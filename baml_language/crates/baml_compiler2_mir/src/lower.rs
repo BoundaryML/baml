@@ -6677,24 +6677,63 @@ impl LoweringContext<'_> {
 
     /// Whether `ty` is a primitive the specialized arithmetic opcodes /
     /// `exec_binop` handle directly — int/bigint/float, plus `string` when
-    /// `include_string` (binary `+` concatenates; unary `-` has no string form) —
-    /// including literals and unions of those. Anything else (a user type, or a
-    /// union / existential / type variable involving one) goes through the
-    /// `__union_*` interface driver.
+    /// `include_string` (binary `+` concatenates; unary `-` has no string form).
+    /// A literal counts as its base; a union counts only when every member is
+    /// the SAME primitive kind (`int | 3`): a mixed-kind union (`int | float`)
+    /// would let emit pick a single-kind opcode for a value of the other kind —
+    /// UB in the specialized handlers — so it goes through the `__union_*`
+    /// interface driver, as does anything else (a user type, or a union /
+    /// existential / type variable involving one). Must stay aligned with TIR's
+    /// `infer_arithmetic` union rule, which types those operands via the
+    /// interface path.
     fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
         use baml_base::Literal;
+        /// The primitive kind of a non-union member, literal widened to base.
+        /// The builtin wrapper classes (`baml.Float` …) count as their
+        /// primitive — `self` inside their method bodies is class-typed but
+        /// primitive-valued (mirrors TIR's `infer_arithmetic`).
+        fn kind(ty: &RuntimeTy, include_string: bool) -> Option<u8> {
+            match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(0),
+                RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _) => Some(1),
+                RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => Some(2),
+                RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
+                    include_string.then_some(3)
+                }
+                RuntimeTy::Class(name, args, _)
+                    if args.is_empty()
+                        && name.package().as_str() == "baml"
+                        && name.namespace().is_empty() =>
+                {
+                    match name.name().as_str() {
+                        "Int" => Some(0),
+                        "Bigint" => Some(1),
+                        "Float" => Some(2),
+                        "String" => include_string.then_some(3),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
         match ty {
-            RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } | RuntimeTy::Float { .. } => true,
-            RuntimeTy::Literal(Literal::Int(_) | Literal::Bigint(_) | Literal::Float(_), _, _) => {
-                true
+            RuntimeTy::Union(members, _) => {
+                // `null` members are transparent: only a chain-narrowed
+                // compound-assign target still carries `| null` here (its
+                // null case never reaches the op — the `?.` guard skips it),
+                // and binary operands with a possible `null` are rejected by
+                // TIR before lowering.
+                let mut first = None;
+                members
+                    .iter()
+                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
+                    .all(|m| match kind(m, include_string) {
+                        Some(k) => *first.get_or_insert(k) == k,
+                        None => false,
+                    })
+                    && first.is_some()
             }
-            RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
-                include_string
-            }
-            RuntimeTy::Union(members, _) => members
-                .iter()
-                .all(|m| Self::arith_primitive(m, include_string)),
-            _ => false,
+            _ => kind(ty, include_string).is_some(),
         }
     }
 
@@ -6903,21 +6942,7 @@ impl LoweringContext<'_> {
         self.chain_null_exits.push(bb_null);
 
         let place = self.lower_lvalue(inner_target);
-        let current = Operand::Copy(place.clone());
-        // Mixed `bigint OP= int` does NOT widen the int rhs: the specialized
-        // `*Bigint` opcodes accept a lone `int` operand and resolve it in the
-        // VM without allocating a heap bigint (mirrors the plain `AssignOp`
-        // path). Lower the value naturally.
-        let rhs = self.lower_to_operand(value);
-        let mir_op = Self::convert_assign_op(op);
-        self.builder.assign(
-            place,
-            Rvalue::BinaryOp {
-                op: mir_op,
-                left: current,
-                right: rhs,
-            },
-        );
+        self.emit_assign_op(place, inner_target, op, value);
 
         self.chain_null_exits.pop();
 
@@ -6929,6 +6954,51 @@ impl LoweringContext<'_> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+    }
+
+    /// Emit `place = place OP value` — the shared body of both `AssignOp`
+    /// lowerings (plain and `?.`-chain targets). An arithmetic op whose
+    /// operands aren't primitive routes through the `__union_*` driver, exactly
+    /// like the binary-expression form (`v += w` and `v = v + w` must agree);
+    /// everything else emits the raw opcode. Mixed `bigint OP= int` does NOT
+    /// widen the int rhs on the opcode path: the specialized `*Bigint` opcodes
+    /// accept a lone `int` operand and resolve it in the VM without allocating
+    /// a heap bigint.
+    fn emit_assign_op(
+        &mut self,
+        place: Place,
+        target: AstExprId,
+        op: AstAssignOp,
+        value: AstExprId,
+    ) {
+        let mir_op = Self::convert_assign_op(op);
+        let driver = match mir_op {
+            BinOp::Add => Some("__union_add"),
+            BinOp::Sub => Some("__union_sub"),
+            BinOp::Mul => Some("__union_mul"),
+            BinOp::Div => Some("__union_div"),
+            BinOp::Mod => Some("__union_rem"),
+            _ => None,
+        };
+        if let Some(driver) = driver
+            && !self.arithmetic_uses_primitive_opcode(target, value)
+        {
+            let current = Operand::Copy(place.clone());
+            let rhs = self.lower_to_operand(value);
+            let result_ty = self.expr_ty(target);
+            self.lower_via_ops_driver(driver, vec![current, rhs], result_ty, place);
+            return;
+        }
+        let current = Operand::Copy(place.clone());
+        let rhs = self.lower_to_operand(value);
+        self.builder.assign(
+            place,
+            Rvalue::BinaryOp {
+                op: mir_op,
+                left: current,
+                right: rhs,
+            },
+        );
     }
 
     /// Lower `obj?.member` — null-check obj, then access member or produce null.
@@ -11585,21 +11655,7 @@ impl LoweringContext<'_> {
                     self.lower_assign_op_optional_chain(inner, op, value);
                 } else {
                     let place = self.lower_lvalue(target);
-                    let current = Operand::Copy(place.clone());
-                    // Mixed `bigint OP= int` does NOT widen the int rhs: the
-                    // specialized `*Bigint` opcodes accept a lone `int` operand
-                    // and resolve it in the VM without allocating a heap bigint.
-                    // Lower the value naturally.
-                    let rhs = self.lower_to_operand(value);
-                    let mir_op = Self::convert_assign_op(op);
-                    self.builder.assign(
-                        place,
-                        Rvalue::BinaryOp {
-                            op: mir_op,
-                            left: current,
-                            right: rhs,
-                        },
-                    );
+                    self.emit_assign_op(place, target, op, value);
                 }
             }
 

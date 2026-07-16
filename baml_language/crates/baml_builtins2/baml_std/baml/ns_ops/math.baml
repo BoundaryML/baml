@@ -9,15 +9,17 @@
 // bytecode matches.
 //
 // Behaviour the `throws never` signatures do not capture — panics are orthogonal
-// to the `throws` contract (see `bigint.baml`), so these stay `throws never`:
-//   - `int` arithmetic wraps on overflow into the i63 range (matching the
-//     `AddInt` / `SubInt` bytecode), so it never throws.
+// to the `throws` contract (see `bigint.baml`), so these stay `throws never`.
+// Every case matches the opcodes exactly (B-266: checked, not wrapping):
+//   - `int` arithmetic raises catchable `baml.panics.IntegerOverflow` on a
+//     result outside the i63 range (incl. `int.min_value() / -1` and
+//     `-int.min_value()`), like the `AddInt` / `SubInt` / `MulInt` bytecode.
 //   - integer (`int` / `bigint`) `/` and `%` by zero raise
 //     `baml.panics.DivisionByZero` (`//baml:fallible`).
 //   - a `bigint` result beyond the workspace size cap raises
 //     `baml.panics.AllocFailure`.
-//   - `float` follows IEEE-754 throughout, including `/` and `%` by zero, which
-//     yield `inf` / `NaN` rather than panicking.
+//   - `float` `+ - * %` follow IEEE-754 (`%` by zero yields `NaN`); `/` by zero
+//     raises `baml.panics.DivisionByZero`, like the `DivFloat` bytecode.
 
 /// `self + rhs`
 interface Add<Rhs extends root.Concrete> requires root.Concrete {
@@ -56,16 +58,19 @@ interface Negate requires root.Concrete {
 
 // ==== int ====
 implement Add<int> for int {
+    //baml:fallible
     function add(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
 implement Subtract<int> for int {
+    //baml:fallible
     function sub(self, rhs: int) -> int throws never {
         $rust_function
     }
 }
 implement Multiply<int> for int {
+    //baml:fallible
     function mul(self, rhs: int) -> int throws never {
         $rust_function
     }
@@ -83,6 +88,7 @@ implement Remainder<int> for int {
     }
 }
 implement Negate for int {
+    //baml:fallible
     function neg(self) -> int throws never {
         $rust_function
     }
@@ -105,6 +111,8 @@ implement Multiply<float> for float {
     }
 }
 implement Divide<float> for float {
+    //baml:mut_vm
+    //baml:fallible
     function div(self, rhs: float) -> float throws never {
         $rust_function
     }
@@ -136,6 +144,8 @@ implement Multiply<int> for float {
     }
 }
 implement Divide<int> for float {
+    //baml:mut_vm
+    //baml:fallible
     function div(self, rhs: int) -> float throws never {
         $rust_function
     }
@@ -166,6 +176,8 @@ implement Multiply<float> for int {
 }
 implement Divide<float> for int {
     type Output = float;
+    //baml:mut_vm
+    //baml:fallible
     function div(self, rhs: float) -> float throws never {
         $rust_function
     }

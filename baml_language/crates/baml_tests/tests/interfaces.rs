@@ -12269,3 +12269,102 @@ fn arithmetic_on_userclass_interface_existential_is_ok() {
         "#,
     );
 }
+
+#[test]
+fn arithmetic_on_mixed_primitive_union_uses_cartesian_product() {
+    // `(int | float) + int` used to promote to `float` on the primitive fast
+    // path, leaving a runtime `int` in a float-typed slot (UB in the
+    // specialized opcodes). The interface path types it as the union of the
+    // pair Outputs: `int | float`.
+    assert_no_compile_errors(
+        r#"
+        function pick(n: int) -> int | float {
+            if n > 0 { 1 } else { 2.5 }
+        }
+        function f(n: int) -> int | float {
+            pick(n) + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_existential_without_pinned_output_is_rejected() {
+    // Without an `Output` pin the `= Self` default realizes to the existential
+    // itself — an unsound claim (`Output` is only bound by `Concrete`), so the
+    // operand must specify `Output`.
+    assert_compile_error_contains(
+        r#"
+        function f(x: baml.ops.Add<int>, a: int) -> int {
+            x + a
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_on_bounded_typevar_with_pinned_output_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        function f<T extends baml.ops.Add<int, Output = int>>(x: T) -> int {
+            x + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_bounded_typevar_without_pinned_output_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        function f<T extends baml.ops.Add<int>>(x: T) -> int {
+            x + 1;
+            0
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn compound_assign_result_not_assignable_to_target_is_rejected() {
+    // `c += 1` desugars to `c = c + 1`; with `Output = int` the operator result
+    // is an `int`, which cannot be stored back into the `Counter` target.
+    assert_compile_error_contains(
+        r#"
+        class Counter {
+            n: int
+            implements baml.ops.Add<int> {
+                type Output = int
+                function add(self, rhs: int) -> int throws never { self.n + rhs }
+            }
+        }
+        function f(c: Counter) -> Counter {
+            c += 1;
+            c
+        }
+        "#,
+        "type mismatch",
+    );
+}
+
+#[test]
+fn compound_assign_on_user_type_with_self_output_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Vec2 {
+            x: int
+            implements baml.ops.Add<Vec2> {
+                function add(self, rhs: Vec2) -> Vec2 throws never {
+                    Vec2 { x: self.x + rhs.x }
+                }
+            }
+        }
+        function f(v: Vec2, w: Vec2) -> Vec2 {
+            v += w;
+            v
+        }
+        "#,
+    );
+}

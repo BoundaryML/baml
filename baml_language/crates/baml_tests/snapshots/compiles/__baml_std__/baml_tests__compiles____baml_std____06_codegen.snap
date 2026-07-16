@@ -607,13 +607,12 @@ function baml.Float.tanh(self: baml.Float) -> float {
 }
 
 function baml.Float.to_degrees(self: baml.Float) -> float {
-    load_var self
-    load_const 180.0
-    call baml.ops.__union_mul
-    store_var _2
     call baml.Float.pi
     store_var _3
-    load_var2 2 3
+    load_var self
+    load_const 180.0
+    bin_op *
+    load_var _3
     div_float
     return
 }
@@ -622,7 +621,7 @@ function baml.Float.to_radians(self: baml.Float) -> float {
     call baml.Float.pi
     store_var _3
     load_var2 1 2
-    call baml.ops.__union_mul
+    bin_op *
     load_const 180.0
     div_float
     return

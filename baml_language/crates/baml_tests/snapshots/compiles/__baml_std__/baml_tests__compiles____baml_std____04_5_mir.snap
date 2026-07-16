@@ -961,19 +961,16 @@ fn baml.Float.to_degrees(self: baml.Float) -> float {
     let _3: float
 
     bb0: {
-        _2 = call const fn baml.ops.__union_mul(copy _1, const 180_f64) -> [bb1];
+        _2 = copy _1 * const 180_f64;
+        _3 = call const fn baml.Float.pi() -> [bb1];
     }
 
     bb1: {
-        _3 = call const fn baml.Float.pi() -> [bb2];
+        _0 = copy _2 / copy _3;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _2 / copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -990,15 +987,12 @@ fn baml.Float.to_radians(self: baml.Float) -> float {
     }
 
     bb1: {
-        _2 = call const fn baml.ops.__union_mul(copy _1, copy _3) -> [bb2];
+        _2 = copy _1 * copy _3;
+        _0 = copy _2 / const 180_f64;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = copy _2 / const 180_f64;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

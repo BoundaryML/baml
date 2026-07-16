@@ -289,3 +289,214 @@ test "operator_union_dispatch" {
     assert.is_true(baml.deep_equals(ops_add_to_unit(Meters { v: 1 }, 2), Meters { v: 3 }))
     assert.is_true(baml.deep_equals(ops_add_to_unit(Feet { v: 10 }, 5), Feet { v: 15 }))
 }
+
+// Compound assignment desugars to the same interface dispatch: `v += w` on a
+// user type must route through `__union_add`, not the primitive opcode.
+function ops_compound_add_vec() -> Vec2 {
+    let v = Vec2 { x: 1, y: 2 };
+    v += Vec2 { x: 10, y: 20 };
+    v
+}
+
+test "operator_compound_assign_user_class" {
+    assert.is_true(baml.deep_equals(ops_compound_add_vec(), Vec2 { x: 11, y: 22 }))
+}
+
+// ─── User-type dispatch: the four remaining binary drivers ────────────────────
+// Sub/Mul/Div/Rem dispatch by runtime string names (`__union_sub` -> "Subtract"
+// -> "sub"); nothing but these tests ties those names to math.baml.
+
+class Scaled {
+    v int
+    implements baml.ops.Subtract<Scaled> {
+        function sub(self, rhs: Scaled) -> Scaled throws never {
+            Scaled { v: self.v - rhs.v }
+        }
+    }
+    implements baml.ops.Multiply<Scaled> {
+        function mul(self, rhs: Scaled) -> Scaled throws never {
+            Scaled { v: self.v * rhs.v }
+        }
+    }
+    implements baml.ops.Divide<Scaled> {
+        function div(self, rhs: Scaled) -> Scaled throws never {
+            Scaled { v: self.v / rhs.v }
+        }
+    }
+    implements baml.ops.Remainder<Scaled> {
+        function rem(self, rhs: Scaled) -> Scaled throws never {
+            Scaled { v: self.v % rhs.v }
+        }
+    }
+}
+
+function ops_scaled_sub(a: Scaled, b: Scaled) -> Scaled { a - b }
+function ops_scaled_mul(a: Scaled, b: Scaled) -> Scaled { a * b }
+function ops_scaled_div(a: Scaled, b: Scaled) -> Scaled { a / b }
+function ops_scaled_rem(a: Scaled, b: Scaled) -> Scaled { a % b }
+
+test "operator_sub_mul_div_rem_user_class" {
+    assert.is_true(baml.deep_equals(ops_scaled_sub(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 7 }))
+    assert.is_true(baml.deep_equals(ops_scaled_mul(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 30 }))
+    assert.is_true(baml.deep_equals(ops_scaled_div(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 3 }))
+    assert.is_true(baml.deep_equals(ops_scaled_rem(Scaled { v: 10 }, Scaled { v: 3 }), Scaled { v: 1 }))
+}
+
+// ─── Multi-instantiation dispatch: impl chosen by the rhs runtime type ────────
+// Poly implements Add at two instantiations; if dispatch regressed to
+// first-applicable-rule selection (instead of the exact iface-args match in
+// resolve_implements_rule_exact), one of these would call the wrong impl.
+
+class Poly {
+    v int
+    implements baml.ops.Add<int> {
+        type Output = Poly
+        function add(self, rhs: int) -> Poly throws never {
+            Poly { v: self.v + rhs }
+        }
+    }
+    implements baml.ops.Add<float> {
+        type Output = Poly
+        function add(self, rhs: float) -> Poly throws never {
+            // Distinct from the Add<int> impl so a wrong-specialization
+            // dispatch produces a visibly different value.
+            Poly { v: self.v + 1000 }
+        }
+    }
+}
+
+function ops_poly_add_int(p: Poly, n: int) -> Poly { p + n }
+function ops_poly_add_float(p: Poly, f: float) -> Poly { p + f }
+
+test "operator_multi_instantiation_selects_by_rhs_type" {
+    assert.is_true(baml.deep_equals(ops_poly_add_int(Poly { v: 1 }, 5), Poly { v: 6 }))
+    assert.is_true(baml.deep_equals(ops_poly_add_float(Poly { v: 1 }, 0.5), Poly { v: 1001 }))
+}
+
+// ─── Output != Self at runtime ────────────────────────────────────────────────
+
+class Counter {
+    n int
+    implements baml.ops.Add<int> {
+        type Output = int
+        function add(self, rhs: int) -> int throws never { self.n + rhs }
+    }
+}
+
+function ops_counter_add(c: Counter, n: int) -> int { c + n }
+
+test "operator_output_differs_from_self" {
+    assert.is_true(baml.deep_equals(ops_counter_add(Counter { n: 2 }, 1), 3))
+}
+
+// ─── Driver/opcode parity for primitives ──────────────────────────────────────
+// A bounded-generic operand keeps MIR off the specialized opcodes, so the
+// arithmetic below dispatches through baml.ops.__union_* to the native
+// primitive impls in ops_math.rs. These pin that the driver path agrees with
+// the opcode path: same values, and the same catchable panics.
+
+function drv_add<T extends baml.ops.Add<T, Output = T>>(a: T, b: T) -> T { a + b }
+function drv_sub<T extends baml.ops.Subtract<T, Output = T>>(a: T, b: T) -> T { a - b }
+function drv_mul<T extends baml.ops.Multiply<T, Output = T>>(a: T, b: T) -> T { a * b }
+function drv_div<T extends baml.ops.Divide<T, Output = T>>(a: T, b: T) -> T { a / b }
+function drv_rem<T extends baml.ops.Remainder<T, Output = T>>(a: T, b: T) -> T { a % b }
+function drv_neg<T extends baml.ops.Negate>(a: T) -> T { -a }
+function drv_add_int_rhs<T extends baml.ops.Add<int, Output = T>>(a: T, b: int) -> T { a + b }
+function drv_div_int_rhs<T extends baml.ops.Divide<int, Output = T>>(a: T, b: int) -> T { a / b }
+
+// Monomorphic wrappers pin T to the primitive (literal args could otherwise
+// infer a literal-typed T, which no interface bound admits).
+function drv_int_add(a: int, b: int) -> int { drv_add(a, b) }
+function drv_int_sub(a: int, b: int) -> int { drv_sub(a, b) }
+function drv_int_mul(a: int, b: int) -> int { drv_mul(a, b) }
+function drv_int_div(a: int, b: int) -> int { drv_div(a, b) }
+function drv_int_rem(a: int, b: int) -> int { drv_rem(a, b) }
+function drv_int_neg(a: int) -> int { drv_neg(a) }
+function drv_float_add(a: float, b: float) -> float { drv_add(a, b) }
+function drv_float_div(a: float, b: float) -> float { drv_div(a, b) }
+function drv_float_neg(a: float) -> float { drv_neg(a) }
+function drv_bigint_add(a: bigint, b: bigint) -> bigint { drv_add(a, b) }
+function drv_bigint_div(a: bigint, b: bigint) -> bigint { drv_div(a, b) }
+function drv_float_add_int(a: float, b: int) -> float { drv_add_int_rhs(a, b) }
+function drv_bigint_add_int(a: bigint, b: int) -> bigint { drv_add_int_rhs(a, b) }
+
+test "driver_int_arithmetic_matches_opcodes" {
+    assert.is_true(baml.deep_equals(drv_int_add(1, 2), 1 + 2))
+    assert.is_true(baml.deep_equals(drv_int_sub(1, 2), 1 - 2))
+    assert.is_true(baml.deep_equals(drv_int_mul(3, 4), 3 * 4))
+    assert.is_true(baml.deep_equals(drv_int_div(10, 3), 10 / 3))
+    assert.is_true(baml.deep_equals(drv_int_rem(10, 3), 10 % 3))
+    assert.is_true(baml.deep_equals(drv_int_neg(5), -5))
+}
+
+test "driver_float_arithmetic_matches_opcodes" {
+    assert.is_true(baml.deep_equals(drv_float_add(1.5, 2.25), 1.5 + 2.25))
+    assert.is_true(baml.deep_equals(drv_float_div(1.0, 4.0), 1.0 / 4.0))
+    assert.is_true(baml.deep_equals(drv_float_neg(2.5), -2.5))
+}
+
+test "driver_bigint_arithmetic_matches_opcodes" {
+    assert.is_true(baml.deep_equals(drv_bigint_add(10n, 3n), 10n + 3n))
+    assert.is_true(baml.deep_equals(drv_bigint_div(10n, 3n), 10n / 3n))
+}
+
+test "driver_mixed_widening_matches_opcodes" {
+    assert.is_true(baml.deep_equals(drv_float_add_int(1.5, 2), 1.5 + 2))
+    assert.is_true(baml.deep_equals(drv_bigint_add_int(10n, 3), 10n + 3))
+}
+
+// Mixed-kind primitive unions dispatch through the driver: the old fast-path
+// promotion typed `(int | float) + int` as `float` while the runtime value
+// could be an `int` — UB in the specialized float opcodes.
+function ops_pick_int_or_float(n: int) -> int | float {
+    if n > 0 { 1 } else { 2.5 }
+}
+
+function ops_mixed_union_add(n: int) -> int | float {
+    ops_pick_int_or_float(n) + 1
+}
+
+test "operator_mixed_primitive_union_add" {
+    assert.is_true(baml.deep_equals(ops_mixed_union_add(1), 2))
+    assert.is_true(baml.deep_equals(ops_mixed_union_add(-1), 3.5))
+}
+
+// Panic parity (B-266): the driver natives must throw the same catchable
+// panics the opcodes do — not wrap, not return IEEE infinities for int-like
+// failures.
+
+function drv_catch_add_overflow() -> int {
+    drv_int_add(baml.Int.max_value(), 1) catch (e) { baml.panics.IntegerOverflow => -1 }
+}
+function drv_catch_mul_overflow() -> int {
+    drv_int_mul(baml.Int.max_value(), 2) catch (e) { baml.panics.IntegerOverflow => -1 }
+}
+function drv_catch_neg_overflow() -> int {
+    drv_int_neg(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+}
+function drv_catch_div_min_by_minus_one() -> int {
+    drv_int_div(baml.Int.min_value(), -1) catch (e) { baml.panics.IntegerOverflow => -1 }
+}
+function drv_catch_int_div_zero() -> int {
+    drv_int_div(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
+}
+function drv_catch_int_rem_zero() -> int {
+    drv_int_rem(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
+}
+function drv_catch_float_div_zero() -> float {
+    drv_float_div(1.0, 0.0) catch (e) { baml.panics.DivisionByZero => -1.0 }
+}
+function drv_catch_bigint_div_zero() -> bigint {
+    drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }
+}
+
+test "driver_panics_match_opcodes" {
+    assert.is_true(baml.deep_equals(drv_catch_add_overflow(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_mul_overflow(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_neg_overflow(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_div_min_by_minus_one(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_int_div_zero(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_int_rem_zero(), -1))
+    assert.is_true(baml.deep_equals(drv_catch_float_div_zero(), -1.0))
+    assert.is_true(baml.deep_equals(drv_catch_bigint_div_zero(), -1n))
+}
