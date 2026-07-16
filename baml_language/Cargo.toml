@@ -4,6 +4,7 @@ members = [
   "forks/*",
   "sdks/go/sdkgen_go",
   "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
   "sdks/rust/*",

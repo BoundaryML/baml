@@ -7,18 +7,18 @@ underlying FFI interfaces).
 
 ```bash
 # Run every SDK test target across all fixtures.
-cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript_node -p sdk_test_rust
+cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript -p sdk_test_rust
 
 # Run SDK tests for a specific generator.
 cargo nextest run -p sdk_test_python_pydantic2
-cargo nextest run -p sdk_test_typescript_node
+cargo nextest run -p sdk_test_typescript
 cargo nextest run -p sdk_test_rust
 
 # Or run one host-language runner specifically.
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
-cargo nextest run -p sdk_test_typescript_node function_calls::vitest_node
-cargo nextest list -p sdk_test_typescript_node function_calls::vitest_web
-cargo nextest list -p sdk_test_typescript_node function_calls::vitest_workers
+cargo nextest run -p sdk_test_typescript function_calls::vitest_node
+cargo nextest list -p sdk_test_typescript function_calls::vitest_web
+cargo nextest list -p sdk_test_typescript function_calls::vitest_workers
 cargo nextest run -p sdk_test_rust function_calls::cargo_test
 ```
 
@@ -39,7 +39,7 @@ cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 (cd sdk_tests/crates/python_pydantic2/function_calls/generated && uv run pytest -v -k optional_args)
 
 # vitest: run tests matching a test-name pattern in one runtime.
-cargo nextest run -p sdk_test_typescript_node function_calls::vitest_node
+cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 (cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.node.config.ts -t optional_args)
 (cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.web.config.ts -t optional_args)
 (cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.workers.config.ts -t optional_args)
@@ -70,7 +70,7 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
   - `sdks/python/src/baml_bridge`
   - `sdks/python/rust/sdkgen_python_pydantic2`
 
-`sdk_test_typescript_node` provides coverage for
+`sdk_test_typescript` provides coverage for
 
   - `sdks/typescript/bridge_typescript`
   - `sdks/typescript/bridge_typescript_web` once the Web implementation change is applied
@@ -88,7 +88,7 @@ There are two dimensions for SDK tests: generators and fixtures.
 There is one Rust crate per SDK generator:
 
   - `sdk_test_python_pydantic2` for the `python/pydantic2` generator
-  - `sdk_test_typescript_node` for the `typescript/node` and `typescript/web` generators across Node, browser, and Workers runtimes
+  - `sdk_test_typescript` for the `typescript/node` and `typescript/web` generators across Node, browser, and Workers runtimes
   - `sdk_test_rust` for the `rust` generator
 
 Each crate fans out over every **fixture** in `sdk_tests/fixtures/`.
@@ -121,7 +121,7 @@ sdk_tests/
     |       |-- customizable/
     |       `-- generated/
     |-- typescript/
-    |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |   |-- Cargo.toml                    # name = "sdk_test_typescript"
     |   |-- function_calls/
     |   |   |-- customizable/             # tracked: shared and runtime-qualified *.test.ts
     |   |   `-- generated/                # gitignored: build output
@@ -160,9 +160,9 @@ sdk_tests/
   trees -- `fixtures/<F>/baml_src/` is the input;
   `crates/<G>/<F>/` is the output for one generator.
 - **Generator directory** (under `crates/`): lowercase snake
-  (`python_pydantic2`, `typescript`, `rust`). The TypeScript crate
-  keeps the Cargo package name `sdk_test_typescript_node` because it
-  still tests the Node target.
+  (`python_pydantic2`, `typescript`, `rust`). The TypeScript crate uses
+  the Cargo package name `sdk_test_typescript` because it covers the full
+  runtime matrix.
 - **Rust crate name**: `sdk_test_<generator>` -- one per generator.
 
 ### TypeScript runtime selection
@@ -181,7 +181,7 @@ Unqualified `*.test.ts` and helper `*.ts` files are selected for Node, Chromium,
    `sdk_tests/crates/python_pydantic2/<name>/customizable/test_main.py`
    and/or
    `sdk_tests/crates/typescript/<name>/customizable/main.test.ts`.
-3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python or `cargo nextest run -p sdk_test_typescript_node <name>::` for the full TypeScript runtime matrix.
+3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python or `cargo nextest run -p sdk_test_typescript <name>::` for the full TypeScript runtime matrix.
 
 No code edits needed in `build.rs` or `src/lib.rs` -- the fixture
 list is discovered at build time from `sdk_tests/fixtures/` and

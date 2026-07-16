@@ -91,7 +91,9 @@ jobs:
             ':.github/workflows/release-baml-language.yml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/build2-web-sdk.reusable.yaml' \
             ':.github/workflows/publish2-nodejs-sdk.yaml' \
+            ':.github/workflows/publish2-web-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -452,7 +454,9 @@ jobs:
           scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
           scripts/baml-language-version stamp --plan nightly-release-plan.json
           node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
+          web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
           test "$node_npm" = "$nightly"
+          test "$web_npm" = "$node_npm"
 
   # Call reusable workflows
   cargo-tests:

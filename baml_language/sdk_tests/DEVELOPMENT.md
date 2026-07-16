@@ -76,7 +76,7 @@ sdk_tests/
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
     |-- typescript/
-    |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |   |-- Cargo.toml                    # name = "sdk_test_typescript"
     |   |                                 # [build-dependencies] sdk_test_harness_setup
     |   |                                 # [dev-dependencies]   sdk_test_harness_runner
     |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript::run_all()
@@ -106,9 +106,9 @@ sdk_tests/
    - Symlinks each file in
      `crates/<generator>/<fixture>/customizable/` into
      `crates/<generator>/<fixture>/generated/` (python) -- or
-     copies (`typescript_node`, because Node.js follows
-     symlinks during module resolution and can break out of the
-     generated dir's `node_modules`). The rust target symlinks into
+     copies (`typescript`, because Node.js follows symlinks during
+     module resolution and can break out of the generated dir's
+     `node_modules`). The rust target symlinks into
      `generated/customizable/` (NOT `generated/tests/`, where cargo
      would auto-discover every file as its own test target) and
      writes the `generated/tests/main.rs` gate file that decides
@@ -116,7 +116,7 @@ sdk_tests/
      `harness_setup/src/rust.rs`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
      (or `package.json` + per-runtime TypeScript/Vitest configs for
-     `typescript_node`) with the per-fixture package name. The rust
+     `typescript`) with the per-fixture package name. The rust
      target's `generated/Cargo.toml` instead comes from `sdkgen_rust`
      itself (the generated SDK is a complete Cargo crate); the harness
      injects the per-fixture package name, the `bridge_rust` path
@@ -136,11 +136,11 @@ sdk_tests/
      plain `uv sync` is a no-op on incremental Rust edits -- uv
      doesn't track the Rust sources behind the editable install,
      so the `.so` would stay stale.
-   - For typescript_node: the setup script builds `bridge_typescript`
-     and runs one `pnpm install` per fixture. Node checks run
-     immediately; the emitted Web and Workers checks remain ignored
-     until the Web implementation change supplies their bridge and
-     runtime dependencies.
+   - For TypeScript: the setup script builds `bridge_typescript` and
+     runs one `pnpm install` per fixture. Node checks run immediately;
+     the emitted Web and Workers checks remain ignored until the Web
+     implementation change supplies their bridge and runtime
+     dependencies.
    - For rust: the setup script runs a serial `cargo test --no-run`
      per fixture into the shared `target/sdk-rust-target` build dir
      (threaded to the tests as `CARGO_TARGET_DIR`), so the
@@ -208,7 +208,7 @@ SDK_TEST_<GEN>_SETUP=1
 
 `<GEN>` is the upper-cased generator key:
 `SDK_TEST_PYTHON_PYDANTIC2_SETUP=1` for python_pydantic2 and
-`SDK_TEST_TYPESCRIPT_NODE_SETUP=1` for typescript_node. The
+`SDK_TEST_TYPESCRIPT_SETUP=1` for TypeScript. The
 canonical name is the `SETUP_ENV_VAR` const in each
 `harness_setup/src/<generator>.rs` (the setup scripts and the
 emitted `setup_guard!(...)` invocation must agree on it). nextest
