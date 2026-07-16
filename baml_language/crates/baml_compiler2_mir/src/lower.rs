@@ -1523,7 +1523,7 @@ use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
@@ -1646,6 +1646,13 @@ struct PackageLoweringData {
     enum_variants: EnumVariantIndices,
     interface_implementors: ImplementorsByInterface,
     resolved_aliases: ResolvedAliases,
+    /// Every method name any in-scope interface (own package + dependency
+    /// closure) declares, required or default. Fast pre-filter for
+    /// [`LoweringContext::dispatch_target_for_concrete`]: a member name absent
+    /// here can never dispatch through an interface impl, so the (hot) impl
+    /// enumeration is skipped for the overwhelmingly common plain-method /
+    /// field-access case.
+    interface_method_names: FxHashSet<Name>,
 }
 
 /// # Safety
@@ -1679,7 +1686,9 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{package_dependencies, package_items};
+    use baml_compiler2_hir::package::{
+        package_dependencies, package_dependency_closure, package_items,
+    };
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
@@ -1720,12 +1729,48 @@ fn package_lowering_data<'db>(
         );
     }
 
+    // Collect every interface-declared method name in scope (own package +
+    // dependency closure). `dispatch_target_for_concrete` previously enumerated
+    // every impl block in the closure (via `l1_impls_for_recv`, which probes
+    // each impl's pattern against the receiver — running alias normalization /
+    // subtype checks per probe) for EVERY method call and field access, just to
+    // conclude "no impl provides this member" for the overwhelmingly common
+    // non-interface member. This set answers that in one hash lookup. Names are
+    // collected package-wide (not per receiver type), so the filter stays a
+    // pure fast path: any name declared by ANY reachable interface still falls
+    // through to the full impl enumeration + `mir_interface_declares_method`.
+    let mut interface_method_names = FxHashSet::default();
+    let mut all_pkgs = vec![pkg_id];
+    all_pkgs.extend(package_dependency_closure(db, pkg_id).iter().copied());
+    for pkg in all_pkgs {
+        let items = package_items(db, pkg);
+        for ns in items.namespaces.values() {
+            for def in ns.types.values() {
+                let baml_compiler2_hir::contributions::Definition::Interface(iface_loc) = def
+                else {
+                    continue;
+                };
+                let itree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = itree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                for sig in &iface_data.required_methods {
+                    interface_method_names.insert(sig.name.clone());
+                }
+                for &fn_id in &iface_data.default_methods {
+                    interface_method_names.insert(itree[fn_id].name.clone());
+                }
+            }
+        }
+    }
+
     PackageLoweringData {
         class_fields,
         class_field_types,
         enum_variants,
         interface_implementors,
         resolved_aliases,
+        interface_method_names,
     }
 }
 
@@ -1852,6 +1897,11 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
+
+    /// All method names declared by in-scope interfaces — see
+    /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
+    /// `dispatch_target_for_concrete`.
+    interface_method_names: &'db FxHashSet<Name>,
 
     /// Stack of pending `defer` block bodies (BEP-042), parallel to
     /// lexical scopes. Each entry is the `AstExprId` of a defer body
@@ -2736,6 +2786,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -2821,6 +2872,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -3565,6 +3617,19 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
         ) {
+            return None;
+        }
+        // Fast pre-filter: a member name no in-scope interface declares can
+        // never dispatch through an impl, so skip the per-call impl enumeration
+        // entirely. `l1_impls_for_recv` probes every impl block's pattern
+        // against the receiver (each probe running alias normalization / subtype
+        // checks via the canonical algebra), so this hash lookup collapses the
+        // dominant "plain method / field access" case — where the accessed
+        // member is not an interface method — to O(1). Correctness: the set is
+        // the union of every method declared by any reachable interface, so any
+        // name that COULD dispatch is still present and falls through to the
+        // full enumeration + `mir_interface_declares_method` check below.
+        if !self.interface_method_names.contains(method) {
             return None;
         }
         for resolved in self.l1_impls_for_recv(recv_ty) {
