@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4643
 ---
 === HIR2 ===
 
@@ -50,6 +51,7 @@ class baml.Map {
 }
 function baml._mean_float(values: float[]) -> float  [builtin]
 function baml._median_float(values: float[]) -> float  [builtin]
+function baml._slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml._sum_float(values: float[]) -> float  [builtin]
 function baml._sum_int(values: int[]) -> int  [builtin]
 function baml.at(self: ?, index: int) -> T?  [builtin]
@@ -99,7 +101,9 @@ function baml.remove_at(self: ?, index: int) -> T?  [builtin]
 function baml.reverse(self: ?) -> T[]  [builtin]
 function baml.set(self: ?, key: K, value: V) -> V?  [builtin]
 function baml.shift(self: ?) -> T?  [builtin]
-function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
+function baml.slice(self: ?, start: int, end: int = self.length()) -> T[]  [expr] {
+  {  } self._slice(start, end)
+}
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
 function baml.sort_by(self: ?, compare: (T, T) -> int throws E) -> T[]  [builtin]
 function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {

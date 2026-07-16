@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4737
 ---
 === MIR2 ===
 
@@ -217,6 +218,8 @@ fn .<lambda(sort, 0)>(a: T, b: T) -> null {
 fn baml._mean_float = builtin(vm)
 
 fn baml._median_float = builtin(vm)
+
+fn baml.Array._slice = builtin(vm)
 
 fn baml._sum_float = builtin(vm)
 
@@ -494,7 +497,34 @@ fn baml.Map.set = builtin(vm)
 
 fn baml.Array.shift = builtin(vm)
 
-fn baml.Array.slice = builtin(vm)
+fn baml.Array.slice(self: baml.Array, start: int, end: int) -> T[] {
+    // Locals:
+    let _0: T[] // _0 // return
+    let _1: baml.Array // self // param
+    let _2: int // start // param
+    let _3: int // end // param
+    let _4: bool
+    let _5: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = len(_1);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = load_type(#0);
+        _0 = call const fn baml.Array._slice<copy _5>(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.Array.some = builtin(vm)
 

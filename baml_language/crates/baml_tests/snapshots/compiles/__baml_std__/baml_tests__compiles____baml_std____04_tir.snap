@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4683
 ---
 === TIR2 ===
 
@@ -179,6 +180,11 @@ function baml.Array.sort_by_key<U, E>(self: baml.Array<T>, key: (T) -> U throws 
   }
 }
 lambda baml.Array.sort_by_key {
+}
+function baml.Array.slice(self: baml.Array<T>, start: int, end: int = self.length()) -> T[] throws never {
+  { : T[]
+    self._slice<T>(start, end) : T[]
+  }
 }
 class baml.Map {
 }
