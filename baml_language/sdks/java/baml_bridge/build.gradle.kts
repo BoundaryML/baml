@@ -19,6 +19,7 @@
 plugins {
     java
     `maven-publish`
+    signing
 }
 
 repositories {
@@ -91,6 +92,12 @@ val nativeJar by tasks.registering(Jar::class) {
             false
         }
     }
+}
+
+// Maven Central requires sources + javadoc jars on releases.
+java {
+    withSourcesJar()
+    withJavadocJar()
 }
 
 tasks.withType<JavaCompile> {
@@ -177,5 +184,27 @@ publishing {
         //         password = System.getenv("CENTRAL_PASSWORD")
         //     }
         // }
+    }
+}
+
+// Signing for Maven Central (skipped unless -PbamlSign=true so local
+// dev/test publishes stay friction-free). Uses the local gpg agent.
+if (providers.gradleProperty("bamlSign").isPresent) {
+    signing {
+        useGpgCmd()
+        sign(publishing.publications["maven"])
+    }
+}
+
+// File-based staging repo: `publishMavenPublicationToStagingRepository`
+// writes the full Maven layout (jars, POM, module, signatures,
+// checksums) under build/staging-deploy — zip it for the Central
+// Portal bundle upload (see PUBLISHING.md).
+publishing {
+    repositories {
+        maven {
+            name = "staging"
+            url = uri(layout.buildDirectory.dir("staging-deploy"))
+        }
     }
 }
