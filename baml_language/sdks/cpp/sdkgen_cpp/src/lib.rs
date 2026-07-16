@@ -1308,9 +1308,10 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             "\ntemplate <>\nstruct Codec<{q}> {{\n  \
              static void Encode(detail::wire::Writer& value_msg, {q} v) {{\n    \
              detail::wire::Writer e;\n    \
-             e.StringField(1, \"{fqn}\");\n    \
-             e.StringField(2, ToWire(v));\n    \
-             value_msg.MessageField(9, e);\n  }}\n  \
+             e.StringField(detail::fields::in_enum::kName, \"{fqn}\");\n    \
+             e.StringField(detail::fields::in_enum::kValue, ToWire(v));\n    \
+             value_msg.MessageField(detail::fields::in_value::kEnumValue, \
+             e);\n  }}\n  \
              static {q} Decode(const detail::OutboundValue& v) {{\n    \
              if (v.kind != detail::OutboundValue::Kind::Enum) {{\n      \
              detail::KindMismatch(\"enum {fqn}\", v);\n    }}\n    \
@@ -1377,11 +1378,14 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             let _ = writeln!(
                 buf,
                 "    {{\n      detail::wire::Writer entry;\n      \
-                 entry.StringField(1, \"{wire}\");\n      \
+                 entry.StringField(detail::fields::in_entry::kStringKey, \
+                 \"{wire}\");\n      \
                  detail::wire::Writer val;\n      \
                  Codec<{ty}>::Encode(val, v.{name});\n      \
-                 entry.MessageField(6, val);\n      \
-                 cls.MessageField(2, entry);\n    }}",
+                 entry.MessageField(detail::fields::in_entry::kValue, \
+                 val);\n      \
+                 cls.MessageField(detail::fields::in_class::kFields, \
+                 entry);\n    }}",
                 wire = field.name.wire(),
                 ty = field.ty,
                 name = field.name.identifier()
@@ -1390,11 +1394,14 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "    detail::wire::Writer class_ty;\n    \
-             class_ty.StringField(1, \"{fqn}\");",
+             class_ty.StringField(detail::fields::ty_class::kName, \
+             \"{fqn}\");",
         );
         buf.push_str(
-            "    cls.MessageField(3, class_ty);\n    \
-             value_msg.MessageField(8, cls);\n  }\n",
+            "    cls.MessageField(detail::fields::in_class::kClassTy, \
+             class_ty);\n    \
+             value_msg.MessageField(detail::fields::in_value::kClassValue, \
+             cls);\n  }\n",
         );
         // Decode: strict field mapping (extra field or missing field = error,
         // pydantic extra="forbid" parity), FQN-checked for precise

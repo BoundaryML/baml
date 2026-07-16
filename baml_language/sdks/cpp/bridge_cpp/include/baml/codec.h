@@ -38,7 +38,7 @@ namespace detail {
 template <>
 struct Codec<int64_t> {
   static void Encode(detail::wire::Writer& value_msg, int64_t v) {
-    value_msg.Int64Field(3, v);  // InboundValue.int_value
+    value_msg.Int64Field(detail::fields::in_value::kIntValue, v);
   }
   static int64_t Decode(const detail::OutboundValue& v) {
     if (v.kind != detail::OutboundValue::Kind::Int) {
@@ -51,7 +51,7 @@ struct Codec<int64_t> {
 template <>
 struct Codec<double> {
   static void Encode(detail::wire::Writer& value_msg, double v) {
-    value_msg.DoubleField(4, v);  // InboundValue.float_value
+    value_msg.DoubleField(detail::fields::in_value::kFloatValue, v);
   }
   static double Decode(const detail::OutboundValue& v) {
     // Engine ints coerce to float when the declared type is float.
@@ -68,7 +68,7 @@ struct Codec<double> {
 template <>
 struct Codec<bool> {
   static void Encode(detail::wire::Writer& value_msg, bool v) {
-    value_msg.BoolField(5, v);  // InboundValue.bool_value
+    value_msg.BoolField(detail::fields::in_value::kBoolValue, v);
   }
   static bool Decode(const detail::OutboundValue& v) {
     if (v.kind != detail::OutboundValue::Kind::Bool) {
@@ -81,7 +81,7 @@ struct Codec<bool> {
 template <>
 struct Codec<std::string> {
   static void Encode(detail::wire::Writer& value_msg, const std::string& v) {
-    value_msg.StringField(2, v);  // InboundValue.string_value
+    value_msg.StringField(detail::fields::in_value::kStringValue, v);
   }
   static std::string Decode(const detail::OutboundValue& v) {
     if (v.kind != detail::OutboundValue::Kind::String) {
@@ -95,7 +95,7 @@ template <>
 struct Codec<std::vector<uint8_t>> {
   static void Encode(detail::wire::Writer& value_msg,
                      const std::vector<uint8_t>& v) {
-    value_msg.BytesField(11, v.data(),
+    value_msg.BytesField(detail::fields::in_value::kUint8ArrayValue, v.data(),
                          v.size());  // InboundValue.uint8array_value
   }
   static std::vector<uint8_t> Decode(const detail::OutboundValue& v) {
@@ -171,9 +171,9 @@ struct Codec<std::vector<T>> {
     for (const T& item : v) {
       detail::wire::Writer item_msg;
       Codec<T>::Encode(item_msg, item);
-      list_msg.MessageField(1, item_msg);
+      list_msg.MessageField(detail::fields::in_list::kValues, item_msg);
     }
-    value_msg.MessageField(6, list_msg);  // InboundValue.list_value
+    value_msg.MessageField(detail::fields::in_value::kListValue, list_msg);
   }
   static std::vector<T> Decode(const detail::OutboundValue& v) {
     if (v.kind != detail::OutboundValue::Kind::List) {
@@ -195,13 +195,13 @@ struct Codec<std::unordered_map<std::string, T>> {
     detail::wire::Writer map_msg;  // InboundMapValue
     for (const auto& entry : v) {
       detail::wire::Writer entry_msg;  // InboundMapEntry
-      entry_msg.StringField(1, entry.first);
+      entry_msg.StringField(detail::fields::in_entry::kStringKey, entry.first);
       detail::wire::Writer item_msg;
       Codec<T>::Encode(item_msg, entry.second);
-      entry_msg.MessageField(6, item_msg);
-      map_msg.MessageField(1, entry_msg);
+      entry_msg.MessageField(detail::fields::in_entry::kValue, item_msg);
+      map_msg.MessageField(detail::fields::in_map::kEntries, entry_msg);
     }
-    value_msg.MessageField(7, map_msg);  // InboundValue.map_value
+    value_msg.MessageField(detail::fields::in_value::kMapValue, map_msg);
   }
   static std::unordered_map<std::string, T> Decode(
       const detail::OutboundValue& v) {

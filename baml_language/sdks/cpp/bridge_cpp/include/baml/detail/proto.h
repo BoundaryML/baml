@@ -19,6 +19,128 @@ namespace baml {
 namespace detail {
 
 // ---------------------------------------------------------------------------
+// Wire schema: field numbers
+// ---------------------------------------------------------------------------
+// The bridge_ctypes CFFI schemas, spelled once. Parser arms, codec encoders,
+// and sdkgen-emitted code all reference these constants; they mirror the
+// .proto sources in crates/bridge_ctypes/types/baml_bridge/cffi/v1/ (the
+// authority on the wire contract). Names follow the proto field names.
+
+namespace fields {
+
+// CallFunctionArgs (baml_inbound.proto)
+namespace call_args {
+constexpr uint32_t kKwargs = 1;
+constexpr uint32_t kCallId = 2;
+}  // namespace call_args
+
+// InboundValue oneof arms
+namespace in_value {
+constexpr uint32_t kStringValue = 2;
+constexpr uint32_t kIntValue = 3;
+constexpr uint32_t kFloatValue = 4;
+constexpr uint32_t kBoolValue = 5;
+constexpr uint32_t kListValue = 6;
+constexpr uint32_t kMapValue = 7;
+constexpr uint32_t kClassValue = 8;
+constexpr uint32_t kEnumValue = 9;
+constexpr uint32_t kUint8ArrayValue = 11;
+}  // namespace in_value
+
+// InboundListValue / InboundMapValue / InboundMapEntry
+namespace in_list {
+constexpr uint32_t kValues = 1;
+}  // namespace in_list
+namespace in_map {
+constexpr uint32_t kEntries = 1;
+}  // namespace in_map
+namespace in_entry {
+constexpr uint32_t kStringKey = 1;
+constexpr uint32_t kValue = 6;
+}  // namespace in_entry
+
+// InboundClassValue / InboundEnumValue / BamlTyClass
+namespace in_class {
+constexpr uint32_t kFields = 2;
+constexpr uint32_t kClassTy = 3;
+}  // namespace in_class
+namespace in_enum {
+constexpr uint32_t kName = 1;
+constexpr uint32_t kValue = 2;
+}  // namespace in_enum
+namespace ty_class {
+constexpr uint32_t kName = 1;
+}  // namespace ty_class
+
+// BamlOutboundResult oneof arms (baml_outbound.proto)
+namespace out_result {
+constexpr uint32_t kOk = 1;
+constexpr uint32_t kError = 2;
+constexpr uint32_t kPanic = 3;
+}  // namespace out_result
+
+// BamlOutboundError / BamlOutboundPanic (field layouts agree)
+namespace out_thrown {
+constexpr uint32_t kValue = 1;
+constexpr uint32_t kTrace = 2;
+constexpr uint32_t kIsExitPanic = 3;
+constexpr uint32_t kExitCode = 4;
+}  // namespace out_thrown
+
+// BamlOutboundValue oneof arms
+namespace out_value {
+constexpr uint32_t kNullValue = 2;
+constexpr uint32_t kStringValue = 3;
+constexpr uint32_t kIntValue = 4;
+constexpr uint32_t kFloatValue = 5;
+constexpr uint32_t kBoolValue = 6;
+constexpr uint32_t kClassValue = 7;
+constexpr uint32_t kEnumValue = 8;
+constexpr uint32_t kLiteralValue = 9;
+constexpr uint32_t kListValue = 11;
+constexpr uint32_t kMapValue = 12;
+constexpr uint32_t kUnionVariantValue = 13;
+constexpr uint32_t kHandleValue = 16;
+constexpr uint32_t kMediaValue = 17;
+constexpr uint32_t kUint8ArrayValue = 19;
+constexpr uint32_t kBigintValue = 20;
+}  // namespace out_value
+
+// BamlValueList / BamlOutboundMapEntry / BamlValueMap
+namespace out_list {
+constexpr uint32_t kItems = 2;
+}  // namespace out_list
+namespace out_entry {
+constexpr uint32_t kKey = 1;
+constexpr uint32_t kValue = 2;
+}  // namespace out_entry
+namespace out_map {
+constexpr uint32_t kEntries = 3;
+}  // namespace out_map
+
+// BamlValueClass / BamlValueEnum / BamlValueUnionVariant / BamlLiteralValue
+namespace out_class {
+constexpr uint32_t kName = 1;
+constexpr uint32_t kFields = 2;
+}  // namespace out_class
+namespace out_enum {
+constexpr uint32_t kName = 1;
+constexpr uint32_t kValue = 2;
+}  // namespace out_enum
+namespace out_union {
+constexpr uint32_t kValue = 6;
+}  // namespace out_union
+namespace out_literal {
+constexpr uint32_t kStringValue = 1;
+constexpr uint32_t kIntValue = 2;
+constexpr uint32_t kBoolValue = 3;
+constexpr uint32_t kBigintValue = 4;
+constexpr uint32_t kFloatValue = 5;
+}  // namespace out_literal
+
+}  // namespace fields
+
+// ---------------------------------------------------------------------------
 // Outbound DOM
 // ---------------------------------------------------------------------------
 
@@ -94,23 +216,23 @@ inline OutboundValue ParseLiteralValue(wire::Reader r) {
   wire::WireType wt;
   while (r.Next(field, wt)) {
     switch (field) {
-      case 1:
+      case fields::out_literal::kStringValue:
         v.kind = OutboundValue::Kind::String;
         v.string_v = r.LenString();
         break;
-      case 2:
+      case fields::out_literal::kIntValue:
         v.kind = OutboundValue::Kind::Int;
         v.int_v = r.Int64();
         break;
-      case 3:
+      case fields::out_literal::kBoolValue:
         v.kind = OutboundValue::Kind::Bool;
         v.bool_v = r.Boolean();
         break;
-      case 4:
+      case fields::out_literal::kBigintValue:
         v.kind = OutboundValue::Kind::BigInt;
         v.string_v = r.LenString();
         break;
-      case 5:
+      case fields::out_literal::kFloatValue:
         // Float literal rides as source text.
         v.kind = OutboundValue::Kind::Float;
         v.float_v = std::stod(r.LenString());
@@ -142,10 +264,10 @@ inline std::vector<std::pair<std::string, OutboundValue>> ParseEntries(
     wire::WireType ewt;
     while (entry.Next(ef, ewt)) {
       switch (ef) {
-        case 1:
+        case fields::out_entry::kKey:
           key = entry.LenString();
           break;
-        case 2:
+        case fields::out_entry::kValue:
           value = ParseOutboundValue(entry.LenPayload());
           break;
         default:
@@ -164,39 +286,38 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
   wire::WireType wt;
   while (r.Next(field, wt)) {
     switch (field) {
-      case 2:  // null_value
+      case fields::out_value::kNullValue:
         r.Skip(wt);
         v.kind = OutboundValue::Kind::Null;
         break;
-      case 3:
+      case fields::out_value::kStringValue:
         v.kind = OutboundValue::Kind::String;
         v.string_v = r.LenString();
         break;
-      case 4:
+      case fields::out_value::kIntValue:
         v.kind = OutboundValue::Kind::Int;
         v.int_v = r.Int64();
         break;
-      case 5:
+      case fields::out_value::kFloatValue:
         v.kind = OutboundValue::Kind::Float;
         v.float_v = r.Fixed64Double();
         break;
-      case 6:
+      case fields::out_value::kBoolValue:
         v.kind = OutboundValue::Kind::Bool;
         v.bool_v = r.Boolean();
         break;
-      case 7: {  // class_value
+      case fields::out_value::kClassValue: {
         v.kind = OutboundValue::Kind::Class;
         wire::Reader cls = r.LenPayload();
         uint32_t cf;
         wire::WireType cwt;
-        // Re-walk: name = 1, fields (entries) = 2, type_args = 3.
-        std::vector<std::pair<std::string, OutboundValue>> fields;
+        std::vector<std::pair<std::string, OutboundValue>> parsed_fields;
         while (cls.Next(cf, cwt)) {
           switch (cf) {
-            case 1:
+            case fields::out_class::kName:
               v.name = cls.LenString();
               break;
-            case 2: {
+            case fields::out_class::kFields: {
               wire::Reader entry = cls.LenPayload();
               std::string key;
               OutboundValue value;
@@ -204,10 +325,10 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
               wire::WireType ewt;
               while (entry.Next(ef, ewt)) {
                 switch (ef) {
-                  case 1:
+                  case fields::out_entry::kKey:
                     key = entry.LenString();
                     break;
-                  case 2:
+                  case fields::out_entry::kValue:
                     value = ParseOutboundValue(entry.LenPayload());
                     break;
                   default:
@@ -215,7 +336,7 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
                     break;
                 }
               }
-              fields.emplace_back(std::move(key), std::move(value));
+              parsed_fields.emplace_back(std::move(key), std::move(value));
               break;
             }
             default:
@@ -223,20 +344,20 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
               break;
           }
         }
-        v.fields = std::move(fields);
+        v.fields = std::move(parsed_fields);
         break;
       }
-      case 8: {  // enum_value { name = 1, value = 2, is_dynamic = 3 }
+      case fields::out_value::kEnumValue: {
         v.kind = OutboundValue::Kind::Enum;
         wire::Reader en = r.LenPayload();
         uint32_t ef;
         wire::WireType ewt;
         while (en.Next(ef, ewt)) {
           switch (ef) {
-            case 1:
+            case fields::out_enum::kName:
               v.name = en.LenString();
               break;
-            case 2:
+            case fields::out_enum::kValue:
               v.string_v = en.LenString();
               break;
             default:
@@ -246,16 +367,16 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
         }
         break;
       }
-      case 9:  // literal_value -> widened to base scalar
+      case fields::out_value::kLiteralValue:  // widened to base scalar
         v = ParseLiteralValue(r.LenPayload());
         break;
-      case 11: {  // list_value { item_type = 1, items = 2 }
+      case fields::out_value::kListValue: {
         v.kind = OutboundValue::Kind::List;
         wire::Reader list = r.LenPayload();
         uint32_t lf;
         wire::WireType lwt;
         while (list.Next(lf, lwt)) {
-          if (lf == 2) {
+          if (lf == fields::out_list::kItems) {
             v.items.push_back(ParseOutboundValue(list.LenPayload()));
           } else {
             list.Skip(lwt);
@@ -263,18 +384,18 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
         }
         break;
       }
-      case 12: {  // map_value { key_type = 1, value_type = 2, entries = 3 }
+      case fields::out_value::kMapValue: {
         v.kind = OutboundValue::Kind::Map;
-        v.fields = ParseEntries(r.LenPayload(), 3);
+        v.fields = ParseEntries(r.LenPayload(), fields::out_map::kEntries);
         break;
       }
-      case 13: {  // union_variant_value -> unwrap inner value (field 6)
+      case fields::out_value::kUnionVariantValue: {  // unwrap inner value
         wire::Reader u = r.LenPayload();
         uint32_t uf;
         wire::WireType uwt;
         bool saw_inner = false;
         while (u.Next(uf, uwt)) {
-          if (uf == 6) {
+          if (uf == fields::out_union::kValue) {
             v = ParseOutboundValue(u.LenPayload());
             saw_inner = true;
           } else {
@@ -286,22 +407,23 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
         }
         break;
       }
-      case 16:  // handle_value: no handle-typed surface this slice; the
-                // kind is kept so a mismatch reports "handle", not "null".
+      case fields::out_value::kHandleValue:
+        // No handle-typed surface this slice; the kind is kept so a
+        // mismatch reports "handle", not "null".
         v.kind = OutboundValue::Kind::Handle;
         r.Skip(wt);
         break;
-      case 17:  // media_value: same tag-and-skip treatment as handles.
+      case fields::out_value::kMediaValue:  // same treatment as handles
         v.kind = OutboundValue::Kind::Media;
         r.Skip(wt);
         break;
-      case 19: {  // uint8array_value
+      case fields::out_value::kUint8ArrayValue: {
         wire::Reader b = r.LenPayload();
         v.kind = OutboundValue::Kind::Bytes;
         v.bytes_v.assign(b.data(), b.data() + b.size());
         break;
       }
-      case 20:
+      case fields::out_value::kBigintValue:
         v.kind = OutboundValue::Kind::BigInt;
         v.string_v = r.LenString();
         break;
@@ -338,35 +460,36 @@ inline OutboundResult ParseOutboundResult(
   bool saw_arm = false;
   while (r.Next(field, wt)) {
     switch (field) {
-      case 1:
+      case fields::out_result::kOk:
         out.arm = OutboundResult::Arm::Ok;
         out.value = ParseOutboundValue(r.LenPayload());
         saw_arm = true;
         break;
-      case 2:
-      case 3: {
-        out.arm = field == 2 ? OutboundResult::Arm::Error
-                             : OutboundResult::Arm::Panic;
+      case fields::out_result::kError:
+      case fields::out_result::kPanic: {
+        out.arm = field == fields::out_result::kError
+                      ? OutboundResult::Arm::Error
+                      : OutboundResult::Arm::Panic;
         saw_arm = true;
         wire::Reader arm_r = r.LenPayload();
         uint32_t af;
         wire::WireType awt;
         while (arm_r.Next(af, awt)) {
           switch (af) {
-            case 1: {
+            case fields::out_thrown::kValue: {
               wire::Reader value_r = arm_r.LenPayload();
               out.raw_value.assign(value_r.data(),
                                    value_r.data() + value_r.size());
               out.value = ParseOutboundValue(value_r);
               break;
             }
-            case 2:
+            case fields::out_thrown::kTrace:
               out.trace.push_back(arm_r.LenString());
               break;
-            case 3:
+            case fields::out_thrown::kIsExitPanic:
               out.is_exit_panic = arm_r.Boolean();
               break;
-            case 4:
+            case fields::out_thrown::kExitCode:
               out.exit_code = arm_r.Int64();
               break;
             default:
@@ -403,13 +526,13 @@ class ArgsEncoder {
     write_value(value_msg);
 
     wire::Writer entry;  // InboundMapEntry
-    entry.StringField(1, name);
-    entry.MessageField(6, value_msg);
-    args_.MessageField(1, entry);  // CallFunctionArgs.kwargs
+    entry.StringField(fields::in_entry::kStringKey, name);
+    entry.MessageField(fields::in_entry::kValue, value_msg);
+    args_.MessageField(fields::call_args::kKwargs, entry);
   }
 
   std::string Finish(uint64_t call_id) {
-    args_.Uint64Field(2, call_id);  // CallFunctionArgs.call_id
+    args_.Uint64Field(fields::call_args::kCallId, call_id);
     return args_.bytes();
   }
 
