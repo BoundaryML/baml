@@ -400,6 +400,7 @@ mod tests {
     fn conversion_matrix_round_trips() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
@@ -407,6 +408,9 @@ mod tests {
         // RealizedTy ≤ RuntimeTy ≤ Ty (deep), by ref + owned move.
         assert_eq!(Ty::from(&rt), t);
         assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(RuntimeTy::from(&cg), rt);
+        assert_eq!(RuntimeTy::from(cg.clone()), rt);
+        assert_eq!(CodegenTy::try_from(&rt).unwrap(), cg);
         assert_eq!(Ty::from(&rz), t);
         assert_eq!(RuntimeTy::from(&rz), rt);
         assert_eq!(RuntimeTy::from(rz.clone()), rt);
@@ -446,7 +450,10 @@ mod tests {
     /// projections to have been resolved at the compiler boundary.
     #[test]
     fn codegen_accepts_type_variables_and_rejects_projections() {
-        assert!(CodegenTy::try_from(&with_typevar()).is_ok());
+        let typevar = with_typevar();
+        let runtime = RuntimeTy::try_from(&typevar).unwrap();
+        let codegen = CodegenTy::try_from(&runtime).unwrap();
+        assert_eq!(RuntimeTy::from(&codegen), runtime);
 
         let projection = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("T"), a())),

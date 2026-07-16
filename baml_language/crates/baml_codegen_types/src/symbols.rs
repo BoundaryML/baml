@@ -271,8 +271,6 @@ impl WalkAllUnions for Ty {
             | Ty::PromptAst { .. }
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
-            // Canonical unions cannot contain nested unions.
-            | Ty::Union(..)
             | Ty::Literal(..) => {}
             Ty::Class(_, args, _) => {
                 for arg in args {
@@ -307,6 +305,13 @@ impl WalkAllUnions for Ty {
             Ty::Future(value, error, _) => {
                 unions.extend(value.walk_all_unions());
                 unions.extend(error.walk_all_unions());
+            }
+            // Codegen types are canonical at the compiler boundary, but keep
+            // this public symbol traversal total for manually assembled pools.
+            Ty::Union(members, _) => {
+                for member in members {
+                    unions.extend(member.walk_all_unions());
+                }
             }
         }
 
@@ -487,5 +492,32 @@ mod tests {
                 "{label} alias key must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn union_walker_is_total_for_noncanonical_pools() {
+        let nested = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::EMPTY,
+                },
+                Ty::Null {
+                    attr: TyAttr::EMPTY,
+                },
+            ],
+            TyAttr::EMPTY,
+        );
+        let outer = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: TyAttr::EMPTY,
+                },
+                nested.clone(),
+            ],
+            TyAttr::EMPTY,
+        );
+        let symbol = alias(name("Nested"), outer.clone());
+
+        assert_eq!(symbol.walk_all_unions(), HashSet::from([outer, nested]));
     }
 }

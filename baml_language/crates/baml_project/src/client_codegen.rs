@@ -544,7 +544,9 @@ fn convert_tir_to_codegen_ty(
 }
 
 fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
-    let attr = TyAttr::default;
+    // Each recursive invocation reads the attribute from its own source node,
+    // so nested SAP/streaming annotations survive the codegen boundary.
+    let attr = || ty.attr().clone();
     let convert = |ty: &TirTy| convert_tir_leaf(ty);
     match ty {
         TirTy::Int { .. } => cg::Ty::Int { attr: attr() },
@@ -637,6 +639,8 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
 mod tests {
     use std::path::Path;
 
+    use baml_type::TyAttrValue;
+
     use super::*;
     use crate::ProjectDatabase;
 
@@ -654,6 +658,29 @@ mod tests {
 
     fn codegen_union(members: Vec<cg::Ty>) -> cg::Ty {
         cg::Ty::Union(members, codegen_attr())
+    }
+
+    #[test]
+    fn tir_attributes_survive_recursive_codegen_lowering() {
+        let outer_attr = TyAttr {
+            sap_pending_never: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let inner_attr = TyAttr {
+            sap_parse_without_null: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let tir = TirTy::List(
+            Box::new(TirTy::String {
+                attr: inner_attr.clone(),
+            }),
+            outer_attr.clone(),
+        );
+
+        assert_eq!(
+            convert_tir_to_codegen_ty(&tir, &HashMap::new(), &std::collections::HashSet::new(),),
+            cg::Ty::List(Box::new(cg::Ty::String { attr: inner_attr }), outer_attr,)
+        );
     }
 
     // ── Unit tests for pure helpers ─────────────────────────────────────────

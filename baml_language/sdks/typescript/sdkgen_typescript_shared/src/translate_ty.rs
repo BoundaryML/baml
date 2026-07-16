@@ -80,10 +80,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Media(MediaKind::Generic, _) => TranslatedType::bare("unknown"),
 
         Ty::List(inner, _) => {
+            let needs_parentheses = matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. });
             let inner = translate_ty(inner, ctx);
-            // Postfix `[]` binds tighter than `|`, so a union/optional element
-            // must be parenthesized: `(string | null)[]`.
-            let elem = if inner.expr.contains(" | ") {
+            // Postfix `[]` binds tighter than unions and function arrows.
+            let elem = if needs_parentheses {
                 format!("({})", inner.expr)
             } else {
                 inner.expr
@@ -118,7 +118,11 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                 .map(|item| {
                     let t = translate_ty(item, ctx);
                     imports.extend(t.imports);
-                    t.expr
+                    if matches!(item, Ty::Function { .. }) {
+                        format!("({})", t.expr)
+                    } else {
+                        t.expr
+                    }
                 })
                 .collect();
             TranslatedType {
@@ -624,6 +628,18 @@ mod tests {
                 expected_imports: &[],
             },
             Case {
+                label: "list_callback",
+                ty: list(boxed(callable(
+                    Vec::new(),
+                    boxed(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ))),
+                ctx: ctx(&[]),
+                expected_expr: "(() => boolean)[]",
+                expected_imports: &[],
+            },
+            Case {
                 label: "optional_list_string",
                 ty: union(vec![
                     list(boxed(Ty::String {
@@ -667,6 +683,23 @@ mod tests {
                 ]),
                 ctx: ctx(&[]),
                 expected_expr: "number | string | boolean",
+                expected_imports: &[],
+            },
+            Case {
+                label: "nullable_callback",
+                ty: union(vec![
+                    callable(
+                        Vec::new(),
+                        boxed(Ty::Bool {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                    ),
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
+                ctx: ctx(&[]),
+                expected_expr: "(() => boolean) | null",
                 expected_imports: &[],
             },
             // ── Name refs (same / cross leaf) ──
