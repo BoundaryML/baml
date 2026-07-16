@@ -7,14 +7,22 @@ dependency; the bridge `dlopen`s the shared BAML runtime at first use.
 
 ## Usage
 
+CMake:
+
+```cmake
+add_subdirectory(baml_sdk)
+target_link_libraries(app PRIVATE baml::sdk)
+```
+
+Or any other build system -- one include path, two generated sources:
+
 ```sh
 c++ -std=c++17 -Ibaml_sdk/include \
   main.cc baml_sdk/src/bindings.cc baml_sdk/src/_inlinedbaml.cc -o app
 BAML_RUNTIME_PATH=/path/to/libbridge_cffi.dylib ./app
 ```
 
-Any build system that can pass one include path and compile two generated
-sources works. Supported compilers: clang, gcc, MSVC (C++17 or later).
+Supported compilers: clang, gcc, MSVC (C++17 or later).
 
 ## Runtime resolution
 
