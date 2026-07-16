@@ -331,6 +331,15 @@ jobs:
         env:
           BAML_PROFILE: "0"
 
+      - name: "Free disk for CLI binary e2e tests"
+        run: |
+          set -euo pipefail
+          mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
+          cp target/debug/baml-sccache.exe baml-sccache.exe
+          echo "RUSTC_WRAPPER=$(pwd -W)/baml-sccache.exe" >> "$GITHUB_ENV"
+          cargo clean
+        working-directory: baml_language
+
       - name: "Run CLI binary e2e tests (windows)"
         run: cargo test -p baml_cli --test pack_e2e --test exit_code_e2e --all-features
         working-directory: baml_language
@@ -353,16 +362,12 @@ jobs:
           path: sccache-stats-test-windows.json
           if-no-files-found: ignore
 
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows.html
-        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-windows
-          path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
+          path: baml_language/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
   sdk-test-matrix:
