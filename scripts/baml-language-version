@@ -20,8 +20,8 @@ BAML_VERSION_RS = ROOT / "baml_language" / "crates" / "baml_version" / "src" / "
 PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
 PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_bridge" / "__init__.py"
 VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
-NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
-NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "dist" / "native.js"
+NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "package.json"
+NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "dist" / "native.js"
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -379,7 +379,7 @@ def regenerate_node_bridge() -> None:
     except subprocess.CalledProcessError as exc:
         fail(
             "failed to install or regenerate the Node bridge after stamping versions. "
-            "Run `cd baml_language/sdks/nodejs/bridge_nodejs && "
+            "Run `cd baml_language/sdks/typescript/bridge_typescript && "
             "pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts && pnpm build:debug` "
             "for details.",
             code=exc.returncode,
@@ -436,7 +436,6 @@ def check_release() -> None:
                     f"expected {expected.canonical_version}. Run "
                     "`scripts/baml-language-version sync` and commit the generated output."
                 )
-
     for name, ok in checks.items():
         if not ok:
             mismatches.append(name)

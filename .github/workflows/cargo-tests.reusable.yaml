@@ -377,7 +377,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
@@ -397,7 +397,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
@@ -417,7 +417,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",

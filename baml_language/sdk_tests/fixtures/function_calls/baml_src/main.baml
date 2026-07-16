@@ -13,6 +13,25 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+// Primitive identity functions keep this call-boundary smoke test focused:
+// every value crosses host -> WASM -> BEX -> WASM -> host without involving
+// collection or class encoding.
+function round_trip_int(value: int) -> int {
+  value
+}
+
+function round_trip_bool(value: bool) -> bool {
+  value
+}
+
+function round_trip_string(value: string) -> string {
+  value
+}
+
+function round_trip_float(value: float) -> float {
+  value
+}
+
 // Helper used as an *expression* default below — `opt2`'s default is a call to
 // this function, so the engine evaluates it whenever `opt2` is omitted.
 function make_opt2() -> int {
