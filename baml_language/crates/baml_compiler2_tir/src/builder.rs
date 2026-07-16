@@ -7815,11 +7815,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         // second matrix of error-free arms only, so an invalid arm cannot
         // spuriously mark a *later* valid arm unreachable.
         if !reachability_arms.is_empty() {
-            let reachability_report = crate::pattern_lowering::compute_match_usefulness(
-                self,
-                &reachability_arms,
-                scrutinee_ty_for_matrix,
-            );
+            // In the common case no arm had a pattern error, so
+            // `reachability_arms` is exactly `matrix_arms` (same DPats, same
+            // order) and the exhaustiveness report above was computed from the
+            // identical matrix — reuse its arm-reachability instead of running
+            // the whole usefulness algorithm a second time. The matrix walk is
+            // the hottest part of match checking, so this halves its cost per
+            // error-free `match`.
+            let reachability_report = if reachability_arms.len() == matrix_arms.len() {
+                report
+            } else {
+                crate::pattern_lowering::compute_match_usefulness(
+                    self,
+                    &reachability_arms,
+                    scrutinee_ty_for_matrix,
+                )
+            };
             for arm in reachability_report.unreachable_arms {
                 if let Some(&body_expr) = reachability_arm_ids.get(arm.0) {
                     self.context
