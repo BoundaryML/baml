@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import baml_sdk.lists.Fns;
 import baml_sdk.lists.ListContainer;
-import baml_sdk.lists.UnionIntOrString;
+import baml_sdk.unions$.UnionIntOrString;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;

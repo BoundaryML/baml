@@ -31,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import baml_sdk.lorem.Box;
 import baml_sdk.lorem.Fns;
 import baml_sdk.lorem.Resume;
-import baml_sdk.lorem.UnionResumeOrResponse;
-import baml_sdk.lorem.UnionResumeOrResumeStream;
+import baml_sdk.unions$.UnionResumeOrResponse;
+import baml_sdk.unions$.UnionResumeOrResumeStream;
 import org.junit.jupiter.api.Test;
 
 class TestStreams {

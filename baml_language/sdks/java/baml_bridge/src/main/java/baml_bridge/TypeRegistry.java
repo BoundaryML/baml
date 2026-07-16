@@ -55,6 +55,13 @@ public final class TypeRegistry {
     private static final ConcurrentHashMap<String, ClassEntry> classesByJavaName = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, EnumEntry> enumsByJavaName = new ConcurrentHashMap<>();
 
+    // Unions. Forward index (decode): the sorted arm-token signature -> entry.
+    // Reverse index (encode): each generated union RECORD binary name -> a
+    // reflective unwrapper for its single {@code value()} accessor.
+    private static final ConcurrentHashMap<String, UnionEntry> unionsBySignature = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
+            new ConcurrentHashMap<>();
+
     private TypeRegistry() {}
 
     // -- registration --------------------------------------------------------
@@ -91,6 +98,35 @@ public final class TypeRegistry {
         }
     }
 
+    /**
+     * Register a generated union. {@code signature} is the union's arm tokens
+     * sorted and joined with {@code |} (the same tokenizer the wire decoder runs
+     * over the union's {@code self_type}); {@code sealedInterfaceName} the binary
+     * name of the generated sealed interface (retained for completeness);
+     * {@code armTokens} the per-arm tokens in <em>declaration</em> order; and
+     * {@code recordNames} the parallel binary names of the wrapper records
+     * (one {@code record ...Value(T value)} per arm). Decode resolves an arm from
+     * the inner value's shape (see {@link #constructUnion}); encode unwraps a
+     * record instance back to its bare inner value (see {@link #unionRecordInner}).
+     * Idempotent: the first registration of {@code signature} wins.
+     */
+    public static void registerUnion(
+            String signature, String sealedInterfaceName, String[] armTokens, String[] recordNames) {
+        if (armTokens.length != recordNames.length) {
+            throw new IllegalArgumentException(
+                    "union arrays length mismatch for " + signature + ": "
+                            + armTokens.length + " arm tokens vs " + recordNames.length + " records");
+        }
+        UnionEntry entry = new UnionEntry(signature, sealedInterfaceName, armTokens, recordNames);
+        unionsBySignature.putIfAbsent(signature, entry);
+        // Record-name registration is unconditional: encode must be able to
+        // unwrap ANY registered record class, independent of which
+        // registration won the signature slot.
+        for (String recordName : recordNames) {
+            unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName));
+        }
+    }
+
     // -- decode (BAML FQN -> generated instance) -----------------------------
 
     /**
@@ -115,7 +151,40 @@ public final class TypeRegistry {
         return entry == null ? null : entry.constantFor(wireName);
     }
 
+    /**
+     * Construct the generated union record for a wire union value. {@code signature}
+     * is the union's sorted arm-token signature; {@code discriminator} the token
+     * describing the inner value's shape (a primitive/FQN token, {@code "list"} /
+     * {@code "map"} for a container arm, or {@code "lit:<base>:<value>"} for a
+     * literal); {@code inner} the already-decoded inner value. Returns the wrapper
+     * record, or {@code null} when the signature is not a registered union or no
+     * arm matches the discriminator — the caller then keeps the bare inner value
+     * (literal-over-one-base unions are erased in codegen and never registered).
+     */
+    public static Object constructUnion(String signature, String discriminator, Object inner) {
+        UnionEntry entry = unionsBySignature.get(signature);
+        return entry == null ? null : entry.instantiate(discriminator, inner);
+    }
+
     // -- encode (Java object -> FQN + wire payload) --------------------------
+
+    /** Whether {@code obj}'s class is a registered generated union wrapper record. */
+    public static boolean isUnionRecord(Object obj) {
+        return unionRecordsByJavaName.containsKey(obj.getClass().getName());
+    }
+
+    /**
+     * The bare inner value carried by a union wrapper record (its {@code value()}
+     * accessor). Callers must gate on {@link #isUnionRecord} first; passing a
+     * non-record object throws.
+     */
+    public static Object unionRecordInner(Object obj) {
+        UnionRecordEntry entry = unionRecordsByJavaName.get(obj.getClass().getName());
+        if (entry == null) {
+            throw new IllegalStateException("not a registered union record: " + obj.getClass().getName());
+        }
+        return entry.inner(obj);
+    }
 
     /**
      * The class-value wire payload for a host object, or {@code null} when the
@@ -336,6 +405,148 @@ public final class TypeRegistry {
                 wireToConstant = m;
             }
             return m;
+        }
+    }
+
+    private static final class UnionEntry {
+        final String signature;
+        final String sealedInterfaceName;
+        final String[] armTokens;
+        final String[] recordNames;
+
+        // Lazily resolved per-arm single-arg record constructors. Benign races
+        // only re-resolve a slot to an equal Constructor.
+        private volatile Constructor<?>[] ctors;
+
+        UnionEntry(String signature, String sealedInterfaceName, String[] armTokens, String[] recordNames) {
+            this.signature = signature;
+            this.sealedInterfaceName = sealedInterfaceName;
+            this.armTokens = armTokens;
+            this.recordNames = recordNames;
+        }
+
+        /** Build the wrapper record for {@code discriminator}, or null if no arm matches. */
+        Object instantiate(String discriminator, Object inner) {
+            int idx = pickArm(discriminator);
+            if (idx < 0) {
+                return null;
+            }
+            Constructor<?> c = constructor(idx);
+            try {
+                return c.newInstance(inner); // autoboxing/unboxing applies to the sole arg
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(
+                        "failed to construct union record " + recordNames[idx], e);
+            }
+        }
+
+        /**
+         * The declaration-order index of the arm matching {@code discriminator}, or
+         * -1. A {@code "list"} / {@code "map"} discriminator picks the first arm whose
+         * token is a {@code list<...>} / {@code map<...>}; a {@code "lit:<base>:..."}
+         * discriminator prefers an exact literal token then the first literal arm of
+         * that base; every other discriminator (primitives and class/enum FQNs)
+         * matches an arm token exactly.
+         */
+        private int pickArm(String discriminator) {
+            if (discriminator.equals("list")) {
+                return firstWithPrefix("list<");
+            }
+            if (discriminator.equals("map")) {
+                return firstWithPrefix("map<");
+            }
+            if (discriminator.startsWith("lit:")) {
+                for (int i = 0; i < armTokens.length; i++) {
+                    if (armTokens[i].equals(discriminator)) {
+                        return i;
+                    }
+                }
+                int base = discriminator.indexOf(':', 4); // after "lit:<base>"
+                String prefix = base < 0 ? discriminator : discriminator.substring(0, base + 1);
+                return firstWithPrefix(prefix);
+            }
+            for (int i = 0; i < armTokens.length; i++) {
+                if (armTokens[i].equals(discriminator)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private int firstWithPrefix(String prefix) {
+            for (int i = 0; i < armTokens.length; i++) {
+                if (armTokens[i].startsWith(prefix)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private Constructor<?> constructor(int idx) {
+            Constructor<?>[] cs = ctors;
+            if (cs == null) {
+                cs = new Constructor<?>[recordNames.length];
+                ctors = cs;
+            }
+            Constructor<?> c = cs[idx];
+            if (c == null) {
+                c = resolveConstructor(recordNames[idx]);
+                cs[idx] = c;
+            }
+            return c;
+        }
+
+        private static Constructor<?> resolveConstructor(String recordName) {
+            Class<?> cls;
+            try {
+                cls = Class.forName(recordName);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException(
+                        "generated union record not found on the classpath: " + recordName, e);
+            }
+            Constructor<?>[] all = cls.getConstructors(); // public only
+            if (all.length == 1) {
+                return all[0];
+            }
+            // Prefer the canonical single-component constructor by arity.
+            for (Constructor<?> cand : all) {
+                if (cand.getParameterCount() == 1) {
+                    return cand;
+                }
+            }
+            throw new IllegalStateException(
+                    "no single-arg constructor on union record " + recordName);
+        }
+    }
+
+    private static final class UnionRecordEntry {
+        final String recordName;
+
+        // Lazily resolved value() accessor (from the object's own Class — encode
+        // never forces a Class.forName).
+        private volatile Method valueAccessor;
+
+        UnionRecordEntry(String recordName) {
+            this.recordName = recordName;
+        }
+
+        Object inner(Object obj) {
+            Method m = valueAccessor;
+            if (m == null) {
+                try {
+                    m = obj.getClass().getMethod("value");
+                } catch (NoSuchMethodException e) {
+                    throw new IllegalStateException(
+                            "no value() accessor on union record " + recordName, e);
+                }
+                valueAccessor = m;
+            }
+            try {
+                return m.invoke(obj);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(
+                        "failed to read value() on union record " + recordName, e);
+            }
         }
     }
 }

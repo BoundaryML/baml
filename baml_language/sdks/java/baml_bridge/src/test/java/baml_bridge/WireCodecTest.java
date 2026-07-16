@@ -37,6 +37,7 @@ class WireCodecTest {
     private static final int OV_LITERAL = 9;
     private static final int OV_LIST = 11;
     private static final int OV_MAP = 12;
+    private static final int OV_UNION = 13;
     private static final int OV_UINT8ARRAY = 19;
     private static final int OV_BIGINT = 20;
 
@@ -255,6 +256,16 @@ class WireCodecTest {
         new$ // wire variant "new" (escaped Java keyword)
     }
 
+    // A generated-shape union: a sealed interface with one wrapper record per arm
+    // (each a `record ...Value(T value)` with a `value()` accessor). `IntValue`
+    // uses a primitive `long` component to exercise reflective unboxing of the
+    // decoded inner value.
+    public sealed interface IntOrString permits IntOrString.IntValue, IntOrString.StringValue {
+        record IntValue(long value) implements IntOrString {}
+
+        record StringValue(String value) implements IntOrString {}
+    }
+
     private static final String RESUME_FQN = "user.lorem.Resume";
     private static final String SENTIMENT_FQN = "user.ipsum.Sentiment";
 
@@ -269,6 +280,15 @@ class WireCodecTest {
                 Sentiment.class.getName(),
                 new String[] {"Positive", "new$"}, // Java constants
                 new String[] {"Positive", "new"}); // wire variants
+        // Signature = sorted arm tokens joined with `|`; arm tokens + record
+        // names in declaration order (int|string).
+        TypeRegistry.registerUnion(
+                "int|string",
+                IntOrString.class.getName(),
+                new String[] {"int", "string"},
+                new String[] {
+                    IntOrString.IntValue.class.getName(), IntOrString.StringValue.class.getName()
+                });
     }
 
     /** A registered class encodes as InboundValue.class_value (=8). */
@@ -404,5 +424,124 @@ class WireCodecTest {
         WireWriter ov = new WireWriter();
         ov.writeMessage(OV_ENUM, en.toByteArray());
         return ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()));
+    }
+
+    // -- union decode / encode (TypeRegistry) --------------------------------
+
+    // BamlTyPrimitiveKind (baml_type.proto).
+    private static final int PRIM_STRING = 1;
+    private static final int PRIM_INT = 2;
+    private static final int PRIM_BOOL = 4;
+
+    /** A BamlTy wrapping a primitive kind (BamlTy.primitive = 1). */
+    private static byte[] tyPrimitive(int kind) {
+        WireWriter prim = new WireWriter();
+        prim.writeInt64(1, kind); // BamlTyPrimitive.kind = 1
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(1, prim.toByteArray());
+        return ty.toByteArray();
+    }
+
+    /** A BamlTy wrapping a string literal (BamlTy.literal = 8). */
+    private static byte[] tyStringLiteral(String s) {
+        WireWriter lit = new WireWriter();
+        lit.writeString(1, s); // BamlTyLiteral.string_value = 1
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(8, lit.toByteArray());
+        return ty.toByteArray();
+    }
+
+    /** A BamlTy union (BamlTy.union = 7) over the given option BamlTys. */
+    private static byte[] tyUnion(byte[]... options) {
+        WireWriter u = new WireWriter();
+        for (byte[] o : options) {
+            u.writeMessage(1, o); // BamlTyUnion.options = 1 (repeated)
+        }
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(7, u.toByteArray());
+        return ty.toByteArray();
+    }
+
+    /** A BamlOutboundValue.union_variant_value (=13) with self_type (=4) + value (=6). */
+    private static byte[] ovUnion(byte[] selfType, byte[] innerValue) {
+        WireWriter uv = new WireWriter();
+        uv.writeMessage(4, selfType); // BamlValueUnionVariant.self_type = 4
+        if (innerValue != null) {
+            uv.writeMessage(6, innerValue); // value = 6
+        }
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_UNION, uv.toByteArray());
+        return ov.toByteArray();
+    }
+
+    private static byte[] ovString(String s) {
+        WireWriter w = new WireWriter();
+        w.writeString(OV_STRING, s);
+        return w.toByteArray();
+    }
+
+    private static byte[] ovLiteralString(String s) {
+        WireWriter lit = new WireWriter();
+        lit.writeString(1, s); // BamlLiteralValue.string_value = 1
+        WireWriter w = new WireWriter();
+        w.writeMessage(OV_LITERAL, lit.toByteArray());
+        return w.toByteArray();
+    }
+
+    private static byte[] ovNull() {
+        WireWriter w = new WireWriter();
+        w.writeMessage(OV_NULL, new WireWriter().toByteArray()); // null_value = empty message
+        return w.toByteArray();
+    }
+
+    /** (a) int|string carrying an int decodes to the registered IntValue record. */
+    @Test
+    void decode_union_int_arm_constructs_record() {
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovInt(1))));
+        IntOrString.IntValue v = assertInstanceOf(IntOrString.IntValue.class, decoded);
+        assertEquals(1L, v.value());
+    }
+
+    /** The arm is picked from the inner value's shape, not by position. */
+    @Test
+    void decode_union_string_arm_constructs_record() {
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovString("hi"))));
+        IntOrString.StringValue v = assertInstanceOf(IntOrString.StringValue.class, decoded);
+        assertEquals("hi", v.value());
+    }
+
+    /** (b) An unregistered signature falls back to the bare decoded inner value. */
+    @Test
+    void decode_union_unknown_signature_falls_back_to_bare_inner() {
+        // int | bool — not a registered signature.
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_BOOL));
+        assertEquals(7L, ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovInt(7)))));
+    }
+
+    /** (c) A literal-over-one-base union (erased, never registered) → bare inner. */
+    @Test
+    void decode_union_literal_arms_fall_back_to_bare_inner() {
+        byte[] selfType = tyUnion(tyStringLiteral("draft"), tyStringLiteral("sent"));
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovLiteralString("draft"))));
+        assertEquals("draft", decoded);
+    }
+
+    /** (d) Encoding a union record unwraps to the bare inner value's encoding. */
+    @Test
+    void encode_union_record_unwraps_to_bare_inner() {
+        byte[] wrapped = ProtoWriter.encodeInboundValue(new IntOrString.IntValue(5L));
+        byte[] bare = ProtoWriter.encodeInboundValue(5L);
+        assertArrayEquals(bare, wrapped);
+    }
+
+    /** (e) A null inner value decodes to null (no wrapper record). */
+    @Test
+    void decode_union_null_inner_is_null() {
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        assertNull(ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovNull()))));
     }
 }

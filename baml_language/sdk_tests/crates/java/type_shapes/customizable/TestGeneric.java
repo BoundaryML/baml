@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_sdk.generics.Fns;
-import baml_sdk.generics.UnionTOrWrapperMarker;
+import baml_sdk.unions$.UnionTOrWrapperMarker;
 import baml_sdk.generics.WrapperMethods;
 import org.junit.jupiter.api.Test;
 

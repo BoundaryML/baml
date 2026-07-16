@@ -195,19 +195,19 @@ fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -
             for arm in &arms {
                 collect_type_vars(arm, &mut tvs);
             }
-            sink.unions
-                .insert((ctx.current_package.clone(), ident.clone()), arms);
+            // Minted unions live in ONE canonical package so a structural
+            // union is a single Java type everywhere (per-package twins
+            // would be distinct, incompatible types and break the wire
+            // registry's signature keying). `unions$` cannot collide with
+            // a user namespace: `$` never appears in BAML identifiers.
+            let pkg = canonical_union_package();
+            sink.unions.insert((pkg.clone(), ident.clone()), arms);
             let generic_suffix = if tvs.is_empty() {
                 String::new()
             } else {
                 format!("<{}>", tvs.join(", "))
             };
-            format!(
-                "{}.{}{}",
-                ctx.current_package.java_package(),
-                ident,
-                generic_suffix
-            )
+            format!("{}.{}{}", pkg.java_package(), ident, generic_suffix)
         }
     }
 }
@@ -269,6 +269,13 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
             collect_type_vars(ret, out);
         }
         _ => {}
+    }
+}
+
+/// The canonical home of all minted (anonymous) union types.
+pub(crate) fn canonical_union_package() -> PackagePath {
+    PackagePath {
+        segments: vec!["unions$".to_string()],
     }
 }
 
@@ -500,10 +507,10 @@ mod tests {
         let mut sink = UnionSink::default();
         let u = Ty::Union(vec![Ty::Int, Ty::String]);
         let expr = translate_ty(&u, TyPosition::TopLevel, &ctx, &mut sink);
-        assert_eq!(expr, "baml_sdk.unions.UnionIntOrString");
+        assert_eq!(expr, "baml_sdk.unions$.UnionIntOrString");
         let key = (
             PackagePath {
-                segments: vec!["unions".to_string()],
+                segments: vec!["unions$".to_string()],
             },
             "UnionIntOrString".to_string(),
         );
@@ -515,7 +522,7 @@ mod tests {
         let u = Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions.UnionIntOrString"
+            "baml_sdk.unions$.UnionIntOrString"
         );
     }
 
@@ -525,7 +532,7 @@ mod tests {
         let u = Ty::Union(vec![t, Ty::String]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions.UnionTOrString"
+            "baml_sdk.unions$.UnionTOrString"
         );
     }
 
@@ -546,7 +553,7 @@ mod tests {
         ]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions.UnionIntK1OrKdraft"
+            "baml_sdk.unions$.UnionIntK1OrKdraft"
         );
     }
 

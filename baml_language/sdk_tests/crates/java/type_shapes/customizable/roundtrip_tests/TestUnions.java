@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import baml_sdk.unions.Fns;
 import baml_sdk.unions.T;
 import baml_sdk.unions.UnionContainer;
-import baml_sdk.unions.UnionIntOrString;
-import baml_sdk.unions.UnionTOrString;
+import baml_sdk.unions$.UnionIntOrString;
+import baml_sdk.unions$.UnionTOrString;
 import org.junit.jupiter.api.Test;
 
 class TestUnions {

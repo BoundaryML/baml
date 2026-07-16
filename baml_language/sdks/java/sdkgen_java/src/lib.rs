@@ -433,6 +433,10 @@ fn union_registration(
         .collect();
     let mut tokens: Vec<String> = arm_entries.iter().map(|(t, _)| t.clone()).collect();
     tokens.sort();
+    // The engine's runtime union_type is not fully normalized (duplicate
+    // arms survive, e.g. `int | int | string`), while TIR-side arms are
+    // dedup'd — the signature must be duplicate-insensitive on both sides.
+    tokens.dedup();
     (tokens.join("|"), union_binary, arm_entries)
 }
 
@@ -770,8 +774,8 @@ mod tests {
         );
         let out = emit_sdk(&pool);
         let container = &out[&PathBuf::from("unions/UnionContainer.java")];
-        assert!(container.contains("private final baml_sdk.unions.UnionIntOrString value;"));
-        let union = &out[&PathBuf::from("unions/UnionIntOrString.java")];
+        assert!(container.contains("private final baml_sdk.unions$.UnionIntOrString value;"));
+        let union = &out[&PathBuf::from("unions$/UnionIntOrString.java")];
         assert!(union.contains(
             "public sealed interface UnionIntOrString permits UnionIntOrString.IntValue, UnionIntOrString.StringValue {"
         ));

@@ -145,6 +145,11 @@ public final class ProtoWriter {
                 throw unsupported(value);
             }
             w.writeMessage(IV_ENUM, encodeEnum(ew));
+        } else if (TypeRegistry.isUnionRecord(value)) {
+            // A union wrapper record carries no wrapper on the inbound wire:
+            // unwrap to its bare inner value and encode that (inbound has no
+            // union arm — the engine re-validates the union at the boundary).
+            return encodeInboundValue(TypeRegistry.unionRecordInner(value));
         } else {
             // A registered generated class encodes as a class_value; anything
             // else (handle / media / host-callable / arbitrary object) is not

@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import baml_sdk.optional.Fns;
 import baml_sdk.optional.OptionalContainer;
 import baml_sdk.optional.Resume;
-import baml_sdk.optional.UnionIntOrString;
+import baml_sdk.unions$.UnionIntOrString;
 import org.junit.jupiter.api.Test;
 
 class TestOptional {
