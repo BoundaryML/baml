@@ -136,14 +136,28 @@ const TY_PRIMITIVE_TOKEN = {
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES]: 'bytes',
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT]: 'bigint',
 };
+const MIN_INT64 = -(1n << 63n);
+const MAX_INT64 = (1n << 63n) - 1n;
 function literalWireTy(token) {
     switch (token.kind) {
         case 'string':
             return { literal: { stringValue: token.value } };
-        case 'int':
-            return Number.isSafeInteger(token.value)
-                ? { literal: { intValue: token.value } }
-                : { unknown: {} };
+        case 'int': {
+            if (typeof token.value === 'number') {
+                return Number.isSafeInteger(token.value)
+                    ? { literal: { intValue: token.value } }
+                    : { unknown: {} };
+            }
+            if (token.value < MIN_INT64 || token.value > MAX_INT64)
+                return { unknown: {} };
+            // The generated interface advertises number | Long, while `fromObject`
+            // also accepts decimal strings. Normalize to an exact signed Long while
+            // retaining the intValue discriminator.
+            const literal = baml_bridge.cffi.v1.BamlTyLiteral.fromObject({
+                intValue: token.value.toString(),
+            });
+            return { literal };
+        }
         case 'bool':
             return { literal: { boolValue: token.value } };
         case 'bigint':
@@ -159,7 +173,14 @@ function outboundLiteral(literal) {
     }
     if (oneof === 'intValue' || (oneof === undefined && literal.intValue != null)) {
         const value = Number(literal.intValue);
-        return Number.isSafeInteger(value) ? { kind: 'int', value } : undefined;
+        if (Number.isSafeInteger(value))
+            return { kind: 'int', value };
+        try {
+            return { kind: 'int', value: BigInt(String(literal.intValue)) };
+        }
+        catch {
+            return undefined;
+        }
     }
     if (oneof === 'boolValue' || (oneof === undefined && literal.boolValue != null)) {
         return { kind: 'bool', value: literal.boolValue ?? false };

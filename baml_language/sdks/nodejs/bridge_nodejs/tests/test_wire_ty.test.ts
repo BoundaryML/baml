@@ -13,6 +13,7 @@ import {
     lowerTypeToWireTy,
     setTypeMap,
 } from '../dist/index.js';
+import { baml_bridge } from '../dist/proto/baml_cffi.js';
 import { outboundTyToBamlType } from '../dist/wire_ty.js';
 
 class Box {
@@ -106,6 +107,44 @@ describe('returned BAML type metadata', () => {
         const token = outboundTyToBamlType({ literal });
         expect(token).toEqual({ literal: expected });
         expect(lowerTypeToWireTy(token)).toEqual({ literal });
+    });
+
+    test.each([
+        ['9007199254740992', 9007199254740992n],
+        ['-9007199254740992', -9007199254740992n],
+        ['9223372036854775807', 9223372036854775807n],
+        ['-9223372036854775808', -9223372036854775808n],
+    ] as const)('preserves wide int64 literal %s as exact int metadata', (raw, expected) => {
+        const literal = baml_bridge.cffi.v1.BamlTyLiteral.fromObject({ intValue: raw });
+        const token = outboundTyToBamlType({ literal });
+
+        expect(token).toEqual({ literal: { kind: 'int', value: expected } });
+
+        const lowered = baml_bridge.cffi.v1.BamlTy.fromObject(lowerTypeToWireTy(token));
+        expect(lowered.literal?.literal).toBe('intValue');
+        expect(String(lowered.literal?.intValue)).toBe(raw);
+        expect(lowered.literal?.bigintValue).toBeNull();
+        expect(outboundTyToBamlType(lowered)).toEqual(token);
+    });
+
+    test.each([
+        ['9007199254740991', 9007199254740991],
+        ['-9007199254740991', -9007199254740991],
+    ] as const)('keeps safe int64 literal %s as number metadata', (raw, expected) => {
+        const literal = baml_bridge.cffi.v1.BamlTyLiteral.fromObject({ intValue: raw });
+
+        expect(outboundTyToBamlType({ literal })).toEqual({
+            literal: { kind: 'int', value: expected },
+        });
+    });
+
+    test.each([
+        9223372036854775808n,
+        -9223372036854775809n,
+    ])('rejects int literal %s outside signed int64', (value) => {
+        expect(lowerTypeToWireTy({ literal: { kind: 'int', value } })).toEqual({
+            unknown: {},
+        });
     });
 
     test.each([

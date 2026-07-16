@@ -468,17 +468,34 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         if origin is typing.Literal:
             if len(targs) == 1 and _fill_wire_literal(ty.literal, targs[0]):
                 return
+            if len(targs) > 1:
+                options = []
+                for arg in targs:
+                    option = baml_type_pb2.BamlTy()
+                    if not _fill_wire_literal(option.literal, arg):
+                        break
+                    options.append(option)
+                else:
+                    for option in options:
+                        ty.union.options.add().CopyFrom(option)
+                    return
             ty.unknown.SetInParent()
             return
         # Any other generic origin: fall through to the unknown default.
 
-    # PEP 695 / typing_extensions TypeAliasType is not a `type` and has no
-    # typing origin. Codegen records its module/name identity in the typemap so
-    # recursive aliases remain usable after outbound generic reconstruction.
+    # PEP 695 / typing_extensions TypeAliasType is not a `type`; parameterized
+    # aliases may expose the base alias through `typing.get_origin`. Codegen
+    # records its module/name identity in the typemap so recursive aliases remain
+    # usable after outbound generic reconstruction.
     if not isinstance(py_type, type):
-        fqn = get_type_map().py_type_to_baml_type(py_type)
+        type_map = get_type_map()
+        fqn = type_map.py_type_to_baml_type(py_type)
+        if not fqn and origin is not None:
+            fqn = type_map.py_type_to_baml_type(origin)
         if fqn:
             ty.type_alias.name = fqn
+            for arg in typing.get_args(py_type):
+                _fill_inner(ty.type_alias.type_args.add(), arg)
             return
 
     if isinstance(py_type, type):

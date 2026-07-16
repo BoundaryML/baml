@@ -259,6 +259,31 @@ def test_python_type_alias_lowers_back_to_named_wire_type():
     assert wire.type_alias.name == "user.lorem.RuntimeAlias"
 
 
+def test_parameterized_python_type_alias_preserves_type_args():
+    from typing_extensions import TypeAliasType
+
+    alias = TypeAliasType("RuntimeAlias", list[T], type_params=(T,))
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={},
+        enums={},
+        type_aliases={"user.lorem.RuntimeAlias": (__name__, "RuntimeAlias")},
+    )
+    saved = get_type_map()
+    set_type_map(tm)
+    try:
+        wire = python_type_to_wire_ty(alias[int])
+    finally:
+        set_type_map(saved)
+
+    assert wire.WhichOneof("ty") == "type_alias"
+    assert wire.type_alias.name == "user.lorem.RuntimeAlias"
+    assert len(wire.type_alias.type_args) == 1
+    assert (
+        wire.type_alias.type_args[0].primitive.kind
+        == baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    )
+
+
 def test_baml_ty_literal_preserves_each_literal_kind():
     cases = (
         ("string_value", "draft", "draft"),
@@ -284,6 +309,47 @@ def test_python_literal_lowers_back_to_literal_wire_type():
     assert wire.WhichOneof("ty") == "literal"
     assert wire.literal.WhichOneof("literal") == "string_value"
     assert wire.literal.string_value == "draft"
+
+
+def test_python_multi_literal_lowers_to_union_of_literal_wire_types():
+    wire = python_type_to_wire_ty(typing.Literal["draft", "published"])
+
+    assert wire.WhichOneof("ty") == "union"
+    assert len(wire.union.options) == 2
+    assert [option.WhichOneof("ty") for option in wire.union.options] == [
+        "literal",
+        "literal",
+    ]
+    assert [option.literal.string_value for option in wire.union.options] == [
+        "draft",
+        "published",
+    ]
+
+
+def test_python_multi_literal_preserves_each_supported_kind():
+    large_int = 1 << 70
+    wire = python_type_to_wire_ty(typing.Literal["draft", 7, True, 3.5, large_int])
+
+    assert wire.WhichOneof("ty") == "union"
+    assert [option.literal.WhichOneof("literal") for option in wire.union.options] == [
+        "string_value",
+        "int_value",
+        "bool_value",
+        "float_value",
+        "bigint_value",
+    ]
+    assert wire.union.options[0].literal.string_value == "draft"
+    assert wire.union.options[1].literal.int_value == 7
+    assert wire.union.options[2].literal.bool_value is True
+    assert wire.union.options[3].literal.float_value == "3.5"
+    assert wire.union.options[4].literal.bigint_value == str(large_int)
+
+
+def test_python_multi_literal_with_unsupported_value_stays_unknown():
+    unsupported = object()
+    wire = python_type_to_wire_ty(typing.Literal["draft", unsupported])
+
+    assert wire.WhichOneof("ty") == "unknown"
 
 
 def test_baml_ty_media_preserves_known_media_classes():

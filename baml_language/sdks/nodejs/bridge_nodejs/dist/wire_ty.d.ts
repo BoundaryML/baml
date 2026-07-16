@@ -24,13 +24,14 @@ export type BamlMediaCtor = typeof BamlImage | typeof BamlAudio | typeof BamlVid
 /** An exact BAML literal type. The tag keeps `int`/`float` and primitive type
  * tokens unambiguous despite JavaScript's erased scalar types. The host keeps
  * this exact metadata; the engine intentionally widens a literal when it is
- * reused as a TypeVar binding. */
+ * reused as a TypeVar binding. An `int` uses a bigint value only when its exact
+ * signed-int64 value is outside JavaScript's safe-integer range. */
 export type BamlLiteralToken = {
     kind: 'string';
     value: string;
 } | {
     kind: 'int';
-    value: number;
+    value: number | bigint;
 } | {
     kind: 'bool';
     value: boolean;
