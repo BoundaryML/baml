@@ -13557,6 +13557,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let result = Self::infer_arithmetic(op, lhs, rhs);
                 if !matches!(result, Ty::Unknown { .. }) {
                     result
+                } else if matches!(self.normalize(lhs), Ty::Never { .. })
+                    || matches!(self.normalize(rhs), Ty::Never { .. })
+                {
+                    // A `never` operand makes the operation unreachable (e.g.
+                    // an unreachable catch arm's binding): bottom propagates,
+                    // no diagnostic.
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
                 } else if let Some(ty) = self.infer_arithmetic_via_interface(op, lhs, rhs) {
                     ty
                 } else {
