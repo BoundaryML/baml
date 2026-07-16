@@ -403,6 +403,38 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-go-sdk:
+    name: Build Go SDK mirror
+    needs: [plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - name: Stamp version
+        run: scripts/baml-language-version stamp --plan release-plan.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: baml_language/sdks/go/baml_go/go.mod
+          cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
+      - name: Assemble and test public module
+        run: |
+          set -euo pipefail
+          scripts/assemble-go-sdk-mirror --out "$RUNNER_TEMP/go-sdk-mirror"
+          cd "$RUNNER_TEMP/go-sdk-mirror"
+          test "$(go list -m)" = "github.com/boundaryml/baml-go"
+          go test ./...
+          go vet ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-sdk-mirror
+          path: ${{ runner.temp }}/go-sdk-mirror
+          if-no-files-found: error
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
@@ -414,6 +446,7 @@ jobs:
       - build-python-sdk
       - build-nodejs-sdk
       - build-bridge-cffi
+      - build-go-sdk
     steps:
       - run: echo "all release build jobs completed"
 
@@ -603,10 +636,66 @@ jobs:
             fi
           done
 
+  publish-go-sdk:
+    name: Publish Go SDK mirror
+    needs: [plan, build-go-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: go-sdk-mirror
+          path: /tmp/go-sdk-package
+      - name: Clone BoundaryML/baml-go
+        env:
+          DEPLOY_KEY: ${{ secrets.BAML_GO_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_go_mirror_key
+          chmod 600 ~/.ssh/baml_go_mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
+          git clone git@github.com:BoundaryML/baml-go.git /tmp/baml-go
+          if ! git -C /tmp/baml-go rev-parse --verify HEAD >/dev/null 2>&1; then
+            git -C /tmp/baml-go switch --orphan main
+          fi
+      - name: Publish immutable module tag
+        env:
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
+          tag="v$VERSION"
+          rsync -a --delete --exclude .git /tmp/go-sdk-package/ /tmp/baml-go/
+          cd /tmp/baml-go
+          git add -A
+
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            if git diff --cached --quiet "$tag" --; then
+              echo "$tag already exists with identical module content"
+              exit 0
+            fi
+            echo "::error::$tag already exists with different module content"
+            exit 1
+          fi
+
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for v$VERSION"
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$tag" -m "$tag"
+          git push --atomic origin main "$tag"
+
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-go-sdk, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && needs.publish-go-sdk.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -710,9 +799,36 @@ jobs:
           aws s3 cp scripts/install.ps1 "s3://$PKG_BUCKET/install.ps1" --content-type text/plain --cache-control "public, max-age=60, must-revalidate"
           aws s3 cp tools/pkg_boundaryml_com/data/index.html "s3://$PKG_BUCKET/index.html" --content-type text/html --cache-control "public, max-age=300"
 
+  smoke-go-release:
+    name: Smoke published Go SDK (${{ matrix.os }})
+    needs: [plan, publish-go-sdk, publish-pkg-boundaryml-com]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: baml_language/sdks/go/baml_go/go.mod
+          cache: false
+      - name: Prove installation and runtime call outside the repository
+        run: |
+          python scripts/smoke-go-release.py \
+            --version "${{ needs.plan.outputs.version }}" \
+            --work-dir "$RUNNER_TEMP/baml-go-release-smoke"
+
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
-    needs: [plan, publish-pkg-boundaryml-com]
+    needs: [plan, publish-pkg-boundaryml-com, smoke-go-release]
     if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     permissions:

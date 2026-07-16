@@ -9,7 +9,7 @@ import (
 // module. The release planner stamps it alongside every other SDK version.
 const DefaultRuntimeVersion = "0.15.0"
 
-const goModulePath = "github.com/boundaryml/baml/sdks/go/baml_go"
+const goModulePath = "github.com/boundaryml/baml-go"
 
 func requiredRuntimeVersion() string {
 	info, ok := debug.ReadBuildInfo()

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
-	"github.com/boundaryml/baml/sdks/go/baml_go"
+	"github.com/boundaryml/baml-go"
 )
 
 // These assignments are intentionally compile-only. They pin the exact public

@@ -1,5 +1,10 @@
 # BAML Go runtime
 
+This is the source of the read-only
+[`github.com/boundaryml/baml-go`](https://github.com/BoundaryML/baml-go)
+module mirror. Changes land in the BAML monorepo and release automation copies
+this directory to the mirror with an immutable `v<language-version>` tag.
+
 Generated Go SDKs use this package for wire encoding and native-runtime calls.
 The Go binary does not link `bridge_cffi` at process startup. On supported
 desktop platforms, the package resolves a local runtime artifact and loads the

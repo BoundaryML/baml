@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 // List encodes a present BAML list. A nil Go slice is a present empty list;

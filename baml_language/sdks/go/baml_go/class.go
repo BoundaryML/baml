@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 // Class constructs a non-generic BAML class value. name and every field key

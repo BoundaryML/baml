@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 	"google.golang.org/protobuf/proto"
 )
 

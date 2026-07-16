@@ -3,7 +3,7 @@ package baml_go
 import (
 	"testing"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 func TestOptionalEncodesNilAsExplicitNull(t *testing.T) {

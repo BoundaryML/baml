@@ -1,4 +1,4 @@
-module github.com/boundaryml/baml/sdks/go/baml_go
+module github.com/boundaryml/baml-go
 
 go 1.23
 

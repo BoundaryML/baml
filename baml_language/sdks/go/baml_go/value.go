@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 func (value Value) isNull() (bool, error) {

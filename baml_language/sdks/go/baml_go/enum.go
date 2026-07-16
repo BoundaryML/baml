@@ -3,7 +3,7 @@ package baml_go
 import (
 	"fmt"
 
-	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 // Enum encodes one statically declared BAML enum variant. Generated codecs

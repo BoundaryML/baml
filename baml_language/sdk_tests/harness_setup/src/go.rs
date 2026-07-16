@@ -116,7 +116,7 @@ fn stage_output(manifest_dir: &std::path::Path, fixture: &str, output: HashMap<P
     }
     fs::write(
         generated.join("go.mod"),
-        "module baml.local/sdk\n\ngo 1.23\n\nrequire github.com/boundaryml/baml/sdks/go/baml_go v0.0.0\n\nrequire google.golang.org/protobuf v1.36.6 // indirect\n\nreplace github.com/boundaryml/baml/sdks/go/baml_go => ../../../../../sdks/go/baml_go\n",
+        "module baml.local/sdk\n\ngo 1.23\n\nrequire github.com/boundaryml/baml-go v0.0.0\n\nrequire google.golang.org/protobuf v1.36.6 // indirect\n\nreplace github.com/boundaryml/baml-go => ../../../../../sdks/go/baml_go\n",
     )
     .unwrap();
     fs::write(generated.join("go.sum"), RUNTIME_GO_SUM).unwrap();
