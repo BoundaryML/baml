@@ -174,6 +174,8 @@ jobs:
 
       - name: Build bridge_cffi cdylib
         working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
         run: |
           set -euo pipefail
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
@@ -187,10 +189,10 @@ jobs:
           # the other targets keep their `.cargo/config.toml` rustflags (the
           # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
           # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
-          if [[ "${{ matrix._.target }}" == *-musl ]]; then
+          if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
           fi
-          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "${{ matrix._.target }}"
+          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
 
       - name: Rename and checksum artifact
         id: artifact
@@ -228,8 +230,8 @@ jobs:
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
 
-      - name: Smoke test the public C and C++ ABI
-        if: matrix._.smoke
+      - name: Smoke test the public C and C++ ABI (Unix)
+        if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}
         working-directory: baml_language
         run: |
           set -euo pipefail
@@ -237,6 +239,27 @@ jobs:
           python3 crates/bridge_cffi/tests/run_abi_smoke.py \
             "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}" \
             "$expected"
+
+      - name: Smoke test the public C and C++ ABI (Windows)
+        if: ${{ matrix._.smoke && contains(matrix._.target, 'windows') }}
+        shell: powershell
+        working-directory: baml_language
+        env:
+          MSVC_ARCH: ${{ startsWith(matrix._.target, 'aarch64-') && 'arm64' || 'x64' }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio installation not found"
+          }
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          $expected = jq -r .canonical_version ..\release-plan.json
+          $library = "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}"
+          & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Upload cdylib artifact
         uses: actions/upload-artifact@v4
