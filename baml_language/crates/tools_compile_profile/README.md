@@ -46,10 +46,10 @@ allocator.
 
 ## Cache mode: cold by default
 
-Every measured run is **cold** by default: a fresh `ProjectDatabase` is
-built per run, so Salsa's memoization cache starts empty. This mirrors
-`baml check` from the CLI — one process, one db, no re-use. `cache
-hits: 0` in the report is *expected*, not a bug.
+By default (no `--warm-runs`) every measured run is **cold**: a fresh
+`ProjectDatabase` is built per run, so Salsa's memoization cache starts
+empty. This mirrors `baml check` from the CLI — one process, one db, no
+re-use. `cache hits: 0` in the report is *expected*, not a bug.
 
 There is no other cache to disable. Cargo's build cache is unrelated
 (that only affects compiling Rust; the profiler binary is already built
@@ -61,7 +61,13 @@ To also measure the flip side — "if Salsa's cache *were* effective
 across `baml check` invocations, how much would it save?" — pass
 `--warm-runs N`. After each cold run, the tool invokes `check` +
 `get_bytecode` `N` more times against the *same* database (no input
-mutation). Warm invocations exercise the cache exclusively.
+mutation). Only the first (cold) invocation populates the cache; the warm
+invocations then find Salsa's query cache fully warm, so any query *body*
+that still runs signals a caching gap. Note that warm runs are **not**
+pure cache lookups: the wrapper work around the queries (`db.check()` /
+`db.get_bytecode()` materialization, walking, cloning) is not memoized and
+runs on every invocation — that uncached wrapper cost is exactly what the
+cold-vs-warm table isolates below.
 
 The cold-vs-warm table then makes three failure modes visible:
 
@@ -81,7 +87,8 @@ The cold-vs-warm table then makes three failure modes visible:
 # Build once
 cargo build --release -p tools_compile_profile
 
-# Point at any directory that contains .baml files or a baml_src/ dir
+# Point at a BAML project root (a directory containing a baml_src/ dir,
+# typically alongside baml.toml) or any directory of .baml files
 ./target/release/tools_compile_profile /path/to/baml/project
 
 # Cold + warm re-runs on the same db — measures Salsa's cache effect
@@ -130,7 +137,7 @@ Sample output for the built-in test corpus (~78 files, 25k lines) as it
 looked **before the July 2026 optimization pass** (see the audit section
 below — the same corpus now compiles in ~0.5s):
 
-```
+```text
 --- Wall clock (representative run) ---
   db build (inputs)         0.002 s
   check                     8.107 s

@@ -20,13 +20,16 @@
 //!
 //! ## Cache mode
 //!
-//! Every measured run is **cold** by default: a fresh `ProjectDatabase`
-//! is built per run, so Salsa's memoization cache starts empty. This
-//! matches how `baml check` is invoked from the CLI (one process, one
-//! db). If you want to also measure the effect of Salsa's cache, pass
-//! `--warm-runs N` — after each cold run we invoke `check` +
-//! `get_bytecode` `N` more times against the *same* db, so those extra
-//! invocations exercise the cache exclusively.
+//! By default (no `--warm-runs`) every measured run is **cold**: a fresh
+//! `ProjectDatabase` is built per run, so Salsa's memoization cache starts
+//! empty. This matches how `baml check` is invoked from the CLI (one
+//! process, one db). If you want to also measure the effect of Salsa's
+//! cache, pass `--warm-runs N` — after each cold run we invoke `check` +
+//! `get_bytecode` `N` more times against the *same* db. Only the first
+//! (cold) invocation fills the cache; the warm invocations then hit a fully
+//! warm query cache, but still pay the uncached wrapper cost of
+//! `db.check()` / `db.get_bytecode()` (materialization, walking, cloning)
+//! on every call.
 //!
 //! ## Usage
 //!
@@ -467,6 +470,31 @@ fn invoke_pipeline(
     let check_result = db.check();
     let check = check_start.elapsed();
 
+    // `check` runs the pipeline over *all* files (user sources + compiler2
+    // builtin stubs), so its diagnostics can be anchored to builtin files.
+    // `get_bytecode()`, like the CLI, only aborts emit on *user-file* errors —
+    // builtin-stub diagnostics never block codegen. Mirror that filter for the
+    // emit gate so a project whose only errors live in builtin files still
+    // emits (and gets measured), instead of being skipped by an over-broad
+    // "any error" check.
+    let db_ref: &ProjectDatabase = &*db;
+    let user_file_ids: std::collections::HashSet<_> = db_ref
+        .get_source_files()
+        .iter()
+        .map(|f| f.file_id(db_ref))
+        .collect();
+    let user_error_count = check_result
+        .diagnostics
+        .iter()
+        .filter(|d| {
+            d.severity == Severity::Error
+                && d.file_id()
+                    .map(|id| user_file_ids.contains(&id))
+                    .unwrap_or(false)
+        })
+        .count();
+    // Total counts are still reported as-is (they describe everything `check`
+    // found); only the emit gate uses the user-file-filtered count.
     let error_count = check_result
         .diagnostics
         .iter()
@@ -481,11 +509,11 @@ fn invoke_pipeline(
 
     let (emit, emit_attempted) = if check_only {
         (Duration::ZERO, false)
-    } else if error_count > 0 {
-        // Matches the CLI: `check` errors abort the pipeline before
-        // bytecode generation.
+    } else if user_error_count > 0 {
+        // Matches the CLI / `get_bytecode()`: user-file `check` errors abort
+        // the pipeline before bytecode generation.
         eprintln!(
-            "[tools_compile_profile]   [{}] skipping emit: {error_count} error(s) reported by check",
+            "[tools_compile_profile]   [{}] skipping emit: {user_error_count} user-file error(s) reported by check",
             mode.label()
         );
         (Duration::ZERO, false)
@@ -1019,4 +1047,46 @@ fn print_summary_line(report: &RunReport, files: usize, lines: usize, bytes: usi
         total_cache_hits(&report.queries),
         report.queries.len(),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::phase_for_query;
+
+    #[test]
+    fn phase_for_query_maps_known_queries() {
+        assert_eq!(phase_for_query("lex_file"), "lexer");
+        assert_eq!(phase_for_query("parse_result"), "parser");
+        assert_eq!(phase_for_query("syntax_tree"), "parser");
+        assert_eq!(phase_for_query("file_semantic_index"), "hir");
+        assert_eq!(phase_for_query("function_body"), "hir");
+        assert_eq!(phase_for_query("ppir_expansion_items"), "ppir");
+        assert_eq!(phase_for_query("infer_scope_types"), "tir");
+        assert_eq!(phase_for_query("lower_function"), "mir");
+        assert_eq!(phase_for_query("generate_project_bytecode"), "emit");
+    }
+
+    #[test]
+    fn phase_for_query_falls_back_to_other() {
+        assert_eq!(phase_for_query("some_unregistered_query"), "other");
+        assert_eq!(phase_for_query(""), "other");
+    }
+
+    #[test]
+    fn phase_for_query_strips_collision_suffix() {
+        // Collision-disambiguated names (see `resolve_query_names`) still map to
+        // the same phase as their un-suffixed base.
+        assert_eq!(
+            phase_for_query("file_semantic_index [IngredientIndex(50)]"),
+            "hir"
+        );
+        assert_eq!(
+            phase_for_query("infer_scope_types [IngredientIndex(7)]"),
+            "tir"
+        );
+        assert_eq!(
+            phase_for_query("some_unregistered_query [IngredientIndex(1)]"),
+            "other"
+        );
+    }
 }
