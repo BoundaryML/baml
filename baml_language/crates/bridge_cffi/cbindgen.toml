@@ -126,7 +126,7 @@ prefix_with_name = true
 rename_variants = "ScreamingSnakeCase"
 
 [fn]
-prefix = "BAML_CFFI_API BAML_CFFI_CALL"
+prefix = "BAML_CFFI_API"
 sort_by = "None"
 
 [parse]

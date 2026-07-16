@@ -450,7 +450,7 @@ extern "C" {
  * dynamic library is unloaded. It must not be modified or freed. This is the
  * only symbol a dynamically loaded host bridge needs to resolve.
  */
-BAML_CFFI_API BAML_CFFI_CALL const struct BamlApiV1 *baml_get_api_v1(void);
+BAML_CFFI_API const struct BamlApiV1 *baml_get_api_v1(void);
 
 #ifdef __cplusplus
 }  // extern "C"
