@@ -75,6 +75,11 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_JAVA_SETUP";
 /// Why every emitted test is `#[ignore]`d for now. Un-ignoring is the
 /// signal that a capability's parity tests are expected to pass — see
 /// `sdks/agent-docs/bridge-ref/ref-java-state-of-completeness.md`.
+/// Fixtures whose generated + test sources compile green — their
+/// `javac` gate runs for real (CI enforcement); everything else stays
+/// `#[ignore]`d until its API surface lands.
+const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes"];
+
 const IGNORE_REASON: &str =
     "generated Java API not complete enough for this fixture yet — un-ignore as capabilities land";
 
@@ -255,15 +260,18 @@ mod {fixture} {{
     }}
 
     #[test]
-    #[ignore = {ignore_reason:?}]
-    fn javac() {{
+{javac_ignore}    fn javac() {{
         cmd("gradle --no-daemon --console=plain compileTestJava");
     }}
 "#,
             fixture = name,
             cache_subdir = CACHE_SUBDIR,
             cache_env_var = CACHE_ENV_VAR,
-            ignore_reason = IGNORE_REASON,
+            javac_ignore = if GREEN_JAVAC_FIXTURES.contains(&name.as_str()) {
+                String::new()
+            } else {
+                format!("    #[ignore = {IGNORE_REASON:?}]\n")
+            },
         ));
 
         if fixture.has_junit_tests {
@@ -272,10 +280,18 @@ mod {fixture} {{
     #[test]
     #[ignore = {ignore_reason:?}]
     fn junit() {{
-        cmd("gradle --no-daemon --console=plain test");
+        ::sdk_test_harness_runner::run_java_test_cmd(
+            "{fixture}",
+            "gradle --no-daemon --console=plain test",
+            "{cache_subdir}",
+            "{cache_env_var}",
+        );
     }}
 "#,
                 ignore_reason = IGNORE_REASON,
+                fixture = fixture.name,
+                cache_subdir = CACHE_SUBDIR,
+                cache_env_var = CACHE_ENV_VAR,
             ));
         }
 

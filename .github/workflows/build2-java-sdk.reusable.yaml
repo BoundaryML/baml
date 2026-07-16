@@ -1,0 +1,70 @@
+# DRAFT — Java SDK build matrix (bridge-week). Modeled on
+# build2-nodejs-sdk.reusable.yaml's shape; needs review by the release-
+# workflow owner before wiring into release-baml-language.yml.
+#
+# Per platform: build the bridge_java cdylib (release) and package it as
+# a `natives-<platform>` classifier jar via the baml_bridge Gradle
+# project; the pure-Java main jar + POM build once on linux. The publish
+# step (separate job, credentials via environment) runs
+# `gradle publish -PbamlVersion=<planned version>` — see
+# sdks/java/baml_bridge/PUBLISHING.md for the property contract.
+#
+# Initial target set is the tier-1 trio; the full 8-target set (musl,
+# windows-arm64, etc.) follows once cross toolchains are validated,
+# mirroring the napi matrix.
+name: build2-java-sdk
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Planned channel version (from scripts/baml-language-version plan)"
+        required: true
+        type: string
+
+jobs:
+  build-natives:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x86_64
+            lib: libbridge_java.so
+          - runner: macos-14
+            platform: macos-aarch64
+            lib: libbridge_java.dylib
+          - runner: windows-latest
+            platform: windows-x86_64
+            lib: bridge_java.dll
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mise
+      - name: Build bridge_java (release)
+        working-directory: baml_language
+        run: cargo build -p bridge_java --release
+      - name: Package native jar
+        working-directory: baml_language/sdks/java/baml_bridge
+        run: |
+          mise exec -- gradle --no-daemon nativeJar \
+            -PbamlVersion=${{ inputs.version }} \
+            -PbamlNativePlatform=${{ matrix.platform }} \
+            -PbamlNativeLib=../../../target/release/${{ matrix.lib }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-native-${{ matrix.platform }}
+          path: baml_language/sdks/java/baml_bridge/build/libs/*natives*.jar
+
+  build-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-mise
+      - name: Build + test main jar
+        working-directory: baml_language/sdks/java/baml_bridge
+        run: mise exec -- gradle --no-daemon build -PbamlVersion=${{ inputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: java-main
+          path: baml_language/sdks/java/baml_bridge/build/libs/*.jar

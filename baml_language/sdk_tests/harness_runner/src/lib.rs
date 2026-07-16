@@ -86,6 +86,35 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
     );
 }
 
+/// Java-fixture variant of [`run_test_cmd`]: injects
+/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
+/// generated `Baml` anchor can `System.load` the engine during tests.
+pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
+    let manifest = std::path::PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let lib_name = if cfg!(target_os = "windows") {
+        "bridge_java.dll"
+    } else if cfg!(target_os = "macos") {
+        "libbridge_java.dylib"
+    } else {
+        "libbridge_java.so"
+    };
+    let lib = workspace_root_from_manifest(&manifest)
+        .join("target")
+        .join("debug")
+        .join(lib_name);
+    let lib_str = lib.to_string_lossy().into_owned();
+    run_test_cmd_with_env(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
+    );
+}
+
 /// Same as [`run_test_cmd`] but threads additional environment
 /// variables into the child process.
 pub fn run_test_cmd_with_env(
