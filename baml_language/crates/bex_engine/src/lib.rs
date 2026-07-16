@@ -516,7 +516,7 @@ pub const CANCELLED_PANIC_CLASS: &str = "baml.panics.Cancelled";
 /// True iff `err` is an unhandled `baml.panics.Cancelled` panic.
 ///
 /// Centralizes the cancellation-classification logic that bridges (`bridge_cffi`,
-/// `bridge_nodejs`, `bridge_python`, `bridge_wasm`) and `baml_lsp_server` need
+/// `bridge_typescript`, `bridge_python`, `bridge_wasm`) and `baml_lsp_server` need
 /// for mapping `EngineError` → host-specific cancellation indicator.
 pub fn is_cancelled_engine_error(err: &EngineError) -> bool {
     matches!(

@@ -69,12 +69,12 @@ function NestedGenericReturn() -> map<string, map<string, map<string, int | stri
 }
 
 // ===== Return type: deeply nested function type exceeding limit =====
-function DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> {
+function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
     1
 }
 
 // ===== Deeply nested param types =====
-function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string {
+function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> ((y: int) -> ((z: int) -> string throws never) throws never)) -> string {
     "done"
 }
 

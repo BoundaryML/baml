@@ -17,16 +17,14 @@
 //! the `call_host_value` sysop impl (also in `sys_native`) needs them,
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
-use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
+use bex_project::{BexExternalValue, host_release_dispatch};
 use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external};
 use prost::Message;
 use sys_native::host_dispatch;
-/// Signature for invocation requests from BAML to the host.
-///
-/// Re-exported from `sys_native::host_dispatch::HostDispatchFn` for
-/// external consumers (cbindgen header generation, etc.).
-pub use sys_native::host_dispatch::HostDispatchFn;
 use sys_types::{OpError, SysOp, VmBamlError, VmInternalError};
+
+pub use super::super::api::BamlHostDispatchCallback as HostDispatchFn;
+use super::super::api::BamlHostReleaseCallback;
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -53,7 +51,7 @@ pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
 ///
 /// `cb` must remain valid for the lifetime of the process.
 #[unsafe(no_mangle)]
-pub extern "C" fn register_host_release_callback(cb: HostReleaseFn) {
+pub extern "C" fn register_host_release_callback(cb: BamlHostReleaseCallback) {
     if host_release_dispatch::install(cb).is_err() {
         eprintln!("BAML internal: register_host_release_callback called twice");
     }

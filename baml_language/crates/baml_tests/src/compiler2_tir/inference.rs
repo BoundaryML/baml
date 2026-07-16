@@ -761,8 +761,13 @@ function main() -> int {
     );
 }
 
+/// A function-valued return annotation must declare its throws (rule 5); an
+/// effect-polymorphic forwarder is returned by eta-expanding at the concrete
+/// throws surface. (Returning `wrap` directly does not instantiate its
+/// synthetic effect param against the annotation — the forwarder value stays
+/// generic — so the lambda pins the `never` instantiation.)
 #[test]
-fn returning_callback_forwarder_matches_omitted_function_type_return_annotation() {
+fn returning_callback_forwarder_matches_explicit_function_type_return_annotation() {
     let mut db = make_db();
     let file = db.add_file(
         "callback_return.baml",
@@ -770,15 +775,15 @@ fn returning_callback_forwarder_matches_omitted_function_type_return_annotation(
   return cb(1)
 }
 
-function demo() -> ((x: int) -> int) -> int {
-  return wrap
+function demo() -> ((x: int) -> int throws never) -> int throws never {
+  return (cb: (x: int) -> int throws never) -> int { wrap(cb) }
 }"#,
     );
 
     let output = render_tir(&db, file);
     assert!(
         !output.contains("type mismatch"),
-        "expected function-valued return annotation to preserve callback forwarding surface, got:\n{output}"
+        "expected function-valued return annotation to accept the eta-expanded forwarder, got:\n{output}"
     );
 }
 

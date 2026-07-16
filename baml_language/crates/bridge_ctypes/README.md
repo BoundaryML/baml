@@ -7,9 +7,9 @@ cargo build -p bridge_ctypes
 #   -> sdks/python/src/baml_bridge/cffi/v1/*_pb2.py(i)
 
 # Node / TypeScript (protobufjs + napi loader)
-cd sdks/nodejs/bridge_nodejs && pnpm build:debug
-#   -> sdks/nodejs/bridge_nodejs/typescript_src/proto/baml_cffi.{js,d.ts}
-#   -> sdks/nodejs/bridge_nodejs/dist/native.js
+cd sdks/typescript/bridge_typescript && pnpm build:debug
+#   -> sdks/typescript/bridge_typescript/typescript_src/proto/baml_cffi.{js,d.ts}
+#   -> sdks/typescript/bridge_typescript/dist/native.js
 #
 # scripts/baml-language-version bump/set/sync install the pinned Node bridge
 # dependencies and run this automatically after version bumps because napi

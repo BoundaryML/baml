@@ -319,10 +319,32 @@ jobs:
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here.
+      # dedicated `sdk-tests` matrix below. Skip both here. Profiling-specific
+      # test binaries opt in explicitly; keeping it off for the general suite
+      # avoids filling the Windows runner with incidental `.bamlprof` files.
+      # Run the two binaries that need `baml-pack-host` separately so their
+      # process-global OnceLocks build and share it instead of relinking it for
+      # every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e)'
         working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
+
+      - name: "Free disk for CLI binary e2e tests"
+        run: |
+          set -euo pipefail
+          mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
+          cp target/debug/baml-sccache.exe baml-sccache.exe
+          echo "RUSTC_WRAPPER=$(pwd -W)/baml-sccache.exe" >> "$GITHUB_ENV"
+          cargo clean
+        working-directory: baml_language
+
+      - name: "Run CLI binary e2e tests (windows)"
+        run: cargo test -p baml_cli --test pack_e2e --test exit_code_e2e --all-features
+        working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
 
       - name: "Show sccache stats"
         if: always()
@@ -340,16 +362,12 @@ jobs:
           path: sccache-stats-test-windows.json
           if-no-files-found: ignore
 
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows.html
-        working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-windows
-          path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
+          path: baml_language/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
   sdk-test-matrix:
@@ -377,7 +395,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
@@ -421,7 +439,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
@@ -441,7 +459,7 @@ jobs:
               {
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
-                "sdk-path": "typescript_node",
+                "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",

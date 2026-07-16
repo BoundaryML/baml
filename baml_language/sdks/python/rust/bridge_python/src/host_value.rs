@@ -251,7 +251,7 @@ pub extern "C" fn host_dispatch_callback(
     // infrastructure fault — instead of an opaque `HostCallable` wrapping
     // a `PyKeyError`. The bridge knowing about a handle the dispatcher
     // can no longer find is a bug in the bridge, not a user error.
-    // Mirrors `bridge_nodejs::host_dispatch_callback`'s pre-spawn lookup.
+    // Mirrors `bridge_typescript::host_dispatch_callback`'s pre-spawn lookup.
     //
     // The `Py<PyAny>` is `Send + Sync` and survives moving into the
     // spawned task without holding the GIL; it's only re-attached inside
@@ -529,7 +529,7 @@ fn build_host_callable_inbound(
 /// entry (the engine knows about a handle the bridge no longer has). These
 /// are infrastructure bugs, not user-code exceptions, so they must not
 /// surface as catchable `BamlError(HostCallable(...))`. Mirrors the
-/// `send_dispatch_error_*` family in `bridge_nodejs`.
+/// `send_dispatch_error_*` family in `bridge_typescript`.
 fn send_dispatch_bridge_failure(call_id: u32, message: String) {
     sys_native::host_dispatch::complete_with_error(
         call_id,

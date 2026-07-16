@@ -409,7 +409,7 @@ fn request_callable_members(
 /// `Foo$build_request` -> `Foo__build_request`. `None` for ordinary
 /// functions.
 fn companion_preferred(name: &Name) -> Option<String> {
-    let raw = name.name.as_str();
+    let raw = name.name().as_str();
     if raw.contains('$') {
         Some(function_spelling(raw))
     } else {
@@ -793,7 +793,7 @@ fn emit_callable(
 
     let raises = match &function.throws {
         None => Vec::new(),
-        Some(Ty::Union(items)) => items.iter().map(unqualified_leaf_name).collect(),
+        Some(Ty::Union(items, _)) => items.iter().map(unqualified_leaf_name).collect(),
         Some(ty) => vec![unqualified_leaf_name(ty)],
     };
 
@@ -817,7 +817,9 @@ fn emit_callable(
 
 fn unqualified_leaf_name(ty: &Ty) -> String {
     match ty {
-        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => name.bare_name().to_string(),
+        Ty::Class(name, ..) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+            name.bare_name().to_string()
+        }
         other => other.to_string(),
     }
 }
@@ -846,22 +848,22 @@ fn translate_ty(
     boxed: &BTreeSet<Name>,
 ) -> Translated {
     let translated = match ty {
-        Ty::Int => "int64_t".to_string(),
-        Ty::Float => "double".to_string(),
-        Ty::String => "std::string".to_string(),
-        Ty::Bool => "bool".to_string(),
-        Ty::Null => "std::monostate".to_string(),
-        Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
-        Ty::RustType => {
+        Ty::Int { .. } => "int64_t".to_string(),
+        Ty::Float { .. } => "double".to_string(),
+        Ty::String { .. } => "std::string".to_string(),
+        Ty::Bool { .. } => "bool".to_string(),
+        Ty::Null { .. } => "std::monostate".to_string(),
+        Ty::Uint8Array { .. } => "std::vector<uint8_t>".to_string(),
+        Ty::RustType { .. } => {
             return Translated::Unsupported("handle type (post-step-8)".to_string());
         }
-        Ty::Bigint => {
+        Ty::Bigint { .. } => {
             return Translated::Unsupported("bigint (post-step-8)".to_string());
         }
-        Ty::Media(_) => {
+        Ty::Media(..) => {
             return Translated::Unsupported("media type (post-step-8)".to_string());
         }
-        Ty::Literal(lit) => {
+        Ty::Literal(lit, ..) => {
             // Literal types widen to their base type (Python parity).
             match lit {
                 baml_base::Literal::Int(_) => "int64_t".to_string(),
@@ -873,10 +875,10 @@ fn translate_ty(
                 baml_base::Literal::Bool(_) => "bool".to_string(),
             }
         }
-        Ty::TypeVar(name) => {
+        Ty::TypeVar(name, _) => {
             return Translated::Unsupported(format!("TypeVar {name} (generics post-step-8)"));
         }
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             // Aliases render by name once declared: recursive aliases
             // reference their wrapper struct like a class (boxed inside
             // their own cycle, since the box needs only the forward
@@ -913,7 +915,9 @@ fn translate_ty(
                     .to_string(),
             );
         }
-        Ty::Enum(name) => {
+        // An enum-variant type (`Sentiment.Positive`) widens to its enum
+        // (Python parity: the variant tag narrows values, not the C++ type).
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             return if emitted_types.contains(name) {
                 Translated::Cpp(
                     names
@@ -925,7 +929,7 @@ fn translate_ty(
                 Translated::NotYet
             };
         }
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             let mut translated_args = Vec::new();
             for arg in args {
                 match translate_ty(pool, names, arg, emitted_types, boxed) {
@@ -953,12 +957,12 @@ fn translate_ty(
             }
             return Translated::Cpp(spelled);
         }
-        Ty::List(inner) => match translate_ty(pool, names, inner, emitted_types, boxed) {
+        Ty::List(inner, _) => match translate_ty(pool, names, inner, emitted_types, boxed) {
             Translated::Cpp(inner) => format!("std::vector<{inner}>"),
             other => return other,
         },
-        Ty::Map { key, value } => {
-            if !matches!(key.as_ref(), Ty::String) {
+        Ty::Map { key, value, .. } => {
+            if !matches!(key.as_ref(), Ty::String { .. }) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
             match translate_ty(pool, names, value, emitted_types, boxed) {
@@ -966,12 +970,15 @@ fn translate_ty(
                 other => return other,
             }
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             // Null-normalization (spec D-unions v2): strip the null member,
             // dedup alternatives that map to the same C++ type, emit a
             // variant (or the bare type when one alternative remains), and
             // wrap in optional when null was a member.
-            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+            let non_null: Vec<&Ty> = items
+                .iter()
+                .filter(|t| !matches!(t, Ty::Null { .. }))
+                .collect();
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
@@ -1025,7 +1032,7 @@ fn translate_return_ty(
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Translated {
-    if matches!(ty, Ty::Unit) {
+    if matches!(ty, Ty::Void { .. }) {
         return Translated::Cpp("void".to_string());
     }
     translate_ty(pool, names, ty, emitted_types, boxed)

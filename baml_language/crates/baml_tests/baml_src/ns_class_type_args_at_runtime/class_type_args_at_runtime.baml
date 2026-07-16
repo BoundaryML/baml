@@ -15,7 +15,7 @@ class Box<T> {
 }
 
 class Box2<T> {
-    function make_describer(self) -> () -> string {
+    function make_describer(self) -> () -> string throws never {
         return () -> string { reflect.type_of<T>().to_string() }
     }
 }

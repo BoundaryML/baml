@@ -17,9 +17,8 @@
 namespace aliases = baml_sdk::aliases;
 
 BAML_TEST(round_trip_string_list) {
-  // StringList is a generated `using` alias; the compiler pre-resolves
-  // alias references in signatures, so the parameter type is spelled
-  // std::vector<std::string> but the named alias is interchangeable.
+  // StringList is a generated `using` alias; the codegen pool preserves
+  // alias identity at use sites, so the signature spells StringList too.
   static_assert(
       std::is_same<aliases::StringList, std::vector<std::string>>::value,
       "StringList must alias its resolved type");

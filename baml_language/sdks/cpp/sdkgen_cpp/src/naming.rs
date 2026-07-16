@@ -41,7 +41,7 @@ pub(crate) fn source_ns(symbol: &Name, honor_stream_suffix: bool) -> Vec<Box<str
     if honor_stream_suffix && symbol.is_stream() {
         out.push(Box::from("stream_types"));
     }
-    match symbol.pkg.as_str() {
+    match symbol.package().as_str() {
         "user" => {}
         "baml" => out.push(Box::from("baml")),
         vendor => {
@@ -51,9 +51,9 @@ pub(crate) fn source_ns(symbol: &Name, honor_stream_suffix: bool) -> Vec<Box<str
     }
     out.extend(
         symbol
-            .namespace_path
+            .namespace()
             .iter()
-            .map(|seg| Box::from(seg.as_str())),
+            .map(|seg| Box::<str>::from(seg.as_str())),
     );
     out
 }
@@ -537,12 +537,12 @@ impl ComponentHash {
 fn collision_suffix(request: &NameRequest) -> String {
     const ALPHABET: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut hash = ComponentHash::new();
-    hash.component(request.fqn.symbol.pkg.as_str());
-    hash.usize(request.fqn.symbol.namespace_path.len());
-    for segment in &request.fqn.symbol.namespace_path {
+    hash.component(request.fqn.symbol.package().as_str());
+    hash.usize(request.fqn.symbol.namespace().len());
+    for segment in request.fqn.symbol.namespace() {
         hash.component(segment.as_str());
     }
-    hash.component(request.fqn.symbol.name.as_str());
+    hash.component(request.fqn.symbol.name().as_str());
     hash.usize(request.fqn.members.len());
     for member in &request.fqn.members {
         hash.component(member);
@@ -660,7 +660,7 @@ impl CppNames {
         if request.kind == CppNameKind::Namespace {
             // Record the allocated path for this source path + segment.
             let mut source_path = source_ns.clone();
-            source_path.push(Box::from(request.fqn.symbol.name.as_str()));
+            source_path.push(Box::from(request.fqn.symbol.name().as_str()));
             let mut allocated = self.ns_paths.get(&source_ns).cloned().unwrap_or_default();
             allocated.push(name.clone());
             self.ns_paths.insert(source_path, allocated);

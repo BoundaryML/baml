@@ -1,6 +1,6 @@
 # Build-script-side infrastructure for `sdk_tests/crates/<generator>/`
 # crates. Each per-generator submodule (`python_pydantic2`,
-# `typescript_node`) exposes a `run_all()` for the generator
+# `typescript`) exposes a `run_all()` for the generator
 # crate's `build.rs` — it discovers fixtures, runs codegen, runs
 # `uv sync` / `pnpm install`, and emits the per-fixture `#[test]`
 # scaffold to OUT_DIR. The emitted scaffold is just a sequence of
@@ -22,7 +22,7 @@ publish = false
 [dependencies]
 sdkgen_cpp = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
-sdkgen_typescript_node = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 45889
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -1745,6 +1744,10 @@ SOURCE_FILE
                     ARROW "->"
                     TYPE_EXPR "int"
                       WORD "int"
+                    THROWS_CLAUSE
+                      KW_THROWS "throws"
+                      TYPE_EXPR "never"
+                        WORD "never"
           EQUALS "="
           LAMBDA_EXPR
             PARAMETER_LIST

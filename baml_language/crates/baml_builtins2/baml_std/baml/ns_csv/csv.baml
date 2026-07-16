@@ -116,7 +116,7 @@ class ReaderOptions {
   on_error ("throw" | "skip")?
   /// Observer invoked with each skipped record's `CsvError` when
   /// `on_error = "skip"`. Constant-memory alternative to `skipped()`.
-  on_skip ((CsvError) -> null)?
+  on_skip ((CsvError) -> null throws never)?
   /// How many skipped `CsvError` values `skipped()` retains. Default 1000.
   /// `0` disables retention. `skipped_count()` stays exact regardless.
   max_skipped int?
@@ -245,7 +245,7 @@ class CsvRecord {
 class CsvReader {
   _handle $rust_type
   _file: root.fs.File?
-  _on_skip: ((CsvError) -> null)?
+  _on_skip: ((CsvError) -> null throws never)?
   _owns_file: bool
 
   implements root.iter.Iterable {
@@ -269,7 +269,7 @@ class CsvReader {
           let s: CsvSkip => {
             match (self._on_skip) {
               null => null,
-              let cb: (CsvError) -> null => cb(s.error),
+              let cb: (CsvError) -> null throws never => cb(s.error),
             };
           },
           CsvNeedData => { self._read_chunk(); },
@@ -443,7 +443,7 @@ class CsvRows<T> {
               let s: CsvSkip => {
                 match (self.reader._on_skip) {
                   null => null,
-                  let cb: (CsvError) -> null => cb(s.error),
+                  let cb: (CsvError) -> null throws never => cb(s.error),
                 };
               },
               let v: T => { return v; },

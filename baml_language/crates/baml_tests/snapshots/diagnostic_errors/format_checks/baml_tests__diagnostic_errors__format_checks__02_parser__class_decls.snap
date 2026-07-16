@@ -367,6 +367,10 @@ class EmptyClass {
             TYPE_EXPR "int"
               WORD "int"
             GREATER ">"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "never"
+            WORD "never"
     FIELD
       WORD "deeply_nested"
       TYPE_EXPR
@@ -528,6 +532,10 @@ class EmptyClass {
         ARROW "->"
         TYPE_EXPR "string"
           WORD "string"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "never"
+            WORD "never"
     FIELD
       WORD "paren_union_array"
       TYPE_EXPR

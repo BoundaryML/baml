@@ -335,10 +335,10 @@ inline void EnsureRegistered(const char* sdk_version) {
     const std::string version(sdk_version);
     BamlBridgeInfoV1 info;
     info.struct_size = sizeof(BamlBridgeInfoV1);
-    info.language = 6;  // BridgeLanguage::Cpp
+    info.language = BAML_BRIDGE_LANGUAGE_CPP;
     info.sdk_version = reinterpret_cast<const uint8_t*>(version.data());
     info.sdk_version_len = version.size();
-    Buffer diagnostic = api.register_bridge(&info);
+    BamlBuffer diagnostic = api.register_bridge(&info);
     if (diagnostic.ptr != nullptr && diagnostic.len != 0) {
       std::string message(reinterpret_cast<const char*>(diagnostic.ptr),
                           diagnostic.len);

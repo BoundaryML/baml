@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.SearchService {
   base: string
 }
-type user.NarrowSearcher = (query: string, filter?: string?) -> string[]
-type user.Searcher = (query: string, max_results?: int) -> int
+type user.NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
+type user.Searcher = (query: string, max_results?: int) -> int throws never
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string  [llm] {
   baml.llm.call_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
