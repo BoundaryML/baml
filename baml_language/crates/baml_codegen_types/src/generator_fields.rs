@@ -19,6 +19,9 @@ pub enum OutputType {
     /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
     #[strum(serialize = "typescript/web")]
     TypescriptWeb,
+    /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
+    #[strum(serialize = "cpp")]
+    Cpp,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as
