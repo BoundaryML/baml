@@ -335,7 +335,7 @@ impl ItemTreeBuilder {
             .config_items
             .iter()
             .find(|item| item.key.as_str() == "options")
-            .map(|_| Vec::new()) // complex to parse; clients field is more relevant
+            .map(|_| Vec::new()) // sub-clients are not parsed from `options`; left empty (unused downstream)
             .unwrap_or_default();
         let retry_policy_name = c
             .config_items

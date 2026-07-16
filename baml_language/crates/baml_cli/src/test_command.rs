@@ -470,7 +470,21 @@ fn render_test_list(
     );
     // Indented list under the cargo-style status line. These are content (the
     // actual list), not status updates, so they go to stdout as plain prints.
-    for t in legacy_selected {
+    //
+    // Canonicalize the order at this single render point — both the fresh-compile
+    // and bytecode-cache paths flow through here — so `--list` output is
+    // byte-identical between them regardless of upstream map/enumeration order.
+    // Sort by (function, test) so each function's tests group together (a legacy
+    // `test` is function-attached), with the path as a final deterministic tiebreak.
+    let mut legacy_sorted: Vec<&crate::bytecode_cache::CachedLegacyTest> =
+        legacy_selected.iter().collect();
+    legacy_sorted.sort_by(|a, b| {
+        a.function_name
+            .cmp(&b.function_name)
+            .then_with(|| a.test_name.cmp(&b.test_name))
+            .then_with(|| a.file_path.cmp(&b.file_path))
+    });
+    for t in legacy_sorted {
         println!("  {}::{}  ({})", t.function_name, t.test_name, t.file_path);
     }
     for name in testset_names {

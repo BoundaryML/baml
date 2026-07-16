@@ -76,8 +76,11 @@ pub fn class_source_map<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> Cl
     lower(db, class).1
 }
 
-/// Both halves share one lowering pass — the split into two queries is purely
-/// about what each one lets downstream depend on.
+/// The `*_data` and `*_source_map` queries each call this and keep one half, so
+/// `lower` runs once per query — not a single shared pass. It is deterministic,
+/// so the `TypeRefId`s the data half hands out validly index the source map's
+/// arena. The split into two queries is purely about what each one lets
+/// downstream depend on.
 ///
 /// Type refs are allocated in a fixed order (bounds, then fields, then
 /// `implements` targets) so that ids are a pure function of the class's shape.

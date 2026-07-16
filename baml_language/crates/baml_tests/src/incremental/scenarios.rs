@@ -940,13 +940,13 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     );
 }
 
-/// PLANNED (plan Phase 5). The whole refactor exists so that a cosmetic edit does
-/// not re-run type inference — the exact claim ARCHITECTURE.md:728 makes but that
-/// is *false* today: `infer_scope_types` reads the `no_eq` `file_semantic_index`
-/// directly (`inference.rs:1524`), so any edit re-executes it. Un-ignore once
-/// inference consumes the per-item firewall queries instead of the coarse index.
+/// The whole refactor exists so that a cosmetic edit does not re-run type
+/// inference. That does not hold yet: `infer_scope_types` reads the `no_eq`
+/// `file_semantic_index` directly, so any edit to its file re-executes it.
+/// Un-ignore once inference consumes the per-item firewall queries instead of the
+/// coarse index.
 #[test]
-#[ignore = "infer_scope_types still reads the no_eq file_semantic_index directly; un-ignore after it migrates to the firewall queries (plan Phase 5)"]
+#[ignore = "infer_scope_types still reads the no_eq file_semantic_index directly; un-ignore once it consumes the firewall queries"]
 fn comment_edit_does_not_reexecute_type_inference() {
     let mut test_db = IncrementalTestDb::new();
 

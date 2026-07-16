@@ -14,11 +14,14 @@ use text_size::TextRange;
 
 use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 
-/// Compiler2 function signature — param names + unresolved `TypeExpr`.
+/// Compiler2 function signature — param names + unresolved `ast::TypeExpr`.
 ///
-/// No spans — those live in `SignatureSourceMap`.
-/// `TypeExpr` is already span-free (spans live in `TypeExpr` at the
-/// AST layer and are split out here).
+/// The `SignatureSourceMap` twin holds the item-level spans. This struct is NOT
+/// fully span-free, though: `ast::TypeExpr` carries its own `span` inline (its
+/// `PartialEq` ignores that span but transitively compares `RawAttribute` spans),
+/// so a whitespace edit near an attribute can still bust this query's cutoff. The
+/// span-free successor is `ppir::function_data` over the `TypeRef` arena; this
+/// struct is retained until its consumers migrate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     pub name: baml_base::Name,

@@ -8866,7 +8866,13 @@ impl LoweringContext<'_> {
             Some(baml_compiler2_hir::item_tree::MethodOwner::Class(class_id)) => {
                 item_tree[*class_id].generic_params.clone()
             }
-            _ => Vec::new(),
+            // `Interface` owners are handled by the early return above; a free
+            // impl's own generics are not enclosing-type parameters.
+            Some(
+                baml_compiler2_hir::item_tree::MethodOwner::Interface(_)
+                | baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(_),
+            )
+            | None => Vec::new(),
         };
         params.extend(item_tree[func_id].generic_params.iter().cloned());
         // Inside a (possibly nested) generic lambda body, the lambda's own

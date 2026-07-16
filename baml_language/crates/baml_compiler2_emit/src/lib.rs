@@ -3503,7 +3503,7 @@ fn compute_function_metadata_from_item_tree(
     let owner = item_tree.method_owners.get(&func_id);
     let enclosing_free_impl = match owner {
         Some(MethodOwner::FreeImpl(impl_id)) => Some((*impl_id, &item_tree.impls[impl_id])),
-        _ => None,
+        Some(MethodOwner::Class(_) | MethodOwner::Interface(_)) | None => None,
     };
     let enclosing_impl_for_target =
         enclosing_free_impl.and_then(|(_, block)| match &block.subject {
@@ -3512,11 +3512,11 @@ fn compute_function_metadata_from_item_tree(
         });
     let enclosing_class = match owner {
         Some(MethodOwner::Class(class_id)) => Some(&item_tree[*class_id]),
-        _ => None,
+        Some(MethodOwner::FreeImpl(_) | MethodOwner::Interface(_)) | None => None,
     };
     let enclosing_interface = match owner {
         Some(MethodOwner::Interface(iface_id)) => Some(&item_tree[*iface_id]),
-        _ => None,
+        Some(MethodOwner::Class(_) | MethodOwner::FreeImpl(_)) | None => None,
     };
     let self_replacement = enclosing_impl_for_target
         .cloned()

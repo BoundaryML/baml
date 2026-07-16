@@ -17,7 +17,8 @@ use baml_compiler2_hir::loc::{
 };
 
 /// Declare an enumeration query: `file_<plural>(file) -> Vec<XLoc>`, ordered by
-/// source position.
+/// source position. Synthetic `*$stream` companions carry no source span, so they
+/// sort first (at offset 0); user-declared items follow in source order.
 macro_rules! file_items {
     ($(#[$meta:meta])* $name:ident, $map:ident, $loc:ident) => {
         $(#[$meta])*
@@ -35,13 +36,13 @@ macro_rules! file_items {
 }
 
 file_items!(
-    /// Every class declared in `file`, in source order.
+    /// Every class in `file`, in source order (synthetic `*$stream` companions first).
     file_classes,
     classes,
     ClassLoc
 );
 file_items!(
-    /// Every function declared in `file`, in source order. Includes methods.
+    /// Every function in `file`, in source order (synthetic companions first). Includes methods.
     file_functions,
     functions,
     FunctionLoc
@@ -59,7 +60,7 @@ file_items!(
     InterfaceLoc
 );
 file_items!(
-    /// Every type alias declared in `file`, in source order.
+    /// Every type alias in `file`, in source order (synthetic `*$stream` companions first).
     file_type_aliases,
     type_aliases,
     TypeAliasLoc

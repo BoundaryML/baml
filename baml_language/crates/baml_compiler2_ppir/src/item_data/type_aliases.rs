@@ -41,8 +41,11 @@ pub fn type_alias_source_map<'db>(
     lower(db, alias).1
 }
 
-/// Both halves share one lowering pass — the split into two queries is purely
-/// about what each one lets downstream depend on.
+/// The `*_data` and `*_source_map` queries each call this and keep one half, so
+/// `lower` runs once per query — not a single shared pass. It is deterministic,
+/// so the `TypeRefId`s the data half hands out validly index the source map's
+/// arena. The split into two queries is purely about what each one lets
+/// downstream depend on.
 fn lower<'db>(
     db: &'db dyn crate::Db,
     alias: TypeAliasLoc<'db>,
