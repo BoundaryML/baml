@@ -1,0 +1,39 @@
+{
+  "name": "@boundaryml/baml-bridge-web",
+  "version": "0.15.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git",
+    "directory": "baml_language/sdks/typescript/bridge_typescript_web"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "workerd": {
+        "types": "./dist/workerd/index.d.ts",
+        "import": "./dist/workerd/index.js"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build:wasm": "node scripts/clean-wasm-output.mjs && wasm-pack build . --target web --dev --out-dir dist/wasm --out-name bridge_web_core && node scripts/build-worker.mjs --dev && node scripts/prepare-wasm-package.mjs",
+    "build:wasm:release": "node scripts/build-wasm-release.mjs && node scripts/prepare-wasm-package.mjs",
+    "build:ts": "node scripts/sync-node-runtime.mjs && tsc -p tsconfig.json && node scripts/prepare-workerd-package.mjs",
+    "build": "pnpm build:wasm:release && pnpm build:ts",
+    "build:debug": "pnpm build:wasm && pnpm build:ts"
+  },
+  "dependencies": {
+    "protobufjs": "^7.6.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  }
+}

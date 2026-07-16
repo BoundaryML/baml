@@ -18,6 +18,7 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
 "cargo:wasm-pack" = "0.14.0"
+"cargo:worker-build" = "0.8.5"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
 "cargo:prek" = "0.3.13"
