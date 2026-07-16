@@ -14,7 +14,7 @@
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
 //! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`typescript_node`].
+//! like [`python_pydantic2`] and [`typescript`].
 //!
 //! Layout the helpers assume:
 //!
@@ -37,7 +37,7 @@ use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
-pub mod typescript_node;
+pub mod typescript;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.

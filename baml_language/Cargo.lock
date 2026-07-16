@@ -747,11 +747,12 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "mimalloc",
  "object 0.36.3",
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_typescript_shared",
  "serde",
  "serde_json",
  "sha2",
@@ -771,6 +772,7 @@ name = "baml_codegen_types"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_type",
  "strum",
 ]
 
@@ -838,6 +840,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
+ "baml_workspace",
  "indexmap",
  "num-bigint",
  "rustc-hash 2.1.2",
@@ -1574,6 +1577,7 @@ dependencies = [
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "cbindgen",
  "futures",
  "indexmap",
  "libc",
@@ -1581,6 +1585,7 @@ dependencies = [
  "prost",
  "serde_json",
  "sys_native",
+ "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
@@ -1604,25 +1609,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridge_nodejs"
-version = "0.0.0-beta"
-dependencies = [
- "baml_version",
- "bex_events",
- "bex_project",
- "bridge_cffi",
- "bridge_ctypes",
- "indexmap",
- "log",
- "napi",
- "napi-build",
- "napi-derive",
- "prost",
- "serde_json",
- "sys_native",
-]
-
-[[package]]
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
@@ -1641,6 +1627,25 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "bridge_typescript"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_version",
+ "bex_events",
+ "bex_project",
+ "bridge_cffi",
+ "bridge_ctypes",
+ "indexmap",
+ "log",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "prost",
+ "serde_json",
+ "sys_native",
 ]
 
 [[package]]
@@ -1870,6 +1875,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "cbindgen"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "975982cdb7ad6a142be15bdf84aea7ec6a9e5d4d797c004d43185b24cfe4e684"
+dependencies = [
+ "clap",
+ "heck 0.5.0",
+ "indexmap",
+ "log",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -4264,6 +4288,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4513,6 +4546,15 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -6572,7 +6614,7 @@ dependencies = [
  "baml_workspace",
  "borsh",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_typescript_shared",
 ]
 
 [[package]]
@@ -6620,7 +6662,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdkgen_typescript_node"
+name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
@@ -7665,6 +7707,21 @@ name = "toml_writer"
 version = "1.1.1+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
+
+[[package]]
+name = "tools_compile_profile"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_compiler_diagnostics",
+ "baml_project",
+ "baml_workspace",
+ "clap",
+ "mimalloc",
+ "salsa",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "tools_onionskin"

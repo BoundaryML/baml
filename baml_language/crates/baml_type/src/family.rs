@@ -1,8 +1,8 @@
 //! The `Ty` type family, generated from a single tagged definition.
 //!
 //! [`ty_family!`](baml_type_macros::ty_family) expands the master `Ty` enum
-//! below into the whole family — `Ty`, [`RuntimeTy`], [`RealizedTy`],
-//! [`ConcreteTy`], [`ConcreteRealizedTy`] — plus the per-member
+//! below into the whole family — `Ty`, [`RuntimeTy`], [`CodegenTy`],
+//! [`RealizedTy`], [`ConcreteTy`], [`ConcreteRealizedTy`] — plus the per-member
 //! `FunctionParamTy` companion structs. Membership is by axis: each variant is
 //! tagged with exactly one `#[axis(..)]`, and each member includes a set of
 //! axes (a variant is present iff its axis is included). Nested positions are
@@ -29,6 +29,11 @@ ty_family! {
 
     type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
     type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
+    // excludes unresolved associated-type projections; unlike `RealizedTy`, it
+    // retains named type variables for generic declarations. Type aliases are
+    // deliberately retained as nominal references at public use sites.
+    type CodegenTy          { includes: [concrete, abstract, literal, never, typevar, special],                  child: Self }
     type RealizedTy         { includes: [concrete, abstract, literal, never, special],                           child: Self }
     type ConcreteTy         { includes: [concrete, never],                                                       child: RuntimeTy }
     type ConcreteRealizedTy { includes: [concrete, never],                                                       child: RealizedTy }
@@ -340,8 +345,8 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use crate::{
-        ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotRealizedTy,
-        NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
+        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotCodegenTy,
+        NotRealizedTy, NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -395,6 +400,7 @@ mod tests {
     fn conversion_matrix_round_trips() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
@@ -402,6 +408,9 @@ mod tests {
         // RealizedTy ≤ RuntimeTy ≤ Ty (deep), by ref + owned move.
         assert_eq!(Ty::from(&rt), t);
         assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(RuntimeTy::from(&cg), rt);
+        assert_eq!(RuntimeTy::from(cg.clone()), rt);
+        assert_eq!(CodegenTy::try_from(&rt).unwrap(), cg);
         assert_eq!(Ty::from(&rz), t);
         assert_eq!(RuntimeTy::from(&rz), rt);
         assert_eq!(RuntimeTy::from(rz.clone()), rt);
@@ -437,11 +446,39 @@ mod tests {
         );
     }
 
+    /// Codegen types retain generic parameters but require associated
+    /// projections to have been resolved at the compiler boundary.
+    #[test]
+    fn codegen_accepts_type_variables_and_rejects_projections() {
+        let typevar = with_typevar();
+        let runtime = RuntimeTy::try_from(&typevar).unwrap();
+        let codegen = CodegenTy::try_from(&runtime).unwrap();
+        assert_eq!(RuntimeTy::from(&codegen), runtime);
+
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::TypeVar(Name::new("T"), a())),
+            interface: Box::new(crate::Interface::new(
+                qtn("Iterator"),
+                Vec::new(),
+                Vec::new(),
+            )),
+            member: Name::new("Item"),
+            attr: a(),
+        };
+        assert_eq!(
+            CodegenTy::try_from(&projection),
+            Err(NotCodegenTy {
+                variant: "AssociatedTypeProjection"
+            })
+        );
+    }
+
     /// Borsh serialization round-trips for every member.
     #[test]
     fn borsh_round_trips() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
@@ -450,6 +487,10 @@ mod tests {
         assert_eq!(
             RuntimeTy::try_from_slice(&borsh::to_vec(&rt).unwrap()).unwrap(),
             rt
+        );
+        assert_eq!(
+            CodegenTy::try_from_slice(&borsh::to_vec(&cg).unwrap()).unwrap(),
+            cg
         );
         assert_eq!(
             RealizedTy::try_from_slice(&borsh::to_vec(&rz).unwrap()).unwrap(),
@@ -526,12 +567,15 @@ mod tests {
         // `typevar` and `projection` variants before it, yet its tag stays 27.
         assert_eq!(in_memory_tag(&Ty::BuiltinUnknown { attr: a() }), 27);
         assert_eq!(in_memory_tag(&RuntimeTy::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag(&CodegenTy::BuiltinUnknown { attr: a() }), 27);
         assert_eq!(in_memory_tag(&RealizedTy::BuiltinUnknown { attr: a() }), 27);
         // `Never` (#28) is shared and tag-stable across the deep members.
         assert_eq!(in_memory_tag(&Ty::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag(&CodegenTy::Never { attr: a() }), 28);
         assert_eq!(in_memory_tag(&RealizedTy::Never { attr: a() }), 28);
         // A leaf concrete variant present in every member, shallow ones included.
         assert_eq!(in_memory_tag(&Ty::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag(&CodegenTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
     }
@@ -544,15 +588,20 @@ mod tests {
     fn borrowed_upcast_matches_owned_widening() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Reinterpreting the narrower value yields the wider value by reference.
         assert_eq!(rt.as_ty(), &t);
+        assert_eq!(cg.as_ty(), &t);
+        assert_eq!(cg.as_runtime_ty(), &rt);
         assert_eq!(rz.as_ty(), &t);
+        assert_eq!(rz.as_codegen_ty(), &cg);
         assert_eq!(rz.as_runtime_ty(), &rt);
 
         // And it agrees with the owned `From` (also a transmute) on equal input.
         assert_eq!(rt.as_ty(), &Ty::from(rt.clone()));
+        assert_eq!(cg.as_runtime_ty(), &RuntimeTy::from(cg.clone()));
         assert_eq!(rz.as_runtime_ty(), &RuntimeTy::from(rz.clone()));
     }
 
@@ -564,15 +613,20 @@ mod tests {
     fn downcast_validates_then_reinterprets() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
         assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
+        assert_eq!(<&CodegenTy>::try_from(&t), Ok(&cg));
+        assert_eq!(<&CodegenTy>::try_from(&rt), Ok(&cg));
         assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
         assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
 
         // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
         assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
+        assert_eq!(CodegenTy::try_from(t.clone()).unwrap(), cg);
+        assert_eq!(CodegenTy::try_from(rt.clone()).unwrap(), cg);
         assert_eq!(RealizedTy::try_from(t.clone()).unwrap(), rz);
         assert_eq!(RealizedTy::try_from(rt.clone()).unwrap(), rz);
     }
@@ -605,6 +659,10 @@ mod tests {
         assert_eq!(
             <&RuntimeTy>::try_from(&bad),
             Err(NotRuntimeTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            <&CodegenTy>::try_from(&bad),
+            Err(NotCodegenTy { variant: "Unknown" })
         );
         assert_eq!(
             <&RealizedTy>::try_from(&bad),

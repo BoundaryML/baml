@@ -37,7 +37,7 @@ async fn clean_lambda_into_fn_param() {
 #[tokio::test]
 async fn clean_lambda_into_class_field() {
     let r = run(r#"
-        class F { f (int) -> int }
+        class F { f (int) -> int throws never }
         function main() -> int {
             let holder = F { f: (x: int) -> int { x * 2 } };
             let g = holder.f;

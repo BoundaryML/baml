@@ -218,7 +218,7 @@ function class_destructure_unknown_renamed_field_span() -> int {
 }
 
 function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
-    let f: (Person) -> int = (p: Person) -> int {
+    let f: (Person) -> int throws never = (p: Person) -> int {
         let Person { age: string } = p;
         1
     };

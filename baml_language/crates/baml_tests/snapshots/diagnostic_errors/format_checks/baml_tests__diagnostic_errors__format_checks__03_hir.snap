@@ -99,7 +99,7 @@ class user.LongAttrField {
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
-  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
   deeply_nested: int | string | bool | float | null[]?
 }
 class user.ManyFields {
@@ -207,7 +207,7 @@ class user.TypeVariety {
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
   deep_generic: map<string, map<string, int[]>>
-  fn_type: (x: int, y: int) -> string
+  fn_type: (x: int, y: int) -> string throws never
   paren_union_array: int | string | bool[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
@@ -344,13 +344,13 @@ enum user.WithCommas {A, B, C}
 function user.ComplexReturn(x: int) -> int | string | null  [expr] {
   {  } x
 }
-function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>  [expr] {
+function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never throws never throws never throws never  [expr] {
   {  } 1
 }
 function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int  [expr] {
   {  } if (a Gt 0) {  } if (b Gt 0) {  } if (c Gt 0) { return a Mul b Mul c Mul d Add a Mul b Mul c Add a Mul b Add a Add b Mul c Mul d Add b Mul c Add b Add c Mul d Add c Add d } else { return 0 } else { return 0 } else { return 0 }
 }
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string  [expr] {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string throws never throws never) -> string  [expr] {
   {  } "done"
 }
 function user.DeeplyNestedBody(a: int, b: int, c: int) -> int  [expr] {
@@ -557,24 +557,24 @@ class user.TypeAliasSuccess {
 type user.AliasChain = user.SimpleAlias
 type user.AlwaysTrue = true
 type user.ArrayOptional = int[]?
-type user.BinaryOp = (a: int, b: int) -> int
-type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string?
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string? throws never
 type user.ComplexMap = map<string, int | string | bool>
 type user.ComplexPostfix = int | string?[][]
-type user.Curried = (x: int) -> (y: int) -> int
-type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
+type user.Curried = (x: int) -> (y: int) -> int throws never throws never
+type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never throws never throws never throws never
 type user.DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
 type user.DeepParenUnion = int | string | bool | float | null | int[][]?
 type user.DeepPostfix = int | string | bool | float?[][]?
 type user.DoubleArray = int[][]
 type user.DoubleOptional = int??
 type user.ExtraWhitespace = int | string | bool | float | null
-type user.FnFactory = (config: string) -> (int) -> int
+type user.FnFactory = (config: string) -> (int) -> int throws never throws never
 type user.HttpOk = 200
 type user.IntList = int[]
-type user.IntToInt = (x: int) -> int
+type user.IntToInt = (x: int) -> int throws never
 type user.Json = int | float | string | bool | null | user.Json[] | map<string, user.Json>
-type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
+type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string throws never
 type user.LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
 type user.Matrix = int[][]
 type user.MaybeInt = int?
@@ -586,7 +586,7 @@ type user.NestedParenUnion = int | string | bool | float[]
 type user.OptionalArray = int?[]
 type user.OptionalUnion = int | string?
 type user.ParenUnion = int | string[]
-type user.Producer = () -> string
+type user.Producer = () -> string throws never
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
 type user.Role = "user" | "assistant" | "system"
 type user.SimpleAlias = int
@@ -599,18 +599,18 @@ type user.TriviaAlias = int
 type user.TriviaAliasBlock = int
 type user.TriviaArray = int[]
 type user.TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
-type user.TriviaFnType = (x: int) -> string
-type user.TriviaFnTypeBlock = (x: int) -> string
+type user.TriviaFnType = (x: int) -> string throws never
+type user.TriviaFnTypeBlock = (x: int) -> string throws never
 type user.TriviaGeneric = map<string, int>
 type user.TriviaGenericBlock = map<string, int>
-type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
+type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string throws never
 type user.TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 type user.TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 type user.TriviaOptional = int?
 type user.TriviaParen = int | string[]
 type user.TriviaUnion = int | string | bool
 type user.TriviaUnionBlock = int | string | bool
-type user.UnionParamFn = (value: int | string) -> bool
-type user.UnnamedParams = (int, int) -> int
+type user.UnionParamFn = (value: int | string) -> bool throws never
+type user.UnnamedParams = (int, int) -> int throws never
 type user.VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 type user.WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>

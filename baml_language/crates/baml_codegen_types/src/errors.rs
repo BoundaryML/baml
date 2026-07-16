@@ -1,6 +1,7 @@
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CodegenTypeError {
-    InvalidUnionUsage(super::Ty),
-    InvalidOptionalUsage(super::Ty),
-    InvalidMapKey(super::Ty),
-    InvalidUnit(super::Ty),
+    InvalidUnionUsage(Box<super::Ty>),
+    InvalidOptionalUsage(Box<super::Ty>),
+    InvalidMapKey(Box<super::Ty>),
+    InvalidUnit(Box<super::Ty>),
 }

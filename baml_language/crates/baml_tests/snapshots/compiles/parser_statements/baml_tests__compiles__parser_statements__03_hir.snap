@@ -17,7 +17,7 @@ function user.block_with_tail() -> int  [expr] {
 function user.edge_call_then_index(foo: () -> int[]) -> int  [expr] {
   { foo()[0] } 1
 }
-function user.edge_call_then_parens(foo: () -> (int) -> int) -> int  [expr] {
+function user.edge_call_then_parens(foo: () -> (int) -> int throws never) -> int  [expr] {
   { foo()(1) } 2
 }
 function user.edge_let_call_then_index(bar: () -> int[]) -> int  [expr] {

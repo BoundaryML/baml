@@ -189,6 +189,6 @@ rpi/
 .codeboarding/
 
 # Track generated Node bridge package JS/TS dist outputs, but not native addons.
-!baml_language/sdks/nodejs/bridge_nodejs/dist/
-!baml_language/sdks/nodejs/bridge_nodejs/dist/**
-baml_language/sdks/nodejs/bridge_nodejs/dist/*.node
+!baml_language/sdks/typescript/bridge_typescript/dist/
+!baml_language/sdks/typescript/bridge_typescript/dist/**
+baml_language/sdks/typescript/bridge_typescript/dist/*.node

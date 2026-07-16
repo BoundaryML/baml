@@ -710,6 +710,13 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         method: Name,
     },
+    /// A function type omits its `throws` clause in a position where the error type cannot be
+    /// inferred — a type alias, class field, `let` annotation, nested or return position
+    /// (`TYPE_SYSTEM.md` rule 5). Only an immediate callback parameter of a function declaration
+    /// may omit it; there the compiler opens it to a synthetic effect parameter (rule 4). Lambda
+    /// parameters have no generic binder to open an effect parameter on, so they must declare it
+    /// explicitly.
+    FunctionTypeMissingThrows,
 }
 
 impl fmt::Display for TirTypeError {
@@ -1657,6 +1664,13 @@ impl fmt::Display for TirTypeError {
                     f,
                     "interface method `{method}` on `{}` must declare an explicit `throws` clause",
                     interface.render_user_facing()
+                )
+            }
+            TirTypeError::FunctionTypeMissingThrows => {
+                write!(
+                    f,
+                    "function type must declare an explicit `throws` clause; add `throws never` \
+                     if calling it cannot throw"
                 )
             }
         }

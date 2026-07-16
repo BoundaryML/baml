@@ -8,3 +8,5 @@ function user.lambda_capture_later_param(a: int = f(), b: int = 1) -> int throws
   }
   !! 46..78: default for parameter `a` cannot reference later parameter `b`
 }
+lambda user.lambda_capture_later_param {
+}

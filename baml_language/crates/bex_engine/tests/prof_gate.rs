@@ -2094,7 +2094,7 @@ async fn call_callable_has_real_identity_and_balance() {
     init_prof_env();
     let source = r#"
         function cc_callee(x: int) -> int { x + 1 }
-        function cc_get() -> (int) -> int { cc_callee }
+        function cc_get() -> (int) -> int throws never { cc_callee }
     "#;
     let program = compile_for_engine(source);
     let engine = Arc::new(

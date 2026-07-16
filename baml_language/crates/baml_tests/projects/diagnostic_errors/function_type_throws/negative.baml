@@ -1,14 +1,14 @@
-type HiddenHandler = (value: int) -> int
+type HiddenHandler = (value: int) -> int throws never
 
 class Holder {
-  cb (value: int) -> int
+  cb (value: int) -> int throws never
 }
 
 function accept_hidden(cb: HiddenHandler) -> int {
   cb(1)
 }
 
-function nested_position(cb: ((value: int) -> int) -> int) -> int {
+function nested_position(cb: ((value: int) -> int throws never) -> int) -> int {
   let inner = (value: int) -> int throws string {
     throw "boom"
   }
@@ -27,7 +27,7 @@ function fail_stored() -> Holder {
   Holder { cb: risky }
 }
 
-function fail_returned() -> (value: int) -> int {
+function fail_returned() -> (value: int) -> int throws never {
   let local = (value: int) -> int throws string {
     throw "boom"
   }
