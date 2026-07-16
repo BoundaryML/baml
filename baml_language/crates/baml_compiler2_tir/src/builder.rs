@@ -2428,6 +2428,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             }
 
+            // Defaulted parameters can be passed positionally. Any omitted
+            // trailing defaults are filled by the call-default machinery.
             bindings[next_positional] = Some(arg_expr);
             provided_args.insert(arg_expr);
             next_positional += 1;
