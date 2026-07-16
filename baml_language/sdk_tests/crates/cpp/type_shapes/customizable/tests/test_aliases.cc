@@ -10,12 +10,19 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
 namespace aliases = baml_sdk::aliases;
 
 BAML_TEST(round_trip_string_list) {
-  const std::vector<std::string> s = {"a", "b"};
+  // StringList is a generated `using` alias; the compiler pre-resolves
+  // alias references in signatures, so the parameter type is spelled
+  // std::vector<std::string> but the named alias is interchangeable.
+  static_assert(
+      std::is_same<aliases::StringList, std::vector<std::string>>::value,
+      "StringList must alias its resolved type");
+  const aliases::StringList s = {"a", "b"};
   BAML_ASSERT(aliases::round_trip_string_list(s) == s);
 }

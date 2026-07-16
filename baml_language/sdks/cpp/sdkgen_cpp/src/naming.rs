@@ -142,9 +142,6 @@ pub(crate) enum CppNameKind {
     Class,
     Enum,
     EnumVariant,
-    /// Never requested yet: aliases resolve transparently this slice. Kept
-    /// so the named-alias slice slots in without re-numbering typed hashes.
-    #[expect(dead_code)]
     TypeAlias,
     /// Never requested this slice: methods are a post-step-8 feature. Kept
     /// so the methods slice slots in without re-numbering typed hashes.

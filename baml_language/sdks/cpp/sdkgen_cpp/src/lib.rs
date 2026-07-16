@@ -75,18 +75,30 @@ pub fn to_source_code_with_bytecode(
     let emit_type = |name: &Name,
                      emitted_types: &BTreeSet<Name>,
                      boxed: &BTreeSet<Name>|
-     -> Result<Option<EmittedClass>, String> {
+     -> Result<Option<EmittedType>, String> {
         match &pool[name] {
             Symbol::Class(class_def) => {
-                emit_class(pool, &names, name, class_def, emitted_types, boxed)
+                Ok(
+                    emit_class(pool, &names, name, class_def, emitted_types, boxed)?
+                        .map(EmittedType::Class),
+                )
+            }
+            Symbol::TypeAlias(alias) if alias.recursive => {
+                Ok(
+                    emit_alias_wrapper(pool, &names, name, alias, emitted_types, boxed)?
+                        .map(EmittedType::Class),
+                )
             }
             Symbol::TypeAlias(alias) => {
-                emit_alias_wrapper(pool, &names, name, alias, emitted_types, boxed)
+                Ok(
+                    emit_alias_using(pool, &names, name, alias, emitted_types, boxed)?
+                        .map(EmittedType::Using),
+                )
             }
             Symbol::Enum(_) | Symbol::Function(_) => unreachable!(),
         }
     };
-    let mut classes: Vec<EmittedClass> = Vec::new();
+    let mut classes: Vec<EmittedType> = Vec::new();
     let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
@@ -96,7 +108,7 @@ pub fn to_source_code_with_bytecode(
             }
             match &pool[*name] {
                 Symbol::Class(class_def) => class_def.generic_params.is_empty(),
-                Symbol::TypeAlias(alias) => alias.recursive,
+                Symbol::TypeAlias(_) => true,
                 Symbol::Enum(_) | Symbol::Function(_) => false,
             }
         })
@@ -324,14 +336,19 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 requests.insert(function_request(name));
                 request_callable_members(&mut requests, &fqn, function);
             }
-            // Non-recursive aliases resolve transparently (no declaration,
-            // so no name); recursive aliases emit a named wrapper struct
-            // that breaks the type recursion.
+            // Non-recursive aliases emit a `using` declaration; recursive
+            // aliases emit a named wrapper struct that breaks the type
+            // recursion (an alias-declaration cannot reference itself).
             Symbol::TypeAlias(alias) => {
+                request_namespace_segments(&mut requests, name, true);
                 if alias.recursive {
-                    request_namespace_segments(&mut requests, name, true);
                     requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
                     requests.insert(alias_value_field_request(name));
+                } else {
+                    requests.insert(NameRequest::new(
+                        BamlFqn::symbol(name),
+                        CppNameKind::TypeAlias,
+                    ));
                 }
             }
         }
@@ -644,6 +661,51 @@ fn emit_alias_wrapper(
     }))
 }
 
+/// A named type as it interleaves in declaration order: a struct (class or
+/// recursive-alias wrapper) or a `using` declaration.
+enum EmittedType {
+    Class(EmittedClass),
+    Using(EmittedUsing),
+}
+
+/// A non-recursive type alias as a `using` declaration. A `using` is a pure
+/// synonym, so no codec is emitted: `Codec<Alias>` *is* `Codec<Target>`.
+struct EmittedUsing {
+    ns: Vec<String>,
+    name: CppName,
+    target: String,
+}
+
+/// A non-recursive type alias: `type StringList = string[]` becomes
+/// `using StringList = std::vector<std::string>;`. It joins the class
+/// fixed point so the declaration lands after the types its target names.
+fn emit_alias_using(
+    pool: &SymbolPool,
+    names: &CppNames,
+    name: &Name,
+    alias: &baml_codegen_types::TypeAlias,
+    emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
+) -> Result<Option<EmittedUsing>, String> {
+    let target = match translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed) {
+        Translated::Cpp(ty) => ty,
+        Translated::NotYet => return Ok(None),
+        Translated::Unsupported(reason) => {
+            return Err(format!("aliased type: {reason}"));
+        }
+    };
+    Ok(Some(EmittedUsing {
+        ns: allocated_namespace(names, name, true),
+        name: names
+            .get(&NameRequest::new(
+                BamlFqn::symbol(name),
+                CppNameKind::TypeAlias,
+            ))
+            .clone(),
+        target,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Callables (free functions and methods share this shape)
 // ---------------------------------------------------------------------------
@@ -815,10 +877,12 @@ fn translate_ty(
             return Translated::Unsupported(format!("TypeVar {name} (generics post-step-8)"));
         }
         Ty::TypeAlias(name) => {
-            // Non-recursive aliases resolve transparently to their target
-            // type; recursive aliases reference their wrapper struct like a
-            // class (boxed inside their own cycle, since the box needs only
-            // the forward declaration).
+            // Aliases render by name once declared: recursive aliases
+            // reference their wrapper struct like a class (boxed inside
+            // their own cycle, since the box needs only the forward
+            // declaration); non-recursive aliases reference their `using`
+            // declaration, which cannot be forward-declared, so uses wait
+            // for the declaration itself.
             let Some(Symbol::TypeAlias(alias)) = pool.get(name) else {
                 return Translated::Unsupported(format!("unresolved alias {name}"));
             };
@@ -836,7 +900,18 @@ fn translate_ty(
                 }
                 return Translated::Cpp(base);
             }
-            return translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed);
+            if !emitted_types.contains(name) {
+                return Translated::NotYet;
+            }
+            return Translated::Cpp(
+                names
+                    .get(&NameRequest::new(
+                        BamlFqn::symbol(name),
+                        CppNameKind::TypeAlias,
+                    ))
+                    .identifier()
+                    .to_string(),
+            );
         }
         Ty::Enum(name) => {
             return if emitted_types.contains(name) {
@@ -1095,7 +1170,7 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
 }
 fn render_header(
     enums: &[EmittedEnum],
-    classes: &[EmittedClass],
+    types: &[EmittedType],
     fns_by_namespace: &BTreeMap<Vec<String>, Vec<EmittedFn>>,
     skipped: &[String],
 ) -> String {
@@ -1125,11 +1200,18 @@ fn render_header(
     let _ = writeln!(buf, "void {}();", GeneratorIdent::EnsureRuntime.token());
     let _ = writeln!(buf, "}}  // namespace {detail}");
 
-    // Forward declarations: method signatures may reference classes defined
-    // later (C++ allows incomplete types in declarations).
+    // Forward declarations for the structs (`using` declarations cannot be
+    // forward-declared; alias uses wait for the declaration itself).
+    let classes: Vec<&EmittedClass> = types
+        .iter()
+        .filter_map(|t| match t {
+            EmittedType::Class(c) => Some(c),
+            EmittedType::Using(_) => None,
+        })
+        .collect();
     if !classes.is_empty() {
         buf.push('\n');
-        for c in classes {
+        for c in &classes {
             open_namespaces(&mut buf, &c.ns);
             let _ = writeln!(buf, "struct {};", c.name.declared());
             close_namespaces(&mut buf, &c.ns);
@@ -1164,8 +1246,18 @@ fn render_header(
         close_namespaces(&mut buf, &e.ns);
     }
 
-    // Classes are already in dependency order from the fixed-point loop.
-    for c in classes {
+    // Types are already in dependency order from the fixed-point loop.
+    for t in types {
+        let c = match t {
+            EmittedType::Class(c) => c,
+            EmittedType::Using(u) => {
+                buf.push('\n');
+                open_namespaces(&mut buf, &u.ns);
+                let _ = writeln!(buf, "using {} = {};", u.name.declared(), u.target);
+                close_namespaces(&mut buf, &u.ns);
+                continue;
+            }
+        };
         buf.push('\n');
         open_namespaces(&mut buf, &c.ns);
         push_doc(&mut buf, "", c.doc.as_ref(), &[]);
@@ -1210,7 +1302,7 @@ fn render_header(
 
     buf.push_str("\n}  // namespace baml_sdk\n");
 
-    render_codecs(&mut buf, enums, classes);
+    render_codecs(&mut buf, enums, &classes);
 
     if !skipped.is_empty() {
         buf.push_str("\n// Symbols not yet emitted by this sdkgen_cpp slice:\n");
@@ -1224,7 +1316,7 @@ fn render_header(
 
 /// Codec<T> specializations for the generated enums and classes. Emitted in
 /// the header (inline) so they are visible from any translation unit.
-fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClass]) {
+fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedClass]) {
     buf.push_str("\nnamespace baml {\n");
 
     for e in enums {
