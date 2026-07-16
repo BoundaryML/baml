@@ -8,10 +8,48 @@ use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = stageRuntimeBytecode)]
-pub fn stage_runtime_bytecode(_bytecode: &[u8]) -> Result<(), JsError> {
-    Err(JsError::new(
-        "@boundaryml/baml-bridge-web runtime support is not implemented yet",
-    ))
+pub fn stage_runtime_bytecode(bytecode: &[u8]) -> Result<(), JsError> {
+    let sys_ops = sys_wasm::build().map_err(|error| JsError::new(&error))?;
+    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(bytecode, sys_ops)
+        .map(|_| ())
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = configureWebSysops)]
+pub fn configure_web_sysops(fetch_key: u64, read_file_sync_key: u64) -> Result<(), JsError> {
+    sys_wasm::configure_web_sysops(fetch_key, read_file_sync_key)
+        .map_err(|error| JsError::new(&error))
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = registerWebHostCallable)]
+pub fn register_web_host_callable(callable: js_sys::Function) -> u64 {
+    sys_wasm::register_host_callable(callable)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = mintWebHostValueKey)]
+pub fn mint_web_host_value_key() -> u64 {
+    sys_wasm::mint_host_value_key()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = registerWebHostValueReleaseCallback)]
+pub fn register_web_host_value_release_callback(callback: js_sys::Function) {
+    sys_wasm::register_host_value_release_callback(callback);
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = releaseWebHostCallable)]
+pub fn release_web_host_callable(key: u64) {
+    sys_wasm::release_host_callable(key);
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = completeWebHostCall)]
+pub fn complete_web_host_call(call_id: u32, is_error: i32, content: &[u8]) {
+    sys_wasm::complete_host_call(call_id, is_error, content);
 }
 
 #[cfg(target_arch = "wasm32")]

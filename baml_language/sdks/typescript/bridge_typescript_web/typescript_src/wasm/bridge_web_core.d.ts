@@ -1,6 +1,12 @@
 export default function init(moduleOrPath?: unknown): Promise<unknown>;
 export function stageRuntimeBytecode(bytecode: Uint8Array): void;
+export function configureWebSysops(fetchKey: bigint, readFileSyncKey: bigint): void;
 export function callFunctionSync(functionName: string, encodedArgs: Uint8Array): Uint8Array;
 export function callFunction(functionName: string, encodedArgs: Uint8Array): Promise<Uint8Array>;
 export function newFunctionCall(): bigint;
 export function cancelFunctionCall(callId: bigint): boolean;
+export function registerWebHostCallable(callable: (callId: number, args: Uint8Array) => void): bigint;
+export function mintWebHostValueKey(): bigint;
+export function registerWebHostValueReleaseCallback(callback: (key: bigint) => void): void;
+export function releaseWebHostCallable(key: bigint): void;
+export function completeWebHostCall(callId: number, isError: number, content: Uint8Array): void;

@@ -10,6 +10,8 @@ crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
 bridge_cffi = { workspace = true, default-features = false }
+sys_wasm = { workspace = true }
+js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
