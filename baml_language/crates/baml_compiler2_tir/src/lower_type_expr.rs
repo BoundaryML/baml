@@ -921,6 +921,22 @@ pub fn lower_type_expr(
         } => {
             // A function type carries no generics of its own; its type variables
             // come from the enclosing context.
+            //
+            // The `throws` clause is required here (`TYPE_SYSTEM.md` rule 5): the only
+            // positions that may omit it never reach this lowering with `None` — a
+            // declaration's immediate callback parameter is opened to a synthetic effect
+            // parameter by HIR signature elaboration, and lambda literals infer their
+            // own throws from the body. Recover with `never` so downstream checking
+            // doesn't cascade.
+            let throws_ty = match throws.as_deref() {
+                Some(throws) => lower_type_expr(throws, ctx, diagnostics),
+                None => {
+                    diagnostics.push(TirTypeError::FunctionTypeMissingThrows);
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                }
+            };
             Ty::Function {
                 params: params
                     .iter()
@@ -935,14 +951,7 @@ pub fn lower_type_expr(
                     })
                     .collect(),
                 ret: Box::new(lower_type_expr(ret, ctx, diagnostics)),
-                throws: Box::new(
-                    throws
-                        .as_deref()
-                        .map(|throws| lower_type_expr(throws, ctx, diagnostics))
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
+                throws: Box::new(throws_ty),
                 attr: TyAttr::default(),
             }
         }
@@ -3101,7 +3110,9 @@ mod tests {
                 },
             ],
             ret: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default())),
-            throws: None,
+            throws: Some(Box::new(
+                TypeExprKind::Never { attrs: vec![] }.at(text_size::TextRange::default()),
+            )),
             attrs: vec![],
         }
         .at(text_size::TextRange::default());

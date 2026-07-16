@@ -57,7 +57,7 @@ function user.test_lambda_calling_lambda() -> int throws never {
           x * 2
         }
     let apply_twice = : (f: (int) -> int throws never, x: int) -> int throws never
-      (f: (int) -> int, x: int) -> int { ... } : (f: (int) -> int throws never, x: int) -> int throws never
+      (f: (int) -> int throws never, x: int) -> int { ... } : (f: (int) -> int throws never, x: int) -> int throws never
         {
           f(f(x))
         }
@@ -303,7 +303,7 @@ function user.test_apply_twice_inferred() -> int throws never {
           x * 2
         }
     let apply_twice = : (f: (int) -> int throws never, x: int) -> int throws never
-      (f: (int) -> int, x: int) -> { ... } : (f: (int) -> int throws never, x: int) -> int throws never
+      (f: (int) -> int throws never, x: int) -> { ... } : (f: (int) -> int throws never, x: int) -> int throws never
         {
           f(f(x))
         }
@@ -337,7 +337,7 @@ lambda user.test_deep_capture_inferred {
 function user.test_two_transforms_inferred() -> int throws never {
   { : int
     let apply_both = : (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> int throws never
-      (f: (int) -> int, g: (int) -> int, x: int) -> { ... } : (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> int throws never
+      (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> { ... } : (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> int throws never
         {
           g(f(x))
         }

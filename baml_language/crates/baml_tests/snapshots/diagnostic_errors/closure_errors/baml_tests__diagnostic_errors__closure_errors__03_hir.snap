@@ -28,7 +28,7 @@ function user.test_err_bound_for_unbound() -> string  [expr] {
   { let e = user.Employee { first: "Alice", last: "Smith" } } takes_unbound(e.full_name)
 }
 function user.test_err_bound_type_mismatch() -> int  [expr] {
-  { let c = user.Counter { value: 0 }; let inc: (user.Counter) -> int = c.increment } 0
+  { let c = user.Counter { value: 0 }; let inc: (user.Counter) -> int throws never = c.increment } 0
 }
 function user.test_err_extra_arg() -> string  [expr] {
   { let fmt = user.Formatter { prefix: ">> " }; let transform = fmt.format } transform(fmt, "hello")
@@ -37,5 +37,5 @@ function user.test_err_missing_self() -> string  [expr] {
   { let f = Employee.full_name } f()
 }
 function user.test_err_unbound_type_mismatch() -> string  [expr] {
-  { let f: () -> string = Employee.full_name } ""
+  { let f: () -> string throws never = Employee.full_name } ""
 }

@@ -13,6 +13,7 @@ pub mod types;
 
 use pyo3::{
     Bound,
+    exceptions::PyImportError,
     prelude::{PyModule, PyResult, pyfunction, pymodule},
     types::PyModuleMethods,
     wrap_pyfunction,
@@ -45,6 +46,12 @@ fn cancel_function_call(call_id: u64) -> bool {
 
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::Python,
+        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+    })
+    .map_err(PyImportError::new_err)?;
+
     m.add_class::<baml_call_context::BamlCallContext>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;

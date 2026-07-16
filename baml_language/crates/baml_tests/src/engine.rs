@@ -360,7 +360,7 @@ mod tests {
             }
 
             function main() -> int {
-              let f: (x: int, b?: int) -> int = combine;
+              let f: (x: int, b?: int) -> int throws never = combine;
               f(1, b = 5)
             }
             "#,
@@ -386,7 +386,7 @@ mod tests {
             }
 
             function main() -> int {
-              let f: (x: int, b?: int, a?: int) -> int = combine;
+              let f: (x: int, b?: int, a?: int) -> int throws never = combine;
               f(1, b = 5, a = 2)
             }
             "#,

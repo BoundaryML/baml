@@ -392,6 +392,17 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  # Language-neutral engine cdylib, shared by every dylib-loader SDK.
+  build-bridge-cffi:
+    name: Build bridge_cffi cdylib
+    needs: [plan]
+    uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
@@ -402,6 +413,7 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      - build-bridge-cffi
     steps:
       - run: echo "all release build jobs completed"
 
@@ -532,10 +544,69 @@ jobs:
               --notes "BAML wrapper $WRAPPER_VERSION"
           fi
 
+  publish-bridge-cffi-release:
+    name: Publish bridge_cffi release assets
+    # After the toolchain publisher so the shared `baml-language-<version>`
+    # release already exists (both add assets to the same tag).
+    needs: [plan, all-builds, publish-toolchain-release]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-cffi-*
+          path: dist/cffi
+          merge-multiple: true
+      - name: Publish bridge_cffi release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.git_tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(dist/cffi/*)
+          if [[ ${#assets[@]} -eq 0 ]]; then
+            echo "::error::no bridge_cffi assets downloaded"
+            exit 1
+          fi
+          # The toolchain publisher created the shared release; create it only if
+          # a cffi-only rerun somehow got here first.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "BAML Language $VERSION" \
+              --notes "BAML language $VERSION"
+          fi
+          # Immutable upload: add missing assets, verify identical bytes for any
+          # that already exist, and fail on mismatch. Never overwrite (unlike the
+          # toolchain job's --clobber): a published release asset is immutable, and
+          # the loader downloads these by URL.
+          existing="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for f in "${assets[@]}"; do
+            name="$(basename "$f")"
+            if grep -qxF "$name" <<<"$existing"; then
+              tmp="$(mktemp)"
+              gh release download "$TAG" --pattern "$name" --output "$tmp" --clobber
+              if cmp -s "$f" "$tmp"; then
+                echo "asset already present and identical: $name"
+              else
+                echo "::error::release asset $name exists with different content"
+                exit 1
+              fi
+              rm -f "$tmp"
+            else
+              gh release upload "$TAG" "$f"
+              echo "uploaded: $name"
+            fi
+          done
+
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -549,6 +620,11 @@ jobs:
         with:
           pattern: toolchain-*
           path: dist/toolchain
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-cffi-*
+          path: dist/cffi
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
@@ -573,6 +649,7 @@ jobs:
           fi
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
+            --cffi-dir dist/cffi \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out manifests \
@@ -760,6 +837,11 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
+          pattern: bridge-cffi-*
+          path: dist/cffi
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
@@ -776,6 +858,7 @@ jobs:
           fi
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
+            --cffi-dir dist/cffi \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out dry-run/manifest/v1 \

@@ -309,9 +309,9 @@ source: crates/baml_tests/src/generated_tests.rs
      │         ───────┬───────  
      │                ╰───────── duplicate enum definition
      │
-     ├─[ type_alias_decls.baml:389:9 ]
+     ├─[ type_alias_decls.baml:401:9 ]
      │
- 389 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+ 401 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
      │         ───────┬───────  
      │                ╰───────── duplicate type definition
      │ 

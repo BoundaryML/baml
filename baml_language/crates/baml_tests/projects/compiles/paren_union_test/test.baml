@@ -13,12 +13,12 @@ class Union {
   u_opt_opt_opt_arr_opt_opt_arr_arr_arr (Union | Union | (Union | Union))???[]??[][][]
   arr_opt_arr_u_arr_arr_arr_opt_opt_arr (Union | Union[]?[] | (Union | Union))[][][]??[]
   opt_arr_opt_u_arr_arr_arr_opt_opt_arr (Union | Union?[]? | (Union | Union))[][][]??[]
-  fun (Union | Union | (Union | Union)) -> Union | Union | (Union | Union)
-  fun_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union))[]
-  fun_arr_opt ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union))[]?
-  fun_opt ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union))?
-  fun_opt_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union))?[]
-  fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union))???[][]?[]
-  arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union[]?[] | (Union | Union)) -> Union | Union[]?[] | (Union | Union))???[][]?[]
-  opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union?[]? | (Union | Union)) -> Union | Union?[]? | (Union | Union))???[][]?[]
+  fun (Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never
+  fun_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never)[]
+  fun_arr_opt ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never)[]?
+  fun_opt ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never)?
+  fun_opt_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never)?[]
+  fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union | (Union | Union)) -> Union | Union | (Union | Union) throws never)???[][]?[]
+  arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union[]?[] | (Union | Union)) -> Union | Union[]?[] | (Union | Union) throws never)???[][]?[]
+  opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr ((Union | Union?[]? | (Union | Union)) -> Union | Union?[]? | (Union | Union) throws never)???[][]?[]
 }

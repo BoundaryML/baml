@@ -417,3 +417,12 @@ panic = "unwind"
 [profile.release-bridge-node]
 inherits = "release"
 panic = "unwind"
+
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
+# *inside the user's process* — so it needs `unwind` for the same reason: its
+# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
+# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
+[profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"
