@@ -34,13 +34,13 @@ dependencies {
 }
 
 // ---- Coordinates ---------------------------------------------------------
-// Maven Central family: com.boundaryml.baml:baml-bridge. Channels have no
+// Maven Central family: com.boundaryml:baml-bridge. Channels have no
 // dist-tag equivalent, so canary = plain version (0.15.0), nightly = suffixed
 // (0.15.0-nightly.YYYYMMDD). CI injects the real value via -PbamlVersion.
 val bamlVersion = (project.findProperty("bamlVersion") as String?)?.takeIf { it.isNotBlank() }
     ?: "0.0.0-dev"
 
-group = "com.boundaryml.baml"
+group = "com.boundaryml"
 version = bamlVersion
 
 // ---- Per-platform native jar --------------------------------------------
@@ -131,7 +131,7 @@ tasks.withType<Test> {
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            groupId = "com.boundaryml.baml"
+            groupId = "com.boundaryml"
             artifactId = "baml-bridge"
             version = bamlVersion
 

@@ -1,6 +1,6 @@
 # BAML Java quickstart
 
-Minimal consumer of the `com.boundaryml.baml:baml-bridge` Maven artifact.
+Minimal consumer of the `com.boundaryml:baml-bridge` Maven artifact.
 
 ```sh
 # 1. Generate the typed SDK from baml_src/ (writes ./baml_sdk/)

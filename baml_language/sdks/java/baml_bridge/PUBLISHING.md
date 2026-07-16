@@ -1,7 +1,7 @@
 # Publishing `baml-bridge` to Maven
 
 The BAML Java runtime ships as one Maven Central artifact family,
-`com.boundaryml.baml:baml-bridge`:
+`com.boundaryml:baml-bridge`:
 
 - a pure-Java **main jar** (`BamlFfi`, the error hierarchy, `BamlStream`, the
   media wrappers, the hand-rolled protobuf codec), plus
@@ -47,10 +47,10 @@ working against a locally built cdylib uses step 1 or 2.
 
 - **Maven / Gradle by classifier** (the gRPC/netty `os-maven-plugin`
   convention): depend on
-  `com.boundaryml.baml:baml-bridge:<version>:natives-<os>-<arch>` alongside the
+  `com.boundaryml:baml-bridge:<version>:natives-<os>-<arch>` alongside the
   main artifact. This is the supported path today.
 - **Automatic platform selection via Gradle Module Metadata variants** (a plain
-  `implementation("com.boundaryml.baml:baml-bridge:<version>")` resolving the
+  `implementation("com.boundaryml:baml-bridge:<version>")` resolving the
   right native jar by OS/arch attributes) is the target-state enhancement; it is
   not wired yet. The published `.module` currently lists only the main jar in
   its variants; the native jar is a classifier artifact.

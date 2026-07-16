@@ -39,7 +39,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
 
 ## Java plan
 
-**One Maven Central artifact family: `com.boundaryml.baml:baml-bridge`.**
+**One Maven Central artifact family: `com.boundaryml:baml-bridge`.**
 
 - **Main JAR** (pure Java): `BamlRuntime`, error hierarchy,
   `BamlStream`, media wrappers, protobuf codec.
@@ -47,7 +47,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
   cdylib (same 8-target matrix as Node). Platform selection — the
   Maven answer to npm's `optionalDependencies` — is **Gradle Module
   Metadata variants**, so a plain
-  `implementation("com.boundaryml.baml:baml-bridge:…")` resolves the
+  `implementation("com.boundaryml:baml-bridge:…")` resolves the
   right native JAR by OS/arch attributes. Maven-proper users use the
   `os-maven-plugin` classifier pattern (the gRPC/netty convention).
   No all-platforms fat JAR: at engine sizes that would be an
@@ -82,7 +82,7 @@ Three placement patterns, in order of adoption:
   with one-time boilerplate `build.gradle.kts`; the app depends on
   `project(":baml-sdk")`. Keeps app `src/` pristine; generated code
   gets its own compilation unit.
-- **C (target state): a Gradle plugin** (`com.boundaryml.baml`), the
+- **C (target state): a Gradle plugin** (`com.boundaryml`), the
   protobuf-gradle-plugin model: a `generateBaml` task with declared
   inputs (`baml_src/**`, `baml.toml`, toolchain version) and outputs
   (`build/generated/sources/baml/java/main`), wired into
