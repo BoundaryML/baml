@@ -194,11 +194,12 @@ function user.RunCommandWithVar() -> string throws never {
   !! 198..230: type mismatch: expected string, got uint8array
 }
 function user.ChainCommands() -> string throws never {
-  { : string
+  { : unknown
     let result1 = baml.sys.shell("pwd", null) : baml.sys.ShellOutput
     let result2 = baml.sys.shell("whoami", null) : baml.sys.ShellOutput
-    result1.stdout + " - " + result2.stdout : string
+    result1.stdout + " - " + result2.stdout : unknown
   }
+  !! 372..394: operator `+` cannot be applied to `uint8array` and `" - "`
 }
 function user.CheckExitCode() -> int throws never {
   { : int

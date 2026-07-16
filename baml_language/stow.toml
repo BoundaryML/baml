@@ -145,6 +145,7 @@ link_crates = ["baml_db", "baml_project"]
 # bridge namespace configuration
 [[namespaces]]
 name = "bridge"
+approved_suffixes = ["typescript_web"]
 link_crates = ["bex_project", "sys_native", "sys_types"]
 
 # Bridge crates should go through bex_project for runtime access, not depend on bex internals directly.

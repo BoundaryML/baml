@@ -7,7 +7,8 @@
     "test": "vitest run --config vitest.node.config.ts"
   },
   "dependencies": {
-    "@boundaryml/baml-bridge": "file:../../../../../sdks/typescript/bridge_typescript"
+    "@boundaryml/baml-bridge": "file:../../../../../sdks/typescript/bridge_typescript",
+    "@boundaryml/baml-bridge-web": "file:../../../../../sdks/typescript/bridge_typescript_web"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.4",
