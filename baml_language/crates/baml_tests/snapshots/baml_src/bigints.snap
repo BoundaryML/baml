@@ -668,6 +668,48 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "bigint_hex_literal"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 111)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_octal_literal"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 112)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_binary_literal"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 113)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_underscore_separators"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 114)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_hex_underscores"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 115)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_negative_prefixed"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 116)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "bigint_hex_beyond_int_range"
+    make_closure .<lambda($init_test_ns_bigints_bigints, 117)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
