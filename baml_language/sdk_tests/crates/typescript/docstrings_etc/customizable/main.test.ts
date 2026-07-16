@@ -3,15 +3,23 @@
 // the generated SDK source directly.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { Doc, Note, Priority, Sentiment } from "./baml_sdk/docs/index.js";
+import { isTestRuntime } from "./test_runtime.js";
+
+let readFileSync: typeof import("node:fs").readFileSync;
+let join: typeof import("node:path").join;
+if (isTestRuntime("node")) {
+  ({ readFileSync } = await import("node:fs"));
+  ({ join } = await import("node:path"));
+}
 
 const docsSource = () =>
-  readFileSync(join(__dirname, "baml_sdk", "docs", "index.ts"), "utf8").replace(/\r\n/g, "\n");
+  readFileSync(join(__dirname, "baml_sdk", "docs", "index.ts"), "utf8").replace(
+    /\r\n/g,
+    "\n",
+  );
 
-describe("docstrings_etc", () => {
+describe.runIf(isTestRuntime("node"))("docstrings_etc", () => {
   it("imports all documented symbols from baml_sdk/docs", () => {
     expect(Doc).toBeDefined();
     expect(Note).toBeDefined();
