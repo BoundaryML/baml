@@ -3,8 +3,6 @@
 // TODO: baml_runtime is disabled for now
 // use baml_runtime::RuntimeCliDefaults;
 
-use std::io::Write as _;
-
 /// The compiler workload is dominated by small short-lived allocations
 /// (`Ty` trees, `Vec`s, `SmolStr`s): the system allocator measured ~35% of
 /// remaining single-threaded CPU in the cold-compile audit. Installing
@@ -41,9 +39,8 @@ fn warn_if_direct_invocation() {
     if env_flag("BAML_WRAPPER_EXEC") || env_flag("BAML_CLI_ALLOW_DIRECT") {
         return;
     }
-    let _ = writeln!(
-        std::io::stderr(),
-        "warning: using the internal BAML toolchain binary directly is not recommended. Use `baml` instead."
+    baml_cli::reporter::print_warning(
+        "using the internal BAML toolchain binary directly is not recommended. Use `baml` instead.",
     );
 }
 

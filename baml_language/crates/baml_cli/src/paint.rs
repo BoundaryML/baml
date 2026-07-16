@@ -19,71 +19,13 @@ use baml_lsp2_actions::{
     DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_tokens,
 };
 use baml_project::ProjectDatabase;
+// ── Output mode (color / hyperlinks) ───────────────────────────────────────────
+/// Process-wide color policy (`--color` flag + agent detection). Defined in
+/// `baml_term` so the `baml` wrapper resolves color the same way; re-exported
+/// here so call sites keep the `paint::` path.
+pub use baml_term::{ColorChoice, init_color};
 use console::Style;
 use text_size::{TextRange, TextSize};
-
-// ── Output mode (color / hyperlinks) ───────────────────────────────────────────
-
-/// When to emit color and hyperlinks. Mirrors the conventional `--color` flag.
-#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ColorChoice {
-    /// Color on an interactive terminal; off when piped or inside an AI agent.
-    #[default]
-    Auto,
-    /// Always emit color/hyperlinks.
-    Always,
-    /// Never emit color/hyperlinks.
-    Never,
-}
-
-/// Environment variables that signal a non-interactive AI agent is capturing
-/// output, where ANSI color and hyperlinks are noise rather than UI. Sourced
-/// from each agent's docs and from maintained detection matrices
-/// (`@vercel/detect-agent`, Bun's agent checks).
-const AGENT_ENV_VARS: &[&str] = &[
-    "CLAUDECODE",      // Claude Code (code.claude.com/docs/en/env-vars)
-    "CODEX_SANDBOX",   // OpenAI Codex CLI (set in its sandbox)
-    "PI_CODING_AGENT", // Pi (earendil-works/pi)
-    "OPENCODE_CLIENT", // opencode
-    "AI_AGENT",        // @vercel/detect-agent universal var (+ custom agents)
-    "CURSOR_TRACE_ID", // Cursor agent terminal
-    "REPL_ID",         // Replit
-    "AGENT",           // generic (Codex `AGENT=codex`, Bun)
-];
-
-fn env_truthy(var: &str) -> bool {
-    std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0")
-}
-
-/// Whether output is being captured by a known AI coding agent.
-fn running_in_agent() -> bool {
-    AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
-}
-
-/// Resolve color/hyperlink output once at startup, applying the decision to both
-/// stdout and stderr so the two streams agree (avoids leaking codes into a
-/// redirected stream or dropping color on a redirected sibling).
-pub fn init_color(choice: ColorChoice) {
-    match choice {
-        ColorChoice::Always => {
-            console::set_colors_enabled(true);
-            console::set_colors_enabled_stderr(true);
-        }
-        ColorChoice::Never => {
-            console::set_colors_enabled(false);
-            console::set_colors_enabled_stderr(false);
-        }
-        ColorChoice::Auto => {
-            // An explicit `CLICOLOR_FORCE` (honored by console's defaults) always
-            // wins; only suppress for agents when color was not force-requested.
-            if !env_truthy("CLICOLOR_FORCE") && running_in_agent() {
-                console::set_colors_enabled(false);
-                console::set_colors_enabled_stderr(false);
-            }
-            // Otherwise leave console's per-stream TTY / NO_COLOR / CLICOLOR defaults.
-        }
-    }
-}
 
 /// Style for a semantic token, honoring its modifiers.
 ///

@@ -15,8 +15,9 @@ workspace = true
 
 [dependencies]
 baml_release = { workspace = true }
+baml_term = { workspace = true }
 anyhow = { workspace = true }
-console = { workspace = true }
+clap = { workspace = true, features = [ "color" ] }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

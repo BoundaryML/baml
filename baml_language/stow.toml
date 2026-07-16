@@ -78,6 +78,10 @@ allowed_crates = [
     # validation helpers and caller-facing context.
     "baml",
     "baml_release",
+    # `baml_term` owns the shared `error:`/`warning:` printers for the
+    # CLI surfaces above; `print_anyhow_error` renders anyhow cause
+    # chains, so it consumes (never defines) anyhow errors.
+    "baml_term",
 ]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."

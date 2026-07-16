@@ -20,10 +20,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use bex_engine::{BexExternalValue, RuntimeTy, UserFunctionInfo};
-use clap::{
-    Arg, ArgMatches, Command,
-    builder::{PossibleValuesParser, styling},
-};
+use clap::{Arg, ArgMatches, Command, builder::PossibleValuesParser};
 
 use crate::{
     auto_cli::{is_auto_cli_primitive, parse_cli_value},
@@ -42,37 +39,11 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-/// Clap styling shared by every baml-cli surface. Lives in `baml_exec`
-/// rather than `baml_cli::reporter` so packed binaries — which can't
-/// depend on `baml_cli` — get the same look as the dev CLI.
-pub const CLAP_STYLING: styling::Styles = {
-    use clap::builder::styling::{AnsiColor, Color, Effects, RgbColor, Style, Styles};
-    const PURPLE: Color = Color::Rgb(RgbColor(0xA8, 0x55, 0xF7));
-    // Tonal pair — same hue family, pale (Tailwind purple-200). Used on
-    // `<placeholders>` so they read as quiet secondary text against the
-    // bold primary purple without washing out into background gray.
-    const PURPLE_LIGHT: Color = Color::Rgb(RgbColor(0xE9, 0xD5, 0xFF));
-    Styles::styled()
-        .header(Style::new().fg_color(Some(PURPLE)).effects(Effects::BOLD))
-        .usage(Style::new().fg_color(Some(PURPLE)).effects(Effects::BOLD))
-        .literal(Style::new().effects(Effects::BOLD))
-        .placeholder(Style::new().fg_color(Some(PURPLE_LIGHT)))
-        .error(
-            Style::new()
-                .fg_color(Some(Color::Ansi(AnsiColor::Red)))
-                .effects(Effects::BOLD),
-        )
-        .valid(
-            Style::new()
-                .fg_color(Some(Color::Ansi(AnsiColor::Green)))
-                .effects(Effects::BOLD),
-        )
-        .invalid(
-            Style::new()
-                .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
-                .effects(Effects::BOLD),
-        )
-};
+/// Clap styling shared by every BAML CLI surface. Lives in `baml_term` so
+/// the `baml` wrapper and packed binaries — which can't depend on
+/// `baml_cli` — get the same look as the dev CLI; re-exported here for
+/// the target-command builders below.
+pub use baml_term::CLAP_STYLING;
 
 /// Result of feeding raw tokens through the target's clap command.
 #[derive(Debug, Default)]

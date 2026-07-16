@@ -28,12 +28,12 @@ fn verb_style() -> Style {
     Style::new().fg(VERB_COLOR).bold()
 }
 
-/// Clap help-text styling re-exported from `baml_exec`. Lives there so
-/// the packed-binary host — which can't depend on `baml_cli` — gets the
-/// same brand-purple look as `baml run`, `baml pack`, etc. Everything
-/// in this crate that wants the styled `--help` palette pulls it from
-/// here for the shorter import path.
-pub use baml_exec::CLAP_STYLING;
+/// Clap help-text styling re-exported from `baml_term`. Lives there so
+/// the `baml` wrapper and the packed-binary host — which can't depend
+/// on `baml_cli` — get the same brand-purple look as `baml run`,
+/// `baml pack`, etc. Everything in this crate that wants the styled
+/// `--help` palette pulls it from here for the shorter import path.
+pub use baml_term::CLAP_STYLING;
 
 /// Cargo-style status reporter.
 pub struct Reporter {
@@ -98,11 +98,11 @@ fn format_status(verb: &str, msg: &str) -> String {
 }
 
 /// Re-exports of the shared `error:` / `warning:` printers (defined in
-/// `baml_exec::diag_print`). Lives in this module so callers across
-/// `baml_cli` keep importing `crate::reporter::print_error` etc., while
-/// the pack host — which can't depend on `baml_cli` — pulls the same
-/// functions from `baml_exec` directly.
-pub use baml_exec::{print_anyhow_error, print_error, print_warning};
+/// `baml_term`). Lives in this module so callers across `baml_cli` keep
+/// importing `crate::reporter::print_error` etc., while the `baml`
+/// wrapper and the pack host — which can't depend on `baml_cli` — pull
+/// the same functions from `baml_term` / `baml_exec`.
+pub use baml_term::{print_anyhow_error, print_error, print_warning};
 
 impl Reporter {
     /// Print an error through this reporter.
@@ -111,13 +111,9 @@ impl Reporter {
         print_error(msg);
     }
 
-    /// Print a warning. Mirrors the formatting of [`print_warning`].
+    /// Print a warning through this reporter.
     pub fn warning(&self, msg: impl std::fmt::Display) {
-        let line = format!(
-            "{}: {msg}",
-            Style::new().yellow().bold().apply_to("warning")
-        );
-        eprintln!("{line}");
+        print_warning(msg);
     }
 }
 

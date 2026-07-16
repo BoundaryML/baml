@@ -11,6 +11,8 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest, WrapperManifest};
+use baml_term::{ColorChoice, init_color, print_anyhow_error, print_warning};
+use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "config.toml";
@@ -105,43 +107,94 @@ enum FetchPolicy {
     ForceRemote,
 }
 
-const TOOLCHAIN_HELP: &str = r#"BAML toolchain management
+/// Wrapper-owned command surface, parsed with the same clap styling as
+/// `baml-cli` so `baml toolchain --help` renders like `baml check --help`.
+///
+/// Only entered when argv[1] names one of the subcommands below; every
+/// other invocation must stay pass-through-transparent (flags included),
+/// which a top-level clap parse would break. See [`run`].
+#[derive(Parser, Debug)]
+#[command(name = "baml", bin_name = "baml", styles = baml_term::CLAP_STYLING)]
+struct WrapperCli {
+    /// When to use colored output: auto (default), always, or never.
+    ///
+    /// `auto` enables color on an interactive terminal and disables it when
+    /// the output is piped or captured by a known AI coding agent.
+    #[arg(long, value_enum, default_value_t = ColorChoice::Auto, global = true)]
+    color: ColorChoice,
 
-Usage:
-  baml toolchain <command>
+    #[command(subcommand)]
+    command: WrapperCommand,
+}
 
-Commands:
-  use <canary|nightly|version>       Install if needed and select as default
-  install <canary|nightly|version>   Download without selecting
-  update                             Advance the active channel
-  status                             Check latest remote version without installing
-  list                               Show installed toolchains, local only
-  uninstall <version>                Remove an installed concrete version
+#[derive(Subcommand, Debug)]
+enum WrapperCommand {
+    /// Manage installed BAML toolchains
+    Toolchain(ToolchainArgs),
+    /// Update the curl-installed `baml` wrapper binary
+    ///
+    /// Updates the wrapper binary only. It never installs or changes the
+    /// active language toolchain. Package-manager-managed wrappers refuse
+    /// self-update and print the package-manager upgrade command instead.
+    SelfUpdate,
+}
 
-Network behavior:
+#[derive(Args, Debug)]
+#[command(
+    arg_required_else_help = true,
+    after_help = "Network behavior:
   list is local-only.
   status checks remote metadata but does not install or change selection.
   use, install, and update may download toolchains or change local state.
 
 Wrapper updates:
-  baml self-update                   Update curl-installed wrapper only
-"#;
+  baml self-update    Update curl-installed wrapper only"
+)]
+struct ToolchainArgs {
+    /// Base URL for release manifests, in place of the production bucket
+    #[arg(long, global = true, value_name = "URL")]
+    manifest_base_url: Option<String>,
 
-const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
+    #[command(subcommand)]
+    command: ToolchainCommand,
+}
 
-Usage:
-  baml self-update
-
-Updates the wrapper binary only. It never installs or changes the active
-language toolchain. Package-manager-managed wrappers refuse self-update and
-print the package-manager upgrade command instead.
-"#;
+#[derive(Subcommand, Debug)]
+enum ToolchainCommand {
+    /// Install if needed and select as default
+    Use {
+        #[arg(value_name = "canary|nightly|version")]
+        selector: String,
+    },
+    /// Download without selecting
+    Install {
+        #[arg(value_name = "canary|nightly|version")]
+        selector: String,
+        /// Reinstall even if this version is already present
+        #[arg(long)]
+        force: bool,
+    },
+    /// Advance the active channel
+    Update,
+    /// Check latest remote version without installing
+    Status,
+    /// Show installed toolchains, local only
+    List,
+    /// Remove an installed concrete version
+    Uninstall {
+        #[arg(value_name = "version")]
+        version: String,
+    },
+}
 
 fn main() {
+    // Route top-level errors through the shared printer (bold-red `error:`
+    // header + cause chain) so wrapper failures render exactly like
+    // baml-cli's instead of anyhow's plain one-line `{err:#}` format.
     let exit = match run() {
         Ok(code) => code,
         Err(err) => {
-            eprintln!("{err:#}");
+            print_anyhow_error(&err);
             1
         }
     };
@@ -149,34 +202,30 @@ fn main() {
 }
 
 fn run() -> Result<i32> {
-    let mut args: Vec<String> = env::args().skip(1).collect();
+    // The wrapper's own output (freshness warnings, errors) follows the
+    // same agent-aware color policy as baml-cli. Wrapper-owned commands
+    // re-resolve below once their `--color` flag is parsed.
+    init_color(ColorChoice::Auto);
+    let args: Vec<String> = env::args().skip(1).collect();
     #[cfg(windows)]
     if args.first().map(String::as_str) == Some("--replace") {
-        args.remove(0);
-        return replace_running_exe(args).map(|()| 0);
+        return replace_running_exe(args[1..].to_vec()).map(|()| 0);
     }
-    if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
-        print_version();
-        return Ok(0);
-    }
-    if args.first().map(String::as_str) == Some("toolchain") {
-        args.remove(0);
-        return toolchain(args).map(|()| 0);
-    }
-    if args.first().map(String::as_str) == Some("self-update") {
-        if args.get(1).is_some_and(|arg| is_help_arg(arg)) {
-            print!("{SELF_UPDATE_HELP}");
-            return Ok(0);
+    match args.first().map(String::as_str) {
+        Some("--version" | "-V") => {
+            print_version();
+            Ok(0)
         }
-        if args.len() > 1 {
-            return Err(anyhow!(
-                "usage: baml self-update\nunexpected arguments: {}",
-                args[1..].join(" ")
-            ));
+        Some("toolchain" | "self-update") => {
+            let cli = WrapperCli::parse_from(std::iter::once("baml".to_string()).chain(args));
+            init_color(cli.color);
+            match cli.command {
+                WrapperCommand::Toolchain(args) => toolchain(args).map(|()| 0),
+                WrapperCommand::SelfUpdate => self_update().map(|()| 0),
+            }
         }
-        return self_update().map(|()| 0);
+        _ => pass_through(args),
     }
-    pass_through(args)
 }
 
 fn print_version() {
@@ -311,65 +360,21 @@ fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-fn toolchain(args: Vec<String>) -> Result<()> {
-    let (args, manifest_base_url) = parse_manifest_base_url(args)?;
-    match args.first().map(String::as_str) {
-        Some("--help" | "-h" | "help") | None => {
-            print!("{TOOLCHAIN_HELP}");
-            Ok(())
+fn toolchain(args: ToolchainArgs) -> Result<()> {
+    let base = args.manifest_base_url.as_deref();
+    match args.command {
+        ToolchainCommand::Use { selector } => use_toolchain(&selector, base),
+        ToolchainCommand::Install { selector, force } => {
+            install_toolchain(&selector, false, base, force)
         }
-        Some("install") => {
-            let selector = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain install <canary|nightly|version>"))?;
-            let force = args.iter().any(|arg| arg == "--force");
-            install_toolchain(selector, false, manifest_base_url.as_deref(), force)
-        }
-        Some("use") => {
-            let selector = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain use <canary|nightly|version>"))?;
-            use_toolchain(selector, manifest_base_url.as_deref())
-        }
-        Some("update") => update_toolchain(manifest_base_url.as_deref()),
-        Some("status") => status_toolchain(manifest_base_url.as_deref()),
-        Some("list") => {
+        ToolchainCommand::Update => update_toolchain(base),
+        ToolchainCommand::Status => status_toolchain(base),
+        ToolchainCommand::List => {
             list_toolchains();
             Ok(())
         }
-        Some("uninstall") => {
-            let version = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain uninstall <version>"))?;
-            uninstall_toolchain(version)
-        }
-        Some(other) => Err(anyhow!(
-            "unknown toolchain command {other:?}\n\n{TOOLCHAIN_HELP}"
-        )),
+        ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),
     }
-}
-
-fn is_help_arg(arg: &str) -> bool {
-    matches!(arg, "--help" | "-h" | "help")
-}
-
-fn parse_manifest_base_url(mut args: Vec<String>) -> Result<(Vec<String>, Option<String>)> {
-    let mut manifest_base_url = None;
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "--manifest-base-url" {
-            let value = args
-                .get(i + 1)
-                .ok_or_else(|| anyhow!("--manifest-base-url requires a value"))?
-                .trim_end_matches('/')
-                .to_string();
-            args.drain(i..=i + 1);
-            manifest_base_url = Some(value);
-        } else {
-            i += 1;
-        }
-    }
-    Ok((args, manifest_base_url))
 }
 
 fn pass_through(args: Vec<String>) -> Result<i32> {
@@ -507,7 +512,7 @@ fn concrete_version_for_selector_with_base(
             )
             .context(format!("project config: {}", path.display()))),
             _ => Err(anyhow!(
-                "error: no BAML toolchain is installed.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
+                "no BAML toolchain is installed.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
             )),
         };
     }
@@ -565,17 +570,6 @@ fn verify_toolchain_version_file(version: &str) -> Result<()> {
 
 fn is_channel(selector: &str) -> bool {
     selector == "canary" || selector == "nightly"
-}
-
-/// Bold-yellow lowercase `warning` prefix, matching the styled diagnostics the
-/// toolchain CLI emits (see `baml_exec::diag_print`). Color is dropped
-/// automatically when stderr is not a TTY.
-fn warning_prefix() -> impl std::fmt::Display {
-    console::Style::new()
-        .yellow()
-        .bold()
-        .for_stderr()
-        .apply_to("warning")
 }
 
 /// An in-flight background refresh of the channel-manifest freshness cache.
@@ -682,11 +676,10 @@ fn warn_if_channel_outdated(selector: &ResolvedSelector, active_version: &str) -
     if !cached_manifest_is_newer(&cache_path, active_version) {
         return false;
     }
-    eprintln!(
-        "{}: Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
-        warning_prefix(),
+    print_warning(format_args!(
+        "Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
         selector.selector
-    );
+    ));
     true
 }
 
@@ -1148,6 +1141,14 @@ fn is_managed_install(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Catches invalid clap configurations (conflicting flags, bad
+    /// subcommand nesting) at test time instead of first invocation.
+    #[test]
+    fn wrapper_cli_definition_is_valid() {
+        use clap::CommandFactory;
+        WrapperCli::command().debug_assert();
+    }
 
     #[test]
     fn cache_allowed_uses_fresh_channel_cache() {

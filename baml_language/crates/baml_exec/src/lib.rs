@@ -15,15 +15,17 @@
 
 pub mod auto_cli;
 pub mod clap_target;
-pub mod diag_print;
 pub mod dispatch;
 pub mod envelope;
 pub mod json_coerce;
 pub mod output;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
+// Shared `error:` / `warning:` printers (defined in `baml_term`),
+// re-exported so the pack host keeps its dependency footprint trimmed
+// to `baml_exec`.
+pub use baml_term::{print_anyhow_error, print_error, print_warning};
 pub use clap_target::{CLAP_STYLING, ParsedTargetArgs, parse_multi_target_argv, parse_target_argv};
-pub use diag_print::{print_anyhow_error, print_error, print_warning};
 
 /// Subset of `clap` re-exported so downstream binaries (pack-host) can
 /// classify [`parse_target_argv`] errors without taking a direct clap
