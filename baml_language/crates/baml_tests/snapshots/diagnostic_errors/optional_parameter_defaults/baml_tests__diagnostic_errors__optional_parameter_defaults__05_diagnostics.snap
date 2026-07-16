@@ -2,16 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: defaulted parameter `max_results` must be passed by name
-    ╭─[ call_binding.baml:22:18 ]
-    │
- 22 │   Search("cats", 5)
-    │                  ┬  
-    │                  ╰── defaulted parameter `max_results` must be passed by name
-    │ 
-    │ Note: Error code: E0005
-────╯
-
   [type] error: positional arguments cannot appear after named arguments
     ╭─[ call_binding.baml:26:26 ]
     │

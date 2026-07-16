@@ -253,6 +253,13 @@ class Array<T> {
   /// [1, 2, 3].slice(2, 1)      // []
   /// ```
   function slice(self, start: int, end: int = self.length()) -> T[] throws never {
+    self._slice(start, end)
+  }
+
+  /// Internal: all-required native behind `slice`. Native functions do not
+  /// run the BAML default-argument prologue, so omitted arguments must be
+  /// filled by a BAML wrapper before reaching the native.
+  function _slice(self, start: int, end: int) -> T[] throws never {
     $rust_function
   }
 

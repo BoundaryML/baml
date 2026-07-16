@@ -723,86 +723,98 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_negative_start"
+    load_const "array_slice_start_only_defaults_end"
     make_closure .<lambda($init_test_ns_arrays_arrays, 173)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_negative_end"
+    load_const "array_slice_start_only_supports_negative_start"
     make_closure .<lambda($init_test_ns_arrays_arrays, 174)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_negative_both"
+    load_const "array_slice_negative_start"
     make_closure .<lambda($init_test_ns_arrays_arrays, 175)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_end_before_start_is_empty"
+    load_const "array_slice_negative_end"
     make_closure .<lambda($init_test_ns_arrays_arrays, 176)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_clamps_out_of_range"
+    load_const "array_slice_negative_both"
     make_closure .<lambda($init_test_ns_arrays_arrays, 177)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_slice_empty_array"
+    load_const "array_slice_end_before_start_is_empty"
     make_closure .<lambda($init_test_ns_arrays_arrays, 178)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_passes_index_0_to_n_minus_1"
+    load_const "array_slice_clamps_out_of_range"
     make_closure .<lambda($init_test_ns_arrays_arrays, 179)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_maps_index_through_f"
+    load_const "array_slice_empty_array"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 180)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_passes_index_0_to_n_minus_1"
     make_closure .<lambda($init_test_ns_arrays_arrays, 181)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_calls_f_once_per_index"
+    load_const "array_generate_maps_index_through_f"
     make_closure .<lambda($init_test_ns_arrays_arrays, 183)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_slots_are_independent"
+    load_const "array_generate_calls_f_once_per_index"
     make_closure .<lambda($init_test_ns_arrays_arrays, 185)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_filled_shares_mutable_slots_unlike_generate"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 186)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "array_generate_zero_length_is_empty"
+    load_const "array_generate_slots_are_independent"
     make_closure .<lambda($init_test_ns_arrays_arrays, 187)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_negative_length_is_empty"
+    load_const "array_filled_shares_mutable_slots_unlike_generate"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 188)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_zero_length_is_empty"
     make_closure .<lambda($init_test_ns_arrays_arrays, 189)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_generate_propagates_error"
+    load_const "array_generate_negative_length_is_empty"
     make_closure .<lambda($init_test_ns_arrays_arrays, 191)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_propagates_error"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 193)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
