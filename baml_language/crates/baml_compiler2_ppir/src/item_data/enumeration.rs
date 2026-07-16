@@ -26,7 +26,18 @@ macro_rules! file_items {
         pub fn $name(db: &dyn crate::Db, file: SourceFile) -> Vec<$loc<'_>> {
             let item_tree = crate::file_item_tree(db, file);
             let mut items: Vec<_> = item_tree.$map.iter().collect();
-            items.sort_by_key(|(_, item)| item.span.start());
+            // Source position, then a stable tiebreaker for items that share an
+            // offset: synthetic `*$stream` companions all sit at offset 0, and
+            // `$map` is an `FxHashMap` (nondeterministic iteration), so ties must
+            // be broken by a position-independent key — otherwise this query's
+            // value (and its early-cutoff) would be unstable across rebuilds.
+            items.sort_by(|(left_id, left), (right_id, right)| {
+                left.span
+                    .start()
+                    .cmp(&right.span.start())
+                    .then_with(|| left.name.cmp(&right.name))
+                    .then_with(|| left_id.as_u32().cmp(&right_id.as_u32()))
+            });
             items
                 .into_iter()
                 .map(|(id, _)| $loc::new(db, file, *id))
