@@ -8,6 +8,7 @@ pub mod debug_log;
 pub mod dedent;
 pub mod escape;
 pub mod files;
+pub mod num_lit;
 pub mod qualified_name;
 
 // Re-export everything for convenience

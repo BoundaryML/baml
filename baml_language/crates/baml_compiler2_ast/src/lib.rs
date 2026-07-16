@@ -83,26 +83,72 @@ pub fn parse_string_attr_value(raw: &str) -> Option<String> {
     Some(rest[1..rest.len() - 1 - hash_count].to_string())
 }
 
-/// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
-///
-/// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
-/// digits, so a parse failure here indicates the CST has been corrupted.
-/// Callers should pass the digit-only string (with the trailing `n` suffix
-/// already stripped).
-pub fn parse_bigint_literal_digits(digits: &str) -> num_bigint::BigInt {
-    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_else(|| {
-        unreachable!("CST bigint_literal returned non-decimal digits: {digits:?}")
-    })
+/// Push diagnostics for a failed numeric literal. `InvalidDigits` gets one
+/// diagnostic per offending digit with a one-character span (rustc-style);
+/// every other error spans the whole token.
+fn push_num_lit_error(
+    error: baml_base::num_lit::IntLitError,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    use baml_base::num_lit::IntLitError;
+    if let IntLitError::InvalidDigits { positions, .. } = &error {
+        for (offset, ch) in positions {
+            let offset = u32::try_from(*offset).expect("literal token exceeds u32 length");
+            let start = token_range.start() + text_size::TextSize::from(offset);
+            let span = text_size::TextRange::new(start, start + text_size::TextSize::of(*ch));
+            diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+                error: error.clone(),
+                span,
+            });
+        }
+    } else {
+        diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+            error,
+            span: token_range,
+        });
+    }
 }
 
-/// Parse the raw text of a `BIGINT_LITERAL` token (digits plus trailing
-/// lowercase `n` suffix) into a [`num_bigint::BigInt`]. The lexer guarantees
-/// the suffix is present, so its absence panics with `unreachable!`.
-pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
+/// Lower the raw text of an `INTEGER_LITERAL` token (`42`, `1_000`, `0xFF`,
+/// `0o755`, `0b1010`) into its value, emitting diagnostics for invalid
+/// literals and returning `0` as the placeholder (compilation already
+/// failed). Signs are handled by callers; the VM's i63 `int` range is
+/// enforced later in type inference.
+pub fn lower_int_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> i64 {
+    match baml_base::num_lit::parse_int_literal(text) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            0
+        }
+    }
+}
+
+/// Lower the raw text of a `BIGINT_LITERAL` token (digits plus trailing
+/// lowercase `n` suffix, e.g. `42n` or `0xFFn`) into a
+/// [`num_bigint::BigInt`], emitting diagnostics for invalid literals and
+/// returning `0` as the placeholder. The lexer guarantees the suffix is
+/// present, so its absence panics with `unreachable!`.
+pub fn lower_bigint_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> num_bigint::BigInt {
     let digits = text
         .strip_suffix('n')
         .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
-    parse_bigint_literal_digits(digits)
+    match baml_base::num_lit::parse_bigint_literal(digits) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            num_bigint::BigInt::from(0)
+        }
+    }
 }
 
 // `unescape_string_literal` lives in `baml_base::escape` and is re-exported
