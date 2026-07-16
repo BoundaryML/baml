@@ -23,7 +23,13 @@ function recordingPath(name: string): string {
     }
     dir = parent;
   }
-  const rec = join(dir, "fixtures", "llm_functions", "recordings", `${name}.snap.sse`);
+  const rec = join(
+    dir,
+    "fixtures",
+    "llm_functions",
+    "recordings",
+    `${name}.snap.sse`,
+  );
   if (!existsSync(rec)) throw new Error(`missing recording ${rec}`);
   return rec;
 }

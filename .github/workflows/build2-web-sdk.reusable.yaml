@@ -58,7 +58,7 @@ jobs:
       - name: Setup Node.js, pnpm, and wasm-pack
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "node npm:pnpm cargo:wasm-pack"
+          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
 
       - name: Setup Rust WASM target
         working-directory: baml_language

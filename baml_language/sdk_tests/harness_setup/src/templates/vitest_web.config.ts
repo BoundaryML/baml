@@ -6,6 +6,7 @@ export default defineConfig({
     exclude: ["@boundaryml/baml-bridge-web"],
   },
   test: {
+    env: { BAML_TEST_RUNTIME: "web" },
     include: ["web/**/*.test.ts"],
     browser: {
       enabled: true,
