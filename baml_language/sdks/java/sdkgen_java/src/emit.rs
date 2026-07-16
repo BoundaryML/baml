@@ -15,11 +15,14 @@
 //! ```java
 //! public static long return_int() {
 //!     return (java.lang.Long) baml_bridge.BamlFfi.callSync(
-//!         "user.primitives.return_int", NAMES, new Object[] {});
+//!         "user.primitives.return_int", NAMES, new Object[] {}, "int");
 //! }
 //! ```
 //!
-//! Decode is wire-driven (FQN + typemap), so generated bodies only
+//! Decode is type-directed: every binding passes a descriptor string
+//! for its declared return type (see [`crate::translate_ty::descriptor_token`])
+//! as the last argument, so the decoder resolves union arm order and
+//! element types without trusting the wire shape. Generated bodies then
 //! cast the decoded `Object` to the declared type; primitives unbox
 //! implicitly on return.
 //!
@@ -344,6 +347,11 @@ fn render_callable_pair(
     let ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
     let ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
 
+    // Type-directed decode descriptor for the declared return type,
+    // passed as the LAST runtime-call argument so the decoder can resolve
+    // union arm order / element types without trusting the wire shape.
+    let descriptor = crate::translate_ty::descriptor_token(&function.return_type, ctx.aliases);
+
     let names_literal = format!("new java.lang.String[] {{{}}}", param_names_java.join(", "));
     let args_literal = format!("new java.lang.Object[] {{{}}}", arg_exprs.join(", "));
 
@@ -376,10 +384,12 @@ fn render_callable_pair(
     };
 
     let sync_body = if ret_top == "void" {
-        format!("        baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal});")
+        format!(
+            "        baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?});"
+        )
     } else {
         format!(
-            "        return ({ret_boxed}) baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal});"
+            "        return ({ret_boxed}) baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?});"
         )
     };
 
@@ -387,7 +397,7 @@ fn render_callable_pair(
     // thenApply so the future's element type is precise.
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
     let async_body = format!(
-        "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}).thenApply(v$ -> ({ret_boxed}) v$);"
+        "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?}).thenApply(v$ -> ({ret_boxed}) v$);"
     );
 
     format!(

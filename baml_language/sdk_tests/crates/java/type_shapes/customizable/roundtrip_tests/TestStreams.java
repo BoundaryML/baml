@@ -20,19 +20,21 @@
 // Java has no import aliasing, so the stream-types symbols are referenced
 // fully qualified below instead of imported.
 //
-// java-port note: for `UnionResumeOrResumeStream` / `UnionResumeOrResponse`,
-// see TestUnions.java for the general sealed-interface shape this port
-// assumes; the arm naming here additionally disambiguates the stream arm
-// as `ResumeStreamValue` since both arms would otherwise render as "Resume".
+// java-port note: `Resume | Resume$stream` -> `Union2<Resume,
+// stream_types.lorem.Resume>` and `Resume | baml.http.Response` ->
+// `Union2<Resume, baml.http.Response>`; see TestUnions.java for the general
+// generic-family shape this port assumes. Arms are positional (Arm0 =
+// `Resume`, Arm1 = the stream / http-response arm) in BAML declaration
+// order, so the two `Resume`-derived arms no longer collide by name. Only
+// the host-constructible `Resume` arm (Arm0) is exercised here.
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import baml_bridge.Union2;
 import baml_sdk.lorem.Box;
 import baml_sdk.lorem.Fns;
 import baml_sdk.lorem.Resume;
-import baml_sdk.unions$.UnionResumeOrResponse;
-import baml_sdk.unions$.UnionResumeOrResumeStream;
 import org.junit.jupiter.api.Test;
 
 class TestStreams {
@@ -62,8 +64,9 @@ class TestStreams {
         // Union arm `Resume` (the non-stream side) is host-constructible.
         Resume r = new Resume("hopper", null);
         Object result =
-                Fns.round_trip_resume_or_resume_stream(new UnionResumeOrResumeStream.ResumeValue(r));
-        assertEquals(r, ((UnionResumeOrResumeStream.ResumeValue) result).value());
+                Fns.round_trip_resume_or_resume_stream(
+                        new Union2.Arm0<Resume, baml_sdk.stream_types.lorem.Resume>(r));
+        assertEquals(r, ((Union2.Arm0<?, ?>) result).value());
     }
 
     @Test
@@ -72,7 +75,8 @@ class TestStreams {
         // host-constructible.
         Resume r = new Resume("lovelace", "a@x.com");
         Object result =
-                Fns.round_trip_resume_or_http_response(new UnionResumeOrResponse.ResumeValue(r));
-        assertEquals(r, ((UnionResumeOrResponse.ResumeValue) result).value());
+                Fns.round_trip_resume_or_http_response(
+                        new Union2.Arm0<Resume, baml_sdk.baml.http.Response>(r));
+        assertEquals(r, ((Union2.Arm0<?, ?>) result).value());
     }
 }

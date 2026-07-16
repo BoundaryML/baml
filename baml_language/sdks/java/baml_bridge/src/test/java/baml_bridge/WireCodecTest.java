@@ -266,8 +266,24 @@ class WireCodecTest {
         record StringValue(String value) implements IntOrString {}
     }
 
+    // A generated-shape value class with a single Object field, registered WITH a
+    // per-field type-directed descriptor (union[int;string]) to exercise the
+    // 4-arg registerClass + fieldDescs decode path.
+    public static final class Box {
+        private final Object payload;
+
+        public Box(Object payload) {
+            this.payload = payload;
+        }
+
+        public Object payload() {
+            return payload;
+        }
+    }
+
     private static final String RESUME_FQN = "user.lorem.Resume";
     private static final String SENTIMENT_FQN = "user.ipsum.Sentiment";
+    private static final String BOX_FQN = "user.test.Box";
 
     @BeforeAll
     static void registerFixtures() {
@@ -275,6 +291,12 @@ class WireCodecTest {
         // Idempotent, so running once per suite is enough.
         TypeRegistry.registerClass(
                 RESUME_FQN, Resume.class.getName(), new String[] {"name", "age"});
+        // 4-arg overload: a parallel fieldDescs array (one descriptor per field).
+        TypeRegistry.registerClass(
+                BOX_FQN,
+                Box.class.getName(),
+                new String[] {"payload"},
+                new String[] {"union[int;string]"});
         TypeRegistry.registerEnum(
                 SENTIMENT_FQN,
                 Sentiment.class.getName(),
@@ -543,5 +565,177 @@ class WireCodecTest {
     void decode_union_null_inner_is_null() {
         byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
         assertNull(ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, ovNull()))));
+    }
+
+    // -- type-directed (descriptor-driven) decode: generic Union{k} family ----
+
+    private static byte[] ovBool(boolean b) {
+        WireWriter w = new WireWriter();
+        w.writeBool(OV_BOOL, b);
+        return w.toByteArray();
+    }
+
+    /** A BamlOutboundValue.class_value (=7) for the registered Resume fixture. */
+    private static byte[] ovResume(String name, long age) {
+        WireWriter nameVal = new WireWriter();
+        nameVal.writeString(OV_STRING, name);
+        WireWriter nameEntry = new WireWriter();
+        nameEntry.writeString(1, "name"); // BamlOutboundMapEntry.key = 1
+        nameEntry.writeMessage(2, nameVal.toByteArray()); // value = 2
+
+        WireWriter ageVal = new WireWriter();
+        ageVal.writeInt64(OV_INT, age);
+        WireWriter ageEntry = new WireWriter();
+        ageEntry.writeString(1, "age");
+        ageEntry.writeMessage(2, ageVal.toByteArray());
+
+        WireWriter cls = new WireWriter();
+        cls.writeString(1, RESUME_FQN); // BamlValueClass.name = 1
+        cls.writeMessage(2, nameEntry.toByteArray()); // fields = 2
+        cls.writeMessage(2, ageEntry.toByteArray());
+
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_CLASS, cls.toByteArray());
+        return ov.toByteArray();
+    }
+
+    /** union[int;string] desc + a BARE int wire → Union2.Arm0 (declared arm order). */
+    @Test
+    void decode_desc_union_bare_int_arm0() {
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovInt(1)), "union[int;string]");
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        assertEquals(1L, arm.value());
+    }
+
+    /** union[int;string] desc + a BARE string wire → Union2.Arm1. */
+    @Test
+    void decode_desc_union_bare_string_arm1() {
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovString("hi")), "union[int;string]");
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
+        assertEquals("hi", arm.value());
+    }
+
+    /**
+     * union[int;string] desc + a union_variant_value wrapper: the descriptor is
+     * preferred over the wire self_type, the wrapper is unwrapped, and the inner
+     * int lands on Union2.Arm0.
+     */
+    @Test
+    void decode_desc_union_variant_wrapped_int_arm0() {
+        // self_type deliberately unregistered/irrelevant — the desc wins.
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovUnion(selfType, ovInt(7))), "union[int;string]");
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        assertEquals(7L, arm.value());
+    }
+
+    /** union_variant_value wrapper carrying a string → Union2.Arm1 (desc-driven). */
+    @Test
+    void decode_desc_union_variant_wrapped_string_arm1() {
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovUnion(selfType, ovString("yo"))), "union[int;string]");
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
+        assertEquals("yo", arm.value());
+    }
+
+    /** T|null collapses in codegen to just T: desc "int", a bare int → the bare Long. */
+    @Test
+    void decode_desc_optional_collapses_to_base() {
+        assertEquals(42L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(42)), "int"));
+    }
+
+    /** T|null collapse: desc "int", a null wire value → null. */
+    @Test
+    void decode_desc_optional_null_is_null() {
+        assertNull(ProtoReader.decodeOutboundResult(okEnvelope(ovNull()), "int"));
+    }
+
+    /** A class-arm union via FQN desc: the class_value lands on the FQN arm. */
+    @Test
+    void decode_desc_union_class_arm_via_fqn() {
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovResume("Alice", 30L)), "union[" + RESUME_FQN + ";string]");
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        Resume r = assertInstanceOf(Resume.class, arm.value());
+        assertEquals("Alice", r.name());
+        assertEquals(30L, r.age());
+    }
+
+    /** No declared arm matches the wire value's kind → BamlError. */
+    @Test
+    void decode_desc_union_no_arm_match_throws() {
+        assertThrows(
+                BamlError.class,
+                () -> ProtoReader.decodeOutboundResult(okEnvelope(ovBool(true)), "union[int;string]"));
+    }
+
+    /** A registered class FQN desc constructs the generated class (fieldDescs unused here). */
+    @Test
+    void decode_desc_fqn_constructs_registered_class() {
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovResume("Bob", 40L)), RESUME_FQN);
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals("Bob", r.name());
+        assertEquals(40L, r.age());
+    }
+
+    /**
+     * A class registered WITH fieldDescs decodes its union-typed field onto the
+     * Union{k} arm family (the fieldDescs path).
+     */
+    @Test
+    void decode_desc_class_field_uses_field_descs() {
+        // BamlValueClass { name = BOX_FQN, fields: { payload: <bare string> } }
+        WireWriter payloadVal = new WireWriter();
+        payloadVal.writeString(OV_STRING, "wrapped");
+        WireWriter payloadEntry = new WireWriter();
+        payloadEntry.writeString(1, "payload");
+        payloadEntry.writeMessage(2, payloadVal.toByteArray());
+
+        WireWriter cls = new WireWriter();
+        cls.writeString(1, BOX_FQN);
+        cls.writeMessage(2, payloadEntry.toByteArray());
+
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_CLASS, cls.toByteArray());
+
+        // Return the Box directly by its FQN desc; its `payload` field carries the
+        // union[int;string] descriptor, so a bare string lands on Union2.Arm1.
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()), BOX_FQN);
+        Box box = assertInstanceOf(Box.class, decoded);
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, box.payload());
+        assertEquals("wrapped", arm.value());
+    }
+
+    /**
+     * Regression: with a null descriptor (the 1-arg / 3-arg wire-driven path), an
+     * int|string union_variant still reifies onto the registered nominal record,
+     * NOT the generic Union{k} family.
+     */
+    @Test
+    void decode_null_desc_keeps_wire_driven_registered_record() {
+        byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
+        byte[] envelope = okEnvelope(ovUnion(selfType, ovInt(3)));
+        // 1-arg overload.
+        Object oneArg = ProtoReader.decodeOutboundResult(envelope);
+        IntOrString.IntValue a = assertInstanceOf(IntOrString.IntValue.class, oneArg);
+        assertEquals(3L, a.value());
+        // 2-arg overload with an explicit null descriptor: same wire-driven result.
+        Object nullDesc = ProtoReader.decodeOutboundResult(envelope, null);
+        IntOrString.IntValue b = assertInstanceOf(IntOrString.IntValue.class, nullDesc);
+        assertEquals(3L, b.value());
+    }
+
+    /** An unparseable / tv: / unknown descriptor falls back to the wire-driven path. */
+    @Test
+    void decode_unparseable_desc_falls_back_to_wire_driven() {
+        byte[] envelope = okEnvelope(ovInt(9));
+        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "tv:T"));
+        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "unknown"));
+        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "union[")); // malformed
     }
 }

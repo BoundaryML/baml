@@ -4,6 +4,7 @@ import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
 import baml_bridge.TypeRegistry;
 
+import java.lang.reflect.Constructor;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -141,13 +142,29 @@ public final class ProtoReader {
     private ProtoReader() {}
 
     /**
+     * Decode a {@code BamlOutboundResult} envelope with no return-type descriptor
+     * (wire-driven decode — the pre-descriptor behavior). Equivalent to
+     * {@link #decodeOutboundResult(byte[], String)} with a {@code null} descriptor.
+     */
+    public static Object decodeOutboundResult(byte[] data) {
+        return decodeOutboundResult(data, null);
+    }
+
+    /**
      * Decode a {@code BamlOutboundResult} envelope. Returns the decoded value on
      * the {@code ok} arm; throws {@link BamlError} on {@code error}; throws
      * {@link BamlPanic} on a non-exit {@code panic}; and for an exit panic
      * ({@code is_exit_panic}) terminates the process via
      * {@code Runtime.getRuntime().halt(exit_code)}.
+     *
+     * <p>{@code returnDesc} is the type-directed decode descriptor for the
+     * declared return type (see {@code ref-java-codegen-conventions.md}); when
+     * non-null it drives the {@code ok}-arm decode against the declared shape
+     * (unions land on the {@code Union{k}} arm family, chosen from the declared
+     * arm order). {@code error}/{@code panic} values always stay wire-driven — a
+     * thrown BAML value is self-describing and carries no host return type.
      */
-    public static Object decodeOutboundResult(byte[] data) {
+    public static Object decodeOutboundResult(byte[] data, String returnDesc) {
         WireReader r = new WireReader(data);
         int arm = 0;
         byte[] okBytes = null;
@@ -176,7 +193,7 @@ public final class ProtoReader {
         return switch (arm) {
             case RESULT_ERROR -> throw decodeError(errBytes);
             case RESULT_PANIC -> throw decodePanic(panicBytes);
-            case RESULT_OK -> decodeValue(new WireReader(okBytes), false);
+            case RESULT_OK -> decodeWithDesc(okBytes, parseDesc(returnDesc), false);
             // Absent oneof: an all-default envelope is a null `ok`.
             default -> null;
         };
@@ -731,6 +748,569 @@ public final class ProtoReader {
         }
         Object constant = TypeRegistry.resolveEnum(fqn, variant);
         return constant != null ? constant : variant;
+    }
+
+    // ========================================================================
+    // Type-directed decode (descriptor-driven).
+    //
+    // A generated binding passes a descriptor string for its declared return
+    // type (and per-field descriptors on registerClass). The descriptor drives
+    // decode against the *declared* shape — most importantly it lands a union
+    // result on the generic `baml_bridge.Union{k}.Arm{i}` family, picking the arm
+    // from the DECLARED arm order (the wire carries no trustworthy arm order).
+    // A null / `tv:` / `unknown` / unparseable descriptor falls back to the
+    // wire-driven `decodeValue` path, which stays fully intact.
+    // ========================================================================
+
+    /**
+     * Decode a {@code BamlOutboundValue} ({@code valueBytes}) against a parsed
+     * descriptor. A null descriptor (or a {@code tv:} / {@code unknown} / bare
+     * primitive / literal one) decodes wire-driven; a {@code list<>} / {@code map<>}
+     * recurses element/value decode through the descriptor; an FQN reifies the
+     * named class/enum/recursive-alias; a {@code union[...]} matches the wire
+     * value against the declared arms in order and wraps the arm.
+     */
+    static Object decodeWithDesc(byte[] valueBytes, Desc desc, boolean lenient) {
+        if (valueBytes == null) {
+            return null;
+        }
+        if (desc == null) {
+            return decodeValue(new WireReader(valueBytes), lenient);
+        }
+        switch (desc.kind) {
+            case LIST:
+                return decodeListWithDesc(valueBytes, desc.children.get(0), lenient);
+            case MAP:
+                return decodeMapWithDesc(valueBytes, desc.children.get(1), lenient);
+            case FQN:
+                return decodeFqnWithDesc(valueBytes, desc.text, lenient);
+            case UNION:
+                return decodeUnionWithDesc(valueBytes, desc, lenient);
+            case PRIM:
+            case LIT:
+            case TV:
+            case UNKNOWN:
+            default:
+                // A scalar/literal descriptor carries no structural recursion; the
+                // self-describing wire form already yields the right value. `tv:` /
+                // `unknown` are the explicit wire-driven fallbacks.
+                return decodeValue(new WireReader(valueBytes), lenient);
+        }
+    }
+
+    /** Decode a {@code list_value}, reifying each element through {@code elemDesc}. */
+    private static Object decodeListWithDesc(byte[] valueBytes, Desc elemDesc, boolean lenient) {
+        byte[] listBytes = outboundSub(valueBytes, OV_LIST);
+        if (listBytes == null) {
+            // Descriptor says list but the wire is not one (e.g. null) → wire-driven.
+            return decodeValue(new WireReader(valueBytes), lenient);
+        }
+        WireReader r = new WireReader(listBytes);
+        List<Object> items = new ArrayList<>();
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == LIST_ITEMS) {
+                items.add(decodeWithDesc(r.readBytes(), elemDesc, lenient));
+            } else {
+                r.skipField(wire);
+            }
+        }
+        return items;
+    }
+
+    /** Decode a {@code map_value}, reifying each entry value through {@code valueDesc}. */
+    private static Object decodeMapWithDesc(byte[] valueBytes, Desc valueDesc, boolean lenient) {
+        byte[] mapBytes = outboundSub(valueBytes, OV_MAP);
+        if (mapBytes == null) {
+            return decodeValue(new WireReader(valueBytes), lenient);
+        }
+        WireReader r = new WireReader(mapBytes);
+        Map<String, Object> map = new LinkedHashMap<>();
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == MAP_ENTRIES) {
+                WireReader e = r.readMessage();
+                String key = null;
+                byte[] vb = null;
+                while (e.hasRemaining()) {
+                    int t = e.readTag();
+                    int ef = WireReader.fieldOf(t);
+                    int ew = WireReader.wireOf(t);
+                    switch (ef) {
+                        case MAP_ENTRY_KEY -> key = e.readString();
+                        case MAP_ENTRY_VALUE -> vb = e.readBytes();
+                        default -> e.skipField(ew);
+                    }
+                }
+                map.put(key, vb == null ? null : decodeWithDesc(vb, valueDesc, lenient));
+            } else {
+                r.skipField(wire);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Decode against an FQN descriptor. The registry decides the kind: a class
+     * reifies with per-field descriptors; a named recursive-alias union routes to
+     * the wire-driven {@link TypeRegistry#constructUnion} (its minted nominal
+     * records); an enum (or an unresolved FQN) decodes wire-driven.
+     */
+    private static Object decodeFqnWithDesc(byte[] valueBytes, String fqn, boolean lenient) {
+        if (TypeRegistry.isClass(fqn)) {
+            byte[] classBytes = outboundSub(valueBytes, OV_CLASS);
+            if (classBytes == null) {
+                return decodeValue(new WireReader(valueBytes), lenient);
+            }
+            return decodeClassWithDesc(new WireReader(classBytes), lenient);
+        }
+        if (TypeRegistry.isUnionKey(fqn)) {
+            // Named recursive alias: unwrap a union_variant wrapper if present,
+            // then reify onto the registered nominal record via the wire shape.
+            byte[] effective = valueBytes;
+            if (outboundArm(valueBytes) == OV_UNION) {
+                byte[] inner = extractUnionInner(valueBytes);
+                if (inner == null) {
+                    return null;
+                }
+                effective = inner;
+            }
+            String discriminator = innerDiscriminator(new WireReader(effective));
+            String armToken = TypeRegistry.unionArmToken(fqn, discriminator);
+            // Decode the arm's inner value type-directed via the arm token
+            // (nested recursive-alias contents must reify, not decode bare).
+            Object inner = armToken != null
+                    ? decodeWithDesc(effective, parseDesc(armToken), lenient)
+                    : decodeValue(new WireReader(effective), lenient);
+            if (inner == null) {
+                return null;
+            }
+            Object record = TypeRegistry.constructUnion(fqn, discriminator, inner);
+            return record != null ? record : inner;
+        }
+        // Enum or unresolved FQN: the wire form is self-describing.
+        return decodeValue(new WireReader(valueBytes), lenient);
+    }
+
+    /**
+     * Decode a {@code BamlValueClass} reifying each field through its registered
+     * descriptor (when present). Mirrors {@link #decodeClass} but reads each field
+     * value's raw bytes so it can drive them with a descriptor; an unregistered
+     * FQN or a field without a descriptor decodes wire-driven.
+     */
+    private static Object decodeClassWithDesc(WireReader r, boolean lenient) {
+        String fqn = null;
+        List<String> keys = new ArrayList<>();
+        List<byte[]> vals = new ArrayList<>();
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case CLASS_NAME -> fqn = r.readString();
+                case CLASS_FIELDS -> {
+                    WireReader e = r.readMessage();
+                    String key = null;
+                    byte[] vb = null;
+                    while (e.hasRemaining()) {
+                        int t = e.readTag();
+                        int ef = WireReader.fieldOf(t);
+                        int ew = WireReader.wireOf(t);
+                        switch (ef) {
+                            case MAP_ENTRY_KEY -> key = e.readString();
+                            case MAP_ENTRY_VALUE -> vb = e.readBytes();
+                            default -> e.skipField(ew);
+                        }
+                    }
+                    keys.add(key);
+                    vals.add(vb);
+                }
+                default -> r.skipField(wire); // type_args
+            }
+        }
+        String[] order = TypeRegistry.classFieldOrder(fqn);
+        String[] descs = TypeRegistry.classFieldDescs(fqn);
+        Map<String, Object> fields = new LinkedHashMap<>();
+        for (int i = 0; i < keys.size(); i++) {
+            Desc fieldDesc = null;
+            if (order != null && descs != null) {
+                int idx = indexOf(order, keys.get(i));
+                if (idx >= 0 && idx < descs.length) {
+                    fieldDesc = parseDesc(descs[idx]);
+                }
+            }
+            byte[] vb = vals.get(i);
+            fields.put(keys.get(i), vb == null ? null : decodeWithDesc(vb, fieldDesc, lenient));
+        }
+        Object instance = TypeRegistry.constructClass(fqn, fields);
+        return instance != null ? instance : fields;
+    }
+
+    /**
+     * Decode against a {@code union[...]} descriptor onto the generic
+     * {@code Union{k}} arm family. A {@code union_variant_value} wrapper is
+     * unwrapped first (the descriptor is preferred over the wire {@code self_type}),
+     * then the (unwrapped) wire value is matched against the declared arms IN
+     * ORDER by its wire kind; the first matching arm's inner value is decoded with
+     * that arm's descriptor and wrapped in {@code baml_bridge.Union{k}.Arm{i}}. A
+     * null wire value decodes to null; no arm match throws {@link BamlError}.
+     */
+    private static Object decodeUnionWithDesc(byte[] valueBytes, Desc unionDesc, boolean lenient) {
+        byte[] effective = valueBytes;
+        if (outboundArm(valueBytes) == OV_UNION) {
+            byte[] inner = extractUnionInner(valueBytes);
+            if (inner == null) {
+                return null; // null inner ≡ null
+            }
+            effective = inner;
+        }
+        int effArm = outboundArm(effective);
+        if (effArm == 0 || effArm == OV_NULL) {
+            return null;
+        }
+        String token = innerDiscriminator(new WireReader(effective));
+        if (token.equals("null")) {
+            return null;
+        }
+        int k = unionDesc.children.size();
+        for (int i = 0; i < k; i++) {
+            if (armMatchesToken(unionDesc.children.get(i), token)) {
+                Object inner = decodeWithDesc(effective, unionDesc.children.get(i), lenient);
+                return wrapArm(k, i, inner);
+            }
+        }
+        throw new BamlError(
+                "type-directed union decode: no declared arm matched wire value (kind '"
+                        + token + "') for descriptor " + unionDesc,
+                List.of(),
+                null);
+    }
+
+    /**
+     * Whether a union arm descriptor matches a wire discriminator token (from
+     * {@link #innerDiscriminator}). Primitives/FQNs match their token exactly;
+     * {@code list<>} / {@code map<>} match the {@code "list"} / {@code "map"}
+     * sentinels; a literal arm matches an exact {@code lit:base:value} token, else
+     * its base (a same-base literal union is erased in codegen, so at most one
+     * literal arm per base survives — base match cannot be ambiguous); a nested
+     * union matches if any of its arms match; {@code tv:} / {@code unknown} are
+     * wildcards (wire-driven).
+     */
+    private static boolean armMatchesToken(Desc arm, String token) {
+        switch (arm.kind) {
+            case PRIM:
+            case FQN:
+                return arm.text.equals(token);
+            case LIST:
+                return token.equals("list");
+            case MAP:
+                return token.equals("map");
+            case LIT: {
+                if (token.startsWith("lit:")) {
+                    String exact = "lit:" + arm.text + ":" + arm.litValue;
+                    return token.equals(exact) || token.startsWith("lit:" + arm.text + ":");
+                }
+                // A bare scalar of the literal's base type also matches the base.
+                return token.equals(arm.text);
+            }
+            case UNION:
+                for (Desc child : arm.children) {
+                    if (armMatchesToken(child, token)) {
+                        return true;
+                    }
+                }
+                return false;
+            case TV:
+            case UNKNOWN:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** Reflectively build {@code baml_bridge.Union{k}.Arm{idx}} around {@code inner}. */
+    private static Object wrapArm(int k, int idx, Object inner) {
+        String className = "baml_bridge.Union" + k + "$Arm" + idx;
+        Class<?> cls;
+        try {
+            cls = Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(
+                    "generic union arm class not found on the classpath: " + className, e);
+        }
+        Constructor<?>[] all = cls.getConstructors(); // single canonical record ctor
+        if (all.length == 0) {
+            throw new IllegalStateException("no public constructor on union arm " + className);
+        }
+        try {
+            return all[0].newInstance(inner);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("failed to construct union arm " + className, e);
+        }
+    }
+
+    /** The set {@code BamlOutboundValue} oneof arm field number (last-wins), or 0. */
+    private static int outboundArm(byte[] valueBytes) {
+        WireReader r = new WireReader(valueBytes);
+        int arm = 0;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case OV_NULL, OV_STRING, OV_INT, OV_FLOAT, OV_BOOL, OV_CLASS, OV_ENUM,
+                        OV_LITERAL, OV_LIST, OV_MAP, OV_UNION, OV_UINT8ARRAY, OV_BIGINT -> {
+                    arm = field;
+                    r.skipField(wire);
+                }
+                default -> r.skipField(wire);
+            }
+        }
+        return arm;
+    }
+
+    /** The last length-delimited sub-message payload for {@code wantField}, or null. */
+    private static byte[] outboundSub(byte[] valueBytes, int wantField) {
+        WireReader r = new WireReader(valueBytes);
+        byte[] found = null;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == wantField && wire == WireWriter.WIRE_LEN) {
+                found = r.readBytes();
+            } else {
+                r.skipField(wire);
+            }
+        }
+        return found;
+    }
+
+    /** The inner {@code value} bytes of a {@code union_variant_value} outbound value. */
+    private static byte[] extractUnionInner(byte[] valueBytes) {
+        byte[] uvBytes = outboundSub(valueBytes, OV_UNION);
+        return uvBytes == null ? null : unionInnerValue(new WireReader(uvBytes));
+    }
+
+    private static int indexOf(String[] arr, String want) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i].equals(want)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // -- descriptor grammar (one tokenizer, shared with the emitter) ----------
+
+    /**
+     * A parsed type-directed decode descriptor. Grammar (per
+     * {@code ref-java-codegen-conventions.md}): primitives
+     * {@code int|bigint|float|string|bool|null|uint8array|void|unknown}; an FQN
+     * (class/enum/named recursive alias); {@code list<D>}; {@code map<D,D>};
+     * ordered {@code union[D;D;...]}; {@code lit:<base>:<value>}; and {@code tv:<name>}.
+     */
+    static final class Desc {
+        enum Kind { PRIM, FQN, LIST, MAP, UNION, LIT, TV, UNKNOWN }
+
+        final Kind kind;
+        final String text; // PRIM: name; FQN: fqn; TV: var name; LIT: base
+        final String litValue; // LIT only
+        final List<Desc> children; // LIST: [elem]; MAP: [key, value]; UNION: arms
+
+        private Desc(Kind kind, String text, String litValue, List<Desc> children) {
+            this.kind = kind;
+            this.text = text;
+            this.litValue = litValue;
+            this.children = children;
+        }
+
+        static Desc prim(String name) {
+            return new Desc(Kind.PRIM, name, null, null);
+        }
+
+        static Desc fqn(String name) {
+            return new Desc(Kind.FQN, name, null, null);
+        }
+
+        static Desc tv(String name) {
+            return new Desc(Kind.TV, name, null, null);
+        }
+
+        static Desc unknown() {
+            return new Desc(Kind.UNKNOWN, "unknown", null, null);
+        }
+
+        static Desc lit(String base, String value) {
+            return new Desc(Kind.LIT, base, value, null);
+        }
+
+        static Desc list(Desc elem) {
+            return new Desc(Kind.LIST, null, null, List.of(elem));
+        }
+
+        static Desc map(Desc key, Desc value) {
+            return new Desc(Kind.MAP, null, null, List.of(key, value));
+        }
+
+        static Desc union(List<Desc> arms) {
+            return new Desc(Kind.UNION, null, null, arms);
+        }
+
+        @Override
+        public String toString() {
+            return switch (kind) {
+                case PRIM, TV, UNKNOWN -> text;
+                case FQN -> text;
+                case LIT -> "lit:" + text + ":" + litValue;
+                case LIST -> "list<" + children.get(0) + ">";
+                case MAP -> "map<" + children.get(0) + "," + children.get(1) + ">";
+                case UNION -> {
+                    StringBuilder sb = new StringBuilder("union[");
+                    for (int i = 0; i < children.size(); i++) {
+                        if (i > 0) {
+                            sb.append(';');
+                        }
+                        sb.append(children.get(i));
+                    }
+                    yield sb.append(']').toString();
+                }
+            };
+        }
+    }
+
+    /**
+     * Parse a descriptor string, or return null for a null / empty / unparseable
+     * descriptor (the caller then decodes wire-driven).
+     */
+    static Desc parseDesc(String s) {
+        if (s == null || s.isEmpty()) {
+            return null;
+        }
+        int[] p = {0};
+        Desc d;
+        try {
+            d = parseNode(s, p);
+        } catch (RuntimeException e) {
+            return null; // unparseable → wire-driven fallback
+        }
+        skipWs(s, p);
+        return p[0] == s.length() ? d : null; // trailing garbage → fallback
+    }
+
+    private static Desc parseNode(String s, int[] p) {
+        skipWs(s, p);
+        if (consume(s, p, "list<")) {
+            Desc elem = parseNode(s, p);
+            expect(s, p, '>');
+            return Desc.list(elem);
+        }
+        if (consume(s, p, "map<")) {
+            Desc key = parseNode(s, p);
+            expect(s, p, ',');
+            Desc value = parseNode(s, p);
+            expect(s, p, '>');
+            return Desc.map(key, value);
+        }
+        if (consume(s, p, "union[")) {
+            List<Desc> arms = new ArrayList<>();
+            arms.add(parseNode(s, p));
+            skipWs(s, p);
+            while (p[0] < s.length() && s.charAt(p[0]) == ';') {
+                p[0]++;
+                arms.add(parseNode(s, p));
+                skipWs(s, p);
+            }
+            expect(s, p, ']');
+            return Desc.union(arms);
+        }
+        if (consume(s, p, "lit:")) {
+            int bs = p[0];
+            while (p[0] < s.length() && s.charAt(p[0]) != ':') {
+                p[0]++;
+            }
+            String base = s.substring(bs, p[0]);
+            expect(s, p, ':');
+            // The literal value is a leaf: read to the next structural terminator
+            // (so `lit:string:hello world` keeps its space; a value containing
+            // `;]>,` is an accepted parser limitation, noted in the conventions).
+            int vs = p[0];
+            while (p[0] < s.length()) {
+                char c = s.charAt(p[0]);
+                if (c == ';' || c == ']' || c == '>' || c == ',') {
+                    break;
+                }
+                p[0]++;
+            }
+            return Desc.lit(base, s.substring(vs, p[0]));
+        }
+        String tok = readLeaf(s, p);
+        if (tok.isEmpty()) {
+            throw new IllegalArgumentException("empty descriptor token at " + p[0]);
+        }
+        return classifyLeaf(tok);
+    }
+
+    private static Desc classifyLeaf(String tok) {
+        switch (tok) {
+            case "int":
+            case "bigint":
+            case "float":
+            case "string":
+            case "bool":
+            case "null":
+            case "uint8array":
+            case "void":
+                return Desc.prim(tok);
+            case "unknown":
+                return Desc.unknown();
+            default:
+                if (tok.startsWith("tv:")) {
+                    return Desc.tv(tok.substring(3));
+                }
+                return Desc.fqn(tok);
+        }
+    }
+
+    /** Read a leaf bareword (primitive / FQN / tv) up to a delimiter or whitespace. */
+    private static String readLeaf(String s, int[] p) {
+        int start = p[0];
+        while (p[0] < s.length()) {
+            char c = s.charAt(p[0]);
+            if (c == '<' || c == '>' || c == '[' || c == ']' || c == ';' || c == ','
+                    || Character.isWhitespace(c)) {
+                break;
+            }
+            p[0]++;
+        }
+        return s.substring(start, p[0]);
+    }
+
+    /** Consume {@code lit} if it is the exact prefix at {@code p}; else leave {@code p}. */
+    private static boolean consume(String s, int[] p, String lit) {
+        if (s.regionMatches(p[0], lit, 0, lit.length())) {
+            p[0] += lit.length();
+            return true;
+        }
+        return false;
+    }
+
+    private static void expect(String s, int[] p, char c) {
+        skipWs(s, p);
+        if (p[0] >= s.length() || s.charAt(p[0]) != c) {
+            throw new IllegalArgumentException("expected '" + c + "' at " + p[0] + " in " + s);
+        }
+        p[0]++;
+    }
+
+    private static void skipWs(String s, int[] p) {
+        while (p[0] < s.length() && Character.isWhitespace(s.charAt(p[0]))) {
+            p[0]++;
+        }
     }
 
     /**

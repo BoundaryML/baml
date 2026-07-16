@@ -145,6 +145,10 @@ public final class ProtoWriter {
                 throw unsupported(value);
             }
             w.writeMessage(IV_ENUM, encodeEnum(ew));
+        } else if (value instanceof baml_bridge.BamlUnion) {
+            // Generic-family arm record (Union2..Union10): unwrap to the
+            // single `value()` component — no union envelope inbound.
+            return encodeInboundValue(unwrapGenericUnion(value));
         } else if (TypeRegistry.isUnionRecord(value)) {
             // A union wrapper record carries no wrapper on the inbound wire:
             // unwrap to its bare inner value and encode that (inbound has no
@@ -192,6 +196,16 @@ public final class ProtoWriter {
         return new UnsupportedOperationException(
                 "capability not yet implemented: cannot encode argument of type "
                         + value.getClass().getName());
+    }
+
+
+    private static Object unwrapGenericUnion(Object value) {
+        try {
+            return value.getClass().getMethod("value").invoke(value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(
+                    "BamlUnion arm record without a value() accessor: " + value.getClass(), e);
+        }
     }
 
     private static byte[] encodeList(List<?> list) {

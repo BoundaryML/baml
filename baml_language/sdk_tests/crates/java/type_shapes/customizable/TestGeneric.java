@@ -19,8 +19,8 @@
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import baml_bridge.Union2;
 import baml_sdk.generics.Fns;
-import baml_sdk.unions$.UnionTOrWrapperMarker;
 import baml_sdk.generics.WrapperMethods;
 import org.junit.jupiter.api.Test;
 
@@ -33,20 +33,20 @@ class TestGeneric {
         // `T | WrapperMarker`.
         //
         // java-port note: `get_value_or_marker` returns `T | WrapperMarker`
-        // — a union whose one arm is the *class's* TypeVar rather than a
-        // concrete BAML type. The conventions doc leaves the shape of a
-        // TypeVar-bearing union return type as an open question (the
-        // "Generic function/method (explicit)" row in
-        // ref-java-state-of-completeness.md: "shape TBD"). This port
-        // invents a minimal shape to keep the test compilable: a
-        // non-generically-parameterized sealed interface
-        // `UnionTOrWrapperMarker` whose `TValue` arm carries `Object` (an
-        // erasure stand-in for `T`); the call site narrows and casts. This
-        // needs a real codegen decision — flagged for review.
+        // — a union whose first arm is the *class's* TypeVar rather than a
+        // concrete BAML type, so it renders as `Union2<Object, WrapperMarker>`
+        // (Arm0 = the `T` arm, Arm1 = `WrapperMarker`); the descriptor keeps
+        // the arm as `tv:T` and the Java type arg erases to `Object`. The
+        // conventions doc leaves the shape of a TypeVar-bearing union return
+        // type as an open question (the "Generic function/method (explicit)"
+        // row in ref-java-state-of-completeness.md: "shape TBD"). This port
+        // narrows the returned value with a wildcard `Union2.Arm0<?, ?>`
+        // pattern and reads `.value()` (Java 17: `instanceof` only, no record
+        // patterns). This needs a real codegen decision — flagged for review.
         WrapperMethods<String> w = Fns.make_wrapper_methods("hello");
         Object result = w.get_value_or_marker();
         assertTrue(
-                result instanceof UnionTOrWrapperMarker.TValue tv
+                result instanceof Union2.Arm0<?, ?> tv
                         && "hello".equals(tv.value()));
     }
 

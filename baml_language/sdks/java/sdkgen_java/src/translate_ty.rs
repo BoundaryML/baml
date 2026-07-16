@@ -14,11 +14,15 @@
 //!   until a `@Nullable` annotation dependency is decided).
 //! - `T?` (`Ty::Union` with a `Null` arm and one other arm) collapses
 //!   to the boxed inner type; it never mints a union type.
-//! - Multi-arm unions mint a **nominal sealed type** named
-//!   `Union<Arm>Or<Arm>...` (declaration order, no arity prefix; see
-//!   [`union_ident`]). Encountered unions are reported through
-//!   [`UnionSink`] so the emitter can generate their files beside the
-//!   symbol that referenced them.
+//! - Anonymous multi-arm unions render inline as the runtime's generic
+//!   arity family `baml_bridge.Union{n}<...>` (declaration order, null
+//!   arm stripped; arity > 10 falls back to `java.lang.Object`). Arm
+//!   selection is type-directed at decode time (via the per-binding
+//!   descriptor), so no nominal type is minted and [`UnionSink`] stays
+//!   empty for them. **Recursive** aliases are the exception: they keep
+//!   a minted nominal sealed type named after the alias (a positional
+//!   generic cannot reference itself), rendered by the emitter's
+//!   `render_union`.
 //! - Literal unions over one base type erase to the base type
 //!   (`"draft" | "sent"` → `java.lang.String`) — Java has no literal
 //!   types.
@@ -47,24 +51,30 @@ pub(crate) enum TyPosition {
 /// Built by the emitter from the pool's `Symbol::TypeAlias` entries.
 pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
 
-/// Collects the union types a translation encounters, so the emitter
-/// can mint one nominal sealed type per distinct union per package.
-/// Keyed by (package, union identifier); the value keeps the arm list
-/// (null arm already stripped).
+/// **Vestigial — recursive-alias path only.** Anonymous unions render
+/// inline as `baml_bridge.Union{n}<...>` (decode is type-directed), so
+/// nothing records into this sink anymore and it stays empty in
+/// practice; recursive aliases mint their nominal type directly in the
+/// emitter. It is retained solely because `translate_ty`'s signatures
+/// still thread a `&mut UnionSink`. Keyed by (package, union
+/// identifier); the value would hold the arm list (null arm stripped).
 #[derive(Debug, Default)]
 pub(crate) struct UnionSink {
+    // Never read: anonymous unions render inline and recursive aliases
+    // mint directly, so nothing records here. Retained so the sink type
+    // still threads through `translate_ty`'s signatures.
+    #[allow(dead_code)]
     pub(crate) unions: BTreeMap<(PackagePath, String), Vec<Ty>>,
 }
 
 /// Everything `translate_ty` needs beyond the type itself.
 pub(crate) struct TranslateCtx<'a> {
-    /// Package of the symbol being translated — minted unions land here.
-    pub(crate) current_package: PackagePath,
     pub(crate) aliases: &'a AliasTable,
 }
 
-/// Translate `ty` to a Java type expression, recording any minted
-/// unions into `sink`.
+/// Translate `ty` to a Java type expression. `sink` is threaded for the
+/// vestigial [`UnionSink`] contract only — anonymous unions render
+/// inline and nothing is recorded.
 pub(crate) fn translate_ty(
     ty: &Ty,
     pos: TyPosition,
@@ -189,25 +199,21 @@ fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -
             if let Some(base) = common_literal_base(&non_null) {
                 return base;
             }
-            let ident = union_ident(&non_null);
-            let arms: Vec<Ty> = non_null.iter().map(|t| (*t).clone()).collect();
-            let mut tvs: Vec<String> = Vec::new();
-            for arm in &arms {
-                collect_type_vars(arm, &mut tvs);
+            // TEAM DECISION (2026-07-16): anonymous unions render as the
+            // runtime's generic arity family in DECLARATION order; arm
+            // selection is type-directed at decode time, so no nominal
+            // type (and no wire-order trust) is involved. Arity > 10
+            // falls back to Object until the threshold/alias policy
+            // lands (decoder then uses the wire-driven path).
+            let n = non_null.len();
+            if n > 10 {
+                return "java.lang.Object".to_string();
             }
-            // Minted unions live in ONE canonical package so a structural
-            // union is a single Java type everywhere (per-package twins
-            // would be distinct, incompatible types and break the wire
-            // registry's signature keying). `unions$` cannot collide with
-            // a user namespace: `$` never appears in BAML identifiers.
-            let pkg = canonical_union_package();
-            sink.unions.insert((pkg.clone(), ident.clone()), arms);
-            let generic_suffix = if tvs.is_empty() {
-                String::new()
-            } else {
-                format!("<{}>", tvs.join(", "))
-            };
-            format!("{}.{}{}", pkg.java_package(), ident, generic_suffix)
+            let rendered: Vec<String> = non_null
+                .iter()
+                .map(|t| translate_ty(t, TyPosition::Boxed, ctx, sink))
+                .collect();
+            format!("baml_bridge.Union{n}<{}>", rendered.join(", "))
         }
     }
 }
@@ -272,28 +278,60 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
     }
 }
 
-/// The canonical home of all minted (anonymous) union types.
-pub(crate) fn canonical_union_package() -> PackagePath {
-    PackagePath {
-        segments: vec!["unions$".to_string()],
-    }
-}
-
-/// Deterministic union type name: `Union<Arm>Or<Arm>...` in
-/// declaration order (the engine already normalizes/dedups union
-/// arms). Literal arms use a `K`-prefixed token (legacy Go precedent):
-/// `"draft"` → `Kdraft`, `1` → `IntK1`, `true` → `BoolKTrue`.
-pub(crate) fn union_ident(arms: &[&Ty]) -> String {
-    let mut out = String::from("Union");
-    for (i, arm) in arms.iter().enumerate() {
-        if i > 0 {
-            out.push_str("Or");
+/// Type-directed decode descriptor for a declared type (the string a
+/// generated binding passes to `BamlFfi.callSync/callAsync`, and the
+/// per-field entries `registerClass` carries). Same token vocabulary
+/// as [`signature_token`] except anonymous unions render ORDERED as
+/// `union[a;b;...]` (declaration order — the decoder matches arms in
+/// this order) and `T | null` collapses to the inner descriptor
+/// (nullability never affects decode).
+pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
+    match ty {
+        Ty::Union(items) => {
+            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+            match non_null.len() {
+                0 => "null".to_string(),
+                1 => descriptor_token(non_null[0], aliases),
+                _ => {
+                    if common_literal_base(&non_null).is_some() {
+                        // Erased literal union: decodes as its base type.
+                        if let Ty::Literal(lit) = non_null[0] {
+                            return match lit {
+                                baml_base::Literal::Int(_) => "int".to_string(),
+                                baml_base::Literal::Bigint(_) => "bigint".to_string(),
+                                baml_base::Literal::Float(_) => "float".to_string(),
+                                baml_base::Literal::String(_) => "string".to_string(),
+                                baml_base::Literal::Bool(_) => "bool".to_string(),
+                            };
+                        }
+                    }
+                    let arms: Vec<String> = non_null
+                        .iter()
+                        .map(|a| descriptor_token(a, aliases))
+                        .collect();
+                    format!("union[{}]", arms.join(";"))
+                }
+            }
         }
-        out.push_str(&union_arm_token(arm));
+        Ty::TypeAlias(name) => match aliases.get(name) {
+            Some((resolved, false)) => descriptor_token(resolved, aliases),
+            _ => crate::signature_token(ty, aliases),
+        },
+        Ty::List(inner) => format!("list<{}>", descriptor_token(inner, aliases)),
+        Ty::Map { key, value } => format!(
+            "map<{},{}>",
+            descriptor_token(key, aliases),
+            descriptor_token(value, aliases)
+        ),
+        _ => crate::signature_token(ty, aliases),
     }
-    out
 }
 
+/// Deterministic per-arm token, used to name a recursive alias's
+/// nominal union arm records (`{token}Value`) and their registry
+/// entries. Literal arms use a `K`-prefixed token (legacy Go
+/// precedent): `"draft"` → `Kdraft`, `1` → `IntK1`, `true` →
+/// `BoolKTrue`.
 pub(crate) fn union_arm_token(ty: &Ty) -> String {
     match ty {
         Ty::Int => "Int".to_string(),
@@ -386,18 +424,13 @@ mod tests {
         )
     }
 
-    fn ctx_in<'a>(segments: &[&str], aliases: &'a AliasTable) -> TranslateCtx<'a> {
-        TranslateCtx {
-            current_package: PackagePath {
-                segments: segments.iter().map(ToString::to_string).collect(),
-            },
-            aliases,
-        }
+    fn ctx_in(aliases: &AliasTable) -> TranslateCtx<'_> {
+        TranslateCtx { aliases }
     }
 
     fn tr(ty: &Ty, pos: TyPosition) -> String {
         let aliases = AliasTable::new();
-        let ctx = ctx_in(&["unions"], &aliases);
+        let ctx = ctx_in(&aliases);
         let mut sink = UnionSink::default();
         translate_ty(ty, pos, &ctx, &mut sink)
     }
@@ -501,39 +534,48 @@ mod tests {
     }
 
     #[test]
-    fn multi_arm_union_mints_nominal_type_and_records_it() {
+    fn multi_arm_union_renders_generic_arity_family() {
+        // Anonymous unions render inline as `baml_bridge.Union{n}<...>`
+        // in declaration order (arms boxed); nothing records into the
+        // now-vestigial sink.
         let aliases = AliasTable::new();
-        let ctx = ctx_in(&["unions"], &aliases);
+        let ctx = ctx_in(&aliases);
         let mut sink = UnionSink::default();
         let u = Ty::Union(vec![Ty::Int, Ty::String]);
         let expr = translate_ty(&u, TyPosition::TopLevel, &ctx, &mut sink);
-        assert_eq!(expr, "baml_sdk.unions$.UnionIntOrString");
-        let key = (
-            PackagePath {
-                segments: vec!["unions$".to_string()],
-            },
-            "UnionIntOrString".to_string(),
-        );
-        assert_eq!(sink.unions.get(&key), Some(&vec![Ty::Int, Ty::String]));
+        assert_eq!(expr, "baml_bridge.Union2<java.lang.Long, java.lang.String>");
+        assert!(sink.unions.is_empty());
     }
 
     #[test]
-    fn nullable_multi_arm_union_still_mints_without_null_arm() {
+    fn nullable_multi_arm_union_strips_null_arm() {
         let u = Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions$.UnionIntOrString"
+            "baml_bridge.Union2<java.lang.Long, java.lang.String>"
         );
     }
 
     #[test]
-    fn union_name_uses_declaration_order_and_class_idents() {
+    fn union_arms_render_in_declaration_order() {
         let t = Ty::Class(name("user", &["unions"], "T"), vec![]);
         let u = Ty::Union(vec![t, Ty::String]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions$.UnionTOrString"
+            "baml_bridge.Union2<baml_sdk.unions.T, java.lang.String>"
         );
+    }
+
+    #[test]
+    fn union_over_ten_arms_falls_back_to_object() {
+        // Arity > 10 exceeds the Union2..Union10 family; until the
+        // threshold/alias policy lands the emitter falls back to Object
+        // (the decoder then uses the wire-driven path).
+        let arms: Vec<Ty> = (0..11)
+            .map(|i| Ty::Class(name("user", &["unions"], &format!("C{i}")), vec![]))
+            .collect();
+        let u = Ty::Union(arms);
+        assert_eq!(tr(&u, TyPosition::TopLevel), "java.lang.Object");
     }
 
     #[test]
@@ -546,14 +588,16 @@ mod tests {
     }
 
     #[test]
-    fn literal_union_mixed_base_mints_k_arms() {
+    fn literal_union_mixed_base_renders_generic_arity_family() {
+        // Mixed-base literal unions don't erase; each literal arm boxes
+        // to its base type inside the arity family.
         let u = Ty::Union(vec![
             Ty::Literal(baml_base::Literal::Int(1)),
             Ty::Literal(baml_base::Literal::String("draft".into())),
         ]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
-            "baml_sdk.unions$.UnionIntK1OrKdraft"
+            "baml_bridge.Union2<java.lang.Long, java.lang.String>"
         );
     }
 
@@ -573,7 +617,7 @@ mod tests {
                 true,
             ),
         );
-        let ctx = ctx_in(&["aliases"], &aliases);
+        let ctx = ctx_in(&aliases);
         let mut sink = UnionSink::default();
         assert_eq!(
             translate_ty(
@@ -644,5 +688,29 @@ mod tests {
             ),
             "java.lang.String"
         );
+    }
+
+    #[test]
+    fn descriptor_union_return_is_ordered() {
+        let aliases = AliasTable::new();
+        let u = Ty::Union(vec![Ty::Int, Ty::String]);
+        assert_eq!(descriptor_token(&u, &aliases), "union[int;string]");
+    }
+
+    #[test]
+    fn descriptor_nullable_collapses_to_inner() {
+        let aliases = AliasTable::new();
+        let opt_int = Ty::Union(vec![Ty::Int, Ty::Null]);
+        assert_eq!(descriptor_token(&opt_int, &aliases), "int");
+    }
+
+    #[test]
+    fn descriptor_erased_literal_union_is_base() {
+        let aliases = AliasTable::new();
+        let u = Ty::Union(vec![
+            Ty::Literal(baml_base::Literal::String("draft".into())),
+            Ty::Literal(baml_base::Literal::String("sent".into())),
+        ]);
+        assert_eq!(descriptor_token(&u, &aliases), "string");
     }
 }

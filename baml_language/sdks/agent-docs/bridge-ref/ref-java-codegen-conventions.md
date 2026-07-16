@@ -45,9 +45,36 @@ change together). Companion to `ref-java-state-of-completeness.md`.
   `double`, `string` → `String`, `bool` → `boolean` (boxed where
   nullability requires), `uint8array` → `byte[]`, `null`-typed values
   → `Void`/`null`, lists → `java.util.List<T>`, maps →
-  `java.util.Map<String, V>`, unions → generated sealed interface +
-  records (see state-of-completeness doc), `T?` → `@Nullable T`
-  (never `Optional<T>` in signatures).
+  `java.util.Map<String, V>`, `T?` → boxed nullable `T` (never
+  `Optional<T>` in signatures, never a union type).
+- **Unions (TEAM DECISION 2026-07-16)**: anonymous multi-arm unions
+  render as the runtime library's **generic arity family**
+  `baml_bridge.Union2<A,B>` … `Union10<...>` — sealed interfaces with
+  nested generic records `Arm0..Arm{n-1}`, one per positional arm in
+  BAML declaration order (post-normalization, null arm stripped), so
+  Java 21+ consumers get exhaustive `switch` with record patterns
+  (`case Union2.Arm0(var x) -> ...`); Java 17 uses `instanceof`.
+  Arm selection is **type-directed** (Kai's model): decode matches the
+  wire value against the *declared* arm list in source order — the
+  wire carries no arm order and none is trusted. Same-base literal
+  unions still erase to the base type; arity > 10 is a codegen error
+  until the threshold/alias policy lands. **Recursive type aliases
+  keep a minted nominal sealed type named after the alias** (a
+  positional generic cannot reference itself); their arms follow the
+  same record-naming scheme as before.
+- **Type-directed decode descriptors**: every generated binding passes
+  a descriptor string for its declared return type as the last
+  argument of `BamlFfi.callSync/callAsync`, and `registerClass` gains
+  a parallel `String[] fieldDescs`. Descriptor grammar (one tokenizer,
+  shared with the emitter): primitives `int|bigint|float|string|bool|
+  null|uint8array|void|unknown`; class/enum/named-recursive-alias →
+  canonical BAML FQN (registry resolves the kind); `list<D>`;
+  `map<D,D>`; ordered anonymous union `union[D;D;...]`;
+  `lit:<base>:<value>`; unresolved type vars `tv:<name>` (decoder
+  falls back to wire-driven `self_type` decode). Decode without a
+  descriptor, or on any descriptor/value mismatch that has a
+  self-describing wire form, falls back to the wire-driven path
+  (error/panic values stay wire-driven).
 - **Optional args**: AWS-SDK-v2-style trailing configurator overload:
   `Fns.optional_args_probe(1)` omits everything (engine evaluates BAML
   defaults); `Fns.optional_args_probe(1, o -> o.opt1(5))` supplies

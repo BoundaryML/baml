@@ -98,20 +98,48 @@ public final class BamlFfi {
      * Synchronously call the BAML function {@code fqn}, passing {@code args}
      * paired positionally with their declared parameter {@code names}. Returns
      * the decoded value, or throws {@link BamlError} / {@link BamlPanic}.
+     *
+     * <p>Result decode is wire-driven (no return-type descriptor): a union result
+     * reifies via the wire's {@code self_type} onto its registered nominal record.
+     * Generated bindings that know their declared return type call the four-arg
+     * {@link #callSync(String, String[], Object[], String)} instead.
      */
     public static Object callSync(String fqn, String[] names, Object[] args) {
-        byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, newCallId());
-        byte[] response = nativeCallSync(fqn, request);
-        return ProtoReader.decodeOutboundResult(response);
+        return callSync(fqn, names, args, null);
     }
 
     /**
-     * Asynchronous sibling of {@link #callSync}. For now this runs the sync
-     * path on a background daemon thread; see {@link #ASYNC_POOL} for the real
-     * async-path TODO.
+     * As {@link #callSync(String, String[], Object[])}, but threads a
+     * type-directed decode descriptor for the declared return type (see
+     * {@code ref-java-codegen-conventions.md}). The generated SDK passes the
+     * descriptor string as this last argument so a union result lands on the
+     * {@code Union{k}} arm family (arm chosen from the declared arm order) and
+     * nested class/list/map/union results decode against their declared shape.
+     * A {@code null} descriptor is exactly the three-arg (wire-driven) behavior.
+     */
+    public static Object callSync(String fqn, String[] names, Object[] args, String returnDesc) {
+        byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, newCallId());
+        byte[] response = nativeCallSync(fqn, request);
+        return ProtoReader.decodeOutboundResult(response, returnDesc);
+    }
+
+    /**
+     * Asynchronous sibling of {@link #callSync(String, String[], Object[])}. For
+     * now this runs the sync path on a background daemon thread; see
+     * {@link #ASYNC_POOL} for the real async-path TODO.
      */
     public static CompletableFuture<Object> callAsync(String fqn, String[] names, Object[] args) {
-        return CompletableFuture.supplyAsync(() -> callSync(fqn, names, args), ASYNC_POOL);
+        return callAsync(fqn, names, args, null);
+    }
+
+    /**
+     * Asynchronous sibling of
+     * {@link #callSync(String, String[], Object[], String)}, threading the same
+     * type-directed return descriptor through the background decode.
+     */
+    public static CompletableFuture<Object> callAsync(
+            String fqn, String[] names, Object[] args, String returnDesc) {
+        return CompletableFuture.supplyAsync(() -> callSync(fqn, names, args, returnDesc), ASYNC_POOL);
     }
 
     private static long newCallId() {

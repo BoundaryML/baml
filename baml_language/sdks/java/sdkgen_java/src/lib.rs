@@ -1,3 +1,8 @@
+// String-builder style: the registration and anchor bodies are assembled
+// by appending rendered fragments; the `write!`-into-String alternative
+// buys nothing here but noise (same rationale as `emit.rs`).
+#![allow(clippy::format_push_string)]
+
 //! Java SDK emitter. Produces a `baml_sdk/` tree from a `SymbolPool`:
 //! one `.java` file per generated top (Java allows one public type per
 //! file), a per-package `Fns` holder binding free functions to the
@@ -34,7 +39,7 @@ pub use baml_codegen_types::{NamingConvention, OutputType};
 use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_union},
     routing::{PackagePath, java_identifier, route},
-    translate_ty::{AliasTable, TranslateCtx, UnionSink},
+    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_token},
 };
 
 /// A user BAML source file as it should appear in the emitter's
@@ -70,6 +75,14 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.llm.Stream",
 ];
 
+/// One enum typemap entry: (BAML FQN, Java binary name, per-variant
+/// (java const ident, wire name)).
+type EnumRegistration = (String, String, Vec<(String, String)>);
+
+/// One union typemap entry: (arm-token signature, union binary name,
+/// per-arm (arm token, record binary name)).
+type UnionRegistration = (String, String, Vec<(String, String)>);
+
 /// Build the Java SDK output tree for `pool`. Returned paths are
 /// relative to the `baml_sdk/` output root.
 pub fn to_source_code(
@@ -100,15 +113,15 @@ pub fn to_source_code(
     // (BAML FQN, Java binary name, per-kind payload). Field order is
     // carried explicitly because the JVM does not guarantee
     // getDeclaredFields() order and the decoder constructs via the
-    // canonical constructor positionally.
-    let mut class_registry: Vec<(String, String, Vec<String>)> = Vec::new();
-    let mut enum_registry: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
+    // canonical constructor positionally. Classes also carry a parallel
+    // per-field decode-descriptor array (same order as the field idents).
+    let mut class_registry: Vec<(String, String, Vec<String>, Vec<String>)> = Vec::new();
+    let mut enum_registry: Vec<EnumRegistration> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
-    // (signature, union binary name, per-arm (token, record binary name))
-    let mut union_registry: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
+    let mut union_registry: Vec<UnionRegistration> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -123,10 +136,7 @@ pub fn to_source_code(
             s
         };
         let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
-        let ctx = TranslateCtx {
-            current_package: pkg.clone(),
-            aliases: &aliases,
-        };
+        let ctx = TranslateCtx { aliases: &aliases };
 
         match symbol {
             Symbol::Class(class) => {
@@ -145,6 +155,11 @@ pub fn to_source_code(
                         .properties
                         .iter()
                         .map(|prop| java_identifier(prop.name.as_str()))
+                        .collect(),
+                    class
+                        .properties
+                        .iter()
+                        .map(|prop| descriptor_token(&prop.ty, &aliases))
                         .collect(),
                 ));
                 type_files.push((
@@ -212,10 +227,7 @@ pub fn to_source_code(
         } else {
             "Fns"
         };
-        let ctx = TranslateCtx {
-            current_package: pkg.clone(),
-            aliases: &aliases,
-        };
+        let ctx = TranslateCtx { aliases: &aliases };
         out.insert(
             java_file_path(&pkg, holder),
             with_package(
@@ -229,10 +241,7 @@ pub fn to_source_code(
     // minted union under the alias's own name; other recursive shapes
     // get a reserved placeholder until the aliases capability lands.
     for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
-        let ctx = TranslateCtx {
-            current_package: pkg.clone(),
-            aliases: &aliases,
-        };
+        let ctx = TranslateCtx { aliases: &aliases };
         let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -254,34 +263,12 @@ pub fn to_source_code(
         out.insert(java_file_path(&pkg, &ident), with_package(&pkg, &body));
     }
 
-    // Minted union files. Rendering a union can itself mint more
-    // unions (e.g. a `(int | string)[]` arm), so drain to a fixpoint.
-    let mut emitted_unions: BTreeSet<(PackagePath, String)> = BTreeSet::new();
-    loop {
-        let pending: Vec<((PackagePath, String), Vec<Ty>)> = sink
-            .unions
-            .iter()
-            .filter(|(key, _)| !emitted_unions.contains(key))
-            .map(|(key, arms)| (key.clone(), arms.clone()))
-            .collect();
-        if pending.is_empty() {
-            break;
-        }
-        for ((pkg, ident), arms) in pending {
-            let ctx = TranslateCtx {
-                current_package: pkg.clone(),
-                aliases: &aliases,
-            };
-            let body = render_union(&ident, &arms, &ctx, &mut sink);
-            union_registry.push(union_registration(&pkg, &ident, &arms, &aliases));
-            // A generated type may already own this identifier (e.g. a
-            // recursive alias that named the same union) — first writer
-            // wins, and the alias/type pass ran first.
-            out.entry(java_file_path(&pkg, &ident))
-                .or_insert_with(|| with_package(&pkg, &body));
-            emitted_unions.insert((pkg, ident));
-        }
-    }
+    // Anonymous multi-arm unions no longer mint nominal files: they
+    // render inline as the runtime's generic arity family
+    // (`baml_bridge.Union{n}<...>`) and decode is type-directed via the
+    // per-binding descriptors, so nothing records into `sink` anymore.
+    // The only nominal union files are the recursive aliases emitted
+    // above (a positional generic cannot reference itself).
 
     // Root runtime anchor. Loading any generated class must (in a
     // later phase) trigger idempotent runtime initialization from the
@@ -304,11 +291,13 @@ pub fn to_source_code(
             records.join(", ")
         ));
     }
-    for (fqn, java_name, fields) in &class_registry {
+    for (fqn, java_name, fields, descriptors) in &class_registry {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
+        let desc_list: Vec<String> = descriptors.iter().map(|d| format!("{d:?}")).collect();
         registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}});\n",
-            field_list.join(", ")
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new java.lang.String[] {{{}}});\n",
+            field_list.join(", "),
+            desc_list.join(", ")
         ));
     }
     for (fqn, java_name, variants) in &enum_registry {
@@ -364,8 +353,8 @@ pub fn to_source_code_with_bytecode(
 /// union's registry key is the `|`-join of its arms' tokens sorted
 /// lexically (null arms excluded on both sides) — order-insensitive so
 /// engine-side normalization can't cause a mismatch. Keep in lockstep
-/// with `baml_bridge.TypeRegistry`'s BamlTy tokenizer.
-fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
+/// with `baml_bridge.TypeRegistry`'s `BamlTy` tokenizer.
+pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
     fn fqn(name: &baml_codegen_types::Name) -> String {
         let mut s = String::from(name.pkg.as_str());
         for seg in &name.namespace_path {
@@ -422,7 +411,7 @@ fn union_registration(
     ident: &str,
     arms: &[Ty],
     aliases: &AliasTable,
-) -> (String, String, Vec<(String, String)>) {
+) -> UnionRegistration {
     let union_binary = format!("{}.{}", pkg.java_package(), ident);
     let arm_entries: Vec<(String, String)> = arms
         .iter()
@@ -492,7 +481,7 @@ mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
         Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol,
-        SymbolPool, Ty,
+        SymbolPool, Ty, TypeAlias,
     };
 
     use super::*;
@@ -616,6 +605,17 @@ mod tests {
         })
     }
 
+    /// A recursive type alias `RecList = int | RecList[]` — self-
+    /// referential, so `recursive: true`.
+    fn recursive_alias_sym(n: &Name, span: u32) -> Symbol {
+        Symbol::TypeAlias(TypeAlias {
+            name: n.clone(),
+            resolves_to: Ty::Union(vec![Ty::Int, Ty::List(Box::new(Ty::TypeAlias(n.clone())))]),
+            recursive: true,
+            origin: origin(span),
+        })
+    }
+
     fn emit_sdk(pool: &SymbolPool) -> HashMap<PathBuf, String> {
         to_source_code(pool, &[], NamingConvention::PreserveCase)
     }
@@ -704,13 +704,16 @@ mod tests {
         let file = &out[&PathBuf::from("lorem/Fns.java")];
         assert!(file.contains("public final class Fns {"));
         assert!(file.contains("public static long extract_resume(long x) {"));
+        // The return-type decode descriptor (`"int"`) is the last call arg.
         assert!(file.contains(
-            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x});"
+            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
         ));
-        assert!(file.contains("thenApply(v$ -> (java.lang.Long) v$)"));
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\").thenApply(v$ -> (java.lang.Long) v$)"
+        ));
     }
 
     #[test]
@@ -733,7 +736,7 @@ mod tests {
         // free function, bound to `<class fqn>.<method>`.
         assert!(file.contains("public static java.lang.String create(java.lang.String name) {"));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name});"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name}, \"string\");"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.String> create_async(java.lang.String name) {"
@@ -744,7 +747,7 @@ mod tests {
         assert!(file.contains("public java.lang.String greet(java.lang.String greeting) {"));
         assert!(!file.contains("public static java.lang.String greet("));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting});"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\");"
         ));
         assert!(file.contains(
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
@@ -765,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn union_field_mints_sealed_union_file() {
+    fn union_field_renders_generic_arity_family() {
         let mut pool = SymbolPool::new();
         let n = name("user", &["unions"], "UnionContainer");
         pool.insert(
@@ -779,19 +782,48 @@ mod tests {
         );
         let out = emit_sdk(&pool);
         let container = &out[&PathBuf::from("unions/UnionContainer.java")];
-        assert!(container.contains("private final baml_sdk.unions$.UnionIntOrString value;"));
-        let union = &out[&PathBuf::from("unions$/UnionIntOrString.java")];
-        assert!(union.contains(
-            "public sealed interface UnionIntOrString permits UnionIntOrString.IntValue, UnionIntOrString.StringValue {"
-        ));
+        // Anonymous unions render inline as the runtime's arity family;
+        // no nominal sealed type (and no `unions$` file) is minted.
         assert!(
-            union.contains("record IntValue(java.lang.Long value) implements UnionIntOrString {}")
-        );
-        assert!(
-            union.contains(
-                "record StringValue(java.lang.String value) implements UnionIntOrString {}"
+            container.contains(
+                "private final baml_bridge.Union2<java.lang.Long, java.lang.String> value;"
             )
         );
+        assert!(!out.contains_key(&PathBuf::from("unions$/UnionIntOrString.java")));
+        // registerClass carries a parallel per-field decode-descriptor
+        // array as its fourth argument.
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerClass(\"user.unions.UnionContainer\", \"baml_sdk.unions.UnionContainer\", new java.lang.String[] {\"value\"}, new java.lang.String[] {\"union[int;string]\"});"
+        ));
+    }
+
+    #[test]
+    fn recursive_alias_mints_nominal_union_and_registers() {
+        // A recursive alias keeps its minted nominal sealed type (a
+        // positional generic can't reference itself) and still emits BOTH
+        // union registrations: the structural signature AND the alias's
+        // own FQN.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["aliases"], "RecList");
+        pool.insert(n.clone(), recursive_alias_sym(&n, 0));
+        let out = emit_sdk(&pool);
+
+        let file = &out[&PathBuf::from("aliases/RecList.java")];
+        assert!(file.contains(
+            "public sealed interface RecList permits RecList.IntValue, RecList.RecListListValue {"
+        ));
+        assert!(file.contains("record IntValue(java.lang.Long value) implements RecList {}"));
+
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        // Structural signature registration.
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerUnion(\"int|list<user.aliases.RecList>\", \"baml_sdk.aliases.RecList\","
+        ));
+        // Alias-FQN registration (the engine may send self_type either way).
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerUnion(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\","
+        ));
     }
 
     #[test]

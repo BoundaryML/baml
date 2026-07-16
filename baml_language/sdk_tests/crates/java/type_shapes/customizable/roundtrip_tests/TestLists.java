@@ -4,14 +4,15 @@
 // test_lists.py — same test names, cases, inputs, assertions.
 //
 // java-port note: for the union-shaped elements below, see TestUnions.java
-// for the sealed-interface shape (`UnionIntOrString`) this port assumes.
+// for the generic-family shape (`(int | string)` -> `Union2<Long, String>`,
+// int = Arm0, string = Arm1) this port assumes.
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import baml_bridge.Union2;
 import baml_sdk.lists.Fns;
 import baml_sdk.lists.ListContainer;
-import baml_sdk.unions$.UnionIntOrString;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -43,11 +44,11 @@ class TestLists {
 
     @Test
     void test_round_trip_union_list() {
-        List<UnionIntOrString> xs =
+        List<Union2<Long, String>> xs =
                 List.of(
-                        new UnionIntOrString.IntValue(1L),
-                        new UnionIntOrString.StringValue("two"),
-                        new UnionIntOrString.IntValue(3L));
+                        new Union2.Arm0<Long, String>(1L),
+                        new Union2.Arm1<Long, String>("two"),
+                        new Union2.Arm0<Long, String>(3L));
         assertEquals(xs, Fns.round_trip_union_list(xs));
     }
 
@@ -58,8 +59,8 @@ class TestLists {
                         List.of(1L, 2L),
                         Arrays.asList(null, "z"),
                         List.of(
-                                new UnionIntOrString.IntValue(1L),
-                                new UnionIntOrString.StringValue("x")));
+                                new Union2.Arm0<Long, String>(1L),
+                                new Union2.Arm1<Long, String>("x")));
         assertEquals(c, Fns.round_trip_list_container(c));
     }
 }

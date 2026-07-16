@@ -71,9 +71,32 @@ public final class TypeRegistry {
      * order — the order of the canonical all-args constructor and the field
      * accessor methods. Idempotent: the first registration of {@code bamlFqn}
      * wins (a redundant re-registration is a no-op, preserving cached state).
+     *
+     * <p>Delegates to {@link #registerClass(String, String, String[], String[])}
+     * with no per-field descriptors ({@code null}), so decode of this class's
+     * fields stays wire-driven (the pre-descriptor behavior).
      */
     public static void registerClass(String bamlFqn, String javaClassName, String[] fieldOrder) {
-        ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder);
+        registerClass(bamlFqn, javaClassName, fieldOrder, null);
+    }
+
+    /**
+     * Register a generated class, carrying a parallel {@code fieldDescs} array —
+     * one type-directed decode descriptor per {@code fieldOrder} entry (see
+     * {@code ref-java-codegen-conventions.md} "Type-directed decode descriptors").
+     * When present, decode reifies each field's value through its descriptor
+     * (so e.g. a union-typed field lands on the {@code Union{k}} arm family rather
+     * than the wire-driven fallback); when {@code null}, field decode stays
+     * wire-driven. Idempotent: the first registration of {@code bamlFqn} wins.
+     */
+    public static void registerClass(
+            String bamlFqn, String javaClassName, String[] fieldOrder, String[] fieldDescs) {
+        if (fieldDescs != null && fieldDescs.length != fieldOrder.length) {
+            throw new IllegalArgumentException(
+                    "class field descriptor length mismatch for " + bamlFqn + ": "
+                            + fieldOrder.length + " fields vs " + fieldDescs.length + " descriptors");
+        }
+        ClassEntry entry = new ClassEntry(bamlFqn, javaClassName, fieldOrder, fieldDescs);
         if (classesByFqn.putIfAbsent(bamlFqn, entry) == null) {
             classesByJavaName.putIfAbsent(javaClassName, entry);
         }
@@ -140,6 +163,41 @@ public final class TypeRegistry {
         return entry == null ? null : entry.instantiate(fields);
     }
 
+    /** Whether {@code bamlFqn} resolves to a registered generated class. */
+    public static boolean isClass(String bamlFqn) {
+        return classesByFqn.containsKey(bamlFqn);
+    }
+
+    /**
+     * Whether {@code key} is a registered union — anonymous unions are keyed by
+     * their sorted arm-token signature, named recursive aliases by their FQN.
+     * The type-directed FQN decode path uses this to route an FQN descriptor
+     * that names a recursive alias to {@link #constructUnion}.
+     */
+    public static boolean isUnionKey(String key) {
+        return unionsBySignature.containsKey(key);
+    }
+
+    /**
+     * The declaration-order field names of the registered class {@code bamlFqn},
+     * or {@code null} when it is not a registered class. The parallel of
+     * {@link #classFieldDescs}.
+     */
+    public static String[] classFieldOrder(String bamlFqn) {
+        ClassEntry entry = classesByFqn.get(bamlFqn);
+        return entry == null ? null : entry.fieldOrder;
+    }
+
+    /**
+     * The per-field type-directed decode descriptors of the registered class
+     * {@code bamlFqn} (parallel to {@link #classFieldOrder}), or {@code null} when
+     * it is not registered or was registered without descriptors.
+     */
+    public static String[] classFieldDescs(String bamlFqn) {
+        ClassEntry entry = classesByFqn.get(bamlFqn);
+        return entry == null ? null : entry.fieldDescs;
+    }
+
     /**
      * Resolve the generated enum constant bound to {@code bamlFqn} for a given
      * wire variant name. Returns {@code null} when the FQN is not registered or
@@ -164,6 +222,21 @@ public final class TypeRegistry {
     public static Object constructUnion(String signature, String discriminator, Object inner) {
         UnionEntry entry = unionsBySignature.get(signature);
         return entry == null ? null : entry.instantiate(discriminator, inner);
+    }
+
+    /**
+     * The registered arm token the discriminator selects for {@code key}, or
+     * {@code null} when the key is unregistered / no arm matches. Lets the
+     * decoder reuse the arm token as a type-directed descriptor for the arm's
+     * inner value (recursive aliases: nested items must reify too).
+     */
+    public static String unionArmToken(String key, String discriminator) {
+        UnionEntry entry = unionsBySignature.get(key);
+        if (entry == null) {
+            return null;
+        }
+        int idx = entry.pickArm(discriminator);
+        return idx < 0 ? null : entry.armTokens[idx];
     }
 
     // -- encode (Java object -> FQN + wire payload) --------------------------
@@ -247,6 +320,9 @@ public final class TypeRegistry {
         final String bamlFqn;
         final String javaClassName;
         final String[] fieldOrder;
+        // Per-field type-directed decode descriptors (parallel to fieldOrder), or
+        // null when the class was registered without them (wire-driven decode).
+        final String[] fieldDescs;
 
         // Lazily resolved (decode/encode reflection). Benign races only re-resolve
         // to the same value; volatile publishes the resolved object safely.
@@ -254,10 +330,11 @@ public final class TypeRegistry {
         private volatile Constructor<?> ctor;
         private volatile Method[] accessors;
 
-        ClassEntry(String bamlFqn, String javaClassName, String[] fieldOrder) {
+        ClassEntry(String bamlFqn, String javaClassName, String[] fieldOrder, String[] fieldDescs) {
             this.bamlFqn = bamlFqn;
             this.javaClassName = javaClassName;
             this.fieldOrder = fieldOrder;
+            this.fieldDescs = fieldDescs;
         }
 
         private Class<?> javaClass() {

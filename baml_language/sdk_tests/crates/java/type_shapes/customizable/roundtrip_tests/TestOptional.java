@@ -4,18 +4,19 @@
 // test_optional.py — same test names, cases, inputs, assertions.
 //
 // java-port note: for the union-shaped values below, see TestUnions.java
-// for the sealed-interface shape (`UnionIntOrString`) this port assumes.
-// `T? | string` collapsing to a nullable `UnionIntOrString` matches the
-// conventions doc's "Null-bearing unions collapse to `@Nullable T`" rule.
+// for the generic-family shape (`(int | string)` -> `Union2<Long, String>`,
+// int = Arm0, string = Arm1) this port assumes. `(int | string)?` collapsing
+// to a nullable `Union2<Long, String>` matches the conventions doc's
+// "Null-bearing unions collapse to `@Nullable T`" rule.
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import baml_bridge.Union2;
 import baml_sdk.optional.Fns;
 import baml_sdk.optional.OptionalContainer;
 import baml_sdk.optional.Resume;
-import baml_sdk.unions$.UnionIntOrString;
 import org.junit.jupiter.api.Test;
 
 class TestOptional {
@@ -36,11 +37,11 @@ class TestOptional {
     @Test
     void test_round_trip_optional_union() {
         assertEquals(
-                new UnionIntOrString.IntValue(3L),
-                Fns.round_trip_optional_union(new UnionIntOrString.IntValue(3L)));
+                new Union2.Arm0<Long, String>(3L),
+                Fns.round_trip_optional_union(new Union2.Arm0<Long, String>(3L)));
         assertEquals(
-                new UnionIntOrString.StringValue("s"),
-                Fns.round_trip_optional_union(new UnionIntOrString.StringValue("s")));
+                new Union2.Arm1<Long, String>("s"),
+                Fns.round_trip_optional_union(new Union2.Arm1<Long, String>("s")));
         assertNull(Fns.round_trip_optional_union(null));
     }
 
@@ -54,7 +55,7 @@ class TestOptional {
     void test_round_trip_optional_container() {
         OptionalContainer c =
                 new OptionalContainer(
-                        null, new Resume("x"), new UnionIntOrString.StringValue("y"));
+                        null, new Resume("x"), new Union2.Arm1<Long, String>("y"));
         assertEquals(c, Fns.round_trip_optional_container(c));
     }
 }
