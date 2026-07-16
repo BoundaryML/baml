@@ -84,35 +84,16 @@ export function registerHostOpaque(value) {
     hostValueMap.set(handleKeyToBigint(key), value);
     return key;
 }
-/**
- * Look up a host-registered JS value by key. Returns `undefined` when:
- * - the key is the reserved sentinel `0n` (no real value was registered);
- * - the engine has already released the entry (last `HostValueArc` clone
- *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
- *   removed the entry);
- * - the key was minted by a different Node process (cross-runtime handle).
- *
- * Callers should fall back to a metadata-built exception in those cases.
- *
- * GC/decode race: a release notification and a rehydrating decode can be
- * scheduled on the libuv loop concurrently in principle, but in practice
- * the same `HostValueArc` cannot drop *while* the engine is actively
- * emitting an outbound proto referencing its key — the outbound encode
- * holds a strong handle through proto serialization, and the release tsfn
- * isn't fired until that strong handle drops. By the time the TS decoder
- * runs `tryRehydrateHostValueByKey`, the only way the map entry is gone is if
- * a *prior* outbound completed and the engine has since dropped its last
- * Arc; in that case the user has already observed the original throw at
- * least once, so a second lookup-miss → metadata-fallback is acceptable.
- */
 export function lookupHostValue(key) {
-    return hostValueMap.get(key);
+    if (!hostValueMap.has(key))
+        return { found: false };
+    return { found: true, value: hostValueMap.get(key) };
 }
 /**
  * Convenience for the outbound decoder: if `handle` is a `BamlHandle`
  * tagged `HOST_VALUE_OPAQUE`, look up the originating JS value in
- * the registry and return it. Returns `undefined` for any other handle
- * type, a non-`BamlHandle` argument, or a key that doesn't resolve.
+ * the registry. The discriminated result preserves the difference between a
+ * missing key and a present key whose registered JS value is `undefined`.
  *
  * Used by `decodeCallResult`'s `error` arm to rehydrate the original JS
  * exception when a BAML-thrown `baml.errors.HostCallable` propagates back
@@ -120,9 +101,9 @@ export function lookupHostValue(key) {
  */
 export function tryRehydrateHostValueByKey(handle) {
     if (!(handle instanceof BamlHandle))
-        return undefined;
+        return { found: false };
     if (handle.handleType !== BamlHandleType.HOST_VALUE_OPAQUE)
-        return undefined;
+        return { found: false };
     return lookupHostValue(handleKeyToBigint(handle.key));
 }
 /**

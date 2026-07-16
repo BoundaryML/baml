@@ -12,4 +12,9 @@ describe("generic method boundary", () => {
     const w = make_wrapper_methods("hello");
     expect(w.get_value_or_marker()).toBe("hello");
   });
+
+  it("test_generic_wrapper_get_value", () => {
+    const w = make_wrapper_methods("hello");
+    expect(w.get_value()).toBe("hello");
+  });
 });

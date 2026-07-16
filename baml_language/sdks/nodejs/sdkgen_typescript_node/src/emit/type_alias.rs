@@ -1,7 +1,8 @@
 //! `NodeTypeAlias` — TypeScript type alias.
 //!
-//! Emits `export type Foo = <RHS>`. `recursive` is consumed by
-//! `group_and_sort` (recursive aliases hoist to the front of the leaf).
+//! Emits `export type Foo = <RHS>` plus a same-named runtime descriptor used
+//! by the generic bridge. `recursive` is consumed by `group_and_sort`
+//! (recursive aliases hoist to the front of the leaf).
 
 use baml_codegen_types::{Name, Ty};
 

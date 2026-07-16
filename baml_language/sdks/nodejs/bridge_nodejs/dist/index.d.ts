@@ -6,7 +6,7 @@
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 import { BamlRuntime, BamlCallContext, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
-export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents, } from './native.js';
+export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
@@ -17,7 +17,7 @@ export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 export type { GenericParams } from './define_function.js';
 export { Never, lowerTypeToWireTy } from './wire_ty.js';
-export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
+export type { BamlType, BamlPrimitiveToken, BamlClassCtor, BamlEnumObject, BamlLiteralToken, BamlMediaCtor, BamlTypeAliasToken, } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
@@ -30,7 +30,13 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  * codegen embeds precompiled BAML bytecode.
  */
 export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
+/**
+ * Return the process-global runtime. The native binding raises a napi error
+ * before initialization; expose that setup failure as `BamlPanic(SdkPanic)`
+ * just like the Python bridge's handle-returning boundary.
+ */
+export declare function getRuntime(): BamlRuntime;
+export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, makeSdkPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;
 export declare class FunctionResult {

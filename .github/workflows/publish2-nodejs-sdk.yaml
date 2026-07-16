@@ -1,8 +1,7 @@
 name: BAML SDK Release - Publish Node.js npm
 
-# Reusable publisher for the Node.js SDK. Downloads the per-platform sub-packages
-# assembled by build2-nodejs-sdk.reusable.yaml, wires the umbrella package's
-# optionalDependencies, and publishes the umbrella + sub-packages to npm.
+# Reusable publisher for the Node.js SDK. It publishes only the exact tarballs
+# assembled, installed, and smoke-tested by build2-nodejs-sdk.reusable.yaml.
 # Called by release-baml-language.yml (real releases), which owns the needs/if
 # gating and passes the frozen release plan.
 #
@@ -10,6 +9,9 @@ name: BAML SDK Release - Publish Node.js npm
 # filename, not this reusable file, so the npm trusted-publisher config on each
 # package must name release-baml-language.yml (org/repo casing is exact, no
 # environment). See https://docs.npmjs.com/trusted-publishers.
+# Trusted publishing authenticates each `npm publish`. Native leaf packages are
+# published under an internal tag and integrity-verified before the user-facing
+# umbrella package atomically advances the public channel tag.
 
 on:
   workflow_call:
@@ -32,6 +34,23 @@ defaults:
     shell: bash
 
 jobs:
+  platforms:
+    name: Load release platforms
+    runs-on: ubuntu-latest
+    outputs:
+      verify_matrix: ${{ steps.matrix.outputs.verify_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Validate and export registry verification matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          scripts/baml-release-platforms check
+          echo "verify_matrix=$(scripts/baml-release-platforms matrix node_verify)" >> "$GITHUB_OUTPUT"
+
   publish-npm:
     name: Publish Node.js npm
     runs-on: ubuntu-latest
@@ -43,23 +62,11 @@ jobs:
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-      - name: Download per-platform npm packages
+      - name: Download verified npm package set
         uses: actions/download-artifact@v4
         with:
-          # Each build matrix job uploaded a single npm/<platform>/ sub-package
-          # (stamped package.json + baml_node.<platform>.node); merge-multiple
-          # reconstructs the full npm/ tree under the bridge dir.
-          pattern: nodejs-sdk-*
-          path: baml_language/sdks/nodejs/bridge_nodejs/npm
-          merge-multiple: true
-      - name: Download umbrella dist
-        uses: actions/download-artifact@v4
-        with:
-          # The umbrella ships `files: ["dist"]`; the build job assembled this
-          # platform-agnostic dist/ once (on the linux-gnu target). Restore it here
-          # so `npm publish` of the umbrella includes the built JS/types.
-          name: nodejs-umbrella-dist
-          path: baml_language/sdks/nodejs/bridge_nodejs/dist
+          name: nodejs-verified-packages
+          path: verified-npm
       - name: Setup Node.js
         # Mirror legacy release.yml publish-to-npm: the composite sets registry-url
         # (writes the .npmrc that npm/pnpm OIDC trusted publishing keys off of) and
@@ -89,48 +96,24 @@ jobs:
             echo "::error::OIDC id-token endpoint is NOT available in this job; npm cannot use trusted publishing. Check id-token: write on the calling job."
             exit 1
           fi
-      - name: Stamp release plan
+      - name: Validate verified inputs
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-          # The per-platform package.json files were already stamped in the build
-          # jobs; this stamps the umbrella package.json from the same frozen plan,
-          # so the umbrella version (and the optionalDependencies wired below) match
-          # the downloaded sub-packages.
-          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
-          scripts/baml-language-version stamp --plan release-plan.json
-      - name: Wire umbrella optionalDependencies
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
-        run: |
-          set -euo pipefail
-          echo "Per-platform sub-packages downloaded from the build matrix:"
-          ls -R npm
-          # Wiring optionalDependencies only needs the napi CLI, not the bridge's
-          # full dependency tree, so install just that. Version comes from the
-          # bridge devDependencies so it stays in sync with local builds.
-          napi_version="$(jq -r '.devDependencies["@napi-rs/cli"]' package.json)"
-          npm install -g "@napi-rs/cli@${napi_version}"
-          # pre-publish only updates the umbrella package.json optionalDependencies
-          # (pinned to the stamped version) over the already-assembled npm/ tree.
-          # --skip-optional-publish: we publish each package explicitly below so we
-          #   can attach the channel dist-tag (napi prepublish cannot set one).
-          # --no-gh-release: GitHub releases are handled by publish-github-release.
-          napi pre-publish -t npm --no-gh-release --skip-optional-publish
-      - name: Publish to npm
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+          (cd verified-npm && sha256sum -c SHA256SUMS)
+          version="$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .canonical_version)"
+          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .source_sha)" = "$EXPECTED_SOURCE_SHA"
+          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .channel)" = "$EXPECTED_CHANNEL"
+          scripts/baml-release-platforms check-node-packages verified-npm/packages.json --version "$version"
+      - name: Publish native leaves, then commit the umbrella channel
         env:
           CHANNEL: ${{ inputs.channel }}
+          INTERNAL_TAG: baml-internal
         run: |
           set -euo pipefail
-          # A canary cut is a clean stable SemVer, so it takes the default `latest`
-          # dist-tag; nightlies use the `nightly` tag so `npm install` never
-          # resolves a prerelease by default.
-          if [[ "$CHANNEL" == "canary" ]]; then
-            tag="latest"
-          else
-            tag="$CHANNEL"
-          fi
           # --- OIDC diagnostics: show the auth state npm sees before publishing ---
           echo "=== auth / OIDC environment ==="
           echo "OIDC id-token endpoint set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
@@ -139,36 +122,200 @@ jobs:
           echo "--- npmrc (auth lines, token redacted) ---"
           npm config ls -l 2>/dev/null | grep -iE "registry|_authtoken|provenance|userconfig" | sed -E 's/(_authToken=).*/\1<redacted>/I' || true
           echo "==============================="
-          echo "Publishing @boundaryml/baml-bridge packages with dist-tag '$tag'"
-          # `npm publish --loglevel verbose` makes the OIDC keyless exchange visible
-          # in the log (a request to the id-token endpoint vs. just sending a token).
-          #
-          # Idempotency guard for reruns: the stamped version is frozen in the release
-          # plan, so a rerun after a mid-loop failure re-attempts the same version.
-          # npm rejects republishing an existing version, which under `set -e` would
-          # abort before the not-yet-published packages are reached, leaving a partial
-          # release. Skip any package whose exact version is already on the registry so
-          # a rerun resumes from where it stopped.
           publish_if_needed() {
-            local pkg_dir="$1"
-            local name version existing
-            name="$(jq -r '.name' "$pkg_dir/package.json")"
-            version="$(jq -r '.version' "$pkg_dir/package.json")"
-            # `npm view <name>@<version> version` prints the version when it exists,
-            # prints nothing (exit 0) when that version is absent, and errors (E404)
-            # when the package has never been published. `|| true` keeps that
-            # first-publish 404 from tripping `set -e`; an empty result means
-            # "not published yet -> publish".
-            existing="$(npm view "${name}@${version}" version 2>/dev/null || true)"
-            if [ "$existing" = "$version" ]; then
-              echo "Skipping ${name}@${version} (already published)"
+            local record="$1"
+            local tag="$2"
+            local name version filename expected_integrity existing_integrity
+            name="$(jq -r .name <<<"$record")"
+            version="$(jq -r .version <<<"$record")"
+            filename="$(jq -r .filename <<<"$record")"
+            expected_integrity="$(jq -r .integrity <<<"$record")"
+            existing_integrity="$(npm view "${name}@${version}" dist.integrity 2>/dev/null || true)"
+            if [[ -n "$existing_integrity" ]]; then
+              if [[ "$existing_integrity" != "$expected_integrity" ]]; then
+                echo "::error::${name}@${version} exists with integrity ${existing_integrity}; expected ${expected_integrity}"
+                exit 1
+              fi
+              echo "Skipping ${name}@${version} (identical integrity ${expected_integrity})"
               return 0
             fi
-            echo "Publishing ${name}@${version} (${pkg_dir})"
-            (cd "$pkg_dir" && npm publish --access public --tag "$tag" --loglevel verbose)
+            echo "Publishing ${name}@${version} from verified-npm/${filename} with tag '$tag'"
+            npm publish "verified-npm/${filename}" --access public --tag "$tag" --loglevel verbose
           }
-          for dir in npm/*/; do
-            publish_if_needed "$dir"
-          done
-          # Umbrella package lives in the working directory.
-          publish_if_needed "."
+
+          retry_delay() {
+            local attempt="$1"
+            local delay=$((1 << attempt))
+            if (( delay > 20 )); then delay=20; fi
+            printf '%s\n' "$delay"
+          }
+
+          verify_integrity_with_retry() {
+            local name="$1"
+            local version="$2"
+            local expected="$3"
+            local attempt actual delay
+            for attempt in 1 2 3 4 5 6; do
+              actual="$(npm view "${name}@${version}" dist.integrity 2>/dev/null || true)"
+              if [[ "$actual" == "$expected" ]]; then
+                echo "Verified registry integrity for ${name}@${version}"
+                return 0
+              fi
+              if [[ -n "$actual" ]]; then
+                echo "::error::${name}@${version} has registry integrity ${actual}; expected ${expected}"
+                return 1
+              fi
+              if (( attempt == 6 )); then break; fi
+              delay="$(retry_delay "$attempt")"
+              echo "${name}@${version} is not visible yet; retrying in ${delay}s (${attempt}/6)"
+              sleep "$delay"
+            done
+            echo "::error::${name}@${version} did not become visible with its expected integrity"
+            return 1
+          }
+
+          verify_tag_with_retry() {
+            local name="$1"
+            local tag="$2"
+            local expected_version="$3"
+            local attempt actual delay
+            for attempt in 1 2 3 4 5 6; do
+              actual="$(npm view "$name" dist-tags --json 2>/dev/null | jq -r --arg tag "$tag" '.[$tag] // empty' || true)"
+              if [[ "$actual" == "$expected_version" ]]; then
+                echo "Verified ${name}@${tag} -> ${expected_version}"
+                return 0
+              fi
+              if (( attempt == 6 )); then break; fi
+              delay="$(retry_delay "$attempt")"
+              echo "${name}@${tag} currently resolves to ${actual:-<missing>}; retrying in ${delay}s (${attempt}/6)"
+              sleep "$delay"
+            done
+            echo "::error::${name} dist-tag '${tag}' points to '${actual:-<missing>}', expected '${expected_version}'"
+            echo "::error::Trusted publishing cannot mutate dist-tags independently; investigate before retrying or repairing manually."
+            return 1
+          }
+
+          # Leaf packages are implementation details. Publish them first under a
+          # non-user-facing tag, then prove that every exact version in the
+          # umbrella's optionalDependencies exists with the expected integrity.
+          while IFS= read -r record; do publish_if_needed "$record" "$INTERNAL_TAG"; done < <(
+            jq -c '.[] | select(.name != "@boundaryml/baml-bridge")' verified-npm/packages.json
+          )
+          while IFS= read -r record; do
+            name="$(jq -r .name <<<"$record")"
+            version="$(jq -r .version <<<"$record")"
+            expected="$(jq -r .integrity <<<"$record")"
+            verify_integrity_with_retry "$name" "$version" "$expected"
+          done < <(jq -c '.[] | select(.name != "@boundaryml/baml-bridge")' verified-npm/packages.json)
+
+          if [[ "$CHANNEL" == "canary" ]]; then public_tag="latest"; else public_tag="$CHANNEL"; fi
+          umbrella_record="$(jq -c '.[] | select(.name == "@boundaryml/baml-bridge")' verified-npm/packages.json)"
+          publish_if_needed "$umbrella_record" "$public_tag"
+
+          # A fresh publish attaches the channel tag atomically. On a rerun, verify
+          # both immutable integrity and the already-committed public tag; OIDC
+          # intentionally cannot repair tags independently with `npm dist-tag`.
+          umbrella_name="$(jq -r .name <<<"$umbrella_record")"
+          umbrella_version="$(jq -r .version <<<"$umbrella_record")"
+          umbrella_integrity="$(jq -r .integrity <<<"$umbrella_record")"
+          verify_integrity_with_retry "$umbrella_name" "$umbrella_version" "$umbrella_integrity"
+          verify_tag_with_retry "$umbrella_name" "$public_tag" "$umbrella_version"
+
+  verify-registry:
+    name: Verify npm registry install / ${{ matrix._.target }}
+    needs: [platforms, publish-npm]
+    strategy:
+      fail-fast: false
+      matrix:
+        _: ${{ fromJSON(needs.platforms.outputs.verify_matrix) }}
+    runs-on: ${{ matrix._.host }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        if: ${{ !matrix._.docker_image }}
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install the umbrella alone from npm and run BAML
+        env:
+          EXPECTED_VERSION: ${{ fromJSON(inputs.release_plan_json).canonical_version }}
+          PUBLIC_TAG: ${{ inputs.channel == 'canary' && 'latest' || inputs.channel }}
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_ENGINE_STRICT: "true"
+          NPM_CONFIG_FUND: "false"
+          NPM_CONFIG_FETCH_RETRIES: "5"
+          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "2000"
+          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "10000"
+        run: |
+          set -euo pipefail
+          cold_import_max_ms="$(jq -r .node_budgets.cold_import_max_ms release/platforms.json)"
+          version_calls_max_ms="$(jq -r .node_budgets.version_calls_10000_max_ms release/platforms.json)"
+          exact_spec="@boundaryml/baml-bridge@${EXPECTED_VERSION}"
+
+          if [[ -n '${{ matrix._.docker_image }}' ]]; then
+            mkdir registry-exact
+            cp scripts/verify-node-release-package.mjs registry-exact/
+            docker run --rm -v "$PWD/registry-exact:/app" -w /app \
+              --env PACKAGE_SPEC="$exact_spec" \
+              --env EXPECTED_NATIVE_PACKAGE='@boundaryml/baml-bridge-${{ matrix._.npm_package }}' \
+              --env EXPECTED_VERSION \
+              --env COLD_IMPORT_MAX_MS="$cold_import_max_ms" \
+              --env VERSION_CALLS_MAX_MS="$version_calls_max_ms" \
+              --env NPM_CONFIG_AUDIT=false \
+              --env NPM_CONFIG_ENGINE_STRICT=true \
+              --env NPM_CONFIG_FUND=false \
+              '${{ matrix._.docker_image }}' sh -eu -c '
+                npm init -y >/dev/null
+                attempt=1
+                until npm install --package-lock=false --prefer-online "$PACKAGE_SPEC"; do
+                  rm -rf node_modules package-lock.json
+                  if [ "$attempt" -ge 6 ]; then exit 1; fi
+                  delay=$((1 << attempt))
+                  if [ "$delay" -gt 20 ]; then delay=20; fi
+                  echo "$PACKAGE_SPEC is not installable yet; retrying in ${delay}s (${attempt}/6)"
+                  sleep "$delay"
+                  attempt=$((attempt + 1))
+                done
+                npm ls "$EXPECTED_NATIVE_PACKAGE"
+                node verify-node-release-package.mjs
+              '
+          else
+            install_and_verify() {
+              local spec="$1"
+              local directory="$2"
+              local attempt delay
+              rm -rf "$directory"
+              mkdir "$directory"
+              cp scripts/verify-node-release-package.mjs "$directory/"
+              pushd "$directory" >/dev/null
+              npm init -y >/dev/null
+              for attempt in 1 2 3 4 5 6; do
+                rm -rf node_modules package-lock.json
+                if npm install --package-lock=false --prefer-online "$spec"; then
+                  npm ls '@boundaryml/baml-bridge-${{ matrix._.npm_package }}'
+                  EXPECTED_VERSION="$EXPECTED_VERSION" \
+                    COLD_IMPORT_MAX_MS="$cold_import_max_ms" \
+                    VERSION_CALLS_MAX_MS="$version_calls_max_ms" \
+                    node verify-node-release-package.mjs
+                  popd >/dev/null
+                  return 0
+                fi
+                if (( attempt == 6 )); then break; fi
+                delay=$((1 << attempt))
+                if (( delay > 20 )); then delay=20; fi
+                echo "$spec is not installable yet; retrying in ${delay}s (${attempt}/6)"
+                sleep "$delay"
+              done
+              popd >/dev/null
+              echo "::error::Failed to install $spec after 6 attempts"
+              return 1
+            }
+
+            install_and_verify "$exact_spec" registry-exact
+            if [[ '${{ matrix._.verify_public_tag }}' == 'true' ]]; then
+              install_and_verify "@boundaryml/baml-bridge@${PUBLIC_TAG}" registry-public-tag
+            fi
+          fi

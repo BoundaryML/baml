@@ -156,53 +156,79 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::TypeAlias(name) => render_name_ref(name, ctx),
         Ty::TypeVar(name) => TranslatedType::bare(name.as_str().to_string()),
 
-        Ty::Callable { params, ret } => {
-            let ret_t = translate_ty(ret, ctx);
-            let mut imports = ret_t.imports;
-            // Required params stay positional; optional params are grouped into
-            // a trailing `$opts?: { name?: T | undefined; … } | undefined`
-            // object — the same convention used for *calling* a BAML function
-            // (`leaf::fn_type_sig`), so a callback type and a function call read
-            // the same way. The engine invokes the callback positionally; the
-            // runtime adapter installed by `define_function.ts` (driven by the
-            // per-param metadata `leaf::callback_params_arg` emits) translates
-            // those positional args back into this `$opts` calling convention
-            // before the user's callback runs.
-            let mut positional: Vec<String> = Vec::new();
-            let mut opt_fields: Vec<String> = Vec::new();
-            for (idx, p) in params.iter().enumerate() {
-                let t = translate_ty(&p.ty, ctx);
-                imports.extend(t.imports);
-                let arg_name = p
-                    .name
-                    .as_ref()
-                    .map(|n| n.as_str().to_string())
-                    .unwrap_or_else(|| format!("arg{idx}"));
-                if p.mode == CodegenFunctionParamMode::Optional {
-                    opt_fields.push(format!(
-                        "{}?: {} | undefined",
-                        crate::leaf::option_field_name(&arg_name),
-                        t.expr
-                    ));
-                } else {
-                    positional.push(format!(
-                        "{}: {}",
-                        crate::leaf::safe_param_name(&arg_name),
-                        t.expr
-                    ));
-                }
-            }
-            if !opt_fields.is_empty() {
-                positional.push(format!(
-                    "$opts?: {{ {} }} | undefined",
-                    opt_fields.join("; ")
-                ));
-            }
-            TranslatedType {
-                expr: format!("({}) => {}", positional.join(", "), ret_t.expr),
-                imports,
-            }
+        Ty::Callable { params, ret } => translate_callable(params, ret, ctx, false),
+    }
+}
+
+/// Translate a type used for an argument supplied by the Node host. A direct
+/// callable argument may return either its declared BAML result or a thenable
+/// of that result: the async bridge awaits host callbacks before resuming the
+/// BAML task. Ordinary value positions intentionally keep the exact callable
+/// type, so a BAML function that *returns* a closure is not advertised as an
+/// async host callback.
+pub(crate) fn translate_host_input_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
+    match ty {
+        Ty::Callable { params, ret } => translate_callable(params, ret, ctx, true),
+        _ => translate_ty(ty, ctx),
+    }
+}
+
+fn translate_callable(
+    params: &[baml_codegen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx,
+    accepts_promise_like: bool,
+) -> TranslatedType {
+    let ret_t = translate_ty(ret, ctx);
+    let mut imports = ret_t.imports;
+    // Required params stay positional; optional params are grouped into a
+    // trailing `$opts?: { name?: T | undefined; … } | undefined` object. The
+    // engine invokes callbacks positionally; the bridge dispatch adapter folds
+    // optional values back into this object before calling user code.
+    let mut positional: Vec<String> = Vec::new();
+    let mut opt_fields: Vec<String> = Vec::new();
+    for (idx, p) in params.iter().enumerate() {
+        let t = translate_ty(&p.ty, ctx);
+        imports.extend(t.imports);
+        let arg_name = p
+            .name
+            .as_ref()
+            .map(|n| n.as_str().to_string())
+            .unwrap_or_else(|| format!("arg{idx}"));
+        if p.mode == CodegenFunctionParamMode::Optional {
+            opt_fields.push(format!(
+                "{}?: {} | undefined",
+                crate::leaf::option_field_name(&arg_name),
+                t.expr
+            ));
+        } else {
+            positional.push(format!(
+                "{}: {}",
+                crate::leaf::safe_param_name(&arg_name),
+                t.expr
+            ));
         }
+    }
+    if !opt_fields.is_empty() {
+        positional.push(format!(
+            "$opts?: {{ {} }} | undefined",
+            opt_fields.join("; ")
+        ));
+    }
+
+    let ret_expr = if accepts_promise_like {
+        let direct = if ret_t.expr.contains("=>") {
+            format!("({})", ret_t.expr)
+        } else {
+            ret_t.expr.clone()
+        };
+        format!("{direct} | PromiseLike<{}>", ret_t.expr)
+    } else {
+        ret_t.expr
+    };
+    TranslatedType {
+        expr: format!("({}) => {ret_expr}", positional.join(", ")),
+        imports,
     }
 }
 
@@ -782,5 +808,23 @@ mod tests {
         for case in &cases {
             assert_ty(case);
         }
+    }
+
+    #[test]
+    fn host_input_callable_accepts_promise_like_only_at_the_call_boundary() {
+        let callable = Ty::Callable {
+            params: vec![callable_param(Ty::Int)],
+            ret: boxed(Ty::Union(vec![Ty::String, Ty::Null])),
+        };
+        let context = ctx(&[]);
+
+        assert_eq!(
+            translate_ty(&callable, &context).expr,
+            "(arg0: number) => string | null"
+        );
+        assert_eq!(
+            translate_host_input_ty(&callable, &context).expr,
+            "(arg0: number) => string | null | PromiseLike<string | null>"
+        );
     }
 }

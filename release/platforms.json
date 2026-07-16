@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "node_support": {
+    "minimum_major": 22,
+    "module_format": "esm"
+  },
+  "platforms": [
+    {
+      "target": "aarch64-apple-darwin",
+      "npm_package": "darwin-arm64",
+      "node_build": { "host": "macos-14" },
+      "node_verify": { "host": "macos-14" },
+      "python_build": { "runs_on": "macos-latest", "python_version": "3.10" },
+      "toolchain": { "os": "macos-14" },
+      "wrapper": { "os": "macos-14" }
+    },
+    {
+      "target": "x86_64-apple-darwin",
+      "npm_package": "darwin-x64",
+      "node_build": { "host": "macos-14" },
+      "node_verify": { "host": "macos-15-intel" },
+      "python_build": { "runs_on": "macos-latest", "python_version": "3.10" },
+      "toolchain": { "os": "macos-15-intel" },
+      "wrapper": { "os": "macos-15-intel" }
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "npm_package": "linux-arm64-gnu",
+      "node_build": {
+        "host": "ubuntu-24.04-arm",
+        "container": "ghcr.io/rust-cross/manylinux_2_28-cross:aarch64",
+        "before": "echo \"CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8\" >> \"$GITHUB_ENV\""
+      },
+      "node_verify": { "host": "ubuntu-24.04-arm" },
+      "python_build": { "runs_on": "ubuntu-latest", "manylinux": "2_24", "python_version": "3.10" },
+      "toolchain": { "os": "ubuntu-24.04-arm" },
+      "wrapper": { "os": "ubuntu-24.04-arm" }
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "npm_package": "linux-x64-gnu",
+      "node_build": { "host": "ubuntu-22.04", "build_umbrella": true },
+      "node_verify": { "host": "ubuntu-22.04", "verify_public_tag": true },
+      "python_build": { "runs_on": "ubuntu-latest", "manylinux": "2_17", "python_version": "3.10" },
+      "toolchain": { "os": "ubuntu-latest" },
+      "wrapper": { "os": "ubuntu-latest" }
+    },
+    {
+      "target": "aarch64-unknown-linux-musl",
+      "npm_package": "linux-arm64-musl",
+      "node_build": {
+        "host": "ubuntu-22.04",
+        "cross_toolchain_sha256": "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38",
+        "before": "archive=aarch64-linux-musl-cross.tgz\nexpected_sha256=c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38\ncurl --fail --location --output \"$archive\" https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz\necho \"$expected_sha256  $archive\" | sha256sum --check --strict\ntar -xzf \"$archive\"\necho \"$PWD/aarch64-linux-musl-cross/bin\" >> \"$GITHUB_PATH\"\ncat >>\"$GITHUB_ENV\" <<EOF\nRUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable\nEOF",
+        "napi_args": "--use-napi-cross"
+      },
+      "node_verify": { "host": "ubuntu-24.04-arm", "docker_image": "node:22-alpine" },
+      "python_build": { "runs_on": "ubuntu-latest", "manylinux": "musllinux_1_1", "python_version": "3.10" },
+      "toolchain": {
+        "os": "ubuntu-24.04-arm",
+        "before": "sudo apt-get update\nsudo apt-get install -y musl-tools\necho \"CC_aarch64_unknown_linux_musl=musl-gcc\" >> \"$GITHUB_ENV\"\necho \"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc\" >> \"$GITHUB_ENV\""
+      },
+      "wrapper": {
+        "os": "ubuntu-24.04-arm",
+        "before": "sudo apt-get update\nsudo apt-get install -y musl-tools\necho \"CC_aarch64_unknown_linux_musl=musl-gcc\" >> \"$GITHUB_ENV\"\necho \"CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc\" >> \"$GITHUB_ENV\""
+      }
+    },
+    {
+      "target": "x86_64-unknown-linux-musl",
+      "npm_package": "linux-x64-musl",
+      "node_build": {
+        "host": "ubuntu-22.04",
+        "before": "sudo apt-get update\nsudo apt-get install -y musl-tools\ncat >>\"$GITHUB_ENV\" <<EOF\nCC_x86_64_unknown_linux_musl=musl-gcc\nRUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable\nEOF"
+      },
+      "node_verify": { "host": "ubuntu-22.04", "docker_image": "node:22-alpine" },
+      "python_build": { "runs_on": "ubuntu-latest", "manylinux": "musllinux_1_1", "python_version": "3.10" },
+      "toolchain": {
+        "os": "ubuntu-latest",
+        "before": "sudo apt-get update\nsudo apt-get install -y musl-tools\necho \"CC_x86_64_unknown_linux_musl=musl-gcc\" >> \"$GITHUB_ENV\"\necho \"CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc\" >> \"$GITHUB_ENV\""
+      },
+      "wrapper": {
+        "os": "ubuntu-latest",
+        "before": "sudo apt-get update\nsudo apt-get install -y musl-tools\necho \"CC_x86_64_unknown_linux_musl=musl-gcc\" >> \"$GITHUB_ENV\"\necho \"CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc\" >> \"$GITHUB_ENV\""
+      }
+    },
+    {
+      "target": "aarch64-pc-windows-msvc",
+      "npm_package": "win32-arm64-msvc",
+      "node_build": { "host": "windows-11-arm" },
+      "node_verify": { "host": "windows-11-arm" },
+      "python_build": { "runs_on": "windows-11-arm", "architecture": "arm64", "python_version": "3.11", "bootstrap_rustup": true },
+      "toolchain": { "os": "windows-latest" },
+      "wrapper": { "os": "windows-latest" }
+    },
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "npm_package": "win32-x64-msvc",
+      "node_build": { "host": "windows-latest" },
+      "node_verify": { "host": "windows-latest" },
+      "python_build": { "runs_on": "windows-latest", "python_version": "3.10" },
+      "toolchain": { "os": "windows-latest" },
+      "wrapper": { "os": "windows-latest" }
+    }
+  ],
+  "node_budgets": {
+    "umbrella_max_unpacked_bytes": 3000000,
+    "native_leaf_max_unpacked_bytes": 25000000,
+    "cold_import_max_ms": 5000,
+    "version_calls_10000_max_ms": 2000
+  }
+}

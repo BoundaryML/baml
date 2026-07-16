@@ -29,7 +29,7 @@ const T = 30_000;
 
 describe("streaming e2e — string-typed T", () => {
   it(
-    "next() yields >= 10 partials and drains to StreamFinished",
+    "test_stream",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
       const stream = lorem.stream_e2e_extract$stream("ignored-by-replay-server");
@@ -47,7 +47,7 @@ describe("streaming e2e — string-typed T", () => {
   );
 
   it(
-    "async: nextAsync() yields >= 10 partials",
+    "test_stream_async",
     { timeout: T },
     withReplayServer("replay_extract_string", async () => {
       const stream = await lorem.stream_e2e_extract$stream_async("ignored-by-replay-server");
@@ -65,7 +65,7 @@ describe("streaming e2e — string-typed T", () => {
   );
 
   it(
-    "BAML-driven collect keeps the S | StreamFinished union engine-side",
+    "test_stream_collect_in_baml",
     { timeout: T },
     withReplayServer("replay_extract_string", () => {
       const result = lorem.stream_e2e_collect("ignored-by-replay-server");
@@ -81,7 +81,7 @@ describe("streaming e2e — string-typed T", () => {
 
 describe("streaming e2e — class-typed T", () => {
   it(
-    "next() yields >= 10 doc partials; final() is a typed StreamingDoc",
+    "test_stream_doc",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
       const stream = lorem.stream_e2e_extract_doc$stream("ignored-by-replay-server");
@@ -99,7 +99,7 @@ describe("streaming e2e — class-typed T", () => {
   );
 
   it(
-    "async: class-typed nextAsync() yields >= 10 partials",
+    "test_stream_doc_async",
     { timeout: T },
     withReplayServer("replay_extract_doc", async () => {
       const stream = await lorem.stream_e2e_extract_doc$stream_async("ignored-by-replay-server");
@@ -117,7 +117,7 @@ describe("streaming e2e — class-typed T", () => {
   );
 
   it(
-    "BAML-driven collect returns the final doc",
+    "test_stream_doc_collect_in_baml",
     { timeout: T },
     withReplayServer("replay_extract_doc", () => {
       const result = lorem.stream_e2e_collect_doc("ignored-by-replay-server");

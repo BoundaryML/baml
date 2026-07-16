@@ -149,25 +149,22 @@ sdk_tests/
 ### Soft-fail build.rs
 
 `uv` / `pnpm` aren't required to *build* the workspace -- only to
-*test* the SDK targets. Both targets' `build.rs` only does codegen
-+ scaffold emit (no `uv` / `pnpm`), so the soft-fail set is just
-`to_source_code` panics and codegen file write errors recorded to
-`$OUT_DIR/build_diagnostics.txt` (build.rs exits 0 instead of
-aborting). `uv sync` / `pnpm install` failures hard-fail in the
-respective `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
+*test* the SDK targets. Both targets' `build.rs` only does codegen and
+scaffold emission (no `uv` / `pnpm`). Python records emitter/write
+failures in `$OUT_DIR/build_diagnostics.txt`; TypeScript/Node runs the
+landed emitter directly, so an emitter panic aborts the build while
+file-write errors are recorded. `uv sync` / `pnpm install` failures
+hard-fail in the respective `setup.sh` instead. The
+`sdk_test_harness_runner::build_diagnostics!` macro expands
 to a `mod build_diagnostics { #[test] fn no_build_failures }` that
 reads the file and fails with the records. `sdk_test_harness_setup`'s
 scaffold emitter stamps one invocation per generator scaffold --
-`::sdk_test_harness_runner::build_diagnostics!()` for python and
-`::sdk_test_harness_runner::build_diagnostics!(ignore = "...")` for
-typescript_node (while `sdkgen_typescript_node` is a stub).
+`::sdk_test_harness_runner::build_diagnostics!()` for both active targets.
 
 Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm`
-installed; `cargo nextest run` surfaces the same failures it would
-have hit before, just routed through a test rather than build.rs. The
-`typescript_node` crate `#[ignore]`s `build_diagnostics` plus
-every per-fixture test until `sdkgen_typescript_node` is real -- see
-`IGNORE_REASON` in `sdk_tests/harness_setup/src/typescript_node.rs`.
+installed; `cargo nextest run` surfaces environment/setup failures and runs
+the active TypeScript/Node `esm_output`, `tsc`, `vitest`, and package-shape
+checks for every selected fixture.
 
 ### setup.sh guard (`setup_guard::ran`)
 
@@ -203,9 +200,7 @@ a file would persist across runs and false-pass after the `.so` /
 prove "under nextest", not "this script ran". Under plain
 `cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
 the breadcrumb; the generated fixture tests are still free to fail if
-the local setup is missing or stale. typescript_node's guard is
-`#[ignore]`d alongside its other tests while `sdkgen_typescript_node` is a
-stub.
+the local setup is missing or stale.
 
 Hard panics are retained for repo/author bugs: missing `fixtures/`
 directory, fixtures with zero `.baml` files, `.baml` files with

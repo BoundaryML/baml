@@ -17,6 +17,17 @@ function ThrowMyError() -> int throws MyError {
   throw MyError { code: 42, detail: "boom" }
 }
 
+// Node maps BAML `int` to JavaScript `number`, whose exact integer range ends
+// at 2^53 - 1. These two fixtures ensure a representation failure nested in a
+// thrown value is surfaced explicitly rather than silently dropping `.value`.
+function ThrowUnsafeIntError() -> int throws MyError {
+  throw MyError { code: 9007199254740993, detail: "unsafe integer" }
+}
+
+function PanicWithUnsafeInt() -> int {
+  9007199254740993 / 0
+}
+
 // stdlib error arm: bad input throws `baml.json.JsonParseError`.
 function ParseJson(s: string) -> baml.json.json throws baml.json.JsonParseError {
   baml.json.parse(s)

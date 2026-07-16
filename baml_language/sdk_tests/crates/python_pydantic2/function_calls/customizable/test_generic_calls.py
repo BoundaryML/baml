@@ -13,9 +13,12 @@ depend on the not-yet-landed inbound-inference phase — is intentionally not
 covered here yet.)
 """
 
+import typing
+
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_sdk.baml.media import Image
 from baml_sdk.generic_tests import (
     StringIntPair,
     GenericPair,
@@ -41,6 +44,13 @@ from baml_sdk.generic_tests import (
     make_int_container,
     make_nested_box,
     make_int_str_bool_triple,
+    SomeEnum,
+    RecursiveInts,
+    make_union_box,
+    make_enum_box,
+    make_literal_box,
+    make_image_box,
+    make_alias_box,
 )
 
 
@@ -387,3 +397,46 @@ def test_make_int_str_bool_triple_reified():
     assert t.first == 1
     assert t.second == ["a", "b"]
     assert t.third == {"k": True}
+
+
+def test_make_union_box_reified():
+    box = make_union_box()
+    (arg,) = _type_args(box)
+    assert typing.get_origin(arg) is typing.Union
+    assert set(typing.get_args(arg)) == {int, str}
+    assert box.value == 7
+    assert box.get() == "int | string"
+
+
+def test_make_enum_box_reified():
+    box = make_enum_box()
+    assert _type_args(box) == (SomeEnum,)
+    assert box.value is SomeEnum.VARIANT
+    assert "SomeEnum" in box.get()
+
+
+def test_make_literal_box_reified():
+    box = make_literal_box()
+    (arg,) = _type_args(box)
+    assert typing.get_origin(arg) is typing.Literal
+    assert typing.get_args(arg) == ("fixed",)
+    assert box.value == "fixed"
+    # The host retains Literal["fixed"] in returned metadata. When that token
+    # is sent back as a TypeVar binding, the shared wire decoder intentionally
+    # widens literal bindings to their safe primitive base type.
+    assert box.get() == "string"
+
+
+def test_make_image_box_reified():
+    box = make_image_box(url="https://example.com/image.png")
+    assert _type_args(box) == (Image,)
+    assert isinstance(box.value, Image)
+    assert box.value.url() == "https://example.com/image.png"
+    assert box.get() == "image"
+
+
+def test_make_alias_box_reified():
+    box = make_alias_box()
+    assert _type_args(box) == (RecursiveInts,)
+    assert box.value == [1, [2, 3]]
+    assert "RecursiveInts" in box.get()

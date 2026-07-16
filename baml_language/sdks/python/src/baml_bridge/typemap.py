@@ -9,7 +9,7 @@ getattr`, then memoizes.
 """
 from __future__ import annotations
 import importlib
-from typing import Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type
 
 from .errors import BamlError
 
@@ -78,7 +78,11 @@ class BamlTypeMap:
             m._reverse.setdefault((mp, attr), fqn)
         for fqn, (mp, attr) in enums.items():
             m._reverse.setdefault((mp, attr), fqn)
-        # Type aliases generally don't appear as `type(value)`; skip.
+        # A generated TypeAliasType is itself a runtime object and may be used
+        # as an explicit generic binding (or recovered from returned generic
+        # metadata), so keep its module/attribute identity in the reverse map.
+        for fqn, (mp, attr) in type_aliases.items():
+            m._reverse.setdefault((mp, attr), fqn)
         return m
 
     # — lookup (lazy fallback) —
@@ -142,13 +146,23 @@ class BamlTypeMap:
 
     # — reverse lookup (replaces _baml_type_name ClassVar pathway) —
 
-    def py_type_to_baml_type(self, cls: type) -> str:
-        """Reverse lookup: Python class → engine FQN. Walks the MRO so
-        user subclasses of generated classes resolve to the parent's
-        FQN (matching today's ClassVar inheritance). Returns `""` for
-        any class not in the typemap — informational-only field on the
-        wire, same as 25b's `_derive_baml_fqn` fallback."""
-        for c in cls.__mro__:
+    def py_type_to_baml_type(self, py_type: Any) -> str:
+        """Reverse lookup: Python runtime type descriptor → engine FQN.
+
+        Classes walk the MRO so user subclasses of generated classes resolve to
+        the parent's FQN. Non-class descriptors (notably TypeAliasType) use
+        their module/name identity directly. Returns `""` when unmapped.
+        """
+        module = getattr(py_type, "__module__", None)
+        name = getattr(py_type, "__qualname__", None) or getattr(
+            py_type, "__name__", None
+        )
+        if module and name:
+            direct = self._reverse.get((module, name))
+            if direct is not None:
+                return direct
+
+        for c in getattr(py_type, "__mro__", ()):
             fqn = self._reverse.get((c.__module__, c.__qualname__))
             if fqn is not None:
                 return fqn

@@ -13,9 +13,11 @@ from baml_sdk.primitives import (
     return_float,
     return_string,
     return_bool,
+    return_bigint,
     return_null,
     round_trip_uint8_array,
     round_trip_int,
+    round_trip_bigint,
     round_trip_float,
     round_trip_string,
     round_trip_bool,
@@ -44,8 +46,24 @@ def test_return_null():
     assert return_null() is None
 
 
+def test_return_bigint():
+    assert return_bigint() == 9223372036854775808
+
+
 def test_round_trip_int():
     assert round_trip_int(x=7) == 7
+
+
+def test_round_trip_bigint_zero():
+    assert round_trip_bigint(x=0) == 0
+
+
+def test_round_trip_bigint_negative():
+    assert round_trip_bigint(x=-9223372036854775809) == -9223372036854775809
+
+
+def test_round_trip_bigint_larger_than_i64():
+    assert round_trip_bigint(x=2**100) == 2**100
 
 
 def test_round_trip_float():
@@ -60,6 +78,13 @@ def test_round_trip_float_accepts_int():
     result = round_trip_float(x=7)
     assert isinstance(result, float)
     assert result == 7.0
+
+
+def test_round_trip_float_accepts_large_integral_value():
+    value = 2**54
+    result = round_trip_float(x=value)
+    assert isinstance(result, float)
+    assert result == float(value)
 
 
 def test_round_trip_string():
@@ -86,6 +111,7 @@ def test_round_trip_primitives():
         bool_field=True,
         null_field=None,
         uint8array_field=b"ab",
+        bigint_field=2**100,
     )
     assert round_trip_primitives(p=p) == p
 
@@ -101,6 +127,7 @@ def test_round_trip_primitives_float_field_accepts_int():
         bool_field=True,
         null_field=None,
         uint8array_field=b"ab",
+        bigint_field=2**100,
     )
     assert isinstance(p.float_field, float)
     result = round_trip_primitives(p=p)

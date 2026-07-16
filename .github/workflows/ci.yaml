@@ -82,15 +82,19 @@ jobs:
             ':scripts/baml-language-version' \
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
+            ':scripts/baml-release-platforms' \
+            ':scripts/verify-node-release-package.mjs' \
             ':scripts/baml-package-manager-artifacts' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
             ':packaging/aur/**' \
             ':tools/pkg_boundaryml_com/**' \
+            ':release/platforms.json' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/publish2-nodejs-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \

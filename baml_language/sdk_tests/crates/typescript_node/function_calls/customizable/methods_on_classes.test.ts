@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { Greeter } from "./baml_sdk/methods_on_classes/index.js";
 
 describe("function_calls — static + instance method bindings", () => {
-  it("exposes sync + async bindings for both flavors", () => {
+  it("test_method_bindings_exist", () => {
     // Static bindings hang off the class.
     expect(typeof Greeter.create).toBe("function");
     expect(typeof Greeter.create_async).toBe("function");
@@ -25,27 +25,37 @@ describe("function_calls — static + instance method bindings", () => {
 });
 
 describe("function_calls — static method round-trip", () => {
-  it("create() constructs a Greeter (async + sync)", async () => {
+  it("test_static_create_round_trips", () => {
+    const g = Greeter.create("grace");
+    expect(g).toBeInstanceOf(Greeter);
+    expect(g.name).toBe("grace");
+  });
+
+  it("test_static_create_async_round_trips", async () => {
     const g = await Greeter.create_async("ada");
     expect(g).toBeInstanceOf(Greeter);
     expect(g.name).toBe("ada");
-
-    const g2 = Greeter.create("grace");
-    expect(g2).toBeInstanceOf(Greeter);
-    expect(g2.name).toBe("grace");
   });
 });
 
 describe("function_calls — instance method round-trip", () => {
-  it("who() returns a field off self (async + sync)", async () => {
-    const g = await Greeter.create_async("hopper");
-    expect(await g.who_async()).toBe("hopper");
+  it("test_instance_who_round_trips", () => {
+    const g = Greeter.create("hopper");
     expect(g.who()).toBe("hopper");
   });
 
-  it("greet(arg) echoes a non-self argument (async + sync)", async () => {
-    const g = await Greeter.create_async("lovelace");
-    expect(await g.greet_async("hi")).toBe("hi");
+  it("test_instance_who_async_round_trips", async () => {
+    const g = await Greeter.create_async("hopper");
+    await expect(g.who_async()).resolves.toBe("hopper");
+  });
+
+  it("test_instance_greet_with_arg_round_trips", () => {
+    const g = Greeter.create("lovelace");
     expect(g.greet("hi")).toBe("hi");
+  });
+
+  it("test_instance_greet_async_with_arg_round_trips", async () => {
+    const g = await Greeter.create_async("lovelace");
+    await expect(g.greet_async("hi")).resolves.toBe("hi");
   });
 });

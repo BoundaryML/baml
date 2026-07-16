@@ -27,6 +27,22 @@ function return_pdf(url: string, mime: string?) -> pdf {
   pdf.from_url(url, mime)
 }
 
+function return_image_base64(base64: string, mime: string?) -> image {
+  image.from_base64(base64, mime)
+}
+
+function return_audio_base64(base64: string, mime: string?) -> audio {
+  audio.from_base64(base64, mime)
+}
+
+function return_video_base64(base64: string, mime: string?) -> video {
+  video.from_base64(base64, mime)
+}
+
+function return_pdf_base64(base64: string, mime: string?) -> pdf {
+  pdf.from_base64(base64, mime)
+}
+
 function round_trip_image(x: image) -> image {
   x
 }

@@ -21,7 +21,7 @@ describe("function_calls — stdlib entry points", () => {
   // (FunctionKind::Native). Calling it as an entry point should run the native
   // and return a positive millisecond timestamp, not reject with
   // `NotInvokableAsEntry`.
-  it("native baml.sys.now_ms is callable as an entry point", async () => {
+  it("test_native_now_ms_callable_as_entry_point", async () => {
     expect(now_ms()).toBeGreaterThan(0);
     expect(await now_ms_async()).toBeGreaterThan(0);
   });
@@ -30,12 +30,12 @@ describe("function_calls — stdlib entry points", () => {
   // (FunctionKind::SysOp). Calling it as an entry point should run the
   // filesystem sysop and return a bool. `.` is the generated fixture
   // directory on the test host.
-  it("sysop baml.fs.exists is callable as an entry point", async () => {
+  it("test_sysop_fs_exists_callable_as_entry_point", async () => {
     expect(exists(".")).toBe(true);
     expect(await exists_async(".")).toBe(true);
   });
 
-  it("compiler intrinsics are not emitted as entry points", () => {
+  it("test_compiler_intrinsics_are_not_emitted_as_entry_points", () => {
     const forbidden: Array<[string, string]> = [
       ["vendor/log/index.ts", "\"log.info\""],
       ["vendor/log/index.ts", "\"log.debug\""],

@@ -20,8 +20,10 @@
 // `undefined` / `null` (an absent binding) lowers to the unknown/top type —
 // the engine treats it as a wildcard, matching Python's `_fill_wire_ty(None)`.
 import { baml_bridge } from './proto/baml_cffi.js';
+import { BamlAudio, BamlImage, BamlPdf, BamlVideo } from './native.js';
 import { getTypeMap } from './typemap.js';
 const TyPrimitiveKind = baml_bridge.cffi.v1.BamlTyPrimitiveKind;
+const TyMediaKind = baml_bridge.cffi.v1.BamlTyMediaKind;
 /**
  * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
  * to `never`, mirroring Python's `_types={"T": Never}`.
@@ -35,6 +37,18 @@ const PRIMITIVE_KIND = {
     null: TyPrimitiveKind.BAML_TY_PRIMITIVE_NULL,
     bytes: TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES,
     bigint: TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT,
+};
+const MEDIA_CTOR_KIND = new Map([
+    [BamlImage, TyMediaKind.BAML_TY_MEDIA_KIND_IMAGE],
+    [BamlAudio, TyMediaKind.BAML_TY_MEDIA_KIND_AUDIO],
+    [BamlVideo, TyMediaKind.BAML_TY_MEDIA_KIND_VIDEO],
+    [BamlPdf, TyMediaKind.BAML_TY_MEDIA_KIND_PDF],
+]);
+const TY_MEDIA_CTOR = {
+    [TyMediaKind.BAML_TY_MEDIA_KIND_IMAGE]: BamlImage,
+    [TyMediaKind.BAML_TY_MEDIA_KIND_AUDIO]: BamlAudio,
+    [TyMediaKind.BAML_TY_MEDIA_KIND_VIDEO]: BamlVideo,
+    [TyMediaKind.BAML_TY_MEDIA_KIND_PDF]: BamlPdf,
 };
 /**
  * Lower a {@link BamlType} token to a wire `BamlTy` (an `IBamlTy` plain object the
@@ -59,8 +73,14 @@ export function lowerTypeToWireTy(token) {
         }
         return { unknown: {} };
     }
-    // A bare class constructor → that class, no concrete args.
+    // Media constructors are functions too, so dispatch before the generic
+    // codegen-class path.
     if (typeof token === 'function') {
+        const mediaKind = MEDIA_CTOR_KIND.get(token);
+        if (mediaKind !== undefined) {
+            return { media: { kind: mediaKind } };
+        }
+        // A bare class constructor → that class, no concrete args.
         return classWireTy(token, []);
     }
     if (typeof token === 'object') {
@@ -80,6 +100,29 @@ export function lowerTypeToWireTy(token) {
         if ('union' in token) {
             return { union: { options: token.union.map(lowerTypeToWireTy) } };
         }
+        if ('enum' in token) {
+            const fqn = getTypeMap().jsTypeToBamlType(token.enum);
+            return fqn ? { enum: { name: fqn } } : { unknown: {} };
+        }
+        if ('literal' in token) {
+            return literalWireTy(token.literal);
+        }
+        if ('typeAlias' in token) {
+            if (!token.typeAlias)
+                return { unknown: {} };
+            try {
+                getTypeMap().getTypeAlias(token.typeAlias);
+            }
+            catch {
+                return { unknown: {} };
+            }
+            return {
+                typeAlias: {
+                    name: token.typeAlias,
+                    typeArgs: (token.args ?? []).map(lowerTypeToWireTy),
+                },
+            };
+        }
     }
     // Unrecognized: leave as unknown/top (binds nothing).
     return { unknown: {} };
@@ -93,14 +136,81 @@ const TY_PRIMITIVE_TOKEN = {
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES]: 'bytes',
     [TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT]: 'bigint',
 };
+const MIN_INT64 = -(1n << 63n);
+const MAX_INT64 = (1n << 63n) - 1n;
+function literalWireTy(token) {
+    switch (token.kind) {
+        case 'string':
+            return { literal: { stringValue: token.value } };
+        case 'int': {
+            if (typeof token.value === 'number') {
+                return Number.isSafeInteger(token.value)
+                    ? { literal: { intValue: token.value } }
+                    : { unknown: {} };
+            }
+            if (token.value < MIN_INT64 || token.value > MAX_INT64)
+                return { unknown: {} };
+            // The generated interface advertises number | Long, while `fromObject`
+            // also accepts decimal strings. Normalize to an exact signed Long while
+            // retaining the intValue discriminator.
+            const literal = baml_bridge.cffi.v1.BamlTyLiteral.fromObject({
+                intValue: token.value.toString(),
+            });
+            return { literal };
+        }
+        case 'bool':
+            return { literal: { boolValue: token.value } };
+        case 'bigint':
+            return { literal: { bigintValue: token.value.toString(10) } };
+        case 'float':
+            return { literal: { floatValue: token.value } };
+    }
+}
+function outboundLiteral(literal) {
+    const oneof = literal.literal;
+    if (oneof === 'stringValue' || (oneof === undefined && literal.stringValue != null)) {
+        return { kind: 'string', value: literal.stringValue ?? '' };
+    }
+    if (oneof === 'intValue' || (oneof === undefined && literal.intValue != null)) {
+        const value = Number(literal.intValue);
+        if (Number.isSafeInteger(value))
+            return { kind: 'int', value };
+        try {
+            return { kind: 'int', value: BigInt(String(literal.intValue)) };
+        }
+        catch {
+            return undefined;
+        }
+    }
+    if (oneof === 'boolValue' || (oneof === undefined && literal.boolValue != null)) {
+        return { kind: 'bool', value: literal.boolValue ?? false };
+    }
+    if (oneof === 'bigintValue' || (oneof === undefined && literal.bigintValue != null)) {
+        try {
+            return { kind: 'bigint', value: BigInt(literal.bigintValue ?? '') };
+        }
+        catch {
+            return undefined;
+        }
+    }
+    if (oneof === 'floatValue' || (oneof === undefined && literal.floatValue != null)) {
+        return { kind: 'float', value: literal.floatValue ?? '' };
+    }
+    return undefined;
+}
+function isTypeAliasToken(value) {
+    return typeof value === 'object'
+        && value !== null
+        && 'typeAlias' in value
+        && typeof value.typeAlias === 'string';
+}
 /**
  * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
  * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
  * instance's `$types` field on decode. Mirrors the engine's
  * `ty_encode::runtime_ty_to_proto_ty` and Python's `_ty_to_python_type`.
- * Positions with no concrete JS binding (a structural union, an enum, a type
- * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
- * wildcard.
+ * Positions with no concrete JS binding (a type variable or opaque/runtime-only
+ * type) decode to `undefined`, i.e. an unbound wildcard.
  */
 export function outboundTyToBamlType(ty) {
     if (!ty)
@@ -115,6 +225,9 @@ export function outboundTyToBamlType(ty) {
     }
     if (ty.optional)
         return { optional: outboundTyToBamlType(ty.optional.inner) };
+    if (ty.union) {
+        return { union: (ty.union.options ?? []).map(outboundTyToBamlType) };
+    }
     if (ty.classTy) {
         const fqn = ty.classTy.name ?? '';
         const args = (ty.classTy.typeArgs ?? []).map((a) => outboundTyToBamlType(a));
@@ -129,8 +242,42 @@ export function outboundTyToBamlType(ty) {
             return undefined;
         return args.length ? { class: ctor, args } : ctor;
     }
-    // union / enum / literal / media / type_var / unknown / any other →
-    // unbound wildcard (a structural union is unbound for `class<args>`).
+    if (ty.enum) {
+        const fqn = ty.enum.name ?? '';
+        try {
+            const enumObject = getTypeMap().getEnum(fqn);
+            return typeof enumObject === 'object' && enumObject !== null
+                ? { enum: enumObject }
+                : undefined;
+        }
+        catch {
+            return undefined;
+        }
+    }
+    if (ty.literal) {
+        const literal = outboundLiteral(ty.literal);
+        return literal === undefined ? undefined : { literal };
+    }
+    if (ty.typeAlias) {
+        const fqn = ty.typeAlias.name ?? '';
+        const args = (ty.typeAlias.typeArgs ?? []).map(outboundTyToBamlType);
+        try {
+            const alias = getTypeMap().getTypeAlias(fqn);
+            if (!isTypeAliasToken(alias))
+                return undefined;
+            return args.length ? { ...alias, args } : alias;
+        }
+        catch {
+            return undefined;
+        }
+    }
+    if (ty.media) {
+        return TY_MEDIA_CTOR[ty.media.kind ?? -1] ?? undefined;
+    }
+    if (ty.never)
+        return Never;
+    // type_var / interface / function / opaque/runtime-only / unknown / any
+    // other unrepresentable type → unbound wildcard.
     return undefined;
 }
 /** Build a `class_ty` wire `Ty` for a codegen class constructor and its

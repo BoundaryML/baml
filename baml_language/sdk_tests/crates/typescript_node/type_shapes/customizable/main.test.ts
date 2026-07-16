@@ -30,11 +30,11 @@ import * as lorem from "./baml_sdk/lorem/index.js";
 import * as a from "./baml_sdk/a/index.js";
 
 describe("type_shapes — namespace imports", () => {
-  it("baml_sdk root imports cleanly", () => {
+  it("test_root_imports_cleanly", () => {
     expect(bamlSdk).toBeDefined();
   });
 
-  it("every namespace module imports cleanly", () => {
+  it("test_all_namespaces_reachable", () => {
     for (const mod of [
       primitives,
       media,
@@ -60,15 +60,15 @@ describe("type_shapes — namespace imports", () => {
 });
 
 describe("type_shapes — representative symbols", () => {
-  it("root Foo is reachable", () => {
+  it("test_root_foo_reachable", () => {
     expect(Foo).toBeDefined();
   });
 
-  it("baml_sdk/lorem.Resume is reachable", () => {
+  it("test_lorem_resume_reachable", () => {
     expect(Resume).toBeDefined();
   });
 
-  it("baml_sdk/a/b.Thing is reachable at the deep namespace", () => {
+  it("test_deep_namespace_thing_reachable", () => {
     expect(Thing).toBeDefined();
   });
 });

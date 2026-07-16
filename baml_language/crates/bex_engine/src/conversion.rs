@@ -2632,6 +2632,19 @@ fn coerce_numeric_to_declared_type(
     ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
+        // A schema-free host encoder may need to represent an integral-looking
+        // floating-point value as `Float` (JavaScript does this above its safe
+        // integer range). Do not let that value silently inhabit an `int` slot:
+        // it would bypass the host's exact-integer guard and the VM would carry
+        // a float under an integer declaration. Exact large integers must use
+        // the host bigint representation and the checked narrowing below.
+        (
+            BexExternalValue::Float(f),
+            RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _),
+        ) => Err(EngineError::TypeMismatch {
+            message: format!("float value {f} cannot be used where BAML int is required"),
+        }),
+
         // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
         // `bigint` in the type system).
         (
@@ -2701,6 +2714,29 @@ fn coerce_numeric_to_declared_type(
         }
 
         (v, _) => Ok(v),
+    }
+}
+
+#[cfg(test)]
+mod numeric_coercion_tests {
+    use super::*;
+
+    #[test]
+    fn float_does_not_silently_inhabit_an_int_slot() {
+        let result = coerce_arg_to_declared_type(
+            BexExternalValue::Float(9_007_199_254_740_992.0),
+            &RuntimeTy::int(),
+        );
+        assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
+    }
+
+    #[test]
+    fn integral_looking_float_remains_valid_for_a_float_slot() {
+        let result = coerce_arg_to_declared_type(
+            BexExternalValue::Float(9_007_199_254_740_992.0),
+            &RuntimeTy::float(),
+        );
+        assert!(matches!(result, Ok(BexExternalValue::Float(_))));
     }
 }
 

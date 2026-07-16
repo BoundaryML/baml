@@ -26,33 +26,41 @@ describe("roundtrip generics", () => {
   // bare map and accepts it into the generic class slot. (No `$types` is passed
   // here, so each arg lowers to the unknown/top type, which is a compatible
   // wildcard against the declared concrete args.)
-  it("round_trip_wrapper_int", () => {
+  it("test_round_trip_wrapper_int", () => {
     const w = new Wrapper({ value: 5 });
     expect(round_trip_wrapper_int(w)).toEqual(w);
   });
-  it("round_trip_generic_linked_list_int", () => {
-    const ll = new GenericLinkedList({ value: 1, next: new GenericLinkedList({ value: 2, next: null }) });
+  it("test_round_trip_generic_linked_list_int", () => {
+    const ll = new GenericLinkedList({
+      value: 1,
+      next: new GenericLinkedList({ value: 2, next: null }),
+    });
     expect(round_trip_generic_linked_list_int(ll)).toEqual(ll);
   });
-  it("round_trip_generic_binary_tree_int", () => {
+  it("test_round_trip_generic_binary_tree_int", () => {
     const t = new GenericBinaryTree({ value: 1, left: null, right: null });
     expect(round_trip_generic_binary_tree_int(t)).toEqual(t);
   });
-  it("round_trip_box_int", () => {
+  it("test_round_trip_box_int", () => {
     const b = new Box({ value: 3, wrapped: new Wrapper({ value: 4 }) });
     expect(round_trip_box_int(b)).toEqual(b);
   });
-  it("round_trip_nested_generics", () => {
+  it("test_round_trip_nested_generics", () => {
     const n = new NestedGenerics({
       ww: new Wrapper({ value: new Wrapper({ value: 1 }) }),
       wl: new Wrapper({ value: [1, 2] }),
-      wr: new Wrapper({ value: new GenericLinkedList({ value: 9, next: null }) }),
+      wr: new Wrapper({
+        value: new GenericLinkedList({ value: 9, next: null }),
+      }),
     });
     expect(round_trip_nested_generics(n)).toEqual(n);
   });
-  it("round_trip_differing_instantiation", () => {
+  it("test_round_trip_differing_instantiation", () => {
     const d = new DifferingInstantiation({
-      list: new GenericLinkedList({ value: new Wrapper({ value: 1 }), next: null }),
+      list: new GenericLinkedList({
+        value: new Wrapper({ value: 1 }),
+        next: null,
+      }),
     });
     expect(round_trip_differing_instantiation(d)).toEqual(d);
   });

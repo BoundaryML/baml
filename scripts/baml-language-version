@@ -18,10 +18,16 @@ ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TOML = ROOT / "baml_language" / "release.toml"
 BAML_VERSION_RS = ROOT / "baml_language" / "crates" / "baml_version" / "src" / "lib.rs"
 PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
-PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_bridge" / "__init__.py"
+PY_INIT = (
+    ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_bridge" / "__init__.py"
+)
 VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
-NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
-NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "dist" / "native.js"
+NODE_PACKAGE = (
+    ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
+)
+NODE_NATIVE_JS = (
+    ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "dist" / "native.js"
+)
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -41,7 +47,9 @@ class Version:
     def parse(cls, value: str) -> "Version":
         match = SEMVER_RE.fullmatch(value)
         if not match:
-            raise ValueError(f"invalid canary version {value!r}; expected MAJOR.MINOR.PATCH")
+            raise ValueError(
+                f"invalid canary version {value!r}; expected MAJOR.MINOR.PATCH"
+            )
         return cls(*(int(part) for part in match.groups()))
 
     def __str__(self) -> str:
@@ -66,8 +74,14 @@ class ReleasePlan:
     channel: str
     canary_version: str
     canonical_version: str
-    pypi_version: str
+    registry_versions: dict[str, str]
     git_tag: str
+    source_sha: str
+    released_at: str
+
+    @property
+    def pypi_version(self) -> str:
+        return self.registry_versions["pypi"]
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -152,7 +166,9 @@ def load_release(path: Path = RELEASE_TOML) -> Version:
 
 
 def write_release(version: Version) -> None:
-    RELEASE_TOML.write_text(f'[release]\ncanary_version = "{version}"\n', encoding="utf-8")
+    RELEASE_TOML.write_text(
+        f'[release]\ncanary_version = "{version}"\n', encoding="utf-8"
+    )
 
 
 def git_output(*args: str) -> str | None:
@@ -196,6 +212,24 @@ def today_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
 
 
+def released_at_utc() -> str:
+    override = os.environ.get("BAML_LANGUAGE_RELEASED_AT")
+    if override:
+        try:
+            parsed = dt.datetime.fromisoformat(override.replace("Z", "+00:00"))
+        except ValueError:
+            fail("BAML_LANGUAGE_RELEASED_AT must be an ISO-8601 UTC timestamp")
+        if parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
+            fail("BAML_LANGUAGE_RELEASED_AT must be an ISO-8601 UTC timestamp")
+        return parsed.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        dt.datetime.now(dt.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
 def command_output(command: list[str]) -> str | None:
     try:
         return subprocess.check_output(
@@ -205,7 +239,11 @@ def command_output(command: list[str]) -> str | None:
             text=True,
             timeout=30,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
         return None
 
 
@@ -228,7 +266,9 @@ def release_tags() -> list[str]:
     if output:
         return [line.strip() for line in output.splitlines() if line.strip()]
 
-    output = command_output(["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"])
+    output = command_output(
+        ["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"]
+    )
     if output:
         tags: list[str] = []
         for line in output.splitlines():
@@ -284,13 +324,18 @@ def to_pypi_version(canonical: str) -> str:
 
 def make_plan(channel: str) -> ReleasePlan:
     canonical = compute_version(channel)
+    source_sha = git_output("rev-parse", "HEAD")
+    if not source_sha:
+        fail("could not resolve source SHA for release plan")
     return ReleasePlan(
-        schema=1,
+        schema=2,
         channel=channel,
         canary_version=str(load_release()),
         canonical_version=canonical,
-        pypi_version=to_pypi_version(canonical),
+        registry_versions={"npm": canonical, "pypi": to_pypi_version(canonical)},
         git_tag=f"baml-language-{canonical}",
+        source_sha=source_sha,
+        released_at=released_at_utc(),
     )
 
 
@@ -303,16 +348,43 @@ def load_plan(path: Path) -> ReleasePlan:
         fail(f"{path} is not valid JSON: {exc}")
 
     try:
-        return ReleasePlan(
-            schema=int(data["schema"]),
+        schema = int(data["schema"])
+        if schema != 2:
+            fail(f"unsupported release plan schema {schema}; expected 2")
+        registry_versions = data["registry_versions"]
+        if not isinstance(registry_versions, dict):
+            fail("release plan registry_versions must be an object")
+        plan = ReleasePlan(
+            schema=schema,
             channel=str(data["channel"]),
             canary_version=str(data["canary_version"]),
             canonical_version=str(data["canonical_version"]),
-            pypi_version=str(data["pypi_version"]),
+            registry_versions={
+                str(key): str(value) for key, value in registry_versions.items()
+            },
             git_tag=str(data["git_tag"]),
+            source_sha=str(data["source_sha"]),
+            released_at=str(data["released_at"]),
         )
     except KeyError as exc:
         fail(f"{path} is missing {exc.args[0]!r}")
+    if plan.channel not in ("canary", "nightly"):
+        fail(f"release plan has unsupported channel {plan.channel!r}")
+    if plan.registry_versions.get("npm") != plan.canonical_version:
+        fail("release plan npm version must equal canonical_version")
+    if plan.registry_versions.get("pypi") != to_pypi_version(plan.canonical_version):
+        fail("release plan pypi version does not match canonical_version")
+    if not re.fullmatch(r"[0-9a-f]{40}", plan.source_sha):
+        fail("release plan source_sha must be a full lowercase Git SHA")
+    if plan.git_tag != f"baml-language-{plan.canonical_version}":
+        fail("release plan git_tag does not match canonical_version")
+    try:
+        released_at = dt.datetime.fromisoformat(plan.released_at.replace("Z", "+00:00"))
+    except ValueError:
+        fail("release plan released_at must be an ISO-8601 timestamp")
+    if released_at.tzinfo is None or released_at.utcoffset() != dt.timedelta(0):
+        fail("release plan released_at must be UTC")
+    return plan
 
 
 def replace_regex(path: Path, pattern: str, replacement: str) -> None:
@@ -340,14 +412,28 @@ def stamp(plan: ReleasePlan) -> None:
         encoding="utf-8",
     )
     replace_regex(PYPROJECT, r'^version = ".*"$', f'version = "{plan.pypi_version}"')
-    replace_regex(VSIX_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+    replace_regex(
+        VSIX_PACKAGE,
+        r'^  "version": ".*",$',
+        f'  "version": "{plan.canonical_version}",',
+    )
     if NODE_PACKAGE.exists():
-        replace_regex(NODE_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+        replace_regex(
+            NODE_PACKAGE,
+            r'^  "version": ".*",$',
+            f'  "version": "{plan.canonical_version}",',
+        )
 
     text = PY_INIT.read_text(encoding="utf-8")
     version_line = f'__version__ = "{plan.canonical_version}"\n'
     if re.search(r'^__version__ = ".*"$', text, flags=re.MULTILINE):
-        text = re.sub(r'^__version__ = ".*"$', version_line.rstrip(), text, count=1, flags=re.MULTILINE)
+        text = re.sub(
+            r'^__version__ = ".*"$',
+            version_line.rstrip(),
+            text,
+            count=1,
+            flags=re.MULTILINE,
+        )
     else:
         marker = "atexit.register(flush_events)\n"
         if marker in text:
@@ -365,7 +451,13 @@ def regenerate_node_bridge() -> None:
 
     try:
         subprocess.run(
-            ["pnpm", "install", "--frozen-lockfile", "--ignore-workspace", "--ignore-scripts"],
+            [
+                "pnpm",
+                "install",
+                "--frozen-lockfile",
+                "--ignore-workspace",
+                "--ignore-scripts",
+            ],
             cwd=NODE_PACKAGE.parent,
             check=True,
         )
@@ -375,7 +467,9 @@ def regenerate_node_bridge() -> None:
             check=True,
         )
     except FileNotFoundError:
-        fail("pnpm is required to install and regenerate the Node bridge after a canary version bump")
+        fail(
+            "pnpm is required to install and regenerate the Node bridge after a canary version bump"
+        )
     except subprocess.CalledProcessError as exc:
         fail(
             "failed to install or regenerate the Node bridge after stamping versions. "
@@ -400,19 +494,29 @@ def check_release() -> None:
             fail(f"canary_version must not decrease: {current} < {previous_version}")
 
     if current.next_patch() <= current:
-        fail(f"nightly base {current.next_patch()} must be greater than canary {current}")
+        fail(
+            f"nightly base {current.next_patch()} must be greater than canary {current}"
+        )
 
     expected = make_plan("canary")
     mismatches: list[str] = []
     checks = {
-        "baml_version::CANONICAL_VERSION": expected.canonical_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
-        "baml_version::PYPI_VERSION": expected.pypi_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
-        "python pyproject version": f'version = "{expected.pypi_version}"' in PYPROJECT.read_text(encoding="utf-8"),
-        "python __version__": f'__version__ = "{expected.canonical_version}"' in PY_INIT.read_text(encoding="utf-8"),
-        "vsix package version": f'"version": "{expected.canonical_version}"' in VSIX_PACKAGE.read_text(encoding="utf-8"),
+        "baml_version::CANONICAL_VERSION": expected.canonical_version
+        in BAML_VERSION_RS.read_text(encoding="utf-8"),
+        "baml_version::PYPI_VERSION": expected.pypi_version
+        in BAML_VERSION_RS.read_text(encoding="utf-8"),
+        "python pyproject version": f'version = "{expected.pypi_version}"'
+        in PYPROJECT.read_text(encoding="utf-8"),
+        "python __version__": f'__version__ = "{expected.canonical_version}"'
+        in PY_INIT.read_text(encoding="utf-8"),
+        "vsix package version": f'"version": "{expected.canonical_version}"'
+        in VSIX_PACKAGE.read_text(encoding="utf-8"),
     }
     if NODE_PACKAGE.exists():
-        checks["node package version"] = f'"version": "{expected.canonical_version}"' in NODE_PACKAGE.read_text(encoding="utf-8")
+        checks["node package version"] = (
+            f'"version": "{expected.canonical_version}"'
+            in NODE_PACKAGE.read_text(encoding="utf-8")
+        )
         if not NODE_NATIVE_JS.exists():
             mismatches.append(
                 "node native loader version guards: "
@@ -445,7 +549,7 @@ def check_release() -> None:
         [
             "rg",
             "-n",
-            "BAML_RELEASE_VERSION|BAML_WRAPPER_VERSION|env!\\(\"CARGO_PKG_VERSION\"\\)",
+            'BAML_RELEASE_VERSION|BAML_WRAPPER_VERSION|env!\\("CARGO_PKG_VERSION"\\)',
             "baml_language/crates",
             "baml_language/sdks",
             "scripts",
@@ -466,8 +570,14 @@ def check_release() -> None:
     wrapper_toml = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
     if "version.workspace" in wrapper_toml:
         mismatches.append("wrapper crate must use a literal [package].version")
-    if not re.search(r'^version = "(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"$', wrapper_toml, flags=re.MULTILINE):
-        mismatches.append("wrapper crate version must be literal MAJOR.MINOR.PATCH SemVer")
+    if not re.search(
+        r'^version = "(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"$',
+        wrapper_toml,
+        flags=re.MULTILINE,
+    ):
+        mismatches.append(
+            "wrapper crate version must be literal MAJOR.MINOR.PATCH SemVer"
+        )
 
     if mismatches:
         fail("version check failed:\n" + "\n".join(f"- {item}" for item in mismatches))
@@ -491,7 +601,9 @@ def main() -> None:
     bump_group.add_argument("--patch", action="store_true")
 
     compute_parser = subparsers.add_parser("compute")
-    compute_parser.add_argument("--channel", choices=["canary", "nightly"], required=True)
+    compute_parser.add_argument(
+        "--channel", choices=["canary", "nightly"], required=True
+    )
     compute_parser.add_argument("--pypi", action="store_true")
 
     plan_parser = subparsers.add_parser("plan")

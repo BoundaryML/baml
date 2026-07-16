@@ -4,22 +4,20 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import hashlib
 import json
+import runpy
 from pathlib import Path
 
 
-TARGETS = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-]
+ROOT = Path(__file__).resolve().parents[1]
+LOAD_RELEASE_PLAN = runpy.run_path(
+    str(ROOT / "scripts" / "baml-language-version")
+)["load_plan"]
+PLATFORMS = json.loads(
+    (ROOT / "release" / "platforms.json").read_text(encoding="utf-8")
+)
+TARGETS = [entry["target"] for entry in PLATFORMS["platforms"]]
 
 
 def sha256(path: Path) -> str:
@@ -34,7 +32,20 @@ def artifact_url(tag: str, path: Path) -> str:
     return f"https://github.com/BoundaryML/baml/releases/download/{tag}/{path.name}"
 
 
-def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[str, str]]:
+def require_vsix(root: Path, version: str) -> Path:
+    expected_name = f"baml-language-{version}.vsix"
+    expected = root / expected_name
+    candidates = sorted(root.glob("*.vsix"))
+    missing = [] if expected.is_file() else [expected_name]
+    extra = [path.name for path in candidates if path != expected]
+    if missing or extra or len(candidates) != 1:
+        raise SystemExit(f"VSIX artifact mismatch missing={missing} extra={extra}")
+    return expected
+
+
+def collect_artifacts(
+    root: Path, product: str, version: str
+) -> dict[str, dict[str, str]]:
     artifacts = {}
     prefix = f"{product}-{version}-"
     for path in sorted(root.iterdir()):
@@ -54,7 +65,9 @@ def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[
     missing = sorted(set(TARGETS) - set(artifacts))
     extra = sorted(set(artifacts) - set(TARGETS))
     if missing or extra:
-        raise SystemExit(f"{product} artifact target mismatch missing={missing} extra={extra}")
+        raise SystemExit(
+            f"{product} artifact target mismatch missing={missing} extra={extra}"
+        )
     return artifacts
 
 
@@ -95,52 +108,63 @@ def main() -> None:
     parser.add_argument("--wrapper-dir", required=True, type=Path)
     parser.add_argument("--vsix-dir", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--channel", required=True, choices=["canary", "nightly"])
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--pypi-version", required=True)
+    parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "version").mkdir(parents=True, exist_ok=True)
-    released_at = (
-        dt.datetime.now(dt.timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    plan = LOAD_RELEASE_PLAN(args.plan)
+    version = plan.canonical_version
+    channel = plan.channel
+    released_at = plan.released_at
+    registry_versions = plan.registry_versions
 
-    vsix = next(args.vsix_dir.glob("*.vsix"), None)
-    if vsix is None:
-        raise SystemExit(f"no .vsix files found in --vsix-dir {args.vsix_dir}")
+    vsix = require_vsix(args.vsix_dir, version)
     toolchain = {
         "schema": 1,
-        "version": args.version,
-        "channel": args.channel,
+        "version": version,
+        "channel": channel,
         "released_at": released_at,
-        "artifacts": collect_artifacts(args.toolchain_dir, "baml-language", args.version),
+        "artifacts": collect_artifacts(args.toolchain_dir, "baml-language", version),
         "vsix": {
-            "url": artifact_url(f"baml-language-{args.version}", vsix),
+            "url": artifact_url(f"baml-language-{version}", vsix),
             "sha256": sha256(vsix),
         },
         "baml_bridge_pypi": {
-            "version": args.pypi_version,
+            "version": registry_versions["pypi"],
+        },
+        "sdks": {
+            "nodejs": {
+                "registry": "npm",
+                "package": "@boundaryml/baml-bridge",
+                "version": registry_versions["npm"],
+            },
+            "python": {
+                "registry": "pypi",
+                "package": "baml_bridge",
+                "version": registry_versions["pypi"],
+            },
         },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
     text = json.dumps(toolchain, indent=2, sort_keys=True) + "\n"
-    (args.out / "version" / f"{args.version}.json").write_text(text)
-    (args.out / f"{args.channel}.json").write_text(text)
+    (args.out / "version" / f"{version}.json").write_text(text)
+    (args.out / f"{channel}.json").write_text(text)
 
     if args.wrapper_changed:
         wrapper = {
             "schema": 1,
             "version": args.wrapper_version,
             "released_at": released_at,
-            "artifacts": collect_artifacts(args.wrapper_dir, "baml-wrapper", args.wrapper_version),
+            "artifacts": collect_artifacts(
+                args.wrapper_dir, "baml-wrapper", args.wrapper_version
+            ),
         }
-        (args.out / "wrapper.json").write_text(json.dumps(wrapper, indent=2, sort_keys=True) + "\n")
+        (args.out / "wrapper.json").write_text(
+            json.dumps(wrapper, indent=2, sort_keys=True) + "\n"
+        )
 
 
 if __name__ == "__main__":

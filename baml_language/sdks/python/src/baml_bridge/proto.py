@@ -55,6 +55,13 @@ def _is_pydantic_model_class(cls: type) -> bool:
 # overrides at construction (25b2 §"reverse map overrides").
 _MEDIA_PYO3_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
 
+_MEDIA_TYPE_KINDS = (
+    (BamlImage, baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE),
+    (BamlAudio, baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO),
+    (BamlVideo, baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO),
+    (BamlPdf, baml_type_pb2.BAML_TY_MEDIA_KIND_PDF),
+)
+
 
 # ---------------------------------------------------------------------------
 # Encoding: Python kwargs → CallFunctionArgs (09d §2)
@@ -429,7 +436,17 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         ty.primitive.kind = kind
         return
 
-    # typing constructs: list[X], dict[K, V], Optional[X], Union[...].
+    # Generated media classes are runtime type descriptors in Python, but the
+    # engine type is `Media`, not a user `Class`. Dispatch before the general
+    # class path so returned GenericBox[Image] metadata can be sent back through
+    # an instance method without changing T to `baml.media.Image` class_ty.
+    for media_type, media_kind in _MEDIA_TYPE_KINDS:
+        if py_type is media_type:
+            ty.media.kind = media_kind
+            return
+
+    # typing constructs: list[X], dict[K, V], Optional[X], Union[...],
+    # Literal[value].
     origin = typing.get_origin(py_type)
     if origin is not None:
         targs = typing.get_args(py_type)
@@ -448,7 +465,38 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
             for arg in targs:
                 _fill_inner(ty.union.options.add(), arg)
             return
+        if origin is typing.Literal:
+            if len(targs) == 1 and _fill_wire_literal(ty.literal, targs[0]):
+                return
+            if len(targs) > 1:
+                options = []
+                for arg in targs:
+                    option = baml_type_pb2.BamlTy()
+                    if not _fill_wire_literal(option.literal, arg):
+                        break
+                    options.append(option)
+                else:
+                    for option in options:
+                        ty.union.options.add().CopyFrom(option)
+                    return
+            ty.unknown.SetInParent()
+            return
         # Any other generic origin: fall through to the unknown default.
+
+    # PEP 695 / typing_extensions TypeAliasType is not a `type`; parameterized
+    # aliases may expose the base alias through `typing.get_origin`. Codegen
+    # records its module/name identity in the typemap so recursive aliases remain
+    # usable after outbound generic reconstruction.
+    if not isinstance(py_type, type):
+        type_map = get_type_map()
+        fqn = type_map.py_type_to_baml_type(py_type)
+        if not fqn and origin is not None:
+            fqn = type_map.py_type_to_baml_type(origin)
+        if fqn:
+            ty.type_alias.name = fqn
+            for arg in typing.get_args(py_type):
+                _fill_inner(ty.type_alias.type_args.add(), arg)
+            return
 
     if isinstance(py_type, type):
         # Parameterized Pydantic generic (`Box[int]`): the base FQN plus the
@@ -472,6 +520,32 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
 
     # Unrecognized: leave as the unknown/top type (binds nothing).
     ty.unknown.SetInParent()
+
+
+def _fill_wire_literal(literal: Any, value: Any) -> bool:
+    """Encode one Python Literal argument into BamlTyLiteral.
+
+    Python represents BAML `int` and `bigint` with the same `int` type, so only
+    values outside signed int64 are unambiguously bigint on the return path.
+    Float source formatting likewise cannot survive a Python float; `repr` is
+    the stable round-trip spelling.
+    """
+    if isinstance(value, bool):
+        literal.bool_value = value
+        return True
+    if isinstance(value, str):
+        literal.string_value = value
+        return True
+    if isinstance(value, int):
+        if -(1 << 63) <= value < (1 << 63):
+            literal.int_value = value
+        else:
+            literal.bigint_value = str(value)
+        return True
+    if isinstance(value, float):
+        literal.float_value = repr(value)
+        return True
+    return False
 
 
 def _fill_inner(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
@@ -563,9 +637,8 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
     The runtime inverse of `python_type_to_wire_ty` / `_fill_wire_ty` in the
     same module (the inbound writer) and the mirror of the engine's
     `ty_encode::runtime_ty_to_proto_ty`. A position with no concrete Python
-    binding (a structural union, a type variable, an opaque/runtime-only type)
-    widens to `typing.Any` — an unbound wildcard for parameterization purposes
-    (02a §5).
+    binding (a type variable or an opaque/runtime-only type) widens to
+    `typing.Any` — an unbound wildcard for parameterization purposes (02a §5).
     """
     which = ty.WhichOneof("ty")
     # Absent variant or the unknown/top type → wildcard.

@@ -12,14 +12,14 @@ const docsSource = () =>
   readFileSync(join(__dirname, "baml_sdk", "docs", "index.ts"), "utf8").replace(/\r\n/g, "\n");
 
 describe("docstrings_etc", () => {
-  it("imports all documented symbols from baml_sdk/docs", () => {
+  it("test_imports", () => {
     expect(Doc).toBeDefined();
     expect(Note).toBeDefined();
     expect(Priority).toBeDefined();
     expect(Sentiment).toBeDefined();
   });
 
-  it("renders class summaries and Attributes sections as JSDoc", () => {
+  it("test_class_doc_summary_and_attributes_section_in_dunder_doc", () => {
     const src = docsSource();
 
     expect(src).toContain(`/**
@@ -30,6 +30,10 @@ describe("docstrings_etc", () => {
  *   body: Free-form body text.
  */
 export class Doc {`);
+  });
+
+  it("test_undocumented_field_listed_as_bare_name_under_attributes", () => {
+    const src = docsSource();
 
     expect(src).toContain(`/**
  * A multi-line summary.
@@ -43,7 +47,7 @@ export class Doc {`);
 export class Note {`);
   });
 
-  it("renders enum summaries and Members sections as JSDoc", () => {
+  it("test_enum_doc_summary_and_members_section_in_dunder_doc", () => {
     const src = docsSource();
 
     expect(src).toContain(`/**
@@ -55,6 +59,10 @@ export class Note {`);
  *   NEUTRAL
  */
 export enum Sentiment {`);
+  });
+
+  it("test_enum_summary_only_omits_members_section_when_no_variant_documented", () => {
+    const src = docsSource();
 
     expect(src).toContain(`/**
  * Pin the "summary only, no member rollup" case: this enum has a
@@ -63,7 +71,7 @@ export enum Sentiment {`);
 export enum Priority {`);
   });
 
-  it("does not emit inline field or variant doc artifacts", () => {
+  it("test_no_inline_field_or_variant_doc_artifacts", () => {
     const src = docsSource();
 
     expect(src).not.toContain("// Title shown in lists");
