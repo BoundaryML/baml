@@ -109,6 +109,16 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     _class: JClass<'_>,
     bytecode: JByteArray<'_>,
 ) {
+    // Register this bridge with the versioned ABI (idempotent; mirrors
+    // bridge_python). A canonical-version mismatch is a real deployment
+    // error and surfaces as a Java exception via the panic handler.
+    if let Err(e) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::Java,
+        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+    }) {
+        throw_runtime_exception(&mut env, &format!("BAML bridge registration failed: {e}"));
+        return;
+    }
     let bytes = match env.convert_byte_array(&bytecode) {
         Ok(b) => b,
         Err(e) => {
