@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 import baml_bridge.internal.WireWriter;
+import baml_sdk.baml.media.Image;
+import baml_sdk.baml.media.Pdf;
 
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
@@ -759,5 +761,69 @@ class WireCodecTest {
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "tv:T"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "unknown"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "union[")); // malformed
+    }
+
+    // -- media handle decode (baml.media.*) ----------------------------------
+    // Native-free: decoding a handle only constructs a BamlHandle token
+    // (no native call); its Cleaner-driven release is guarded, so these run
+    // without the bridge library. BamlOutboundHandle: key = 1, handle_type = 2.
+
+    // BamlOutboundValue.handle_value = 16; BamlHandleType ADT_MEDIA_{IMAGE,PDF}.
+    private static final int OV_HANDLE = 16;
+    private static final int ADT_MEDIA_IMAGE = 6;
+    private static final int ADT_MEDIA_PDF = 9;
+    private static final int FUNCTION_REF = 5;
+
+    private static byte[] handleMsg(long key, int handleType) {
+        WireWriter h = new WireWriter();
+        h.writeInt64(1, key); // BamlOutboundHandle.key = 1
+        h.writeInt64(2, handleType); // handle_type = 2
+        return h.toByteArray();
+    }
+
+    private static byte[] ovHandle(long key, int handleType) {
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_HANDLE, handleMsg(key, handleType));
+        return ov.toByteArray();
+    }
+
+    /** A bare handle_value(ADT_MEDIA_IMAGE) decodes to a runtime-owned Image. */
+    @Test
+    void decode_media_handle_constructs_image() {
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovHandle(4242L, ADT_MEDIA_IMAGE)));
+        Image img = assertInstanceOf(Image.class, decoded);
+        assertEquals("baml.media.Image", img.bamlFqn());
+        assertEquals(4242L, img.bamlHandle().key());
+        assertEquals(ADT_MEDIA_IMAGE, img.bamlHandle().handleType());
+    }
+
+    /** class_value(baml.media.Pdf, {_data: handle_value}) unwraps to the Pdf. */
+    @Test
+    void decode_media_class_wrapper_unwraps_to_media() {
+        WireWriter dataVal = new WireWriter();
+        dataVal.writeMessage(OV_HANDLE, handleMsg(77L, ADT_MEDIA_PDF)); // _data value
+        WireWriter dataEntry = new WireWriter();
+        dataEntry.writeString(1, "_data"); // BamlOutboundMapEntry.key = 1
+        dataEntry.writeMessage(2, dataVal.toByteArray()); // value = 2
+
+        WireWriter cls = new WireWriter();
+        cls.writeString(1, "baml.media.Pdf"); // BamlValueClass.name = 1
+        cls.writeMessage(2, dataEntry.toByteArray()); // fields = 2
+
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_CLASS, cls.toByteArray());
+
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()));
+        Pdf pdf = assertInstanceOf(Pdf.class, decoded);
+        assertEquals(77L, pdf.bamlHandle().key());
+    }
+
+    /** A non-media handle type keeps the bare-BamlHandle fallback. */
+    @Test
+    void decode_unknown_handle_type_falls_back_to_bare_handle() {
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovHandle(9L, FUNCTION_REF)));
+        BamlHandle h = assertInstanceOf(BamlHandle.class, decoded);
+        assertEquals(9L, h.key());
+        assertEquals(FUNCTION_REF, h.handleType());
     }
 }

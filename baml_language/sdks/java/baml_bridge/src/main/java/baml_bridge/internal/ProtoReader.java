@@ -1,8 +1,13 @@
 package baml_bridge.internal;
 
 import baml_bridge.BamlError;
+import baml_bridge.BamlHandle;
 import baml_bridge.BamlPanic;
 import baml_bridge.TypeRegistry;
+import baml_sdk.baml.media.Audio;
+import baml_sdk.baml.media.Image;
+import baml_sdk.baml.media.Pdf;
+import baml_sdk.baml.media.Video;
 
 import java.lang.reflect.Constructor;
 import java.math.BigInteger;
@@ -94,6 +99,20 @@ public final class ProtoReader {
     // BamlValueUnionVariant
     private static final int UNION_SELF_TYPE = 4;
     private static final int UNION_VALUE = 6;
+
+    // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3).
+    private static final int HANDLE_KEY = 1;
+    private static final int HANDLE_TYPE = 2;
+
+    // BamlHandleType (baml_handle.proto): the ADT_MEDIA_* discriminants the media
+    // decode dispatches on. Every other handle type decodes to a bare BamlHandle.
+    private static final int ADT_MEDIA_IMAGE = 6;
+    private static final int ADT_MEDIA_AUDIO = 7;
+    private static final int ADT_MEDIA_VIDEO = 8;
+    private static final int ADT_MEDIA_PDF = 9;
+
+    // The single field name a handle-backed media class carries on the wire.
+    private static final String MEDIA_DATA_FIELD = "_data";
 
     // BamlTy oneof (baml_type.proto) — used to tokenize a union's self_type into
     // the arm-token signature the TypeRegistry keys on. Unlisted variants fall to
@@ -282,7 +301,8 @@ public final class ProtoReader {
                 case OV_BIGINT -> result = new BigInteger(r.readString(), 16);
                 case OV_CLASS -> result = decodeClass(r.readMessage(), lenient);
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
-                case OV_HANDLE, OV_MEDIA, OV_PROMPT_AST, OV_TY -> {
+                case OV_HANDLE -> result = decodeHandle(r.readMessage());
+                case OV_MEDIA, OV_PROMPT_AST, OV_TY -> {
                     if (lenient) {
                         r.skipField(wire);
                         result = null;
@@ -723,6 +743,11 @@ public final class ProtoReader {
                 default -> r.skipField(wire); // type_args
             }
         }
+        // A media stdlib class wraps its engine handle in a `_data` field; the
+        // inner decode already reified the media wrapper, so unwrap and return it.
+        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
+            return fields.get(MEDIA_DATA_FIELD);
+        }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         return instance != null ? instance : fields;
     }
@@ -748,6 +773,53 @@ public final class ProtoReader {
         }
         Object constant = TypeRegistry.resolveEnum(fqn, variant);
         return constant != null ? constant : variant;
+    }
+
+    /**
+     * Decode a {@code BamlOutboundHandle} ({@code key}, {@code handle_type}; the
+     * {@code ty} field is unused for the media/bare cases). A media handle type
+     * ({@code ADT_MEDIA_*}) reifies the matching runtime-owned media class over a
+     * fresh {@link BamlHandle}; any other handle type (including
+     * {@code ADT_MEDIA_GENERIC} and the not-yet-modeled handle-backed
+     * capabilities) decodes to a bare {@link BamlHandle}. Mirrors
+     * {@code bridge_python}'s {@code _decode_handle}.
+     */
+    private static Object decodeHandle(WireReader r) {
+        long key = 0;
+        int handleType = 0;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case HANDLE_KEY -> key = r.readVarint();
+                case HANDLE_TYPE -> handleType = (int) r.readVarint();
+                default -> r.skipField(wire); // ty (field 3)
+            }
+        }
+        BamlHandle handle = new BamlHandle(key, handleType);
+        return switch (handleType) {
+            case ADT_MEDIA_IMAGE -> Image.fromHandle(handle);
+            case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
+            case ADT_MEDIA_VIDEO -> Video.fromHandle(handle);
+            case ADT_MEDIA_PDF -> Pdf.fromHandle(handle);
+            default -> handle;
+        };
+    }
+
+    /**
+     * Whether {@code fqn} names one of the handle-backed media stdlib classes.
+     * The engine wraps a media value as {@code class_value(baml.media.X, {_data})}
+     * whose {@code _data} field is a media {@code handle_value}; the wrapper is
+     * unwrapped to that decoded field (see {@link #decodeClass}), mirroring
+     * {@code bridge_python}'s {@code _decode_class} media special-case. These
+     * FQNs are runtime-owned and never registered in the {@link TypeRegistry}.
+     */
+    private static boolean isMediaFqn(String fqn) {
+        return Image.FQN.equals(fqn)
+                || Audio.FQN.equals(fqn)
+                || Video.FQN.equals(fqn)
+                || Pdf.FQN.equals(fqn);
     }
 
     // ========================================================================
@@ -945,6 +1017,11 @@ public final class ProtoReader {
             }
             byte[] vb = vals.get(i);
             fields.put(keys.get(i), vb == null ? null : decodeWithDesc(vb, fieldDesc, lenient));
+        }
+        // Defensive parity with the wire-driven path: a media stdlib class
+        // (never registered, so normally unreachable here) unwraps its `_data`.
+        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
+            return fields.get(MEDIA_DATA_FIELD);
         }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         return instance != null ? instance : fields;

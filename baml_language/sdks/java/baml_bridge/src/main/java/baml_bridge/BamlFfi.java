@@ -80,6 +80,40 @@ public final class BamlFfi {
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
 
+    // ---- Handle lifecycle + media (baml.media.*) ---------------------------
+    // The JVM analog of bridge_python's media/handle FFI: media values are
+    // minted as HANDLE_TABLE rows and referenced across JNI by their u64 key
+    // (returned as a long). The `kind` argument is a proto MediaTypeEnum
+    // discriminant (IMAGE=1, AUDIO=2, PDF=3, VIDEO=4, OTHER=5). A native failure
+    // (bad kind, invalid key, alloc) throws an unchecked RuntimeException.
+
+    /** Mint an `Adt(Media)` row from a URL; returns its handle key. */
+    static native long nativeMediaFromUrl(int kind, String url, String mimeType);
+
+    /** Mint an `Adt(Media)` row from a local file path; returns its handle key. */
+    static native long nativeMediaFromFile(int kind, String path, String mimeType);
+
+    /** Mint an `Adt(Media)` row from a base64 payload; returns its handle key. */
+    static native long nativeMediaFromBase64(int kind, String base64, String mimeType);
+
+    /** The media's source URL, or {@code null} when it is not URL-backed. */
+    static native String nativeMediaUrl(long key);
+
+    /** The media's local file path, or {@code null} when it is not file-backed. */
+    static native String nativeMediaFile(long key);
+
+    /** The media's base64 payload (never {@code null}; empty when unavailable). */
+    static native String nativeMediaBase64(long key);
+
+    /** The media's MIME type, or {@code null} when none is set. */
+    static native String nativeMediaMimeType(long key);
+
+    /** Clone a handle key, minting a fresh owned key for the same row. */
+    static native long nativeHandleClone(long key);
+
+    /** Release one owned handle key (best-effort; a stale key is ignored). */
+    static native void nativeHandleRelease(long key);
+
     // ---- Public surface the generated SDK targets --------------------------
 
     /** Initialize the runtime from embedded bytecode (idempotent; replaces). */

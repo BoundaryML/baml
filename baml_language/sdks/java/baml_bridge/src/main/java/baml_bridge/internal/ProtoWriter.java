@@ -50,8 +50,16 @@ public final class ProtoWriter {
     private static final int IV_MAP = 7;
     private static final int IV_CLASS = 8;
     private static final int IV_ENUM = 9;
+    private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+
+    // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
+    private static final int HANDLE_KEY = 1;
+    private static final int HANDLE_TYPE = 2;
+
+    // The single field name a handle-backed media class carries on the wire.
+    private static final String MEDIA_DATA_FIELD = "_data";
 
     // InboundListValue / InboundMapValue
     private static final int LIST_VALUES = 1;
@@ -145,6 +153,12 @@ public final class ProtoWriter {
                 throw unsupported(value);
             }
             w.writeMessage(IV_ENUM, encodeEnum(ew));
+        } else if (value instanceof baml_bridge.BamlMedia media) {
+            // Handle-backed media (baml.media.{Image,Audio,Video,Pdf}): a
+            // class_value whose only field `_data` carries the engine handle,
+            // with the stdlib FQN on class_ty.name. Mirrors bridge_python's
+            // media encode branch (proto.py: class_value(name, {_data: handle})).
+            w.writeMessage(IV_CLASS, encodeMediaClass(media));
         } else if (value instanceof baml_bridge.BamlUnion) {
             // Generic-family arm record (Union2..Union10): unwrap to the
             // single `value()` component — no union envelope inbound.
@@ -180,6 +194,37 @@ public final class ProtoWriter {
         }
         WireWriter classTy = new WireWriter();
         classTy.writeString(TY_CLASS_NAME, cw.fqn);
+        w.writeMessage(CLASS_TY, classTy.toByteArray());
+        return w.toByteArray();
+    }
+
+    /**
+     * Encode a handle-backed media value as an {@code InboundClassValue}: a single
+     * {@code _data} field whose value is an {@code InboundValue.handle}
+     * ({@code BamlHandle{key, handle_type}}), plus the stdlib FQN on
+     * {@code class_ty.name}. The key is a <em>fresh clone</em> so the engine can
+     * {@code drain} its copy on decode while the Java media object keeps its own
+     * row (mirrors {@code bridge_python}'s {@code _clone_key_for_wire}).
+     */
+    private static byte[] encodeMediaClass(baml_bridge.BamlMedia media) {
+        baml_bridge.BamlHandle handle = media.bamlHandle();
+        long wireKey = handle.cloneKeyForWire();
+
+        WireWriter handleMsg = new WireWriter();
+        handleMsg.writeInt64(HANDLE_KEY, wireKey);
+        handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());
+
+        WireWriter dataValue = new WireWriter();
+        dataValue.writeMessage(IV_HANDLE, handleMsg.toByteArray());
+
+        WireWriter dataEntry = new WireWriter();
+        dataEntry.writeString(MAP_ENTRY_STRING_KEY, MEDIA_DATA_FIELD);
+        dataEntry.writeMessage(MAP_ENTRY_VALUE, dataValue.toByteArray());
+
+        WireWriter w = new WireWriter();
+        w.writeMessage(CLASS_FIELDS, dataEntry.toByteArray());
+        WireWriter classTy = new WireWriter();
+        classTy.writeString(TY_CLASS_NAME, media.bamlFqn());
         w.writeMessage(CLASS_TY, classTy.toByteArray());
         return w.toByteArray();
     }

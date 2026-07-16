@@ -1613,6 +1613,7 @@ dependencies = [
 name = "bridge_java"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_version",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",

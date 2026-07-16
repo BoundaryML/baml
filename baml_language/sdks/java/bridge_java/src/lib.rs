@@ -16,13 +16,15 @@
 //! `baml_bridge.BamlFfi`. JNI mangles the package `baml_bridge` as
 //! `baml_1bridge` (an underscore in a Java name is escaped `_1`).
 
-use bex_project::{BexArgs, CallId, RuntimeTy};
-use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
+use std::sync::Arc;
+
+use bex_project::{BexArgs, BexExternalAdt, CallId, MediaKind, MediaValue, RuntimeTy};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, kwargs_to_bex_values};
 use indexmap::IndexMap;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JClass, JString},
-    sys::jlong,
+    sys::{jint, jlong},
 };
 use prost::Message;
 
@@ -188,6 +190,281 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
     // Call ids fit u64; JNI `long` is i64. The counter starts at 1 and the
     // low 63 bits are what the engine keys on, so the bit cast is faithful.
     bridge_cffi::new_function_call_id() as jlong
+}
+
+// ===========================================================================
+// Handle lifecycle + media (baml.media.{Image,Audio,Video,Pdf}).
+//
+// The JVM analog of `bridge_python`'s `media.rs` / `py_handle.rs`: media values
+// are minted as `Adt(Media)` rows in the shared `HANDLE_TABLE` and referenced
+// across the JNI boundary by their `u64` key (returned as a `long`). Encode
+// clones a fresh key for the wire so the engine can `drain` it while the Java
+// object keeps its own row; decode rehydrates a wrapper class from the key +
+// `handle_type` tag. Mirrors `bridge_cffi::ffi::handle` — we call the same
+// underlying `MediaValue` / `HANDLE_TABLE` API in-process rather than the
+// C-string ABI, since the JNI layer already owns `String` conversion.
+// ===========================================================================
+
+/// Map a proto `MediaTypeEnum` discriminant (as passed from Java) to a
+/// `MediaKind`. Mirrors `bridge_cffi::ffi::handle::media_kind_from_proto`.
+fn media_kind_from_proto(kind: jint) -> Option<MediaKind> {
+    use bridge_ctypes::baml_bridge::cffi::MediaTypeEnum;
+    match kind {
+        x if x == MediaTypeEnum::Image as jint => Some(MediaKind::Image),
+        x if x == MediaTypeEnum::Audio as jint => Some(MediaKind::Audio),
+        x if x == MediaTypeEnum::Pdf as jint => Some(MediaKind::Pdf),
+        x if x == MediaTypeEnum::Video as jint => Some(MediaKind::Video),
+        x if x == MediaTypeEnum::Other as jint => Some(MediaKind::Generic),
+        _ => None,
+    }
+}
+
+/// Read a required `JString` argument into an owned `String`, throwing (and
+/// returning `None`) on a null pointer or invalid UTF-8.
+fn read_required_string(env: &mut JNIEnv<'_>, s: &JString<'_>, ctx: &str) -> Option<String> {
+    if s.as_raw().is_null() {
+        throw_runtime_exception(env, &format!("{ctx}: required string argument was null"));
+        return None;
+    }
+    match env.get_string(s) {
+        Ok(js) => Some(String::from(js)),
+        Err(e) => {
+            throw_runtime_exception(env, &format!("{ctx}: failed to read string argument: {e}"));
+            None
+        }
+    }
+}
+
+/// Read an optional `JString` (Java `null` → `None`), throwing on invalid UTF-8.
+fn read_optional_string(
+    env: &mut JNIEnv<'_>,
+    s: &JString<'_>,
+    ctx: &str,
+) -> Result<Option<String>, ()> {
+    if s.as_raw().is_null() {
+        return Ok(None);
+    }
+    match env.get_string(s) {
+        Ok(js) => Ok(Some(String::from(js))),
+        Err(e) => {
+            throw_runtime_exception(env, &format!("{ctx}: failed to read mime string: {e}"));
+            Err(())
+        }
+    }
+}
+
+/// Convert an `Option<String>` accessor result into a Java `String` (or Java
+/// `null` for `None`), throwing on allocation failure.
+fn optional_string_to_jstring<'local>(
+    env: &mut JNIEnv<'local>,
+    value: Option<String>,
+    ctx: &str,
+) -> JString<'local> {
+    match value {
+        None => JString::default(), // Java null — the accessor field is absent.
+        Some(s) => match env.new_string(s) {
+            Ok(js) => js,
+            Err(e) => {
+                throw_runtime_exception(env, &format!("{ctx}: failed to allocate string: {e}"));
+                JString::default()
+            }
+        },
+    }
+}
+
+/// Resolve a live media row by key, or `None` when the key does not identify an
+/// `Adt(Media)` entry (invalid key or wrong handle kind).
+fn resolve_media(key: jlong) -> Option<Arc<MediaValue>> {
+    let entry = HANDLE_TABLE.resolve(key as u64)?;
+    match &*entry {
+        CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)) => Some(media.clone()),
+        _ => None,
+    }
+}
+
+/// `nativeMediaFromUrl(int kind, String url, String mimeType) -> long`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromUrl<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    kind: jint,
+    url: JString<'local>,
+    mime: JString<'local>,
+) -> jlong {
+    media_from(
+        &mut env,
+        kind,
+        url,
+        mime,
+        "nativeMediaFromUrl",
+        MediaValue::from_url,
+    )
+}
+
+/// `nativeMediaFromFile(int kind, String path, String mimeType) -> long`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromFile<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    kind: jint,
+    path: JString<'local>,
+    mime: JString<'local>,
+) -> jlong {
+    media_from(
+        &mut env,
+        kind,
+        path,
+        mime,
+        "nativeMediaFromFile",
+        MediaValue::from_file,
+    )
+}
+
+/// `nativeMediaFromBase64(int kind, String base64, String mimeType) -> long`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFromBase64<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    kind: jint,
+    base64: JString<'local>,
+    mime: JString<'local>,
+) -> jlong {
+    media_from(
+        &mut env,
+        kind,
+        base64,
+        mime,
+        "nativeMediaFromBase64",
+        MediaValue::from_base64,
+    )
+}
+
+/// Shared body for the three media constructors: validate the kind, read the
+/// value + optional mime strings, then mint the row and return its key. Returns
+/// `0` after throwing on any input failure (a thrown JNI method's return value
+/// is ignored by the JVM).
+fn media_from<'local>(
+    env: &mut JNIEnv<'local>,
+    kind: jint,
+    value: JString<'local>,
+    mime: JString<'local>,
+    ctx: &str,
+    make: fn(MediaKind, &str, Option<&str>) -> Arc<MediaValue>,
+) -> jlong {
+    let Some(media_kind) = media_kind_from_proto(kind) else {
+        throw_runtime_exception(env, &format!("{ctx}: unsupported media kind {kind}"));
+        return 0;
+    };
+    let Some(value) = read_required_string(env, &value, ctx) else {
+        return 0;
+    };
+    let mime = match read_optional_string(env, &mime, ctx) {
+        Ok(m) => m,
+        Err(()) => return 0,
+    };
+    let media = make(media_kind, &value, mime.as_deref());
+    HANDLE_TABLE.insert(CffiHandleTableEntry::Adt(BexExternalAdt::Media(media))) as jlong
+}
+
+/// `nativeMediaUrl(long key) -> String` (Java `null` when the media has no URL).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaUrl<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    key: jlong,
+) -> JString<'local> {
+    match resolve_media(key) {
+        Some(media) => optional_string_to_jstring(&mut env, media.url(), "nativeMediaUrl"),
+        None => {
+            throw_runtime_exception(&mut env, "nativeMediaUrl: invalid media handle key");
+            JString::default()
+        }
+    }
+}
+
+/// `nativeMediaFile(long key) -> String` (Java `null` when not file-backed).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaFile<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    key: jlong,
+) -> JString<'local> {
+    match resolve_media(key) {
+        Some(media) => optional_string_to_jstring(&mut env, media.file(), "nativeMediaFile"),
+        None => {
+            throw_runtime_exception(&mut env, "nativeMediaFile: invalid media handle key");
+            JString::default()
+        }
+    }
+}
+
+/// `nativeMediaBase64(long key) -> String` (never null; empty when unavailable).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaBase64<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    key: jlong,
+) -> JString<'local> {
+    match resolve_media(key) {
+        Some(media) => {
+            optional_string_to_jstring(&mut env, Some(media.base64()), "nativeMediaBase64")
+        }
+        None => {
+            throw_runtime_exception(&mut env, "nativeMediaBase64: invalid media handle key");
+            JString::default()
+        }
+    }
+}
+
+/// `nativeMediaMimeType(long key) -> String` (Java `null` when no mime is set).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeMediaMimeType<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    key: jlong,
+) -> JString<'local> {
+    match resolve_media(key) {
+        Some(media) => {
+            optional_string_to_jstring(&mut env, media.mime_type(), "nativeMediaMimeType")
+        }
+        None => {
+            throw_runtime_exception(&mut env, "nativeMediaMimeType: invalid media handle key");
+            JString::default()
+        }
+    }
+}
+
+/// `nativeHandleClone(long key) -> long`. Mint a new owned key pointing at the
+/// same underlying row (used to hand a fresh key to the engine on the inbound
+/// wire so the Java object keeps its own). Throws on an invalid key.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    key: jlong,
+) -> jlong {
+    match HANDLE_TABLE.clone_handle(key as u64) {
+        Some(new_key) => new_key as jlong,
+        None => {
+            throw_runtime_exception(
+                &mut env,
+                &format!("nativeHandleClone: invalid handle key {key}"),
+            );
+            0
+        }
+    }
+}
+
+/// `nativeHandleRelease(long key)`. Release one owned key. Best-effort: an
+/// invalid/stale key (double release, JVM teardown race) is silently ignored,
+/// matching `bridge_python`'s `BamlPyHandle::drop`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    key: jlong,
+) {
+    let _ = HANDLE_TABLE.release(key as u64);
 }
 
 /// Throw an unchecked `java.lang.RuntimeException`, ignoring a failure to
