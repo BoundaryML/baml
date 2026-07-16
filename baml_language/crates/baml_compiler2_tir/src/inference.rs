@@ -1093,6 +1093,14 @@ pub struct ScopeInference<'db> {
     /// these up (via this owning Function/Let scope) to seed params that have no
     /// HIR binding — see the `ScopeKind::Lambda` arm of `infer_scope_types`.
     template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Nested lambda scope → the full inference tables captured during this
+    /// (owning) scope's inline pass over the lambda's body. The standalone
+    /// `ScopeKind::Lambda` query projects its `ScopeInference` out of this map
+    /// instead of re-inferring the body — which previously inferred every lambda
+    /// body a second time and (because both passes emit diagnostics) reported
+    /// diagnostics inside lambdas twice. Populated only on Function/Let owner
+    /// scopes; contains entries for lambdas at every nesting depth.
+    nested_lambda_inference: FxHashMap<FileScopeId, NestedLambdaInference<'db>>,
     /// Lambda/function parameter types by index (name, inferred type).
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
@@ -1120,6 +1128,32 @@ pub struct ScopeInference<'db> {
     parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
+}
+
+/// The complete inference tables of one nested lambda body, captured during
+/// the owning Function/Let scope's inline pass (`infer_lambda_body`).
+///
+/// Before this existed, every lambda body was type-inferred twice: once inline
+/// while inferring the enclosing function (needed to type the lambda expression
+/// itself) and a second time from scratch by the standalone `ScopeKind::Lambda`
+/// arm of `infer_scope_types` (needed by MIR/LSP for the lambda scope's own
+/// tables). Recording the inline results here lets the Lambda arm project them
+/// out instead of re-inferring — and stops the lambda's diagnostics from being
+/// reported twice (they stay with the owner scope's inference).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NestedLambdaInference<'db> {
+    pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub(crate) param_types: Vec<(Name, Ty)>,
+    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1264,6 +1298,17 @@ impl<'db> ScopeInference<'db> {
     /// standalone scope inference to seed params that have no HIR binding.
     pub fn template_body_params(&self, fsi: FileScopeId) -> Option<&[FunctionParamTy]> {
         self.template_body_params.get(&fsi).map(Vec::as_slice)
+    }
+
+    /// The captured inline-inference tables for a nested lambda scope, if this
+    /// scope owns (transitively) that lambda's body. Present only on the owning
+    /// Function/Let scope's inference; the standalone `ScopeKind::Lambda` query
+    /// uses it to avoid re-inferring the body.
+    pub(crate) fn nested_lambda_inference(
+        &self,
+        fsi: FileScopeId,
+    ) -> Option<&NestedLambdaInference<'db>> {
+        self.nested_lambda_inference.get(&fsi)
     }
 
     /// Look up the binding type for a pattern (the type the variable is bound to,
@@ -1615,6 +1660,7 @@ fn infer_scope_types_cycle_initial<'db>(
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         template_body_params: FxHashMap::default(),
+        nested_lambda_inference: FxHashMap::default(),
         param_types: Vec::new(),
         call_plans: FxHashMap::default(),
         call_type_instantiations: FxHashMap::default(),
@@ -2134,6 +2180,60 @@ pub fn infer_scope_types<'db>(
             }
         }
         ScopeKind::Lambda => {
+            // Fast path: the owning Function/Let scope's inline pass already
+            // inferred this lambda's body and captured its full tables (see
+            // `NestedLambdaInference`). Project them out instead of re-inferring
+            // the body here. This is what makes lambda-body inference happen
+            // exactly once — the standalone Lambda query used to re-walk the
+            // body from scratch, duplicating both the work AND every diagnostic
+            // reported inside the lambda. The projected `ScopeInference` carries
+            // no `extra`/diagnostics, so the lambda's diagnostics stay with the
+            // owner scope and are reported once.
+            //
+            // Synthetic tagged-template bodies (`is_template_body`) have no
+            // backing `Expr::Lambda` and are never captured, so they fall
+            // through to the standalone inference below; likewise any miss
+            // (e.g. the empty owner inference produced during a Salsa cycle
+            // iteration).
+            if !scope.is_template_body {
+                let owner_fsi =
+                    index
+                        .ancestor_scopes(file_scope)
+                        .into_iter()
+                        .find(|fsi: &FileScopeId| {
+                            matches!(
+                                index.scopes[fsi.index() as usize].kind,
+                                ScopeKind::Function | ScopeKind::Let
+                            )
+                        });
+                if let Some(owner_fsi) = owner_fsi {
+                    let owner_scope_id = index.scope_ids[owner_fsi.index() as usize];
+                    let owner_inference = infer_scope_types(db, owner_scope_id);
+                    if let Some(tables) = owner_inference.nested_lambda_inference(file_scope) {
+                        let tables = tables.clone();
+                        return ScopeInference {
+                            expressions: tables.expressions,
+                            pattern_types: tables.pattern_types,
+                            resolutions: tables.resolutions,
+                            catch_residual_throws: tables.catch_residual_throws,
+                            exhaustive_matches: tables.exhaustive_matches,
+                            path_root_types: tables.path_root_types,
+                            path_segment_types: tables.path_segment_types,
+                            path_member_resolutions: tables.path_member_resolutions,
+                            nested_lambda_types: FxHashMap::default(),
+                            template_body_params: FxHashMap::default(),
+                            nested_lambda_inference: FxHashMap::default(),
+                            param_types: tables.param_types,
+                            call_plans: tables.call_plans,
+                            call_type_instantiations: tables.call_type_instantiations,
+                            function_coercions: tables.function_coercions,
+                            parameter_defaults: DefaultParameterInference::empty(),
+                            extra: None,
+                        };
+                    }
+                }
+            }
+
             // Find the enclosing Function (or Let) scope by walking ancestors.
             // The Lambda scope does not directly store its body — we must find
             // the top-level body (Function or Let) and then locate the lambda
@@ -2848,6 +2948,7 @@ pub fn infer_scope_types<'db>(
         nested_lambda_types,
         template_body_params,
         parameter_defaults,
+        nested_lambda_inference,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -2867,6 +2968,7 @@ pub fn infer_scope_types<'db>(
         path_member_resolutions,
         nested_lambda_types,
         template_body_params,
+        nested_lambda_inference,
         param_types,
         call_plans,
         call_type_instantiations,

@@ -862,6 +862,16 @@ pub struct TypeInferenceBuilder<'db> {
     /// to the owning Function/Let scope) lets that standalone inference seed
     /// them — see `infer_scope_types`'s `ScopeKind::Lambda` arm.
     pub template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Accumulates each nested lambda's full inline-inference tables, keyed by
+    /// the lambda's `FileScopeId`. Captured at the end of `infer_lambda_body`
+    /// (moved, not cloned) before parent state is restored. Like
+    /// `nested_lambda_types`, NOT saved/restored by `infer_lambda_body`, so
+    /// entries for arbitrarily nested lambdas bubble up to the owning
+    /// Function/Let scope, where the standalone `ScopeKind::Lambda` query
+    /// projects them out instead of re-inferring the body (and re-emitting its
+    /// diagnostics).
+    pub nested_lambda_inference:
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     /// Diagnostic-only concrete escaping throws for lambda expressions in the
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
@@ -1100,6 +1110,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
             template_body_params: FxHashMap::default(),
+            nested_lambda_inference: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
         }
@@ -1219,6 +1230,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<FileScopeId, Ty>,
         FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
         crate::inference::DefaultParameterInference<'db>,
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -1238,6 +1250,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.nested_lambda_types,
             self.template_body_params,
             self.default_parameter_inference,
+            self.nested_lambda_inference,
         )
     }
 
@@ -5502,15 +5515,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         // Infer the lambda body using save/restore approach
-        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-            .infer_lambda_body(
-                func_def,
-                &param_tys,
-                return_annotation.as_ref(),
-                &throws_ty,
-                throws_span,
-                warn_extraneous_throws,
-            );
+        let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+            func_def,
+            &param_tys,
+            return_annotation.as_ref(),
+            &throws_ty,
+            throws_span,
+            warn_extraneous_throws,
+        );
         let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
         let surface_throws = if infer_throws_from_body {
@@ -6458,15 +6470,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
 
                 // Infer/check the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-                    .infer_lambda_body(
-                        func_def,
-                        &param_tys,
-                        Some(effective_ret),
-                        &throws_ty,
-                        throws_span,
-                        warn_extraneous_throws,
-                    );
+                let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+                    func_def,
+                    &param_tys,
+                    Some(effective_ret),
+                    &throws_ty,
+                    throws_span,
+                    warn_extraneous_throws,
+                );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
                     if matches!(
                         expected_ret.as_ref(),
@@ -14224,13 +14235,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Infer/check a lambda body using a save/restore approach.
     ///
     /// Saves the current locals, `declared_return_ty`, `generic_params`, and
-    /// `expressions` (to avoid `ExprId` collisions between
-    /// the lambda's arena and the parent's arena). After inference, restores all
-    /// saved state and returns the lambda's expression types separately.
+    /// `expressions` (to avoid `ExprId` collisions between the lambda's arena
+    /// and the parent's arena). After inference, restores all saved state; the
+    /// lambda's own inference tables are *moved* into `nested_lambda_inference`
+    /// keyed by the lambda's `FileScopeId`, so the standalone
+    /// `ScopeKind::Lambda` query can project them instead of re-inferring the
+    /// body (which also stops its diagnostics from being reported twice).
     ///
-    /// Returns `(inferred_return_ty, lambda_expressions)` where
-    /// `lambda_expressions` contains the expression types for the lambda body
-    /// only (keyed by the lambda's own `ExprId`s, which start at 0).
+    /// Returns `(inferred_return_ty, lambda_file_scope_id, effective_throws)`.
     pub fn infer_lambda_body(
         &mut self,
         func_def: &baml_compiler2_ast::FunctionDef,
@@ -14239,7 +14251,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
-    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>, Ty) {
+    ) -> (Ty, Option<FileScopeId>, Ty) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
@@ -14248,7 +14260,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14261,7 +14272,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Void {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14345,10 +14355,33 @@ impl<'db> TypeInferenceBuilder<'db> {
             let db = self.context.db();
             let file = self.context.scope().file(db);
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
-            // Captures are seeded only if the lambda scope is located (it
-            // always should be, but be defensive).
-            let found_fsi = index.lambda_scope_for(func_def.span);
-            if let Some(fsi) = found_fsi {
+            // The lambda's own `FileScopeId`, matched by the surface lambda's
+            // span. Real `(...) -> { ... }` lambdas resolve here.
+            //
+            // Synthetic lambdas (desugared `test` / `testset` bodies) carry a
+            // default `FunctionDef::span`, so this misses. For capture *seeding*
+            // (defensive suppression of false "unresolved name" diagnostics on
+            // captures) we still want the scope, so we fall back to the body's
+            // root-expression span to locate it — but ONLY for seeding.
+            //
+            // The capture *key* (`lambda_file_scope_id`, used to record this
+            // body's tables in `nested_lambda_inference` for the standalone
+            // `ScopeKind::Lambda` query to project) is deliberately left `None`
+            // for these synthetic bodies. Their diagnostics (e.g. `unresolved
+            // name: functions` inside an experimental `test T() { functions
+            // [...] args { } }` block) are emitted ONLY by the standalone Lambda
+            // inference, not by this owning inline pass; projecting an empty
+            // table would drop them. Falling through to standalone re-inference
+            // keeps them. Real lambda bodies, whose diagnostics the owner inline
+            // pass does emit, are keyed and projected so they are not inferred
+            // (or reported) twice.
+            let key_fsi = index.lambda_scope_for(func_def.span);
+            let seed_fsi = key_fsi.or_else(|| {
+                lambda_body
+                    .root_expr
+                    .and_then(|root| index.lambda_scope_for(lambda_source_map.expr_span(root)))
+            });
+            if let Some(fsi) = seed_fsi {
                 let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
                     index.scope_bindings[fsi.index() as usize]
                         .captures
@@ -14361,7 +14394,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.seed_capture(capture_name, ty);
                 }
             }
-            found_fsi
+            key_fsi
         };
 
         // Set return type context for return statement checking inside lambda
@@ -14423,23 +14456,84 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             });
 
-        // Collect the lambda's expression types and restore parent state
+        // Move the lambda's expression types out and swap the parent's back in.
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
-        self.pattern_types = saved_bindings;
+        // Capture this lambda's complete inference tables (keyed by its own body
+        // arena's IDs) so the standalone `ScopeKind::Lambda` query can project
+        // them out instead of re-inferring the body from scratch — the second
+        // inference that this eliminates was both wasted work AND the source of
+        // duplicated diagnostics inside lambdas. Each table is *moved* out while
+        // the saved parent state is swapped back in (`mem::replace`), so there
+        // are no clones: the lambda's tables have exactly one consumer.
+        // `nested_lambda_inference` itself is NOT restored below, so entries
+        // recorded by inner `infer_lambda_body` calls bubble up to the owning
+        // Function/Let scope. `pattern_natural_cache` and the other fields
+        // outside `NestedLambdaInference` are always just restored — they are
+        // caches/context, not part of the lambda's projected result.
+        if let Some(fsi) = lambda_file_scope_id {
+            let lambda_param_types: Vec<(Name, Ty)> = func_def
+                .params
+                .iter()
+                .zip(param_tys.iter())
+                .map(|(param, param_ty)| (param.name.clone(), param_ty.ty.clone()))
+                .collect();
+            self.nested_lambda_inference.insert(
+                fsi,
+                crate::inference::NestedLambdaInference {
+                    expressions: lambda_expressions,
+                    pattern_types: std::mem::replace(&mut self.pattern_types, saved_bindings),
+                    resolutions: std::mem::replace(&mut self.resolutions, saved_resolutions),
+                    catch_residual_throws: std::mem::replace(
+                        &mut self.catch_residual_throws,
+                        saved_catch_residual_throws,
+                    ),
+                    exhaustive_matches: std::mem::replace(
+                        &mut self.exhaustive_matches,
+                        saved_exhaustive_matches,
+                    ),
+                    path_root_types: std::mem::replace(
+                        &mut self.path_root_types,
+                        saved_path_root_types,
+                    ),
+                    path_segment_types: std::mem::replace(
+                        &mut self.path_segment_types,
+                        saved_path_segment_types,
+                    ),
+                    path_member_resolutions: std::mem::replace(
+                        &mut self.path_member_resolutions,
+                        saved_path_member_resolutions,
+                    ),
+                    param_types: lambda_param_types,
+                    call_plans: std::mem::replace(&mut self.call_plans, saved_call_plans),
+                    call_type_instantiations: std::mem::replace(
+                        &mut self.call_type_instantiations,
+                        saved_call_type_instantiations,
+                    ),
+                    function_coercions: std::mem::replace(
+                        &mut self.function_coercions,
+                        saved_function_coercions,
+                    ),
+                },
+            );
+        } else {
+            // Synthetic lambda with no locatable scope: just restore, dropping
+            // its tables (nothing will project them).
+            self.pattern_types = saved_bindings;
+            self.resolutions = saved_resolutions;
+            self.catch_residual_throws = saved_catch_residual_throws;
+            self.exhaustive_matches = saved_exhaustive_matches;
+            self.path_root_types = saved_path_root_types;
+            self.path_segment_types = saved_path_segment_types;
+            self.path_member_resolutions = saved_path_member_resolutions;
+            self.call_plans = saved_call_plans;
+            self.call_type_instantiations = saved_call_type_instantiations;
+            self.function_coercions = saved_function_coercions;
+        }
         self.pattern_natural_cache = saved_pattern_natural_cache;
-        self.resolutions = saved_resolutions;
-        self.exhaustive_matches = saved_exhaustive_matches;
-        self.catch_residual_throws = saved_catch_residual_throws;
-        self.path_root_types = saved_path_root_types;
-        self.path_segment_types = saved_path_segment_types;
-        self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.owner_type_arg_binding_seed = saved_owner_type_arg_binding_seed;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
-        self.call_plans = saved_call_plans;
-        self.call_type_instantiations = saved_call_type_instantiations;
-        self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;
         self.scoped_local_assignments = saved_scoped_local_assignments;
@@ -14453,12 +14547,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
         self.body_source_map = saved_body_source_map;
 
-        (
-            ret_ty,
-            lambda_expressions,
-            lambda_file_scope_id,
-            lambda_effective_throws,
-        )
+        (ret_ty, lambda_file_scope_id, lambda_effective_throws)
     }
 }
 
