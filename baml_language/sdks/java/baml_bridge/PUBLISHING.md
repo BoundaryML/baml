@@ -123,3 +123,14 @@ The `build-java-sdk` / `publish-maven` jobs slot into
    - Central also requires GPG-signed artifacts; wiring the `signing` plugin
      with the CI signing key is part of the `publish-maven` job (out of scope
      for the local flow above).
+
+## Signing key pin
+
+Always pass `-Psigning.gnupg.keyName=<KEYID>` — `useGpgCmd()` otherwise
+signs with gpg's *default* secret key, which on a dev machine may be a
+personal key that no keyserver knows (Central then rejects every
+signature with "could not find a public key by the key fingerprint").
+The BoundaryML publishing key is `A5006CD3995646B6`
+(fingerprint 3B14D8AC406FCE34249AC7E8A5006CD3995646B6), published to
+keyserver.ubuntu.com and keys.openpgp.org; CI gets its own key as a
+secret.
