@@ -419,10 +419,11 @@ jobs:
       # The engine cdylib is required — it is the shared artifact every
       # dylib-loader SDK depends on.
       - build-bridge-cffi
-      # build-rust-sdk / verify-rust-sdk deliberately absent: the Rust SDK
-      # runs in the graph for dry-run validation but does not gate releases
-      # yet (nothing publishes it yet). Add them here once it is
-      # production-ready.
+      # The Rust SDK is production-ready (crates.io publisher live), so its
+      # build + consumer verification gate the release: a failure here blocks
+      # publishing rather than shipping a release the Rust SDK isn't part of.
+      - build-rust-sdk
+      - verify-rust-sdk
     steps:
       - run: echo "all release build jobs completed"
 
@@ -618,11 +619,8 @@ jobs:
     # from the `baml-language-<version>` GitHub release on first call, so those
     # assets must be live before the crate that fetches them lands on crates.io.
     needs: [plan, all-builds, build-rust-sdk, verify-rust-sdk, publish-bridge-cffi-release]
-    # Also gated on the RUST_SDK_RELEASE_ENABLED repo variable so the crate
-    # cannot publish until the crates.io name is reserved and trusted publishing
-    # is configured for this workflow (contract rollout: production publisher
-    # behind an explicit enable flag). Set the variable to `true` to go live.
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && vars.RUST_SDK_RELEASE_ENABLED == 'true' }}
+    # Publishes on every real canary release, like PyPI/npm above.
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     # crates.io trusted publishing is bound to this top-level workflow identity,
     # like PyPI/npm above. Match the builder's runner + toolchain so the
     # repackaged `.crate` is byte-reproducible.
@@ -972,11 +970,9 @@ jobs:
           if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
-          # Dry-run rehearses the real manifest shape: include sdks.rust when the
-          # Rust release is enabled (a real run would publish + record it).
-          if [[ "${{ vars.RUST_SDK_RELEASE_ENABLED }}" == "true" ]]; then
-            args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
-          fi
+          # Dry-run rehearses the real manifest shape: a real run publishes the
+          # Rust SDK and records sdks.rust, so include it here too.
+          args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \
