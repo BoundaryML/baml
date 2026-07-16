@@ -44,7 +44,7 @@ impl<'db> NamespaceShadow<'db> {
             "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
             self.ns_name,
             self.ns_name,
-            def.kind_name(),
+            def.source_kind_name(db),
             self.ns_name
         );
 
@@ -55,7 +55,7 @@ impl<'db> NamespaceShadow<'db> {
                 Span { file_id, range },
                 format!(
                     "this {} is shadowed by namespace `{}`",
-                    def.kind_name(),
+                    def.source_kind_name(db),
                     self.ns_name
                 ),
             );

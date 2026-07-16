@@ -516,7 +516,7 @@ pub const CANCELLED_PANIC_CLASS: &str = "baml.panics.Cancelled";
 /// True iff `err` is an unhandled `baml.panics.Cancelled` panic.
 ///
 /// Centralizes the cancellation-classification logic that bridges (`bridge_cffi`,
-/// `bridge_nodejs`, `bridge_python`, `bridge_wasm`) and `baml_lsp_server` need
+/// `bridge_typescript`, `bridge_python`, `bridge_wasm`) and `baml_lsp_server` need
 /// for mapping `EngineError` → host-specific cancellation indicator.
 pub fn is_cancelled_engine_error(err: &EngineError) -> bool {
     matches!(
@@ -843,7 +843,8 @@ fn host_call_type_arg(
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
     // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
-        Object::Type(ty) => Ok((**ty).clone()),
+        // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
+        Object::Type(ty) => Ok((**ty).clone().into()),
         _ => Err(bad_slot()),
     }
 }
@@ -987,7 +988,11 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.to_vec(),
+                        instance
+                            .class_type_args
+                            .iter()
+                            .map(baml_type::RuntimeTy::from)
+                            .collect(),
                         TyAttr::default(),
                     ))
                 }
@@ -1933,26 +1938,8 @@ impl BexEngine {
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
-        #[cfg(feature = "heap_debug")]
-        let handle_root_count = all_roots.len();
 
         heap_guard.collect_roots(&mut all_roots);
-
-        // Validate roots before the collector dereferences them. Without this,
-        // a stale pointer falls through `generation_of` as Gen0 and can turn a
-        // root-forwarding bug into an opaque SIGSEGV in `Object::clone`.
-        #[cfg(feature = "heap_debug")]
-        for (root_index, &ptr) in all_roots.iter().enumerate() {
-            let source = if root_index < handle_root_count {
-                "handle"
-            } else {
-                "parked-vm"
-            };
-            self.heap.debug_assert_valid_index_with_context(
-                ptr,
-                &format!("pre-GC root index={root_index} source={source}"),
-            );
-        }
 
         tracing::debug!(
             "GC: {} total roots from {} handles and {} parked heap permits",
@@ -1993,27 +1980,11 @@ impl BexEngine {
         #[cfg(feature = "heap_debug")]
         {
             let mut roots_after = self.heap.collect_handle_roots();
-            let handle_root_count = roots_after.len();
             heap_guard.collect_roots(&mut roots_after);
-            for (root_index, &ptr) in roots_after.iter().enumerate() {
-                let source = if root_index < handle_root_count {
-                    "handle"
-                } else {
-                    "parked-vm"
-                };
-                let generation = self.heap.generation_of(ptr);
-                let in_inactive = self.heap.debug_ptr_in_inactive(ptr);
-                self.heap.debug_assert_valid_index_with_context(
-                    ptr,
-                    &format!(
-                        "post-GC root index={root_index} source={source} \
-                         generation={generation:?} in_inactive={in_inactive}"
-                    ),
-                );
+            for &ptr in &roots_after {
                 assert!(
                     !self.heap.debug_ptr_in_inactive(ptr),
-                    "heap_debug: post-forward_roots — root index={root_index} \
-                     source={source} ptr={ptr:?} still points \
+                    "heap_debug: post-forward_roots — root {ptr:?} still points \
                      into the inactive space (forward_roots missed it)"
                 );
             }
@@ -2589,6 +2560,22 @@ impl BexEngine {
         // against the callee's generic params. An empty map seeds nothing
         // (non-generic callee) or all-unbound slots (generic callee with no
         // bindings).
+        // The runtime frame holds realized type args; narrow the host-supplied
+        // bindings at this FFI boundary, rejecting a non-realized binding rather
+        // than erasing it.
+        let type_args = type_args
+            .into_iter()
+            .map(|(name, ty)| match baml_type::RealizedTy::try_from(&ty) {
+                Ok(realized) => Ok((name, realized)),
+                Err(e) => Err(EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::TypeSubstitution {
+                        message: format!(
+                            "host entry-point type argument `{name}` is not realized: {e}"
+                        ),
+                    },
+                )),
+            })
+            .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -2834,7 +2821,11 @@ impl BexEngine {
             if let Some(RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
                 let mut bindings = indexmap::IndexMap::new();
                 for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
-                    crate::conversion::collect_type_var_bindings(declared, concrete, &mut bindings);
+                    crate::conversion::collect_type_var_bindings(
+                        declared,
+                        concrete.as_runtime_ty(),
+                        &mut bindings,
+                    );
                 }
                 return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
             }
@@ -2889,6 +2880,10 @@ impl BexEngine {
         // pairing each with the callee's generic-param name. A lambda has no
         // declared param names, so fall back to the index as a key; the named
         // lowering then emits the unnamed bindings in order.
+        // The seed args are realized (a value's captured/class type args); widen
+        // them into the `RuntimeTy` the host `type_args` channel carries. They are
+        // re-narrowed to `RealizedTy` at the `set_entry_point_with_type_args`
+        // boundary inside `run_entry_point`.
         let seed_type_args: indexmap::IndexMap<String, RuntimeTy> = seed_type_args
             .into_iter()
             .enumerate()
@@ -2898,7 +2893,7 @@ impl BexEngine {
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| i.to_string()),
-                    ty,
+                    RuntimeTy::from(ty),
                 )
             })
             .collect();
@@ -3442,34 +3437,6 @@ impl BexEngine {
         drop(guard);
         child_cancel.cancel();
         Ok(())
-    }
-
-    /// Settle a spawned child's still-`Pending` future after its event loop
-    /// bubbled an [`EngineError`] out of `run_thread_event_loop` (the `Err` /
-    /// invariant-violating `RootValue` arms in [`Self::spawn_thread_inner`]).
-    ///
-    /// The child task has already fully unwound here — its `ActiveHeapPermit`
-    /// was consumed by (and dropped inside) `run_thread_event_loop` — so we own
-    /// no permit. Acquire a fresh COLD permit (the `active_future_count`
-    /// pattern) purely to reach the `FutureManager`, and settle the future as an
-    /// internal error IF it is still `Pending` (tolerating a racing cancel).
-    /// This fires the `ready` wake and routes the error to any awaiter, so the
-    /// await chain resumes instead of parking forever and wedging shutdown.
-    async fn settle_spawn_engine_error(self: &Arc<Self>, future_id: FutureId, err: EngineError) {
-        let active = self
-            .heap_permit_manager
-            .new_permit(())
-            .await
-            .acquire()
-            .await;
-        let mut guard = self.futures.acquire(active.proof()).await;
-        if let Err(settle_err) = guard.settle_internal_error_if_pending(future_id, err) {
-            tracing::error!(
-                ?settle_err,
-                ?future_id,
-                "failed to settle a spawned child's leaked future after an engine error"
-            );
-        }
     }
 
     /// Transition the child future settled by `thread` to `Error(value)`,
@@ -4132,35 +4099,11 @@ impl BexEngine {
                 // The abnormal arms close any spans the event loop left open
                 // before the thread ends — the ring EndThread (emitted by the
                 // run_thread_event_loop wrapper) must never strand open spans.
-                //
-                // Both arms MUST also settle the child's heap `Future`. A child
-                // event loop reaches here with its future still `Pending`: the
-                // normal terminal transitions (`Complete`/throw/cancel) return
-                // `Ok(SettledChild)` after settling, so `Ok(RootValue)` is an
-                // invariant violation and `Err` is an `EngineError` that bubbled
-                // out past every `settle_child_*` (notably the InternalError
-                // reproduced by the live testset: a child awaited a future that
-                // produced an `InternalError`, and `AwaitOutcome::Done(r) => r?`
-                // propagated it here). Left `Pending`, the child's `ready` wake
-                // never fires, its awaiter parks forever, and the stall cascades
-                // to the root's B-650 end-of-run wait — the engine never observes
-                // quiescence and `baml test` wedges after finishing all work.
-                // Settling as an internal error fires the wake and re-propagates
-                // the error deterministically up the await chain.
                 Ok(ThreadOutcome::RootValue(_)) => {
                     tracing::error!(
                         ?future_id,
                         "spawn thread returned a root value instead of settling its future"
                     );
-                    engine
-                        .settle_spawn_engine_error(
-                            future_id,
-                            EngineError::Other(
-                                "spawn thread returned a root value instead of settling its future"
-                                    .to_string(),
-                            ),
-                        )
-                        .await;
                 }
                 Err(err) => {
                     tracing::error!(
@@ -4168,7 +4111,28 @@ impl BexEngine {
                         ?future_id,
                         "spawn thread terminated with engine error"
                     );
-                    engine.settle_spawn_engine_error(future_id, err).await;
+                    // The event loop settles the future itself on the VM-error
+                    // paths (`InternalError` / `TracedInternalError` /
+                    // unhandled-throw arms), but an `EngineError` escaping
+                    // through any other `?` in the loop arrives here with the
+                    // future still `Pending` — and an unsettled future parks
+                    // every awaiter forever (the parent, its parent, …). This
+                    // arm is the single choke point that restores the
+                    // propagation chain: settle the future with the engine
+                    // error so the awaiter re-raises it, *its* terminal path
+                    // settles the next future up, and the root surfaces the
+                    // original error to the host. The thread's own permit died
+                    // with the event loop, so settle under a fresh rootless
+                    // permit (`()` roots nothing; the future entry itself
+                    // roots the heap object).
+                    let admin = engine.heap_permit_manager.new_permit(()).await;
+                    let active = admin.acquire().await;
+                    engine
+                        .futures
+                        .acquire(active.proof())
+                        .await
+                        .settle_spawn_engine_error(future_id, err);
+                    child_cancel.cancel();
                 }
             }
         };

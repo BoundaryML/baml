@@ -209,6 +209,10 @@ pub fn render_diagnostic(
 ) -> String {
     match config.format {
         DiagnosticFormat::Ariadne => {
+            // Single-diagnostic path builds its own one-shot cache. The batch
+            // path (`render_diagnostics`) shares one cache across diagnostics
+            // instead; this cache is exactly what that code used to build
+            // per-diagnostic, so the rendered bytes are unchanged.
             let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
             render_ariadne(diagnostic, sources, &mut cache, config.color)
         }
@@ -226,25 +230,27 @@ pub fn render_diagnostics(
     file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
-    match config.format {
-        DiagnosticFormat::Ariadne => {
-            // Building the ariadne cache line-splits every source file, so
-            // share one cache across the batch instead of rebuilding it per
-            // diagnostic — with many diagnostics the rebuild dominated
-            // `baml check` render time.
-            let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
-            diagnostics
-                .iter()
-                .map(|d| render_ariadne(d, sources, &mut cache, config.color))
-                .collect::<Vec<_>>()
-                .join("\n")
-        }
-        DiagnosticFormat::Concise => diagnostics
-            .iter()
-            .map(|d| render_concise(d, sources, file_paths))
-            .collect::<Vec<_>>()
-            .join("\n"),
-    }
+    // Build the ariadne `SourceCache` ONCE for the whole batch. Previously
+    // each diagnostic reconstructed its own cache inside
+    // `render_report_to_string`, and every `SourceCache::new` eagerly clones
+    // `sources`/`file_paths` and ariadne then computes a line index over every
+    // touched file. On warning-heavy projects that per-diagnostic rebuild was a
+    // large fraction of `baml check` wall time. Hoisting it is a pure
+    // construction move: the cache handed to `render_ariadne` is byte-for-byte
+    // the same object it would have built itself, so rendered output is
+    // identical (safe under `BAML_CACHE_VERIFY`).
+    let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
+        .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
+    diagnostics
+        .iter()
+        .map(|d| match (&config.format, &mut ariadne_cache) {
+            (DiagnosticFormat::Ariadne, Some(cache)) => {
+                render_ariadne(d, sources, cache, config.color)
+            }
+            _ => render_concise(d, sources, file_paths),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Translate a byte offset into a character offset within `text`.
@@ -276,6 +282,11 @@ fn translate_span(span: Span, sources: &HashMap<FileId, String>) -> Span {
 }
 
 /// Render a diagnostic using Ariadne (pretty CLI output).
+///
+/// Takes a pre-built [`SourceCache`] by `&mut` so batch rendering can share a
+/// single line-index computation across all diagnostics instead of rebuilding
+/// it per diagnostic. The cache carries the same `sources`/`file_paths` used
+/// elsewhere here, so filename display and rendered bytes are unchanged.
 fn render_ariadne(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
@@ -444,6 +455,11 @@ fn render_concise(
 }
 
 /// Render an ariadne Report to a String using `SourceCache` for proper filename display.
+///
+/// The `SourceCache` is now supplied by the caller (built once per batch)
+/// rather than reconstructed here per diagnostic. `report.write` only reads
+/// from the cache (populating ariadne's internal line index lazily), so
+/// reusing one cache across reports produces identical bytes.
 fn render_report_to_string(report: &Report<'_, Span>, cache: &mut SourceCache) -> String {
     let mut output = Vec::new();
 

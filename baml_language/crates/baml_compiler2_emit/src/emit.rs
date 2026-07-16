@@ -385,6 +385,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         ctx: MirCodegenContext<'ctx, 'obj>,
         analysis: AnalysisResult,
     ) -> Self {
+        // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
+        // one instruction + one parallel `meta` entry per bytecode op, and a
+        // MIR statement lowers to a few ops, so growing these from empty costs
+        // several doubling reallocations (memcpy of the whole buffer) per
+        // function — measurable across a project-wide emit. The estimate only
+        // sets initial capacity; being off is harmless.
+        let stmt_count: usize = body
+            .blocks
+            .iter()
+            .map(|b| b.statements.len() + 1) // +1 for the terminator
+            .sum();
+        let est_instructions = stmt_count * 3;
+        let mut bytecode = Bytecode::new();
+        bytecode.instructions.reserve(est_instructions);
+        bytecode.meta.reserve(est_instructions);
+
         Self {
             body,
             arity,
@@ -396,21 +412,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             enum_variants: ctx.enum_variants,
             objects: ctx.objects,
             analysis,
-            local_slots: HashMap::new(),
+            local_slots: HashMap::with_capacity(body.locals.len()),
             real_local_count: 0,
-            block_addresses: HashMap::new(),
-            block_end_addresses: HashMap::new(),
+            block_addresses: HashMap::with_capacity(body.blocks.len()),
+            block_end_addresses: HashMap::with_capacity(body.blocks.len()),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
             trap_pc: None,
-            bytecode: Bytecode::new(),
+            bytecode,
             current_debug_span: None,
             pending_sequence_point: false,
             next_line_discriminator: HashMap::new(),
             next_block: None,
             current_block_start: 0,
-            local_types: HashMap::new(),
+            local_types: HashMap::with_capacity(body.locals.len()),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),

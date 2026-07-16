@@ -380,7 +380,7 @@ mod tests {
         let impls: Vec<_> = impl_locs
             .into_iter()
             .map(|loc| {
-                baml_compiler2_tir::interfaces::impl_data(&db, loc)
+                baml_compiler2_tir::interfaces::impl_data(&db, *loc)
                     .as_ref()
                     .expect("impl resolves")
                     .clone()
@@ -672,6 +672,107 @@ mod tests {
             ns.types.get(&Name::new("Thing")),
             Some(baml_compiler2_hir::contributions::Definition::Class(_))
         ));
+    }
+
+    /// Type and value lookup are separate implementation details; declarations
+    /// still share one BAML namespace and produce one complete diagnostic.
+    #[test]
+    fn mixed_declaration_kinds_across_files_produce_one_conflict() {
+        let mut db = make_db();
+        let file_a = db.add_file("a.baml", "class Shared { value int }");
+        let file_b = db.add_file("b.baml", "enum Shared { One\nTwo }");
+        let file_c = db.add_file("c.baml", "type Shared = string");
+        let file_d = db.add_file("d.baml", "function Shared() -> int { 1 }");
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+
+        assert_eq!(ns.conflicts().len(), 1);
+        let conflict = &ns.conflicts()[0];
+        assert_eq!(conflict.name, Name::new("Shared"));
+        assert_eq!(conflict.entries.len(), 4);
+        assert_eq!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.kind_name())
+                .collect::<Vec<_>>(),
+            vec!["class", "enum", "type", "function"]
+        );
+        assert!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.file(&db))
+                .eq([file_a, file_b, file_c, file_d])
+        );
+
+        let diagnostic = conflict.to_diagnostic(&db);
+        assert_eq!(diagnostic.annotations.len(), 4);
+        assert_eq!(
+            diagnostic
+                .annotations
+                .iter()
+                .map(|annotation| annotation.span.file_id)
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            4,
+            "every conflicting source location must be included"
+        );
+    }
+
+    #[test]
+    fn type_and_client_names_collide_across_files() {
+        let mut db = make_db();
+        let _type_file = db.add_file("types.baml", "type Backend = string");
+        let _client_file = db.add_file(
+            "clients.baml",
+            r#"client<llm> Backend {
+  provider openai
+  options { model "gpt-4o-mini" }
+}"#,
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert_eq!(ns.conflicts().len(), 1);
+        assert_eq!(
+            ns.conflicts()[0]
+                .entries
+                .iter()
+                .map(|entry| entry.definition.source_kind_name(&db))
+                .collect::<std::collections::HashSet<_>>(),
+            std::collections::HashSet::from(["type", "client"])
+        );
+    }
+
+    #[test]
+    fn type_and_value_names_in_different_baml_namespaces_are_legal() {
+        let mut db = make_db();
+        let _type_file = db.add_file("ns_models/types.baml", "class Shared { value int }");
+        let _value_file = db.add_file("ns_api/functions.baml", "function Shared() -> int { 1 }");
+
+        let package = PackageId::new(&db, Name::new("user"));
+        assert!(package_items(&db, package).conflicts().is_empty());
+    }
+
+    #[test]
+    fn same_named_tests_keep_function_scoped_identity() {
+        let mut db = make_db();
+        let _file_a = db.add_file(
+            "a.baml",
+            "function First() -> int { 1 }\ntest Shared { functions [First] }
+",
+        );
+        let _file_b = db.add_file(
+            "b.baml",
+            "function Second() -> int { 2 }\ntest Shared { functions [Second] }
+",
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert!(ns.conflicts().is_empty());
     }
 
     /// No conflict when names are unique across files.
@@ -1841,7 +1942,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "alias_hidden.baml",
-            "type Handler = (value: int) -> string\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
+            "type Handler = (value: int) -> string throws never\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
@@ -1850,8 +1951,11 @@ function foo(user: User) -> string {
         assert_eq!(sig.params[0].ty.to_string(), "Handler");
     }
 
+    /// A nested callback position is NOT opened to an effect parameter — only the
+    /// immediate parameter root is (rule 4). The nested omitted throws is left
+    /// unfilled; TIR lowering rejects it (`FunctionTypeMissingThrows`, E0151).
     #[test]
-    fn function_type_throws_nested_callback_position_stays_closed() {
+    fn function_type_throws_nested_callback_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "nested.baml",
@@ -1866,12 +1970,14 @@ function foo(user: User) -> string {
         );
         assert_eq!(
             sig.params[0].ty.to_string(),
-            "((value: int) -> string throws never) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string throws __effect_param_0"
         );
     }
 
+    /// Return position is not an argument position, so rule 4 does not apply: the
+    /// omitted throws is left unfilled for TIR to reject (rule 5, E0151).
     #[test]
-    fn function_type_throws_return_position_stays_closed() {
+    fn function_type_throws_return_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_fn.baml",
@@ -1884,12 +1990,14 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "(value: int) -> string throws never"
+            "(value: int) -> string"
         );
     }
 
+    /// A returned function type's callback parameters do not open effect
+    /// parameters either — the whole return type passes through untouched.
     #[test]
-    fn function_type_throws_return_position_opens_immediate_callback_surface() {
+    fn function_type_throws_return_position_callbacks_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_wrapper.baml",
@@ -1899,22 +2007,19 @@ function foo(user: User) -> string {
         let sig =
             elaborated_function_signature(&db, find_function_loc(&db, file, "returns_wrapper"));
 
-        assert_eq!(
-            sig.synthetic_effect_params,
-            vec![Name::new("__effect_param_0")]
-        );
+        assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string"
         );
     }
 
     #[test]
-    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+    fn function_type_throws_return_position_preserves_explicit_throws() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_explicit_wrapper.baml",
-            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string throws never { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(
@@ -1925,7 +2030,7 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws string) -> string throws string"
+            "((value: int) -> string throws string) -> string throws never"
         );
     }
 

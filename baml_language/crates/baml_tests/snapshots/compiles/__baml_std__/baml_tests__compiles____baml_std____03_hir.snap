@@ -242,7 +242,7 @@ class baml.csv.CsvPosition {
 class baml.csv.CsvReader {
   _handle: $rust_type
   _file: root.fs.File?
-  _on_skip: (baml.csv.CsvError) -> null?
+  _on_skip: (baml.csv.CsvError) -> null throws never?
   _owns_file: bool
 }
 class baml.csv.CsvRecord {
@@ -275,7 +275,7 @@ class baml.csv.ReaderOptions {
   encoding: "utf8" | "utf8-lossy"?
   bom: "strip" | "keep"?
   on_error: "throw" | "skip"?
-  on_skip: (baml.csv.CsvError) -> null?
+  on_skip: (baml.csv.CsvError) -> null throws never?
   max_skipped: int?
   limit: int?
 }
@@ -369,10 +369,10 @@ function baml.csv.iter(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv
 }
 function baml.csv.length(self: ?) -> int  [builtin]
 function baml.csv.next(self: ?) -> T | root.iter.Done  [expr] {
-  { while true {  } match (self.reader.next()) { d: root.iter.Done => { return d }, rec: baml.csv.CsvRecord => {  } match (_try_decode(rec, self.reader)) { s: baml.csv.CsvSkip => { match (self.reader._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, v: T => { return v } } } } root.sys.panic("unreachable: CsvR...")
+  { while true {  } match (self.reader.next()) { d: root.iter.Done => { return d }, rec: baml.csv.CsvRecord => {  } match (_try_decode(rec, self.reader)) { s: baml.csv.CsvSkip => { match (self.reader._on_skip) { null => null, cb: (baml.csv.CsvError) -> null throws never => cb(s.error) } }, v: T => { return v } } } } root.sys.panic("unreachable: CsvR...")
 }
 function baml.csv.next(self: ?) -> baml.csv.CsvRecord | root.iter.Done  [expr] {
-  { while true {  } match (self._poll()) { rec: baml.csv.CsvRecord => { return rec }, d: root.iter.Done => { return d }, s: baml.csv.CsvSkip => { match (self._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
+  { while true {  } match (self._poll()) { rec: baml.csv.CsvRecord => { return rec }, d: root.iter.Done => { return d }, s: baml.csv.CsvSkip => { match (self._on_skip) { null => null, cb: (baml.csv.CsvError) -> null throws never => cb(s.error) } }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
 }
 function baml.csv.open(path: string, options: baml.csv.ReaderOptions? = null) -> baml.csv.CsvReader  [expr] {
   { let f = baml.fs.open(path, "r") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _reader(f, options, true)
@@ -1048,7 +1048,7 @@ class baml.llm.ExecutionContext {
   jinja_string: string
   args: map<string, unknown>
   function_name: string
-  prompt_closure: (Context) -> PromptAst?
+  prompt_closure: (Context) -> PromptAst throws never?
 }
 class baml.llm.OrchestrationStep {
   primitive_client: PrimitiveClient
@@ -1057,22 +1057,22 @@ class baml.llm.OrchestrationStep {
 class baml.llm.PlannerState {
   rr_client_names: string[]
 }
-function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
+function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
   { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
 }
-function baml.llm.build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
+function baml.llm.build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
   { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request_stream(specialized_prompt, return_type)
 }
-function baml.llm.call_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> T  [expr] {
+function baml.llm.call_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> T  [expr] {
   { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
   { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
 }
-function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst?) -> string  [expr] {
+function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst throws never?) -> string  [expr] {
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
 }
-function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> PromptAst  [expr] {
+function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> PromptAst  [expr] {
   { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(lenient = true); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
@@ -1081,7 +1081,7 @@ function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
 function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_client_count: int) -> int  [expr] {
   { let local_offset = self.rr_local_offset(client_name); self.rr_client_names.push(client_name) } counter Add local_offset Mod sub_client_count
 }
-function baml.llm.stream_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> Stream<TStream, TFinal>  [expr] {
+function baml.llm.stream_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> Stream<TStream, TFinal>  [expr] {
   { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) } result
 }
 
@@ -1270,7 +1270,7 @@ function baml.llm.next(self: ?) -> TStream | root.stream.StreamFinished  [expr] 
 function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
-function baml.llm.prompt(body: (role: (string) -> baml.llm.Role, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
+function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
   { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, render_prompt_values(t.values)) } } render
 }
 function baml.llm.prompt_has_media(prompt: baml.llm.PromptAst) -> bool  [builtin]
@@ -1280,8 +1280,8 @@ function baml.llm.render_prompt(self: ?, template: string, args: map<string, unk
 function baml.llm.render_prompt_values(values: unknown[]) -> unknown[]  [expr] {
   { let rendered: unknown[] = []; for value in values {  } rendered.push(match (value) { baml.llm.Role => value, _ => string.from(value) }) } rendered
 }
-function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst?) -> baml.llm.PromptAst  [expr] {
-  { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
+function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
+  { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.text(self: ?) -> string  [builtin]
@@ -1430,6 +1430,52 @@ function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
 function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
   {  } false
 }
+
+--- <builtin>/baml/ns_ops/math.baml ---
+function baml.ops.__union_add(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.__union_div(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.__union_mul(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.__union_neg(a: unknown) -> unknown  [builtin]
+function baml.ops.__union_rem(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown  [builtin]
+function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.add(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.add(self: ?, rhs: int) -> float  [builtin]
+function baml.ops.add(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.div(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.div(self: ?, rhs: int) -> float  [builtin]
+function baml.ops.div(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.div(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: int) -> float  [builtin]
+function baml.ops.mul(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.mul(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.mul(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.mul(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.neg(self: ?) -> bigint  [builtin]
+function baml.ops.neg(self: ?) -> float  [builtin]
+function baml.ops.neg(self: ?) -> int  [builtin]
+function baml.ops.rem(self: ?, rhs: int) -> float  [builtin]
+function baml.ops.rem(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.rem(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.rem(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.rem(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.sub(self: ?, rhs: int) -> float  [builtin]
+function baml.ops.sub(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.sub(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.sub(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.sub(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.sub(self: ?, rhs: float) -> float  [builtin]
+function baml.ops.sub(self: ?, rhs: bigint) -> bigint  [builtin]
 
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.AllocFailure {

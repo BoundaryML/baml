@@ -91,6 +91,9 @@ jobs:
             ':.github/workflows/release-baml-language.yml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/build2-web-sdk.reusable.yaml' \
+            ':.github/workflows/publish2-nodejs-sdk.yaml' \
+            ':.github/workflows/publish2-web-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -448,6 +451,13 @@ jobs:
               raise SystemExit(f"unexpected nightly PyPI version: {pypi} != {expected_pypi}")
           PY
 
+          scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
+          scripts/baml-language-version stamp --plan nightly-release-plan.json
+          node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
+          web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
+          test "$node_npm" = "$nightly"
+          test "$web_npm" = "$node_npm"
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -699,7 +709,7 @@ jobs:
           shared-key: "linux-cargo"
 
       # bridge_ctypes/build.rs needs `protoc`; bridge_go/build.sh needs
-      # `protoc` + `protoc-gen-go`; bridge_nodejs needs node + pnpm.
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
       # The `cargo build -p bridge_ctypes` step uses cargo from rustup
       # (not mise), so we don't need `go` itself here either.
       - name: "Install mise"
@@ -723,30 +733,30 @@ jobs:
         run: ./build.sh
         working-directory: baml_language/sdks/go/bridge_go
 
-      # --ignore-workspace: install from bridge_nodejs's own pnpm-lock.yaml
+      # --ignore-workspace: install from bridge_typescript's own pnpm-lock.yaml
       # rather than the root workspace lockfile. The two resolve different
       # protobufjs-cli versions, and pbjs codegen output (committed under
       # typescript_src/proto/) must come from the version this package pins.
       # --ignore-scripts: skip dependency build scripts (esbuild's binary
       # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
       # codegen, and pnpm errors on unapproved build scripts otherwise.
-      # Same flags as sdk_tests/crates/typescript_node/setup.sh.
+      # Same flags as sdk_tests/crates/typescript/setup.sh.
       - name: "Install Node SDK dependencies"
         run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
 
-      # Node / TypeScript (protobufjs) — writes into sdks/nodejs/bridge_nodejs/typescript_src/proto/.
+      # Node / TypeScript (protobufjs) — writes into sdks/typescript/bridge_typescript/typescript_src/proto/.
       # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
-      - name: "Generate Node/TypeScript proto bindings (sdks/nodejs/bridge_nodejs)"
+      - name: "Generate Node/TypeScript proto bindings (sdks/typescript/bridge_typescript)"
         run: pnpm build:debug
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
 
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
           # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
           PATHS=(
-            baml_language/sdks/nodejs/bridge_nodejs
+            baml_language/sdks/typescript/bridge_typescript
             baml_language/crates/bridge_ctypes
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi

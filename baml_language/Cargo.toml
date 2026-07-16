@@ -3,14 +3,15 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/go/sdkgen_go",
-  "sdks/nodejs/bridge_nodejs",
-  "sdks/nodejs/sdkgen_typescript_node",
+  "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
+  "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
   "sdk_tests/crates/python_pydantic2",
-  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
+  # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
   # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
@@ -18,7 +19,7 @@ members = [
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
-  "sdk_tests/crates/typescript_node",
+  "sdk_tests/crates/typescript",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",
@@ -55,7 +56,7 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
@@ -69,6 +70,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
+bex_cache = { path = "crates/bex_cache" }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -140,6 +142,7 @@ bitflags = "2"
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
+cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
@@ -203,6 +206,7 @@ bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
+mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
@@ -414,5 +418,14 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
+
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
+# *inside the user's process* — so it needs `unwind` for the same reason: its
+# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
+# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
+[profile.release-bridge-cffi]
 inherits = "release"
 panic = "unwind"

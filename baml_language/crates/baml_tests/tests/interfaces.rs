@@ -55,11 +55,10 @@ fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let project = db.get_project().expect("project must be set");
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(db, project, &all_files)
+    collect_diagnostics(db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
@@ -5276,321 +5275,6 @@ fn all_required_parents_satisfied_is_ok() {
         }
         "#,
     );
-}
-
-#[test]
-fn cross_file_required_parent_is_satisfied_by_in_body_class_impl() {
-    let files = &[
-        (
-            "ns_ai/interfaces.baml",
-            r#"
-                interface Provider {}
-                interface Generate requires Provider {}
-                "#,
-        ),
-        (
-            "ns_ai/providers/openai/provider.baml",
-            r#"
-                class OpenAi {
-                    implements Provider {}
-                }
-                "#,
-        ),
-        (
-            "ns_ai/providers/openai/generate.baml",
-            r#"
-                implements Generate for OpenAi {}
-                "#,
-        ),
-    ];
-    assert_no_compile_errors_multi(files);
-}
-
-#[test]
-fn cross_file_required_parent_is_satisfied_by_out_of_body_impl() {
-    let files = &[
-        (
-            "ns_ai/interfaces.baml",
-            r#"
-                interface Provider {}
-                interface Generate requires Provider {}
-                "#,
-        ),
-        (
-            "ns_ai/providers/openai/provider.baml",
-            r#"
-                class OpenAi {}
-                "#,
-        ),
-        (
-            "ns_ai/providers/openai/provider_capability.baml",
-            r#"
-                implements Provider for OpenAi {}
-                "#,
-        ),
-        (
-            "ns_ai/providers/openai/generate.baml",
-            r#"
-                implements Generate for OpenAi {}
-                "#,
-        ),
-    ];
-    assert_no_compile_errors_multi(files);
-}
-
-#[tokio::test]
-async fn in_body_and_cross_file_impls_share_runtime_registry() {
-    let program = baml_tests::engine::compile_multi_file(&[
-        (
-            "interfaces.baml",
-            r#"
-                interface Provider {
-                    function name(self) -> string throws never
-                }
-                interface ToolCallingProvider requires Provider {
-                    function tool_name(self) -> string throws never
-                }
-            "#,
-        ),
-        (
-            "providers/in_body.baml",
-            r#"
-                class InBodyProvider {
-                    implements Provider {
-                        function name(self) -> string { return "in-body" }
-                    }
-                    implements ToolCallingProvider {
-                        function tool_name(self) -> string { return "in-body" }
-                    }
-                }
-            "#,
-        ),
-        (
-            "providers/example/provider.baml",
-            r#"
-                class ExampleProvider {}
-                implements Provider for ExampleProvider {
-                    function name(self) -> string { return "example" }
-                }
-            "#,
-        ),
-        (
-            "providers/example/tools.baml",
-            r#"
-                implements ToolCallingProvider for ExampleProvider {
-                    function tool_name(self) -> string { return "search" }
-                }
-            "#,
-        ),
-        (
-            "main.baml",
-            r#"
-                function narrow(provider: Provider) -> string {
-                    match (provider) {
-                        let tools: ToolCallingProvider => tools.tool_name(),
-                        _ => "NO MATCH",
-                    }
-                }
-                function main() -> string {
-                    let in_body: Provider = InBodyProvider {}
-                    let cross_file: Provider = ExampleProvider {}
-                    return narrow(in_body) + "|" + narrow(cross_file)
-                }
-            "#,
-        ),
-    ]);
-    let output = baml_tests::engine::run_compiled(
-        program,
-        "main",
-        baml_tests::engine::IndexMap::new(),
-        false,
-    )
-    .await;
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("in-body|search".into())
-    );
-}
-
-#[tokio::test]
-async fn interface_match_uses_runtime_registry_for_mixed_class_and_primitive_impls() {
-    // Interface membership is an open, directed query. Once a class implements
-    // `Marker`, a class-only compiler index must not shadow the equally valid
-    // primitive impl and make the `int` arm fail.
-    let output = baml_test!(
-        r#"
-interface Marker {}
-
-class Widget {
-    implements Marker {}
-}
-
-implements Marker for int {}
-
-function matches_marker(value: unknown) -> bool {
-    value is Marker
-}
-
-function main() -> int {
-    (if (matches_marker(7)) { 1 } else { 0 })
-        + (if (matches_marker(Widget {})) { 2 } else { 0 })
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
-}
-
-#[tokio::test]
-async fn interface_match_uses_runtime_registry_for_container_blanket_impls() {
-    // Implementor *types* are not enumerable: this one impl denotes infinitely
-    // many realized list types. Runtime matching must prove the concrete
-    // `int[]` membership directly from the canonical impl rule.
-    let output = baml_test!(
-        r#"
-interface Sequence<T> {}
-
-implements<T> Sequence<T> for T[] {}
-
-class IntSequence {
-    implements Sequence<int> {}
-}
-
-function is_int_sequence(value: unknown) -> bool {
-    value is Sequence<int>
-}
-
-function main() -> int {
-    (if (is_int_sequence([1, 2])) { 1 } else { 0 })
-        + (if (is_int_sequence(["no"])) { 2 } else { 0 })
-        + (if (is_int_sequence(IntSequence {})) { 4 } else { 0 })
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(5));
-}
-
-#[tokio::test]
-async fn interface_match_uses_runtime_registry_for_bounded_blanket_impls() {
-    // A blanket impl over `T` is selected by proving the bound for the actual
-    // runtime type. Both a primitive and a class satisfy that bound here.
-    let output = baml_test!(
-        r#"
-interface Base {}
-interface Derived {}
-
-implements Base for int {}
-implements<T extends Base> Derived for T {}
-
-class Widget {
-    implements Base {}
-}
-
-class Other {}
-
-function is_derived(value: unknown) -> bool {
-    value is Derived
-}
-
-function main() -> int {
-    (if (is_derived(7)) { 1 } else { 0 })
-        + (if (is_derived(Widget {})) { 2 } else { 0 })
-        + (if (is_derived(Other {})) { 4 } else { 0 })
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
-}
-
-#[tokio::test]
-async fn runtime_interface_membership_respects_associated_type_pins() {
-    let output = baml_test!(
-        r#"
-interface Source {
-    type Item
-}
-
-implements Source for int {
-    type Item = string
-}
-
-class IntSource {
-    implements Source {
-        type Item = int
-    }
-}
-
-function is_string_source(value: unknown) -> bool {
-    value is Source<Item = string>
-}
-
-function main() -> int {
-    (if (is_string_source(7)) { 1 } else { 0 })
-        + (if (is_string_source(IntSource {})) { 2 } else { 0 })
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
-}
-
-#[tokio::test]
-async fn stdlib_interface_match_keeps_builtin_primitive_impl_when_user_class_also_implements() {
-    // Exact cross-package shape from the soundness report: the stdlib owns the
-    // primitive impl, while user code adds a class impl. Adding `Score` must not
-    // turn the open `Comparable` predicate into a user-class-only enumeration.
-    let output = baml_test!(
-        r#"
-class Score {
-    points: int
-    implements baml.Comparable {
-        type CompareError = never
-        function compare(self, other: Self) -> int throws never {
-            self.points - other.points
-        }
-    }
-}
-
-function is_comparable(value: unknown) -> bool {
-    value is baml.Comparable<CompareError = never>
-}
-
-function main() -> int {
-    (if (is_comparable(7)) { 1 } else { 0 })
-        + (if (is_comparable(Score { points: 7 })) { 2 } else { 0 })
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
-}
-
-#[tokio::test]
-async fn catch_interface_uses_runtime_registry_for_non_class_implementor() {
-    // Catch lowering shares pattern-test machinery with `is`/`match`, but keep
-    // a dedicated regression because exception dispatch has historically had
-    // separate control-flow plumbing.
-    let output = baml_test!(
-        baml: r#"
-interface Marker {}
-
-class Widget {
-    implements Marker {}
-}
-
-implements Marker for int {}
-
-function boom() -> never throws unknown {
-    throw 7
-}
-
-function main() -> int {
-    boom() catch (error) {
-        let marker: Marker => 1,
-        _ => 0,
-    }
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
 }
 
 #[test]
@@ -11571,13 +11255,13 @@ fn union_fuzz_pr_ambiguous_inherited_method_in_class_union_is_e0121() {
 async fn union_fuzz_pr_function_typed_interface_field_in_union() {
     let output = baml_test!(
         r#"
-        interface HasHandler { handler: (int) -> string }
+        interface HasHandler { handler: (int) -> string throws never }
         class A {
-          handler: (int) -> string
+          handler: (int) -> string throws never
           label: string
           implements HasHandler {}
         }
-        function getHandler(x: HasHandler | A) -> (int) -> string { return x.handler }
+        function getHandler(x: HasHandler | A) -> (int) -> string throws never { return x.handler }
         function main() -> string {
           let a: HasHandler = A { handler: (n: int) -> string { return "handled" }, label: "a" }
           let h = getHandler(a)
@@ -12435,94 +12119,286 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // its single concrete base `int` before the union rejection — is exercised at
 // runtime by `baml_src/ns_arrays/sort_comparable.baml`.)
 
-// ── Group N: cross-file out-of-body implementors in interface `match`/`catch` ──
-//
-// Regression cluster for a perf-merge (`pkg-alias-query`) regression that dropped
-// the registration of *out-of-body* `implements Iface for ConcreteClass` blocks
-// into the flat implementor map (`interface_implementors`) used by
-// `emit_is_type_branch`. The class-def loop only sees `implements` blocks in the
-// SAME FILE as the `class`; cross-file out-of-body impls are registered solely by
-// the `implements_for` loop, which the perf merge changed to `continue` on class
-// targets. Result: an interface arm/clause whose static target is an interface
-// *member of the scrutinee union* expanded to an implementor set missing every
-// cross-file concrete implementor, so the arm silently missed.
-//
-// The stdlib provides the exact cross-file shape: `baml.errors.Unsupported` is
-// declared in `ns_errors/errors.baml` but `implements StreamError for Unsupported`
-// lives in `ns_errors/capability.baml`.
+// ── Group AI: arithmetic operators dispatch through the `baml.ops` interfaces ──
+// `+ - * / %` (and unary `-`) are valid iff the operand types implement the
+// matching `baml.ops` interface for the right operand; the result is the impl's
+// `Output`. Unions are valid iff every operand pair is, with the union of their
+// outputs.
 
-#[tokio::test]
-async fn interface_union_member_matches_cross_file_out_of_body_implementor() {
-    // The union member is the INTERFACE type itself; the runtime value is a
-    // concrete cross-file implementor. The interface arm must match, and the
-    // bound value must be a live interface view (method dispatch works).
-    let output = baml_test!(
+#[test]
+fn arithmetic_on_user_type_implementing_add_is_ok() {
+    assert_no_compile_errors(
         r#"
-function main() -> string {
-    let v: baml.errors.StreamError | int = baml.errors.Unsupported { message: "x" };
-    match (v) {
-        let s: baml.errors.StreamError => if (s.is_network_error()) { "net" } else { "hit" },
-        _ => "missed",
-    }
-}
-"#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("hit".into())
+        class Vec2 {
+            x: int
+            y: int
+            implements baml.ops.Add<Vec2> {
+                type Output = Vec2
+                function add(self, rhs: Vec2) -> Vec2 throws never {
+                    Vec2 { x: self.x + rhs.x, y: self.y + rhs.y }
+                }
+            }
+        }
+        function f(a: Vec2, b: Vec2) -> Vec2 {
+            a + b
+        }
+        "#,
     );
 }
 
-#[tokio::test]
-async fn catch_by_channel_interface_catches_thrown_concrete_error() {
-    // The documented error-triage idiom: a function declares a channel-interface
-    // `throws` and throws a concrete implementor of it; the caller catches by the
-    // channel interface. `Unsupported` implements `StreamError` cross-file, so the
-    // `StreamError` clause must catch it rather than falling through to `_`.
-    let output = baml_test!(
-        baml: r#"
-function boom() -> int throws baml.errors.StreamError | baml.errors.UnknownError {
-    throw baml.errors.Unsupported { message: "nope" }
-}
-function main() -> int {
-    boom() catch (e) {
-        let s: baml.errors.StreamError => 1,
-        _ => -2,
-    }
-}
-"#
-    );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
-}
-
-#[tokio::test]
-async fn interface_union_member_matches_in_body_implementor() {
-    // Sibling shape (the `06: SaveTo` family): interface-typed union member, value
-    // is a concrete implementor declared with an IN-BODY `implements` block. This
-    // path (class-def loop) was never broken, but the test guards the whole
-    // interface-membership `match` family together.
-    let output = baml_test!(
+#[test]
+fn arithmetic_on_user_type_without_impl_is_rejected() {
+    assert_compile_error_contains(
         r#"
-interface Channel {
-    function tag(self) -> string throws never
-}
-class Widget {
-    note: string
-    implements Channel {
-        function tag(self) -> string throws never { "widget" }
-    }
-}
-function main() -> string {
-    let c: Channel | int = Widget { note: "x" };
-    match (c) {
-        let h: Channel => h.tag(),
-        _ => "missed",
-    }
-}
-"#
+        class Vec2 { x: int }
+        function f(a: Vec2, b: Vec2) -> Vec2 {
+            a + b
+        }
+        "#,
+        "cannot be applied",
     );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("widget".into())
+}
+
+#[test]
+fn arithmetic_output_type_is_the_impl_output() {
+    // `Add<int> for Counter` has `Output = int`, so `c + 1` is an `int`.
+    assert_no_compile_errors(
+        r#"
+        class Counter {
+            n: int
+            implements baml.ops.Add<int> {
+                type Output = int
+                function add(self, rhs: int) -> int throws never { self.n + rhs }
+            }
+        }
+        function f(c: Counter) -> int {
+            c + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_user_type_implementing_negate_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Vec2 {
+            x: int
+            implements baml.ops.Negate {
+                function neg(self) -> Vec2 throws never { Vec2 { x: -self.x } }
+            }
+        }
+        function f(a: Vec2) -> Vec2 {
+            -a
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_user_type_without_impl_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        class Vec2 { x: int }
+        function f(a: Vec2) -> Vec2 {
+            -a
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_on_union_all_pairs_valid_is_ok() {
+    // `int | bigint` + `int`: int+int and bigint+int both implement Add, so the
+    // result is `int | bigint`.
+    assert_no_compile_errors(
+        r#"
+        function f(a: int | bigint, b: int) -> int | bigint {
+            a + b
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_out_of_body_user_impl_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Counter { n: int }
+        implement baml.ops.Add<int> for Counter {
+            type Output = int
+            function add(self, rhs: int) -> int throws never { self.n + rhs }
+        }
+        function f(c: Counter) -> int { c + 1 }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_interface_existential_is_ok() {
+    // An interface-existential operand (all associated types specified) dispatches
+    // through its pinned `Output`: `Add<int, Output=int> + int` is an `int`.
+    assert_no_compile_errors(
+        r#"
+        function f(x: baml.ops.Add<int, Output = int>, a: int) -> int {
+            x + a
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_userclass_interface_existential_is_ok() {
+    // A user class as the interface arg must satisfy `Rhs extends Concrete` via
+    // the stdlib's blanket `Concrete` impl (which lives in the baml package, not
+    // the user's) — the bound is an implements check across both packages.
+    assert_no_compile_errors(
+        r#"
+        class B { v: int }
+        class A {
+            v: int
+            implements baml.ops.Add<A> {
+                type Output = B
+                function add(self, rhs: A) -> B throws never { B { v: self.v + rhs.v } }
+            }
+        }
+        function f(x: baml.ops.Add<A, Output = B>, a: A) -> B {
+            x + a
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_mixed_primitive_union_uses_cartesian_product() {
+    // `(int | float) + int` used to promote to `float` on the primitive fast
+    // path, leaving a runtime `int` in a float-typed slot (UB in the
+    // specialized opcodes). The interface path types it as the union of the
+    // pair Outputs: `int | float`.
+    assert_no_compile_errors(
+        r#"
+        function pick(n: int) -> int | float {
+            if n > 0 { 1 } else { 2.5 }
+        }
+        function f(n: int) -> int | float {
+            pick(n) + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_existential_without_pinned_output_is_rejected() {
+    // Without an `Output` pin the `= Self` default realizes to the existential
+    // itself — an unsound claim (`Output` is only bound by `Concrete`), so the
+    // operand must specify `Output`.
+    assert_compile_error_contains(
+        r#"
+        function f(x: baml.ops.Add<int>, a: int) -> int {
+            x + a
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_on_bounded_typevar_with_pinned_output_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        function f<T extends baml.ops.Add<int, Output = int>>(x: T) -> int {
+            x + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_output_type_is_the_impl_output() {
+    // `Negate` has an `Output` (defaulting to `Self`), so `-d` can change type.
+    assert_no_compile_errors(
+        r#"
+        class Debt {
+            amount: int
+            implements baml.ops.Negate {
+                type Output = int
+                function neg(self) -> int throws never { 0 - self.amount }
+            }
+        }
+        function f(d: Debt) -> int {
+            -d
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_bounded_typevar_without_pinned_output_is_rejected() {
+    // Same rule as the binary operators: an operand whose `Output` realizes to
+    // the unpinned `= Self` default existential is invalid.
+    assert_compile_error_contains(
+        r#"
+        function f<T extends baml.ops.Negate>(x: T) -> int {
+            -x;
+            0
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_on_bounded_typevar_without_pinned_output_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        function f<T extends baml.ops.Add<int>>(x: T) -> int {
+            x + 1;
+            0
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn compound_assign_result_not_assignable_to_target_is_rejected() {
+    // `c += 1` desugars to `c = c + 1`; with `Output = int` the operator result
+    // is an `int`, which cannot be stored back into the `Counter` target.
+    assert_compile_error_contains(
+        r#"
+        class Counter {
+            n: int
+            implements baml.ops.Add<int> {
+                type Output = int
+                function add(self, rhs: int) -> int throws never { self.n + rhs }
+            }
+        }
+        function f(c: Counter) -> Counter {
+            c += 1;
+            c
+        }
+        "#,
+        "type mismatch",
+    );
+}
+
+#[test]
+fn compound_assign_on_user_type_with_self_output_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Vec2 {
+            x: int
+            implements baml.ops.Add<Vec2> {
+                function add(self, rhs: Vec2) -> Vec2 throws never {
+                    Vec2 { x: self.x + rhs.x }
+                }
+            }
+        }
+        function f(v: Vec2, w: Vec2) -> Vec2 {
+            v += w;
+            v
+        }
+        "#,
     );
 }

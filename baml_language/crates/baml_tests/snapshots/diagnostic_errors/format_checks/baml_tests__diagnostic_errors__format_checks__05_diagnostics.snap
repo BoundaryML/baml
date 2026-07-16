@@ -296,7 +296,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [validation] error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
+  [validation] error: Name `ExtraWhitespace` defined 5 times as: class, enum, function, template_string, type
      ╭─[ class_decls.baml:296:10 ]
      │
  296 │ class    ExtraWhitespace    {
@@ -309,14 +309,42 @@ source: crates/baml_tests/src/generated_tests.rs
      │         ───────┬───────  
      │                ╰───────── duplicate enum definition
      │
-     ├─[ type_alias_decls.baml:389:9 ]
+     ├─[ function_decls.baml:497:13 ]
      │
- 389 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+ 497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+     │             ───────┬───────  
+     │                    ╰───────── duplicate function definition
+     │
+     ├─[ template_string_decls.baml:364:20 ]
+     │
+ 364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+     │                    ───────┬───────  
+     │                           ╰───────── duplicate template_string definition
+     │
+     ├─[ type_alias_decls.baml:401:9 ]
+     │
+ 401 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
      │         ───────┬───────  
      │                ╰───────── duplicate type definition
      │ 
      │ Note: Error code: E0011
 ─────╯
+
+  [validation] error: Name `Minimal` defined 2 times as: enum, function
+   ╭─[ enum_decls.baml:4:6 ]
+   │
+ 4 │ enum Minimal {
+   │      ───┬───  
+   │         ╰───── first defined as enum here
+   │
+   ├─[ function_decls.baml:5:10 ]
+   │
+ 5 │ function Minimal() -> int {
+   │          ───┬───  
+   │             ╰───── duplicate function definition
+   │ 
+   │ Note: Error code: E0011
+───╯
 
   [type] error: type mismatch: expected (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never, got 1
     ╭─[ function_decls.baml:73:5 ]
@@ -600,18 +628,18 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] error: Name `ExtraWhitespace` defined 2 times as: function, template_string
-     ╭─[ function_decls.baml:497:13 ]
+  [validation] error: Name `T` defined 2 times as: template_string, type
+     ╭─[ template_string_decls.baml:123:17 ]
      │
- 497 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
-     │             ───────┬───────  
-     │                    ╰───────── first defined as function here
+ 123 │ template_string T(x: int) #"{{ x }}"#
+     │                 ┬  
+     │                 ╰── first defined as template_string here
      │
-     ├─[ template_string_decls.baml:364:20 ]
+     ├─[ type_alias_decls.baml:398:6 ]
      │
- 364 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
-     │                    ───────┬───────  
-     │                           ╰───────── duplicate template_string definition
+ 398 │ type T = int
+     │      ┬  
+     │      ╰── duplicate type definition
      │ 
      │ Note: Error code: E0011
 ─────╯

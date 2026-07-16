@@ -10,6 +10,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_syntax = { workspace = true }
+borsh = { workspace = true }
 la-arena = { workspace = true }
 num-bigint = { workspace = true }
 rowan = { workspace = true }

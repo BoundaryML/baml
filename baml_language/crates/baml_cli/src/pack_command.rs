@@ -412,11 +412,8 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
     use baml_db::baml_compiler_diagnostics::render;
 
-    let project = db
-        .get_project()
-        .ok_or_else(|| anyhow!("No project context"))?;
     let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+    let diagnostics = baml_project::collect_diagnostics(db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)

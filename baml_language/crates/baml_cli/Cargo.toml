@@ -28,12 +28,13 @@ baml_release = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
 baml_workspace = { workspace = true }
+bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_vm_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
-sdkgen_typescript_node = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
@@ -41,9 +42,11 @@ clap = { workspace = true, features = [ "color" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
+mimalloc = { workspace = true }
 object = { workspace = true }
 prost = { workspace = true }
 regex = { workspace = true }
@@ -51,6 +54,7 @@ reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+sha2 = { workspace = true }
 strsim = { workspace = true }
 tar = { workspace = true }
 text-size = { workspace = true }

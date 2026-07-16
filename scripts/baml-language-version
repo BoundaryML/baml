@@ -20,8 +20,10 @@ BAML_VERSION_RS = ROOT / "baml_language" / "crates" / "baml_version" / "src" / "
 PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
 PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_bridge" / "__init__.py"
 VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
-NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
-NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "dist" / "native.js"
+NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "package.json"
+NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "dist" / "native.js"
+WEB_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "package.json"
+NPM_PACKAGES = (NODE_PACKAGE, WEB_PACKAGE)
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -341,8 +343,9 @@ def stamp(plan: ReleasePlan) -> None:
     )
     replace_regex(PYPROJECT, r'^version = ".*"$', f'version = "{plan.pypi_version}"')
     replace_regex(VSIX_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
-    if NODE_PACKAGE.exists():
-        replace_regex(NODE_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+    for package in NPM_PACKAGES:
+        if package.exists():
+            replace_regex(package, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
 
     text = PY_INIT.read_text(encoding="utf-8")
     version_line = f'__version__ = "{plan.canonical_version}"\n'
@@ -379,7 +382,7 @@ def regenerate_node_bridge() -> None:
     except subprocess.CalledProcessError as exc:
         fail(
             "failed to install or regenerate the Node bridge after stamping versions. "
-            "Run `cd baml_language/sdks/nodejs/bridge_nodejs && "
+            "Run `cd baml_language/sdks/typescript/bridge_typescript && "
             "pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts && pnpm build:debug` "
             "for details.",
             code=exc.returncode,
@@ -436,6 +439,8 @@ def check_release() -> None:
                     f"expected {expected.canonical_version}. Run "
                     "`scripts/baml-language-version sync` and commit the generated output."
                 )
+    if WEB_PACKAGE.exists():
+        checks["web package version"] = f'"version": "{expected.canonical_version}"' in WEB_PACKAGE.read_text(encoding="utf-8")
 
     for name, ok in checks.items():
         if not ok:

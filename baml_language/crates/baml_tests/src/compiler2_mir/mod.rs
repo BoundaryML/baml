@@ -492,3 +492,75 @@ fn runtime_id_assignment_lowers_to_baml_id_set() {
         render_mir(&db, file)
     );
 }
+
+// ============================================================================
+// Array rest-pattern bindings (B-531)
+// ============================================================================
+
+/// `[let a, ..let r, let z]` projects the middle as
+/// `baml.Array.slice(xs, prefix_len, len - suffix_len)` behind a `len >= 2`
+/// guard.
+#[test]
+fn array_rest_binding_with_suffix_slices_middle() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f(xs: int[]) -> int {
+            match (xs) {
+                [let a, ..let r, let z] => r.length() + a + z,
+                _ => 0
+            }
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "array_rest_binding_with_suffix_slices_middle",
+        render_mir(&db, file)
+    );
+}
+
+/// With no suffix the slice end is the array length directly; no subtraction.
+#[test]
+fn array_rest_binding_no_suffix_slices_to_len() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f(xs: int[]) -> int {
+            match (xs) {
+                [let a, ..let r] => r.length() + a,
+                _ => 0
+            }
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "array_rest_binding_no_suffix_slices_to_len",
+        render_mir(&db, file)
+    );
+}
+
+/// `.._` binds nothing, so it must lower exactly like bare `..`: no
+/// `baml.Array.slice` call, no copied middle. This is a requirement on the
+/// ungated implementation, not a snapshot of current behavior.
+#[test]
+fn array_rest_wildcard_skips_slice_projection() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f(xs: int[]) -> int {
+            match (xs) {
+                [let a, .._] => a,
+                _ => 0
+            }
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    assert!(
+        !output.contains("baml.Array.slice"),
+        "wildcard rest must not pay for a slice copy:\n{output}"
+    );
+}

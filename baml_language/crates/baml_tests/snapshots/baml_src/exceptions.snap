@@ -1049,13 +1049,14 @@ function exceptions.catch_integer_overflow_via_panic_union_fn() -> int {
     jump L2
     load_var e
     type_tag
-    jump_table [L1, L1, L1, _, L1, _, _, L1, L1, _, L1, _, _, L1, _, _, L1, _, L1, L1, _, L1, _, L1, _, _, L1, _, L1, L1], default L0
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
+    jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
     rethrow
 
-  L1: SdkPanic
+  L1: IntegerOverflow
     load_const 2
     unary_op -
 
@@ -2195,13 +2196,14 @@ function exceptions.panic_alias_catches_any_panic_fn() -> int {
     jump L2
     load_var e
     type_tag
-    jump_table [L1, L1, L1, _, L1, _, _, L1, L1, _, L1, _, _, L1, _, _, L1, _, L1, L1, _, L1, _, L1, _, _, L1, _, L1, L1], default L0
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
+    jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
     rethrow
 
-  L1: SdkPanic
+  L1: IntegerOverflow
     load_const 1
     unary_op -
 
@@ -2215,7 +2217,8 @@ function exceptions.panic_alias_plus_wildcard_dispatch_fn() -> int {
     jump L2
     load_var e
     type_tag
-    jump_table [L1, L1, L1, _, L1, _, _, L1, L1, _, L1, _, _, L1, _, _, L1, _, L1, L1, _, L1, _, L1, _, _, L1, _, L1, L1], default L0
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
+    jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
@@ -2223,7 +2226,7 @@ function exceptions.panic_alias_plus_wildcard_dispatch_fn() -> int {
     load_const 2
     jump L2
 
-  L1: SdkPanic
+  L1: IntegerOverflow
     load_const 1
 
   L2:

@@ -137,6 +137,92 @@ fn function_generic_param_bounds_exprs(
     item_tree[func_loc.id(db)].generic_param_bounds.clone()
 }
 
+/// Per-callee generic-parameter facts consumed at every call site:
+/// the enclosing class's generic params (empty for free functions), the
+/// callee's user-declared params, their lowered interface bounds, and the
+/// callee's name for diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct CalleeGenerics {
+    pub(crate) class_params: Vec<Name>,
+    pub(crate) user_params: Vec<Name>,
+    pub(crate) user_bounds: Vec<Option<Ty>>,
+    pub(crate) name: Name,
+}
+
+// Safety: `CalleeGenerics` holds only plain (non-`'db`) data. Manual `Update`
+// impl uses `PartialEq` for Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for CalleeGenerics {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// The declared generic params and lowered bounds of a callable, memoized per
+/// function. Every call site used to redo this from scratch — an item-tree
+/// scan for the enclosing class plus a re-lowering of the bound type
+/// expressions — even though it is a pure function of the callee's
+/// declaration, so memoizing per `FunctionLoc` is safe.
+#[salsa::tracked(returns(ref))]
+pub(crate) fn callee_generics_for_func<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> CalleeGenerics {
+    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    // The enclosing class's generic params (`[]` for a free function). These
+    // are always in scope when lowering the method's *bounds* — a bound may
+    // reference a class generic (`<U extends Eq<C>>` on a method of
+    // `class Box<C>`) regardless of how the class args are supplied — so they
+    // must be visible or `C` would resolve to `unknown`.
+    let file = func_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let class_params: Vec<Name> = item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+        .map(|class_data| class_data.generic_params.clone())
+        .unwrap_or_default();
+
+    // Lower the user generic params' interface bounds in the callee's own
+    // package/namespace, with the class params in scope (see above). The
+    // bounds were already validated at the declaration site, so discard
+    // re-lowering diagnostics here.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let mut bound_scope = class_params.clone();
+    bound_scope.extend(sig.user_generic_params.iter().cloned());
+    let mut diags = Vec::new();
+    let user_bounds = lower_generic_param_bounds(
+        db,
+        &function_generic_param_bounds_exprs(db, func_loc),
+        pkg_items,
+        &pkg_info.namespace_path,
+        &bound_scope,
+        None,
+        &mut diags,
+    );
+
+    CalleeGenerics {
+        class_params,
+        user_params: sig.user_generic_params.clone(),
+        user_bounds,
+        name: sig.name.clone(),
+    }
+}
+
 pub(crate) fn lower_generic_param_bounds(
     db: &dyn crate::Db,
     bounds: &[Option<TypeExpr>],
@@ -544,7 +630,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         GlobalTypeContext {
             db: self.context.db(),
             res_ctx: self.res_ctx,
-            aliases: &self.aliases,
+            aliases: self.aliases,
             bounds: &self.generic_param_bounds,
         }
     }
@@ -590,8 +676,9 @@ impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
         base: &Ty,
         interface: &baml_type::Interface,
         member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
-        self.as_global().project(base, interface, member)
+        self.as_global().project(base, interface, member, fuel)
     }
 }
 
@@ -663,8 +750,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
     /// Resolved type alias map: alias qualified name → expanded Ty.
-    /// Used by the normalizer for structural subtype checking.
-    aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Used by the normalizer for structural subtype checking. Held by
+    /// reference to the Salsa-cached `package_resolved_aliases` value so it is
+    /// not cloned per scope (it used to be rebuilt for every scope inference).
+    aliases: &'db HashMap<crate::ty::QualifiedTypeName, Ty>,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -773,6 +862,16 @@ pub struct TypeInferenceBuilder<'db> {
     /// to the owning Function/Let scope) lets that standalone inference seed
     /// them — see `infer_scope_types`'s `ScopeKind::Lambda` arm.
     pub template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Accumulates each nested lambda's full inline-inference tables, keyed by
+    /// the lambda's `FileScopeId`. Captured at the end of `infer_lambda_body`
+    /// (moved, not cloned) before parent state is restored. Like
+    /// `nested_lambda_types`, NOT saved/restored by `infer_lambda_body`, so
+    /// entries for arbitrarily nested lambdas bubble up to the owning
+    /// Function/Let scope, where the standalone `ScopeKind::Lambda` query
+    /// projects them out instead of re-inferring the body (and re-emitting its
+    /// diagnostics).
+    pub nested_lambda_inference:
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     /// Diagnostic-only concrete escaping throws for lambda expressions in the
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
@@ -966,7 +1065,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
-        aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+        aliases: &'db HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
         let db = context.db();
         let package_items = &res_ctx.own_items;
@@ -1011,6 +1110,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
             template_body_params: FxHashMap::default(),
+            nested_lambda_inference: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
         }
@@ -1130,6 +1230,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<FileScopeId, Ty>,
         FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
         crate::inference::DefaultParameterInference<'db>,
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -1149,6 +1250,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.nested_lambda_types,
             self.template_body_params,
             self.default_parameter_inference,
+            self.nested_lambda_inference,
         )
     }
 
@@ -1318,7 +1420,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        crate::inference::expand_alias_chains(ty, &self.aliases)
+        crate::inference::expand_alias_chains(ty, self.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -1802,19 +1904,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // The arms below bridge between the builtin `Class<Array, [T]>` /
         // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
-        // `Map<K, V>` shapes, recursing structurally on the element types.
-        // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
-        // an `(int | string)[]` slot.
+        // `Map<K, V>` shapes. `List`/`Map` are invariant (TYPE_SYSTEM.md, Subtyping
+        // Rules → Variance), so the element types must be *equivalent*, not merely
+        // subtypes — an `int[]` argument does not satisfy an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
@@ -1825,15 +1927,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.container_arg_subtype_without_nominal(actual_key, &expected_args[0])
-                    && self.container_arg_subtype_without_nominal(actual_val, &expected_args[1])
+                self.equivalent(actual_key, &expected_args[0])
+                    && self.equivalent(actual_val, &expected_args[1])
             }
             _ => false,
         }
-    }
-
-    fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
-        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
     }
 
     fn function_coercion_for(
@@ -2004,20 +2102,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
         let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-        // The enclosing class's generic params (`[]` for a free function). These
-        // are always in scope when lowering the method's *bounds* — a bound may
-        // reference a class generic (`<U extends Eq<C>>` on a method of
-        // `class Box<C>`) regardless of how the class args are supplied — so they
-        // must be visible or `C` would resolve to `unknown`.
-        let file = func_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let enclosing_class_params: Vec<Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        // The callee's declared params and lowered bounds are a pure function
+        // of its declaration — previously re-derived here (item-tree scan +
+        // bound re-lowering) at every call site; now Salsa-memoized per callee.
+        let data = callee_generics_for_func(db, func_loc);
         // Only user-declared generic params are *supplied at the call site*;
         // synthetic effect params are always inferred. For static-method-on-
         // generic-class calls, the class params are also supplied (`Class<...>.m`)
@@ -2026,41 +2114,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         // params (their own bounds, where any, are enforced at receiver
         // specialization).
         let class_params: &[Name] = if treat_as_static_method {
-            &enclosing_class_params
+            &data.class_params
         } else {
             &[]
         };
 
-        // Lower the user generic params' interface bounds in the callee's own
-        // package/namespace, with the class params in scope (see above). The
-        // bounds were already validated at the declaration site, so discard
-        // re-lowering diagnostics here.
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let mut bound_scope = enclosing_class_params.clone();
-        bound_scope.extend(sig.user_generic_params.iter().cloned());
-        let mut diags = Vec::new();
-        let user_bounds = lower_generic_param_bounds(
-            db,
-            &function_generic_param_bounds_exprs(db, func_loc),
-            pkg_items,
-            &pkg_info.namespace_path,
-            &bound_scope,
-            None,
-            &mut diags,
-        );
-
         let mut declared_params: Vec<Name> = class_params.to_vec();
-        declared_params.extend(sig.user_generic_params.iter().cloned());
+        declared_params.extend(data.user_params.iter().cloned());
         let mut declared_bounds: Vec<Option<Ty>> = vec![None; class_params.len()];
-        declared_bounds.extend(user_bounds);
+        declared_bounds.extend(data.user_bounds.iter().cloned());
         // A user bound that references an enclosing class param (`<U extends
         // Eq<C>>` on a method of `class Box<C>`) is lowered with `C` as a type
         // variable here; on a bound-method call the receiver's value for `C` is
         // seeded into the call-site bindings (see `owner_type_arg_binding_seed`) so
         // the bound resolves to e.g. `Eq<int>` before it is checked.
-        Some((declared_params, declared_bounds, sig.name.clone()))
+        Some((declared_params, declared_bounds, data.name.clone()))
     }
 
     /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
@@ -5447,15 +5515,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         // Infer the lambda body using save/restore approach
-        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-            .infer_lambda_body(
-                func_def,
-                &param_tys,
-                return_annotation.as_ref(),
-                &throws_ty,
-                throws_span,
-                warn_extraneous_throws,
-            );
+        let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+            func_def,
+            &param_tys,
+            return_annotation.as_ref(),
+            &throws_ty,
+            throws_span,
+            warn_extraneous_throws,
+        );
         let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
         let surface_throws = if infer_throws_from_body {
@@ -5909,7 +5976,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.package_id,
                         &inferred,
                         expected,
-                        &self.aliases,
+                        self.aliases,
                         |a, b| self.is_subtype(a, b),
                     )
                 } else {
@@ -6403,15 +6470,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
 
                 // Infer/check the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-                    .infer_lambda_body(
-                        func_def,
-                        &param_tys,
-                        Some(effective_ret),
-                        &throws_ty,
-                        throws_span,
-                        warn_extraneous_throws,
-                    );
+                let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+                    func_def,
+                    &param_tys,
+                    Some(effective_ret),
+                    &throws_ty,
+                    throws_span,
+                    warn_extraneous_throws,
+                );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
                     if matches!(
                         expected_ret.as_ref(),
@@ -7365,6 +7431,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let result_ty =
                     self.infer_binary_op(binary_op, &effective_target_ty, &value_ty, *target);
+                // `t OP= v` stores the operator result back into `t`, so the
+                // result must be assignable to the target — not a given once
+                // operators dispatch through `baml.ops` impls whose `Output`
+                // can differ from `Self` (`Counter += 1` with `Output = int`
+                // would leave an `int` in a `Counter` slot). The target is
+                // widened to its base first so a literal-flow-typed local
+                // (`let x = 1; x += 2`) compares against `int`, not `1`.
+                let widened_target = Self::widen_literal_base(&effective_target_ty);
+                if !self.reassignment_is_compatible(&result_ty, &widened_target) {
+                    self.context.report_simple(
+                        TirTypeError::TypeMismatch {
+                            expected: widened_target,
+                            got: result_ty.clone(),
+                        },
+                        *value,
+                    );
+                }
                 // Re-record the value expression with the result type so the
                 // display shows the operation result, not the raw RHS literal.
                 self.record_expr_type(*value, result_ty);
@@ -7749,11 +7832,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         // second matrix of error-free arms only, so an invalid arm cannot
         // spuriously mark a *later* valid arm unreachable.
         if !reachability_arms.is_empty() {
-            let reachability_report = crate::pattern_lowering::compute_match_usefulness(
-                self,
-                &reachability_arms,
-                scrutinee_ty_for_matrix,
-            );
+            // In the common case no arm had a pattern error, so
+            // `reachability_arms` is exactly `matrix_arms` (same DPats, same
+            // order) and the exhaustiveness report above was computed from the
+            // identical matrix — reuse its arm-reachability instead of running
+            // the whole usefulness algorithm a second time. The matrix walk is
+            // the hottest part of match checking, so this halves its cost per
+            // error-free `match`.
+            let reachability_report = if reachability_arms.len() == matrix_arms.len() {
+                report
+            } else {
+                crate::pattern_lowering::compute_match_usefulness(
+                    self,
+                    &reachability_arms,
+                    scrutinee_ty_for_matrix,
+                )
+            };
             for arm in reachability_report.unreachable_arms {
                 if let Some(&body_expr) = reachability_arm_ids.get(arm.0) {
                     self.context
@@ -8359,11 +8453,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 base, interface, ..
             } => {
                 Self::ty_contains_unknown_like(base, count_builtin)
-                    || interface.as_ref().is_some_and(|interface| {
-                        interface
-                            .tys()
-                            .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
-                    })
+                    || interface
+                        .tys()
+                        .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_unknown_like(elem, count_builtin)
@@ -10827,7 +10919,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::AssociatedTypeProjection {
-                interface: Some(projection_iface),
+                interface: projection_iface,
                 member: assoc,
                 ..
             } if member.as_str() != "from_json" => {
@@ -13535,23 +13627,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
 
-            // Arithmetic: result type depends on operands
+            // Arithmetic: valid iff `lhs` implements `baml.ops.{Add,Subtract,…}`
+            // for `rhs`; the result is that impl's `Output` (unioned over operand
+            // alternatives). Primitive numeric promotion and `string` concatenation
+            // stay on the fast classifier (`infer_arithmetic`) — the primitive
+            // interfaces back the same result, and `string`'s concat interface is
+            // deferred — and everything else dispatches through the interface.
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let result = Self::infer_arithmetic(op, lhs, rhs);
-                if matches!(result, Ty::Unknown { .. })
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                if !matches!(result, Ty::Unknown { .. }) {
+                    result
+                } else if matches!(self.normalize(lhs), Ty::Never { .. })
+                    || matches!(self.normalize(rhs), Ty::Never { .. })
                 {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
+                    // A `never` operand makes the operation unreachable (e.g.
+                    // an unreachable catch arm's binding): bottom propagates,
+                    // no diagnostic.
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                } else if let Some(ty) = self.infer_arithmetic_via_interface(op, lhs, rhs) {
+                    ty
+                } else {
+                    if !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                        && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        self.context.report_simple(
+                            TirTypeError::InvalidBinaryOp {
+                                op,
+                                lhs: lhs.clone(),
+                                rhs: rhs.clone(),
+                            },
+                            at,
+                        );
+                    }
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
                 }
-                result
             }
 
             // Bitwise: result type depends on operands (int or bigint).
@@ -13623,19 +13736,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn infer_arithmetic(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
-        fn promote(a: PrimitiveType, b: &PrimitiveType) -> Option<PrimitiveType> {
-            if a == *b {
-                return Some(a);
-            }
-            match (&a, &b) {
-                (PrimitiveType::Int, PrimitiveType::Float)
-                | (PrimitiveType::Float, PrimitiveType::Int) => Some(PrimitiveType::Float),
-                (PrimitiveType::Int, PrimitiveType::Bigint)
-                | (PrimitiveType::Bigint, PrimitiveType::Int) => Some(PrimitiveType::Bigint),
-                _ => None,
-            }
-        }
-
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
             // Enumerate the specific primitives this op accepts (Int, Bigint,
             // Float, String). Anything else returns `None`, which makes the
@@ -13651,14 +13751,43 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
                 Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
                 Ty::Literal(baml_base::Literal::String(_), _, _) => Some(PrimitiveType::String),
+                // The builtin wrapper classes are the method surface for the
+                // primitives — `self` inside `class baml.Float`'s methods is
+                // class-typed but primitive-valued (`self * 180.0` in
+                // `to_degrees`), so they count as their primitive here.
+                Ty::Class(qtn, args, _)
+                    if args.is_empty()
+                        && qtn.package().as_str() == "baml"
+                        && qtn.namespace().is_empty() =>
+                {
+                    match qtn.name().as_str() {
+                        "Int" => Some(PrimitiveType::Int),
+                        "Bigint" => Some(PrimitiveType::Bigint),
+                        "Float" => Some(PrimitiveType::Float),
+                        "String" => Some(PrimitiveType::String),
+                        _ => None,
+                    }
+                }
                 Ty::Union(members, _) => {
+                    // A union stays on the fast path only when every member is
+                    // the SAME primitive kind (`int | 3` -> int). A mixed-kind
+                    // union (`int | float`) must NOT promote here: the static
+                    // promotion (float) diverges from the runtime value (which
+                    // may be an int), so emit would pick a single-kind opcode
+                    // for a value of the other kind — UB in the specialized
+                    // handlers. Mixed unions fall through to the interface
+                    // path, whose cartesian product types them correctly and
+                    // whose driver dispatches on the runtime type.
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
                         let p = base_ty(m)?;
-                        result = Some(match result {
-                            None => p,
-                            Some(existing) => promote(existing, &p)?,
-                        });
+                        if let Some(existing) = &result {
+                            if *existing != p {
+                                return None;
+                            }
+                        } else {
+                            result = Some(p);
+                        }
                     }
                     result
                 }
@@ -13667,6 +13796,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (base_ty(lhs), base_ty(rhs)) {
+            // A non-primitive operand always falls through to the interface
+            // path — a wildcard arm below must never claim `user_class +
+            // float` (or `+ string`) for the fast path, which would type it by
+            // the primitive operand alone and skip the operand's `baml.ops`
+            // impls entirely.
+            (None, _) | (_, None) => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
             // Float / bigint mixing is rejected — bigint values past 2^53 don't
             // round-trip through f64. Users must explicitly convert.
             (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
@@ -13684,12 +13821,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
             (Some(PrimitiveType::String), _) | (_, Some(PrimitiveType::String)) => {
-                // String concatenation, Add only. The VM concatenates any two
-                // *objects* via `as_string` (string, uint8array, …), but a
-                // non-object primitive (int/float/bigint/bool/null) has no object
-                // representation and aborts at runtime. So `string + int` must be
-                // a type error here rather than inferring `string` and crashing
-                // the VM, while `string + uint8array` stays valid.
+                // String concatenation, Add only, and only string + string:
+                // both operands are known primitive-based here (the None arm
+                // above already sent everything else to the interface path),
+                // so the non-object-primitive check rejects exactly `string +
+                // int/float/bigint` — the VM concatenates objects via
+                // `as_string`, and a tagged primitive has no object
+                // representation. `string` deliberately has no `baml.ops`
+                // impls (see math.baml), so no interface fallback applies.
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add)
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)
@@ -13707,6 +13846,161 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
         }
+    }
+
+    /// The qualified name of the `baml.ops.<name>` interface.
+    fn ops_qtn(name: &str) -> crate::ty::QualifiedTypeName {
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new(name),
+        )
+    }
+
+    /// The `baml.ops.<Interface>` an arithmetic operator dispatches through, or
+    /// `None` for a non-arithmetic operator.
+    fn arithmetic_interface_qtn(
+        op: baml_compiler2_ast::BinaryOp,
+    ) -> Option<crate::ty::QualifiedTypeName> {
+        use baml_compiler2_ast::BinaryOp;
+        let name = match op {
+            BinaryOp::Add => "Add",
+            BinaryOp::Sub => "Subtract",
+            BinaryOp::Mul => "Multiply",
+            BinaryOp::Div => "Divide",
+            BinaryOp::Mod => "Remainder",
+            _ => return None,
+        };
+        Some(Self::ops_qtn(name))
+    }
+
+    /// Split an operand type into the concrete alternatives an operator must hold
+    /// against. A union contributes each member (every pair must be valid); a
+    /// single type (incl. an interface-existential) is one alternative. Normalized
+    /// first so a collapsible spelling (`int | 99` → `int`) is one alternative.
+    /// `unknown` / error operands yield no members so the caller suppresses
+    /// cascading diagnostics.
+    fn operator_operand_members(&self, ty: &Ty) -> Vec<Ty> {
+        // Widen each alternative to its base (literal → primitive, enum-variant →
+        // enum): impls are keyed on base types, so `c + 1` must request `Add<int>`,
+        // not `Add<1>`.
+        let members = match self.normalize(ty) {
+            Ty::Union(members, _) => members.iter().map(Self::widen_literal_base).collect(),
+            Ty::Unknown { .. } | Ty::Error { .. } => Vec::new(),
+            other => vec![Self::widen_literal_base(&other)],
+        };
+        // Widening can collapse distinct alternatives to one base (`1 | 2` → two
+        // `int`s); dedup so each base contributes one pair to the operator product.
+        let mut deduped: Vec<Ty> = Vec::with_capacity(members.len());
+        for member in members {
+            if !deduped.iter().any(|seen| self.equivalent(seen, &member)) {
+                deduped.push(member);
+            }
+        }
+        deduped
+    }
+
+    /// For one operand, resolve `<l as Iface<args>>::Output` — the result of the
+    /// operator applied to `l` (`args` is `[rhs]` for a binary operator, empty
+    /// for `Negate`) — to its concrete type. A concrete `l` (or an existential
+    /// whose `Output` is specified) yields that `Output`; `None` when `l` does
+    /// not implement `Iface<args>`, which the resolver signals by leaving the
+    /// projection unresolved (so an `l` whose `Output` can't be pinned to a
+    /// concrete type — e.g. an unbounded type variable — is rejected as an
+    /// invalid operand).
+    fn resolve_operator_output(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        l: &Ty,
+        iface_args: Vec<Ty>,
+    ) -> Option<Ty> {
+        // Resolve `<l as Iface<args>>::Output` directly rather than checking
+        // `is_subtype(l, Iface<args>)` first: the latter fills the interface's
+        // `Output` with its `= Self` default, turning the membership test into a
+        // stricter `Iface<args, Output=Self>` that a concrete impl (`Output =
+        // int`, say) can never satisfy. Normalization reduces the projection
+        // through the impl registry (`TypeContext::project`), selecting the impl
+        // by the input dimensions only — the right notion here — and leaves the
+        // projection unresolved exactly when no impl applies.
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(l.clone()),
+            interface: Box::new(baml_type::Interface::new(
+                iface_qtn.clone(),
+                iface_args,
+                Vec::new(),
+            )),
+            member: Name::new("Output"),
+            attr: TyAttr::default(),
+        };
+        match self.normalize(&projection) {
+            Ty::AssociatedTypeProjection { .. } | Ty::Unknown { .. } | Ty::Error { .. } => None,
+            // The `= Self` default realized against a symbolic operand (an
+            // interface-existential, or a type var whose bound leaves `Output`
+            // unpinned) resolves to the operator existential itself. That
+            // claims the result implements the interface, but `Output`'s only
+            // bound is `Concrete` — an impl whose `Output` doesn't implement
+            // it would falsify the claim at runtime (`(x + 1) + 1` would
+            // type-check yet fail to dispatch). Such an operand must pin
+            // `Output` explicitly, so the pair is invalid.
+            Ty::Interface(name, _, bindings, _)
+                if name == *iface_qtn && !bindings.iter().any(|(n, _)| n.as_str() == "Output") =>
+            {
+                None
+            }
+            resolved => Some(resolved),
+        }
+    }
+
+    /// Resolve `lhs OP rhs` through the `baml.ops` arithmetic interfaces: every
+    /// `(L, R)` pair of operand alternatives must satisfy `L extends Iface<R>`,
+    /// and the result is the union of each pair's `Output`. `None` when the
+    /// operator is not arithmetic, an operand has no alternatives (`unknown`), or
+    /// any pair is unimplemented — i.e. the operator is invalid for these types.
+    fn infer_arithmetic_via_interface(
+        &self,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: &Ty,
+        rhs: &Ty,
+    ) -> Option<Ty> {
+        let iface_qtn = Self::arithmetic_interface_qtn(op)?;
+        let lhs_members = self.operator_operand_members(lhs);
+        let rhs_members = self.operator_operand_members(rhs);
+        if lhs_members.is_empty() || rhs_members.is_empty() {
+            return None;
+        }
+        let mut output: Option<Ty> = None;
+        for l in &lhs_members {
+            for r in &rhs_members {
+                let pair_output = self.resolve_operator_output(&iface_qtn, l, vec![r.clone()])?;
+                output = Some(match output {
+                    None => pair_output,
+                    Some(acc) => Self::join_types(&acc, &pair_output),
+                });
+            }
+        }
+        output
+    }
+
+    /// Resolve unary `-operand` through `baml.ops.Negate`: every operand
+    /// alternative must implement `Negate`, and the result is the union of each
+    /// alternative's `Output` (defaulting to the alternative itself via the
+    /// `= Self` default). `None` when an alternative does not implement `Negate`
+    /// (or the operand has none) — i.e. negation is invalid.
+    fn infer_negate_via_interface(&self, operand: &Ty) -> Option<Ty> {
+        let members = self.operator_operand_members(operand);
+        if members.is_empty() {
+            return None;
+        }
+        let negate_qtn = Self::ops_qtn("Negate");
+        let mut output: Option<Ty> = None;
+        for m in &members {
+            let member_output = self.resolve_operator_output(&negate_qtn, m, Vec::new())?;
+            output = Some(match output {
+                None => member_output,
+                Some(acc) => Self::join_types(&acc, &member_output),
+            });
+        }
+        output
     }
 
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the
@@ -13770,20 +14064,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         let operand_attr = operand.attr().clone();
         match op {
             baml_compiler2_ast::UnaryOp::Not => Ty::Bool { attr: operand_attr },
+            // Negation: the primitives stay on the fast path (their `Negate`
+            // impls back the same result); anything else dispatches through
+            // `baml.ops.Negate`, whose `neg(self) -> Self` keeps the operand type.
             baml_compiler2_ast::UnaryOp::Neg => match operand {
                 Ty::Int { attr } => Ty::Int { attr: attr.clone() },
                 Ty::Float { attr } => Ty::Float { attr: attr.clone() },
                 Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
-                    self.context.report_simple(
-                        TirTypeError::InvalidUnaryOp {
-                            op,
-                            operand: operand.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown { attr: operand_attr }
+                    if let Some(ty) = self.infer_negate_via_interface(operand) {
+                        ty
+                    } else {
+                        self.context.report_simple(
+                            TirTypeError::InvalidUnaryOp {
+                                op,
+                                operand: operand.clone(),
+                            },
+                            at,
+                        );
+                        Ty::Unknown { attr: operand_attr }
+                    }
                 }
             },
         }
@@ -14171,13 +14472,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Infer/check a lambda body using a save/restore approach.
     ///
     /// Saves the current locals, `declared_return_ty`, `generic_params`, and
-    /// `expressions` (to avoid `ExprId` collisions between
-    /// the lambda's arena and the parent's arena). After inference, restores all
-    /// saved state and returns the lambda's expression types separately.
+    /// `expressions` (to avoid `ExprId` collisions between the lambda's arena
+    /// and the parent's arena). After inference, restores all saved state; the
+    /// lambda's own inference tables are *moved* into `nested_lambda_inference`
+    /// keyed by the lambda's `FileScopeId`, so the standalone
+    /// `ScopeKind::Lambda` query can project them instead of re-inferring the
+    /// body (which also stops its diagnostics from being reported twice).
     ///
-    /// Returns `(inferred_return_ty, lambda_expressions)` where
-    /// `lambda_expressions` contains the expression types for the lambda body
-    /// only (keyed by the lambda's own `ExprId`s, which start at 0).
+    /// Returns `(inferred_return_ty, lambda_file_scope_id, effective_throws)`.
     pub fn infer_lambda_body(
         &mut self,
         func_def: &baml_compiler2_ast::FunctionDef,
@@ -14186,7 +14488,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
-    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>, Ty) {
+    ) -> (Ty, Option<FileScopeId>, Ty) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
@@ -14195,7 +14497,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14208,7 +14509,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Void {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14292,10 +14592,33 @@ impl<'db> TypeInferenceBuilder<'db> {
             let db = self.context.db();
             let file = self.context.scope().file(db);
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
-            // Captures are seeded only if the lambda scope is located (it
-            // always should be, but be defensive).
-            let found_fsi = index.lambda_scope_for(func_def.span);
-            if let Some(fsi) = found_fsi {
+            // The lambda's own `FileScopeId`, matched by the surface lambda's
+            // span. Real `(...) -> { ... }` lambdas resolve here.
+            //
+            // Synthetic lambdas (desugared `test` / `testset` bodies) carry a
+            // default `FunctionDef::span`, so this misses. For capture *seeding*
+            // (defensive suppression of false "unresolved name" diagnostics on
+            // captures) we still want the scope, so we fall back to the body's
+            // root-expression span to locate it — but ONLY for seeding.
+            //
+            // The capture *key* (`lambda_file_scope_id`, used to record this
+            // body's tables in `nested_lambda_inference` for the standalone
+            // `ScopeKind::Lambda` query to project) is deliberately left `None`
+            // for these synthetic bodies. Their diagnostics (e.g. `unresolved
+            // name: functions` inside an experimental `test T() { functions
+            // [...] args { } }` block) are emitted ONLY by the standalone Lambda
+            // inference, not by this owning inline pass; projecting an empty
+            // table would drop them. Falling through to standalone re-inference
+            // keeps them. Real lambda bodies, whose diagnostics the owner inline
+            // pass does emit, are keyed and projected so they are not inferred
+            // (or reported) twice.
+            let key_fsi = index.lambda_scope_for(func_def.span);
+            let seed_fsi = key_fsi.or_else(|| {
+                lambda_body
+                    .root_expr
+                    .and_then(|root| index.lambda_scope_for(lambda_source_map.expr_span(root)))
+            });
+            if let Some(fsi) = seed_fsi {
                 let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
                     index.scope_bindings[fsi.index() as usize]
                         .captures
@@ -14308,7 +14631,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.seed_capture(capture_name, ty);
                 }
             }
-            found_fsi
+            key_fsi
         };
 
         // Set return type context for return statement checking inside lambda
@@ -14370,23 +14693,84 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             });
 
-        // Collect the lambda's expression types and restore parent state
+        // Move the lambda's expression types out and swap the parent's back in.
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
-        self.pattern_types = saved_bindings;
+        // Capture this lambda's complete inference tables (keyed by its own body
+        // arena's IDs) so the standalone `ScopeKind::Lambda` query can project
+        // them out instead of re-inferring the body from scratch — the second
+        // inference that this eliminates was both wasted work AND the source of
+        // duplicated diagnostics inside lambdas. Each table is *moved* out while
+        // the saved parent state is swapped back in (`mem::replace`), so there
+        // are no clones: the lambda's tables have exactly one consumer.
+        // `nested_lambda_inference` itself is NOT restored below, so entries
+        // recorded by inner `infer_lambda_body` calls bubble up to the owning
+        // Function/Let scope. `pattern_natural_cache` and the other fields
+        // outside `NestedLambdaInference` are always just restored — they are
+        // caches/context, not part of the lambda's projected result.
+        if let Some(fsi) = lambda_file_scope_id {
+            let lambda_param_types: Vec<(Name, Ty)> = func_def
+                .params
+                .iter()
+                .zip(param_tys.iter())
+                .map(|(param, param_ty)| (param.name.clone(), param_ty.ty.clone()))
+                .collect();
+            self.nested_lambda_inference.insert(
+                fsi,
+                crate::inference::NestedLambdaInference {
+                    expressions: lambda_expressions,
+                    pattern_types: std::mem::replace(&mut self.pattern_types, saved_bindings),
+                    resolutions: std::mem::replace(&mut self.resolutions, saved_resolutions),
+                    catch_residual_throws: std::mem::replace(
+                        &mut self.catch_residual_throws,
+                        saved_catch_residual_throws,
+                    ),
+                    exhaustive_matches: std::mem::replace(
+                        &mut self.exhaustive_matches,
+                        saved_exhaustive_matches,
+                    ),
+                    path_root_types: std::mem::replace(
+                        &mut self.path_root_types,
+                        saved_path_root_types,
+                    ),
+                    path_segment_types: std::mem::replace(
+                        &mut self.path_segment_types,
+                        saved_path_segment_types,
+                    ),
+                    path_member_resolutions: std::mem::replace(
+                        &mut self.path_member_resolutions,
+                        saved_path_member_resolutions,
+                    ),
+                    param_types: lambda_param_types,
+                    call_plans: std::mem::replace(&mut self.call_plans, saved_call_plans),
+                    call_type_instantiations: std::mem::replace(
+                        &mut self.call_type_instantiations,
+                        saved_call_type_instantiations,
+                    ),
+                    function_coercions: std::mem::replace(
+                        &mut self.function_coercions,
+                        saved_function_coercions,
+                    ),
+                },
+            );
+        } else {
+            // Synthetic lambda with no locatable scope: just restore, dropping
+            // its tables (nothing will project them).
+            self.pattern_types = saved_bindings;
+            self.resolutions = saved_resolutions;
+            self.catch_residual_throws = saved_catch_residual_throws;
+            self.exhaustive_matches = saved_exhaustive_matches;
+            self.path_root_types = saved_path_root_types;
+            self.path_segment_types = saved_path_segment_types;
+            self.path_member_resolutions = saved_path_member_resolutions;
+            self.call_plans = saved_call_plans;
+            self.call_type_instantiations = saved_call_type_instantiations;
+            self.function_coercions = saved_function_coercions;
+        }
         self.pattern_natural_cache = saved_pattern_natural_cache;
-        self.resolutions = saved_resolutions;
-        self.exhaustive_matches = saved_exhaustive_matches;
-        self.catch_residual_throws = saved_catch_residual_throws;
-        self.path_root_types = saved_path_root_types;
-        self.path_segment_types = saved_path_segment_types;
-        self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.owner_type_arg_binding_seed = saved_owner_type_arg_binding_seed;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
-        self.call_plans = saved_call_plans;
-        self.call_type_instantiations = saved_call_type_instantiations;
-        self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;
         self.scoped_local_assignments = saved_scoped_local_assignments;
@@ -14400,12 +14784,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
         self.body_source_map = saved_body_source_map;
 
-        (
-            ret_ty,
-            lambda_expressions,
-            lambda_file_scope_id,
-            lambda_effective_throws,
-        )
+        (ret_ty, lambda_file_scope_id, lambda_effective_throws)
     }
 }
 
@@ -15956,47 +16335,60 @@ impl TypeInferenceBuilder<'_> {
             },
         };
 
-        // Reject any non-trivial rest sub-pattern: only bare `..` is
-        // allowed for now. Bindings (`..let r`), structural rests
-        // (`..[a, b]`), class destructures (`..Box {}`), and chain
-        // ascriptions (`..pat: T`) are all disallowed while we settle
-        // the rest-vs-slice typing semantics. The chain widening rule
-        // only catches mismatches *between* chain links, not the
-        // implicit "rest is a slice" constraint, so partial support
-        // would let contradictory annotations slip through silently.
-        if let Some(rp) = rest
-            && let Some(rest_pat) = rp.pat
-        {
-            self.report_at_pat_or_expr(TirTypeError::RestSubPatternNotSupported, rest_pat, at_expr);
-        }
-
-        // Pre-flatten nested rest sub-patterns: `[a, ..[b, ..c, d], e]`
-        // collapses to `[a, b, ..c, d, e]`. baml has no equivalent of this
-        // in rustc — rustc's `..` is a position marker and can only carry a
-        // binding (`name @ ..`). To stay faithful to rustc's flat slice
-        // model in the matrix algorithm we rewrite to flat shape here.
-        //
-        // Returns (flat_prefix, has_rest, rest_binding_pat, flat_suffix):
-        //   - has_rest=false → Fixed shape, no rest binding
-        //   - has_rest=true, rest_binding_pat=None → bare `..` (Variable, no binding)
-        //   - has_rest=true, rest_binding_pat=Some(p) → `..p` where p is a
-        //     non-flattenable sub-pattern (binding/wildcard/etc.)
-        let (flat_prefix, has_rest, rest_binding_pat, flat_suffix) =
-            Self::flatten_array_rest(body, prefix.to_vec(), rest, suffix.to_vec());
-
-        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(flat_prefix.len() + flat_suffix.len());
+        // `..` may carry a binding-shaped sub-pattern: `..let r`, `.._`,
+        // pure bind chains (`..let r: let s`), optionally terminated by a
+        // `: T` ascription link (`..let r: int[]`, checked against the
+        // slice type below). Anything else is rejected:
+        //   - type patterns and class destructures are statically dead —
+        //     the slice's runtime tag is always exactly `elem[]` (built by
+        //     `Array.slice` from the scrutinee) and list type tests are
+        //     invariant tag compares, so they can never narrow;
+        //   - refutable shapes (or-patterns like `..([] | [_])`) have no
+        //     column in the usefulness matrix: the slice DPat below is
+        //     rustc's model, whose `..` only ever carries a binding, so
+        //     allowing them makes "exhaustive" matches that fall through
+        //     at runtime;
+        //   - nested array rests (`..[a, ..r, b]`) are sound if flattened
+        //     into the outer shape before the matrix runs, but they are a
+        //     second spelling of the flat pattern (`[..[]]` = `[]`), so
+        //     they stay out until someone wants them.
+        // The set could be expanded in the future along exactly those
+        // lines: flatten nested arrays, extend the matrix with a rest
+        // constraint, or make list tests structural.
         let mut bindings: Vec<PatternBinding> = Vec::new();
+        let (has_rest, rest_binding_pat) = match rest.and_then(|rp| rp.pat) {
+            None => (rest.is_some(), None),
+            Some(rest_pat) => {
+                if Self::rest_subpattern_is_binding_shaped(body, rest_pat, false) {
+                    (true, Some(rest_pat))
+                } else {
+                    self.report_at_pat_or_expr(
+                        TirTypeError::RestSubPatternNotBinding,
+                        rest_pat,
+                        at_expr,
+                    );
+                    // Recovery: keep the rejected sub-pattern's names in
+                    // scope (typed unknown) so the body doesn't cascade
+                    // unresolved-name errors, and treat the rest as bare
+                    // `..` for the slice shape.
+                    for name in body.patterns[rest_pat].bound_names(&body.patterns) {
+                        bindings.push(PatternBinding {
+                            name: name.clone(),
+                            pat_id: rest_pat,
+                            ty: Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                        });
+                    }
+                    (true, None)
+                }
+            }
+        };
+
+        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(prefix.len() + suffix.len());
         let mut element_required_tys: Vec<Ty> = Vec::new();
 
-        for &p in &flat_prefix {
-            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
-            sub_dpats.push(r.dpat);
-            bindings.extend(r.bindings);
-            if let Some(req) = r.required_ty {
-                element_required_tys.push(req);
-            }
-        }
-        for &p in &flat_suffix {
+        for &p in prefix.iter().chain(suffix) {
             let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
             sub_dpats.push(r.dpat);
             bindings.extend(r.bindings);
@@ -16008,15 +16400,17 @@ impl TypeInferenceBuilder<'_> {
         // doesn't consume a slot in the slice shape.
         if let Some(rest_pat) = rest_binding_pat {
             let rest_ty = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
-            // The rest sub-pattern matches against the *slice* (a list),
-            // not against an element. If the user annotates it with a
-            // non-list type (e.g. `..let r: int`, or `..Box { .. }`, or
-            // `..[x]: int`), that's a type mismatch — the annotation
-            // claims something incompatible with `List<elem>`.
+            // A `: T` ascription on the rest binding must be EQUIVALENT to
+            // the slice type, not merely a subtype. The slice's runtime tag
+            // is always exactly `elem[]`, so a narrowing ascription (e.g.
+            // `..let r: int[]` on `(int|string)[]`) can never match — better
+            // a mismatch here than a statically-dead arm. Non-list types
+            // (`..let r: int`) fail the same check.
             if let Some(expected) = self.pattern_expected_ty(rest_pat, body)
                 && !Self::ty_contains_recovery_unknown(&rest_ty)
                 && !crate::generics::contains_typevar(&rest_ty)
-                && !self.is_subtype(expected.ty(), &rest_ty)
+                && !(self.is_subtype(expected.ty(), &rest_ty)
+                    && self.is_subtype(&rest_ty, expected.ty()))
             {
                 let got = expected.into_ty();
                 let err = TirTypeError::TypeMismatch {
@@ -16031,11 +16425,11 @@ impl TypeInferenceBuilder<'_> {
 
         let shape = if has_rest {
             SliceShape::Variable {
-                prefix: flat_prefix.len(),
-                suffix: flat_suffix.len(),
+                prefix: prefix.len(),
+                suffix: suffix.len(),
             }
         } else {
-            SliceShape::Fixed(flat_prefix.len() + flat_suffix.len())
+            SliceShape::Fixed(prefix.len() + suffix.len())
         };
 
         // Required type: List<join of element required tys>, or List<elem>
@@ -16058,48 +16452,22 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    /// Recursively merge nested rest sub-patterns into a flat slice shape.
-    ///
-    /// Returns `(flat_prefix, has_rest, rest_binding_pat, flat_suffix)`. See
-    /// [`Self::lower_array_pat`] for the encoding.
-    ///
-    /// When the rest sub-pattern is itself an array (possibly wrapped in a
-    /// chain — only the leftmost link is structural), its prefix/suffix get
-    /// merged into the outer prefix/suffix and we recurse into its inner
-    /// rest. When the rest sub-pattern is anything else (binding, wildcard,
-    /// or-pattern, etc.), we keep it as the variable-shape's binding slot.
-    fn flatten_array_rest(
-        body: &ExprBody,
-        prefix: Vec<PatId>,
-        rest: Option<&ast::ArrayRestPat>,
-        suffix: Vec<PatId>,
-    ) -> (Vec<PatId>, bool, Option<PatId>, Vec<PatId>) {
-        let Some(rp) = rest else {
-            return (prefix, false, None, suffix);
-        };
-        let Some(rest_pat) = rp.pat else {
-            return (prefix, true, None, suffix);
-        };
-
-        // Rest sub-patterns are disabled at TIR (we emit
-        // `RestSubPatternNotSupported` elsewhere). For error recovery
-        // here we simply treat the rest as a bare binding-like slot —
-        // no nested array flattening, no chain unwrapping.
-        match &body.patterns[rest_pat] {
-            ast::Pattern::Array {
-                prefix: ip,
-                rest: ir,
-                suffix: is,
-                ascription: _,
-            } => {
-                let mut new_prefix = prefix;
-                new_prefix.extend(ip.iter().copied());
-                let mut new_suffix: Vec<PatId> = is.clone();
-                new_suffix.extend(suffix);
-                let ir_owned = ir.clone();
-                Self::flatten_array_rest(body, new_prefix, ir_owned.as_ref(), new_suffix)
-            }
-            _ => (prefix, true, Some(rest_pat), suffix),
+    /// Whether a rest sub-pattern is binding-shaped: a wildcard, a bare
+    /// binding, or a bind chain whose links are all binds with an optional
+    /// terminal `: T` ascription link (`in_chain` distinguishes that
+    /// position — a bare type pattern as the WHOLE sub-pattern, `..int`, is
+    /// not binding-shaped). These shapes are irrefutable against the slice,
+    /// which is what lets the usefulness matrix keep treating the rest as
+    /// "matches any length" while MIR materializes the binding.
+    fn rest_subpattern_is_binding_shaped(body: &ExprBody, pat: PatId, in_chain: bool) -> bool {
+        match &body.patterns[pat] {
+            ast::Pattern::Wildcard => true,
+            ast::Pattern::Type(_) => in_chain,
+            ast::Pattern::Bind { subpat, .. } => match subpat {
+                None => true,
+                Some(sp) => Self::rest_subpattern_is_binding_shaped(body, *sp, true),
+            },
+            ast::Pattern::Array { .. } | ast::Pattern::Class { .. } | ast::Pattern::Or(_) => false,
         }
     }
 

@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -880,8 +880,9 @@ pub enum Constant {
     GenericFunction {
         /// The base generic function.
         item: ItemRef,
-        /// The concrete type arguments (fully resolved, no type parameters).
-        type_args: Vec<RuntimeTy>,
+        /// The concrete type arguments — fully realized (no type parameters),
+        /// exactly what the runtime `Object::GenericFunction` carries.
+        type_args: Vec<RealizedTy>,
     },
     /// An enum variant value.
     EnumVariant {

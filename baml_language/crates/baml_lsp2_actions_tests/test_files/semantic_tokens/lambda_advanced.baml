@@ -24,7 +24,7 @@ function test_higher_order_return() -> int {
 // Lambda calling another lambda
 function test_lambda_calling_lambda() -> int {
     let double = (x: int) -> int { x * 2 }
-    let apply_twice = (f: (int) -> int, x: int) -> int {
+    let apply_twice = (f: (int) -> int throws never, x: int) -> int {
         f(f(x))
     }
     apply_twice(double, 3)
@@ -184,7 +184,7 @@ function test_higher_order_inferred() -> int {
 // ── Lambda calling lambda: no return annotations ─────────────────
 function test_apply_twice_inferred() -> int {
     let double = (x: int) -> { x * 2 }
-    let apply_twice = (f: (int) -> int, x: int) -> { f(f(x)) }
+    let apply_twice = (f: (int) -> int throws never, x: int) -> { f(f(x)) }
     apply_twice(double, 3)
 }
 
@@ -200,7 +200,7 @@ function test_deep_capture_inferred() -> int {
 
 // ── Multiple lambda args: all inferred ───────────────────────────
 function test_two_transforms_inferred() -> int {
-    let apply_both = (f: (int) -> int, g: (int) -> int, x: int) -> { g(f(x)) }
+    let apply_both = (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> { g(f(x)) }
     apply_both(
         (x: int) -> { x * 2 },
         (x: int) -> { x + 10 },
@@ -375,9 +375,11 @@ function test_iife_inferred() -> int {
 // lambda_advanced.baml:27:24 (parameter) [declaration] len=1 "f"
 // lambda_advanced.baml:27:28 (type) [defaultLibrary] len=3 "int"
 // lambda_advanced.baml:27:36 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:27:41 (parameter) [declaration] len=1 "x"
-// lambda_advanced.baml:27:44 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:27:52 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:27:40 (keyword) len=6 "throws"
+// lambda_advanced.baml:27:47 (type) [defaultLibrary] len=5 "never"
+// lambda_advanced.baml:27:54 (parameter) [declaration] len=1 "x"
+// lambda_advanced.baml:27:57 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:27:65 (type) [defaultLibrary] len=3 "int"
 // lambda_advanced.baml:28:9 (parameter) len=1 "f"
 // lambda_advanced.baml:28:11 (parameter) len=1 "f"
 // lambda_advanced.baml:28:13 (parameter) len=1 "x"
@@ -769,11 +771,13 @@ function test_iife_inferred() -> int {
 // lambda_advanced.baml:187:24 (parameter) [declaration] len=1 "f"
 // lambda_advanced.baml:187:28 (type) [defaultLibrary] len=3 "int"
 // lambda_advanced.baml:187:36 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:187:41 (parameter) [declaration] len=1 "x"
-// lambda_advanced.baml:187:44 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:187:54 (parameter) len=1 "f"
-// lambda_advanced.baml:187:56 (parameter) len=1 "f"
-// lambda_advanced.baml:187:58 (parameter) len=1 "x"
+// lambda_advanced.baml:187:40 (keyword) len=6 "throws"
+// lambda_advanced.baml:187:47 (type) [defaultLibrary] len=5 "never"
+// lambda_advanced.baml:187:54 (parameter) [declaration] len=1 "x"
+// lambda_advanced.baml:187:57 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:187:67 (parameter) len=1 "f"
+// lambda_advanced.baml:187:69 (parameter) len=1 "f"
+// lambda_advanced.baml:187:71 (parameter) len=1 "x"
 // lambda_advanced.baml:188:5 (variable) len=11 "apply_twice"
 // lambda_advanced.baml:188:17 (variable) len=6 "double"
 // lambda_advanced.baml:188:25 (number) len=1 "3"
@@ -814,14 +818,18 @@ function test_iife_inferred() -> int {
 // lambda_advanced.baml:203:23 (parameter) [declaration] len=1 "f"
 // lambda_advanced.baml:203:27 (type) [defaultLibrary] len=3 "int"
 // lambda_advanced.baml:203:35 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:203:40 (parameter) [declaration] len=1 "g"
-// lambda_advanced.baml:203:44 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:203:52 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:203:57 (parameter) [declaration] len=1 "x"
-// lambda_advanced.baml:203:60 (type) [defaultLibrary] len=3 "int"
-// lambda_advanced.baml:203:70 (parameter) len=1 "g"
-// lambda_advanced.baml:203:72 (parameter) len=1 "f"
-// lambda_advanced.baml:203:74 (parameter) len=1 "x"
+// lambda_advanced.baml:203:39 (keyword) len=6 "throws"
+// lambda_advanced.baml:203:46 (type) [defaultLibrary] len=5 "never"
+// lambda_advanced.baml:203:53 (parameter) [declaration] len=1 "g"
+// lambda_advanced.baml:203:57 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:203:65 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:203:69 (keyword) len=6 "throws"
+// lambda_advanced.baml:203:76 (type) [defaultLibrary] len=5 "never"
+// lambda_advanced.baml:203:83 (parameter) [declaration] len=1 "x"
+// lambda_advanced.baml:203:86 (type) [defaultLibrary] len=3 "int"
+// lambda_advanced.baml:203:96 (parameter) len=1 "g"
+// lambda_advanced.baml:203:98 (parameter) len=1 "f"
+// lambda_advanced.baml:203:100 (parameter) len=1 "x"
 // lambda_advanced.baml:204:5 (variable) len=10 "apply_both"
 // lambda_advanced.baml:205:10 (parameter) [declaration] len=1 "x"
 // lambda_advanced.baml:205:13 (type) [defaultLibrary] len=3 "int"

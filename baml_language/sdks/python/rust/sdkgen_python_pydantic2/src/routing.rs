@@ -93,7 +93,7 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
         segs.push("stream_types".to_string());
     }
 
-    match name.pkg.as_str() {
+    match name.package().as_str() {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
         other => {
@@ -102,7 +102,7 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
         }
     }
 
-    for seg in &name.namespace_path {
+    for seg in name.namespace() {
         segs.push(sanitize_python_module_segment(seg.as_str()));
     }
 
@@ -165,10 +165,14 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 default: None,
             }],
-            return_type: Ty::Int,
+            return_type: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: Vec::new(),
             origin: origin(),

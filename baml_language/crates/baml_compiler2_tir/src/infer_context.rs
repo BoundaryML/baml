@@ -265,10 +265,12 @@ pub enum TirTypeError {
     /// A generic class destructure with fields must write its type arguments
     /// directly on the class pattern, e.g. `Box<int> { value }`.
     GenericClassDestructureRequiresTypeArgs { class_name: Name },
-    /// A rest pattern (`..`) carries a sub-pattern (`..let r`, `..[a, b]`,
-    /// `..pat: T`, etc.). Currently unsupported — only bare `..` is allowed
-    /// while we settle the rest-vs-slice typing semantics.
-    RestSubPatternNotSupported,
+    /// A rest pattern (`..`) carries a sub-pattern that is not binding-shaped.
+    /// Allowed: `..let r`, `.._`, bind chains, and a terminal `: T` ascription
+    /// link. Rejected: bare type patterns, structural destructures, and
+    /// or-patterns — see `lower_array_pat` for why each is blocked and what
+    /// expanding the set would take.
+    RestSubPatternNotBinding,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet {
@@ -708,6 +710,13 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         method: Name,
     },
+    /// A function type omits its `throws` clause in a position where the error type cannot be
+    /// inferred — a type alias, class field, `let` annotation, nested or return position
+    /// (`TYPE_SYSTEM.md` rule 5). Only an immediate callback parameter of a function declaration
+    /// may omit it; there the compiler opens it to a synthetic effect parameter (rule 4). Lambda
+    /// parameters have no generic binder to open an effect parameter on, so they must declare it
+    /// explicitly.
+    FunctionTypeMissingThrows,
 }
 
 impl fmt::Display for TirTypeError {
@@ -1000,9 +1009,9 @@ impl fmt::Display for TirTypeError {
                 f,
                 "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
             ),
-            TirTypeError::RestSubPatternNotSupported => write!(
+            TirTypeError::RestSubPatternNotBinding => write!(
                 f,
-                "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed"
+                "rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`"
             ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,
@@ -1655,6 +1664,13 @@ impl fmt::Display for TirTypeError {
                     f,
                     "interface method `{method}` on `{}` must declare an explicit `throws` clause",
                     interface.render_user_facing()
+                )
+            }
+            TirTypeError::FunctionTypeMissingThrows => {
+                write!(
+                    f,
+                    "function type must declare an explicit `throws` clause; add `throws never` \
+                     if calling it cannot throw"
                 )
             }
         }

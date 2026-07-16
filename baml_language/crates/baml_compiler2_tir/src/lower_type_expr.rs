@@ -921,6 +921,22 @@ pub fn lower_type_expr(
         } => {
             // A function type carries no generics of its own; its type variables
             // come from the enclosing context.
+            //
+            // The `throws` clause is required here (`TYPE_SYSTEM.md` rule 5): the only
+            // positions that may omit it never reach this lowering with `None` — a
+            // declaration's immediate callback parameter is opened to a synthetic effect
+            // parameter by HIR signature elaboration, and lambda literals infer their
+            // own throws from the body. Recover with `never` so downstream checking
+            // doesn't cascade.
+            let throws_ty = match throws.as_deref() {
+                Some(throws) => lower_type_expr(throws, ctx, diagnostics),
+                None => {
+                    diagnostics.push(TirTypeError::FunctionTypeMissingThrows);
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                }
+            };
             Ty::Function {
                 params: params
                     .iter()
@@ -935,14 +951,7 @@ pub fn lower_type_expr(
                     })
                     .collect(),
                 ret: Box::new(lower_type_expr(ret, ctx, diagnostics)),
-                throws: Box::new(
-                    throws
-                        .as_deref()
-                        .map(|throws| lower_type_expr(throws, ctx, diagnostics))
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
+                throws: Box::new(throws_ty),
                 attr: TyAttr::default(),
             }
         }
@@ -1329,14 +1338,7 @@ mod tests {
                 interface, member, ..
             } => {
                 assert_eq!(member.as_str(), "Item");
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Iterator"
-                );
+                assert_eq!(interface.name.name().as_str(), "Iterator");
             }
             other => panic!("expected a symbolic Self.Item projection, got {other:?}"),
         }
@@ -1438,12 +1440,12 @@ mod tests {
         let db = compile("interface Bar {}\ninterface Foo {\n  type Assoc extends Bar\n}\n");
         let user = PackageId::new(&db, Name::new("user"));
         let res_ctx = crate::package_interface::package_resolution_context(&db, user);
-        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let aliases = crate::inference::package_resolved_aliases(&db, user);
         let bounds = TypeVarBoundsMap::default();
         let gctx = crate::type_context::GlobalTypeContext {
             db: &db,
             res_ctx,
-            aliases: &aliases,
+            aliases,
             bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
@@ -1453,7 +1455,7 @@ mod tests {
         );
         let projection = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
-            interface: Some(Box::new(foo)),
+            interface: Box::new(foo),
             member: Name::new("Assoc"),
             attr: TyAttr::default(),
         };
@@ -1480,12 +1482,12 @@ mod tests {
         ));
         let user = PackageId::new(&db, Name::new("user"));
         let res_ctx = crate::package_interface::package_resolution_context(&db, user);
-        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let aliases = crate::inference::package_resolved_aliases(&db, user);
         let bounds = TypeVarBoundsMap::default();
         let gctx = crate::type_context::GlobalTypeContext {
             db: &db,
             res_ctx,
-            aliases: &aliases,
+            aliases,
             bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
@@ -1497,7 +1499,7 @@ mod tests {
             base: Box::new(Ty::Int {
                 attr: TyAttr::default(),
             }),
-            interface: Some(Box::new(foo)),
+            interface: Box::new(foo),
             member: Name::new("Assoc"),
             attr: TyAttr::default(),
         };
@@ -1925,15 +1927,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(**base, string_ty, "base must be the realized argument");
-                assert_eq!(
-                    interface
-                        .as_ref()
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "HasItem"
-                );
+                assert_eq!(interface.as_ref().name.name().as_str(), "HasItem");
                 assert_eq!(member.as_str(), "Item");
             }
             other => panic!("expected a symbolic T.Item projection, got {other:?}"),
@@ -2808,14 +2802,7 @@ mod tests {
                 interface, member, ..
             } => {
                 assert_eq!(member.as_str(), "X");
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Base"
-                );
+                assert_eq!(interface.name.name().as_str(), "Base");
             }
             other => panic!("expected a symbolic projection through Base, got {other:?}"),
         }
@@ -2836,14 +2823,7 @@ mod tests {
                 ..
             } => {
                 assert!(matches!(*base, Ty::TypeVar(ref n, _) if n.as_str() == "T"));
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "HasItem"
-                );
+                assert_eq!(interface.name.name().as_str(), "HasItem");
                 assert_eq!(member.as_str(), "Item");
             }
             other => panic!("expected a symbolic T.Item projection, got {other:?}"),
@@ -2912,14 +2892,7 @@ mod tests {
                     matches!(*base, Ty::AssociatedTypeProjection { ref member, .. } if member.as_str() == "A"),
                     "outer projection's base is the inner `T.A` projection",
                 );
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Inner"
-                );
+                assert_eq!(interface.name.name().as_str(), "Inner");
                 assert_eq!(member.as_str(), "B");
             }
             other => panic!("expected a symbolic T.A.B projection, got {other:?}"),
@@ -2972,14 +2945,7 @@ mod tests {
             Ty::AssociatedTypeProjection {
                 interface, member, ..
             } => {
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "L3"
-                );
+                assert_eq!(interface.name.name().as_str(), "L3");
                 assert_eq!(member.as_str(), "C");
             }
             other => panic!("expected a symbolic T.A.B.C projection, got {other:?}"),
@@ -3005,7 +2971,7 @@ mod tests {
             panic!("expected a symbolic T.A.B projection, got {ty:?}");
         };
         assert_eq!(member.as_str(), "B");
-        let interface = interface.as_ref().expect("interface determined");
+        let interface = interface.as_ref();
         assert_eq!(interface.name.name().as_str(), "Inner");
         // `Inner`'s sole argument must be the symbolic `T.C` projection, not `TypeVar("C")`.
         match interface.generics.as_slice() {
@@ -3040,7 +3006,7 @@ mod tests {
             panic!("expected a symbolic T.A.X projection, got {ty:?}");
         };
         assert_eq!(member.as_str(), "X");
-        let interface = interface.as_ref().expect("interface determined");
+        let interface = interface.as_ref();
         assert_eq!(interface.name.name().as_str(), "J");
         // `J`'s arg is the finite symbolic `T.B` projection; B's own `K<A>` bound is not opened.
         match interface.generics.as_slice() {
@@ -3144,7 +3110,9 @@ mod tests {
                 },
             ],
             ret: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default())),
-            throws: None,
+            throws: Some(Box::new(
+                TypeExprKind::Never { attrs: vec![] }.at(text_size::TextRange::default()),
+            )),
             attrs: vec![],
         }
         .at(text_size::TextRange::default());
@@ -3213,7 +3181,7 @@ mod tests {
         let pkg = baml_compiler2_hir::file_package::file_package(&db, file).package;
         let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, pkg);
         let mut out = Vec::new();
-        for impl_loc in crate::interfaces::package_impl_locs(&db, pkg_id) {
+        for &impl_loc in crate::interfaces::package_impl_locs(&db, pkg_id) {
             match crate::interfaces::impl_data(&db, impl_loc) {
                 Ok(data) => out.extend(data.diagnostics.iter().map(|(e, _)| e.clone())),
                 Err(crate::interfaces::ImplDataError::InterfaceUnresolved { diagnostics }) => {

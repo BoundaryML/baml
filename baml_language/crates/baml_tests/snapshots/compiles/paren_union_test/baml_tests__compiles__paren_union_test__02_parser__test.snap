@@ -371,6 +371,10 @@ SOURCE_FILE
               PIPE "|"
               WORD "Union"
           R_PAREN ")"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "never"
+            WORD "never"
     FIELD
       WORD "fun_arr"
       TYPE_EXPR
@@ -405,6 +409,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         L_BRACKET "["
         R_BRACKET "]"
@@ -442,6 +450,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         L_BRACKET "["
         R_BRACKET "]"
@@ -480,6 +492,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         QUESTION "?"
     FIELD
@@ -516,6 +532,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         QUESTION "?"
         L_BRACKET "["
@@ -554,6 +574,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         QUESTION "?"
         QUESTION "?"
@@ -609,6 +633,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         QUESTION "?"
         QUESTION "?"
@@ -662,6 +690,10 @@ SOURCE_FILE
                   PIPE "|"
                   WORD "Union"
               R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
         R_PAREN ")"
         QUESTION "?"
         QUESTION "?"

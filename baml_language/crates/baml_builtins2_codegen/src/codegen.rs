@@ -1750,7 +1750,7 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
         .unwrap();
         writeln!(
             out,
-            "{indent}Ok(Value::object(vm.alloc_array(baml_type::RuntimeTy::string(), result_values)))"
+            "{indent}Ok(Value::object(vm.alloc_array(baml_type::RealizedTy::string(), result_values)))"
         )
         .unwrap();
         return;
@@ -1830,11 +1830,11 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
     receiver_containers + param_containers >= 2
 }
 
-/// Emit a Rust expression that constructs the `baml_type::RuntimeTy` describing
+/// Emit a Rust expression that constructs the `baml_type::RealizedTy` describing
 /// `ty` at VM runtime, used to tag `vm.alloc_array` / `vm.alloc_map`
 /// allocations with their declared element/key/value types.
 ///
-/// - Leaf primitives map to their exact `RuntimeTy` constructor.
+/// - Leaf primitives map to their exact `RealizedTy` constructor.
 /// - A **generic parameter** resolves to the call's instantiated type argument,
 ///   read from `vm.current_call_type_args()` at the parameter's declaration
 ///   index (the call-instruction handler records the leading `LoadType`s there,
@@ -1842,34 +1842,34 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
 ///   conversions: the native body makes no nested call that could overwrite the
 ///   pending args before the result is built.
 /// - **Media / named / `$rust_type`** positions map to their concrete
-///   `RuntimeTy`.
+///   `RealizedTy`.
 ///
 /// `unknown` appears only when a generic name is absent from `generics` or its
 /// type argument was not supplied at the call — never as a lazy fallback for a
 /// type that is statically recoverable.
 fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
     match ty {
-        BamlType::String => "baml_type::RuntimeTy::string()".to_string(),
-        BamlType::Int => "baml_type::RuntimeTy::int()".to_string(),
-        BamlType::Bigint => "baml_type::RuntimeTy::bigint()".to_string(),
-        BamlType::Float => "baml_type::RuntimeTy::float()".to_string(),
-        BamlType::Bool => "baml_type::RuntimeTy::bool()".to_string(),
-        BamlType::Null => "baml_type::RuntimeTy::null()".to_string(),
-        BamlType::Uint8Array => "baml_type::RuntimeTy::uint8array()".to_string(),
+        BamlType::String => "baml_type::RealizedTy::string()".to_string(),
+        BamlType::Int => "baml_type::RealizedTy::int()".to_string(),
+        BamlType::Bigint => "baml_type::RealizedTy::bigint()".to_string(),
+        BamlType::Float => "baml_type::RealizedTy::float()".to_string(),
+        BamlType::Bool => "baml_type::RealizedTy::bool()".to_string(),
+        BamlType::Null => "baml_type::RealizedTy::null()".to_string(),
+        BamlType::Uint8Array => "baml_type::RealizedTy::uint8array()".to_string(),
         BamlType::List(inner) => {
             format!(
-                "baml_type::RuntimeTy::list({})",
+                "baml_type::RealizedTy::list({})",
                 runtime_ty_expr(inner, generics)
             )
         }
         BamlType::Map(key, value) => format!(
-            "baml_type::RuntimeTy::map({}, {})",
+            "baml_type::RealizedTy::map({}, {})",
             runtime_ty_expr(key, generics),
             runtime_ty_expr(value, generics)
         ),
         BamlType::Optional(inner) => {
             format!(
-                "baml_type::RuntimeTy::optional({})",
+                "baml_type::RealizedTy::optional({})",
                 runtime_ty_expr(inner, generics)
             )
         }
@@ -1882,16 +1882,16 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
             // best-effort tag, not a correctness invariant worth a hard panic.
             Some(idx) => format!(
                 "vm.current_call_type_args().get({idx}).cloned()\
-                    .unwrap_or_else(baml_type::RuntimeTy::unknown)"
+                    .unwrap_or_else(baml_type::RealizedTy::unknown)"
             ),
             None => format!("compile_error!(\"unknown type arg `{name}`\")"),
         },
         BamlType::Media(kind) => format!(
-            "baml_type::RuntimeTy::Media({}, baml_type::TyAttr::default())",
+            "baml_type::RealizedTy::Media({}, baml_type::TyAttr::default())",
             media_kind_path(kind)
         ),
         BamlType::RustType => {
-            "baml_type::RuntimeTy::RustType { attr: baml_type::TyAttr::default() }".to_string()
+            "baml_type::RealizedTy::RustType { attr: baml_type::TyAttr::default() }".to_string()
         }
         // `Named` is a lossy catch-all: the type parser discards a class's
         // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
@@ -1900,7 +1900,7 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
         // drop generics and fabricate a class for the placeholder names, so this
         // static-`BamlType` path cannot recover a named type — the complete type
         // lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) => "baml_type::RuntimeTy::unknown()".to_string(),
+        BamlType::Named(_) => "baml_type::RealizedTy::unknown()".to_string(),
     }
 }
 

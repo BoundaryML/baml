@@ -3472,7 +3472,7 @@ fn baml.http._timeout_nanos(timeout: null | baml.time.Duration) -> bigint {
     }
 
     bb2: {
-        _0 = const 300000000000n;
+        _0 = const 0n;
         goto -> bb3;
     }
 
@@ -5621,168 +5621,6 @@ fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Ite
     }
 }
 
-fn baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.json.json // current // param
-    let _2: string // key // param
-    let _3: string // selector // param
-    let _4: bool
-    let _5: map<string, baml.json.json> // m
-    let _6: bool
-    let _7: bool
-    let _8: type
-    let _9: type
-    let _10: baml.json.JsonPathError
-    let _11: string
-    let _12: string
-    let _13: type
-    let _14: type
-    let _15: baml.json.JsonPathError
-    let _16: string
-    let _17: string
-
-    bb0: {
-        _4 = is_type(copy _1, map<string, baml.json.json>);
-        branch copy _4 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _17 = const "field access '." + copy _2;
-        _16 = copy _17 + const "' on a non-object";
-        _15 = baml.json.JsonPathError { copy _16, copy _3 };
-        throw copy _15;
-    }
-
-    bb2: {
-        _5 = copy _1;
-        _8 = load_type(string);
-        _9 = load_type(baml.json.json);
-        _7 = call const fn baml.Map.has<copy _8, copy _9>(copy _5, copy _2) -> [bb3];
-    }
-
-    bb3: {
-        _6 = !copy _7;
-        branch copy _6 -> [bb6, bb4];
-    }
-
-    bb4: {
-        _13 = load_type(string);
-        _14 = load_type(baml.json.json);
-        _0 = call const fn baml.Map.get<copy _13, copy _14>(copy _5, copy _2) -> [bb5];
-    }
-
-    bb5: {
-        return;
-    }
-
-    bb6: {
-        _12 = const "missing field '" + copy _2;
-        _11 = copy _12 + const "'";
-        _10 = baml.json.JsonPathError { copy _11, copy _3 };
-        throw copy _10;
-    }
-}
-
-fn baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: baml.json.json // current // param
-    let _2: int // idx // param
-    let _3: string // selector // param
-    let _4: bool
-    let _5: baml.json.json[] // arr
-    let _6: bool
-    let _7: bool
-    let _8: int
-    let _9: baml.json.JsonPathError
-    let _10: string
-    let _11: string
-    let _12: string
-    let _13: string
-    let _14: string
-    let _15: type
-    let _16: string
-    let _17: int
-    let _18: type
-    let _19: type
-    let _20: baml.json.JsonPathError
-    let _21: string
-    let _22: string
-    let _23: string
-    let _24: type
-
-    bb0: {
-        _4 = is_type(copy _1, baml.json.json[]);
-        branch copy _4 -> [bb3, bb1];
-    }
-
-    bb1: {
-        _24 = load_type(int);
-        _23 = call const fn baml.String.from<copy _24>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _22 = const "index [" + copy _23;
-        _21 = copy _22 + const "] on a non-array";
-        _20 = baml.json.JsonPathError { copy _21, copy _3 };
-        throw copy _20;
-    }
-
-    bb3: {
-        _5 = copy _1;
-        _7 = copy _2 < const 0_i64;
-        _6 = short_circuit(||) copy _7 -> [eval: bb4, join: bb6];
-    }
-
-    bb4: {
-        _8 = len(_5);
-        goto -> bb5;
-    }
-
-    bb5: {
-        _6 = copy _2 >= copy _8;
-        goto -> bb6;
-    }
-
-    bb6: {
-        branch copy _6 -> [bb9, bb7];
-    }
-
-    bb7: {
-        _19 = load_type(baml.json.json);
-        _0 = call const fn baml.Array.at<copy _19>(copy _5, copy _2) -> [bb8];
-    }
-
-    bb8: {
-        return;
-    }
-
-    bb9: {
-        _15 = load_type(int);
-        _14 = call const fn baml.String.from<copy _15>(copy _2) -> [bb10];
-    }
-
-    bb10: {
-        _13 = const "index [" + copy _14;
-        _12 = copy _13 + const "] out of bounds (length ";
-        _17 = len(_5);
-        goto -> bb11;
-    }
-
-    bb11: {
-        _18 = load_type(int);
-        _16 = call const fn baml.String.from<copy _18>(copy _17) -> [bb12];
-    }
-
-    bb12: {
-        _11 = copy _12 + copy _16;
-        _10 = copy _11 + const ")";
-        _9 = baml.json.JsonPathError { copy _10, copy _3 };
-        throw copy _9;
-    }
-}
-
 fn baml.json.deserialize(s: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -5827,637 +5665,6 @@ fn baml.json.from_json = builtin(vm)
 fn baml.json.from_string = builtin(vm)
 
 fn baml.json.parse = builtin(vm)
-
-fn baml.json.path(j: baml.json.json, selector: string) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string // selector // param
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: baml.json.JsonPathError
-    let _7: string
-    let _8: string
-    let _9: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null // current
-    let _10: string[] // pieces
-    let _11: int // i
-    let _12: string[]
-    let _13: baml.iter.Iterator<Item = string, Error = never>
-    let _14: type
-    let _15: unknown
-    let _16: bool
-    let _17: unknown
-    let _18: bool
-    let _19: type
-    let _20: type
-    let _21: bool
-    let _22: type
-    let _23: bool
-    let _24: unknown
-    let _25: bool
-    let _26: unknown
-    let _27: bool
-    let _28: type
-    let _29: bool
-    let _30: type
-    let _31: type
-    let _32: type
-    let _33: bool
-    let _34: unknown
-    let _35: bool
-    let _36: type
-    let _37: type
-    let _38: type
-    let _39: bool
-    let _40: type
-    let _41: type
-    let _42: bool
-    let _43: string
-    let _44: string // piece
-    let _45: string // rest
-    let _46: bool
-    let _47: int
-    let _48: string[] // closing
-    let _49: bool
-    let _50: int
-    let _51: baml.json.JsonPathError
-    let _52: string // token
-    let _53: string | null
-    let _54: type
-    let _55: bool
-    let _56: string | null
-    let _57: type
-    let _58: bool
-    let _59: bool // quoted
-    let _60: bool
-    let _61: bool
-    let _62: bool
-    let _63: int
-    let _64: bool
-    let _65: bool
-    let _66: int
-    let _67: bool
-    let _68: bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
-    let _69: string
-    let _70: int
-    let _71: int
-    let _72: int // idx
-    let _73: unknown // e
-    let _74: string
-    let _75: baml.json.JsonPathError
-    let _76: string
-    let _77: string
-    let _78: string
-    let _79: baml.json.json
-    let _80: int
-    let _81: string[]
-    let _82: baml.iter.Iterator<Item = string, Error = never>
-    let _83: type
-    let _84: unknown
-    let _85: bool
-    let _86: unknown
-    let _87: bool
-    let _88: type
-    let _89: type
-    let _90: bool
-    let _91: type
-    let _92: bool
-    let _93: unknown
-    let _94: bool
-    let _95: unknown
-    let _96: bool
-    let _97: type
-    let _98: bool
-    let _99: type
-    let _100: type
-    let _101: type
-    let _102: bool
-    let _103: unknown
-    let _104: bool
-    let _105: type
-    let _106: type
-    let _107: type
-    let _108: bool
-    let _109: type
-    let _110: type
-    let _111: bool
-    let _112: string
-    let _113: string // name
-    let _114: bool
-    let _115: string
-    let _116: baml.json.json
-    let _117: string
-    let _118: int
-    let _119: unknown // e
-    let _120: baml.json.json
-    let _121: type
-    let _122: baml.json.JsonPathError
-
-    bb0: {
-        _5 = call const fn baml.String.starts_with(copy _2, const ".") -> [bb1];
-    }
-
-    bb1: {
-        _4 = short_circuit(||) copy _5 -> [eval: bb2, join: bb3];
-    }
-
-    bb2: {
-        _4 = call const fn baml.String.starts_with(copy _2, const "[") -> [bb3];
-    }
-
-    bb3: {
-        _3 = !copy _4;
-        branch copy _3 -> [bb88, bb4];
-    }
-
-    bb4: {
-        _9 = copy _1;
-        _10 = call const fn baml.String.split(copy _2, const "[") -> [bb5];
-    }
-
-    bb5: {
-        _11 = const 0_i64;
-        _12 = copy _10;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _14 = load_type(string);
-        _13 = call const fn baml.iter.Iterable$for$T[].iter<copy _14>(copy _12) -> [bb7];
-    }
-
-    bb7: {
-        _16 = is_type(copy _13, baml.iter.Flatten<_, string, never, never>);
-        branch copy _16 -> [bb27, bb8];
-    }
-
-    bb8: {
-        _18 = is_type(copy _13, baml.iter.StepBy<string, never>);
-        branch copy _18 -> [bb26, bb9];
-    }
-
-    bb9: {
-        _21 = is_type(copy _13, baml.iter.Repeat<string>);
-        branch copy _21 -> [bb25, bb10];
-    }
-
-    bb10: {
-        _23 = is_type(copy _13, baml.iter.FlatMap<_, string, never, never, never>);
-        branch copy _23 -> [bb24, bb11];
-    }
-
-    bb11: {
-        _25 = is_type(copy _13, baml.iter.FilterMap<_, string, never, never>);
-        branch copy _25 -> [bb23, bb12];
-    }
-
-    bb12: {
-        _27 = is_type(copy _13, baml.iter.ArrayIterator<string>);
-        branch copy _27 -> [bb22, bb13];
-    }
-
-    bb13: {
-        _29 = is_type(copy _13, baml.iter.Chain<string, never, never>);
-        branch copy _29 -> [bb21, bb14];
-    }
-
-    bb14: {
-        _33 = is_type(copy _13, baml.iter.Map<_, string, never, never>);
-        branch copy _33 -> [bb20, bb15];
-    }
-
-    bb15: {
-        _35 = is_type(copy _13, baml.iter.Filter<string, never, never>);
-        branch copy _35 -> [bb19, bb16];
-    }
-
-    bb16: {
-        _39 = is_type(copy _13, baml.iter.Peekable<string, never>);
-        branch copy _39 -> [bb18, bb17];
-    }
-
-    bb17: {
-        unreachable;
-    }
-
-    bb18: {
-        _40 = load_type(string);
-        _41 = load_type(never);
-        _15 = call const fn baml.iter.Peekable.Iterator.next<copy _40, copy _41>(copy _13) -> [bb28];
-    }
-
-    bb19: {
-        _36 = load_type(string);
-        _37 = load_type(never);
-        _38 = load_type(never);
-        _15 = call const fn baml.iter.Filter.Iterator.next<copy _36, copy _37, copy _38>(copy _13) -> [bb28];
-    }
-
-    bb20: {
-        _34 = make_bound_method baml.iter.Map.Iterator.next(copy _13);
-        _15 = call copy _34() -> [bb28];
-    }
-
-    bb21: {
-        _30 = load_type(string);
-        _31 = load_type(never);
-        _32 = load_type(never);
-        _15 = call const fn baml.iter.Chain.Iterator.next<copy _30, copy _31, copy _32>(copy _13) -> [bb28];
-    }
-
-    bb22: {
-        _28 = load_type(string);
-        _15 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _28>(copy _13) -> [bb28];
-    }
-
-    bb23: {
-        _26 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _13);
-        _15 = call copy _26() -> [bb28];
-    }
-
-    bb24: {
-        _24 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _13);
-        _15 = call copy _24() -> [bb28];
-    }
-
-    bb25: {
-        _22 = load_type(string);
-        _15 = call const fn baml.iter.Repeat.Iterator.next<copy _22>(copy _13) -> [bb28];
-    }
-
-    bb26: {
-        _19 = load_type(string);
-        _20 = load_type(never);
-        _15 = call const fn baml.iter.StepBy.Iterator.next<copy _19, copy _20>(copy _13) -> [bb28];
-    }
-
-    bb27: {
-        _17 = make_bound_method baml.iter.Flatten.Iterator.next(copy _13);
-        _15 = call copy _17() -> [bb28];
-    }
-
-    bb28: {
-        _42 = is_type(copy _15, baml.iter.Done);
-        branch copy _42 -> [bb86, bb29];
-    }
-
-    bb29: {
-        _43 = copy _15;
-        fresh_cell(_44);
-        _44 = copy _43;
-        _45 = copy _44;
-        _47 = copy _11;
-        _46 = copy _47 > const 0_i64;
-        branch copy _46 -> [bb30, bb58];
-    }
-
-    bb30: {
-        _48 = call const fn baml.String.split(copy _45, const "]") -> [bb31];
-    }
-
-    bb31: {
-        _50 = len(_48);
-        goto -> bb32;
-    }
-
-    bb32: {
-        _49 = copy _50 < const 2_i64;
-        branch copy _49 -> [bb85, bb33];
-    }
-
-    bb33: {
-        _54 = load_type(string);
-        _53 = call const fn baml.Array.at<copy _54>(copy _48, const 0_i64) -> [bb34];
-    }
-
-    bb34: {
-        _52 = copy _53;
-        _55 = copy _53 == const null;
-        branch copy _55 -> [bb35, bb36];
-    }
-
-    bb35: {
-        _52 = const "";
-        goto -> bb36;
-    }
-
-    bb36: {
-        _57 = load_type(string);
-        _56 = call const fn baml.Array.at<copy _57>(copy _48, const 1_i64) -> [bb37];
-    }
-
-    bb37: {
-        _45 = copy _56;
-        _58 = copy _56 == const null;
-        branch copy _58 -> [bb38, bb39];
-    }
-
-    bb38: {
-        _45 = const "";
-        goto -> bb39;
-    }
-
-    bb39: {
-        _62 = call const fn baml.String.starts_with(copy _52, const "\"") -> [bb40];
-    }
-
-    bb40: {
-        _61 = short_circuit(&&) copy _62 -> [eval: bb41, join: bb42];
-    }
-
-    bb41: {
-        _61 = call const fn baml.String.ends_with(copy _52, const "\"") -> [bb42];
-    }
-
-    bb42: {
-        _60 = short_circuit(&&) copy _61 -> [eval: bb43, join: bb45];
-    }
-
-    bb43: {
-        _63 = call const fn baml.String.length(copy _52) -> [bb44];
-    }
-
-    bb44: {
-        _60 = copy _63 >= const 2_i64;
-        goto -> bb45;
-    }
-
-    bb45: {
-        _59 = short_circuit(||) copy _60 -> [eval: bb46, join: bb52];
-    }
-
-    bb46: {
-        _65 = call const fn baml.String.starts_with(copy _52, const "'") -> [bb47];
-    }
-
-    bb47: {
-        _64 = short_circuit(&&) copy _65 -> [eval: bb48, join: bb49];
-    }
-
-    bb48: {
-        _64 = call const fn baml.String.ends_with(copy _52, const "'") -> [bb49];
-    }
-
-    bb49: {
-        _59 = short_circuit(&&) copy _64 -> [eval: bb50, join: bb52];
-    }
-
-    bb50: {
-        _66 = call const fn baml.String.length(copy _52) -> [bb51];
-    }
-
-    bb51: {
-        _59 = copy _66 >= const 2_i64;
-        goto -> bb52;
-    }
-
-    bb52: {
-        _67 = copy _59;
-        branch copy _67 -> [bb55, bb53];
-    }
-
-    bb53: {
-        _74 = copy _52;
-        _72 = call const fn baml.Int.parse(copy _74) -> [bb54, unwind: bb89];
-    }
-
-    bb54: {
-        _79 = copy _9;
-        _80 = copy _72;
-        _9 = call const fn baml.json._path_index(copy _79, copy _80, copy _2) -> [bb58];
-    }
-
-    bb55: {
-        _68 = copy _9;
-        _71 = call const fn baml.String.length(copy _52) -> [bb56];
-    }
-
-    bb56: {
-        _70 = copy _71 - const 1_i64;
-        _69 = call const fn baml.String.substring(copy _52, const 1_i64, copy _70) -> [bb57];
-    }
-
-    bb57: {
-        _9 = call const fn baml.json._path_field(copy _68, copy _69, copy _2) -> [bb58];
-    }
-
-    bb58: {
-        _81 = call const fn baml.String.split(copy _45, const ".") -> [bb59];
-    }
-
-    bb59: {
-        _83 = load_type(string);
-        _82 = call const fn baml.iter.Iterable$for$T[].iter<copy _83>(copy _81) -> [bb60];
-    }
-
-    bb60: {
-        _85 = is_type(copy _82, baml.iter.Flatten<_, string, never, never>);
-        branch copy _85 -> [bb80, bb61];
-    }
-
-    bb61: {
-        _87 = is_type(copy _82, baml.iter.StepBy<string, never>);
-        branch copy _87 -> [bb79, bb62];
-    }
-
-    bb62: {
-        _90 = is_type(copy _82, baml.iter.Repeat<string>);
-        branch copy _90 -> [bb78, bb63];
-    }
-
-    bb63: {
-        _92 = is_type(copy _82, baml.iter.FlatMap<_, string, never, never, never>);
-        branch copy _92 -> [bb77, bb64];
-    }
-
-    bb64: {
-        _94 = is_type(copy _82, baml.iter.FilterMap<_, string, never, never>);
-        branch copy _94 -> [bb76, bb65];
-    }
-
-    bb65: {
-        _96 = is_type(copy _82, baml.iter.ArrayIterator<string>);
-        branch copy _96 -> [bb75, bb66];
-    }
-
-    bb66: {
-        _98 = is_type(copy _82, baml.iter.Chain<string, never, never>);
-        branch copy _98 -> [bb74, bb67];
-    }
-
-    bb67: {
-        _102 = is_type(copy _82, baml.iter.Map<_, string, never, never>);
-        branch copy _102 -> [bb73, bb68];
-    }
-
-    bb68: {
-        _104 = is_type(copy _82, baml.iter.Filter<string, never, never>);
-        branch copy _104 -> [bb72, bb69];
-    }
-
-    bb69: {
-        _108 = is_type(copy _82, baml.iter.Peekable<string, never>);
-        branch copy _108 -> [bb71, bb70];
-    }
-
-    bb70: {
-        unreachable;
-    }
-
-    bb71: {
-        _109 = load_type(string);
-        _110 = load_type(never);
-        _84 = call const fn baml.iter.Peekable.Iterator.next<copy _109, copy _110>(copy _82) -> [bb81];
-    }
-
-    bb72: {
-        _105 = load_type(string);
-        _106 = load_type(never);
-        _107 = load_type(never);
-        _84 = call const fn baml.iter.Filter.Iterator.next<copy _105, copy _106, copy _107>(copy _82) -> [bb81];
-    }
-
-    bb73: {
-        _103 = make_bound_method baml.iter.Map.Iterator.next(copy _82);
-        _84 = call copy _103() -> [bb81];
-    }
-
-    bb74: {
-        _99 = load_type(string);
-        _100 = load_type(never);
-        _101 = load_type(never);
-        _84 = call const fn baml.iter.Chain.Iterator.next<copy _99, copy _100, copy _101>(copy _82) -> [bb81];
-    }
-
-    bb75: {
-        _97 = load_type(string);
-        _84 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _97>(copy _82) -> [bb81];
-    }
-
-    bb76: {
-        _95 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _82);
-        _84 = call copy _95() -> [bb81];
-    }
-
-    bb77: {
-        _93 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _82);
-        _84 = call copy _93() -> [bb81];
-    }
-
-    bb78: {
-        _91 = load_type(string);
-        _84 = call const fn baml.iter.Repeat.Iterator.next<copy _91>(copy _82) -> [bb81];
-    }
-
-    bb79: {
-        _88 = load_type(string);
-        _89 = load_type(never);
-        _84 = call const fn baml.iter.StepBy.Iterator.next<copy _88, copy _89>(copy _82) -> [bb81];
-    }
-
-    bb80: {
-        _86 = make_bound_method baml.iter.Flatten.Iterator.next(copy _82);
-        _84 = call copy _86() -> [bb81];
-    }
-
-    bb81: {
-        _111 = is_type(copy _84, baml.iter.Done);
-        branch copy _111 -> [bb84, bb82];
-    }
-
-    bb82: {
-        _112 = copy _84;
-        fresh_cell(_113);
-        _113 = copy _112;
-        _115 = copy _113;
-        _114 = copy _115 == const "";
-        branch copy _114 -> [bb60, bb83];
-    }
-
-    bb83: {
-        _116 = copy _9;
-        _117 = copy _113;
-        _9 = call const fn baml.json._path_field(copy _116, copy _117, copy _2) -> [bb60];
-    }
-
-    bb84: {
-        _118 = copy _11;
-        _11 = copy _118 + const 1_i64;
-        goto -> bb7;
-    }
-
-    bb85: {
-        _51 = baml.json.JsonPathError { const "unterminated '[' segment", copy _2 };
-        throw copy _51;
-    }
-
-    bb86: {
-        _120 = copy _9;
-        _121 = load_type(#0);
-        _0 = call const fn baml.json.to<copy _121>(copy _120) -> [bb87, unwind: bb91];
-    }
-
-    bb87: {
-        return;
-    }
-
-    bb88: {
-        _8 = const "selector must start with '.' or '[' (jq style), got '" + copy _2;
-        _7 = copy _8 + const "'";
-        _6 = baml.json.JsonPathError { copy _7, copy _2 };
-        throw copy _6;
-    }
-
-    bb89: {
-        throw_if_panic copy _73 -> bb90;
-    }
-
-    bb90: {
-        _78 = copy _52;
-        _77 = const "bad bracket token '[" + copy _78;
-        _76 = copy _77 + const "]'";
-        _75 = baml.json.JsonPathError { copy _76, copy _2 };
-        throw copy _75;
-    }
-
-    bb91: {
-        throw_if_panic copy _119 -> bb92;
-    }
-
-    bb92: {
-        _122 = baml.json.JsonPathError { const "leaf does not coerce to the requested type", copy _2 };
-        throw copy _122;
-    }
-}
-
-fn baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string // selector // param
-    let _3: T // default // param
-    let _4: unknown // e
-    let _5: type
-
-    bb0: {
-        _5 = load_type(#0);
-        _0 = call const fn baml.json.path<copy _5>(copy _1, copy _2) -> [bb3, unwind: bb1];
-    }
-
-    bb1: {
-        throw_if_panic copy _4 -> bb2;
-    }
-
-    bb2: {
-        _0 = copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
 
 fn baml.json.serialize(v: T) -> string {
     // Locals:
@@ -8579,10 +7786,6 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> null {
     }
 }
 
-fn baml.llm.prompt_has_media = builtin(io)
-
-fn baml.llm.prompt_to_text = builtin(io)
-
 fn baml.llm.render_output_format = builtin(io)
 
 fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
@@ -9248,68 +8451,93 @@ fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
     }
 }
 
-fn baml.sap.parse(text: string) -> T {
-    // Locals:
-    let _0: T // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.StreamCache<unknown, unknown>
-    let _3: type
-    let _4: type
-    let _5: type
-    let _6: type
+fn baml.ops.__union_add = builtin(vm)
 
-    bb0: {
-        _3 = load_type(#0);
-        goto -> bb1;
-    }
+fn baml.ops.__union_div = builtin(vm)
 
-    bb1: {
-        _4 = load_type(#0);
-        goto -> bb2;
-    }
+fn baml.ops.__union_mul = builtin(vm)
 
-    bb2: {
-        _2 = sys_op const fn baml.llm.StreamCache.new(copy _3, copy _4) -> bb3;
-    }
+fn baml.ops.__union_neg = builtin(vm)
 
-    bb3: {
-        _5 = load_type(#0);
-        _6 = load_type(#0);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _1, copy _2, copy _5, copy _6) -> bb4;
-    }
+fn baml.ops.__union_rem = builtin(vm)
 
-    bb4: {
-        return;
-    }
-}
+fn baml.ops.__union_sub = builtin(vm)
 
-fn baml.sap.parse_type(t: type, text: string) -> unknown {
-    // Locals:
-    let _0: unknown // _0 // return
-    let _1: type // t // param
-    let _2: string // text // param
-    let _3: baml.llm.StreamCache<unknown, unknown> // cache
-    let _4: baml.llm.StreamCache<unknown, unknown>
-    let _5: type
-    let _6: type
+fn baml.ops.Add<float>$for$float.add = builtin(vm)
 
-    bb0: {
-        _3 = sys_op const fn baml.llm.StreamCache.new(copy _1, copy _1) -> bb1;
-    }
+fn baml.ops.Add<bigint>$for$bigint.add = builtin(vm)
 
-    bb1: {
-        _4 = copy _3;
-        _5 = load_type(unknown);
-        _6 = load_type(unknown);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _2, copy _4, copy _5, copy _6) -> bb2;
-    }
+fn baml.ops.Add<int>$for$int.add = builtin(vm)
 
-    bb2: {
-        return;
-    }
-}
+fn baml.ops.Add<float>$for$int.add = builtin(vm)
 
-fn baml.schema.json_schema = builtin(io)
+fn baml.ops.Add<bigint>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$float.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$bigint.add = builtin(vm)
+
+fn baml.ops.Divide<int>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$int.mul = builtin(vm)
+
+fn baml.ops.Negate$for$bigint.neg = builtin(vm)
+
+fn baml.ops.Negate$for$float.neg = builtin(vm)
+
+fn baml.ops.Negate$for$int.neg = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
 
 fn baml.spawn.TaskGroup.active_count = builtin(vm)
 
@@ -12361,14 +11589,6 @@ fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | s
         return;
     }
 }
-
-fn baml.ws.WsStream.close = builtin(io)
-
-fn baml.ws.connect = builtin(io)
-
-fn baml.ws.WsStream.next = builtin(io)
-
-fn baml.ws.WsStream.send = builtin(io)
 
 fn baml.yaml.deserialize(s: string) -> T {
     // Locals:

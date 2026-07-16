@@ -358,30 +358,13 @@ fn user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: (int) -> int | string throws never // cb // param
-    let _2: bool
-    let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, (int) -> int throws never);
-        branch copy _2 -> [bb3, bb1];
+        _0 = const 1_i64;
+        goto -> bb1;
     }
 
     bb1: {
-        _3 = is_type(copy _1, never);
-        branch copy _3 -> [bb2, bb4];
-    }
-
-    bb2: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

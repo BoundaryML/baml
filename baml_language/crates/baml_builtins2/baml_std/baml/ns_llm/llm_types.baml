@@ -765,11 +765,11 @@ class PrimitiveClient {
     template: string,
     args: map<string, unknown>,
     return_type: type,
-    prompt_closure: ((Context) -> PromptAst)?,
+    prompt_closure: ((Context) -> PromptAst throws never)?,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
     let prompt = match (prompt_closure) {
       null => self.render_prompt(template, args, return_type),
-      let closure: (Context) -> PromptAst => closure(build_prompt_context(self, return_type)),
+      let closure: (Context) -> PromptAst throws never => closure(build_prompt_context(self, return_type)),
     };
     self.specialize_prompt(prompt)
   }
@@ -905,7 +905,7 @@ function make_role(name: string) -> Role throws never {
 /// messages. `ctx.output_format` schema injection lands in a later slice.
 //baml:tagged_string
 function prompt(
-  body: (role: (string) -> Role, ctx: Context) -> baml.TaggedString throws never,
+  body: (role: (string) -> Role throws never, ctx: Context) -> baml.TaggedString throws never,
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)

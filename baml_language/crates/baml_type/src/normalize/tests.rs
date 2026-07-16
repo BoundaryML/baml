@@ -93,7 +93,13 @@ impl TypeContext for Ctx {
             .collect()
     }
 
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep {
+    fn project(
+        &self,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
+        _fuel: u32,
+    ) -> ProjectionStep {
         self.projections
             .iter()
             .find(|(b, i, m, _)| b == base && i == &interface.name && m == member)
@@ -135,7 +141,7 @@ fn typevar(s: &str) -> Ty {
 fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
     Ty::AssociatedTypeProjection {
         base: Box::new(base),
-        interface: Some(Box::new(Interface::new(qtn(iface_name), vec![], vec![]))),
+        interface: Box::new(Interface::new(qtn(iface_name), vec![], vec![])),
         member: Name::new(member),
         attr: TyAttr::default(),
     }
@@ -541,6 +547,95 @@ fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
 }
 
 #[test]
+fn function_throws_is_covariant() {
+    // Error type is covariant (TYPE_SYSTEM.md, Subtyping Rules → Variance): a
+    // function that throws `never` is a subtype of one that throws `int`, but not
+    // the reverse.
+    let ctx = Ctx::default();
+    let mk = |throws: Ty| Ty::Function {
+        params: vec![],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    };
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    assert!(is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx));
+    assert!(!is_subtype(&mk(Ty::int()), &mk(never), &ctx));
+}
+
+#[test]
+fn function_required_param_names_are_insignificant() {
+    // Required params are positional; their names are not part of the type
+    // (TYPE_SYSTEM.md, Subtyping Rules), so two functions differing only in a
+    // required param's name are equivalent (a named vs unnamed one too).
+    let ctx = Ctx::default();
+    let mk = |name: Option<&str>| Ty::Function {
+        params: vec![FunctionParamTy::required(name.map(Name::new), Ty::int())],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx));
+    assert!(equivalent(&mk(Some("a")), &mk(None), &ctx));
+}
+
+#[test]
+fn function_optional_params_follow_the_superset_rule() {
+    // Optional params (BEP-033) are matched by name, and the *subtype* declares a
+    // superset of them — a subset function type accepts more optional args
+    // (TYPE_SYSTEM.md, Subtyping Rules). Their order is insignificant.
+    let ctx = Ctx::default();
+    let func = |params: Vec<FunctionParamTy>| Ty::Function {
+        params,
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    let req = FunctionParamTy::required(None, Ty::string());
+    let opt_max = FunctionParamTy::optional(Some(Name::new("max")), Ty::int());
+    let opt_filter = FunctionParamTy::optional(Some(Name::new("filter")), Ty::string());
+
+    let two = func(vec![req.clone(), opt_max.clone(), opt_filter.clone()]);
+    let one = func(vec![req.clone(), opt_filter.clone()]);
+
+    // More optionals <: fewer optionals; the reverse fails (missing `max`).
+    assert!(is_subtype(&two, &one, &ctx));
+    assert!(!is_subtype(&one, &two, &ctx));
+
+    // Optional order does not matter: reordered forms are mutual subtypes.
+    let two_reordered = func(vec![req, opt_filter, opt_max]);
+    assert!(is_subtype(&two, &two_reordered, &ctx));
+    assert!(is_subtype(&two_reordered, &two, &ctx));
+}
+
+#[test]
+fn function_optional_and_required_params_are_incomparable() {
+    // A single-required-param function and a single-optional-param function are
+    // unrelated: the required-arity check (equal counts) already fails both ways.
+    let ctx = Ctx::default();
+    let mk = |optional: bool| Ty::Function {
+        params: vec![if optional {
+            FunctionParamTy::optional(Some(Name::new("value")), Ty::int())
+        } else {
+            FunctionParamTy::required(Some(Name::new("value")), Ty::int())
+        }],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(!is_subtype(&mk(true), &mk(false), &ctx));
+    assert!(!is_subtype(&mk(false), &mk(true), &ctx));
+}
+
+#[test]
 fn interface_membership_through_unions() {
     let mut ctx = Ctx::default();
     ctx.impls.push((qtn("Dog"), qtn("Animal")));
@@ -598,13 +693,17 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
     );
     ctx.requires.push((qtn("Summarizable"), qtn("Displayable")));
 
-    let proj = |interface: Option<Interface>| Ty::AssociatedTypeProjection {
+    let proj = |interface: Interface| Ty::AssociatedTypeProjection {
         base: Box::new(typevar("T")),
-        interface: interface.map(Box::new),
+        interface: Box::new(interface),
         member: Name::new("Item"),
         attr: TyAttr::default(),
     };
-    let iter_proj = proj(iface("Iter").as_interface());
+    let iter_proj = proj(
+        iface("Iter")
+            .as_interface()
+            .expect("iface() builds an interface existential"),
+    );
 
     assert!(is_subtype(&iter_proj, &iface("Summarizable"), &ctx));
     // …including transitively through the bound's `requires`.
@@ -613,43 +712,6 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
     assert!(!is_subtype(&iter_proj, &iface("Unrelated"), &ctx));
     // Reflexivity still holds (the projection is equal to itself).
     assert!(is_subtype(&iter_proj, &iter_proj, &ctx));
-    // An unresolved-interface projection is opaque — no bound to reason through.
-    assert!(!is_subtype(&proj(None), &iface("Summarizable"), &ctx));
-}
-
-#[test]
-fn projection_with_unresolved_interface_is_opaque() {
-    // A projection whose interface the TIR has not yet determined (`interface:
-    // None`) canonicalizes opaquely: it equals only a structurally-identical
-    // projection. In particular the two spellings of the *same* associated type —
-    // `(T as ?).Item` (unresolved) and `(T as Iter).Item` (resolved) — are NOT
-    // equated by this algebra, unlike the TIR's legacy
-    // `projection_views_equivalent`. This is the known gap (review item L3): it is
-    // resolved upstream by the TIR determining the interface (filling `Some(I)`,
-    // per `Ty::AssociatedTypeProjection`'s field TODO) BEFORE equivalence is flipped
-    // onto this algebra. If that flip lands while `None` can still occur, a real
-    // `(T as ?).M` vs `(T as I).M` comparison would give a false negative — this
-    // test pins the current opaque behavior so the gap can't be crossed silently.
-    let ctx = Ctx::default();
-    let proj =
-        |base: &str, interface: Option<Interface>, member: &str| Ty::AssociatedTypeProjection {
-            base: Box::new(typevar(base)),
-            interface: interface.map(Box::new),
-            member: Name::new(member),
-            attr: TyAttr::default(),
-        };
-    let unresolved = proj("T", None, "Item");
-    let resolved = proj("T", iface("Iter").as_interface(), "Item");
-
-    // Opaque: each spelling equals only itself.
-    assert!(equivalent(&unresolved, &unresolved, &ctx));
-    assert!(equivalent(&resolved, &resolved, &ctx));
-    // The gap: unresolved and resolved spellings of the same projection are not
-    // equated structurally (the legacy view-equivalence would equate them).
-    assert!(!equivalent(&unresolved, &resolved, &ctx));
-    // Distinct member / base are never equated.
-    assert!(!equivalent(&unresolved, &proj("T", None, "Other"), &ctx));
-    assert!(!equivalent(&unresolved, &proj("U", None, "Item"), &ctx));
 }
 
 // ── aliases & recursion ──────────────────────────────────────────────────--

@@ -38,30 +38,30 @@ function bare_type_arm(v: int | string) -> int {
 // Match on a single function type — arm narrows to the callable.
 function call_int_callback(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int => f(10)
+        let f: (int) -> int throws never => f(10)
     }
 }
 
 // Match on a union of two distinct function types; dispatch by signature.
-function dispatch_callback(cb: ((int) -> int) | ((string) -> string)) -> int {
+function dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
     match (cb) {
-        let f: (int) -> int => f(0),
-        (string) -> string => 0
+        let f: (int) -> int throws never => f(0),
+        (string) -> string throws never => 0
     }
 }
 
 // Or-pattern across two function-typed alternatives that share the same return.
-function call_either_int_caller(cb: ((int) -> int) | ((bool) -> int)) -> int {
+function call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int {
     match (cb) {
-        (int) -> int => 1,
-        (bool) -> int => 2
+        (int) -> int throws never => 1,
+        (bool) -> int throws never => 2
     }
 }
 
 // Function-type narrow with chain-narrow position (`(int) -> T`).
-function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
+function dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     match (cb) {
-        (int) -> int => 1,
+        (int) -> int throws never => 1,
         _ => 0
     }
 }
@@ -69,10 +69,10 @@ function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
 // Generic function-type pattern. T is unified at the call site. The outer
 // parens disambiguate the union — without them the parser binds `|` inside
 // the return type, yielding `(int) -> (T | (string) -> T)`.
-function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
+function unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     match (cb) {
-        let f: (int) -> T => f(0),
-        let f: (string) -> T => f("")
+        let f: (int) -> T throws never => f(0),
+        let f: (string) -> T throws never => f("")
     }
 }
 
@@ -84,22 +84,22 @@ function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
 // `g: (string) -> (string) -> string`   — two-deep curried string function.
 // The match dispatches on which curried shape was passed and unwraps it.
 function unwrap_curried(
-    f: ((int) -> (int) -> (int) -> int) | ((string) -> (string) -> string)
+    f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)
 ) -> int {
     match (f) {
-        let triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3),
-        let pair: (string) -> (string) -> string => 0
+        let triple: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never => triple(1)(2)(3),
+        let pair: (string) -> ((string) -> string throws never) throws never => 0
     }
 }
 
 // Match on a function that takes a callback. The arm narrows to the
 // callback-accepting shape, then we synthesize an int callback inline.
 function call_with_callback(
-    runner: (((int) -> int) -> int) | (((string) -> int) -> int)
+    runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)
 ) -> int {
     match (runner) {
-        let r: ((int) -> int) -> int => r((x: int) -> int { x + 1 }),
-        let r: ((string) -> int) -> int => r((s: string) -> int { 0 })
+        let r: ((int) -> int throws never) -> int throws never => r((x: int) -> int { x + 1 }),
+        let r: ((string) -> int throws never) -> int throws never => r((s: string) -> int { 0 })
     }
 }
 
@@ -120,7 +120,7 @@ function literal_widens_to_int(v: int) -> int {
 // so `(int) -> int <: (int) -> int | string`.
 function fn_return_widens(cb: (int) -> int | string) -> int {
     match (cb) {
-        (int) -> int | string => 1,
+        (int) -> (int | string) throws never => 1,
     }
 }
 
@@ -144,7 +144,7 @@ function paren_chains_in_or(v: int) -> int {
 
 function fn_pattern(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int => f(0)
+        let f: (int) -> int throws never => f(0)
     }
 }
 
@@ -170,9 +170,9 @@ function for_let_ascription(items: int[]) -> int {
 }
 
 // for-let with a function-type narrow.
-function for_let_fn_narrow(items: ((int) -> int)[]) -> int {
+function for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     let total = 0;
-    for (let f: (int) -> int in items) {
+    for (let f: (int) -> int throws never in items) {
         total += f(0)
     }
     total
@@ -348,62 +348,86 @@ class PatternMatrix {
 // patterns_new.baml:41:13 (variable) [declaration] len=1 "f"
 // patterns_new.baml:41:17 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:41:25 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:41:32 (variable) len=1 "f"
-// patterns_new.baml:41:34 (number) len=2 "10"
+// patterns_new.baml:41:29 (keyword) len=6 "throws"
+// patterns_new.baml:41:36 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:41:45 (variable) len=1 "f"
+// patterns_new.baml:41:47 (number) len=2 "10"
 // patterns_new.baml:45:1 (comment) len=74 "// Match on a union of two distinct function types; dispatch by signature."
 // patterns_new.baml:46:1 (keyword) len=8 "function"
 // patterns_new.baml:46:10 (function) [declaration] len=17 "dispatch_callback"
 // patterns_new.baml:46:28 (parameter) [declaration] len=2 "cb"
 // patterns_new.baml:46:34 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:46:42 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:46:47 (operator) len=1 "|"
-// patterns_new.baml:46:51 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:46:62 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:46:74 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:46:46 (keyword) len=6 "throws"
+// patterns_new.baml:46:53 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:46:60 (operator) len=1 "|"
+// patterns_new.baml:46:64 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:46:75 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:46:82 (keyword) len=6 "throws"
+// patterns_new.baml:46:89 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:46:100 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:47:5 (keyword) len=5 "match"
 // patterns_new.baml:47:12 (parameter) len=2 "cb"
 // patterns_new.baml:48:9 (keyword) len=3 "let"
 // patterns_new.baml:48:13 (variable) [declaration] len=1 "f"
 // patterns_new.baml:48:17 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:48:25 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:48:32 (variable) len=1 "f"
-// patterns_new.baml:48:34 (number) len=1 "0"
+// patterns_new.baml:48:29 (keyword) len=6 "throws"
+// patterns_new.baml:48:36 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:48:45 (variable) len=1 "f"
+// patterns_new.baml:48:47 (number) len=1 "0"
 // patterns_new.baml:49:10 (type) [defaultLibrary] len=6 "string"
 // patterns_new.baml:49:21 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:49:31 (number) len=1 "0"
+// patterns_new.baml:49:28 (keyword) len=6 "throws"
+// patterns_new.baml:49:35 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:49:44 (number) len=1 "0"
 // patterns_new.baml:53:1 (comment) len=80 "// Or-pattern across two function-typed alternatives that share the same return."
 // patterns_new.baml:54:1 (keyword) len=8 "function"
 // patterns_new.baml:54:10 (function) [declaration] len=22 "call_either_int_caller"
 // patterns_new.baml:54:33 (parameter) [declaration] len=2 "cb"
 // patterns_new.baml:54:39 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:54:47 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:54:52 (operator) len=1 "|"
-// patterns_new.baml:54:56 (type) [defaultLibrary] len=4 "bool"
-// patterns_new.baml:54:65 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:54:74 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:54:51 (keyword) len=6 "throws"
+// patterns_new.baml:54:58 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:54:65 (operator) len=1 "|"
+// patterns_new.baml:54:69 (type) [defaultLibrary] len=4 "bool"
+// patterns_new.baml:54:78 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:54:82 (keyword) len=6 "throws"
+// patterns_new.baml:54:89 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:54:100 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:55:5 (keyword) len=5 "match"
 // patterns_new.baml:55:12 (parameter) len=2 "cb"
 // patterns_new.baml:56:10 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:56:18 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:56:25 (number) len=1 "1"
+// patterns_new.baml:56:22 (keyword) len=6 "throws"
+// patterns_new.baml:56:29 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:56:38 (number) len=1 "1"
 // patterns_new.baml:57:10 (type) [defaultLibrary] len=4 "bool"
 // patterns_new.baml:57:19 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:57:26 (number) len=1 "2"
+// patterns_new.baml:57:23 (keyword) len=6 "throws"
+// patterns_new.baml:57:30 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:57:39 (number) len=1 "2"
 // patterns_new.baml:61:1 (comment) len=66 "// Function-type narrow with chain-narrow position (`(int) -> T`)."
 // patterns_new.baml:62:1 (keyword) len=8 "function"
 // patterns_new.baml:62:10 (function) [declaration] len=22 "dispatch_with_wildcard"
 // patterns_new.baml:62:33 (parameter) [declaration] len=2 "cb"
 // patterns_new.baml:62:39 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:62:47 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:62:52 (operator) len=1 "|"
-// patterns_new.baml:62:56 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:62:67 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:62:76 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:62:51 (keyword) len=6 "throws"
+// patterns_new.baml:62:58 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:62:65 (operator) len=1 "|"
+// patterns_new.baml:62:69 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:62:80 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:62:84 (keyword) len=6 "throws"
+// patterns_new.baml:62:91 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:62:102 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:63:5 (keyword) len=5 "match"
 // patterns_new.baml:63:12 (parameter) len=2 "cb"
 // patterns_new.baml:64:10 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:64:18 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:64:25 (number) len=1 "1"
+// patterns_new.baml:64:22 (keyword) len=6 "throws"
+// patterns_new.baml:64:29 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:64:38 (number) len=1 "1"
 // patterns_new.baml:65:14 (number) len=1 "0"
 // patterns_new.baml:69:1 (comment) len=74 "// Generic function-type pattern. T is unified at the call site. The outer"
 // patterns_new.baml:70:1 (comment) len=77 "// parens disambiguate the union — without them the parser binds `|` inside"
@@ -416,24 +440,32 @@ class PatternMatrix {
 // patterns_new.baml:72:26 (parameter) [declaration] len=2 "cb"
 // patterns_new.baml:72:32 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:72:40 (type) len=1 "T"
-// patterns_new.baml:72:43 (operator) len=1 "|"
-// patterns_new.baml:72:47 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:72:58 (type) len=1 "T"
-// patterns_new.baml:72:65 (type) len=1 "T"
+// patterns_new.baml:72:42 (keyword) len=6 "throws"
+// patterns_new.baml:72:49 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:72:56 (operator) len=1 "|"
+// patterns_new.baml:72:60 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:72:71 (type) len=1 "T"
+// patterns_new.baml:72:73 (keyword) len=6 "throws"
+// patterns_new.baml:72:80 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:72:91 (type) len=1 "T"
 // patterns_new.baml:73:5 (keyword) len=5 "match"
 // patterns_new.baml:73:12 (parameter) len=2 "cb"
 // patterns_new.baml:74:9 (keyword) len=3 "let"
 // patterns_new.baml:74:13 (variable) [declaration] len=1 "f"
 // patterns_new.baml:74:17 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:74:25 (type) len=1 "T"
-// patterns_new.baml:74:30 (variable) len=1 "f"
-// patterns_new.baml:74:32 (number) len=1 "0"
+// patterns_new.baml:74:27 (keyword) len=6 "throws"
+// patterns_new.baml:74:34 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:74:43 (variable) len=1 "f"
+// patterns_new.baml:74:45 (number) len=1 "0"
 // patterns_new.baml:75:9 (keyword) len=3 "let"
 // patterns_new.baml:75:13 (variable) [declaration] len=1 "f"
 // patterns_new.baml:75:17 (type) [defaultLibrary] len=6 "string"
 // patterns_new.baml:75:28 (type) len=1 "T"
-// patterns_new.baml:75:33 (variable) len=1 "f"
-// patterns_new.baml:75:35 (string) len=2 "\"\""
+// patterns_new.baml:75:30 (keyword) len=6 "throws"
+// patterns_new.baml:75:37 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:75:46 (variable) len=1 "f"
+// patterns_new.baml:75:48 (string) len=2 "\"\""
 // patterns_new.baml:79:1 (comment) len=79 "// ============================================================================"
 // patterns_new.baml:80:1 (comment) len=74 "// Triple higher-order: function returning a function returning a function"
 // patterns_new.baml:81:1 (comment) len=79 "// ============================================================================"
@@ -444,32 +476,52 @@ class PatternMatrix {
 // patterns_new.baml:86:10 (function) [declaration] len=14 "unwrap_curried"
 // patterns_new.baml:87:5 (parameter) [declaration] len=1 "f"
 // patterns_new.baml:87:10 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:87:19 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:87:28 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:87:36 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:87:41 (operator) len=1 "|"
-// patterns_new.baml:87:45 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:87:57 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:87:68 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:87:20 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:87:30 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:87:38 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:87:42 (keyword) len=6 "throws"
+// patterns_new.baml:87:49 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:87:56 (keyword) len=6 "throws"
+// patterns_new.baml:87:63 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:87:70 (keyword) len=6 "throws"
+// patterns_new.baml:87:77 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:87:84 (operator) len=1 "|"
+// patterns_new.baml:87:88 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:87:101 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:87:112 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:87:119 (keyword) len=6 "throws"
+// patterns_new.baml:87:126 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:87:133 (keyword) len=6 "throws"
+// patterns_new.baml:87:140 (type) [defaultLibrary] len=5 "never"
 // patterns_new.baml:88:6 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:89:5 (keyword) len=5 "match"
 // patterns_new.baml:89:12 (parameter) len=1 "f"
 // patterns_new.baml:90:9 (keyword) len=3 "let"
 // patterns_new.baml:90:13 (variable) [declaration] len=6 "triple"
 // patterns_new.baml:90:22 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:90:31 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:90:40 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:90:48 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:90:55 (variable) len=6 "triple"
-// patterns_new.baml:90:62 (number) len=1 "1"
-// patterns_new.baml:90:65 (number) len=1 "2"
-// patterns_new.baml:90:68 (number) len=1 "3"
+// patterns_new.baml:90:32 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:90:42 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:90:50 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:90:54 (keyword) len=6 "throws"
+// patterns_new.baml:90:61 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:90:68 (keyword) len=6 "throws"
+// patterns_new.baml:90:75 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:90:82 (keyword) len=6 "throws"
+// patterns_new.baml:90:89 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:90:98 (variable) len=6 "triple"
+// patterns_new.baml:90:105 (number) len=1 "1"
+// patterns_new.baml:90:108 (number) len=1 "2"
+// patterns_new.baml:90:111 (number) len=1 "3"
 // patterns_new.baml:91:9 (keyword) len=3 "let"
 // patterns_new.baml:91:13 (variable) [declaration] len=4 "pair"
 // patterns_new.baml:91:20 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:91:32 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:91:43 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:91:53 (number) len=1 "0"
+// patterns_new.baml:91:33 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:91:44 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:91:51 (keyword) len=6 "throws"
+// patterns_new.baml:91:58 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:91:65 (keyword) len=6 "throws"
+// patterns_new.baml:91:72 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:91:81 (number) len=1 "0"
 // patterns_new.baml:95:1 (comment) len=68 "// Match on a function that takes a callback. The arm narrows to the"
 // patterns_new.baml:96:1 (comment) len=71 "// callback-accepting shape, then we synthesize an int callback inline."
 // patterns_new.baml:97:1 (keyword) len=8 "function"
@@ -477,11 +529,19 @@ class PatternMatrix {
 // patterns_new.baml:98:5 (parameter) [declaration] len=6 "runner"
 // patterns_new.baml:98:16 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:98:24 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:98:32 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:98:37 (operator) len=1 "|"
-// patterns_new.baml:98:42 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:98:53 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:98:61 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:98:28 (keyword) len=6 "throws"
+// patterns_new.baml:98:35 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:98:45 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:98:49 (keyword) len=6 "throws"
+// patterns_new.baml:98:56 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:98:63 (operator) len=1 "|"
+// patterns_new.baml:98:68 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:98:79 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:98:83 (keyword) len=6 "throws"
+// patterns_new.baml:98:90 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:98:100 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:98:104 (keyword) len=6 "throws"
+// patterns_new.baml:98:111 (type) [defaultLibrary] len=5 "never"
 // patterns_new.baml:99:6 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:100:5 (keyword) len=5 "match"
 // patterns_new.baml:100:12 (parameter) len=6 "runner"
@@ -489,24 +549,32 @@ class PatternMatrix {
 // patterns_new.baml:101:13 (variable) [declaration] len=1 "r"
 // patterns_new.baml:101:18 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:101:26 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:101:34 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:101:41 (variable) len=1 "r"
-// patterns_new.baml:101:44 (parameter) [declaration] len=1 "x"
+// patterns_new.baml:101:30 (keyword) len=6 "throws"
+// patterns_new.baml:101:37 (type) [defaultLibrary] len=5 "never"
 // patterns_new.baml:101:47 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:101:55 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:101:61 (parameter) len=1 "x"
-// patterns_new.baml:101:63 (operator) len=1 "+"
-// patterns_new.baml:101:65 (number) len=1 "1"
+// patterns_new.baml:101:51 (keyword) len=6 "throws"
+// patterns_new.baml:101:58 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:101:67 (variable) len=1 "r"
+// patterns_new.baml:101:70 (parameter) [declaration] len=1 "x"
+// patterns_new.baml:101:73 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:101:81 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:101:87 (parameter) len=1 "x"
+// patterns_new.baml:101:89 (operator) len=1 "+"
+// patterns_new.baml:101:91 (number) len=1 "1"
 // patterns_new.baml:102:9 (keyword) len=3 "let"
 // patterns_new.baml:102:13 (variable) [declaration] len=1 "r"
 // patterns_new.baml:102:18 (type) [defaultLibrary] len=6 "string"
 // patterns_new.baml:102:29 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:102:37 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:102:44 (variable) len=1 "r"
-// patterns_new.baml:102:47 (parameter) [declaration] len=1 "s"
-// patterns_new.baml:102:50 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:102:61 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:102:67 (number) len=1 "0"
+// patterns_new.baml:102:33 (keyword) len=6 "throws"
+// patterns_new.baml:102:40 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:102:50 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:102:54 (keyword) len=6 "throws"
+// patterns_new.baml:102:61 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:102:70 (variable) len=1 "r"
+// patterns_new.baml:102:73 (parameter) [declaration] len=1 "s"
+// patterns_new.baml:102:76 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:102:87 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:102:93 (number) len=1 "0"
 // patterns_new.baml:106:1 (comment) len=79 "// ============================================================================"
 // patterns_new.baml:107:1 (comment) len=77 "// Chain narrows + subtyping: each link must be a subtype of the next, so the"
 // patterns_new.baml:108:1 (comment) len=77 "// chain widens left-to-right. The rightmost concrete narrow is the effective"
@@ -537,10 +605,12 @@ class PatternMatrix {
 // patterns_new.baml:122:5 (keyword) len=5 "match"
 // patterns_new.baml:122:12 (parameter) len=2 "cb"
 // patterns_new.baml:123:10 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:123:18 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:123:22 (operator) len=1 "|"
-// patterns_new.baml:123:24 (type) [defaultLibrary] len=6 "string"
-// patterns_new.baml:123:34 (number) len=1 "1"
+// patterns_new.baml:123:19 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:123:23 (operator) len=1 "|"
+// patterns_new.baml:123:25 (type) [defaultLibrary] len=6 "string"
+// patterns_new.baml:123:33 (keyword) len=6 "throws"
+// patterns_new.baml:123:40 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:123:49 (number) len=1 "1"
 // patterns_new.baml:127:1 (keyword) len=4 "type"
 // patterns_new.baml:127:6 (type) [declaration] len=6 "Number"
 // patterns_new.baml:127:13 (operator) len=1 "="
@@ -589,8 +659,10 @@ class PatternMatrix {
 // patterns_new.baml:147:13 (variable) [declaration] len=1 "f"
 // patterns_new.baml:147:17 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:147:25 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:147:32 (variable) len=1 "f"
-// patterns_new.baml:147:34 (number) len=1 "0"
+// patterns_new.baml:147:29 (keyword) len=6 "throws"
+// patterns_new.baml:147:36 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:147:45 (variable) len=1 "f"
+// patterns_new.baml:147:47 (number) len=1 "0"
 // patterns_new.baml:151:1 (comment) len=79 "// ============================================================================"
 // patterns_new.baml:152:1 (comment) len=28 "// for-let with crazy chains"
 // patterns_new.baml:153:1 (comment) len=79 "// ============================================================================"
@@ -641,7 +713,9 @@ class PatternMatrix {
 // patterns_new.baml:173:28 (parameter) [declaration] len=5 "items"
 // patterns_new.baml:173:37 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:173:45 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:173:56 (type) [defaultLibrary] len=3 "int"
+// patterns_new.baml:173:49 (keyword) len=6 "throws"
+// patterns_new.baml:173:56 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:173:69 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:174:5 (keyword) len=3 "let"
 // patterns_new.baml:174:9 (variable) [declaration] len=5 "total"
 // patterns_new.baml:174:15 (operator) len=1 "="
@@ -651,8 +725,10 @@ class PatternMatrix {
 // patterns_new.baml:175:14 (variable) [declaration] len=1 "f"
 // patterns_new.baml:175:18 (type) [defaultLibrary] len=3 "int"
 // patterns_new.baml:175:26 (type) [defaultLibrary] len=3 "int"
-// patterns_new.baml:175:30 (keyword) len=2 "in"
-// patterns_new.baml:175:33 (parameter) len=5 "items"
+// patterns_new.baml:175:30 (keyword) len=6 "throws"
+// patterns_new.baml:175:37 (type) [defaultLibrary] len=5 "never"
+// patterns_new.baml:175:43 (keyword) len=2 "in"
+// patterns_new.baml:175:46 (parameter) len=5 "items"
 // patterns_new.baml:176:9 (variable) len=5 "total"
 // patterns_new.baml:176:15 (operator) len=2 "+="
 // patterns_new.baml:176:18 (variable) len=1 "f"

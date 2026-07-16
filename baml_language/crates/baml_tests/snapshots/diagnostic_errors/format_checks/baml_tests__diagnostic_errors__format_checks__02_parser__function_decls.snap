@@ -520,44 +520,72 @@ SOURCE_FILE
       TYPE_EXPR
         L_PAREN "("
         FUNCTION_TYPE_PARAM
-          WORD "y"
-          COLON ":"
-          TYPE_EXPR "int"
-            WORD "int"
-        R_PAREN ")"
-        ARROW "->"
-        TYPE_EXPR
-          L_PAREN "("
-          FUNCTION_TYPE_PARAM
-            WORD "z"
-            COLON ":"
-            TYPE_EXPR "int"
-              WORD "int"
-          R_PAREN ")"
-          ARROW "->"
           TYPE_EXPR
             L_PAREN "("
             FUNCTION_TYPE_PARAM
-              WORD "w"
+              WORD "y"
               COLON ":"
               TYPE_EXPR "int"
                 WORD "int"
             R_PAREN ")"
             ARROW "->"
             TYPE_EXPR
-              WORD "map"
-              TYPE_ARGS
-                LESS "<"
-                TYPE_EXPR "string"
-                  WORD "string"
-                COMMA ","
-                TYPE_EXPR "int | string | bool"
-                  WORD "int"
-                  PIPE "|"
-                  WORD "string"
-                  PIPE "|"
-                  WORD "bool"
-                GREATER ">"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR
+                  L_PAREN "("
+                  FUNCTION_TYPE_PARAM
+                    WORD "z"
+                    COLON ":"
+                    TYPE_EXPR "int"
+                      WORD "int"
+                  R_PAREN ")"
+                  ARROW "->"
+                  TYPE_EXPR
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR
+                        L_PAREN "("
+                        FUNCTION_TYPE_PARAM
+                          WORD "w"
+                          COLON ":"
+                          TYPE_EXPR "int"
+                            WORD "int"
+                        R_PAREN ")"
+                        ARROW "->"
+                        TYPE_EXPR
+                          WORD "map"
+                          TYPE_ARGS
+                            LESS "<"
+                            TYPE_EXPR "string"
+                              WORD "string"
+                            COMMA ","
+                            TYPE_EXPR "int | string | bool"
+                              WORD "int"
+                              PIPE "|"
+                              WORD "string"
+                              PIPE "|"
+                              WORD "bool"
+                            GREATER ">"
+                        THROWS_CLAUSE
+                          KW_THROWS "throws"
+                          TYPE_EXPR "never"
+                            WORD "never"
+                    R_PAREN ")"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
+              R_PAREN ")"
+            THROWS_CLAUSE
+              KW_THROWS "throws"
+              TYPE_EXPR "never"
+                WORD "never"
+        R_PAREN ")"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR "{
     1
@@ -617,23 +645,39 @@ SOURCE_FILE
           TYPE_EXPR
             L_PAREN "("
             FUNCTION_TYPE_PARAM
-              WORD "y"
-              COLON ":"
-              TYPE_EXPR "int"
-                WORD "int"
+              TYPE_EXPR
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  WORD "y"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                R_PAREN ")"
+                ARROW "->"
+                TYPE_EXPR
+                  L_PAREN "("
+                  FUNCTION_TYPE_PARAM
+                    TYPE_EXPR
+                      L_PAREN "("
+                      FUNCTION_TYPE_PARAM
+                        WORD "z"
+                        COLON ":"
+                        TYPE_EXPR "int"
+                          WORD "int"
+                      R_PAREN ")"
+                      ARROW "->"
+                      TYPE_EXPR "string"
+                        WORD "string"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
+                  R_PAREN ")"
+                THROWS_CLAUSE
+                  KW_THROWS "throws"
+                  TYPE_EXPR "never"
+                    WORD "never"
             R_PAREN ")"
-            ARROW "->"
-            TYPE_EXPR
-              L_PAREN "("
-              FUNCTION_TYPE_PARAM
-                WORD "z"
-                COLON ":"
-                TYPE_EXPR "int"
-                  WORD "int"
-              R_PAREN ")"
-              ARROW "->"
-              TYPE_EXPR "string"
-                WORD "string"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "string"

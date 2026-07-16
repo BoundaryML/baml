@@ -289,10 +289,8 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         } => {
             out.push_str("Assoc<");
             write_ty_identity(out, base);
-            if let Some(interface) = interface {
-                out.push_str(" as ");
-                write_ty_identity(out, &interface.to_ty());
-            }
+            out.push_str(" as ");
+            write_ty_identity(out, &interface.to_ty());
             let _ = write!(out, ".{member}>");
         }
         Ty::Int { .. } => out.push_str("P:Int"),

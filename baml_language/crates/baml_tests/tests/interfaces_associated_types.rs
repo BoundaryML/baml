@@ -31,11 +31,10 @@ fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let project = db.get_project().expect("project must be set");
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(db, project, &all_files)
+    collect_diagnostics(db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
@@ -317,7 +316,10 @@ async fn associated_type_projection_in_throws_position_runs() {
             let generic_result = call_value(AlwaysFails {}) catch (e) {
                 Boom => "generic:" + e.message
             }
-            return default_result + "|" + generic_result
+            // The catch arms make these `int | string` (the int is the
+            // non-throwing value); render explicitly — a mixed union is not
+            // a valid concat operand.
+            return default_result.to_string() + "|" + generic_result.to_string()
         }
         "#
     );
@@ -2014,7 +2016,7 @@ fn complex_qualified_projection_type_args_compile() {
                 type Output = int
             }
 
-            implements Codec<(value: string) -> int> {
+            implements Codec<(value: string) -> int throws never> {
                 type Output = bool
             }
         }
@@ -2025,7 +2027,7 @@ fn complex_qualified_projection_type_args_compile() {
         type TextOutMap = map<string, (Document as Codec<TextFormat>).Output>
         type MapArgOut = (Document as Codec<map<string, PairFormat[]?>>).Output
         type UnionArgOut = (Document as Codec<(TextFormat | CodeFormat)>).Output
-        type FunctionArgOut = (Document as Codec<(value: string) -> int>).Output
+        type FunctionArgOut = (Document as Codec<(value: string) -> int throws never>).Output
         type WrappedBase = ((Document) as Codec<TextFormat>).Output
         type WrappedInterface = (Document as (Codec<TextFormat>)).Output
         "#,
@@ -2261,12 +2263,12 @@ fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
         }
 
         class IntCallbackSource {
-            value: (x: int) -> int
+            value: (x: int) -> int throws never
 
             implements Source {
-                type Item = (x: int) -> int
+                type Item = (x: int) -> int throws never
 
-                function get(self) -> (x: int) -> int {
+                function get(self) -> (x: int) -> int throws never {
                     return self.value
                 }
             }
@@ -2284,7 +2286,7 @@ fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
             return source.get()
         }
 
-        function read_callback<T, S extends Source<Item = (x: T) -> T>>(source: S) -> (x: T) -> T {
+        function read_callback<T, S extends Source<Item = (x: T) -> T throws never>>(source: S) -> (x: T) -> T throws never {
             return source.get()
         }
 
@@ -2304,7 +2306,7 @@ fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
             return read_map<int, IntMapSource>(IntMapSource { value: { "x": 3 } })
         }
 
-        function use_callback() -> (x: int) -> int {
+        function use_callback() -> (x: int) -> int throws never {
             return read_callback<int, IntCallbackSource>(IntCallbackSource { value: id })
         }
         "#,
@@ -2846,10 +2848,10 @@ fn associated_types_substitute_inside_function_type_positions() {
         interface Lifter {
             type Item
 
-            function lift(self) -> ((Self.Item) -> Self.Item?) throws never
+            function lift(self) -> ((Self.Item) -> Self.Item? throws never) throws never
         }
 
-        function lift_int(lifter: Lifter<Item = int>) -> (int) -> int? {
+        function lift_int(lifter: Lifter<Item = int>) -> (int) -> int? throws never {
             return lifter.lift()
         }
         "#,

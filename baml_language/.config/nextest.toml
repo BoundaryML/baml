@@ -2,25 +2,29 @@ nextest-version = "0.9.98"
 
 experimental = ["setup-scripts"]
 
-# nodejs tests need `.node` addon. build it, install fixtures. fire only
-# when a typescript_node test is selected. setup.sh / setup.ps1 are
+# TypeScript matrix tests need both bridges, fixture packages, and Chromium. Fire only
+# when a TypeScript test is selected. setup.sh / setup.ps1 are
 # byte-for-byte equivalent — same pnpm steps in the host shell of each
 # platform.
-[scripts.setup.typescript_node_pnpm_unix]
-command = './sdk_tests/crates/typescript_node/setup.sh'
+[scripts.setup.typescript_pnpm_unix]
+command = './sdk_tests/crates/typescript/setup.sh'
+capture-stdout = true
+capture-stderr = true
 
-[scripts.setup.typescript_node_pnpm_win]
-command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/typescript_node/setup.ps1']
+[scripts.setup.typescript_pnpm_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/typescript/setup.ps1']
+capture-stdout = true
+capture-stderr = true
 
 [[profile.default.scripts]]
-filter = 'package(=sdk_test_typescript_node)'
+filter = 'package(=sdk_test_typescript)'
 platform = { host = 'cfg(unix)' }
-setup = 'typescript_node_pnpm_unix'
+setup = 'typescript_pnpm_unix'
 
 [[profile.default.scripts]]
-filter = 'package(=sdk_test_typescript_node)'
+filter = 'package(=sdk_test_typescript)'
 platform = { host = 'cfg(windows)' }
-setup = 'typescript_node_pnpm_win'
+setup = 'typescript_pnpm_win'
 
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
