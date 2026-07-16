@@ -467,21 +467,6 @@ class ArgsEncoder {
     AddArg(name, [](wire::Writer&) {});
   }
 
-  // Adds one explicit TypeVar binding (CallFunctionArgs.type_args entry).
-  // Bindings are added in De Bruijn order: enclosing class params first,
-  // then the callee's own generic params. `write_ty` fills the BamlTy
-  // message body for the concrete binding.
-  template <typename WriteTy>
-  void AddTypeArg(const std::string& type_var, WriteTy&& write_ty) {
-    wire::Writer ty_msg;
-    write_ty(ty_msg);
-
-    wire::Writer binding;  // BamlTyArg
-    binding.StringField(1, type_var);
-    binding.MessageField(2, ty_msg);
-    args_.MessageField(3, binding);  // CallFunctionArgs.type_args
-  }
-
   std::string Finish(uint64_t call_id) {
     args_.Uint64Field(2, call_id);  // CallFunctionArgs.call_id
     return args_.bytes();

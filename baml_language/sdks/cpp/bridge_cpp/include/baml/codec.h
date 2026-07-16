@@ -6,13 +6,10 @@
 // BamlError on kind mismatches. Generated code adds specializations for its
 // classes/enums; this header owns the primitive and container instances.
 
-#include <baml/bigint.h>
 #include <baml/box.h>
-#include <baml/detail/host_value.h>
 #include <baml/detail/proto.h>
 #include <baml/detail/wire.h>
 #include <baml/errors.h>
-#include <baml/handle.h>
 #include <baml_cffi.h>
 
 #include <cstdint>
@@ -36,17 +33,6 @@ namespace detail {
   throw BamlError(std::string("BAML decode error: expected ") + expected +
                   ", got " + got.KindName());
 }
-
-// dependent_t<X, Deps...> is X, made formally dependent on Deps. Generated
-// template bodies reference Codec<X> for concrete X through this alias so
-// the lookup defers to instantiation time -- Codec specializations are
-// defined after the classes whose inline template methods mention them.
-template <typename X, typename...>
-struct dependent {
-  using type = X;
-};
-template <typename X, typename... Deps>
-using dependent_t = typename dependent<X, Deps...>::type;
 
 }  // namespace detail
 
@@ -131,39 +117,6 @@ struct Codec<std::monostate> {
       detail::KindMismatch("null", v);
     }
     return std::monostate{};
-  }
-};
-
-template <>
-struct Codec<BigInt> {
-  static void Encode(detail::wire::Writer& value_msg, const BigInt& v) {
-    value_msg.StringField(12, v.hex());  // InboundValue.bigint_value
-  }
-  static BigInt Decode(const detail::OutboundValue& v) {
-    // Engine ints widen to bigint when the declared type is bigint.
-    if (v.kind == detail::OutboundValue::Kind::Int) {
-      return BigInt(v.int_v);
-    }
-    if (v.kind != detail::OutboundValue::Kind::BigInt) {
-      detail::KindMismatch("bigint", v);
-    }
-    return BigInt::FromHex(v.string_v);
-  }
-};
-
-template <>
-struct Codec<Handle> {
-  static void Encode(detail::wire::Writer& value_msg, const Handle& v) {
-    detail::wire::Writer handle;  // BamlHandle
-    handle.Uint64Field(1, v.CloneKeyForWire());
-    handle.Int64Field(2, v.handle_type());
-    value_msg.MessageField(10, handle);  // InboundValue.handle
-  }
-  static Handle Decode(const detail::OutboundValue& v) {
-    if (v.kind != detail::OutboundValue::Kind::Handle) {
-      detail::KindMismatch("handle", v);
-    }
-    return Handle(v.handle_key, v.handle_type);
   }
 };
 
@@ -300,24 +253,6 @@ inline std::string JoinTrace(const std::vector<std::string>& trace) {
                                      ? result.value.name
                                      : std::string();
 
-  // A baml.errors.HostCallable wrapping a native host exception carries a
-  // _handle into this process's registry: rethrow the original exception
-  // object instead of a flattened BamlError (Python-identity parity).
-  if (result.arm == OutboundResult::Arm::Error &&
-      class_name == "baml.errors.HostCallable") {
-    for (const auto& field : result.value.fields) {
-      if (field.first == "_handle" &&
-          field.second.kind == OutboundValue::Kind::Handle &&
-          field.second.handle_type == kHandleHostValueOpaque) {
-        if (std::exception_ptr original =
-                HostValueRegistry::Instance().FindException(
-                    field.second.handle_key)) {
-          std::rethrow_exception(original);
-        }
-      }
-    }
-  }
-
   std::string message = ErrorMessageOf(result.value);
   std::string trace = JoinTrace(result.trace);
 
@@ -340,7 +275,8 @@ inline std::string JoinTrace(const std::vector<std::string>& trace) {
                   std::move(result.raw_value));
 }
 
-// Declared in future.h; the codec provides the definition.
+// Decodes a BamlOutboundResult envelope into T, throwing BamlError /
+// BamlPanic / BamlCancelled for the non-ok arms.
 template <typename T>
 T DecodeResult(const std::vector<uint8_t>& envelope) {
   OutboundResult result = ParseOutboundResult(envelope);

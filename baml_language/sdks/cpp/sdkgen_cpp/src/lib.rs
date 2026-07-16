@@ -1,13 +1,12 @@
-//! C++ SDK emitter. Slices 1-4 of the bridge-cpp codegen spec: the
-//! single-header layout, namespace routing, free functions, classes + enums
-//! with generated `Codec<T>` and `Ty<T>` specializations, static + instance
-//! methods, optional arguments via per-function opts structs (spec D4),
-//! recursion via `baml::Box` cycle-breaking, and generics as real templates
-//! (spec D3: generic classes are class templates, generic callables are
-//! function templates whose concrete bindings ride `CallFunctionArgs.type_args`).
-//! Streaming, companions, media/handles, and stdlib surfaces land in later
-//! slices; symbols they gate on are skipped and reported in a trailing
-//! header comment (no silent caps).
+//! C++ SDK emitter, scoped to the packaging/publishing slice (bridge-week
+//! steps 1-8): the single-header layout, namespace routing, free functions
+//! with required + optional arguments (per-function opts structs, spec D4),
+//! classes + enums with generated `Codec<T>` specializations, transparent
+//! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
+//! Post-step-8 features (async, methods, callbacks, generics, streaming
+//! companions, media/handles, unions) are skipped and reported in a trailing
+//! header comment (no silent caps); the full implementation is preserved on
+//! the avery/bridge-cpp-full branch.
 //!
 //! Every emitted identifier comes from the typed naming system in the
 //! `naming` module: a request-collection pass walks the pool up front,
@@ -18,16 +17,8 @@
 //!
 //! Output layout (spec D1):
 //!   `include/baml_sdk.h`   - the typed surface
-//!   `src/bindings.cc`      - non-template definitions over `::baml::detail`
-//!   `src/_inlinedbaml.cc`  - embedded BAML sources + lazy runtime init
-//!
-//! Template callables (generic functions, and every method of a generic
-//! class) define inline in the header; non-template callables keep the
-//! declaration/definition split.
-//!
-//! Runtime init embeds the user's `.baml` sources and initializes through
-//! `create_baml_runtime`; it switches to embedded bytecode once
-//! `InitializeRuntimeFromBytecode` is exported over the C ABI.
+//!   `src/bindings.cc`      - definitions over `::baml::detail`
+//!   `src/_inlinedbaml.cc`  - embedded BAML bytecode + lazy runtime init
 
 mod naming;
 
@@ -37,9 +28,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{
-    CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
-};
+use baml_codegen_types::{Class, Enum, Function, Name, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
@@ -101,10 +90,15 @@ pub fn to_source_code_with_bytecode(
     let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
-        .filter(|name| match &pool[*name] {
-            Symbol::Class(_) => true,
-            Symbol::TypeAlias(alias) => alias.recursive,
-            Symbol::Enum(_) | Symbol::Function(_) => false,
+        .filter(|name| {
+            if name.is_stream() {
+                return false;
+            }
+            match &pool[*name] {
+                Symbol::Class(class_def) => class_def.generic_params.is_empty(),
+                Symbol::TypeAlias(alias) => alias.recursive,
+                Symbol::Enum(_) | Symbol::Function(_) => false,
+            }
         })
         .collect();
     loop {
@@ -165,59 +159,26 @@ pub fn to_source_code_with_bytecode(
         }
     }
 
-    // Pass 3: methods, against the final emitted type set (declarations may
-    // reference any emitted class thanks to the forward-declaration block).
-    for class in &mut classes {
-        if class.alias_wrapper {
-            continue;
-        }
-        let Symbol::Class(class_def) = &pool[&class.pool_name] else {
-            unreachable!()
-        };
-        for (methods, is_static) in [
-            (&class_def.static_methods, true),
-            (&class_def.instance_methods, false),
-        ] {
-            for method in methods {
-                let fqn = BamlFqn::member(&class.pool_name, method.name.as_str());
-                match emit_callable(
-                    pool,
-                    &names,
-                    &fqn,
-                    CppNameKind::Method,
-                    method,
-                    &emitted_types,
-                    &class.generic_params,
-                ) {
-                    Ok(emitted) => {
-                        if is_static {
-                            class.static_methods.push(emitted);
-                        } else {
-                            class.instance_methods.push(emitted);
-                        }
-                    }
-                    Err(reason) => {
-                        skipped.push(format!("{}.{}: {reason}", class.pool_name, method.name));
-                    }
-                }
-            }
-        }
-    }
-
     // Pass 4: free functions over the emitted type set.
     let mut fns_by_namespace: BTreeMap<Vec<String>, Vec<EmittedFn>> = BTreeMap::new();
     for name in &pool_names {
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
+        if name.is_stream() || name.bare_name().contains('$') {
+            skipped.push(format!("{name}: companion functions (post-step-8)"));
+            continue;
+        }
+        if !function.generic_params.is_empty() {
+            skipped.push(format!("{name}: generic function (post-step-8)"));
+            continue;
+        }
         match emit_callable(
             pool,
             &names,
             &BamlFqn::symbol(name),
-            CppNameKind::Function,
             function,
             &emitted_types,
-            &[],
         ) {
             Ok(emitted) => {
                 let ns = allocated_namespace(&names, name, false);
@@ -234,7 +195,7 @@ pub fn to_source_code_with_bytecode(
     );
     out.insert(
         PathBuf::from("src/bindings.cc"),
-        render_bindings(&classes, &fns_by_namespace),
+        render_bindings(&fns_by_namespace),
     );
     out.insert(
         PathBuf::from("src/_inlinedbaml.cc"),
@@ -265,10 +226,6 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/baml.h"),
     ),
     (
-        "include/baml/bigint.h",
-        include_str!("../../bridge_cpp/include/baml/bigint.h"),
-    ),
-    (
         "include/baml/box.h",
         include_str!("../../bridge_cpp/include/baml/box.h"),
     ),
@@ -285,28 +242,12 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/errors.h"),
     ),
     (
-        "include/baml/future.h",
-        include_str!("../../bridge_cpp/include/baml/future.h"),
-    ),
-    (
-        "include/baml/handle.h",
-        include_str!("../../bridge_cpp/include/baml/handle.h"),
-    ),
-    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
     (
-        "include/baml/ty.h",
-        include_str!("../../bridge_cpp/include/baml/ty.h"),
-    ),
-    (
         "include/baml/detail/call.h",
         include_str!("../../bridge_cpp/include/baml/detail/call.h"),
-    ),
-    (
-        "include/baml/detail/host_value.h",
-        include_str!("../../bridge_cpp/include/baml/detail/host_value.h"),
     ),
     (
         "include/baml/detail/json.h",
@@ -345,6 +286,11 @@ const OPTS_MEMBER: &str = "opts";
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
+        // Post-step-8 features are disabled: stream companions and
+        // $-companion functions never allocate names.
+        if name.is_stream() || name.bare_name().contains('$') {
+            continue;
+        }
         match symbol {
             Symbol::Enum(enum_def) => {
                 request_namespace_segments(&mut requests, name, true);
@@ -357,34 +303,22 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
             }
             Symbol::Class(class_def) => {
+                if !class_def.generic_params.is_empty() {
+                    continue; // generics disabled (post-step-8)
+                }
                 request_namespace_segments(&mut requests, name, true);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
-                if is_tagged_heap_handle_class(name) {
-                    requests.insert(tagged_handle_field_request(name));
-                }
-                for param in &class_def.generic_params {
-                    requests.insert(NameRequest::new(
-                        BamlFqn::member(name, param.as_str()),
-                        CppNameKind::TypeVar,
-                    ));
-                }
                 for prop in &class_def.properties {
                     requests.insert(NameRequest::new(
                         BamlFqn::member(name, prop.name.as_str()),
                         CppNameKind::Field,
                     ));
                 }
-                for method in class_def
-                    .static_methods
-                    .iter()
-                    .chain(&class_def.instance_methods)
-                {
-                    let method_fqn = BamlFqn::member(name, method.name.as_str());
-                    requests.insert(NameRequest::new(method_fqn.clone(), CppNameKind::Method));
-                    request_callable_members(&mut requests, &method_fqn, method);
-                }
             }
             Symbol::Function(function) => {
+                if !function.generic_params.is_empty() {
+                    continue; // generics disabled (post-step-8)
+                }
                 request_namespace_segments(&mut requests, name, false);
                 let fqn = BamlFqn::symbol(name);
                 requests.insert(function_request(name));
@@ -439,12 +373,6 @@ fn request_callable_members(
     fqn: &BamlFqn,
     function: &Function,
 ) {
-    for param in &function.generic_params {
-        requests.insert(NameRequest::new(
-            fqn.child(param.as_str()),
-            CppNameKind::TypeVar,
-        ));
-    }
     for arg in &function.arguments {
         requests.insert(NameRequest::new(
             fqn.child(arg.name.as_str()),
@@ -491,26 +419,6 @@ fn function_request(name: &Name) -> NameRequest {
         Some(preferred) => NameRequest::synthesized(fqn, CppNameKind::Function, &preferred),
         None => NameRequest::new(fqn, CppNameKind::Function),
     }
-}
-
-/// `baml.llm.Stream` crosses the wire as a bare tagged-heap-handle value
-/// (never as a `class_value`), so it emits with a single synthesized handle
-/// field and a bare-handle codec.
-fn is_tagged_heap_handle_class(name: &Name) -> bool {
-    name.to_string() == "baml.llm.Stream"
-}
-
-/// `BamlHandleType.ADT_TAGGED_HEAP_HANDLE` (`baml_handle.proto`).
-const ADT_TAGGED_HEAP_HANDLE: i32 = 14;
-
-/// The synthesized `_handle` field request of a tagged-heap-handle class.
-/// Shared between collection and emission so the lookup key cannot drift.
-fn tagged_handle_field_request(class: &Name) -> NameRequest {
-    NameRequest::synthesized(
-        BamlFqn::member(class, "_handle"),
-        CppNameKind::Field,
-        "_handle",
-    )
 }
 
 /// The synthesized `value` field request of a recursive-alias wrapper
@@ -642,73 +550,14 @@ struct EmittedField {
 }
 
 struct EmittedClass {
-    pool_name: Name,
     ns: Vec<String>,
     name: CppName,
     doc: Option<String>,
-    /// Template parameters; empty for non-generic classes.
-    generic_params: Vec<CppName>,
     fields: Vec<EmittedField>,
-    static_methods: Vec<EmittedFn>,
-    instance_methods: Vec<EmittedFn>,
     /// A recursive-alias wrapper struct: one `value` field holding the
     /// alias's resolved type, structural codec (aliases have no wire
     /// identity), no methods.
     alias_wrapper: bool,
-}
-
-impl EmittedClass {
-    fn is_template(&self) -> bool {
-        !self.generic_params.is_empty()
-    }
-
-    /// `X` or `X<T, U>` — the class's own name as spelled inside its scope.
-    fn self_type(&self) -> String {
-        if self.is_template() {
-            format!(
-                "{}<{}>",
-                self.name.declared(),
-                type_param_list(&self.generic_params)
-            )
-        } else {
-            self.name.declared().to_string()
-        }
-    }
-
-    /// `::baml_sdk::ns::X<T, U>` — fully qualified parameterized spelling.
-    fn qualified_self_type(&self) -> String {
-        if self.is_template() {
-            format!(
-                "{}<{}>",
-                self.name.identifier(),
-                type_param_list(&self.generic_params)
-            )
-        } else {
-            self.name.identifier().to_string()
-        }
-    }
-
-    fn template_prefix(&self) -> String {
-        template_prefix(&self.generic_params)
-    }
-}
-
-fn template_prefix(params: &[CppName]) -> String {
-    if params.is_empty() {
-        String::new()
-    } else {
-        let typenames: Vec<String> = params
-            .iter()
-            .map(|p| format!("typename {}", p.declared()))
-            .collect();
-        format!("template <{}>\n", typenames.join(", "))
-    }
-}
-
-/// `T, U` — template arguments at a use site.
-fn type_param_list(params: &[CppName]) -> String {
-    let spelled: Vec<String> = params.iter().map(|p| p.identifier().to_string()).collect();
-    spelled.join(", ")
 }
 
 /// Ok(None) = not emittable *yet* (a field references a class not emitted so
@@ -721,42 +570,9 @@ fn emit_class(
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
-    let generic_params: Vec<CppName> = class_def
-        .generic_params
-        .iter()
-        .map(|p| {
-            names
-                .get(&NameRequest::new(
-                    BamlFqn::member(name, p.as_str()),
-                    CppNameKind::TypeVar,
-                ))
-                .clone()
-        })
-        .collect();
     let mut fields = Vec::new();
-    if is_tagged_heap_handle_class(name) {
-        // The wire form is a bare tagged heap handle; the class's declared
-        // fields are engine-internal and never cross the boundary.
-        fields.push(EmittedField {
-            name: names.get(&tagged_handle_field_request(name)).clone(),
-            ty: "::baml::Handle".to_string(),
-        });
-        return Ok(Some(EmittedClass {
-            pool_name: name.clone(),
-            ns: allocated_namespace(names, name, true),
-            name: names
-                .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
-                .clone(),
-            doc: class_def.docstring.clone(),
-            generic_params,
-            fields,
-            static_methods: Vec::new(),
-            instance_methods: Vec::new(),
-            alias_wrapper: false,
-        }));
-    }
     for prop in &class_def.properties {
-        match translate_ty(pool, names, &prop.ty, emitted_types, boxed, &generic_params) {
+        match translate_ty(pool, names, &prop.ty, emitted_types, boxed) {
             Translated::Cpp(ty) => {
                 fields.push(EmittedField {
                     name: names
@@ -774,29 +590,7 @@ fn emit_class(
             }
         }
     }
-    // Method optional params become Arg<T> fields on opts structs nested in
-    // this class's body, so their types must be complete (= defined earlier)
-    // too. Delay the class while such a dep is merely not-yet-emitted; once
-    // the cycle pass runs (boxed non-empty), stop blocking -- a dep that
-    // still cannot resolve there means pass 3 skips that method, so no opts
-    // struct references it.
-    if boxed.is_empty() {
-        for method in class_def
-            .static_methods
-            .iter()
-            .chain(&class_def.instance_methods)
-        {
-            for arg in method.arguments.iter().filter(|a| a.default.is_some()) {
-                if let Translated::NotYet =
-                    translate_ty(pool, names, &arg.ty, emitted_types, boxed, &generic_params)
-                {
-                    return Ok(None);
-                }
-            }
-        }
-    }
     Ok(Some(EmittedClass {
-        pool_name: name.clone(),
         ns: allocated_namespace(names, name, true),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
@@ -810,10 +604,7 @@ fn emit_class(
                 .map(|p| (p.name.to_string(), p.docstring.clone()))
                 .collect::<Vec<_>>(),
         ),
-        generic_params,
         fields,
-        static_methods: Vec::new(),
-        instance_methods: Vec::new(),
         alias_wrapper: false,
     }))
 }
@@ -832,7 +623,7 @@ fn emit_alias_wrapper(
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
-    let inner = match translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed, &[]) {
+    let inner = match translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed) {
         Translated::Cpp(ty) => ty,
         Translated::NotYet => return Ok(None),
         Translated::Unsupported(reason) => {
@@ -840,19 +631,15 @@ fn emit_alias_wrapper(
         }
     };
     Ok(Some(EmittedClass {
-        pool_name: name.clone(),
         ns: allocated_namespace(names, name, true),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),
         doc: None,
-        generic_params: Vec::new(),
         fields: vec![EmittedField {
             name: names.get(&alias_value_field_request(name)).clone(),
             ty: inner,
         }],
-        static_methods: Vec::new(),
-        instance_methods: Vec::new(),
         alias_wrapper: true,
     }))
 }
@@ -864,11 +651,6 @@ fn emit_alias_wrapper(
 struct EmittedParam {
     name: CppName,
     ty: String,
-    /// For callable-typed parameters: the callable's declared BAML param
-    /// names in declared order ("" for unnamed required params). Switches
-    /// the binding to `EncodeCallable` (host-callable registration) and
-    /// keys supplied optional args on dispatch.
-    callable_names: Option<Vec<String>>,
 }
 
 /// An optional parameter, rendered as an `Arg<type>` field on the opts
@@ -882,110 +664,37 @@ struct EmittedOptParam {
 
 struct EmittedFn {
     name: CppName,
-    /// The BAML FQN the runtime call dispatches on: the wire symbol, plus
-    /// `.member` (the method's source name) for methods. Never derived from
-    /// C++ spellings.
+    /// The BAML FQN the runtime call dispatches on (the wire symbol);
+    /// never derived from C++ spellings.
     call_fqn: String,
     ret: String,
     params: Vec<EmittedParam>,
     opt_params: Vec<EmittedOptParam>,
     /// Opts struct name, when `opt_params` is non-empty.
     opts_name: Option<CppName>,
-    /// The callable's own template parameters (function generics).
-    type_params: Vec<CppName>,
-    /// The enclosing class's template parameters (empty for free functions
-    /// and methods of non-generic classes). Bound before `type_params` in
-    /// the call's `type_args` (De Bruijn order).
-    class_type_params: Vec<CppName>,
     doc: Option<String>,
     raises: Vec<String>,
-}
-
-impl EmittedFn {
-    /// Template callables (a generic function, or any method that must see
-    /// its class's template params) define inline in the header.
-    fn is_template(&self) -> bool {
-        !self.type_params.is_empty() || !self.class_type_params.is_empty()
-    }
 }
 
 fn emit_callable(
     pool: &SymbolPool,
     names: &CppNames,
     fqn: &BamlFqn,
-    kind: CppNameKind,
     function: &Function,
     emitted_types: &BTreeSet<Name>,
-    class_type_params: &[CppName],
 ) -> Result<EmittedFn, String> {
-    let request = if kind == CppNameKind::Function {
-        function_request(&fqn.symbol)
-    } else {
-        NameRequest::new(fqn.clone(), kind)
-    };
-    let name = names.get(&request).clone();
-    let type_params: Vec<CppName> = function
-        .generic_params
-        .iter()
-        .map(|p| {
-            names
-                .get(&NameRequest::new(
-                    fqn.child(p.as_str()),
-                    CppNameKind::TypeVar,
-                ))
-                .clone()
-        })
-        .collect();
-    let mut in_scope: Vec<CppName> = class_type_params.to_vec();
-    in_scope.extend(type_params.iter().cloned());
+    let name = names.get(&function_request(&fqn.symbol)).clone();
 
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
     for arg in &function.arguments {
-        // Top-level callable parameters cross as host callables
-        // (std::function); callables nested in other types stay
-        // unsupported (translate_ty rejects them).
-        let mut callable_names = None;
-        let ty = if let Ty::Callable {
-            params: callable_params,
-            ret,
-        } = &arg.ty
-        {
-            if arg.default.is_some() {
+        let ty = match translate_ty(pool, names, &arg.ty, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(ty) => ty,
+            Translated::NotYet | Translated::Unsupported(_) => {
                 return Err(format!(
-                    "optional argument `{}` has a callable type (unsupported)",
-                    arg.name
+                    "argument `{}` has unsupported type {}",
+                    arg.name, arg.ty
                 ));
-            }
-            match translate_callable_ty(pool, names, callable_params, ret, emitted_types, &in_scope)
-            {
-                Ok((ty, wire_names)) => {
-                    callable_names = Some(wire_names);
-                    ty
-                }
-                Err(reason) => {
-                    return Err(format!(
-                        "argument `{}` has unsupported type {} ({reason})",
-                        arg.name, arg.ty
-                    ));
-                }
-            }
-        } else {
-            match translate_ty(
-                pool,
-                names,
-                &arg.ty,
-                emitted_types,
-                &BTreeSet::new(),
-                &in_scope,
-            ) {
-                Translated::Cpp(ty) => ty,
-                Translated::NotYet | Translated::Unsupported(_) => {
-                    return Err(format!(
-                        "argument `{}` has unsupported type {}",
-                        arg.name, arg.ty
-                    ));
-                }
             }
         };
         let param_name = names
@@ -1004,7 +713,6 @@ fn emit_callable(
             params.push(EmittedParam {
                 name: param_name,
                 ty,
-                callable_names,
             });
         }
     }
@@ -1014,7 +722,6 @@ fn emit_callable(
         &function.return_type,
         emitted_types,
         &BTreeSet::new(),
-        &in_scope,
     ) {
         Translated::Cpp(ty) => ty,
         Translated::NotYet | Translated::Unsupported(_) => {
@@ -1034,24 +741,13 @@ fn emit_callable(
         Some(names.get(&opts_request(fqn, function)).clone())
     };
 
-    // The runtime dispatches on the BAML FQN: for methods that is the class's
-    // wire symbol plus the method's source member token, never a C++ name.
-    let call_fqn = if name.kind() == CppNameKind::Method {
-        let member = fqn.members.last().expect("method identity has a member");
-        format!("{}.{member}", name.wire())
-    } else {
-        name.wire().to_string()
-    };
-
     Ok(EmittedFn {
+        call_fqn: name.wire().to_string(),
         name,
-        call_fqn,
         ret,
         params,
         opt_params,
         opts_name,
-        type_params,
-        class_type_params: class_type_params.to_vec(),
         doc: function.docstring.clone(),
         raises,
     })
@@ -1086,7 +782,6 @@ fn translate_ty(
     ty: &Ty,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
-    type_vars: &[CppName],
 ) -> Translated {
     let translated = match ty {
         Ty::Int => "int64_t".to_string(),
@@ -1095,56 +790,29 @@ fn translate_ty(
         Ty::Bool => "bool".to_string(),
         Ty::Null => "std::monostate".to_string(),
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
-        // Opaque engine-managed state (`$rust_type` fields of handle-backed
-        // stdlib classes): an owned engine handle.
-        Ty::RustType => "::baml::Handle".to_string(),
-        Ty::Bigint => "::baml::BigInt".to_string(),
-        // The primitive media types are the stdlib media classes on the
-        // wire (class_value with a `_data` handle), so they translate to
-        // the generated baml.media.* class references.
-        Ty::Media(kind) => {
-            let class_name = match kind {
-                baml_base::MediaKind::Image => "Image",
-                baml_base::MediaKind::Audio => "Audio",
-                baml_base::MediaKind::Video => "Video",
-                baml_base::MediaKind::Pdf => "Pdf",
-                baml_base::MediaKind::Generic => {
-                    return Translated::Unsupported("generic media type".to_string());
-                }
-            };
-            let media_class = Name::new(
-                baml_base::Name::from("baml"),
-                vec![baml_base::Name::from("media")],
-                baml_base::Name::from(class_name),
-            );
-            return translate_ty(
-                pool,
-                names,
-                &Ty::Class(media_class, Vec::new()),
-                emitted_types,
-                boxed,
-                type_vars,
-            );
+        Ty::RustType => {
+            return Translated::Unsupported("handle type (post-step-8)".to_string());
+        }
+        Ty::Bigint => {
+            return Translated::Unsupported("bigint (post-step-8)".to_string());
+        }
+        Ty::Media(_) => {
+            return Translated::Unsupported("media type (post-step-8)".to_string());
         }
         Ty::Literal(lit) => {
             // Literal types widen to their base type (Python parity).
             match lit {
                 baml_base::Literal::Int(_) => "int64_t".to_string(),
-                baml_base::Literal::Bigint(_) => "::baml::BigInt".to_string(),
+                baml_base::Literal::Bigint(_) => {
+                    return Translated::Unsupported("bigint literal (post-step-8)".to_string());
+                }
                 baml_base::Literal::Float(_) => "double".to_string(),
                 baml_base::Literal::String(_) => "std::string".to_string(),
                 baml_base::Literal::Bool(_) => "bool".to_string(),
             }
         }
         Ty::TypeVar(name) => {
-            // In-scope `TypeVar`s are matched by their BAML wire name; the
-            // C++ template parameter may have been renamed.
-            match type_vars.iter().find(|tv| tv.wire().is_key(name.as_str())) {
-                Some(tv) => tv.identifier().to_string(),
-                None => {
-                    return Translated::Unsupported(format!("out-of-scope TypeVar {name}"));
-                }
-            }
+            return Translated::Unsupported(format!("TypeVar {name} (generics post-step-8)"));
         }
         Ty::TypeAlias(name) => {
             // Non-recursive aliases resolve transparently to their target
@@ -1168,14 +836,7 @@ fn translate_ty(
                 }
                 return Translated::Cpp(base);
             }
-            return translate_ty(
-                pool,
-                names,
-                &alias.resolves_to,
-                emitted_types,
-                boxed,
-                type_vars,
-            );
+            return translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed);
         }
         Ty::Enum(name) => {
             return if emitted_types.contains(name) {
@@ -1192,7 +853,7 @@ fn translate_ty(
         Ty::Class(name, args) => {
             let mut translated_args = Vec::new();
             for arg in args {
-                match translate_ty(pool, names, arg, emitted_types, boxed, type_vars) {
+                match translate_ty(pool, names, arg, emitted_types, boxed) {
                     Translated::Cpp(t) => translated_args.push(t),
                     other => return other,
                 }
@@ -1217,17 +878,15 @@ fn translate_ty(
             }
             return Translated::Cpp(spelled);
         }
-        Ty::List(inner) => {
-            match translate_ty(pool, names, inner, emitted_types, boxed, type_vars) {
-                Translated::Cpp(inner) => format!("std::vector<{inner}>"),
-                other => return other,
-            }
-        }
+        Ty::List(inner) => match translate_ty(pool, names, inner, emitted_types, boxed) {
+            Translated::Cpp(inner) => format!("std::vector<{inner}>"),
+            other => return other,
+        },
         Ty::Map { key, value } => {
             if !matches!(key.as_ref(), Ty::String) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
-            match translate_ty(pool, names, value, emitted_types, boxed, type_vars) {
+            match translate_ty(pool, names, value, emitted_types, boxed) {
                 Translated::Cpp(value) => format!("std::map<std::string, {value}>"),
                 other => return other,
             }
@@ -1241,7 +900,7 @@ fn translate_ty(
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
-                match translate_ty(pool, names, item, emitted_types, boxed, type_vars) {
+                match translate_ty(pool, names, item, emitted_types, boxed) {
                     Translated::Cpp(alt) => {
                         if !alternatives.contains(&alt) {
                             alternatives.push(alt);
@@ -1290,81 +949,23 @@ fn translate_return_ty(
     ty: &Ty,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
-    type_vars: &[CppName],
 ) -> Translated {
     if matches!(ty, Ty::Unit) {
         return Translated::Cpp("void".to_string());
     }
-    translate_ty(pool, names, ty, emitted_types, boxed, type_vars)
-}
-
-/// A callable-typed parameter as `std::function<Ret(Slots...)>` plus its
-/// declared BAML param names ("" for unnamed). Optional callable params
-/// (`y?: int`) become `Arg` slots, so an arg BAML omits materializes as an
-/// unset `Arg` and the host's own default applies.
-fn translate_callable_ty(
-    pool: &SymbolPool,
-    names: &CppNames,
-    callable_params: &[CallableParam],
-    ret: &Ty,
-    emitted_types: &BTreeSet<Name>,
-    type_vars: &[CppName],
-) -> Result<(String, Vec<String>), String> {
-    let mut slots = Vec::new();
-    let mut wire_names = Vec::new();
-    for p in callable_params {
-        let slot = match translate_ty(
-            pool,
-            names,
-            &p.ty,
-            emitted_types,
-            &BTreeSet::new(),
-            type_vars,
-        ) {
-            Translated::Cpp(t) => t,
-            Translated::NotYet | Translated::Unsupported(_) => {
-                return Err(format!("callable param type {}", p.ty));
-            }
-        };
-        slots.push(match p.mode {
-            CodegenFunctionParamMode::Required => slot,
-            CodegenFunctionParamMode::Optional => format!("::baml::Arg<{slot}>"),
-        });
-        wire_names.push(
-            p.name
-                .as_ref()
-                .map(|n| n.as_str().to_string())
-                .unwrap_or_default(),
-        );
-    }
-    let ret =
-        match translate_return_ty(pool, names, ret, emitted_types, &BTreeSet::new(), type_vars) {
-            Translated::Cpp(t) => t,
-            Translated::NotYet | Translated::Unsupported(_) => {
-                return Err(format!("callable return type {ret}"));
-            }
-        };
-    Ok((
-        format!("std::function<{ret}({})>", slots.join(", ")),
-        wire_names,
-    ))
+    translate_ty(pool, names, ty, emitted_types, boxed)
 }
 
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
 
-/// How a callable renders: as a free function, a method declaration inside a
-/// struct, an inline in-struct definition, or an out-of-line member
-/// definition.
-enum RenderPos<'a> {
-    Free,
-    StaticDecl,
-    InstanceDecl,
-    StaticDef { class: &'a EmittedClass },
-    InstanceDef { class: &'a EmittedClass },
-    StaticInline,
-    InstanceInline,
+/// Whether a function renders as its header declaration (defaulted opts
+/// parameter) or its bindings.cc definition (no default repeated).
+#[derive(Clone, Copy)]
+enum RenderPos {
+    Decl,
+    Def,
 }
 
 fn push_doc(buf: &mut String, indent: &str, doc: Option<&String>, raises: &[String]) {
@@ -1401,7 +1002,7 @@ fn by_value_or_cref(ty: &str) -> String {
     }
 }
 
-fn signature(f: &EmittedFn, async_variant: bool, pos: &RenderPos) -> String {
+fn signature(f: &EmittedFn, pos: RenderPos) -> String {
     let mut params: Vec<String> = f
         .params
         .iter()
@@ -1409,44 +1010,18 @@ fn signature(f: &EmittedFn, async_variant: bool, pos: &RenderPos) -> String {
         .collect();
     if let Some(opts_name) = &f.opts_name {
         let default = match pos {
-            RenderPos::StaticDef { .. } | RenderPos::InstanceDef { .. } => "",
-            _ => " = {}",
-        };
-        let qualified_opts = match pos {
-            RenderPos::StaticDef { class } | RenderPos::InstanceDef { class } => {
-                format!("{}::{}", class.self_type(), opts_name.declared())
-            }
-            _ => opts_name.declared().to_string(),
+            RenderPos::Def => "",
+            RenderPos::Decl => " = {}",
         };
         params.push(format!(
-            "{qualified_opts} {opts}{default}",
+            "{opts_name} {opts}{default}",
+            opts_name = opts_name.declared(),
             opts = GeneratorIdent::OptsParam.token()
         ));
     }
-    let (ret, suffix) = if async_variant {
-        (format!("::baml::Future<{}>", f.ret), "_async")
-    } else {
-        (f.ret.clone(), "")
-    };
-    let prefix = match pos {
-        RenderPos::StaticDecl | RenderPos::StaticInline => "static ",
-        _ => "",
-    };
-    let owner = match pos {
-        RenderPos::StaticDef { class } | RenderPos::InstanceDef { class } => {
-            format!("{}::", class.self_type())
-        }
-        _ => String::new(),
-    };
-    let constness = match pos {
-        RenderPos::InstanceDecl | RenderPos::InstanceDef { .. } | RenderPos::InstanceInline => {
-            " const"
-        }
-        _ => "",
-    };
     format!(
-        "{tpl}{prefix}{ret} {owner}{name}{suffix}({params}){constness}",
-        tpl = template_prefix(&f.type_params),
+        "{ret} {name}({params})",
+        ret = f.ret,
         name = f.name.declared(),
         params = params.join(", ")
     )
@@ -1479,30 +1054,10 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
 /// the callable's own — De Bruijn order), self (for instance methods),
 /// required args, set optional args, then the call. `self_type` is the
 /// receiver's parameterized C++ spelling for instance methods.
-fn render_body(
-    buf: &mut String,
-    indent: &str,
-    f: &EmittedFn,
-    async_variant: bool,
-    self_type: Option<&str>,
-) {
+fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
     let args = GeneratorIdent::ArgsLocal.token();
     let w = GeneratorIdent::WriterParam.token();
-    let m = GeneratorIdent::TyWriterParam.token();
     let opts = GeneratorIdent::OptsParam.token();
-    // Inside a template body, a Codec<ConcreteClass> reference is
-    // non-dependent and would be checked at definition -- before the Codec
-    // specializations, which render after the classes. dependent_t defers
-    // the lookup to instantiation time.
-    let codec_ty = |ty: &str| -> String {
-        match f.class_type_params.iter().chain(&f.type_params).next() {
-            Some(dep) => format!(
-                "::baml::detail::dependent_t<{ty}, {dep}>",
-                dep = dep.identifier()
-            ),
-            None => ty.to_string(),
-        }
-    };
     let _ = writeln!(
         buf,
         "{indent}::baml_sdk::{detail}::{ensure}();",
@@ -1510,49 +1065,15 @@ fn render_body(
         ensure = GeneratorIdent::EnsureRuntime.token()
     );
     let _ = writeln!(buf, "{indent}::baml::detail::ArgsEncoder {args};");
-    for param in f.class_type_params.iter().chain(&f.type_params) {
-        let _ = writeln!(
-            buf,
-            "{indent}{args}.AddTypeArg(\"{wire}\", [](::baml::detail::wire::Writer& {m}) {{ \
-             ::baml::Ty<{cpp}>::Encode({m}); }});",
-            wire = param.wire(),
-            cpp = param.identifier()
-        );
-    }
-    if let Some(self_type) = self_type {
-        let _ = writeln!(
-            buf,
-            "{indent}{args}.AddArg(\"self\", [&](::baml::detail::wire::Writer& {w}) {{ \
-             ::baml::Codec<{ty}>::Encode({w}, *this); }});",
-            ty = codec_ty(self_type)
-        );
-    }
     for p in &f.params {
-        if let Some(callable_names) = &p.callable_names {
-            let names_array = callable_names
-                .iter()
-                .map(|n| format!("std::string(\"{n}\")"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let _ = writeln!(
-                buf,
-                "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
-                 ::baml::detail::EncodeCallable({w}, {value}, \
-                 std::array<std::string, {len}>{{{{{names_array}}}}}); }});",
-                wire = p.name.wire(),
-                value = p.name.identifier(),
-                len = callable_names.len()
-            );
-        } else {
-            let _ = writeln!(
-                buf,
-                "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
-                 ::baml::Codec<{ty}>::Encode({w}, {value}); }});",
-                wire = p.name.wire(),
-                ty = codec_ty(&p.ty),
-                value = p.name.identifier()
-            );
-        }
+        let _ = writeln!(
+            buf,
+            "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::Codec<{ty}>::Encode({w}, {value}); }});",
+            wire = p.name.wire(),
+            ty = p.ty,
+            value = p.name.identifier()
+        );
     }
     for p in &f.opt_params {
         let field = p.name.identifier();
@@ -1562,22 +1083,16 @@ fn render_body(
              {args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
              ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
             wire = p.name.wire(),
-            ty = codec_ty(&p.ty)
+            ty = p.ty
         );
     }
-    let call = if async_variant {
-        "StartCall"
-    } else {
-        "CallSync"
-    };
     let _ = writeln!(
         buf,
-        "{indent}return ::baml::detail::{call}<{ret}>(\"{fqn}\", std::move({args}));",
+        "{indent}return ::baml::detail::CallSync<{ret}>(\"{fqn}\", std::move({args}));",
         ret = f.ret,
         fqn = f.call_fqn,
     );
 }
-
 fn render_header(
     enums: &[EmittedEnum],
     classes: &[EmittedClass],
@@ -1616,7 +1131,6 @@ fn render_header(
         buf.push('\n');
         for c in classes {
             open_namespaces(&mut buf, &c.ns);
-            let _ = write!(buf, "{}", c.template_prefix());
             let _ = writeln!(buf, "struct {};", c.name.declared());
             close_namespaces(&mut buf, &c.ns);
         }
@@ -1655,46 +1169,9 @@ fn render_header(
         buf.push('\n');
         open_namespaces(&mut buf, &c.ns);
         push_doc(&mut buf, "", c.doc.as_ref(), &[]);
-        let _ = write!(buf, "{}", c.template_prefix());
         let _ = writeln!(buf, "struct {} {{", c.name.declared());
         for field in &c.fields {
             let _ = writeln!(buf, "  {} {};", field.ty, field.name.declared());
-        }
-        for f in c.static_methods.iter().chain(&c.instance_methods) {
-            render_opts_struct(&mut buf, "  ", f);
-        }
-        // Template classes define their methods inline (the bodies need the
-        // class's template params); non-template classes split decl/def
-        // unless the method itself is generic.
-        for (methods, is_instance) in [(&c.static_methods, false), (&c.instance_methods, true)] {
-            for f in methods {
-                push_doc(&mut buf, "  ", f.doc.as_ref(), &f.raises);
-                if c.is_template() || f.is_template() {
-                    let inline_pos = if is_instance {
-                        RenderPos::InstanceInline
-                    } else {
-                        RenderPos::StaticInline
-                    };
-                    for async_variant in [false, true] {
-                        let _ = writeln!(buf, "  {} {{", signature(f, async_variant, &inline_pos));
-                        let self_type = if is_instance {
-                            Some(c.self_type())
-                        } else {
-                            None
-                        };
-                        render_body(&mut buf, "    ", f, async_variant, self_type.as_deref());
-                        buf.push_str("  }\n");
-                    }
-                } else {
-                    let decl_pos = if is_instance {
-                        RenderPos::InstanceDecl
-                    } else {
-                        RenderPos::StaticDecl
-                    };
-                    let _ = writeln!(buf, "  {};", signature(f, false, &decl_pos));
-                    let _ = writeln!(buf, "  {};", signature(f, true, &decl_pos));
-                }
-            }
         }
         let eq_terms: Vec<String> = c
             .fields
@@ -1726,16 +1203,7 @@ fn render_header(
         for f in fns {
             render_opts_struct(&mut buf, "", f);
             push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
-            if f.is_template() {
-                for async_variant in [false, true] {
-                    let _ = writeln!(buf, "{} {{", signature(f, async_variant, &RenderPos::Free));
-                    render_body(&mut buf, "  ", f, async_variant, None);
-                    buf.push_str("}\n");
-                }
-            } else {
-                let _ = writeln!(buf, "{};", signature(f, false, &RenderPos::Free));
-                let _ = writeln!(buf, "{};", signature(f, true, &RenderPos::Free));
-            }
+            let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl));
         }
         close_namespaces(&mut buf, ns);
     }
@@ -1754,23 +1222,14 @@ fn render_header(
     buf
 }
 
-/// Codec<T> and Ty<T> specializations for the generated enums and classes.
-/// Emitted in the header (inline) so generic bindings can instantiate them
-/// from any translation unit. Generic classes get partial specializations.
+/// Codec<T> specializations for the generated enums and classes. Emitted in
+/// the header (inline) so they are visible from any translation unit.
 fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClass]) {
     buf.push_str("\nnamespace baml {\n");
 
     for e in enums {
         let q = e.name.identifier();
         let fqn = e.name.wire();
-        let _ = writeln!(
-            buf,
-            "\ntemplate <>\nstruct Ty<{q}> {{\n  \
-             static void Encode(detail::wire::Writer& m) {{\n    \
-             detail::wire::Writer enum_ty;\n    \
-             enum_ty.StringField(1, \"{fqn}\");\n    \
-             m.MessageField(3, enum_ty);\n  }}\n}};",
-        );
         let _ = writeln!(
             buf,
             "\ntemplate <>\nstruct Codec<{q}> {{\n  \
@@ -1810,12 +1269,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
     }
 
     for c in classes {
-        let spec_prefix = if c.is_template() {
-            template_prefix(&c.generic_params)
-        } else {
-            "template <>\n".to_string()
-        };
-        let q = c.qualified_self_type();
+        let q = c.name.identifier();
 
         if c.alias_wrapper {
             // Structural codec: aliases have no wire identity, so the
@@ -1824,7 +1278,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             // not a nominal type the engine can bind a TypeVar to).
             let inner = &c.fields[0].ty;
             let field = c.fields[0].name.identifier();
-            let _ = write!(buf, "\n{spec_prefix}");
+            buf.push_str("\ntemplate <>\n");
             let _ = writeln!(
                 buf,
                 "struct Codec<{q}> {{\n  \
@@ -1838,52 +1292,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
 
         let fqn = c.name.wire();
 
-        // Ty<Class>: BamlTy.class_ty = 2 { name = 1, type_args = 2 }.
-        let _ = write!(buf, "\n{spec_prefix}");
-        let _ = writeln!(
-            buf,
-            "struct Ty<{q}> {{\n  \
-             static void Encode(detail::wire::Writer& m) {{\n    \
-             detail::wire::Writer class_ty;\n    \
-             class_ty.StringField(1, \"{fqn}\");",
-        );
-        for param in &c.generic_params {
-            let _ = writeln!(
-                buf,
-                "    {{\n      detail::wire::Writer arg;\n      \
-                 Ty<{param}>::Encode(arg);\n      \
-                 class_ty.MessageField(2, arg);\n    }}",
-                param = param.identifier()
-            );
-        }
-        buf.push_str("    m.MessageField(2, class_ty);\n  }\n};\n");
-
-        if is_tagged_heap_handle_class(&c.pool_name) {
-            // Bare tagged-heap-handle wire form (Python parity: BamlStream
-            // encodes handle_value(ADT_TAGGED_HEAP_HANDLE), never a
-            // class_value; the engine substitutes the type params from the
-            // tagged handle).
-            let handle_field = c.fields[0].name.identifier();
-            let tag = ADT_TAGGED_HEAP_HANDLE;
-            let _ = write!(buf, "\n{spec_prefix}");
-            let _ = writeln!(
-                buf,
-                "struct Codec<{q}> {{\n  \
-                 static void Encode(detail::wire::Writer& value_msg, const {q}& v) {{\n    \
-                 detail::wire::Writer handle;\n    \
-                 handle.Uint64Field(1, v.{handle_field}.CloneKeyForWire());\n    \
-                 handle.Int64Field(2, {tag});\n    \
-                 value_msg.MessageField(10, handle);\n  }}\n  \
-                 static {q} Decode(const detail::OutboundValue& v) {{\n    \
-                 if (v.kind != detail::OutboundValue::Kind::Handle ||\n      \
-                 v.handle_type != {tag}) {{\n      \
-                 detail::KindMismatch(\"stream handle {fqn}\", v);\n    }}\n    \
-                 return {q}{{::baml::Handle(v.handle_key, v.handle_type)}};\n  }}\n}};"
-            );
-            continue;
-        }
-
-        let _ = write!(buf, "\n{spec_prefix}");
+        buf.push_str("\ntemplate <>\n");
         let _ = writeln!(buf, "struct Codec<{q}> {{");
         // Encode: InboundValue.class_value = 8 { fields = 2, class_ty = 3 }
         let _ = writeln!(
@@ -1910,15 +1319,6 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             "    detail::wire::Writer class_ty;\n    \
              class_ty.StringField(1, \"{fqn}\");",
         );
-        for param in &c.generic_params {
-            let _ = writeln!(
-                buf,
-                "    {{\n      detail::wire::Writer arg;\n      \
-                 Ty<{param}>::Encode(arg);\n      \
-                 class_ty.MessageField(2, arg);\n    }}",
-                param = param.identifier()
-            );
-        }
         buf.push_str(
             "    cls.MessageField(3, class_ty);\n    \
              value_msg.MessageField(8, cls);\n  }\n",
@@ -1990,10 +1390,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
     buf.push_str("\n}  // namespace baml\n");
 }
 
-fn render_bindings(
-    classes: &[EmittedClass],
-    fns_by_namespace: &BTreeMap<Vec<String>, Vec<EmittedFn>>,
-) -> String {
+fn render_bindings(fns_by_namespace: &BTreeMap<Vec<String>, Vec<EmittedFn>>) -> String {
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdkgen_cpp - do not edit.\n\
@@ -2002,56 +1399,13 @@ fn render_bindings(
          namespace baml_sdk {\n",
     );
 
-    for c in classes {
-        if c.is_template() {
-            continue; // template methods define inline in the header
-        }
-        let has_non_template = c
-            .static_methods
-            .iter()
-            .chain(&c.instance_methods)
-            .any(|f| !f.is_template());
-        if !has_non_template {
-            continue;
-        }
-        buf.push('\n');
-        open_namespaces(&mut buf, &c.ns);
-        for f in c.static_methods.iter().filter(|f| !f.is_template()) {
-            for async_variant in [false, true] {
-                let pos = RenderPos::StaticDef { class: c };
-                let _ = writeln!(buf, "\n{} {{", signature(f, async_variant, &pos));
-                render_body(&mut buf, "  ", f, async_variant, None);
-                buf.push_str("}\n");
-            }
-        }
-        for f in c.instance_methods.iter().filter(|f| !f.is_template()) {
-            for async_variant in [false, true] {
-                let pos = RenderPos::InstanceDef { class: c };
-                let _ = writeln!(buf, "\n{} {{", signature(f, async_variant, &pos));
-                render_body(&mut buf, "  ", f, async_variant, Some(&c.self_type()));
-                buf.push_str("}\n");
-            }
-        }
-        close_namespaces(&mut buf, &c.ns);
-    }
-
-    let opts = GeneratorIdent::OptsParam.token();
     for (ns, fns) in fns_by_namespace {
-        let non_template: Vec<&EmittedFn> = fns.iter().filter(|f| !f.is_template()).collect();
-        if non_template.is_empty() {
-            continue;
-        }
         buf.push('\n');
         open_namespaces(&mut buf, ns);
-        for f in non_template {
-            for async_variant in [false, true] {
-                let sig = signature(f, async_variant, &RenderPos::Free);
-                // Free-function definitions must not repeat the default arg.
-                let sig = sig.replace(&format!(" {opts} = {{}}"), &format!(" {opts}"));
-                let _ = writeln!(buf, "\n{sig} {{");
-                render_body(&mut buf, "  ", f, async_variant, None);
-                buf.push_str("}\n");
-            }
+        for f in fns {
+            let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def));
+            render_body(&mut buf, "  ", f);
+            buf.push_str("}\n");
         }
         close_namespaces(&mut buf, ns);
     }

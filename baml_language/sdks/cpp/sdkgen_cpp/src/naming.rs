@@ -146,9 +146,16 @@ pub(crate) enum CppNameKind {
     /// so the named-alias slice slots in without re-numbering typed hashes.
     #[expect(dead_code)]
     TypeAlias,
+    /// Never requested this slice: methods are a post-step-8 feature. Kept
+    /// so the methods slice slots in without re-numbering typed hashes.
+    #[expect(dead_code)]
     Method,
     Field,
     Parameter,
+    /// Never requested this slice: generic callables are a post-step-8
+    /// feature. Kept so the generics slice slots in without re-numbering
+    /// typed hashes.
+    #[expect(dead_code)]
     TypeVar,
     /// Synthesized per-callable opts struct (no wire identity).
     OptsStruct,
@@ -259,13 +266,6 @@ pub(crate) enum BamlWireName {
     Key(Box<str>),
 }
 
-impl BamlWireName {
-    /// `true` when this wire identity is the member key `key`.
-    pub(crate) fn is_key(&self, key: &str) -> bool {
-        matches!(self, BamlWireName::Key(k) if &**k == key)
-    }
-}
-
 impl fmt::Display for BamlWireName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -313,10 +313,6 @@ impl CppName {
             .as_ref()
             .expect("synthesized name has no wire identity")
     }
-
-    pub(crate) fn kind(&self) -> CppNameKind {
-        self.kind
-    }
 }
 
 pub(crate) struct CppIdentifier<'a>(&'a CppName);
@@ -353,7 +349,6 @@ pub(crate) enum NameScope {
 pub(crate) enum GeneratorIdent {
     ArgsLocal,
     WriterParam,
-    TyWriterParam,
     SetterValueParam,
     OptsParam,
     EnsureRuntime,
@@ -365,7 +360,6 @@ impl GeneratorIdent {
         match self {
             GeneratorIdent::ArgsLocal => "args",
             GeneratorIdent::WriterParam => "w",
-            GeneratorIdent::TyWriterParam => "m",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
             GeneratorIdent::EnsureRuntime => "EnsureRuntime",
@@ -379,7 +373,6 @@ impl GeneratorIdent {
 const CALLABLE_RESERVED: &[GeneratorIdent] = &[
     GeneratorIdent::ArgsLocal,
     GeneratorIdent::WriterParam,
-    GeneratorIdent::TyWriterParam,
     GeneratorIdent::SetterValueParam,
     GeneratorIdent::OptsParam,
 ];
@@ -823,16 +816,5 @@ mod tests {
         let names = CppNames::allocate(&set);
         assert_eq!(names.get(&a).declared(), "value");
         assert_eq!(names.get(&b).declared(), "value");
-    }
-
-    #[test]
-    fn test_typevar_wire_is_the_baml_name() {
-        let owner = BamlFqn::symbol(&name(&[], "deep_copy"));
-        let req = NameRequest::new(owner.child("T"), CppNameKind::TypeVar);
-        let mut set = BTreeSet::new();
-        set.insert(req.clone());
-        let names = CppNames::allocate(&set);
-        assert_eq!(names.get(&req).declared(), "T");
-        assert!(names.get(&req).wire().is_key("T"));
     }
 }

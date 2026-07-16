@@ -6,5 +6,4 @@
 BAML_TEST(no_op) {
   baml_sdk::void_::no_op();  // returns void; completing without throwing is the
                              // assertion
-  baml_sdk::void_::no_op_async().get();
 }

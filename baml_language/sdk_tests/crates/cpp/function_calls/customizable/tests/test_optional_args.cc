@@ -5,7 +5,6 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-using baml_sdk::OptBox;
 using baml_sdk::optional_args_probeOpts;
 
 using Probe = std::vector<std::optional<int64_t>>;
@@ -49,26 +48,4 @@ BAML_TEST(unset_and_null_differ_in_one_call) {
                                                    .set_opt1(std::nullopt)
                                                    .set_opt2(baml::unset)) ==
               (Probe{1, std::nullopt, 99}));
-}
-
-BAML_TEST(optional_args_async_samples) {
-  BAML_ASSERT(baml_sdk::optional_args_probe_async(1).get() ==
-              (Probe{1, 5, 99}));
-  BAML_ASSERT(baml_sdk::optional_args_probe_async(
-                  1, optional_args_probeOpts{}.set_opt1(std::nullopt))
-                  .get() == (Probe{1, std::nullopt, 99}));
-  BAML_ASSERT(baml_sdk::optional_args_probe_async(
-                  1, optional_args_probeOpts{}.set_opt2(int64_t{9}))
-                  .get() == (Probe{1, 5, 9}));
-}
-
-BAML_TEST(opt_box_method_matrix) {
-  const OptBox box = OptBox::make(10);
-  BAML_ASSERT_EQ(box.base, 17);
-
-  const OptBox box2 = OptBox::make(10, OptBox::makeOpts{}.set_opt1(int64_t{0}));
-  BAML_ASSERT_EQ(box2.base, 10);
-  BAML_ASSERT(box2.probe(1) == (Probe{10, 1, 5}));
-  BAML_ASSERT(box2.probe(1, OptBox::probeOpts{}.set_opt1(int64_t{8})) ==
-              (Probe{10, 1, 8}));
 }

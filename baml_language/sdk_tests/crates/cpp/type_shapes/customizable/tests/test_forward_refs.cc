@@ -8,12 +8,9 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-#include <cstdint>
 #include <variant>
-#include <vector>
 
 namespace forward_refs = baml_sdk::forward_refs;
-using forward_refs::GNode;
 using forward_refs::Other;
 
 BAML_TEST(round_trip_other) {
@@ -25,12 +22,4 @@ BAML_TEST(round_trip_node_symbol_exists) {
   // Uninhabitable (required self-ref); reference-only, like Python's
   // import-only assertion.
   (void)&forward_refs::round_trip_node;
-}
-
-BAML_TEST(round_trip_g_node_int) {
-  // The leaf node carries children=[]; this exercises the empty-list
-  // round trip.
-  using Children = std::vector<::baml::Box<GNode<int64_t>>>;
-  const GNode<int64_t> g{Children{GNode<int64_t>{Children{}}}};
-  BAML_ASSERT(forward_refs::round_trip_g_node_int(g) == g);
 }

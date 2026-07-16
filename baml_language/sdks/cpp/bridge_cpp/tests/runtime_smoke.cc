@@ -1,14 +1,12 @@
 // Bridge-core smoke test: exercises the header-only runtime layer against the
 // real cdylib - version, runtime init, end-to-end typed calls through the
-// codec (sync, async, containers, error envelope), call registry fan-out,
-// Arg semantics, and buffer moves.
+// codec (containers, error envelope), call registry fan-out, Arg semantics,
+// and buffer moves.
 #include <baml/baml.h>
 
-#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
-#include <functional>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -26,8 +24,7 @@ static void TestInitializeRuntime() {
       {"main.baml",
        "function ReturnOne() -> int {\n  1\n}\n"
        "function Identity(s: string) -> string {\n  s\n}\n"
-       "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"
-       "function CallTwice(f: (int) -> int, x: int) -> int {\n  f(f(x))\n}\n"},
+       "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"},
   };
   baml::InitializeRuntime(".", files);
   std::printf("runtime initialized\n");
@@ -74,12 +71,6 @@ static void TestCallFunctionEndToEnd() {
     assert((got == std::vector<int64_t>{2, 4, 6}));
   }
   {
-    // Async path through Future.
-    baml::detail::ArgsEncoder args;
-    auto fut = baml::detail::StartCall<int64_t>("ReturnOne", std::move(args));
-    assert(fut.get() == 1);
-  }
-  {
     // Pre-call failure (unknown function) arrives as a BamlError envelope.
     bool threw = false;
     try {
@@ -91,48 +82,6 @@ static void TestCallFunctionEndToEnd() {
     assert(threw);
   }
   std::printf("call function end to end ok\n");
-}
-
-static void TestHostCallableRoundTrip() {
-  // BAML invokes the host std::function twice; each round trip crosses
-  // the dispatch trampoline, a detached dispatch thread, and
-  // complete_host_call.
-  {
-    std::function<int64_t(int64_t)> triple = [](int64_t x) { return x * 3; };
-    baml::detail::ArgsEncoder args;
-    args.AddArg("f", [&](baml::detail::wire::Writer& w) {
-      baml::detail::EncodeCallable(w, triple, std::array<std::string, 1>{{""}});
-    });
-    args.AddArg("x", [](baml::detail::wire::Writer& w) {
-      baml::Codec<int64_t>::Encode(w, 2);
-    });
-    const int64_t got =
-        baml::detail::CallSync<int64_t>("CallTwice", std::move(args));
-    assert(got == 18);
-  }
-  {
-    // A native host exception surfaces back as the original exception
-    // object (registry rehydration), not a flattened BamlError.
-    std::function<int64_t(int64_t)> boom = [](int64_t) -> int64_t {
-      throw std::out_of_range("host boom");
-    };
-    baml::detail::ArgsEncoder args;
-    args.AddArg("f", [&](baml::detail::wire::Writer& w) {
-      baml::detail::EncodeCallable(w, boom, std::array<std::string, 1>{{""}});
-    });
-    args.AddArg("x", [](baml::detail::wire::Writer& w) {
-      baml::Codec<int64_t>::Encode(w, 2);
-    });
-    bool threw = false;
-    try {
-      baml::detail::CallSync<int64_t>("CallTwice", std::move(args));
-    } catch (const std::out_of_range& e) {
-      threw = true;
-      assert(std::string(e.what()) == "host boom");
-    }
-    assert(threw);
-  }
-  std::printf("host callable round trip ok\n");
 }
 
 static void TestCallRegistryRoundTrip() {
@@ -217,7 +166,6 @@ int main() {
   TestInitializeRuntime();
   TestBytecodeInitRejectsGarbage();
   TestCallFunctionEndToEnd();
-  TestHostCallableRoundTrip();
   TestCallRegistryRoundTrip();
   TestArgTwoState();
   TestOwnedBufferMove();

@@ -15,13 +15,11 @@ guide itself:
    `payload()`, `call_id()`, `bytes()`.
 2. std-mimicking vocabulary API keeps std spelling: `Arg` (`is_set`,
    `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
-   `operator->`), `Future` (`get`, `wait`, `wait_for`), `OwnedBuffer`
-   (`data`, `size`, `empty`, `to_string`), `Handle` (`empty`, `swap`),
+   `operator->`), `OwnedBuffer` (`data`, `size`, `empty`, `to_string`),
    `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`.
 3. Type traits keep std spelling: `is_std_optional`, `is_arg`, `arg_inner`,
-   `dependent`, `dependent_t`, `has_set_opt1`, `has_set_opt3`.
-4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`,
-   `baml_cpp_host_dispatch_trampoline`, `baml_cpp_host_release_trampoline`.
+   `has_set_opt1`, `has_set_opt3`.
+4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.
 5. Generated identifiers derived from BAML source names are unchanged,
    including derived names: the opts struct for function `probe` is
    `probeOpts` (source casing preserved, never re-cased)
