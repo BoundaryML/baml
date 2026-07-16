@@ -115,7 +115,7 @@ jobs:
       # process-global OnceLock, which nextest's process-per-test model would
       # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=live_engine) and not binary(=conversions)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not package(=baml_bridge)'
         working-directory: baml_language
 
       # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
@@ -217,7 +217,7 @@ jobs:
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=live_engine) and not binary(=conversions)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not package(=baml_bridge)'
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -326,7 +326,7 @@ jobs:
       # process-global OnceLocks build and share it instead of relinking it for
       # every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=live_engine) and not binary(=conversions)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e) and not package(=baml_bridge)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
@@ -606,16 +606,16 @@ jobs:
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
-      # The Rust bridge runtime (baml_bridge) has its own live-engine tests
-      # (the `live_engine` + `conversions` binaries) that load the engine
-      # cdylib the sdk_test_rust setup already built into the main target dir,
-      # so they run here for free instead of burdening the general cargo-test
-      # lane (where the non-cacheable cdylib build ran as a silent nextest
-      # setup script and stalled the Windows job). baml_bridge's pure
-      # loader/encode unit tests still run in the general lane on every OS.
-      - name: "Run rust bridge live-engine tests"
+      # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
+      # cdylib at run time, and its lib test binary mixes pure (loader/encode)
+      # with engine-dependent (completion, live-engine) tests, so the whole
+      # package runs here — where sdk_test_rust's setup already built the engine
+      # into the main target dir — instead of in the general cargo-test lane
+      # (where the non-cacheable cdylib build ran as a silent nextest setup
+      # script and stalled the Windows job).
+      - name: "Run rust bridge tests"
         if: matrix.sdk-label == 'rust'
-        run: cargo nextest run -p baml_bridge --all-features -E 'binary(=live_engine) or binary(=conversions)'
+        run: cargo nextest run -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"
