@@ -3,6 +3,7 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/go/sdkgen_go",
+  "sdks/java/bridge_java",
   "sdks/java/sdkgen_java",
   "sdks/nodejs/bridge_nodejs",
   "sdks/nodejs/sdkgen_typescript_node",
@@ -63,6 +64,7 @@ baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_java = { path = "sdks/java/sdkgen_java" }
+bridge_java = { path = "sdks/java/bridge_java" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -257,6 +259,7 @@ tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
+jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }

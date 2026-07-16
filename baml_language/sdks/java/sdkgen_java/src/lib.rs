@@ -12,9 +12,9 @@
 //! Type expressions come from `translate_ty` and are fully qualified,
 //! so no import machinery exists either.
 //!
-//! Not yet emitted (later capabilities): class static/instance
-//! methods, optional-arg configurators, explicit generic type-args
-//! overloads, the typemap, runtime init in `Baml.java`.
+//! Not yet emitted (later capabilities): optional-arg configurators,
+//! explicit generic type-args overloads, the typemap, runtime init in
+//! `Baml.java`.
 //!
 //! Generated-API conventions live in
 //! `sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md`.
@@ -129,7 +129,11 @@ pub fn to_source_code(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
-                type_files.push((pkg, ident, render_class(class, &ctx, &mut sink)));
+                type_files.push((
+                    pkg,
+                    ident,
+                    render_class(class, &symbol_fqn, &ctx, &mut sink),
+                ));
             }
             Symbol::Enum(enum_) => {
                 let ident = java_identifier(enum_.name.name.as_str());
@@ -419,6 +423,44 @@ mod tests {
         })
     }
 
+    /// A one-argument method `Function` (same shape the pool builder
+    /// hands the class emitter). The receiver is never listed here —
+    /// the emitter prepends it for instance methods.
+    fn method_fn(name: &str, arg: (&str, Ty), ret: Ty, span: u32) -> Function {
+        Function {
+            name: BaseName::new(name),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new(arg.0),
+                docstring: None,
+                ty: arg.1,
+                default: None,
+            }],
+            return_type: ret,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(span),
+        }
+    }
+
+    fn class_sym_with_methods(
+        n: &Name,
+        static_methods: Vec<Function>,
+        instance_methods: Vec<Function>,
+        span: u32,
+    ) -> Symbol {
+        Symbol::Class(Class {
+            name: n.clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties: Vec::new(),
+            static_methods,
+            instance_methods,
+            origin: origin(span),
+        })
+    }
+
     fn emit_sdk(pool: &SymbolPool) -> HashMap<PathBuf, String> {
         to_source_code(pool, &[], NamingConvention::PreserveCase)
     }
@@ -514,6 +556,45 @@ mod tests {
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
         ));
         assert!(file.contains("thenApply(v -> (java.lang.Long) v)"));
+    }
+
+    #[test]
+    fn class_emits_static_and_instance_method_bindings() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["methods_on_classes"], "Greeter");
+        pool.insert(
+            n.clone(),
+            class_sym_with_methods(
+                &n,
+                vec![method_fn("create", ("name", Ty::String), Ty::String, 1)],
+                vec![method_fn("greet", ("greeting", Ty::String), Ty::String, 2)],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("methods_on_classes/Greeter.java")];
+
+        // Static method: `static` binding, no receiver — same shape as a
+        // free function, bound to `<class fqn>.<method>`.
+        assert!(file.contains("public static java.lang.String create(java.lang.String name) {"));
+        assert!(file.contains(
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name});"
+        ));
+        assert!(file.contains(
+            "public static java.util.concurrent.CompletableFuture<java.lang.String> create_async(java.lang.String name) {"
+        ));
+
+        // Instance method: non-static, receiver prepended as `self` /
+        // `this` in the runtime arrays.
+        assert!(file.contains("public java.lang.String greet(java.lang.String greeting) {"));
+        assert!(!file.contains("public static java.lang.String greet("));
+        assert!(file.contains(
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting});"
+        ));
+        assert!(file.contains(
+            "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
+        ));
+        assert!(file.contains("thenApply(v -> (java.lang.String) v)"));
     }
 
     #[test]

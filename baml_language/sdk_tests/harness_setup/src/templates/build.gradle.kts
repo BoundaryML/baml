@@ -25,9 +25,14 @@ repositories {
 }
 
 dependencies {
-    // TODO(bridge-java): add the `baml-bridge` runtime dependency once
-    // sdks/java/bridge_java exists (the analog of the TS fixtures'
-    // `file:`-link to bridge_nodejs).
+    // The `baml_bridge` runtime library (the analog of the TS fixtures'
+    // `file:`-link to bridge_nodejs). Path is relative to this fixture's
+    // `generated/` dir: five levels up reaches `baml_language/`, then into
+    // `sdks/java/baml_bridge`. The jar is produced by
+    // `gradle -p sdks/java/baml_bridge jar` (see crates/java/setup.sh).
+    // `implementation` so it lands on both the generated `baml_sdk/**`
+    // compile classpath and the test runtime classpath.
+    implementation(files("../../../../../sdks/java/baml_bridge/build/libs/baml-bridge.jar"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     // Analog of pytest's monkeypatch.setenv for env-driven tests (see
     // llm_functions build_request tests). Caveat: patches the JVM's view
@@ -54,6 +59,10 @@ sourceSets {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // The generated `Baml` anchor loads the native `bridge_java` library from
+    // this path; propagate it from the test invocation's environment so tests
+    // reach the real engine. Must point at target/debug/libbridge_java.so.
+    environment("BAML_JAVA_BRIDGE_LIB", System.getenv("BAML_JAVA_BRIDGE_LIB") ?: "")
     testLogging {
         events("failed", "skipped")
         showExceptions = true

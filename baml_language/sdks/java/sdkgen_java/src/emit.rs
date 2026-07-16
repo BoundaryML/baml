@@ -23,10 +23,17 @@
 //! cast the decoded `Object` to the declared type; primitives unbox
 //! implicitly on return.
 //!
-//! Not yet emitted (later capabilities): class static/instance
-//! methods, optional-arg configurator overloads, explicit generic
-//! type-args overloads. Functions with optional arguments emit their
-//! required-args form only, so the engine evaluates BAML defaults.
+//! Class static and instance methods render as sibling bindings on the
+//! value class itself: static methods as `static` bindings (same shape
+//! as free functions), instance methods as non-static bindings that
+//! prepend the receiver (`self` / `this`) to the runtime call so the
+//! engine sees it as required param 0. A method's binding FQN is
+//! `<class fqn>.<method name>`.
+//!
+//! Not yet emitted (later capabilities): optional-arg configurator
+//! overloads, explicit generic type-args overloads. Functions (and
+//! methods) with optional arguments emit their required-args form only,
+//! so the engine evaluates BAML defaults.
 
 use baml_codegen_types::{Class, Enum, Function, Ty};
 
@@ -76,9 +83,15 @@ fn field_eq(java_ty: &str) -> FieldEq {
 }
 
 /// Full value-class body: fields, canonical constructor, accessors,
-/// deep `equals`/`hashCode`. Static/instance methods land with the
-/// methods capability.
-pub(crate) fn render_class(class: &Class, ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -> String {
+/// static/instance method bindings, deep `equals`/`hashCode`.
+/// `class_fqn` is the class's BAML FQN (`pkg.namespace.Name`); each
+/// method binds to `<class_fqn>.<method name>`.
+pub(crate) fn render_class(
+    class: &Class,
+    class_fqn: &str,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
     let mut out = render_javadoc(class.docstring.as_deref(), "");
     let ident = java_identifier(class.name.name.as_str());
     let generics = if class.generic_params.is_empty() {
@@ -126,6 +139,42 @@ pub(crate) fn render_class(class: &Class, ctx: &TranslateCtx<'_>, sink: &mut Uni
     for (f_ident, f_ty) in &fields {
         out.push_str(&format!(
             "\n    public {f_ty} {f_ident}() {{\n        return this.{f_ident};\n    }}\n"
+        ));
+    }
+
+    // Static and instance method bindings. Static methods (like free
+    // functions) render as `static` bindings; instance methods are
+    // non-static and prepend the receiver (`self` / `this`) to the
+    // runtime call. Sorted by `(span, name)` for deterministic output,
+    // matching the free-function fan-out.
+    let mut statics: Vec<&Function> = class.static_methods.iter().collect();
+    statics.sort_by(|a, b| {
+        (a.origin.span_start, a.name.as_str()).cmp(&(b.origin.span_start, b.name.as_str()))
+    });
+    for m in statics {
+        let fqn = format!("{class_fqn}.{}", m.name.as_str());
+        out.push_str(&render_callable_pair(
+            &fqn,
+            m,
+            Receiver::None,
+            true,
+            ctx,
+            sink,
+        ));
+    }
+    let mut instances: Vec<&Function> = class.instance_methods.iter().collect();
+    instances.sort_by(|a, b| {
+        (a.origin.span_start, a.name.as_str()).cmp(&(b.origin.span_start, b.name.as_str()))
+    });
+    for m in instances {
+        let fqn = format!("{class_fqn}.{}", m.name.as_str());
+        out.push_str(&render_callable_pair(
+            &fqn,
+            m,
+            Receiver::This,
+            false,
+            ctx,
+            sink,
         ));
     }
 
@@ -221,13 +270,39 @@ pub(crate) fn render_fns_holder(
     out
 }
 
-/// One sync + one `_async` static binding for a free function.
-/// Required (defaultless) arguments only — optional-arg configurator
-/// overloads land with the optional-args capability, so omitted
-/// optionals hit the engine's BAML defaults.
+/// Where the receiver goes on a callable binding. Free functions and
+/// class static methods have no receiver; instance methods prepend
+/// `self` (runtime param name) / `this` (runtime arg) so the engine
+/// sees the receiver as required param 0.
+#[derive(Clone, Copy)]
+enum Receiver {
+    None,
+    This,
+}
+
+/// One sync + one `_async` static binding for a free function. Thin
+/// wrapper over [`render_callable_pair`] with no receiver.
 fn render_function_pair(
     fqn: &str,
     function: &Function,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    render_callable_pair(fqn, function, Receiver::None, true, ctx, sink)
+}
+
+/// One sync + one `_async` binding for a callable — a free function, a
+/// class static method, or a class instance method. `is_static` toggles
+/// the `static` modifier; `receiver` prepends the instance receiver
+/// (`self` / `this`) to the runtime param-names / args arrays. Required
+/// (defaultless) arguments only — optional-arg configurator overloads
+/// land with the optional-args capability, so omitted optionals hit the
+/// engine's BAML defaults.
+fn render_callable_pair(
+    fqn: &str,
+    function: &Function,
+    receiver: Receiver,
+    is_static: bool,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -248,14 +323,18 @@ fn render_function_pair(
             )
         })
         .collect();
-    let param_names_java: Vec<String> = required
-        .iter()
-        .map(|a| format!("{:?}", a.name.as_str()))
-        .collect();
-    let arg_exprs: Vec<String> = required
-        .iter()
-        .map(|a| java_identifier(a.name.as_str()))
-        .collect();
+
+    // Runtime param-names / args arrays. An instance receiver is
+    // prepended (`self` name, `this` arg) so it becomes required param
+    // 0; the Java signature above never lists it.
+    let mut param_names_java: Vec<String> = Vec::new();
+    let mut arg_exprs: Vec<String> = Vec::new();
+    if matches!(receiver, Receiver::This) {
+        param_names_java.push(format!("{:?}", "self"));
+        arg_exprs.push("this".to_string());
+    }
+    param_names_java.extend(required.iter().map(|a| format!("{:?}", a.name.as_str())));
+    arg_exprs.extend(required.iter().map(|a| java_identifier(a.name.as_str())));
 
     let ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
     let ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
@@ -264,6 +343,7 @@ fn render_function_pair(
     let args_literal = format!("new java.lang.Object[] {{{}}}", arg_exprs.join(", "));
 
     let doc = render_javadoc(function.docstring.as_deref(), "    ");
+    let static_kw = if is_static { "static " } else { "" };
 
     let sync_body = if ret_top == "void" {
         format!("        baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal});")
@@ -281,7 +361,7 @@ fn render_function_pair(
     );
 
     format!(
-        "\n{doc}    public static {ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public static {async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
+        "\n{doc}    public {static_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
         params = param_decls.join(", "),
     )
 }
