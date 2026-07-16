@@ -1,0 +1,5 @@
+# Structured / typed output — one type, four wire encodings
+
+The app author writes one return type (`-> Event`) and one prompt, and the same function works across four providers that put that schema on the wire four different ways: OpenAI Chat (`response_format`), OpenAI Responses (`text.format`), Anthropic (forced-tool injection), and Gemini (`responseSchema` in its own UPPERCASE OpenAPI dialect). This scenario shows the proposed model absorbing those divergences inside `HttpProvider.build_request<T>` and `parse<T>` — the `T` generic flows into both — while keeping the application code identical. It also shows the hard parts: strict-vs-nonstrict negotiation, checking for a refusal *before* parsing, and coercion/repair as a parse-layer concern (a SAP branch). Read `implement.baml` (library code) for the four provider bodies, `usage.baml` for the app ergonomics, and `evaluation.md` for where the model leaks (per-attempt strict retry, structured-output-plus-tools, and the missing compile-time "is-constrained" guarantee).
+
+Background: background/01-single-turn.md → ## ★ Structured / typed output

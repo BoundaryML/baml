@@ -1,0 +1,5 @@
+# Scenario 03 — Constrained decoding beyond JSON Schema
+
+When you run open-weight models yourself (vLLM, llama.cpp, Outlines) you get token-level constrained decoding — `guided_choice` / `guided_regex` / `guided_grammar` — which can *guarantee* shapes a JSON schema can't express: a bare enum token, a phone-number string, a SQL statement from a CFG. Hosted OpenAI/Anthropic/Gemini APIs expose only schema-shaped JSON. This scenario models that split as a new capability, `Constrained requires Provider`: self-hosted backends implement it (each absorbing its own divergence — vLLM's extra_body keys, llama.cpp's GBNF-only lowering, in-process Outlines with no HTTP at all), hosted ones don't, and "where it runs / what can be guaranteed" becomes a property of the provider class negotiated at runtime by a `match`. `implement.baml` is the library code; `usage.baml` is the app; `evaluation.md` stresses where the runtime-promise model leaks the guarantee.
+
+Background: background/01-single-turn.md → ## ◆ Constrained decoding beyond JSON Schema
