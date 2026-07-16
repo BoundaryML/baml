@@ -32,7 +32,7 @@ bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
-sdkgen_typescript_node = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }

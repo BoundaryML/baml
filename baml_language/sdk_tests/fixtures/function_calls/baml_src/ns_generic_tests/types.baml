@@ -13,7 +13,7 @@
 //
 // Host tests:
 //   crates/python_pydantic2/function_calls/customizable/test_generic_calls.py
-//   crates/typescript_node/function_calls/customizable/generic_calls.test.ts
+//   crates/typescript/function_calls/customizable/generic_calls.test.ts
 
 // ---------------------------------------------------------------------------
 // Supporting types

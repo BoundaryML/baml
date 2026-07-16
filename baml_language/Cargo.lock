@@ -751,7 +751,7 @@ dependencies = [
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_typescript_shared",
  "serde",
  "serde_json",
  "sha2",
@@ -1604,25 +1604,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridge_nodejs"
-version = "0.0.0-beta"
-dependencies = [
- "baml_version",
- "bex_events",
- "bex_project",
- "bridge_cffi",
- "bridge_ctypes",
- "indexmap",
- "log",
- "napi",
- "napi-build",
- "napi-derive",
- "prost",
- "serde_json",
- "sys_native",
-]
-
-[[package]]
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
@@ -1641,6 +1622,25 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "bridge_typescript"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_version",
+ "bex_events",
+ "bex_project",
+ "bridge_cffi",
+ "bridge_ctypes",
+ "indexmap",
+ "log",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "prost",
+ "serde_json",
+ "sys_native",
 ]
 
 [[package]]
@@ -6590,7 +6590,7 @@ dependencies = [
  "baml_workspace",
  "borsh",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_typescript_shared",
 ]
 
 [[package]]
@@ -6638,7 +6638,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdkgen_typescript_node"
+name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",

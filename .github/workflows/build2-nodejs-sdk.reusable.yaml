@@ -164,15 +164,15 @@ jobs:
         run: ${{ matrix._.before }}
 
       - name: Install dependencies
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         run: pnpm install --ignore-scripts
 
       - name: Build protobuf runtime
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         run: pnpm build:proto
 
       - name: Build native addon (${{ matrix._.target }})
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         # Build through the package.json script so CI and local dev share one napi
         # invocation (writes ./dist/native.js + ./dist/native.d.ts with --esm, which
         # the published umbrella's `files: ["dist"]` ships). build:clean recreates
@@ -184,7 +184,7 @@ jobs:
           pnpm build:napi-release --target ${{ matrix._.target }} ${{ matrix._.napi_args }}
 
       - name: Assemble per-platform npm package
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         run: |
           set -euo pipefail
           # Build the publishable per-platform sub-package here, in the same job
@@ -211,7 +211,7 @@ jobs:
           # *.node); the publish job downloads them all with merge-multiple to
           # reconstruct the full npm/ directory.
           name: nodejs-sdk-${{ matrix._.target }}
-          path: baml_language/sdks/nodejs/bridge_nodejs/npm
+          path: baml_language/sdks/typescript/bridge_typescript/npm
           if-no-files-found: error
 
       # The umbrella package ships `files: ["dist"]`, and that dist/ is
@@ -223,7 +223,7 @@ jobs:
       # from the matrix, move these two steps to another non-cross target.)
       - name: Build umbrella dist (platform-agnostic)
         if: matrix._.target == 'x86_64-unknown-linux-gnu'
-        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        working-directory: baml_language/sdks/typescript/bridge_typescript
         run: |
           set -euo pipefail
           pnpm build:copy-native-dts
@@ -241,5 +241,5 @@ jobs:
           # pattern (that one is merged into npm/); this is downloaded separately
           # into the umbrella's dist/.
           name: nodejs-umbrella-dist
-          path: baml_language/sdks/nodejs/bridge_nodejs/dist
+          path: baml_language/sdks/typescript/bridge_typescript/dist
           if-no-files-found: error
