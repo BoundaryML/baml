@@ -1,8 +1,8 @@
 //! The `Ty` type family, generated from a single tagged definition.
 //!
 //! [`ty_family!`](baml_type_macros::ty_family) expands the master `Ty` enum
-//! below into the whole family — `Ty`, [`RuntimeTy`], [`RealizedTy`],
-//! [`ConcreteTy`], [`ConcreteRealizedTy`] — plus the per-member
+//! below into the whole family — `Ty`, [`RuntimeTy`], [`CodegenTy`],
+//! [`RealizedTy`], [`ConcreteTy`], [`ConcreteRealizedTy`] — plus the per-member
 //! `FunctionParamTy` companion structs. Membership is by axis: each variant is
 //! tagged with exactly one `#[axis(..)]`, and each member includes a set of
 //! axes (a variant is present iff its axis is included). Nested positions are
@@ -29,6 +29,11 @@ ty_family! {
 
     type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
     type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    // A deep, generator-independent public API type. Unlike `RuntimeTy`, this
+    // excludes unresolved associated-type projections; unlike `RealizedTy`, it
+    // retains named type variables for generic declarations. Type aliases are
+    // deliberately retained as nominal references at public use sites.
+    type CodegenTy          { includes: [concrete, abstract, literal, never, typevar, special],                  child: Self }
     type RealizedTy         { includes: [concrete, abstract, literal, never, special],                           child: Self }
     type ConcreteTy         { includes: [concrete, never],                                                       child: RuntimeTy }
     type ConcreteRealizedTy { includes: [concrete, never],                                                       child: RealizedTy }
@@ -340,8 +345,8 @@ mod tests {
     use borsh::BorshDeserialize;
 
     use crate::{
-        ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotRealizedTy,
-        NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
+        CodegenTy, ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotCodegenTy,
+        NotRealizedTy, NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TyTemplate, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -434,6 +439,30 @@ mod tests {
         assert_eq!(
             RealizedTy::try_from(&t),
             Err(NotRealizedTy { variant: "TypeVar" })
+        );
+    }
+
+    /// Codegen types retain generic parameters but require associated
+    /// projections to have been resolved at the compiler boundary.
+    #[test]
+    fn codegen_accepts_type_variables_and_rejects_projections() {
+        assert!(CodegenTy::try_from(&with_typevar()).is_ok());
+
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::TypeVar(Name::new("T"), a())),
+            interface: Box::new(crate::Interface::new(
+                qtn("Iterator"),
+                Vec::new(),
+                Vec::new(),
+            )),
+            member: Name::new("Item"),
+            attr: a(),
+        };
+        assert_eq!(
+            CodegenTy::try_from(&projection),
+            Err(NotCodegenTy {
+                variant: "AssociatedTypeProjection"
+            })
         );
     }
 
