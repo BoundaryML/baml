@@ -240,16 +240,26 @@ class Array<T> {
 
   /// Returns a sub-array from index `start` (inclusive) to `end` (exclusive).
   ///
-  /// Negative indices count from the end. Out-of-range indices are clamped, and
-  /// an `end` that resolves at or before `start` yields an empty array.
+  /// If `end` is omitted, it defaults to `self.length()` (JavaScript-compatible
+  /// `slice(start)` behavior). Negative indices count from the end.
+  /// Out-of-range indices are clamped, and an `end` that resolves at or before
+  /// `start` yields an empty array.
   ///
   /// # Examples
   /// ```
+  /// [1, 2, 3, 4].slice(1)      // [2, 3, 4]
   /// [1, 2, 3, 4].slice(1, 3)   // [2, 3]
   /// [1, 2, 3].slice(-2, 3)     // [2, 3]
   /// [1, 2, 3].slice(2, 1)      // []
   /// ```
-  function slice(self, start: int, end: int) -> T[] throws never {
+  function slice(self, start: int, end: int = self.length()) -> T[] throws never {
+    self._slice(start, end)
+  }
+
+  /// Internal: all-required native behind `slice`. Native functions do not
+  /// run the BAML default-argument prologue, so omitted arguments must be
+  /// filled by a BAML wrapper before reaching the native.
+  function _slice(self, start: int, end: int) -> T[] throws never {
     $rust_function
   }
 

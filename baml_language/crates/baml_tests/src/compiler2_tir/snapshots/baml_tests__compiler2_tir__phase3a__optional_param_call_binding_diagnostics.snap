@@ -11,7 +11,6 @@ function user.positional_default() -> string throws never {
   { : string
     search("cats", 5) : string
   }
-  !! 124..125: defaulted parameter `max` must be passed by name
 }
 function user.positional_after_named() -> string throws never {
   { : string

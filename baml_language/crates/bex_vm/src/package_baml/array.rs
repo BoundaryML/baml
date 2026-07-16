@@ -821,7 +821,7 @@ impl BamlClassArray for PackageBamlImpl {
         result
     }
 
-    fn slice(array: ArrayView<'_>, start: i64, end: i64) -> Vec<Value> {
+    fn _slice(array: ArrayView<'_>, start: i64, end: i64) -> Vec<Value> {
         let start = resolve_slice_bound(start, array.len());
         // An `end` resolving before `start` yields an empty slice.
         let end = resolve_slice_bound(end, array.len()).max(start);

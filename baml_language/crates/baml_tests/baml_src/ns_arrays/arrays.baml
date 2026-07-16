@@ -972,6 +972,14 @@ test "array_slice_basic" {
     assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(1, 3), [2, 3]))
 }
 
+test "array_slice_start_only_defaults_end" {
+    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(1), [2, 3, 4]))
+}
+
+test "array_slice_start_only_supports_negative_start" {
+    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(-2), [3, 4]))
+}
+
 test "array_slice_negative_start" {
     assert.is_true(baml.deep_equals([1, 2, 3].slice(-2, 3), [2, 3]))
 }

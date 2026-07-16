@@ -31,7 +31,6 @@ function user.BadDefaultPositional() -> string throws never {
   { : string
     Search("cats", 5) : string
   }
-  !! 436..437: defaulted parameter `max_results` must be passed by name
 }
 function user.BadPositionalAfterNamed() -> string throws never {
   { : string
