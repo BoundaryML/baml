@@ -107,6 +107,8 @@ pub fn to_source_code(
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, &Ty)> = Vec::new();
+    // (signature, union binary name, per-arm (token, record binary name))
+    let mut union_registry: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -237,6 +239,7 @@ pub fn to_source_code(
                 .filter(|t| !matches!(t, Ty::Null))
                 .cloned()
                 .collect();
+            union_registry.push(union_registration(&pkg, &ident, &arms, &aliases));
             render_union(&ident, &arms, &ctx, &mut sink)
         } else {
             format!(
@@ -265,6 +268,7 @@ pub fn to_source_code(
                 aliases: &aliases,
             };
             let body = render_union(&ident, &arms, &ctx, &mut sink);
+            union_registry.push(union_registration(&pkg, &ident, &arms, &aliases));
             // A generated type may already own this identifier (e.g. a
             // recursive alias that named the same union) — first writer
             // wins, and the alias/type pass ran first.
@@ -283,7 +287,18 @@ pub fn to_source_code(
     };
     class_registry.sort();
     enum_registry.sort();
+    union_registry.sort();
+    union_registry.dedup();
     let mut registrations = String::new();
+    for (signature, union_binary, arm_entries) in &union_registry {
+        let tokens: Vec<String> = arm_entries.iter().map(|(t, _)| format!("{t:?}")).collect();
+        let records: Vec<String> = arm_entries.iter().map(|(_, r)| format!("{r:?}")).collect();
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerUnion({signature:?}, {union_binary:?}, new java.lang.String[] {{{}}}, new java.lang.String[] {{{}}});\n",
+            tokens.join(", "),
+            records.join(", ")
+        ));
+    }
     for (fqn, java_name, fields) in &class_registry {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
         registrations.push_str(&format!(
@@ -337,6 +352,88 @@ pub fn to_source_code_with_bytecode(
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     to_source_code(pool, baml_bytecode, naming_convention)
+}
+
+/// Canonical signature token for one union arm. The Java runtime
+/// derives the same token from the wire `self_type` (`BamlTy`), and a
+/// union's registry key is the `|`-join of its arms' tokens sorted
+/// lexically (null arms excluded on both sides) — order-insensitive so
+/// engine-side normalization can't cause a mismatch. Keep in lockstep
+/// with `baml_bridge.TypeRegistry`'s BamlTy tokenizer.
+fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
+    fn fqn(name: &baml_codegen_types::Name) -> String {
+        let mut s = String::from(name.pkg.as_str());
+        for seg in &name.namespace_path {
+            s.push('.');
+            s.push_str(seg.as_str());
+        }
+        s.push('.');
+        s.push_str(name.name.as_str());
+        s
+    }
+    match ty {
+        Ty::Int => "int".to_string(),
+        Ty::Bigint => "bigint".to_string(),
+        Ty::Float => "float".to_string(),
+        Ty::String => "string".to_string(),
+        Ty::Bool => "bool".to_string(),
+        Ty::Null => "null".to_string(),
+        Ty::Uint8Array => "uint8array".to_string(),
+        Ty::Unit => "void".to_string(),
+        Ty::BuiltinUnknown => "unknown".to_string(),
+        Ty::Class(name, _) | Ty::Enum(name) => fqn(name),
+        Ty::TypeAlias(name) => match aliases.get(name) {
+            Some((resolved, false)) => signature_token(resolved, aliases),
+            _ => fqn(name),
+        },
+        Ty::TypeVar(name) => format!("tv:{}", name.as_str()),
+        Ty::List(inner) => format!("list<{}>", signature_token(inner, aliases)),
+        Ty::Map { key, value } => format!(
+            "map<{},{}>",
+            signature_token(key, aliases),
+            signature_token(value, aliases)
+        ),
+        Ty::Literal(lit) => match lit {
+            baml_base::Literal::Int(v) => format!("lit:int:{v}"),
+            baml_base::Literal::Bigint(v) => format!("lit:bigint:{v}"),
+            baml_base::Literal::Float(v) => format!("lit:float:{v}"),
+            baml_base::Literal::String(v) => format!("lit:string:{v}"),
+            baml_base::Literal::Bool(v) => format!("lit:bool:{v}"),
+        },
+        Ty::Media(kind) => format!("media:{}", format!("{kind:?}").to_lowercase()),
+        Ty::Callable { .. } => "callable".to_string(),
+        Ty::RustType => "handle".to_string(),
+        Ty::BamlOptions => "options".to_string(),
+        Ty::Union(_) => "union".to_string(), // banned by validate(); defensive
+    }
+}
+
+/// Build one union registry entry: the sorted-token signature, the
+/// sealed interface's binary name, and (arm token, record binary name)
+/// pairs in declaration order. Record binary names use the `$` nested
+/// separator (`baml_sdk.unions.UnionIntOrString$IntValue`).
+fn union_registration(
+    pkg: &PackagePath,
+    ident: &str,
+    arms: &[Ty],
+    aliases: &AliasTable,
+) -> (String, String, Vec<(String, String)>) {
+    let union_binary = format!("{}.{}", pkg.java_package(), ident);
+    let arm_entries: Vec<(String, String)> = arms
+        .iter()
+        .map(|arm| {
+            (
+                signature_token(arm, aliases),
+                format!(
+                    "{union_binary}${}Value",
+                    crate::translate_ty::union_arm_token(arm)
+                ),
+            )
+        })
+        .collect();
+    let mut tokens: Vec<String> = arm_entries.iter().map(|(t, _)| t.clone()).collect();
+    tokens.sort();
+    (tokens.join("|"), union_binary, arm_entries)
 }
 
 fn java_file_path(pkg: &PackagePath, ident: &str) -> PathBuf {
