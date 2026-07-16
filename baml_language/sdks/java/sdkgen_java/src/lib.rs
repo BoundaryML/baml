@@ -17,9 +17,8 @@
 //! Type expressions come from `translate_ty` and are fully qualified,
 //! so no import machinery exists either.
 //!
-//! Not yet emitted (later capabilities): optional-arg configurators,
-//! explicit generic type-args overloads, the typemap, runtime init in
-//! `Baml.java`.
+//! Not yet emitted (later capabilities): explicit generic type-args
+//! overloads, the typemap, runtime init in `Baml.java`.
 //!
 //! Generated-API conventions live in
 //! `sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md`.
@@ -753,6 +752,137 @@ mod tests {
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
         ));
         assert!(file.contains("thenApply(v$ -> (java.lang.String) v$)"));
+    }
+
+    #[test]
+    fn optional_args_emit_configurator_overload_and_opts_class() {
+        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        // (required int x, optional int opt1 default, optional string opt2 default)
+        let mut pool = SymbolPool::new();
+        let f = Function {
+            name: BaseName::new("optional_args_probe"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("x"),
+                    docstring: None,
+                    ty: Ty::Int,
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt1"),
+                    docstring: None,
+                    ty: Ty::Int,
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::Int(5),
+                    ))),
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt2"),
+                    docstring: None,
+                    ty: Ty::String,
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::String("hi".into()),
+                    ))),
+                },
+            ],
+            return_type: Ty::Int,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(
+            name("user", &[], "optional_args_probe"),
+            Symbol::Function(f),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("Fns.java")];
+
+        // The required-only pair is preserved: its base arrays carry ONLY the
+        // required arg, so untouched optionals are absent (engine defaults).
+        assert!(file.contains("public static long optional_args_probe(long x) {"));
+        assert!(file.contains(
+            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
+        ));
+
+        // The configurator overload pair: a trailing Consumer<...$Opts>.
+        assert!(file.contains(
+            "public static long optional_args_probe(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg) {"
+        ));
+        assert!(file.contains(
+            "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg) {"
+        ));
+
+        // Overload body: run the configurator, then append the touched
+        // optionals onto the required base arrays via the opts accessors.
+        assert!(file.contains("optional_args_probe$Opts $opts = new optional_args_probe$Opts();"));
+        assert!(file.contains("$cfg.accept($opts);"));
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"int\");"
+        ));
+
+        // Nested opts class with BOXED fluent setters (null must be passable).
+        assert!(file.contains("public static final class optional_args_probe$Opts {"));
+        assert!(file.contains("public optional_args_probe$Opts opt1(java.lang.Long v) {"));
+        assert!(file.contains("public optional_args_probe$Opts opt2(java.lang.String v) {"));
+        assert!(file.contains("this.$values.put(\"opt1\", v);"));
+        assert!(file.contains("this.$touched.add(\"opt1\");"));
+
+        // Package-visible accessors the binding reads.
+        assert!(file.contains("java.lang.String[] $names(java.lang.String[] base) {"));
+        assert!(file.contains("java.lang.Object[] $args(java.lang.Object[] base) {"));
+    }
+
+    #[test]
+    fn optional_args_instance_method_puts_configurator_last() {
+        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        let mut pool = SymbolPool::new();
+        let n = name("user", &[], "OptBox");
+        let probe = Function {
+            name: BaseName::new("probe"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("arg0"),
+                    docstring: None,
+                    ty: Ty::Int,
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt1"),
+                    docstring: None,
+                    ty: Ty::Int,
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::Int(5),
+                    ))),
+                },
+            ],
+            return_type: Ty::Int,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(1),
+        };
+        pool.insert(
+            n.clone(),
+            class_sym_with_methods(&n, Vec::new(), vec![probe], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("OptBox.java")];
+
+        // Required-only instance binding: receiver prepended as self/this.
+        assert!(file.contains("public long probe(long arg0) {"));
+        // Configurator overload keeps the receiver first, the Consumer last.
+        assert!(file.contains(
+            "public long probe(long arg0, java.util.function.Consumer<probe$Opts> $cfg) {"
+        ));
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callSync(\"user.OptBox.probe\", $opts.$names(new java.lang.String[] {\"self\", \"arg0\"}), $opts.$args(new java.lang.Object[] {this, arg0}), \"int\");"
+        ));
+        // The nested opts class is static (instantiable from an instance method).
+        assert!(file.contains("public static final class probe$Opts {"));
+        assert!(file.contains("public probe$Opts opt1(java.lang.Long v) {"));
     }
 
     #[test]

@@ -214,6 +214,28 @@ class WireCodecTest {
     }
 
     @Test
+    void inbound_null_kwarg_encodes_as_absent_value_entry() {
+        // The optional-args configurator sends a touched-with-null optional as
+        // a kwarg whose InboundValue is absent (an unset oneof ≡ explicit BAML
+        // null) — distinct from an OMITTED optional, which contributes no
+        // kwarg entry at all. Pinning this: a null entry in the args array must
+        // still emit its InboundMapEntry (carrying only the string_key), never
+        // throw and never drop the entry.
+        byte[] got = ProtoWriter.encodeCallFunctionArgs(
+                new String[] {"opt1"}, new Object[] {null}, 1L);
+
+        // Expected: one kwarg entry (field 1) carrying only string_key (field 1)
+        // with no value (field 6), then call_id (field 2).
+        WireWriter entry = new WireWriter();
+        entry.writeString(1, "opt1"); // InboundMapEntry.string_key = 1 (value absent)
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(1, entry.toByteArray()); // CallFunctionArgs.kwargs = 1
+        expected.writeInt64(2, 1L); // call_id = 2
+
+        assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    @Test
     void inbound_bigint_in_range_uses_int_channel() {
         // A BigInteger within i64 range must ride int_value, not bigint_value.
         byte[] small = ProtoWriter.encodeInboundValue(BigInteger.valueOf(5));

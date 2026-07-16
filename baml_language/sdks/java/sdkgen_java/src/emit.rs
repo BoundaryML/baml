@@ -33,10 +33,16 @@
 //! engine sees it as required param 0. A method's binding FQN is
 //! `<class fqn>.<method name>`.
 //!
-//! Not yet emitted (later capabilities): optional-arg configurator
-//! overloads, explicit generic type-args overloads. Functions (and
-//! methods) with optional arguments emit their required-args form only,
-//! so the engine evaluates BAML defaults.
+//! Optional arguments render as an AWS-SDK-v2-style trailing configurator
+//! overload beside the required-only pair: a nested `<Ident>$Opts` options
+//! class (fluent boxed setters recording touched entries) plus a
+//! `Consumer<<Ident>$Opts>`-taking sync/async overload. An untouched
+//! optional is simply absent from the wire arrays (the engine evaluates
+//! the BAML default); a touched-with-null optional contributes an explicit
+//! BAML `null`. This preserves the omit-vs-null tri-state with no sentinel.
+//!
+//! Not yet emitted (later capabilities): explicit generic type-args
+//! overloads.
 
 use baml_codegen_types::{Class, Enum, Function, Ty};
 
@@ -299,10 +305,12 @@ fn render_function_pair(
 /// One sync + one `_async` binding for a callable — a free function, a
 /// class static method, or a class instance method. `is_static` toggles
 /// the `static` modifier; `receiver` prepends the instance receiver
-/// (`self` / `this`) to the runtime param-names / args arrays. Required
-/// (defaultless) arguments only — optional-arg configurator overloads
-/// land with the optional-args capability, so omitted optionals hit the
-/// engine's BAML defaults.
+/// (`self` / `this`) to the runtime param-names / args arrays. The
+/// required-only pair takes just the defaultless arguments; when the
+/// callable also has optional (defaulted) arguments, a second sync/async
+/// overload pair taking a trailing `Consumer<<Ident>$Opts>` is appended,
+/// along with the nested `<Ident>$Opts` options class (see
+/// [`render_optional_configurator`]).
 fn render_callable_pair(
     fqn: &str,
     function: &Function,
@@ -317,6 +325,13 @@ fn render_callable_pair(
         .arguments
         .iter()
         .filter(|a| a.default.is_none())
+        .collect();
+    // Optionals (defaulted args) drive the configurator overload; they
+    // never appear as positional Java parameters.
+    let optionals: Vec<_> = function
+        .arguments
+        .iter()
+        .filter(|a| a.default.is_some())
         .collect();
 
     let param_decls: Vec<String> = required
@@ -400,9 +415,129 @@ fn render_callable_pair(
         "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?}).thenApply(v$ -> ({ret_boxed}) v$);"
     );
 
-    format!(
+    let mut out = format!(
         "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
         params = param_decls.join(", "),
+    );
+
+    // Optional-argument configurator: a second sync/async overload pair
+    // (trailing `Consumer<<Ident>$Opts>`) plus the nested opts class. The
+    // required-only pair above stays untouched, so omitting the configurator
+    // still lets the engine evaluate BAML defaults.
+    if !optionals.is_empty() {
+        out.push_str(&render_optional_configurator(
+            &ident,
+            &optionals,
+            &doc,
+            static_kw,
+            &generics_kw,
+            &ret_top,
+            &ret_boxed,
+            &async_ret,
+            fqn,
+            &descriptor,
+            &names_literal,
+            &args_literal,
+            &param_decls,
+            ctx,
+            sink,
+        ));
+    }
+
+    out
+}
+
+/// Emit the optional-argument configurator for a callable that has ≥1
+/// optional (defaulted) argument: the sync + async overloads taking a
+/// trailing `java.util.function.Consumer<<Ident>$Opts>` after the required
+/// params, and the nested `<Ident>$Opts` options class.
+///
+/// The opts class records each touched optional into an insertion-ordered
+/// map (`$values`) plus a `$touched` set; its package-visible `$names` /
+/// `$args` accessors append the touched optionals (in touch order) onto the
+/// binding's base required arrays. An untouched optional is therefore absent
+/// from the wire arrays (UNSET → engine default); a touched-with-null
+/// optional contributes a `null` arg (explicit BAML `null`).
+///
+/// `names_literal` / `args_literal` are the binding's base required arrays
+/// (already including the instance receiver when present); the overload
+/// passes them as the accessor base.
+#[allow(clippy::too_many_arguments)]
+fn render_optional_configurator(
+    ident: &str,
+    optionals: &[&baml_codegen_types::FunctionArgument],
+    doc: &str,
+    static_kw: &str,
+    generics_kw: &str,
+    ret_top: &str,
+    ret_boxed: &str,
+    async_ret: &str,
+    fqn: &str,
+    descriptor: &str,
+    names_literal: &str,
+    args_literal: &str,
+    param_decls: &[String],
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    // A generic callable's optional arg may reference class/method type
+    // vars; the (static) opts class must then re-declare exactly those, so
+    // its setter signatures and the `Consumer<...>` type resolve. The names
+    // are already in scope on the enclosing binding (class-level for
+    // instance methods, re-declared at method level for statics/free fns).
+    let mut opt_tvs: Vec<String> = Vec::new();
+    for a in optionals {
+        crate::translate_ty::collect_type_vars(&a.ty, &mut opt_tvs);
+    }
+    let gu = if opt_tvs.is_empty() {
+        String::new()
+    } else {
+        format!("<{}>", opt_tvs.join(", "))
+    };
+    let opts_ty = format!("{ident}$Opts{gu}");
+    let cfg_ty = format!("java.util.function.Consumer<{opts_ty}>");
+
+    // Overload params: the required params, then the trailing configurator.
+    let mut overload_params: Vec<String> = param_decls.to_vec();
+    overload_params.push(format!("{cfg_ty} $cfg"));
+    let params = overload_params.join(", ");
+
+    // Shared prologue: instantiate the opts holder and run the configurator.
+    let prologue =
+        format!("        {opts_ty} $opts = new {opts_ty}();\n        $cfg.accept($opts);\n");
+    // The runtime call reuses the required-only descriptor and FQN; the
+    // combined names/args come from the opts accessors over the base arrays.
+    let call_names = format!("$opts.$names({names_literal})");
+    let call_args = format!("$opts.$args({args_literal})");
+
+    let sync_body = if ret_top == "void" {
+        format!(
+            "{prologue}        baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?});"
+        )
+    } else {
+        format!(
+            "{prologue}        return ({ret_boxed}) baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?});"
+        )
+    };
+    let async_body = format!(
+        "{prologue}        return baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}).thenApply(v$ -> ({ret_boxed}) v$);"
+    );
+
+    // Fluent boxed setters. The wire key is the BAML arg name; the setter
+    // method name is the Java-escaped identifier (they differ only when the
+    // arg name is a Java keyword).
+    let mut setters = String::new();
+    for a in optionals {
+        let boxed = translate_ty(&a.ty, TyPosition::Boxed, ctx, sink);
+        let wire = a.name.as_str();
+        let setter = java_identifier(wire);
+        setters.push_str(&format!(
+            "\n        public {opts_ty} {setter}({boxed} v) {{\n            this.$values.put({wire:?}, v);\n            this.$touched.add({wire:?});\n            return this;\n        }}\n"
+        ));
+    }
+
+    format!(
+        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
     )
 }
 
