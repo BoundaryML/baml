@@ -267,38 +267,44 @@ function operators.$init_test_ns_operators_operators(registry: testing.TestColle
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "driver_int_arithmetic_matches_opcodes"
+    load_const "operator_negate_output_differs_from_self"
     make_closure .<lambda($init_test_ns_operators_operators, 44)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "driver_float_arithmetic_matches_opcodes"
+    load_const "driver_int_arithmetic_matches_opcodes"
     make_closure .<lambda($init_test_ns_operators_operators, 45)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "driver_bigint_arithmetic_matches_opcodes"
+    load_const "driver_float_arithmetic_matches_opcodes"
     make_closure .<lambda($init_test_ns_operators_operators, 46)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "driver_mixed_widening_matches_opcodes"
+    load_const "driver_bigint_arithmetic_matches_opcodes"
     make_closure .<lambda($init_test_ns_operators_operators, 47)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "operator_mixed_primitive_union_add"
+    load_const "driver_mixed_widening_matches_opcodes"
     make_closure .<lambda($init_test_ns_operators_operators, 48)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "driver_panics_match_opcodes"
+    load_const "operator_mixed_primitive_union_add"
     make_closure .<lambda($init_test_ns_operators_operators, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "driver_panics_match_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 50)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -311,6 +317,14 @@ function operators.Counter.baml.ops.Add<int>.add(self: operators.Counter, rhs: i
     load_field .n
     load_var rhs
     add_int
+    return
+}
+
+function operators.Debt.baml.ops.Negate.neg(self: operators.Debt) -> int {
+    load_const 0
+    load_var self
+    load_field .amount
+    sub_int
     return
 }
 
@@ -777,6 +791,12 @@ function operators.ops_mixed_union_add(n: int) -> int | float {
     call user.operators.ops_pick_int_or_float
     load_const 1
     call baml.ops.__union_add
+    return
+}
+
+function operators.ops_neg_debt(d: operators.Debt) -> int {
+    load_var d
+    call baml.ops.__union_neg
     return
 }
 

@@ -13820,31 +13820,33 @@ impl<'db> TypeInferenceBuilder<'db> {
         deduped
     }
 
-    /// For one operand pair, resolve `<l as Iface<r>>::Output` — the result of
-    /// `l OP r` — to its concrete type. A concrete `l` (or an existential whose
-    /// `Output` is specified) yields that `Output`; `None` when `l` does not
-    /// implement `Iface<r>`, which the resolver signals by leaving the projection
-    /// unresolved (so an `l` whose `Output` can't be pinned to a concrete type —
-    /// e.g. an unbounded type variable — is rejected as an invalid pair).
+    /// For one operand, resolve `<l as Iface<args>>::Output` — the result of the
+    /// operator applied to `l` (`args` is `[rhs]` for a binary operator, empty
+    /// for `Negate`) — to its concrete type. A concrete `l` (or an existential
+    /// whose `Output` is specified) yields that `Output`; `None` when `l` does
+    /// not implement `Iface<args>`, which the resolver signals by leaving the
+    /// projection unresolved (so an `l` whose `Output` can't be pinned to a
+    /// concrete type — e.g. an unbounded type variable — is rejected as an
+    /// invalid operand).
     fn resolve_operator_output(
         &self,
         iface_qtn: &crate::ty::QualifiedTypeName,
         l: &Ty,
-        r: &Ty,
+        iface_args: Vec<Ty>,
     ) -> Option<Ty> {
-        // Resolve `<l as Iface<r>>::Output` directly rather than checking
-        // `is_subtype(l, Iface<r>)` first: the latter fills the interface's
+        // Resolve `<l as Iface<args>>::Output` directly rather than checking
+        // `is_subtype(l, Iface<args>)` first: the latter fills the interface's
         // `Output` with its `= Self` default, turning the membership test into a
-        // stricter `Iface<r, Output=Self>` that a concrete impl (`Output = int`,
-        // say) can never satisfy. Normalization reduces the projection through
-        // the impl registry (`TypeContext::project`), selecting the impl by the
-        // input dimension `(l, r)` only — the right notion here — and leaves the
+        // stricter `Iface<args, Output=Self>` that a concrete impl (`Output =
+        // int`, say) can never satisfy. Normalization reduces the projection
+        // through the impl registry (`TypeContext::project`), selecting the impl
+        // by the input dimensions only — the right notion here — and leaves the
         // projection unresolved exactly when no impl applies.
         let projection = Ty::AssociatedTypeProjection {
             base: Box::new(l.clone()),
             interface: Box::new(baml_type::Interface::new(
                 iface_qtn.clone(),
-                vec![r.clone()],
+                iface_args,
                 Vec::new(),
             )),
             member: Name::new("Output"),
@@ -13889,7 +13891,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut output: Option<Ty> = None;
         for l in &lhs_members {
             for r in &rhs_members {
-                let pair_output = self.resolve_operator_output(&iface_qtn, l, r)?;
+                let pair_output = self.resolve_operator_output(&iface_qtn, l, vec![r.clone()])?;
                 output = Some(match output {
                     None => pair_output,
                     Some(acc) => Self::join_types(&acc, &pair_output),
@@ -13900,25 +13902,25 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Resolve unary `-operand` through `baml.ops.Negate`: every operand
-    /// alternative must implement `Negate`, whose `neg(self) -> Self` makes the
-    /// result the operand's own type. `None` when an alternative does not
-    /// implement `Negate` (or the operand has none) — i.e. negation is invalid.
+    /// alternative must implement `Negate`, and the result is the union of each
+    /// alternative's `Output` (defaulting to the alternative itself via the
+    /// `= Self` default). `None` when an alternative does not implement `Negate`
+    /// (or the operand has none) — i.e. negation is invalid.
     fn infer_negate_via_interface(&self, operand: &Ty) -> Option<Ty> {
         let members = self.operator_operand_members(operand);
         if members.is_empty() {
             return None;
         }
-        let negate = Ty::Interface(
-            Self::ops_qtn("Negate"),
-            Vec::new(),
-            Vec::new(),
-            TyAttr::default(),
-        );
-        if members.iter().all(|m| self.is_subtype(m, &negate)) {
-            Some(operand.clone())
-        } else {
-            None
+        let negate_qtn = Self::ops_qtn("Negate");
+        let mut output: Option<Ty> = None;
+        for m in &members {
+            let member_output = self.resolve_operator_output(&negate_qtn, m, Vec::new())?;
+            output = Some(match output {
+                None => member_output,
+                Some(acc) => Self::join_types(&acc, &member_output),
+            });
         }
+        output
     }
 
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the

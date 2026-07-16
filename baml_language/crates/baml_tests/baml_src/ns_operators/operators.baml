@@ -389,6 +389,21 @@ test "operator_output_differs_from_self" {
     assert.is_true(baml.deep_equals(ops_counter_add(Counter { n: 2 }, 1), 3))
 }
 
+// Negate's Output can also differ from Self (like Rust's Neg::Output).
+class Debt {
+    amount int
+    implements baml.ops.Negate {
+        type Output = int
+        function neg(self) -> int throws never { 0 - self.amount }
+    }
+}
+
+function ops_neg_debt(d: Debt) -> int { -d }
+
+test "operator_negate_output_differs_from_self" {
+    assert.is_true(baml.deep_equals(ops_neg_debt(Debt { amount: 5 }), -5))
+}
+
 // ─── Driver/opcode parity for primitives ──────────────────────────────────────
 // A bounded-generic operand keeps MIR off the specialized opcodes, so the
 // arithmetic below dispatches through baml.ops.__union_* to the native
@@ -400,7 +415,7 @@ function drv_sub<T extends baml.ops.Subtract<T, Output = T>>(a: T, b: T) -> T { 
 function drv_mul<T extends baml.ops.Multiply<T, Output = T>>(a: T, b: T) -> T { a * b }
 function drv_div<T extends baml.ops.Divide<T, Output = T>>(a: T, b: T) -> T { a / b }
 function drv_rem<T extends baml.ops.Remainder<T, Output = T>>(a: T, b: T) -> T { a % b }
-function drv_neg<T extends baml.ops.Negate>(a: T) -> T { -a }
+function drv_neg<T extends baml.ops.Negate<Output = T>>(a: T) -> T { -a }
 function drv_add_int_rhs<T extends baml.ops.Add<int, Output = T>>(a: T, b: int) -> T { a + b }
 function drv_div_int_rhs<T extends baml.ops.Divide<int, Output = T>>(a: T, b: int) -> T { a / b }
 

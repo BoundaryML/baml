@@ -53,7 +53,8 @@ interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
 
 /// `-self`
 interface Negate requires root.Concrete {
-    function neg(self) -> Self throws never
+    type Output extends root.Concrete = Self;
+    function neg(self) -> Self.Output throws never
 }
 
 // ==== int ====

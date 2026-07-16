@@ -12315,6 +12315,40 @@ fn arithmetic_on_bounded_typevar_with_pinned_output_is_ok() {
 }
 
 #[test]
+fn negate_output_type_is_the_impl_output() {
+    // `Negate` has an `Output` (defaulting to `Self`), so `-d` can change type.
+    assert_no_compile_errors(
+        r#"
+        class Debt {
+            amount: int
+            implements baml.ops.Negate {
+                type Output = int
+                function neg(self) -> int throws never { 0 - self.amount }
+            }
+        }
+        function f(d: Debt) -> int {
+            -d
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_bounded_typevar_without_pinned_output_is_rejected() {
+    // Same rule as the binary operators: an operand whose `Output` realizes to
+    // the unpinned `= Self` default existential is invalid.
+    assert_compile_error_contains(
+        r#"
+        function f<T extends baml.ops.Negate>(x: T) -> int {
+            -x;
+            0
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
 fn arithmetic_on_bounded_typevar_without_pinned_output_is_rejected() {
     assert_compile_error_contains(
         r#"
