@@ -1679,6 +1679,77 @@ unsafe impl salsa::Update for PackageLoweringData {
     }
 }
 
+/// Project-wide class → runtime type-tag map. See
+/// [`class_type_tags_for_project`].
+#[derive(Debug, PartialEq)]
+struct ProjectClassTypeTags {
+    tags: IndexMap<TypeName, i64>,
+}
+
+/// Mirrors [`PackageLoweringData`]'s impl: the map holds no Salsa-interned
+/// (`'db`) data, so storing it by value is sound; `maybe_update` uses
+/// `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ProjectClassTypeTags {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Build `class_type_tags` for every class in the project, once, memoized by
+/// Salsa.
+///
+/// Tags are content-addressed (`typetag::class_type_tag` over the
+/// fully-qualified name), so they match the `class.type_tag` values the
+/// emitter assigns by construction — no iteration-order coupling — and a
+/// class keeps its tag regardless of what other code exists.
+///
+/// This was previously an untracked helper called from every
+/// `LoweringContext` construction — i.e. the whole project's item trees were
+/// walked, and every class name re-rendered and re-hashed, once per lowered
+/// function/let (see `crates/tools_compile_profile/README.md`, July 2026
+/// audit, item #4). `project` is only the memo key; the body's file/item
+/// reads are tracked as dependencies through `db` as usual.
+#[salsa::tracked(returns(ref))]
+fn class_type_tags_for_project(
+    db: &dyn crate::Db,
+    _project: baml_workspace::Project,
+) -> ProjectClassTypeTags {
+    let all_files = compiler2_all_files(db);
+    let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
+
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+
+        for class_data in item_tree.classes.values() {
+            let class_qtn = QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                class_data.name.clone(),
+            );
+            let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
+            // Use entry to avoid overwriting if the same class appears via multiple paths
+            // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
+            tags.entry(class_qtn).or_insert(type_tag);
+        }
+    }
+
+    ProjectClassTypeTags { tags }
+}
+
 /// Build the package-invariant [`PackageLoweringData`] once per package,
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
@@ -1882,8 +1953,10 @@ struct LoweringContext<'db> {
     class_field_types: &'db ClassFieldTypes,
     enum_variants: &'db EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
-    /// for union-type switch optimization (ported from MIR 1).
-    class_type_tags: IndexMap<TypeName, i64>,
+    /// for union-type switch optimization (ported from MIR 1). Borrowed from
+    /// the Salsa-memoized [`class_type_tags_for_project`] (was rebuilt per
+    /// lowered function).
+    class_type_tags: &'db IndexMap<TypeName, i64>,
     /// BEP-044: for every interface, the list of classes that implement it
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
@@ -2237,8 +2310,9 @@ impl<'db> LoweringContext<'db> {
 
     /// Populate `class_fields` and `enum_variants` from a single package's items.
     ///
-    /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
-    /// the same file-iteration order as the emitter (`generate_project_bytecode`).
+    /// Note: `class_type_tags` is built separately via the project-wide
+    /// [`class_type_tags_for_project`] query (tags are content-addressed, so
+    /// they match the emitter's values without iteration-order coupling).
     fn populate_from_package(
         db: &'db dyn crate::Db,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
@@ -2518,36 +2592,6 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Build `class_type_tags` for every class in the project.
-    ///
-    /// Tags are content-addressed (`typetag::class_type_tag` over the
-    /// fully-qualified name), so they match the `class.type_tag` values the
-    /// emitter assigns by construction — no iteration-order coupling — and a
-    /// class keeps its tag regardless of what other code exists.
-    fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
-        let all_files = compiler2_all_files(db);
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-
-        for file in &all_files {
-            let item_tree = file_item_tree(db, *file);
-            let pkg_info = file_package(db, *file);
-
-            for class_data in item_tree.classes.values() {
-                let class_qtn = QualifiedTypeName::new(
-                    pkg_info.package.clone(),
-                    pkg_info.namespace_path.clone(),
-                    class_data.name.clone(),
-                );
-                let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
-                // Use entry to avoid overwriting if the same class appears via multiple paths
-                // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
-                class_type_tags.entry(class_qtn).or_insert(type_tag);
-            }
-        }
-
-        class_type_tags
-    }
-
     fn new(
         db: &'db dyn crate::Db,
         func_loc: FunctionLoc<'db>,
@@ -2724,9 +2768,10 @@ impl<'db> LoweringContext<'db> {
         // (was rebuilt — and every class field re-lowered — per function).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Build class_type_tags using the same file-iteration order as the emitter,
-        // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        // Tags are content-addressed over each class's fully-qualified name,
+        // so they match the emitter's `class.type_tag` values by construction.
+        // Memoized project-wide (was rebuilt here per lowered function).
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2841,9 +2886,10 @@ impl<'db> LoweringContext<'db> {
         // (was rebuilt — and every class field re-lowered — per let binding).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Build class_type_tags using the same file-iteration order as the emitter,
-        // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        // Tags are content-addressed over each class's fully-qualified name,
+        // so they match the emitter's `class.type_tag` values by construction.
+        // Memoized project-wide (was rebuilt here per lowered function).
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
 
         LoweringContext {
             db,
