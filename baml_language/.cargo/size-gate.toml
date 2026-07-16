@@ -36,20 +36,21 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# baml-cli baselines bumped ~+3% for the Rust SDK generator: `sdkgen_rust`
+# baml-cli is larger than the python/node CLIs because `sdkgen_rust`
 # formats generated code with `quote` + `prettyplease`, which pulls `syn`
-# into the CLI's runtime graph (the python/node generators use string
-# templates and don't). Reclaiming this would mean dropping prettyplease
-# (raw, unformatted generated SDK output).
-# macOS arm64: baseline 17.52 MB file.
+# into the CLI's runtime graph (the string-template generators don't).
+# Baselines re-recorded after merging canary (~+4%). Reclaiming the `syn`
+# cost would mean dropping prettyplease (raw, unformatted generated SDK
+# output).
+# macOS arm64: baseline 18.30 MB file (18_300_864), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 18_078_116
-# Linux x86_64: baseline 22.77 MB file.
+max_file_bytes = 18_849_890
+# Linux x86_64: baseline 23.75 MB file (23_753_040), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 23_523_717
-# Windows x86_64: baseline 18.73 MB file (18_726_400), ceiling = baseline x1.03.
+max_file_bytes = 24_465_631
+# Windows x86_64: baseline 19.80 MB file (19_798_528), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 19_726_429
+max_file_bytes = 20_392_484
 
 [artifacts.packed-program]
 kind = "pack"

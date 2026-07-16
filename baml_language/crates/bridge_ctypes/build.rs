@@ -6,11 +6,17 @@ fn main() -> std::io::Result<()> {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let proto_dir = manifest_dir.join("types");
 
-    // Discover all .proto files.
-    let protos: Vec<PathBuf> = walkdir(&proto_dir)
+    // Discover all .proto files. Sort for a deterministic order: `read_dir`
+    // (inside `walkdir`) yields entries in filesystem-dependent order, and
+    // prost emits message blocks in proto-argument order — so an unsorted list
+    // makes the generated file's block order vary by platform (macOS locally
+    // vs Linux in CI), dirtying the committed vendored copy in CI. Sorting by
+    // path keeps the generated output byte-identical everywhere.
+    let mut protos: Vec<PathBuf> = walkdir(&proto_dir)
         .into_iter()
         .filter(|p| p.extension().is_some_and(|ext| ext == "proto"))
         .collect();
+    protos.sort();
 
     for proto in &protos {
         println!("cargo:rerun-if-changed={}", proto.display());
@@ -48,8 +54,9 @@ fn main() -> std::io::Result<()> {
     // back into the source tree on every build, so its content must be
     // deterministic — but rustfmt's output for a given input varies by
     // toolchain version, which would dirty the tree in CI vs locally. Raw
-    // prost output is stable (pinned via Cargo.lock), and `cargo fmt` skips
-    // it via the `ignore` entry in `baml_language/rustfmt.toml`.
+    // prost output is stable (pinned via Cargo.lock). `cargo fmt` never
+    // reformats it either: `src/wire/mod.rs` pulls it in with `include!`, and
+    // rustfmt only walks `mod` declarations, not `include!` targets.
     vendor_config.format(false);
     vendor_config.compile_protos(&proto_strs, &["types"])?;
 
