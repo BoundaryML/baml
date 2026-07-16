@@ -371,11 +371,11 @@ pub fn to_source_code_with_bytecode(
                 },
             )
         } else {
-            let mut file_path = PathBuf::from("src");
-            for seg in &path {
-                file_path.push(seg);
-            }
-            file_path.push("mod.rs");
+            // Join with `/` explicitly rather than `PathBuf::push`, which uses
+            // the host separator (`\` on Windows) and would make the generated
+            // file map keys differ by platform. These are logical output paths
+            // (matching the forward-slash literals above), not host paths.
+            let file_path = PathBuf::from(format!("src/{}/mod.rs", path.join("/")));
             (
                 file_path,
                 quote! {
