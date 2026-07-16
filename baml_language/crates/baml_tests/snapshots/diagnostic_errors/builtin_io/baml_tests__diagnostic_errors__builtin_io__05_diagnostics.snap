@@ -22,6 +22,16 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
+  [type] error: operator `+` cannot be applied to `uint8array` and `" - "`
+    ╭─[ shell_ops.baml:15:5 ]
+    │
+ 15 │     result1.stdout + " - " + result2.stdout
+    │     ───────────┬──────────  
+    │                ╰──────────── operator `+` cannot be applied to `uint8array` and `" - "`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
   [type] error: type mismatch: expected string, got uint8array
     ╭─[ shell_ops.baml:27:5 ]
     │

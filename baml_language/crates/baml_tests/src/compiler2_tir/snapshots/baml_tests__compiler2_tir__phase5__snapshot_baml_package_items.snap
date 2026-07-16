@@ -8,6 +8,7 @@ namespace baml:
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
   class Bool { methods: [] }
   type Comparable
+  type Concrete
   class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
   type FloatStats
   type FromJson
@@ -245,8 +246,20 @@ namespace baml.net:
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
   function _timeout_nanos
 namespace baml.ops:
+  type Add
   type Compare
+  type Divide
   type Equals
+  type Multiply
+  type Negate
+  type Remainder
+  type Subtract
+  function __union_add
+  function __union_div
+  function __union_mul
+  function __union_neg
+  function __union_rem
+  function __union_sub
   function equals_equals
 namespace baml.panics:
   class AllocFailure { methods: [] }

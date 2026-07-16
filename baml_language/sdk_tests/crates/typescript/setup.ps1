@@ -1,4 +1,4 @@
-# Per-fixture pnpm setup for the sdk_test_typescript_node crate — Windows.
+# Per-fixture pnpm setup for the sdk_test_typescript crate — Windows.
 #
 # Windows counterpart of setup.sh. Invoked automatically by
 # `cargo nextest run` via the setup-script binding in
@@ -16,6 +16,7 @@ Set-Location $PSScriptRoot
 $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 $RepoRoot = (Resolve-Path (Join-Path $WorkspaceRoot '..')).Path
 $BridgeTypescript = Join-Path $WorkspaceRoot 'sdks\typescript\bridge_typescript'
+$BridgeTypescriptWeb = Join-Path $WorkspaceRoot 'sdks\typescript\bridge_typescript_web'
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
@@ -56,7 +57,19 @@ try {
     Pop-Location
 }
 
-# 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
+# 4. Web/Wasm bridge used by both the browser and workerd runners.
+Write-Host '==> pnpm install in sdks/typescript/bridge_typescript_web'
+Push-Location $BridgeTypescriptWeb
+try {
+    pnpm install --ignore-workspace --ignore-scripts
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    pnpm build:debug
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    Pop-Location
+}
+
+# 5. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    `--force` is load-bearing: pnpm otherwise treats the fixture lockfile as
 #    current and may keep a stale packed copy of the local `file:` dependency
@@ -72,11 +85,27 @@ Get-ChildItem -Directory | ForEach-Object {
             # exits non-zero (ERR_PNPM_IGNORED_BUILDS). See setup.sh.
             pnpm install --force --ignore-workspace --ignore-scripts
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            pnpm update @boundaryml/baml-bridge --force --ignore-workspace --ignore-scripts
+            pnpm update @boundaryml/baml-bridge @boundaryml/baml-bridge-web --force --ignore-workspace --ignore-scripts
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location
         }
+    }
+}
+
+# 6. Install Chromium once from any generated fixture package.
+$FirstGenerated = Get-ChildItem -Directory | ForEach-Object {
+    $generated = Join-Path $_.FullName 'generated'
+    if (Test-Path $generated) { $generated }
+} | Select-Object -First 1
+if ($FirstGenerated) {
+    Write-Host '==> playwright install chromium'
+    Push-Location $FirstGenerated
+    try {
+        pnpm exec playwright install chromium
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } finally {
+        Pop-Location
     }
 }
 
@@ -85,5 +114,5 @@ Get-ChildItem -Directory | ForEach-Object {
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
 # harness_setup/src/typescript.rs.
 if ($env:NEXTEST_ENV) {
-    Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_TYPESCRIPT_NODE_SETUP=1'
+    Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_TYPESCRIPT_SETUP=1'
 }

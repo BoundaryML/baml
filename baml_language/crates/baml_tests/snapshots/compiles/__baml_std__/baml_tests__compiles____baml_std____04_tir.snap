@@ -2693,6 +2693,8 @@ function baml.ops.eq(self: unknown, other: !error) -> bool throws never {
   }
 }
 
+--- <builtin>/baml/ns_ops/math.baml ---
+
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.DivisionByZero {
   dividend: int
