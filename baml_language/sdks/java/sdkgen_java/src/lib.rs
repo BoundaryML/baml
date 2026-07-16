@@ -18,6 +18,10 @@
 
 mod emit;
 mod routing;
+// Wired into the emitters in phase 4 (fields, constructors, Fns
+// bindings); until then only the unit-test matrix exercises it.
+#[allow(dead_code)]
+mod translate_ty;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},

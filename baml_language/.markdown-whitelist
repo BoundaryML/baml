@@ -38,3 +38,4 @@ TASK/POST-IMPLEMENTATION-NOTES.md
 TASK/RECONCILIATION.md
 sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md
 sdks/agent-docs/bridge-ref/ref-java-state-of-completeness.md
+sdks/agent-docs/bridge-ref/ref-java-packaging.md
