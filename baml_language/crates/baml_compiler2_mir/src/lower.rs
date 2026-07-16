@@ -5475,20 +5475,18 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn split_runtime_id_call_args(args: &[CallArg]) -> (Vec<AstExprId>, Option<AstExprId>) {
-        let mut ordinary_args = Vec::with_capacity(args.len());
-        let mut runtime_id = None;
-        for arg in args {
-            if arg
-                .label
-                .as_ref()
-                .is_some_and(|label| label.as_str() == "$id")
-            {
-                runtime_id.get_or_insert(arg.expr);
-            } else {
-                ordinary_args.push(arg.expr);
-            }
-        }
+    fn planned_call_args(
+        &self,
+        expr_id: AstExprId,
+        args: &[CallArg],
+    ) -> (Vec<AstExprId>, Option<AstExprId>) {
+        let runtime_id = self
+            .tir_call_plan(self.expr_metadata_key(expr_id))
+            .and_then(|plan| plan.side_channels.runtime_id);
+        let ordinary_args = args
+            .iter()
+            .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
+            .collect();
         (ordinary_args, runtime_id)
     }
 
@@ -5554,7 +5552,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
                 self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
@@ -5609,7 +5607,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
                 self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 

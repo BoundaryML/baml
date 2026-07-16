@@ -1959,7 +1959,9 @@ fn tir_type_error_to_diagnostic_id(
         // a name-resolution failure.
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
-        | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        | TirTypeError::DuplicateRuntimeIdArgument
+        | TirTypeError::RuntimeIdArgumentMustBeLast
+        | TirTypeError::RuntimeIdArgumentTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
         // A `_` placeholder in a non-inferable position.

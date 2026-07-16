@@ -372,6 +372,40 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
+    let source = r#"
+        function call_host_with_id(
+            f: (int) -> int throws baml.errors.InvalidArgument,
+            x: int,
+        ) -> string {
+            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
+                baml.errors.InvalidArgument => "caught"
+            }
+        }
+    "#;
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let result = engine
+        .call_function(
+            "call_host_with_id",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host-callable rejection should be caught in BAML");
+    assert_eq!(result, BexExternalValue::String("caught".into()));
+    drop(arc);
+}
+
 // ============================================================================
 // Indirect dispatch: a host callable invoked as a native higher-order-builtin
 //         callback. `xs.map(f)` routes each element through the native

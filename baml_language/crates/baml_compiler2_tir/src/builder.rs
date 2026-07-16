@@ -121,6 +121,19 @@ fn json_decode_error_ty() -> Ty {
     )
 }
 
+/// The exact builtin type accepted by the call-site `$id` side channel.
+fn boundary_local_id_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new(baml_builtins2::PACKAGE_BOUNDARY),
+            vec![],
+            Name::new("LocalId"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
 fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
     crate::ty::QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
 }
@@ -2368,7 +2381,18 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let mut next_positional = 0usize;
         let mut saw_named = false;
+        let mut runtime_id = None;
         let mut reported_overflow_arity = false;
+        let ordinary_arg_count = call_args.map_or(args.len(), |call_args| {
+            call_args
+                .iter()
+                .filter(|arg| {
+                    arg.label
+                        .as_ref()
+                        .is_none_or(|label| label.as_str() != "$id")
+                })
+                .count()
+        });
         let has_named_args =
             call_args.is_some_and(|call_args| call_args.iter().any(|arg| arg.label.is_some()));
         for (arg_index, arg_expr) in args.iter().copied().enumerate() {
@@ -2376,19 +2400,41 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .and_then(|call_args| call_args.get(arg_index))
                 .and_then(|arg| arg.label.as_ref());
 
+            if label.is_some_and(|label| label.as_str() == "$id") {
+                if runtime_id.is_some() {
+                    self.context
+                        .report_simple(TirTypeError::DuplicateRuntimeIdArgument, arg_expr);
+                    self.infer_expr(arg_expr, body);
+                    provided_args.insert(arg_expr);
+                    continue;
+                }
+
+                let got = self.infer_expr(arg_expr, body);
+                if !self.is_subtype(&got, &boundary_local_id_ty()) {
+                    self.context.report_simple(
+                        TirTypeError::RuntimeIdArgumentTypeMismatch { got },
+                        arg_expr,
+                    );
+                }
+                runtime_id = Some(arg_expr);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
+            if runtime_id.is_some() {
+                self.context
+                    .report_simple(TirTypeError::RuntimeIdArgumentMustBeLast, arg_expr);
+                self.infer_expr(arg_expr, body);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
             if let Some(label) = label {
                 saw_named = true;
                 let Some(param_index) = name_to_index.get(label).copied() else {
-                    // `foo($id = x)` deserves a targeted message: overrides
-                    // are set inside the callee, not at the call site (the
-                    // call-site form is not part of the language surface).
                     self.context.report_simple(
-                        if label.as_str() == "$id" {
-                            TirTypeError::RuntimeIdCallSiteArgument
-                        } else {
-                            TirTypeError::UnknownNamedArgument {
-                                name: label.clone(),
-                            }
+                        TirTypeError::UnknownNamedArgument {
+                            name: label.clone(),
                         },
                         arg_expr,
                     );
@@ -2419,7 +2465,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: effective_params.len(),
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2449,12 +2495,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .filter(|param| param.is_required())
             .count();
-        let reported_positional_arity = !has_named_args && args.len() < required_count;
+        let reported_positional_arity = !has_named_args && ordinary_arg_count < required_count;
         if reported_positional_arity {
             self.context.report_simple(
                 TirTypeError::ArgumentCountMismatch {
                     expected: required_count,
-                    got: args.len(),
+                    got: ordinary_arg_count,
                 },
                 expr_id,
             );
@@ -2475,7 +2521,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: required_count,
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2518,6 +2564,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
+                side_channels: crate::inference::CallSideChannels { runtime_id },
             },
         );
 
@@ -2666,6 +2713,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .or_insert_with(|| crate::inference::CallPlan {
                 bindings: Vec::new(),
                 type_args,
+                side_channels: crate::inference::CallSideChannels::default(),
             });
     }
 

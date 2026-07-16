@@ -140,6 +140,57 @@ async fn boundary_id_current_matches_root_id() {
 }
 
 #[tokio::test]
+async fn explicit_local_id_is_visible_only_in_callee_and_restores_caller_id() {
+    let source = r#"
+        function explicit_identity_leaf() -> string {
+            boundary.id.current()
+        }
+
+        function main() -> string {
+            let before = boundary.id.current()
+            let inside = explicit_identity_leaf($id = boundary.id())
+            let after = boundary.id.current()
+            before + "|" + inside + "|" + after
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+    let boundary_id = BoundaryId::from_bytes([25; 16]);
+    let value = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_boundary_id(boundary_id)
+                .build(),
+            true,
+        )
+        .await
+        .unwrap();
+    let BexExternalValue::String(result) = value else {
+        panic!("expected identity string")
+    };
+    let parts = result.split('|').collect::<Vec<_>>();
+    assert_eq!(parts.len(), 3);
+    assert_eq!(parts[0], boundary_id.to_wire_string());
+    assert_ne!(
+        parts[1], parts[0],
+        "callee must observe the explicit LocalId"
+    );
+    assert_eq!(
+        parts[2], parts[0],
+        "caller identity must be restored after return"
+    );
+    assert!(matches!(
+        RuntimeId::decode(parts[1]),
+        Ok(RuntimeId::Boundary(_))
+    ));
+}
+
+#[tokio::test]
 async fn call_callable_with_trace_surfaces_callable_entry_call_ref() {
     let source = r#"
         function get_callable() -> () -> string throws never {

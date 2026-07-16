@@ -496,9 +496,12 @@ pub enum TirTypeError {
     /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
     /// string value but is not a binding; bind it to a local first.
     RuntimeIdMemberAccess { member: Name },
-    /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
-    /// are set inside the callee body with `$id = ...`, not by the caller.
-    RuntimeIdCallSiteArgument,
+    /// A second `$id` side channel was supplied to one call.
+    DuplicateRuntimeIdArgument,
+    /// `$id` is trailing call metadata and an ordinary argument followed it.
+    RuntimeIdArgumentMustBeLast,
+    /// The `$id` side channel accepts only a `boundary.LocalId`.
+    RuntimeIdArgumentTypeMismatch { got: Ty },
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -1365,10 +1368,17 @@ impl fmt::Display for TirTypeError {
                 "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
                  (e.g. `let id = $id; id.{member}`)"
             ),
-            TirTypeError::RuntimeIdCallSiteArgument => write!(
+            TirTypeError::DuplicateRuntimeIdArgument => {
+                write!(f, "duplicate `$id` call argument")
+            }
+            TirTypeError::RuntimeIdArgumentMustBeLast => write!(
                 f,
-                "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
-                 body instead"
+                "`$id` must be the final call argument because it is trailing call metadata"
+            ),
+            TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
+                f,
+                "`$id` at a call site expects `boundary.LocalId`, got {}",
+                got.render_user_facing()
             ),
             TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                 f,
