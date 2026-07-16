@@ -37,6 +37,7 @@ use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
+pub mod rust;
 pub mod typescript;
 pub mod typescript_web;
 

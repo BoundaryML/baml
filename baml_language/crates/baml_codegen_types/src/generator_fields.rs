@@ -16,6 +16,9 @@ pub enum OutputType {
     /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
+    /// Rust SDK (`bridge_rust` runtime crate, library name `baml_rs`).
+    #[strum(serialize = "rust")]
+    Rust,
     /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
     #[strum(serialize = "typescript/web")]
     TypescriptWeb,

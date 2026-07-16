@@ -693,6 +693,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_bridge"
+version = "0.15.0"
+dependencies = [
+ "hex",
+ "indexmap",
+ "libloading 0.8.9",
+ "num-bigint",
+ "prost",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "ureq",
+]
+
+[[package]]
 name = "baml_builtins2"
 version = "0.0.0-beta"
 dependencies = [
@@ -752,6 +767,7 @@ dependencies = [
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
+ "sdkgen_rust",
  "sdkgen_typescript_shared",
  "serde",
  "serde_json",
@@ -6622,7 +6638,10 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "borsh",
+ "proc-macro2",
+ "quote",
  "sdkgen_python_pydantic2",
+ "sdkgen_rust",
  "sdkgen_typescript_shared",
 ]
 
@@ -6638,6 +6657,14 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_python_pydantic2"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_rust"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6676,6 +6703,20 @@ dependencies = [
  "baml_codegen_types",
  "indexmap",
  "pretty_assertions",
+]
+
+[[package]]
+name = "sdkgen_rust"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "indexmap",
+ "pretty_assertions",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -8157,6 +8198,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "ureq"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dea7109cdcd5864d4eeb1b58a1648dc9bf520360d7af16ec26d0a9354bafcfc0"
+dependencies = [
+ "base64",
+ "flate2",
+ "log",
+ "percent-encoding",
+ "rustls",
+ "rustls-pki-types",
+ "ureq-proto",
+ "utf8-zero",
+ "webpki-roots",
+]
+
+[[package]]
+name = "ureq-proto"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e994ba84b0bd1b1b0cf92878b7ef898a5c1760108fe7b6010327e274917a808c"
+dependencies = [
+ "base64",
+ "http",
+ "httparse",
+ "log",
+]
+
+[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8168,6 +8238,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "utf8-zero"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e"
 
 [[package]]
 name = "utf8_iter"
@@ -8591,6 +8667,15 @@ name = "webpki-root-certs"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
 dependencies = [
  "rustls-pki-types",
 ]
