@@ -1036,6 +1036,22 @@ jobs:
     name: "snapshot tests"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: baml
+          POSTGRES_PASSWORD: baml
+          POSTGRES_DB: baml_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baml -d baml_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BAML_TEST_POSTGRES_URL: postgres://baml:baml@127.0.0.1:5432/baml_test
     steps:
       - uses: useblacksmith/checkout@v1
         with:

@@ -3748,7 +3748,8 @@ impl BexEngine {
         origin_call_capture: Option<(u64, VmCaptureMask)>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
-            sys_types::OpErrorPayload::HostThrown(thrown) => {
+            sys_types::OpErrorPayload::BamlThrown(thrown)
+            | sys_types::OpErrorPayload::HostThrown(thrown) => {
                 self.convert_external_to_vm_value(thread, *thrown)?
             }
             sys_types::OpErrorPayload::Vm(kind) => op_error_to_throw_value(&mut thread.vm, kind)

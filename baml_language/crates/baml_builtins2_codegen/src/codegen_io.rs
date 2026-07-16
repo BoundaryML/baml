@@ -220,7 +220,7 @@ fn owned_rust_type(
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
-                let ns_ident = format_ident!("{}", ns);
+                let ns_ident = ns_module_ident(ns);
                 let name_ident = format_ident!("{}", name);
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
@@ -401,7 +401,7 @@ fn external_to_typed_expr(
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
             let ns = &class_ns_map[name.as_str()];
             let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", ns);
+            let ns_ident = ns_module_ident(ns);
             let name_ident = format_ident!("{}", name);
             quote! { #owned::#ns_ident::#name_ident::from_external(#val_expr) }
         }
@@ -602,7 +602,7 @@ fn clean_rust_type(
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
-                let ns_ident = format_ident!("{}", ns);
+                let ns_ident = ns_module_ident(ns);
                 let name_ident = format_ident!("{}", name);
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
@@ -675,7 +675,7 @@ fn glue_extract_expr(
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let view = &paths.view;
-                let ns_ident = format_ident!("{}", ns);
+                let ns_ident = ns_module_ident(ns);
                 let name_ident = format_ident!("{}", name);
                 quote! {
                     #arg_ident.as_builtin_class::<#view::#ns_ident::#name_ident>(heap.as_ref(), permit)?.into_owned(heap.as_ref(), permit)?
@@ -716,11 +716,27 @@ fn capitalize_first(s: &str) -> String {
 }
 
 fn ns_trait_ident(ns: &str) -> syn::Ident {
-    format_ident!("IoNamespace{}", capitalize_first(ns))
+    format_ident!("IoNamespace{}", namespace_pascal(ns))
 }
 
 fn class_trait_ident(ns: &str, class: &str) -> syn::Ident {
-    format_ident!("IoClass{}{}", capitalize_first(ns), class)
+    format_ident!("IoClass{}{}", namespace_pascal(ns), class)
+}
+
+fn ns_module_ident(ns: &str) -> syn::Ident {
+    format_ident!("{}", ns.replace('.', "_"))
+}
+
+fn namespace_pascal(ns: &str) -> String {
+    ns.split('.').map(capitalize_first).collect::<String>()
+}
+
+fn namespace_symbol(ns: &str) -> String {
+    ns.replace('.', "_")
+}
+
+fn namespace_relative_path<'a>(path: &'a str, ns: &str) -> &'a str {
+    path.strip_prefix(&format!("baml.{ns}.")).unwrap_or(path)
 }
 
 /// Whether the clean trait method and glue thread an *extracted* receiver value
@@ -776,8 +792,23 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // `is_fallible`.)
             match &b.throws {
                 Some(cats) => {
-                    let has_generic_throw = cats.iter().any(|t| b.generics.iter().any(|g| g == t));
-                    if has_generic_throw {
+                    let has_dynamic_throw = cats.iter().any(|t| {
+                        b.generics.iter().any(|g| g == t)
+                            || !matches!(
+                                t.as_str(),
+                                "Io" | "Timeout"
+                                    | "InvalidArgument"
+                                    | "ParseError"
+                                    | "Unsupported"
+                                    | "NotImplemented"
+                                    | "AccessError"
+                                    | "RenderPrompt"
+                                    | "LlmClient"
+                                    | "DevOther"
+                                    | "HostCallable"
+                            )
+                    });
+                    if has_dynamic_throw {
                         quote! { SysOp::#variant => &[] }
                     } else {
                         let cats: Vec<_> = cats.iter().map(|t| format_ident!("{}", t)).collect();
@@ -952,7 +983,7 @@ fn emit_view_module(
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
-            let ns_ident = format_ident!("{}", ns);
+            let ns_ident = ns_module_ident(ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
                 .map(|cd| emit_view_struct(cd, class_ns_map, ns, paths))
@@ -1015,7 +1046,7 @@ fn emit_view_struct(
 
     // into_owned()
     let owned = &paths.owned;
-    let ns_ident = format_ident!("{}", ns);
+    let ns_ident = ns_module_ident(ns);
     let owned_path = quote! { #owned::#ns_ident::#name_ident };
 
     let into_owned_fields: Vec<TokenStream> = cd
@@ -1154,7 +1185,7 @@ fn emit_owned_module(
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
-            let ns_ident = format_ident!("{}", ns);
+            let ns_ident = ns_module_ident(ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
                 .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths, &non_defaultable))
@@ -1324,7 +1355,11 @@ fn emit_one_class_trait(
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = class_trait_ident(ns, class_name);
-    let dispatch_fn_ident = format_ident!("__dispatch_{}_{}", ns, class_name.to_lowercase());
+    let dispatch_fn_ident = format_ident!(
+        "__dispatch_{}_{}",
+        namespace_symbol(ns),
+        class_name.to_lowercase()
+    );
 
     let source_comment = methods
         .first()
@@ -1338,7 +1373,7 @@ fn emit_one_class_trait(
             let method_ident = format_ident!("{}", io_method_name(m));
             let ret_ty = clean_rust_type(&m.return_type, class_ns_map, paths);
             let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", ns);
+            let ns_ident = ns_module_ident(ns);
             let class_ident = format_ident!("{}", class_name);
             let Some(receiver) = &m.receiver else {
                 return quote! {
@@ -1449,7 +1484,7 @@ fn emit_glue_method(
     let clean_method_ident = format_ident!("{}", io_method_name(builtin));
 
     let view = &paths.view;
-    let ns_ident = format_ident!("{}", ns);
+    let ns_ident = ns_module_ident(ns);
     let class_ident = format_ident!("{}", class_name);
 
     // Arg extraction lets
@@ -1625,7 +1660,7 @@ fn emit_one_namespace_trait(
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = ns_trait_ident(ns);
-    let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
+    let dispatch_fn_ident = format_ident!("__dispatch_{}", namespace_symbol(ns));
 
     // Supertraits: class traits in this namespace
     let class_trait_idents: Vec<syn::Ident> = node
@@ -1696,7 +1731,7 @@ fn emit_one_namespace_trait(
             .free_fns
             .iter()
             .map(|f| {
-                let fn_name_str = io_method_name(f);
+                let fn_name_str = namespace_relative_path(&f.path, ns);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
                 quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
@@ -1715,7 +1750,11 @@ fn emit_one_namespace_trait(
             .keys()
             .map(|cn| {
                 let cn_str = cn.as_str();
-                let dispatch = format_ident!("__dispatch_{}_{}", ns, cn.to_lowercase());
+                let dispatch = format_ident!(
+                    "__dispatch_{}_{}",
+                    namespace_symbol(ns),
+                    cn.to_lowercase()
+                );
                 quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
@@ -1724,7 +1763,7 @@ fn emit_one_namespace_trait(
             .free_fns
             .iter()
             .map(|f| {
-                let fn_name_str = io_method_name(f);
+                let fn_name_str = namespace_relative_path(&f.path, ns);
                 let glue_ident = format_ident!("__glue_{}", f.fn_name);
                 quote! { #fn_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id)) }
             })
@@ -1733,11 +1772,10 @@ fn emit_one_namespace_trait(
         quote! {
             match rest.split_once('.') {
                 #(#class_arms,)*
-                None => match rest {
+                _ => match rest {
                     #(#free_fn_arms,)*
                     _ => None,
                 },
-                _ => None,
             }
         }
     };
@@ -1780,7 +1818,7 @@ fn emit_into_result_call(
         if let BamlType::Named(name) = inner.as_ref() {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
                 let owned = &paths.owned;
-                let ns_ident = format_ident!("{}", ns);
+                let ns_ident = ns_module_ident(ns);
                 let name_ident = format_ident!("{}", name);
                 return quote! {
                     #call_expr
@@ -1971,7 +2009,7 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
         .keys()
         .map(|ns| {
             let ns_str = ns.as_str();
-            let dispatch_fn_ident = format_ident!("__dispatch_{}", ns);
+            let dispatch_fn_ident = format_ident!("__dispatch_{}", namespace_symbol(ns));
             quote! {
                 Some((#ns_str, rest)) => self.#dispatch_fn_ident(rest, heap, permit, args, ctx, call_id)
             }
@@ -2095,7 +2133,7 @@ fn runtime_io_method_name(builtin: &NativeBuiltin) -> String {
 
 /// Derive the handle type name for a class (e.g. `"Response"` in namespace `"http"` -> `"HttpResponseHandle"`).
 fn handle_type_name(ns: &str, class: &str) -> syn::Ident {
-    format_ident!("{}{}Handle", capitalize_first(ns), class)
+    format_ident!("{}{}Handle", namespace_pascal(ns), class)
 }
 
 /// Generate the `RuntimeIo` trait, handle types, `RuntimeIoError`, and `NoopRuntimeIo`.
@@ -2209,7 +2247,7 @@ fn emit_runtime_io_handles(
             }
 
             let owned = &paths.owned;
-            let ns_ident = format_ident!("{}", ns);
+            let ns_ident = ns_module_ident(ns);
             let class_ident = format_ident!("{}", class_name);
             let owned_ty = quote! { #owned::#ns_ident::#class_ident };
 
@@ -2658,7 +2696,7 @@ fn emit_result_conversion_for_ty(
             _ => {
                 if let Some(ns) = class_ns_map.get(name.as_str()) {
                     let owned = &paths.owned;
-                    let ns_ident = format_ident!("{}", ns);
+                    let ns_ident = ns_module_ident(ns);
                     let name_ident = format_ident!("{}", name);
                     quote! {
                         #owned::#ns_ident::#name_ident::from_external(__val)
@@ -2697,5 +2735,32 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 #(#field_inits,)*
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_namespaces_have_valid_symbols_and_relative_dispatch_paths() {
+        assert_eq!(namespace_pascal("sql.sqlite"), "SqlSqlite");
+        assert_eq!(namespace_symbol("sql.sqlite"), "sql_sqlite");
+        assert_eq!(ns_module_ident("sql.sqlite").to_string(), "sql_sqlite");
+        assert_eq!(
+            namespace_relative_path("baml.sql.sqlite._memory_sqlite", "sql"),
+            "sqlite._memory_sqlite"
+        );
+    }
+
+    #[test]
+    fn custom_baml_errors_do_not_generate_builtin_error_categories() {
+        let (_, io_builtins, _) = crate::extract::extract_native_builtins().unwrap();
+        let generated = generate_sys_op_enum(&io_builtins);
+        let compact = generated.split_whitespace().collect::<String>();
+        assert!(
+            compact.contains("SysOp::BamlSqlSqliteMemorySqlite=>&[]"),
+            "custom SqlError must be materialized dynamically"
+        );
     }
 }

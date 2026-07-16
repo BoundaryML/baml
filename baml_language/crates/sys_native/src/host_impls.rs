@@ -210,7 +210,8 @@ impl io::IoNamespaceHost for NativeSysOps {
             // reach here, so collapsing to a generic Vm payload is safe.
             SysOpResult::Ready(Err(err)) => match err.payload {
                 sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-                sys_types::OpErrorPayload::HostThrown(_) => {
+                sys_types::OpErrorPayload::BamlThrown(_)
+                | sys_types::OpErrorPayload::HostThrown(_) => {
                     unreachable!("Ready(Err) is never produced for the host-callable sysop")
                 }
             },
@@ -314,7 +315,8 @@ mod tests {
             SysOpOutput::Ready(r) => r,
             SysOpOutput::Async(fut) => fut.await.map_err(|body| match body.payload {
                 sys_types::OpErrorPayload::Vm(kind) => kind,
-                sys_types::OpErrorPayload::HostThrown(_) => {
+                sys_types::OpErrorPayload::BamlThrown(_)
+                | sys_types::OpErrorPayload::HostThrown(_) => {
                     panic!("expected a Vm payload, got a host-thrown value")
                 }
             }),

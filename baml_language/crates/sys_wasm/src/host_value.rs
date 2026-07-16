@@ -781,7 +781,7 @@ fn drain_pending_unvalidated(
             sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
             // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
             // here can't actually originate from the host-throw path.
-            sys_types::OpErrorPayload::HostThrown(_) => {
+            sys_types::OpErrorPayload::BamlThrown(_) | sys_types::OpErrorPayload::HostThrown(_) => {
                 unreachable!("Ready(Err) is never produced for the host-callable sysop")
             }
         },
