@@ -49,9 +49,16 @@ public indirect enum BamlUnion2<T0, T1> {
     case t0(T0)
     case t1(T1)
 
+    // Type-directed layer (insertion-stable):
+    public init(_ value: T0)                       // arm chosen by argument type
+    public init(_ value: T1)
+    public func value<T>(as type: T.Type) -> T?    // std::get_if analog
+    public func holds<T>(_ type: T.Type) -> Bool   // holds_alternative analog
+    public var anyValue: Any { get }               // for `case let x as T` switches
+
+    // Positional layer (exhaustive):
     public func match<R>(t0 onT0: (T0) throws -> R, t1 onT1: (T1) throws -> R) rethrows -> R
     public func match<R>(t0 onT0: (T0) async throws -> R, t1 onT1: (T1) async throws -> R) async rethrows -> R
-
     public var t0: T0? { get }
     public var t1: T1? { get }
 }
@@ -144,10 +151,31 @@ case .t2(let m):  ...
 | Exhaustive pattern switch | ❌ (C#14) | ✅ (sealed, 21+) | ✅ **native** | ❌ |
 | Primitives without boxing | ✅ | ❌ | ✅ | ✅ |
 
+## API evolution: what breaks when a union's members change
+
+Adding/removing/reordering members changes the type's identity
+(`BamlUnion2<Int, MyType>` → `BamlUnion3<Int, String, MyType>`) and renumbers
+later arms — identical in C#/Java. Per consumption tier:
+
+| Surface | On member insertion |
+|---|---|
+| Type-directed construction (`.init(x)`) | **survives** (arm by type — the C# implicit-conversion analog) |
+| Type-directed access (`value(as:)`, `holds`, `anyValue` switches) | **survives** |
+| Positional (`.t1(x)`, `result.t1`) | renumbers — compile-guided mechanical fix |
+| Exhaustive `match` / `switch` | breaks loudly — **by design**: the new arm must be handled (Python's silence here is the bug, not the feature) |
+| Spelled-out types | break — mitigate by naming the union in BAML (`type Pay = …` → stable typealias) |
+
+Caveats shared with C# (`FromT0`) and C++ (`get<0>`): duplicate arm
+projections make `.init` ambiguous and `value(as:)` first-match — positional
+cases remain authoritative. Type-directed construction is convenience, never
+case-selection authority; decode is wire-identity-driven regardless.
+
 ## Migration
 
-Branch rewound to Phase 2 (`19b07e2ef`); old Phase 3/4a/4b preserved on
-`swift-bridge-pre-union-rework` for replay. Rebuild lands as the new Phase 3 commit, then
-4a/4b cherry-pick on top (their union-specific fixes — literal raw enums, the `"r"/"r+"`
-case-dedup — become dead code under literal collapse). Full plan:
-`~/.claude/plans/goofy-skipping-manatee.md`.
+Completed 2026-07-16: rebuilt as Phase 3 (`a3198721f`) with 4a/4b replayed on top; the
+named-enum design and its union-specific fixes (literal raw enums, `"r"/"r+"` case-dedup)
+are gone. Implementation notes from the rebuild: `_bamlArmIdentity` is a protocol
+REQUIREMENT (extension-only members dispatch statically to the nil default); nullable
+recursive union aliases (stdlib `json`) keep non-null arms in the nominal enum with `?` at
+every reference site; all runtime-library type spellings inside generated scopes must be
+fully qualified (`Swift.String`, `Swift.Bool`) or stdlib classes shadow them.
