@@ -318,12 +318,6 @@ inline const LoadedApi& LoadApi() {
 // The resolved v1 function table. Loads the runtime on first use.
 inline const BamlApiV1& Api() { return *LoadApi().table; }
 
-// Resolves a raw symbol from the loaded runtime; legacy escape hatch for
-// symbols outside the table (dev-only source-file init in the smoke test).
-inline void* RawSymbol(const char* name) {
-  return ResolveSymbol(LoadApi().library, name);
-}
-
 // Registers this bridge (language + canonical SDK version) with the loaded
 // runtime; the contract-required first semantic operation. Idempotent.
 // A non-empty diagnostic from the runtime (version mismatch, conflicting

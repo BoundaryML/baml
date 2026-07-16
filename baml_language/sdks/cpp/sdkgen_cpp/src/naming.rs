@@ -30,17 +30,8 @@ use baml_codegen_types::Name;
 /// The source namespace path a symbol routes to, pkg-aware: `user` symbols
 /// live at the generated root, `baml` under `baml/`, any other package under
 /// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
-///
-/// With `honor_stream_suffix`, a `$stream` companion routes under a leading
-/// `stream_types/` segment. Class-like symbols honor the suffix; function
-/// companions route alongside their parent function (Python routing
-/// parity), so callers pass the symbol kind's
-/// [`CppNameKind::honors_stream_suffix`].
-pub(crate) fn source_ns(symbol: &Name, honor_stream_suffix: bool) -> Vec<Box<str>> {
+pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
     let mut out: Vec<Box<str>> = Vec::new();
-    if honor_stream_suffix && symbol.is_stream() {
-        out.push(Box::from("stream_types"));
-    }
     match symbol.package().as_str() {
         "user" => {}
         "baml" => out.push(Box::from("baml")),
@@ -95,12 +86,10 @@ impl BamlFqn {
     }
 
     /// The scope this identity's *own* name competes in: the parent
-    /// namespace for top-level symbols (stream companions route to their
-    /// own `stream_types` namespaces, so kind-aware), the owning identity
-    /// otherwise.
-    fn scope(&self, kind: CppNameKind) -> NameScope {
+    /// namespace for top-level symbols, the owning identity otherwise.
+    fn scope(&self) -> NameScope {
         if self.members.is_empty() {
-            NameScope::Namespace(source_ns(&self.symbol, kind.honors_stream_suffix()))
+            NameScope::Namespace(source_ns(&self.symbol))
         } else {
             let mut parent = self.clone();
             parent.members.pop();
@@ -143,17 +132,8 @@ pub(crate) enum CppNameKind {
     Enum,
     EnumVariant,
     TypeAlias,
-    /// Never requested this slice: methods are a post-step-8 feature. Kept
-    /// so the methods slice slots in without re-numbering typed hashes.
-    #[expect(dead_code)]
-    Method,
     Field,
     Parameter,
-    /// Never requested this slice: generic callables are a post-step-8
-    /// feature. Kept so the generics slice slots in without re-numbering
-    /// typed hashes.
-    #[expect(dead_code)]
-    TypeVar,
     /// Synthesized per-callable opts struct (no wire identity).
     OptsStruct,
     /// Synthesized opts-struct setter (no wire identity).
@@ -167,10 +147,8 @@ impl CppNameKind {
         matches!(
             self,
             CppNameKind::EnumVariant
-                | CppNameKind::Method
                 | CppNameKind::Field
                 | CppNameKind::Parameter
-                | CppNameKind::TypeVar
                 | CppNameKind::Setter
         )
     }
@@ -183,37 +161,10 @@ impl CppNameKind {
             CppNameKind::Enum => 3,
             CppNameKind::EnumVariant => 4,
             CppNameKind::TypeAlias => 5,
-            CppNameKind::Method => 6,
-            CppNameKind::Field => 7,
-            CppNameKind::Parameter => 8,
-            CppNameKind::TypeVar => 9,
-            CppNameKind::OptsStruct => 10,
-            CppNameKind::Setter => 11,
-        }
-    }
-
-    /// Class-like symbols route their `$stream` companions under
-    /// `stream_types/`; function companions route alongside their parent
-    /// (Python routing parity).
-    pub(crate) fn honors_stream_suffix(self) -> bool {
-        matches!(
-            self,
-            CppNameKind::Class | CppNameKind::Enum | CppNameKind::TypeAlias
-        )
-    }
-}
-
-/// All generated declarations are public today; kept typed so a later
-/// visibility distinction cannot sneak in as a boolean.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) enum CppVisibility {
-    Public,
-}
-
-impl CppVisibility {
-    fn tag(self) -> u8 {
-        match self {
-            CppVisibility::Public => 0,
+            CppNameKind::Field => 6,
+            CppNameKind::Parameter => 7,
+            CppNameKind::OptsStruct => 8,
+            CppNameKind::Setter => 9,
         }
     }
 }
@@ -222,7 +173,6 @@ impl CppVisibility {
 pub(crate) struct NameRequest {
     pub(crate) fqn: BamlFqn,
     pub(crate) kind: CppNameKind,
-    pub(crate) visibility: CppVisibility,
     /// Preferred token override for synthesized names (opts structs,
     /// setters); `None` uses the identity's source token.
     pub(crate) preferred: Option<Box<str>>,
@@ -233,7 +183,6 @@ impl NameRequest {
         Self {
             fqn,
             kind,
-            visibility: CppVisibility::Public,
             preferred: None,
         }
     }
@@ -242,7 +191,6 @@ impl NameRequest {
         Self {
             fqn,
             kind,
-            visibility: CppVisibility::Public,
             preferred: Some(preferred.into()),
         }
     }
@@ -548,7 +496,6 @@ fn collision_suffix(request: &NameRequest) -> String {
         hash.component(member);
     }
     hash.byte(request.kind.tag());
-    hash.byte(request.visibility.tag());
 
     let mut value = hash.0;
     let mut out = String::with_capacity(4);
@@ -645,7 +592,7 @@ impl CppNames {
         if request.kind == CppNameKind::Namespace {
             return false;
         }
-        match request.fqn.scope(request.kind) {
+        match request.fqn.scope() {
             NameScope::Namespace(path) => self
                 .ns_children
                 .get(&path)
@@ -655,8 +602,7 @@ impl CppNames {
     }
 
     fn insert(&mut self, request: &NameRequest, name: Box<str>) {
-        let source_ns: Vec<Box<str>> =
-            source_ns(&request.fqn.symbol, request.kind.honors_stream_suffix());
+        let source_ns: Vec<Box<str>> = source_ns(&request.fqn.symbol);
         if request.kind == CppNameKind::Namespace {
             // Record the allocated path for this source path + segment.
             let mut source_path = source_ns.clone();
@@ -676,13 +622,7 @@ impl CppNames {
             .unwrap_or_else(|| source_ns.iter().map(|s| Box::from(project(s))).collect());
         let wire = match request.kind {
             CppNameKind::OptsStruct | CppNameKind::Setter => None,
-            // A `TypeVar`'s wire identity is its BAML name: the engine
-            // matches `type_args` entries by it, even if the C++ template
-            // parameter was renamed.
-            CppNameKind::Parameter
-            | CppNameKind::Field
-            | CppNameKind::EnumVariant
-            | CppNameKind::TypeVar => request
+            CppNameKind::Parameter | CppNameKind::Field | CppNameKind::EnumVariant => request
                 .fqn
                 .members
                 .last()
@@ -715,7 +655,7 @@ fn group_by_scope_and_preferred<'a>(
     let mut grouped: BTreeMap<(NameScope, String), Vec<&'a NameRequest>> = BTreeMap::new();
     for request in requests {
         grouped
-            .entry((request.fqn.scope(request.kind), preferred_token(request)))
+            .entry((request.fqn.scope(), preferred_token(request)))
             .or_default()
             .push(request);
     }

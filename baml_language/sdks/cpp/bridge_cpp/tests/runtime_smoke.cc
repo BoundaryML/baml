@@ -1,13 +1,13 @@
-// Bridge-core smoke test: exercises the header-only runtime layer against the
-// real cdylib - version, runtime init, end-to-end typed calls through the
-// codec (containers, error envelope), call registry fan-out, Arg semantics,
-// and buffer moves.
+// Bridge-core smoke test: exercises the header-only runtime layer against
+// the real cdylib - version, bytecode-init error surface, call registry
+// fan-out, Arg semantics, and buffer moves. End-to-end typed calls are
+// covered by the generated-SDK fixtures (sdk_tests/crates/cpp), which embed
+// real bytecode.
 #include <baml/baml.h>
 
 #include <cassert>
 #include <chrono>
 #include <cstdio>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -17,17 +17,6 @@ static void TestVersion() {
   const std::string v = baml::Version();
   assert(!v.empty());
   std::printf("version: %s\n", v.c_str());
-}
-
-static void TestInitializeRuntime() {
-  const std::map<std::string, std::string> files = {
-      {"main.baml",
-       "function ReturnOne() -> int {\n  1\n}\n"
-       "function Identity(s: string) -> string {\n  s\n}\n"
-       "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"},
-  };
-  baml::InitializeRuntime(".", files);
-  std::printf("runtime initialized\n");
 }
 
 static void TestBytecodeInitRejectsGarbage() {
@@ -43,45 +32,6 @@ static void TestBytecodeInitRejectsGarbage() {
   }
   assert(threw);
   std::printf("bytecode init rejects garbage ok\n");
-}
-
-static void TestCallFunctionEndToEnd() {
-  {
-    baml::detail::ArgsEncoder args;
-    const int64_t got =
-        baml::detail::CallSync<int64_t>("ReturnOne", std::move(args));
-    assert(got == 1);
-  }
-  {
-    baml::detail::ArgsEncoder args;
-    args.AddArg("s", [](baml::detail::wire::Writer& w) {
-      baml::Codec<std::string>::Encode(w, "hello");
-    });
-    const std::string got =
-        baml::detail::CallSync<std::string>("Identity", std::move(args));
-    assert(got == "hello");
-  }
-  {
-    baml::detail::ArgsEncoder args;
-    args.AddArg("xs", [](baml::detail::wire::Writer& w) {
-      baml::Codec<std::vector<int64_t>>::Encode(w, {1, 2, 3});
-    });
-    const std::vector<int64_t> got =
-        baml::detail::CallSync<std::vector<int64_t>>("Twice", std::move(args));
-    assert((got == std::vector<int64_t>{2, 4, 6}));
-  }
-  {
-    // Pre-call failure (unknown function) arrives as a BamlError envelope.
-    bool threw = false;
-    try {
-      baml::detail::ArgsEncoder args;
-      baml::detail::CallSync<int64_t>("NoSuchFunction", std::move(args));
-    } catch (const baml::BamlError&) {
-      threw = true;
-    }
-    assert(threw);
-  }
-  std::printf("call function end to end ok\n");
 }
 
 static void TestCallRegistryRoundTrip() {
@@ -163,9 +113,7 @@ static void TestOwnedBufferMove() {
 
 int main() {
   TestVersion();
-  TestInitializeRuntime();
   TestBytecodeInitRejectsGarbage();
-  TestCallFunctionEndToEnd();
   TestCallRegistryRoundTrip();
   TestArgTwoState();
   TestOwnedBufferMove();

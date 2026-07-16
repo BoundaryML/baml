@@ -59,7 +59,7 @@ pub fn to_source_code_with_bytecode(
     let mut enums: Vec<EmittedEnum> = Vec::new();
     let mut emitted_types: BTreeSet<Name> = BTreeSet::new();
     for name in &pool_names {
-        if name.is_stream() {
+        if skip_symbol(name) {
             continue;
         }
         if let Symbol::Enum(enum_def) = &pool[*name] {
@@ -103,7 +103,7 @@ pub fn to_source_code_with_bytecode(
         .iter()
         .copied()
         .filter(|name| {
-            if name.is_stream() {
+            if skip_symbol(name) {
                 return false;
             }
             match &pool[*name] {
@@ -177,7 +177,7 @@ pub fn to_source_code_with_bytecode(
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
-        if name.is_stream() || name.bare_name().contains('$') {
+        if skip_symbol(name) {
             skipped.push(format!("{name}: companion functions (post-step-8)"));
             continue;
         }
@@ -193,7 +193,7 @@ pub fn to_source_code_with_bytecode(
             &emitted_types,
         ) {
             Ok(emitted) => {
-                let ns = allocated_namespace(&names, name, false);
+                let ns = allocated_namespace(&names, name);
                 fns_by_namespace.entry(ns).or_default().push(emitted);
             }
             Err(reason) => skipped.push(format!("{name}: {reason}")),
@@ -262,10 +262,6 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/detail/call.h"),
     ),
     (
-        "include/baml/detail/json.h",
-        include_str!("../../bridge_cpp/include/baml/detail/json.h"),
-    ),
-    (
         "include/baml/detail/loader.h",
         include_str!("../../bridge_cpp/include/baml/detail/loader.h"),
     ),
@@ -298,14 +294,13 @@ const OPTS_MEMBER: &str = "opts";
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
-        // Post-step-8 features are disabled: stream companions and
-        // $-companion functions never allocate names.
-        if name.is_stream() || name.bare_name().contains('$') {
+        // Post-step-8 symbols never allocate names.
+        if skip_symbol(name) {
             continue;
         }
         match symbol {
             Symbol::Enum(enum_def) => {
-                request_namespace_segments(&mut requests, name, true);
+                request_namespace_segments(&mut requests, name);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum));
                 for variant in &enum_def.variants {
                     requests.insert(NameRequest::new(
@@ -318,7 +313,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 if !class_def.generic_params.is_empty() {
                     continue; // generics disabled (post-step-8)
                 }
-                request_namespace_segments(&mut requests, name, true);
+                request_namespace_segments(&mut requests, name);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
                 for prop in &class_def.properties {
                     requests.insert(NameRequest::new(
@@ -331,7 +326,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 if !function.generic_params.is_empty() {
                     continue; // generics disabled (post-step-8)
                 }
-                request_namespace_segments(&mut requests, name, false);
+                request_namespace_segments(&mut requests, name);
                 let fqn = BamlFqn::symbol(name);
                 requests.insert(function_request(name));
                 request_callable_members(&mut requests, &fqn, function);
@@ -340,7 +335,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
             // aliases emit a named wrapper struct that breaks the type
             // recursion (an alias-declaration cannot reference itself).
             Symbol::TypeAlias(alias) => {
-                request_namespace_segments(&mut requests, name, true);
+                request_namespace_segments(&mut requests, name);
                 if alias.recursive {
                     requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
                     requests.insert(alias_value_field_request(name));
@@ -358,15 +353,11 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
 
 /// One request per namespace segment, each scoped by its parent path, so
 /// segment names allocate top-down. Segments come from the pkg-aware source
-/// path (`baml`/`vendor/<pkg>`/`stream_types` prefixes included) and are
+/// path (`baml`/`vendor/<pkg>` prefixes included) and are
 /// anchored in the `user` package so identical C++ scopes dedupe across
 /// packages.
-fn request_namespace_segments(
-    requests: &mut BTreeSet<NameRequest>,
-    name: &Name,
-    honor_stream_suffix: bool,
-) {
-    let segments = naming::source_ns(name, honor_stream_suffix);
+fn request_namespace_segments(requests: &mut BTreeSet<NameRequest>, name: &Name) {
+    let segments = naming::source_ns(name);
     for depth in 0..segments.len() {
         let segment = Name::new(
             baml_base::Name::from("user"),
@@ -383,8 +374,8 @@ fn request_namespace_segments(
     }
 }
 
-/// `TypeVar`s, parameters, and (when optional parameters exist) the
-/// synthesized opts struct + setters of one callable.
+/// Parameters and (when optional parameters exist) the synthesized opts
+/// struct + setters of one callable.
 fn request_callable_members(
     requests: &mut BTreeSet<NameRequest>,
     fqn: &BamlFqn,
@@ -404,38 +395,16 @@ fn request_callable_members(
     }
 }
 
-/// Python-parity companion spelling for `$`-suffixed compiler-synthesized
-/// functions: `foo$stream` -> `foo_stream`, `Foo$parse` -> `Foo__parse`,
-/// `Foo$build_request` -> `Foo__build_request`. `None` for ordinary
-/// functions.
-fn companion_preferred(name: &Name) -> Option<String> {
-    let raw = name.name().as_str();
-    if raw.contains('$') {
-        Some(function_spelling(raw))
-    } else {
-        None
-    }
+/// Post-step-8 symbols this slice never emits: `$stream` companions and
+/// `$`-suffixed companion functions.
+fn skip_symbol(name: &Name) -> bool {
+    name.is_stream() || name.bare_name().contains('$')
 }
 
-/// The C++ spelling of a function's source name: companions get their
-/// Python-parity form, everything else is verbatim (bridges never re-case
-/// user spellings).
-fn function_spelling(raw: &str) -> String {
-    match raw.split_once('$') {
-        Some((base, "stream")) => format!("{base}_stream"),
-        Some((base, companion)) => format!("{base}__{companion}"),
-        None => raw.to_string(),
-    }
-}
-
-/// The name request for a free function, companion-aware. Shared between
-/// collection and emission so the lookup key cannot drift.
+/// The name request for a free function. Shared between collection and
+/// emission so the lookup key cannot drift.
 fn function_request(name: &Name) -> NameRequest {
-    let fqn = BamlFqn::symbol(name);
-    match companion_preferred(name) {
-        Some(preferred) => NameRequest::synthesized(fqn, CppNameKind::Function, &preferred),
-        None => NameRequest::new(fqn, CppNameKind::Function),
-    }
+    NameRequest::new(BamlFqn::symbol(name), CppNameKind::Function)
 }
 
 /// The synthesized `value` field request of a recursive-alias wrapper
@@ -455,7 +424,7 @@ fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
         // bridges never re-case user names (Python kwargs and TS's inline
         // $opts never even mint a type); C++ needs a name only because the
         // struct must be constructible.
-        &format!("{}Opts", function_spelling(function.name.as_str())),
+        &format!("{}Opts", function.name.as_str()),
     )
 }
 
@@ -471,8 +440,8 @@ fn setter_request(callable: &BamlFqn, param: &str) -> NameRequest {
 
 /// The allocated C++ namespace path for a symbol, as owned segments for the
 /// namespace open/close renderers and the free-function grouping key.
-fn allocated_namespace(names: &CppNames, name: &Name, honor_stream_suffix: bool) -> Vec<String> {
-    let source: Vec<Box<str>> = naming::source_ns(name, honor_stream_suffix);
+fn allocated_namespace(names: &CppNames, name: &Name) -> Vec<String> {
+    let source: Vec<Box<str>> = naming::source_ns(name);
     names
         .ns_path(&source)
         .iter()
@@ -526,7 +495,7 @@ struct EmittedEnum {
 
 fn emit_enum(names: &CppNames, name: &Name, enum_def: &Enum) -> EmittedEnum {
     EmittedEnum {
-        ns: allocated_namespace(names, name, true),
+        ns: allocated_namespace(names, name),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
             .clone(),
@@ -608,7 +577,7 @@ fn emit_class(
         }
     }
     Ok(Some(EmittedClass {
-        ns: allocated_namespace(names, name, true),
+        ns: allocated_namespace(names, name),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),
@@ -648,7 +617,7 @@ fn emit_alias_wrapper(
         }
     };
     Ok(Some(EmittedClass {
-        ns: allocated_namespace(names, name, true),
+        ns: allocated_namespace(names, name),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),
@@ -695,7 +664,7 @@ fn emit_alias_using(
         }
     };
     Ok(Some(EmittedUsing {
-        ns: allocated_namespace(names, name, true),
+        ns: allocated_namespace(names, name),
         name: names
             .get(&NameRequest::new(
                 BamlFqn::symbol(name),
@@ -778,16 +747,20 @@ fn emit_callable(
             });
         }
     }
-    let ret = match translate_return_ty(
-        pool,
-        names,
-        &function.return_type,
-        emitted_types,
-        &BTreeSet::new(),
-    ) {
-        Translated::Cpp(ty) => ty,
-        Translated::NotYet | Translated::Unsupported(_) => {
-            return Err(format!("unsupported return type {}", function.return_type));
+    let ret = if matches!(function.return_type, Ty::Void { .. }) {
+        "void".to_string()
+    } else {
+        match translate_ty(
+            pool,
+            names,
+            &function.return_type,
+            emitted_types,
+            &BTreeSet::new(),
+        ) {
+            Translated::Cpp(ty) => ty,
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("unsupported return type {}", function.return_type));
+            }
         }
     };
 
@@ -1023,19 +996,6 @@ fn translate_ty(
         other => return Translated::Unsupported(format!("type {other}")),
     };
     Translated::Cpp(translated)
-}
-
-fn translate_return_ty(
-    pool: &SymbolPool,
-    names: &CppNames,
-    ty: &Ty,
-    emitted_types: &BTreeSet<Name>,
-    boxed: &BTreeSet<Name>,
-) -> Translated {
-    if matches!(ty, Ty::Void { .. }) {
-        return Translated::Cpp("void".to_string());
-    }
-    translate_ty(pool, names, ty, emitted_types, boxed)
 }
 
 // ---------------------------------------------------------------------------
