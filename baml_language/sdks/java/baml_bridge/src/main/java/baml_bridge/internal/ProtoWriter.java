@@ -1,5 +1,7 @@
 package baml_bridge.internal;
 
+import baml_bridge.TypeRegistry;
+
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
@@ -19,11 +21,15 @@ import java.util.Map;
  * InboundMapEntry:  string_key = 1, value = 6 (InboundValue)
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
+ *                     class_value = 8, enum_value = 9,
  *                     uint8array_value = 11, bigint_value = 12
- *                     (class_value = 8 / enum_value = 9 / handle = 10 / ty_value = 13
- *                      are not implemented in this slice)
- * InboundListValue: values = 1 (repeated InboundValue)
- * InboundMapValue:  entries = 1 (repeated InboundMapEntry)
+ *                     (handle = 10 / ty_value = 13 are not implemented in this slice)
+ * InboundListValue:  values = 1 (repeated InboundValue)
+ * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
+ * InboundClassValue: fields = 2 (repeated InboundMapEntry), class_ty = 3 (BamlTyClass)
+ *                    (field 1, formerly `name`, is reserved — the FQN lives on class_ty)
+ * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (unused here — generics reify later)
+ * InboundEnumValue:  name = 1 (BAML FQN), value = 2 (wire variant name)
  * </pre>
  */
 public final class ProtoWriter {
@@ -42,12 +48,21 @@ public final class ProtoWriter {
     private static final int IV_BOOL = 5;
     private static final int IV_LIST = 6;
     private static final int IV_MAP = 7;
+    private static final int IV_CLASS = 8;
+    private static final int IV_ENUM = 9;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
 
     // InboundListValue / InboundMapValue
     private static final int LIST_VALUES = 1;
     private static final int MAP_ENTRIES = 1;
+
+    // InboundClassValue (field 1 reserved) / BamlTyClass / InboundEnumValue
+    private static final int CLASS_FIELDS = 2;
+    private static final int CLASS_TY = 3;
+    private static final int TY_CLASS_NAME = 1;
+    private static final int ENUM_NAME = 1;
+    private static final int ENUM_VALUE = 2;
 
     private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
     private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
@@ -122,14 +137,56 @@ public final class ProtoWriter {
             w.writeMessage(IV_LIST, encodeList(list));
         } else if (value instanceof Map<?, ?> map) {
             w.writeMessage(IV_MAP, encodeMap(map));
+        } else if (value instanceof Enum<?> constant) {
+            // Any Java enum: encode it only if its type is a registered generated
+            // enum; an unregistered enum is not a BAML value.
+            TypeRegistry.EnumWire ew = TypeRegistry.enumWire(constant);
+            if (ew == null) {
+                throw unsupported(value);
+            }
+            w.writeMessage(IV_ENUM, encodeEnum(ew));
         } else {
-            // class_value / enum_value / handle / media / host-callable are not
-            // part of the primitives slice yet.
-            throw new UnsupportedOperationException(
-                    "capability not yet implemented: cannot encode argument of type "
-                            + value.getClass().getName());
+            // A registered generated class encodes as a class_value; anything
+            // else (handle / media / host-callable / arbitrary object) is not
+            // part of this slice.
+            TypeRegistry.ClassWire cw = TypeRegistry.classWire(value);
+            if (cw == null) {
+                throw unsupported(value);
+            }
+            w.writeMessage(IV_CLASS, encodeClass(cw));
         }
         return w.toByteArray();
+    }
+
+    /**
+     * Encode an {@code InboundClassValue}: one {@code fields} entry per registry
+     * field (key = field name, value = the accessor-read value, recursed through
+     * {@link #encodeInboundValue}) plus the FQN on {@code class_ty.name}. Generic
+     * {@code type_args} are omitted — they reify later.
+     */
+    private static byte[] encodeClass(TypeRegistry.ClassWire cw) {
+        WireWriter w = new WireWriter();
+        for (int i = 0; i < cw.fieldNames.length; i++) {
+            w.writeMessage(CLASS_FIELDS, encodeMapEntry(cw.fieldNames[i], cw.fieldValues[i]));
+        }
+        WireWriter classTy = new WireWriter();
+        classTy.writeString(TY_CLASS_NAME, cw.fqn);
+        w.writeMessage(CLASS_TY, classTy.toByteArray());
+        return w.toByteArray();
+    }
+
+    /** Encode an {@code InboundEnumValue}: FQN on {@code name}, variant on {@code value}. */
+    private static byte[] encodeEnum(TypeRegistry.EnumWire ew) {
+        WireWriter w = new WireWriter();
+        w.writeString(ENUM_NAME, ew.fqn);
+        w.writeString(ENUM_VALUE, ew.wireName);
+        return w.toByteArray();
+    }
+
+    private static UnsupportedOperationException unsupported(Object value) {
+        return new UnsupportedOperationException(
+                "capability not yet implemented: cannot encode argument of type "
+                        + value.getClass().getName());
     }
 
     private static byte[] encodeList(List<?> list) {

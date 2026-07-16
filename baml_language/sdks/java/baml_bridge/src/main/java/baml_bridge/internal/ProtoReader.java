@@ -2,6 +2,7 @@ package baml_bridge.internal;
 
 import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
+import baml_bridge.TypeRegistry;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -85,6 +86,7 @@ public final class ProtoReader {
     // BamlValueClass / BamlValueEnum
     private static final int CLASS_NAME = 1;
     private static final int CLASS_FIELDS = 2;
+    private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
 
     // BamlValueUnionVariant
@@ -184,13 +186,15 @@ public final class ProtoReader {
     }
 
     /**
-     * Decode a {@code BamlOutboundValue}. When {@code lenient}, undecodable
-     * capabilities degrade instead of throwing: a {@code class_value} becomes a
-     * field {@code Map<String,Object>} (like Python's no-typemap fallback), an
-     * {@code enum_value} becomes its variant string, and opaque handles/media
-     * become null — so a thrown {@code baml.errors.*} value still surfaces on
-     * the error/panic path. On the {@code ok} path ({@code lenient == false})
-     * those kinds throw {@link UnsupportedOperationException}.
+     * Decode a {@code BamlOutboundValue}. A {@code class_value} / {@code enum_value}
+     * is reified through the {@link TypeRegistry}: a registered FQN yields the
+     * generated class instance / enum constant, and an unregistered FQN degrades
+     * to a field {@code Map<String,Object>} (like Python's no-typemap fallback) /
+     * the raw variant string — so a thrown {@code baml.errors.*} value still
+     * surfaces on the error/panic path. When {@code lenient}, the remaining
+     * undecodable capabilities (opaque handles/media/prompt-ast/ty) degrade to
+     * null; on the {@code ok} path ({@code lenient == false}) they throw
+     * {@link UnsupportedOperationException}.
      */
     public static Object decodeValue(WireReader r, boolean lenient) {
         Object result = null;
@@ -213,22 +217,8 @@ public final class ProtoReader {
                 case OV_UNION -> result = decodeUnionVariant(r.readMessage(), lenient);
                 case OV_UINT8ARRAY -> result = r.readBytes();
                 case OV_BIGINT -> result = new BigInteger(r.readString(), 16);
-                case OV_CLASS -> {
-                    if (lenient) {
-                        result = decodeClassFields(r.readMessage(), true);
-                    } else {
-                        r.skipField(wire);
-                        throw unsupported("class_value");
-                    }
-                }
-                case OV_ENUM -> {
-                    if (lenient) {
-                        result = decodeEnumVariant(r.readMessage());
-                    } else {
-                        r.skipField(wire);
-                        throw unsupported("enum_value");
-                    }
-                }
+                case OV_CLASS -> result = decodeClass(r.readMessage(), lenient);
+                case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE, OV_MEDIA, OV_PROMPT_AST, OV_TY -> {
                     if (lenient) {
                         r.skipField(wire);
@@ -324,36 +314,52 @@ public final class ProtoReader {
         return value;
     }
 
-    /** Lenient class decode: field name → decoded value (ignores the FQN). */
-    private static Map<String, Object> decodeClassFields(WireReader r, boolean lenient) {
+    /**
+     * Decode a {@code BamlValueClass}: gather its FQN ({@code name}) and fields,
+     * then reify via the {@link TypeRegistry}. A registered FQN yields the
+     * generated class instance (fields marshalled positionally in the registry's
+     * declaration order); an unregistered FQN degrades to the field
+     * {@code Map<String,Object>}. {@code type_args} (generics) are skipped — the
+     * host reifies generics later.
+     */
+    private static Object decodeClass(WireReader r, boolean lenient) {
+        String fqn = null;
         Map<String, Object> fields = new LinkedHashMap<>();
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
-            if (field == CLASS_FIELDS) {
-                decodeMapEntry(r.readMessage(), fields, lenient);
-            } else {
-                r.skipField(wire); // name / type_args
+            switch (field) {
+                case CLASS_NAME -> fqn = r.readString();
+                case CLASS_FIELDS -> decodeMapEntry(r.readMessage(), fields, lenient);
+                default -> r.skipField(wire); // type_args
             }
         }
-        return fields;
+        Object instance = TypeRegistry.constructClass(fqn, fields);
+        return instance != null ? instance : fields;
     }
 
-    /** Lenient enum decode: the wire variant string. */
-    private static String decodeEnumVariant(WireReader r) {
+    /**
+     * Decode a {@code BamlValueEnum}: gather its FQN ({@code name}) and wire
+     * variant ({@code value}), then map to the generated Java enum constant via
+     * the {@link TypeRegistry}. An unregistered FQN (or unknown variant) degrades
+     * to the raw wire variant string.
+     */
+    private static Object decodeEnum(WireReader r) {
+        String fqn = null;
         String variant = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
-            if (field == ENUM_VALUE) {
-                variant = r.readString();
-            } else {
-                r.skipField(wire); // name / is_dynamic
+            switch (field) {
+                case ENUM_NAME -> fqn = r.readString();
+                case ENUM_VALUE -> variant = r.readString();
+                default -> r.skipField(wire); // is_dynamic
             }
         }
-        return variant;
+        Object constant = TypeRegistry.resolveEnum(fqn, variant);
+        return constant != null ? constant : variant;
     }
 
     /**
