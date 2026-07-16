@@ -8,12 +8,12 @@ using baml_sdk::maps::Resume;
 using baml_sdk::maps::Sentiment;
 
 BAML_TEST(round_trip_simple_map) {
-  const std::map<std::string, int64_t> m{{"a", 1}, {"b", 2}};
+  const std::unordered_map<std::string, int64_t> m{{"a", 1}, {"b", 2}};
   BAML_ASSERT(baml_sdk::maps::round_trip_simple_map(m) == m);
 }
 
 BAML_TEST(round_trip_list_valued_map) {
-  const std::map<std::string, std::vector<int64_t>> m{{"k", {1, 2}}};
+  const std::unordered_map<std::string, std::vector<int64_t>> m{{"k", {1, 2}}};
   BAML_ASSERT(baml_sdk::maps::round_trip_list_valued_map(m) == m);
 }
 

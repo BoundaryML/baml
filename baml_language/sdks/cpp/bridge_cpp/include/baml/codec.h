@@ -14,9 +14,9 @@
 
 #include <cstdint>
 #include <cstdlib>
-#include <map>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -190,9 +190,9 @@ struct Codec<std::vector<T>> {
 };
 
 template <typename T>
-struct Codec<std::map<std::string, T>> {
+struct Codec<std::unordered_map<std::string, T>> {
   static void Encode(detail::wire::Writer& value_msg,
-                     const std::map<std::string, T>& v) {
+                     const std::unordered_map<std::string, T>& v) {
     detail::wire::Writer map_msg;  // InboundMapValue
     for (const auto& entry : v) {
       detail::wire::Writer entry_msg;  // InboundMapEntry
@@ -204,11 +204,12 @@ struct Codec<std::map<std::string, T>> {
     }
     value_msg.MessageField(7, map_msg);  // InboundValue.map_value
   }
-  static std::map<std::string, T> Decode(const detail::OutboundValue& v) {
+  static std::unordered_map<std::string, T> Decode(
+      const detail::OutboundValue& v) {
     if (v.kind != detail::OutboundValue::Kind::Map) {
       detail::KindMismatch("map", v);
     }
-    std::map<std::string, T> out;
+    std::unordered_map<std::string, T> out;
     for (const auto& entry : v.fields) {
       out.emplace(entry.first, Codec<T>::Decode(entry.second));
     }

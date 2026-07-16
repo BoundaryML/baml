@@ -887,7 +887,7 @@ fn translate_ty(
                 return Translated::Unsupported("non-string map key".to_string());
             }
             match translate_ty(pool, names, value, emitted_types, boxed) {
-                Translated::Cpp(value) => format!("std::map<std::string, {value}>"),
+                Translated::Cpp(value) => format!("std::unordered_map<std::string, {value}>"),
                 other => return other,
             }
         }
@@ -1107,7 +1107,7 @@ fn render_header(
          #include <array>\n\
          #include <cstdint>\n\
          #include <functional>\n\
-         #include <map>\n\
+         #include <unordered_map>\n\
          #include <optional>\n\
          #include <string>\n\
          #include <utility>\n\
