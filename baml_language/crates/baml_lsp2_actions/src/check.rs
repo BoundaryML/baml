@@ -93,7 +93,23 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // never taint a scope, so unrelated type errors elsewhere in the file are
     // unaffected.
     let tainted = parse_error_tainted_scopes(index, &parse_errors);
-    for (file_scope_idx, scope_id) in index.scope_ids.iter().enumerate() {
+    // Drive inference with PPIR's canonical (post-`$stream`-expansion) ScopeIds,
+    // not HIR's. `ScopeId` is a Salsa *tracked* struct, so HIR's index and
+    // PPIR's expanded index mint distinct Salsa IDs for the same
+    // (file, FileScopeId) pair; keying `infer_scope_types` with HIR IDs here
+    // made every scope in a `$stream`-expanded file get inferred a second time
+    // when TIR/MIR later asked with the PPIR ID. The original file's scopes are
+    // a prefix of the expanded index — the same invariant `infer_scope_types`
+    // relies on when it resolves a `FileScopeId` in the expanded arena — and we
+    // iterate only that prefix, so synthetic `*$stream` scopes are never
+    // visited and diagnostics are unchanged.
+    let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
+    for (file_scope_idx, scope_id) in ppir_index
+        .scope_ids
+        .iter()
+        .take(index.scopes.len())
+        .enumerate()
+    {
         if tainted.contains(&file_scope_idx) {
             continue;
         }
