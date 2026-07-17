@@ -15,25 +15,14 @@
 
 use std::time::Instant;
 
-use console::{Color, Style};
-use indicatif::HumanDuration;
-
-/// Brand purple `#A855F7` for the cargo-style verb. Rendered via 24-bit
-/// truecolor ANSI (`\x1b[38;2;168;85;247m`) on terminals that support it;
-/// `console::Style` strips the escape when stderr isn't a TTY, so piped
-/// output stays plain.
-const VERB_COLOR: Color = Color::TrueColor(0xA8, 0x55, 0xF7);
-
-fn verb_style() -> Style {
-    Style::new().fg(VERB_COLOR).bold()
-}
-
 /// Clap help-text styling re-exported from `baml_term`. Lives there so
 /// the `baml` wrapper and the packed-binary host — which can't depend
 /// on `baml_cli` — get the same brand-purple look as `baml run`,
 /// `baml pack`, etc. Everything in this crate that wants the styled
 /// `--help` palette pulls it from here for the shorter import path.
 pub use baml_term::CLAP_STYLING;
+use baml_term::format_status;
+use indicatif::HumanDuration;
 
 /// Cargo-style status reporter.
 pub struct Reporter {
@@ -86,17 +75,6 @@ impl Default for Reporter {
     }
 }
 
-/// Format a single status line as cargo does it: 12-char right-aligned
-/// bold purple verb (BAML brand `#A855F7`), then a space, then the
-/// payload. Padding is computed on the *unstyled* verb so ANSI escape
-/// bytes don't blow up column counts. `console::Style` strips the escape
-/// when stderr isn't a TTY, so piped output stays plain.
-fn format_status(verb: &str, msg: &str) -> String {
-    let padded = format!("{verb:>12}");
-    let styled = verb_style().apply_to(padded);
-    format!("{styled} {msg}")
-}
-
 /// Re-exports of the shared `error:` / `warning:` printers (defined in
 /// `baml_term`). Lives in this module so callers across `baml_cli` keep
 /// importing `crate::reporter::print_error` etc., while the `baml`
@@ -114,31 +92,5 @@ impl Reporter {
     /// Print a warning through this reporter.
     pub fn warning(&self, msg: impl std::fmt::Display) {
         print_warning(msg);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Status lines pad to cargo's 12-char column, putting the verb
-    /// flush against where cargo prints `Compiling`. Counting on unstyled
-    /// text keeps ANSI codes from breaking the alignment.
-    #[test]
-    fn format_status_pads_verb_to_column_12() {
-        let line = format_status("Compiling", "foo");
-        // Strip ANSI to inspect the underlying spacing.
-        let stripped = console::strip_ansi_codes(&line);
-        assert!(
-            stripped.starts_with("   Compiling foo"),
-            "got: {stripped:?}"
-        );
-        // Sanity: longer verb shifts the leading padding.
-        let line = format_status("Loading", "bar");
-        let stripped = console::strip_ansi_codes(&line);
-        assert!(
-            stripped.starts_with("     Loading bar"),
-            "got: {stripped:?}"
-        );
     }
 }

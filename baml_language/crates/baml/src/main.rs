@@ -12,7 +12,8 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest, WrapperManifest};
 use baml_term::{
-    ColorChoice, help_heading, help_literal, init_color, print_anyhow_error, print_warning,
+    ColorChoice, help_heading, help_literal, init_color, print_anyhow_error, print_status,
+    print_warning,
 };
 use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -838,7 +839,7 @@ fn install_toolchain_with_policy(
         );
         write_state(&state)?;
     }
-    println!("installed BAML toolchain {}", manifest.version);
+    print_status("Installed", format_args!("toolchain {}", manifest.version));
     Ok(())
 }
 
@@ -884,7 +885,7 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     let mut config = read_config();
     config.default.selector = selector.to_string();
     write_config(&config)?;
-    println!("selected BAML toolchain {selector}");
+    print_status("Selected", format_args!("toolchain {selector}"));
     Ok(())
 }
 
@@ -1019,7 +1020,7 @@ fn uninstall_toolchain(version: &str) -> Result<()> {
         return Err(anyhow!("BAML toolchain {version} is not installed"));
     }
     fs::remove_dir_all(dir)?;
-    println!("uninstalled BAML toolchain {version}");
+    print_status("Uninstalled", format_args!("toolchain {version}"));
     Ok(())
 }
 
@@ -1060,11 +1061,11 @@ fn self_update() -> Result<()> {
             .arg(&current)
             .spawn()
             .with_context(|| format!("failed to spawn updater {}", current.display()))?;
-        println!("updating BAML wrapper to {}", manifest.version);
+        print_status("Updating", format_args!("wrapper to {}", manifest.version));
         return Ok(());
     }
     fs::rename(tmp, current)?;
-    println!("updated BAML wrapper to {}", manifest.version);
+    print_status("Updated", format_args!("wrapper to {}", manifest.version));
     Ok(())
 }
 

@@ -127,6 +127,34 @@ pub fn help_literal(text: &str) -> String {
     format!("{}{text}{}", style.render(), style.render_reset())
 }
 
+// ── Cargo-style status lines ────────────────────────────────────────────────────
+
+/// Brand purple `#A855F7` for the cargo-style status verb — the same hue
+/// as [`CLAP_STYLING`]'s headers. Rendered via 24-bit truecolor ANSI on
+/// terminals that support it; styling is gated on stderr, where status
+/// lines are printed, so piped output stays plain.
+const VERB_COLOR: console::Color = console::Color::TrueColor(0xA8, 0x55, 0xF7);
+
+/// Format a single status line as cargo does it: 12-char right-aligned
+/// bold purple verb, then a space, then the payload. Padding is computed
+/// on the *unstyled* verb so ANSI escape bytes don't blow up column
+/// counts.
+pub fn format_status(verb: &str, msg: &str) -> String {
+    let padded = format!("{verb:>12}");
+    let styled = Style::new()
+        .fg(VERB_COLOR)
+        .bold()
+        .for_stderr()
+        .apply_to(padded);
+    format!("{styled} {msg}")
+}
+
+/// Print a cargo-style status line (`   Installed toolchain 0.2.0`).
+/// Routes to stderr, like cargo's.
+pub fn print_status(verb: &str, msg: impl std::fmt::Display) {
+    eprintln!("{}", format_status(verb, &msg.to_string()));
+}
+
 // ── error: / warning: line printers ─────────────────────────────────────────────
 
 /// Bold-red `error` keyword, matching ariadne's lowercase custom-kind
@@ -172,5 +200,29 @@ pub fn print_anyhow_error(err: &anyhow::Error) {
         for (i, cause) in causes.iter().enumerate() {
             eprintln!("    {i}: {cause}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_status;
+
+    /// Status lines pad to cargo's 12-char column, putting the verb
+    /// flush against where cargo prints `Compiling`. Counting on unstyled
+    /// text keeps ANSI codes from breaking the alignment.
+    #[test]
+    fn format_status_pads_verb_to_column_12() {
+        let line = format_status("Compiling", "foo");
+        let stripped = console::strip_ansi_codes(&line);
+        assert!(
+            stripped.starts_with("   Compiling foo"),
+            "got: {stripped:?}"
+        );
+        let line = format_status("Loading", "bar");
+        let stripped = console::strip_ansi_codes(&line);
+        assert!(
+            stripped.starts_with("     Loading bar"),
+            "got: {stripped:?}"
+        );
     }
 }
