@@ -89,6 +89,12 @@ pub struct InlineAnnotation {
     pub padding_left: bool,
     /// Insert thin space to the right of the hint (between hint and following token).
     pub padding_right: bool,
+    /// Whether the label is valid surface syntax at `offset`, so the editor can
+    /// offer it as a text edit (VS Code applies a hint's `textEdits` on
+    /// double-click). True only for type hints whose rendered type is parseable
+    /// and resolvable — see [`ty_is_insertable`]. Parameter hints have nothing
+    /// to insert and are always `false`.
+    pub insertable: bool,
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -215,19 +221,22 @@ fn process_body(
         // Resolve through the binding's real source scope chain. PatIds are
         // arena-local, so scanning every file scope can hit a foreign body that
         // happens to reuse the same numeric id.
-        let mut ty_str: Option<String> = None;
+        let mut hint: Option<(String, bool)> = None;
         let use_scope = scope_at_offset_within_body(index, pat_span.start(), owner_scope);
         for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
             let scope_id = index.scope_ids[file_scope_id.index() as usize];
             let inference = infer_scope_types(db, scope_id);
             if let Some(ty) = inference.binding_type(*pattern) {
                 if !should_suppress_type(ty) {
-                    ty_str = Some(utils::display_ty_for_file(db, file, ty));
+                    hint = Some((
+                        utils::display_ty_for_file(db, file, ty),
+                        ty_is_insertable(ty),
+                    ));
                 }
                 break;
             }
         }
-        let Some(ty_str) = ty_str else {
+        let Some((ty_str, insertable)) = hint else {
             continue;
         };
 
@@ -237,6 +246,7 @@ fn process_body(
             kind: AnnotationKind::Type,
             padding_left: false,
             padding_right: true,
+            insertable,
         });
     }
 
@@ -302,6 +312,7 @@ fn process_body(
                             kind: AnnotationKind::Parameter,
                             padding_left: false,
                             padding_right: false,
+                            insertable: false,
                         });
                     }
                     break;
@@ -335,6 +346,81 @@ fn should_suppress_type(ty: &Ty) -> bool {
         ty,
         Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Never { .. }
     )
+}
+
+/// True when the rendered form of `ty` is valid, resolvable surface syntax the
+/// user could write as a `let` annotation — i.e. the hint label can be offered
+/// as a double-click text edit.
+///
+/// False for types that render to non-syntax (`_[]` for a never-evolved empty
+/// literal, `callback` for a synthetic effect param, `(T as I).M` projections,
+/// float literal types, which the parser rejects) or to names the resolver
+/// does not accept in type position (`Future<...>`, the opaque runtime leafs).
+fn ty_is_insertable(ty: &Ty) -> bool {
+    use baml_base::Literal;
+
+    match ty {
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::TypeAlias(..)
+        | Ty::Type { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => true,
+
+        Ty::Literal(lit, ..) => !matches!(lit, Literal::Float(_)),
+
+        Ty::Class(_, type_args, _) => type_args.iter().all(ty_is_insertable),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().all(ty_is_insertable)
+                && associated_bindings.iter().all(|(_, t)| ty_is_insertable(t))
+        }
+        Ty::List(inner, _) => ty_is_insertable(inner),
+        Ty::Map { key, value, .. } => ty_is_insertable(key) && ty_is_insertable(value),
+        Ty::Union(members, _) => members.iter().all(ty_is_insertable),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().all(|p| ty_is_insertable(&p.ty))
+                && ty_is_insertable(ret)
+                && ty_is_insertable(throws)
+        }
+
+        // A never-evolved empty literal renders its element slots as `_`
+        // (`_[]` / `map<_, _>`), mirroring the renderer's special case.
+        Ty::EvolvingList(inner, _) => {
+            !matches!(**inner, Ty::Never { .. }) && ty_is_insertable(inner)
+        }
+        Ty::EvolvingMap(key, value, _) => {
+            !(matches!(**key, Ty::Never { .. }) && matches!(**value, Ty::Never { .. }))
+                && ty_is_insertable(key)
+                && ty_is_insertable(value)
+        }
+
+        // A real generic param (`T`) is in scope inside its function; the
+        // synthetic effect param renders as `callback`, which is not a type.
+        Ty::TypeVar(name, _) => !baml_compiler2_tir::ty::is_synthetic_effect_param(name),
+
+        Ty::Future(..)
+        | Ty::Void { .. }
+        | Ty::RustType { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Infer { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. } => false,
+    }
 }
 
 /// True if `callee` names a synthesized test/testset registration method
@@ -609,6 +695,78 @@ testset "math" {
                 .iter()
                 .all(|label| !matches!(*label, "name: " | "body: " | "collector: " | "runner: ")),
             "synthesized test/testset registration hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn type_hints_mark_insertable_types() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function work() -> int {
+    1
+}
+
+function Demo() -> int {
+    let n = 42
+    let f = spawn { work() }
+    let xs = []
+    xs.push(1)
+    let ys = []
+    n
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let by_label = |prefix: &str| {
+            hints
+                .iter()
+                .find(|h| h.kind == AnnotationKind::Type && h.label.starts_with(prefix))
+                .unwrap_or_else(|| panic!("no type hint starting with {prefix:?}: {hints:?}"))
+        };
+
+        assert!(by_label(": int").insertable, "`: int` is valid syntax");
+        assert!(
+            by_label(": int[]").insertable,
+            "an evolved list renders as plain `int[]`, which is valid syntax"
+        );
+        assert!(
+            !by_label(": Future").insertable,
+            "`Future<...>` is not a nameable type"
+        );
+        assert!(
+            !by_label(": _[]").insertable,
+            "`_[]` (never-evolved empty list) is not parseable"
+        );
+    }
+
+    #[test]
+    fn parameter_hints_are_never_insertable() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Echo(x: string) -> string {
+    x
+}
+
+function UseEcho() -> string {
+    Echo("hi")
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        assert!(
+            hints
+                .iter()
+                .filter(|h| h.kind == AnnotationKind::Parameter)
+                .all(|h| !h.insertable),
+            "parameter-name hints have nothing to insert, got {hints:?}"
         );
     }
 

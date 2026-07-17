@@ -281,20 +281,30 @@ impl BexLspRequest for BexMulitProject {
         let lsp_hints: Vec<lsp_types::InlayHint> = hints
             .iter()
             .filter(|h| h.offset >= range.start() && h.offset < range.end())
-            .map(|h| lsp_types::InlayHint {
-                position: codec.offset_to_position(h.offset.into()),
-                label: lsp_types::InlayHintLabel::String(h.label.clone()),
-                kind: Some(match h.kind {
-                    baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
-                    baml_lsp2_actions::AnnotationKind::Parameter => {
-                        lsp_types::InlayHintKind::PARAMETER
-                    }
-                }),
-                padding_left: Some(h.padding_left),
-                padding_right: Some(h.padding_right),
-                text_edits: None,
-                tooltip: None,
-                data: None,
+            .map(|h| {
+                let position = codec.offset_to_position(h.offset.into());
+                lsp_types::InlayHint {
+                    position,
+                    label: lsp_types::InlayHintLabel::String(h.label.clone()),
+                    kind: Some(match h.kind {
+                        baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
+                        baml_lsp2_actions::AnnotationKind::Parameter => {
+                            lsp_types::InlayHintKind::PARAMETER
+                        }
+                    }),
+                    padding_left: Some(h.padding_left),
+                    padding_right: Some(h.padding_right),
+                    // VS Code applies a hint's text edits on double-click,
+                    // turning a `: int` type hint into a real annotation.
+                    text_edits: h.insertable.then(|| {
+                        vec![lsp_types::TextEdit {
+                            range: lsp_types::Range::new(position, position),
+                            new_text: h.label.clone(),
+                        }]
+                    }),
+                    tooltip: None,
+                    data: None,
+                }
             })
             .collect();
 
