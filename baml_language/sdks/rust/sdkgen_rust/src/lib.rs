@@ -190,6 +190,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: None,
+                    generic_params: &[],
                 };
                 match emit::function::emit(name, function, &ctx) {
                     Ok(tokens) => leaves
@@ -215,6 +216,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: Some(name),
+                    generic_params: &[],
                 };
                 match emit::class::emit(name, class, &ctx) {
                     Ok((tokens, class_warnings)) => {
@@ -254,6 +256,7 @@ pub fn to_source_code_with_bytecode(
                     unions: &union_registry,
                     leaf: &leaf,
                     boxing_for: None,
+                    generic_params: &[],
                 };
                 match emit::type_alias::emit(name, alias, &ctx) {
                     Ok(tokens) => leaves
@@ -279,6 +282,7 @@ pub fn to_source_code_with_bytecode(
             unions: &union_registry,
             leaf,
             boxing_for: None,
+            generic_params: &[],
         };
         match emit::union::emit(union_enum, &ctx) {
             Ok(tokens) => leaves.entry(leaf.clone()).or_default().push(LeafItem {
@@ -819,6 +823,127 @@ mod tests {
         // `takes_none` has no arguments to mutate, so a count of 2 also
         // proves its absence there.
         assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
+    }
+
+    fn typevar(name: &str) -> Ty {
+        Ty::TypeVar(baml_base::Name::new(name), baml_base::TyAttr::EMPTY)
+    }
+
+    fn arg(name: &str, ty: Ty) -> baml_codegen_types::FunctionArgument {
+        baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new(name),
+            docstring: None,
+            ty,
+            default: None,
+        }
+    }
+
+    #[test]
+    fn generic_function_binds_type_params_and_sends_type_args() {
+        // identity<T>(x: T) -> T
+        let n = name("user", &[], "identity");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T")];
+        f.arguments = vec![arg("x", typevar("T"))];
+        f.return_type = typevar("T");
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // The TypeVar becomes a `BamlValue`-bounded Rust generic on both the
+        // sync and async bindings; the arg and return position resolve to it.
+        assert!(
+            flat.contains("pubfnidentity<T:::baml_bridge::BamlValue>"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("pubasyncfnidentity_async<T:::baml_bridge::BamlValue>"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("x:T"),
+            "arg resolves to the type param:\n{lib}"
+        );
+        assert_eq!(
+            flat.matches(
+                "->::std::result::Result<T,::baml_bridge::Error<::core::convert::Infallible>>"
+            )
+            .count(),
+            2,
+            "return resolves to the type param on both bindings:\n{lib}"
+        );
+        // The concrete binding is sent explicitly, keyed by the TypeVar
+        // name, on both the sync and async bindings.
+        let type_arg = concat!(
+            "::baml_bridge::encode::type_args(::std::vec![(\"T\",",
+            "<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()"
+        );
+        assert_eq!(flat.matches(type_arg).count(), 2, "{lib}");
+    }
+
+    #[test]
+    fn generic_function_with_return_only_type_params_still_binds_them() {
+        // two_type_args<A, B>() -> string : A and B appear only in the body
+        // (via the wire type args), never in the Rust signature — so the
+        // only thing that keeps them "used" is the explicit binding.
+        let n = name("user", &[], "two_type_args");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("A"), baml_base::Name::new("B")];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains(
+                "pubfntwo_type_args<A:::baml_bridge::BamlValue,B:::baml_bridge::BamlValue>()"
+            ),
+            "{flat}"
+        );
+        assert!(flat.contains("(\"A\",<Aas"), "{flat}");
+        assert!(flat.contains("(\"B\",<Bas"), "{flat}");
+    }
+
+    #[test]
+    fn generic_function_skips_when_a_typevar_is_unrepresentable() {
+        // tag_or_value<T>(x: T | string | null) -> string : `T` sits in a
+        // multi-arm union, which needs a generic union enum we don't emit —
+        // so the whole function skips, loudly, rather than emitting broken
+        // code.
+        let n = name("user", &[], "tag_or_value");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T")];
+        f.arguments = vec![arg(
+            "x",
+            Ty::Union(
+                vec![
+                    typevar("T"),
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(
+            generated.warnings.len(),
+            1,
+            "{:?}",
+            generated.warnings[0].fqn
+        );
+        assert_eq!(generated.warnings[0].fqn, "user.tag_or_value");
+        assert!(
+            !flat(text(&generated, "src/lib.rs")).contains("fntag_or_value"),
+            "the function must not emit"
+        );
     }
 
     #[test]

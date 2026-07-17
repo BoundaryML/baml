@@ -107,12 +107,18 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     (
         "function_calls",
         "test_generic_calls.rs",
-        Gate::Later("needs generics"),
+        // Generic *functions* emit (unbounded `<T: BamlValue>` params); this
+        // file also constructs generic *classes* (`GenericBox<T>`, …) as type
+        // arguments, which are still skipped.
+        Gate::Later("needs generic classes"),
     ),
     (
         "function_calls",
         "test_generic_inference.rs",
-        Gate::Later("needs generics"),
+        // Bare generic calls with no explicit type args: needs the engine's
+        // inbound argument-inference phase (the Rust SDK always binds
+        // explicitly), plus generic classes.
+        Gate::Later("needs generic-argument inference + generic classes"),
     ),
     (
         "function_calls",

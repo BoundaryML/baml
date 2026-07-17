@@ -69,6 +69,7 @@ fn test_round_trip_float_accepts_int() {
     let result = baml_bridge::runtime::invoke_sync::<f64, core::convert::Infallible>(
         "user.primitives.round_trip_float",
         baml_bridge::encode::kwargs(vec![("x", Some(int_on_the_wire))]),
+        vec![],
     )
     .unwrap();
     // Python's `isinstance(result, float)` collapses into the static `f64`

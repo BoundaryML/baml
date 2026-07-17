@@ -26,6 +26,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut from_impls = Vec::new();
     let mut encode_arms = Vec::new();
     let mut trial_decodes = Vec::new();
+    let mut baml_ty_options = Vec::new();
     for arm in &union_enum.arms {
         let variant = idents::ident(&arm.variant);
         match &arm.kind {
@@ -37,6 +38,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         u.reason
                     ),
                 })?;
+                baml_ty_options.push(quote! {
+                    <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()
+                });
                 variant_defs.push(quote! { #variant(#payload) });
                 from_impls.push(quote! {
                     impl ::std::convert::From<#payload> for #ident {
@@ -62,6 +66,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
             }
             UnionArmKind::StringLiteral(value) => {
                 let value = value.as_str();
+                baml_ty_options.push(quote! {
+                    ::baml_bridge::baml_value::internal::literal_string_ty(#value)
+                });
                 variant_defs.push(quote! { #variant });
                 encode_arms.push(quote! {
                     Self::#variant => {
@@ -106,6 +113,12 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 let v = ::baml_bridge::decode::unwrap(v);
                 #(#trial_decodes)*
                 ::std::result::Result::Err(::baml_bridge::decode::no_union_arm(#name_str, &v))
+            }
+
+            fn baml_ty() -> ::baml_bridge::wire::BamlTy {
+                ::baml_bridge::baml_value::internal::union_ty(::std::vec![
+                    #(#baml_ty_options,)*
+                ])
             }
         }
     })

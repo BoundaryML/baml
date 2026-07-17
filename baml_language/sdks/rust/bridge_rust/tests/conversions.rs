@@ -10,8 +10,9 @@ use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 mod common;
 
 use baml_bridge::{
-    BamlValue, DecodeError, Error, Map, baml_value::internal::__BamlValuePrivate, decode, encode,
-    runtime, wire,
+    BamlValue, DecodeError, Error, Map,
+    baml_value::internal::{__BamlValuePrivate, class_ty, enum_ty, literal_string_ty, union_ty},
+    decode, encode, runtime, wire,
 };
 
 const BAML_SRC: &str = r#"
@@ -64,7 +65,7 @@ fn ensure_runtime() {
 fn call<R: BamlValue>(fqn: &str, kwargs: Vec<(&str, wire::InboundValue)>) -> R {
     ensure_runtime();
     let kwargs = kwargs.into_iter().map(|(k, v)| (k, Some(v))).collect();
-    runtime::invoke_sync::<R, Infallible>(fqn, encode::kwargs(kwargs))
+    runtime::invoke_sync::<R, Infallible>(fqn, encode::kwargs(kwargs), vec![])
         .unwrap_or_else(|e| panic!("{fqn} failed: {e}"))
 }
 
@@ -99,6 +100,10 @@ impl __BamlValuePrivate for Color {
             }),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        enum_ty("user.Color")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +133,10 @@ impl __BamlValuePrivate for Point {
             tag: fields.take("tag")?,
         })
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Point")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +162,10 @@ impl __BamlValuePrivate for TreeNode {
             value: fields.take("value")?,
             next: fields.take("next")?,
         })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.TreeNode")
     }
 }
 
@@ -196,6 +209,10 @@ impl __BamlValuePrivate for IntOrString {
         }
         Err(decode::no_union_arm("IntOrString", &v))
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![i64::baml_ty(), String::baml_ty()])
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -234,6 +251,10 @@ impl __BamlValuePrivate for PointOrString {
         }
         Err(decode::no_union_arm("PointOrString", &v))
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![Point::baml_ty(), String::baml_ty()])
+    }
 }
 
 /// String-literal arms become unit variants carrying their wire value.
@@ -261,6 +282,10 @@ impl __BamlValuePrivate for DraftOrSent {
             }
         }
         Err(decode::no_union_arm("DraftOrSent", &v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![literal_string_ty("draft"), literal_string_ty("sent")])
     }
 }
 
@@ -444,6 +469,7 @@ fn class_fqn_drift_fails_loudly() {
     let result = runtime::invoke_sync::<Point, Infallible>(
         "user.make_other",
         encode::kwargs(vec![("x", Some(1i64.to_baml()))]),
+        vec![],
     );
     match result {
         Err(Error::Decode(DecodeError::FqnMismatch { expected, got })) => {
@@ -464,6 +490,7 @@ fn wrong_wire_kind_fails_loudly() {
             ("x", Some(1i64.to_baml())),
             ("y", Some(2i64.to_baml())),
         ]),
+        vec![],
     );
     assert!(matches!(
         result,

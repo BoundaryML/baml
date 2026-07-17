@@ -69,11 +69,12 @@ pub fn initialize_from_files(
 pub fn invoke_sync<R: BamlValue, E: BamlValue>(
     fqn: &str,
     kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
 ) -> Result<R, Error<E>> {
     if tokio::runtime::Handle::try_current().is_ok() {
         return Err(Error::CalledSyncFromAsync);
     }
-    let receiver = dispatch(fqn, kwargs).map_err(Error::Sdk)?;
+    let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
     // Blocks until the engine delivers the result envelope via the callback.
     // There is no timeout: the engine is contracted to complete every call
     // (success, thrown error, or panic). A caller-facing timeout/cancellation
@@ -90,8 +91,9 @@ pub fn invoke_sync<R: BamlValue, E: BamlValue>(
 pub async fn invoke<R: BamlValue, E: BamlValue>(
     fqn: &str,
     kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
 ) -> Result<R, Error<E>> {
-    let receiver = dispatch(fqn, kwargs).map_err(Error::Sdk)?;
+    let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
     let bytes = receiver.wait().await;
     decode::decode_result(&bytes)
 }
@@ -102,6 +104,7 @@ pub async fn invoke<R: BamlValue, E: BamlValue>(
 fn dispatch(
     fqn: &str,
     kwargs: Vec<wire::InboundMapEntry>,
+    type_args: Vec<wire::BamlTyArg>,
 ) -> Result<completion::Receiver, SdkError> {
     let api = capi::api()?;
     let name = CString::new(fqn)
@@ -113,7 +116,7 @@ fn dispatch(
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
-        type_args: Vec::new(),
+        type_args,
     }
     .encode_to_vec();
     // SAFETY: `name` and `args` outlive the call; the engine copies both

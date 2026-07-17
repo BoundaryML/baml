@@ -41,6 +41,9 @@ pub(crate) fn emit(
         unions: ctx.unions,
         leaf: ctx.leaf,
         boxing_for: None,
+        // Generic methods are not emitted yet (skipped in `emit_method`),
+        // so no method has TypeVars in scope.
+        generic_params: &[],
     };
     let mut method_tokens: Vec<TokenStream> = Vec::new();
     for (methods, receiver) in [
@@ -131,6 +134,10 @@ pub(crate) fn emit(
                 v: ::baml_bridge::wire::BamlOutboundValue,
             ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
                 #decode_body
+            }
+
+            fn baml_ty() -> ::baml_bridge::wire::BamlTy {
+                ::baml_bridge::baml_value::internal::class_ty(#fqn)
             }
         }
     };

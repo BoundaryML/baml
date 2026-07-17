@@ -37,12 +37,10 @@ pub(crate) fn emit(
                 .to_string(),
         });
     }
-    if !function.generic_params.is_empty() {
-        return Err(SkipWarning {
-            fqn,
-            reason: "generic functions are not emitted yet".to_string(),
-        });
-    }
+    // Generic free functions ARE emitted: their `<...>` params become Rust
+    // generics bound by `BamlValue`. TypeVars that appear in positions the
+    // translator can't represent (a union arm, a generic-class argument)
+    // still make the whole function skip, at the per-type translation site.
     emit_binding(&fqn, name.name().as_str(), function, Receiver::None, ctx)
 }
 
@@ -89,11 +87,26 @@ fn emit_binding(
         reason,
     };
 
-    let ret = translate_ty::translate(&function.return_type, ctx)
+    // The callee's own `<...>` params come into scope for translating this
+    // binding's signature: a `Ty::TypeVar` naming one of them resolves to
+    // that Rust generic parameter. (Methods reach here only when
+    // non-generic — `emit_method` skips generic methods — so `gctx` matches
+    // the passed `ctx` for them.)
+    let generic_params: Vec<String> = function
+        .generic_params
+        .iter()
+        .map(|param| param.as_str().to_string())
+        .collect();
+    let gctx = TyCtx {
+        generic_params: generic_params.as_slice(),
+        ..*ctx
+    };
+
+    let ret = translate_ty::translate(&function.return_type, &gctx)
         .map_err(|u| skip(format!("return: {}", u.reason)))?;
     let throws = match &function.throws {
         None => quote! { ::core::convert::Infallible },
-        Some(ty) => translate_ty::translate(ty, ctx)
+        Some(ty) => translate_ty::translate(ty, &gctx)
             .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
     };
 
@@ -116,7 +129,7 @@ fn emit_binding(
     for arg in &function.arguments {
         let arg_name = arg.name.as_str();
         let param = idents::ident(arg_name);
-        let ty = translate_ty::translate(&arg.ty, ctx)
+        let ty = translate_ty::translate(&arg.ty, &gctx)
             .map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
         if arg.default.is_some() {
             // A defaulted BAML parameter: the wrapper accepts anything
@@ -182,26 +195,57 @@ fn emit_binding(
         TokenStream::new()
     };
 
+    // Each callee TypeVar becomes a Rust generic bound by `BamlValue` (the
+    // only bound the SDK can express — interfaces/traits aren't wired up),
+    // and its concrete binding is sent explicitly in `type_args`. Rust call
+    // sites are always fully monomorphic, so we never lean on the engine's
+    // argument-side inference: every param is bound by name here.
+    let generics_decl = if generic_params.is_empty() {
+        TokenStream::new()
+    } else {
+        let bounded = generic_params.iter().map(|param| {
+            let ident = idents::ident(param);
+            quote! { #ident: ::baml_bridge::BamlValue }
+        });
+        quote! { <#(#bounded),*> }
+    };
+    let type_args_expr = if generic_params.is_empty() {
+        quote! { ::std::vec![] }
+    } else {
+        let entries = generic_params.iter().map(|param| {
+            let ident = idents::ident(param);
+            quote! {
+                (
+                    #param,
+                    <#ident as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
+        });
+        quote! { ::baml_bridge::encode::type_args(::std::vec![#(#entries),*]) }
+    };
+
     Ok(quote! {
         #(#doc_attrs)*
         #too_many_arguments_attr
-        pub fn #sync_name(#self_param #(#params),*) -> #result_ty {
+        pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
             ::baml_bridge::runtime::invoke_sync(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
             )
         }
 
         #(#doc_attrs)*
         #too_many_arguments_attr
-        pub async fn #async_name(#self_param #(#params),*) -> #result_ty {
+        pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
             ::baml_bridge::runtime::invoke(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                #type_args_expr,
             )
             .await
         }

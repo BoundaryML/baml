@@ -43,6 +43,13 @@ pub(crate) struct TyCtx<'a> {
     /// the field site (outside heap-indirected containers) so recursive
     /// classes stay finite-sized.
     pub(crate) boxing_for: Option<&'a Name>,
+    /// `TypeVar` names in scope — the enclosing generic function's own
+    /// `<...>` params, in declaration order. A `Ty::TypeVar` naming one of
+    /// these translates to that Rust generic parameter; a `TypeVar` not in
+    /// scope is unsupported (fail closed). Empty everywhere except inside a
+    /// generic function's signature (class fields, non-generic functions,
+    /// and — for now — methods have no `TypeVar`s in scope).
+    pub(crate) generic_params: &'a [String],
 }
 
 /// Translate a resolved BAML type to its Rust type expression.
@@ -183,7 +190,22 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
             Ok(type_path(name, ctx.analysis))
         }
-        Ty::TypeVar(..) => Err(unsupported("type variable (generics)")),
+        // A TypeVar naming one of the enclosing generic function's own
+        // `<...>` params translates to that Rust generic parameter. The
+        // bound (`T: BamlValue`) is attached at the binding's signature,
+        // not here. A TypeVar not in scope (e.g. a class-level param, or a
+        // stray) is unsupported so the enclosing symbol skips loudly.
+        Ty::TypeVar(name, _) => {
+            let name = name.as_str();
+            if ctx.generic_params.iter().any(|param| param == name) {
+                let ident = idents::ident(name);
+                Ok(quote! { #ident })
+            } else {
+                Err(unsupported(&format!(
+                    "type variable `{name}` (not a function type parameter)"
+                )))
+            }
+        }
         Ty::BuiltinUnknown { .. } => Err(unsupported("unknown")),
         Ty::Function { .. } => Err(unsupported("function")),
         Ty::Future(..) => Err(unsupported("future handle")),
@@ -253,6 +275,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         translate(ty, &ctx)
             .map(|t| t.to_string())
@@ -372,6 +395,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         let enum_keyed = Ty::Map {
             key: Box::new(Ty::Enum(
@@ -394,6 +418,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         assert!(
             translate(
@@ -456,6 +481,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         assert_eq!(
             translate(
@@ -490,6 +516,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         assert!(translate(&Ty::Class(bad, Vec::new(), baml_base::TyAttr::EMPTY), &ctx).is_err());
     }
@@ -533,6 +560,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: Some(&tree),
+            generic_params: &[],
         };
         assert_eq!(
             translate(&optional_self, &ctx).unwrap().to_string(),
@@ -702,6 +730,7 @@ mod tests {
             unions: &NO_UNIONS,
             leaf: &[],
             boxing_for: None,
+            generic_params: &[],
         };
         assert_eq!(
             translate(&Ty::TypeAlias(plain, baml_base::TyAttr::EMPTY), &ctx)
@@ -792,7 +821,8 @@ mod tests {
                     analysis: &analysis,
                     unions: &NO_UNIONS,
                     leaf: &[],
-                    boxing_for: None
+                    boxing_for: None,
+                    generic_params: &[],
                 }
             )
             .unwrap()
