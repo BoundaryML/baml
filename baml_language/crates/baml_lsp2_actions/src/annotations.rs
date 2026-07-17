@@ -92,7 +92,7 @@ pub struct InlineAnnotation {
     /// Whether the label is valid surface syntax at `offset`, so the editor can
     /// offer it as a text edit (VS Code applies a hint's `textEdits` on
     /// double-click). True only for type hints whose rendered type is parseable
-    /// and resolvable — see [`ty_is_insertable`]. Parameter hints have nothing
+    /// and resolvable — see `ty_is_insertable`. Parameter hints have nothing
     /// to insert and are always `false`.
     pub insertable: bool,
 }
