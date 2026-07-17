@@ -2,6 +2,19 @@ nextest-version = "0.9.98"
 
 experimental = ["setup-scripts"]
 
+# The rust sdk-test fixture tests each spawn a `cargo` subprocess into one
+# shared CARGO_TARGET_DIR, whose build lock serializes them anyway — running
+# them concurrently only multiplies waiting cargo processes and their rustc
+# swarms. Cap the package at 2 in-flight tests (rustfmt is lock-free, so one
+# fmt check can overlap one cargo build); the setup-script pre-warm absorbs
+# the cold build of the shared stack before tests fan out.
+[test-groups]
+rust-sdk-fixture = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_rust)'
+test-group = 'rust-sdk-fixture'
+
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
 command = './sdk_tests/crates/typescript/setup.sh'
@@ -43,6 +56,48 @@ setup = 'typescript_web_pnpm_unix'
 filter = 'package(=sdk_test_typescript_web)'
 platform = { host = 'cfg(windows)' }
 setup = 'typescript_web_pnpm_win'
+
+# rust tests need each fixture's generated crate pre-built into the shared
+# CARGO_TARGET_DIR so the parallel test-time cargo invocations hit a warm
+# cache. fire only when a rust sdk-test is selected.
+[scripts.setup.rust_cargo_unix]
+command = './sdk_tests/crates/rust/setup.sh'
+
+[scripts.setup.rust_cargo_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/rust/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_cargo_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_cargo_win'
+
+# baml_bridge is dylib-only: its tests load the engine cdylib at run time
+# (located next to the test binary in <target>/<profile>/). Build it before
+# any baml_bridge test runs — the lib test binary mixes pure loader/encode
+# tests with engine-dependent ones (completion, live_engine, conversions),
+# so this fires for the whole package. The general cargo-test jobs exclude
+# baml_bridge entirely (the non-cacheable cdylib build is too heavy there);
+# it runs in the rust sdk-tests leg, reusing sdk_test_rust's engine build.
+[scripts.setup.rust_bridge_engine_unix]
+command = './sdks/rust/bridge_rust/build-engine.sh'
+
+[scripts.setup.rust_bridge_engine_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdks/rust/bridge_rust/build-engine.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_bridge_engine_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_bridge_engine_win'
 
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per

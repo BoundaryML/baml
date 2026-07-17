@@ -28,40 +28,40 @@ defaults:
     shell: bash
 
 jobs:
+  # Target set + per-target runner/manylinux/architecture come from the platform
+  # contract (`release/platforms.json`), not a hand-copied matrix list.
+  matrix:
+    name: Compute target matrix
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Generate the python build matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # target + python runner (as `runs_on`) + optional manylinux tag +
+          # optional python-setup architecture. maturin/setup-python treat an
+          # absent field as empty, so only-when-set matches the old matrix.
+          include="$(jq -c '[.targets[]
+            | select(.artifacts.python != null)
+            | .artifacts.python as $p
+            | {target: .triple, runs_on: $p.runner}
+              + (if $p.manylinux then {manylinux: $p.manylinux} else {} end)
+              + (if $p.architecture then {architecture: $p.architecture} else {} end)]' release/platforms.json)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
   build:
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        _:
-          - target: x86_64-unknown-linux-gnu
-            runs_on: ubuntu-latest
-            manylinux: "2_17"
-
-          - target: aarch64-unknown-linux-gnu
-            runs_on: ubuntu-latest
-            manylinux: "2_24"
-
-          - target: x86_64-unknown-linux-musl
-            runs_on: ubuntu-latest
-            # see https://github.com/astral-sh/uv/blob/9bb55c4ac0582e05d1a7a5bbd99cc7b2c82f1847/.github/workflows/build-binaries.yml#L594
-            manylinux: musllinux_1_1
-
-          - target: aarch64-unknown-linux-musl
-            runs_on: ubuntu-latest
-            manylinux: musllinux_1_1
-
-          - target: x86_64-apple-darwin
-            runs_on: macos-latest
-
-          - target: aarch64-apple-darwin
-            runs_on: macos-latest
-
-          - target: x86_64-pc-windows-msvc
-            runs_on: windows-latest
-
-          - target: aarch64-pc-windows-msvc
-            runs_on: windows-11-arm
-            architecture: arm64
+        _: ${{ fromJson(needs.matrix.outputs.include) }}
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}

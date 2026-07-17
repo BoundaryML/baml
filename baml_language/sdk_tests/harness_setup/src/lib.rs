@@ -38,6 +38,7 @@ use baml_project::ProjectDatabase;
 
 pub mod go;
 pub mod python_pydantic2;
+pub mod rust;
 pub mod typescript;
 pub mod typescript_web;
 

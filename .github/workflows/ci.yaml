@@ -760,6 +760,7 @@ jobs:
             baml_language/crates/bridge_ctypes
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/rust/bridge_rust/src/wire
             typescript2/pkg-proto
           )
           README="baml_language/crates/bridge_ctypes/README.md"

@@ -8,12 +8,14 @@ description: |
   the cache prefix) only need to touch this one file.
 
   Cache key composition (per the jdx/mise-action README): the default
-  cache key already includes a platform identifier such as
-  `linux-x64-ubuntu24` or `macos-arm64-macos15`, so cross-platform
-  isolation is automatic. Sharing `cache_key_prefix` (`mise-baml1` —
-  our own, not the upstream default) + the hash of mise.toml is what
-  makes the cache scope shared across workflows that run on the same
-  platform.
+  cache key is `<prefix>-<platform>-<hash>`, where `<platform>` gives
+  automatic cross-platform isolation and `<hash>` folds in both the
+  mise.toml files and an install_args hash. So a cache entry is shared
+  across workflows that run on the same platform AND pass the same
+  `install_args` tool set — distinct tool sets are distinct entries by
+  design (each holds a different set of installed tools). Our own
+  `cache_key_prefix` (`mise-baml2`, not the upstream default) scopes the
+  whole family, so bumping its trailing number busts every entry at once.
 
 inputs:
   install_args:
@@ -56,6 +58,14 @@ runs:
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.
         cache_key_prefix: mise-baml2
+        # Only WRITE the cache on canary — mirrors the Swatinem rust-cache
+        # `save-if` on the same branch. mise-action's default cache key
+        # includes an install_args hash, so each distinct tool set is its own
+        # entry; letting every PR and merge-queue run save its own copy of each
+        # (scoped to its own ref) is what produced dozens of `mise-baml2-*`
+        # entries. Reads stay on (governed by `cache`), so PR/merge-queue runs
+        # still RESTORE canary's caches — they just don't write new ones.
+        cache_save: ${{ github.ref == 'refs/heads/canary' }}
         install_args: ${{ inputs.install_args }}
         # Keep mise's shims OFF $PATH. mise-action exports the concrete
         # installed-tool bin dirs into PATH directly, so the narrow set we

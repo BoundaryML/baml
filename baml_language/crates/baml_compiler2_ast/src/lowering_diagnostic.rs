@@ -3,7 +3,7 @@
 //! Uses `TextRange` (file-relative) — `FileId` is added at the conversion
 //! boundary in `check_file()`.
 
-use baml_base::{FileId, Span};
+use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
@@ -87,7 +87,7 @@ pub enum LoweringDiagnostic {
     /// A client is missing required provider-specific options.
     MissingClientOptions {
         client_name: String,
-        message: String,
+        error: ClientOptionsValidationError,
         span: TextRange,
     },
 
@@ -315,12 +315,12 @@ impl LoweringDiagnostic {
             ),
             LoweringDiagnostic::MissingClientOptions {
                 client_name: _,
-                message,
+                error,
                 span,
             } => (
                 DiagnosticId::MissingClientOptions,
                 Severity::Error,
-                message.clone(),
+                error.to_string(),
                 *span,
                 "missing options",
             ),

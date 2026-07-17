@@ -19,6 +19,9 @@ pub enum OutputType {
     /// Go SDK using the `baml_go` runtime.
     #[strum(serialize = "go")]
     Go,
+    /// Rust SDK (`bridge_rust` runtime crate, library name `baml_rs`).
+    #[strum(serialize = "rust")]
+    Rust,
     /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
     #[strum(serialize = "typescript/web")]
     TypescriptWeb,
