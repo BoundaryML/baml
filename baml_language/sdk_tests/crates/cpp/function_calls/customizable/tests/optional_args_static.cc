@@ -44,9 +44,9 @@ struct has_set_opt3<
 static_assert(
     ProbeInvocable<int64_t>(0),
     "optional_args_probe(x) must be callable with the required arg alone");
-static_assert(ProbeInvocable<int64_t, baml_sdk::optional_args_probeOpts>(0),
+static_assert(ProbeInvocable<int64_t, baml_sdk::optional_args_probe_opts>(0),
               "optional_args_probe(x, opts) must be callable");
-static_assert(has_set_opt1<baml_sdk::optional_args_probeOpts>::value,
+static_assert(has_set_opt1<baml_sdk::optional_args_probe_opts>::value,
               "opts must expose set_opt1");
 
 // optional_args_probe()  -- missing required arg.
@@ -59,7 +59,7 @@ static_assert(!ProbeInvocable<int64_t, int>(0),
               "a positional value must not convert to the opts struct");
 
 // optional_args_probe(1, opt3=1)  -- unknown optional arg.
-static_assert(!has_set_opt3<baml_sdk::optional_args_probeOpts>::value,
+static_assert(!has_set_opt3<baml_sdk::optional_args_probe_opts>::value,
               "opts must not expose a setter for an undeclared optional");
 
 // optional_args_probe("x")  -- wrong type for the required arg.
@@ -67,7 +67,7 @@ static_assert(!ProbeInvocable<const char*>(0),
               "a string must not convert to the int-typed required arg");
 
 // optional_args_probe(1, opt1="x")  -- wrong type for an optional arg.
-static_assert(!std::is_constructible<::baml::Arg<std::optional<int64_t>>,
+static_assert(!std::is_constructible<::baml::arg<std::optional<int64_t>>,
                                      const char*>::value,
               "a string must not convert to an int-typed optional arg");
 

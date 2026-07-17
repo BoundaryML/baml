@@ -1,8 +1,8 @@
-// co_await coverage for baml::Future (this file builds as a separate
+// co_await coverage for baml::future (this file builds as a separate
 // C++20 executable; the C++17 blocking surface is covered by
 // test_cancellation.cc). No python analog: python awaits are event-loop
 // native, while C++20 ships coroutines without a task type - a minimal
-// completion-latch TestTask drives the coroutines here, and the bridge
+// completion-latch test_task drives the coroutines here, and the bridge
 // dispatcher thread resumes them.
 //
 // Coroutines take their inputs by value and their outputs via pointers to
@@ -22,7 +22,7 @@
 #include <variant>
 
 #if !defined(BAML_HAS_COROUTINES)
-#error "the cxx20 test target must enable baml::Future's awaiter"
+#error "the cxx20 test target must enable baml::future's awaiter"
 #endif
 
 #include <coroutine>
@@ -30,17 +30,17 @@
 namespace throws_test = baml_sdk::throws_test;
 using baml_sdk::throws_test::MyError;
 
-using SleepFuture = decltype(throws_test::SleepMsAsync(0));
-using IntFuture = decltype(baml_sdk::round_trip_intAsync(0));
-using ThrowFuture = decltype(throws_test::ThrowMyErrorAsync());
+using sleep_future = decltype(throws_test::SleepMs_async(0));
+using int_future = decltype(baml_sdk::round_trip_int_async(0));
+using throw_future = decltype(throws_test::ThrowMyError_async());
 
 namespace {
 
 // Minimal eager coroutine with a completion latch: the test thread blocks
-// in Join() until the coroutine finishes (possibly resumed on the bridge
+// in join() until the coroutine finishes (possibly resumed on the bridge
 // dispatcher thread) and an escaped exception rethrows there.
-struct TestTask {
-  struct Latch {
+struct test_task {
+  struct completion_latch {
     std::mutex mu;
     std::condition_variable cv;
     bool done = false;
@@ -48,13 +48,14 @@ struct TestTask {
   };
 
   struct promise_type {
-    std::shared_ptr<Latch> latch = std::make_shared<Latch>();
-    TestTask get_return_object() { return TestTask{latch}; }
+    std::shared_ptr<completion_latch> latch =
+        std::make_shared<completion_latch>();
+    test_task get_return_object() { return test_task{latch}; }
     std::suspend_never initial_suspend() { return {}; }
     std::suspend_never final_suspend() noexcept { return {}; }
-    void return_void() { Finish(nullptr); }
-    void unhandled_exception() { Finish(std::current_exception()); }
-    void Finish(std::exception_ptr error) {
+    void return_void() { finish(nullptr); }
+    void unhandled_exception() { finish(std::current_exception()); }
+    void finish(std::exception_ptr error) {
       {
         std::lock_guard<std::mutex> lock(latch->mu);
         latch->error = std::move(error);
@@ -64,7 +65,7 @@ struct TestTask {
     }
   };
 
-  void Join() {
+  void join() {
     std::unique_lock<std::mutex> lock(latch->mu);
     latch->cv.wait(lock, [this] { return latch->done; });
     if (latch->error) {
@@ -72,35 +73,35 @@ struct TestTask {
     }
   }
 
-  std::shared_ptr<Latch> latch;
+  std::shared_ptr<completion_latch> latch;
 };
 
-TestTask AwaitSleep(SleepFuture fut, bool* completed) {
+test_task await_sleep(sleep_future fut, bool* completed) {
   (void)co_await std::move(fut);
   *completed = true;
 }
 
-TestTask AwaitInt(IntFuture fut, int64_t* out) {
+test_task await_int(int_future fut, int64_t* out) {
   *out = co_await std::move(fut);
 }
 
-TestTask AwaitExpectMyError(ThrowFuture fut, bool* caught) {
+test_task await_expect_my_error(throw_future fut, bool* caught) {
   try {
     (void)co_await std::move(fut);
-  } catch (const baml::BamlThrown<baml::Union<MyError>>& e) {
+  } catch (const baml::thrown<baml::variant<MyError>>& e) {
     *caught = e.get<MyError>() == MyError{42, "boom"};
   }
 }
 
-TestTask AwaitExpectCancelled(SleepFuture fut, bool* cancelled) {
+test_task await_expect_cancelled(sleep_future fut, bool* cancelled) {
   try {
     (void)co_await std::move(fut);
-  } catch (const baml::BamlCancelled&) {
+  } catch (const baml::cancelled&) {
     *cancelled = true;
   }
 }
 
-TestTask AwaitUncaught(ThrowFuture fut) { (void)co_await std::move(fut); }
+test_task await_uncaught(throw_future fut) { (void)co_await std::move(fut); }
 
 }  // namespace
 
@@ -108,51 +109,52 @@ BAML_TEST(co_await_pending_future_resumes) {
   // A genuinely in-flight call: the coroutine suspends and the dispatcher
   // thread resumes it when the envelope lands.
   bool completed = false;
-  TestTask task = AwaitSleep(throws_test::SleepMsAsync(100), &completed);
-  task.Join();
+  test_task task = await_sleep(throws_test::SleepMs_async(100), &completed);
+  task.join();
   BAML_ASSERT(completed);
 }
 
 BAML_TEST(co_await_yields_the_decoded_value) {
   int64_t got = 0;
-  TestTask task = AwaitInt(baml_sdk::round_trip_intAsync(7), &got);
-  task.Join();
+  test_task task = await_int(baml_sdk::round_trip_int_async(7), &got);
+  task.join();
   BAML_ASSERT(got == 7);
 }
 
 BAML_TEST(co_await_completed_future_fast_path) {
   // await_ready() true: no suspension, the coroutine runs straight through.
-  auto fut = baml_sdk::round_trip_intAsync(7);
+  auto fut = baml_sdk::round_trip_int_async(7);
   fut.wait();
   int64_t got = 0;
-  TestTask task = AwaitInt(std::move(fut), &got);
-  task.Join();
+  test_task task = await_int(std::move(fut), &got);
+  task.join();
   BAML_ASSERT(got == 7);
 }
 
 BAML_TEST(co_await_throws_typed_into_the_coroutine) {
   bool caught = false;
-  TestTask task = AwaitExpectMyError(throws_test::ThrowMyErrorAsync(), &caught);
-  task.Join();
+  test_task task =
+      await_expect_my_error(throws_test::ThrowMyError_async(), &caught);
+  task.join();
   BAML_ASSERT(caught);
 }
 
 BAML_TEST(co_await_cancelled_call_throws_cancelled) {
-  auto fut = throws_test::SleepMsAsync(2000);
+  auto fut = throws_test::SleepMs_async(2000);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  BAML_ASSERT(fut.Cancel());
+  BAML_ASSERT(fut.cancel());
   bool cancelled = false;
-  TestTask task = AwaitExpectCancelled(std::move(fut), &cancelled);
-  task.Join();
+  test_task task = await_expect_cancelled(std::move(fut), &cancelled);
+  task.join();
   BAML_ASSERT(cancelled);
 }
 
 BAML_TEST(uncaught_coroutine_exception_reaches_join) {
-  TestTask task = AwaitUncaught(throws_test::ThrowMyErrorAsync());
+  test_task task = await_uncaught(throws_test::ThrowMyError_async());
   bool rethrown = false;
   try {
-    task.Join();
-  } catch (const baml::BamlThrown<baml::Union<MyError>>&) {
+    task.join();
+  } catch (const baml::thrown<baml::variant<MyError>>&) {
     rethrown = true;
   }
   BAML_ASSERT(rethrown);

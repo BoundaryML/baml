@@ -1,17 +1,17 @@
-#ifndef BAML_UNION_H_
-#define BAML_UNION_H_
+#ifndef BAML_VARIANT_H_
+#define BAML_VARIANT_H_
 
-// baml::Union<Ts...>: BAML's union type as an order-canonical
+// baml::variant<Ts...>: BAML's union type as an order-canonical
 // std::variant.
 //
 // BAML unions are sets (`string | int` == `int | string`, `int | int` ==
 // `int`), but std::variant<A, B> and std::variant<B, A> are distinct C++
-// types. baml::Union sorts its alternatives at compile time (by a per-type
+// types. baml::variant sorts its alternatives at compile time (by a per-type
 // constexpr name) and drops duplicates, so every spelling of the same
 // alternative set resolves to the SAME std::variant instantiation. It is an
-// alias, not a wrapper class: a baml::Union value is a plain std::variant and
+// alias, not a wrapper class: a baml::variant value is a plain std::variant and
 // works with std::get, std::holds_alternative, std::visit, and every other
-// variant API. (Lowercase `union` is a C++ keyword; Union follows the guide's
+// variant API. (Lowercase `union` is a C++ keyword; variant follows the guide's
 // type-alias casing, while match mirrors std::visit per the vocabulary
 // rule in STYLE.md.)
 //
@@ -20,8 +20,8 @@
 // under canonical ordering). std::visit enforces exhaustiveness at compile
 // time; a `[](const auto&) { ... }` arm is the explicit catch-all.
 //
-// Nullability is NOT spelled with Union: `T | null` is std::optional<T>
-// and `A | B | null` is std::optional<Union<A, B>> (see codec.h).
+// Nullability is NOT spelled with variant: `T | null` is std::optional<T>
+// and `A | B | null` is std::optional<variant<A, B>> (see codec.h).
 
 #include <array>
 #include <cstddef>
@@ -37,7 +37,7 @@ namespace detail {
 // function name embeds the fully-qualified type; uniqueness and a stable
 // order per compiler are all that matters, not the exact spelling.
 template <class T>
-constexpr std::string_view TypeName() {
+constexpr std::string_view type_name() {
 #if defined(_MSC_VER)
   return __FUNCSIG__;
 #else
@@ -51,14 +51,14 @@ constexpr std::string_view TypeName() {
 // function cannot return a runtime-sized array. Insertion sort because
 // constexpr std::sort is C++20 and this is C++17.
 template <std::size_t N>
-struct CanonIndices {
+struct canon_indices {
   std::array<std::size_t, N> idx;
   std::size_t count;
 };
 
 template <class... Ts>
-constexpr CanonIndices<sizeof...(Ts)> SortedUniqueIndices() {
-  std::array<std::string_view, sizeof...(Ts)> names{TypeName<Ts>()...};
+constexpr canon_indices<sizeof...(Ts)> sorted_unique_indices() {
+  std::array<std::string_view, sizeof...(Ts)> names{type_name<Ts>()...};
   std::array<std::size_t, sizeof...(Ts)> idx{};
   for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = i;
   for (std::size_t i = 1; i < idx.size(); ++i)
@@ -76,13 +76,13 @@ constexpr CanonIndices<sizeof...(Ts)> SortedUniqueIndices() {
 // Reorders the pack into canonical order via the sorted, deduplicated
 // indices.
 template <class... Ts>
-struct CanonSort {
-  static constexpr CanonIndices<sizeof...(Ts)> canon =
-      SortedUniqueIndices<Ts...>();
+struct canon_sort {
+  static constexpr canon_indices<sizeof...(Ts)> canon =
+      sorted_unique_indices<Ts...>();
   template <std::size_t... Is>
   static std::variant<std::tuple_element_t<canon.idx[Is], std::tuple<Ts...>>...>
-      Helper(std::index_sequence<Is...>);
-  using type = decltype(Helper(std::make_index_sequence<canon.count>{}));
+      helper(std::index_sequence<Is...>);
+  using type = decltype(helper(std::make_index_sequence<canon.count>{}));
 };
 
 }  // namespace detail
@@ -90,29 +90,29 @@ struct CanonSort {
 // Alias, not a class: every alternative-set spelling resolves to the same
 // std::variant instantiation.
 template <class... Ts>
-using Union = typename detail::CanonSort<Ts...>::type;
+using variant = typename detail::canon_sort<Ts...>::type;
 
 namespace detail {
 
 template <class... Fs>
-struct Overloaded : Fs... {
+struct overloaded : Fs... {
   using Fs::operator()...;
 };
 template <class... Fs>
-Overloaded(Fs...) -> Overloaded<Fs...>;
+overloaded(Fs...) -> overloaded<Fs...>;
 
 }  // namespace detail
 
-// Pattern matching over a baml::Union (or any std::variant): one callable per
+// Pattern matching over a baml::variant (or any std::variant): one callable per
 // alternative, dispatched by type. A missing arm is a compile error;
 // `[](const auto&) { ... }` is the explicit catch-all (spell the parameter
 // `const auto&`, not `auto&&`, or it out-competes the exact arms).
 template <class V, class... Fs>
 decltype(auto) match(V&& v, Fs&&... fs) {
-  return std::visit(detail::Overloaded{std::forward<Fs>(fs)...},
+  return std::visit(detail::overloaded{std::forward<Fs>(fs)...},
                     std::forward<V>(v));
 }
 
 }  // namespace baml
 
-#endif  // BAML_UNION_H_
+#endif  // BAML_VARIANT_H_

@@ -24,13 +24,13 @@ namespace baml {
 namespace detail {
 
 // Per-call completion state shared between the issuing thread (via
-// baml::Future) and the engine callback thread. A plain mutex/condvar cell
+// baml::future) and the engine callback thread. A plain mutex/condvar cell
 // rather than std::promise so a continuation can run at fulfillment time:
 // std::future has no completion hook, and the co_await awaiter needs the
 // dispatcher thread to resume the suspended coroutine when the envelope
 // lands. The continuation is a C++17-clean function pointer (the coroutine
 // glue lives behind the feature-gate in future.h).
-struct CallState {
+struct call_state {
   std::mutex mu;
   std::condition_variable cv;
   bool ready = false;
@@ -41,7 +41,7 @@ struct CallState {
   // Called from the engine callback thread. Publishes the envelope, wakes
   // blocked waiters, and runs the registered continuation (outside the
   // lock: it may resume a coroutine that immediately touches this state).
-  void Fulfill(const uint8_t* bytes, size_t length) {
+  void fulfill(const uint8_t* bytes, size_t length) {
     void (*resume)(void*) = nullptr;
     void* resume_arg = nullptr;
     {
@@ -58,15 +58,15 @@ struct CallState {
   }
 
   // Blocks until the envelope arrives. The reference stays valid for the
-  // life of this state; only Fulfill writes it, exactly once.
-  const std::vector<uint8_t>& Wait() {
+  // life of this state; only fulfill writes it, exactly once.
+  const std::vector<uint8_t>& wait() {
     std::unique_lock<std::mutex> lock(mu);
     cv.wait(lock, [this] { return ready; });
     return envelope;
   }
 
   template <class Clock, class Duration>
-  bool WaitUntil(const std::chrono::time_point<Clock, Duration>& deadline) {
+  bool wait_until(const std::chrono::time_point<Clock, Duration>& deadline) {
     std::unique_lock<std::mutex> lock(mu);
     return cv.wait_until(lock, deadline, [this] { return ready; });
   }
@@ -74,39 +74,39 @@ struct CallState {
 
 // Correlates async results with in-flight calls. The C ABI has exactly one
 // process-global result callback; this registry owns it and fans results
-// out to per-call CallState cells keyed by a bridge-issued correlation id.
-class CallRegistry {
+// out to per-call call_state cells keyed by a bridge-issued correlation id.
+class call_registry {
  public:
-  struct Started {
+  struct started {
     uint32_t correlation_id;
-    std::shared_ptr<CallState> state;
+    std::shared_ptr<call_state> state;
   };
 
-  static CallRegistry& Instance() {
+  static call_registry& instance() {
     // Intentionally leaked (never destroyed): engine callback threads may
     // fire during process teardown, after static destructors would have
     // run a function-local static's destructor.
-    static CallRegistry* registry = new CallRegistry();
+    static call_registry* registry = new call_registry();
     return *registry;
   }
 
-  Started Begin() {
+  started begin() {
     uint32_t id = next_id_.fetch_add(1, std::memory_order_relaxed);
     if (id == 0) {
       id = next_id_.fetch_add(1, std::memory_order_relaxed);
     }
-    auto state = std::make_shared<CallState>();
+    auto state = std::make_shared<call_state>();
     {
       std::lock_guard<std::mutex> lock(mu_);
       pending_.emplace(id, state);
     }
-    return Started{id, std::move(state)};
+    return started{id, std::move(state)};
   }
 
   // Called from the C callback, on an engine thread. The payload is only
   // valid for the duration of the call, so it is copied out here.
-  void Complete(uint32_t call_id, const int8_t* content, size_t length) {
-    std::shared_ptr<CallState> state;
+  void complete(uint32_t call_id, const int8_t* content, size_t length) {
+    std::shared_ptr<call_state> state;
     {
       std::lock_guard<std::mutex> lock(mu_);
       auto it = pending_.find(call_id);
@@ -118,14 +118,14 @@ class CallRegistry {
       state = std::move(it->second);
       pending_.erase(it);
     }
-    state->Fulfill(reinterpret_cast<const uint8_t*>(content), length);
+    state->fulfill(reinterpret_cast<const uint8_t*>(content), length);
   }
 
  private:
-  CallRegistry() { Api().register_callback(&baml_cpp_result_trampoline); }
+  call_registry() { api().register_callback(&baml_cpp_result_trampoline); }
 
   std::mutex mu_;
-  std::unordered_map<uint32_t, std::shared_ptr<CallState>> pending_;
+  std::unordered_map<uint32_t, std::shared_ptr<call_state>> pending_;
   std::atomic<uint32_t> next_id_{1};
 };
 
@@ -137,7 +137,7 @@ extern "C" inline void baml_cpp_result_trampoline(uint32_t call_id,
                                                   size_t length) {
   // No C++ exception may cross the C ABI (bridge contract).
   try {
-    baml::detail::CallRegistry::Instance().Complete(call_id, content, length);
+    baml::detail::call_registry::instance().complete(call_id, content, length);
   } catch (...) {
   }
 }

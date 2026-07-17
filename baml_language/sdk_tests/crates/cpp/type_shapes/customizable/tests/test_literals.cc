@@ -1,5 +1,5 @@
 // Roundtrip coverage for baml_sdk::literals - literal Ty variants as
-// singleton ::baml::Lit types. Port of roundtrip_tests/test_literals.py:
+// singleton ::baml::lit types. Port of roundtrip_tests/test_literals.py:
 // python keeps the value set in typing.Literal annotations; C++ makes each
 // value a distinct type, so the round trips construct through the
 // BAML_LIT macro family and read back through Lit's implicit value

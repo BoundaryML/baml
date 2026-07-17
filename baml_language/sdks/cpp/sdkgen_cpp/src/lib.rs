@@ -1,9 +1,9 @@
 //! C++ SDK emitter, scoped to the packaging/publishing slice (bridge-week
 //! steps 1-8): the single-header layout, namespace routing, free functions
 //! with required + optional arguments (per-function opts structs, spec D4),
-//! classes + enums with generated `Codec<T>` specializations, transparent
+//! classes + enums with generated `codec<T>` specializations, transparent
 //! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
-//! multi-member unions as order-canonical `::baml::Union` aliases, and
+//! multi-member unions as order-canonical `::baml::variant` aliases, and
 //! typed error unions via `BamlThrown`.
 //! Post-step-8 features (async, methods, callbacks, generics, streaming
 //! companions, media/handles) are skipped and reported in a trailing
@@ -356,8 +356,8 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
     (
-        "include/baml/union.h",
-        include_str!("../../bridge_cpp/include/baml/union.h"),
+        "include/baml/variant.h",
+        include_str!("../../bridge_cpp/include/baml/variant.h"),
     ),
     (
         "include/baml/detail/call.h",
@@ -527,7 +527,7 @@ fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
         // bridges never re-case user names (Python kwargs and TS's inline
         // $opts never even mint a type); C++ needs a name only because the
         // struct must be constructible.
-        &format!("{}Opts", function.name.as_str()),
+        &format!("{}_opts", function.name.as_str()),
     )
 }
 
@@ -539,7 +539,7 @@ fn async_request(callable: &BamlFqn, function: &Function) -> NameRequest {
     NameRequest::synthesized(
         callable.child(ASYNC_MEMBER),
         CppNameKind::Function,
-        &format!("{}Async", function.name.as_str()),
+        &format!("{}_async", function.name.as_str()),
     )
 }
 
@@ -753,7 +753,7 @@ enum EmittedType {
 }
 
 /// A non-recursive type alias as a `using` declaration. A `using` is a pure
-/// synonym, so no codec is emitted: `Codec<Alias>` *is* `Codec<Target>`.
+/// synonym, so no codec is emitted: `codec<Alias>` *is* `codec<Target>`.
 struct EmittedUsing {
     ns: Vec<String>,
     name: CppName,
@@ -822,8 +822,8 @@ struct EmittedFn {
     opts_name: Option<CppName>,
     doc: Option<String>,
     raises: Vec<String>,
-    /// The declared throws set as a `::baml::Union<...>` spelling, when
-    /// every member translates; `None` uses the untyped `BamlError` path.
+    /// The declared throws set as a `::baml::variant<...>` spelling, when
+    /// every member translates; `None` uses the untyped `error` path.
     thrown: Option<String>,
 }
 
@@ -891,17 +891,17 @@ fn emit_callable(
     };
 
     // The declared throws set as a C++ type for the typed error path:
-    // always spelled as a ::baml::Union (a single thrown type wraps into a
+    // always spelled as a ::baml::variant (a single thrown type wraps into a
     // one-alternative Union) so every catch site reads uniformly via
     // baml::match. A throws set this slice cannot translate falls back to
-    // the untyped BamlError path (None -> CallSync's ThrownU = void).
+    // the untyped untyped error path (None -> call_sync's ThrownU = void).
     let thrown = function.throws.as_ref().and_then(|ty| {
         match translate_ty(pool, names, ty, emitted_types, &BTreeSet::new()) {
             Translated::Cpp(t) => {
-                if t.starts_with("::baml::Union<") {
+                if t.starts_with("::baml::variant<") {
                     Some(t)
                 } else {
-                    Some(format!("::baml::Union<{t}>"))
+                    Some(format!("::baml::variant<{t}>"))
                 }
             }
             Translated::NotYet | Translated::Unsupported(_) => None,
@@ -976,22 +976,22 @@ fn translate_ty(
             return Translated::Unsupported("media type (post-step-8)".to_string());
         }
         Ty::Literal(lit, ..) => {
-            // Literal types are singleton ::baml::Lit types (each distinct
+            // Literal types are singleton ::baml::lit types (each distinct
             // value a distinct C++ type), spelled as char packs / typed
             // scalars directly -- the BAML_LIT macro family is user-side
             // sugar only. Float literals stay widened: float NTTPs are
             // C++20 and BAML has no float literal types in practice.
             match lit {
-                baml_base::Literal::Int(v) => format!("::baml::Lit<{}>", lit_int_spelling(*v)),
+                baml_base::Literal::Int(v) => format!("::baml::lit<{}>", lit_int_spelling(*v)),
                 baml_base::Literal::Bigint(_) => {
                     return Translated::Unsupported("bigint literal (post-step-8)".to_string());
                 }
                 baml_base::Literal::Float(_) => "double".to_string(),
                 baml_base::Literal::String(s) => {
                     let chars: Vec<String> = s.bytes().map(lit_char_spelling).collect();
-                    format!("::baml::Lit<{}>", chars.join(", "))
+                    format!("::baml::lit<{}>", chars.join(", "))
                 }
-                baml_base::Literal::Bool(b) => format!("::baml::Lit<{b}>"),
+                baml_base::Literal::Bool(b) => format!("::baml::lit<{b}>"),
             }
         }
         Ty::TypeVar(name, _) => {
@@ -1017,7 +1017,7 @@ fn translate_ty(
                     return Translated::NotYet;
                 };
                 if boxed.contains(name) {
-                    return Translated::Cpp(format!("::baml::Box<{base}>"));
+                    return Translated::Cpp(format!("::baml::box<{base}>"));
                 }
                 return Translated::Cpp(base);
             }
@@ -1061,7 +1061,7 @@ fn translate_ty(
                         CppNameKind::EnumVariant,
                     ))
                     .declared();
-                Translated::Cpp(format!("::baml::Lit<{enum_path}::{variant_name}>"))
+                Translated::Cpp(format!("::baml::lit<{enum_path}::{variant_name}>"))
             } else {
                 Translated::NotYet
             };
@@ -1085,7 +1085,7 @@ fn translate_ty(
                 return Translated::NotYet;
             };
             if boxed.contains(name) {
-                return Translated::Cpp(format!("::baml::Box<{base}>"));
+                return Translated::Cpp(format!("::baml::box<{base}>"));
             }
             return Translated::Cpp(base);
         }
@@ -1123,7 +1123,7 @@ fn translate_ty(
                     other => return other,
                 }
             }
-            // Multi-member unions spell ::baml::Union<...>, an
+            // Multi-member unions spell ::baml::variant<...>, an
             // order-canonical std::variant alias: the C++ type system
             // dedups spellings (Union<A, B> == Union<B, A>), so
             // declaration order is fine here; sorting the rendered text
@@ -1132,17 +1132,17 @@ fn translate_ty(
             let inner = match alternatives.as_slice() {
                 [] => return Translated::Unsupported("empty union".to_string()),
                 [single] => single.clone(),
-                many => format!("::baml::Union<{}>", many.join(", ")),
+                many => format!("::baml::variant<{}>", many.join(", ")),
             };
             if had_null {
                 // A nullable boxed recursive edge cannot be optional<Box<T>>
                 // (std::optional needs a complete T at instantiation);
                 // OptionalBox folds the null into the box itself.
                 if let Some(boxed_inner) = inner
-                    .strip_prefix("::baml::Box<")
+                    .strip_prefix("::baml::box<")
                     .and_then(|rest| rest.strip_suffix('>'))
                 {
-                    format!("::baml::OptionalBox<{boxed_inner}>")
+                    format!("::baml::optional_box<{boxed_inner}>")
                 } else {
                     format!("std::optional<{inner}>")
                 }
@@ -1182,8 +1182,8 @@ const FN_VARIANTS: [FnVariant; 2] = [FnVariant::Sync, FnVariant::Async];
 /// when the function has a typed throws set.
 fn future_ret(f: &EmittedFn) -> String {
     match &f.thrown {
-        Some(u) => format!("::baml::Future<{}, {}>", f.ret, u),
-        None => format!("::baml::Future<{}>", f.ret),
+        Some(u) => format!("::baml::future<{}, {}>", f.ret, u),
+        None => format!("::baml::future<{}>", f.ret),
     }
 }
 
@@ -1216,7 +1216,7 @@ fn close_namespaces(buf: &mut String, ns: &[String]) {
 
 fn by_value_or_cref(ty: &str) -> String {
     // Lit types are empty unit structs: by value.
-    if ty.starts_with("::baml::Lit<") {
+    if ty.starts_with("::baml::lit<") {
         return ty.to_string();
     }
     match ty {
@@ -1226,7 +1226,7 @@ fn by_value_or_cref(ty: &str) -> String {
 }
 
 /// Spells one byte of a BAML string literal as a C++ char literal for a
-/// `::baml::Lit` char pack. Bytes, not code points: the pack mirrors the
+/// `::baml::lit` char pack. Bytes, not code points: the pack mirrors the
 /// literal's UTF-8 encoding, matching what `BAML_LIT`'s sizeof-based
 /// expansion produces.
 fn lit_char_spelling(b: u8) -> String {
@@ -1283,7 +1283,7 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
     let _ = writeln!(buf, "{indent}struct {opts_name} {{");
     for p in &f.opt_params {
         let name = p.name.declared();
-        let arg_ty = format!("::baml::Arg<{}>", p.ty);
+        let arg_ty = format!("::baml::arg<{}>", p.ty);
         let _ = writeln!(buf, "{indent}  {arg_ty} {name};");
         let _ = writeln!(
             buf,
@@ -1299,7 +1299,7 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
 }
 
 /// Emits one binding body: runtime init, required args, set optional args,
-/// then the call (blocking `CallSync`, or `StartCall` returning the
+/// then the call (blocking `call_sync`, or `start_call` returning the
 /// in-flight `baml::Future` for the async sibling).
 fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant) {
     let args = GeneratorIdent::ArgsLocal.token();
@@ -1311,12 +1311,12 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant
         detail = GeneratorIdent::DetailNamespace.token(),
         ensure = GeneratorIdent::EnsureRuntime.token()
     );
-    let _ = writeln!(buf, "{indent}::baml::detail::ArgsEncoder {args};");
+    let _ = writeln!(buf, "{indent}::baml::detail::args_encoder {args};");
     for p in &f.params {
         let _ = writeln!(
             buf,
-            "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
-             ::baml::Codec<{ty}>::Encode({w}, {value}); }});",
+            "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
+             ::baml::codec<{ty}>::encode({w}, {value}); }});",
             wire = p.name.wire(),
             ty = p.ty,
             value = p.name.identifier()
@@ -1327,8 +1327,8 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant
         let _ = writeln!(
             buf,
             "{indent}if ({opts}.{field}.is_set()) {{\n{indent}  \
-             {args}.AddArg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
-             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
+             {args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
+             ::baml::codec<{ty}>::encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
             wire = p.name.wire(),
             ty = p.ty
         );
@@ -1338,8 +1338,8 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant
         None => String::new(),
     };
     let driver = match variant {
-        FnVariant::Sync => "CallSync",
-        FnVariant::Async => "StartCall",
+        FnVariant::Sync => "call_sync",
+        FnVariant::Async => "start_call",
     };
     let _ = writeln!(
         buf,
@@ -1495,7 +1495,7 @@ fn render_header(
     buf
 }
 
-/// Codec<T> specializations for the generated enums and classes. Emitted in
+/// codec<T> specializations for the generated enums and classes. Emitted in
 /// the header (inline) so they are visible from any translation unit.
 fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedClass]) {
     buf.push_str("\nnamespace baml {\n");
@@ -1505,17 +1505,17 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let fqn = e.name.wire();
         let _ = writeln!(
             buf,
-            "\ntemplate <>\nstruct Codec<{q}> {{\n  \
-             static void Encode(detail::pb::InboundValue& value_msg, {q} v) {{\n    \
+            "\ntemplate <>\nstruct codec<{q}> {{\n  \
+             static void encode(detail::pb::InboundValue& value_msg, {q} v) {{\n    \
              auto* e = value_msg.mutable_enum_value();\n    \
              e->set_name(\"{fqn}\");\n    \
              e->set_value(ToWire(v));\n  }}\n  \
-             static {q} Decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
-             const auto& v = detail::Unwrap(raw);\n    \
+             static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
+             const auto& v = detail::unwrap(raw);\n    \
              if (v.value_case() != detail::pb::BamlOutboundValue::kEnumValue ||\n      \
              (!v.enum_value().name().empty() &&\n       \
              v.enum_value().name() != \"{fqn}\")) {{\n      \
-             detail::KindMismatch(\"enum {fqn}\", v);\n    }}\n    \
+             detail::kind_mismatch(\"enum {fqn}\", v);\n    }}\n    \
              return FromWire(v.enum_value().value());\n  }}",
         );
         buf.push_str("  static const char* ToWire(");
@@ -1527,7 +1527,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 variant = variant.declared()
             );
         }
-        buf.push_str("    }\n    throw BamlError(\"invalid enum value\");\n  }\n");
+        buf.push_str("    }\n    throw error(\"invalid enum value\");\n  }\n");
         let _ = writeln!(buf, "  static {q} FromWire(const std::string& value) {{");
         for (variant, value) in &e.variants {
             let _ = writeln!(
@@ -1538,7 +1538,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         let _ = writeln!(
             buf,
-            "    throw BamlError(\"unknown variant '\" + value + \"' for enum {fqn}\");\n  \
+            "    throw error(\"unknown variant '\" + value + \"' for enum {fqn}\");\n  \
              }}\n}};",
         );
     }
@@ -1556,11 +1556,11 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             buf.push_str("\ntemplate <>\n");
             let _ = writeln!(
                 buf,
-                "struct Codec<{q}> {{\n  \
-                 static void Encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
-                 Codec<{inner}>::Encode(value_msg, v.{field});\n  }}\n  \
-                 static {q} Decode(const detail::pb::BamlOutboundValue& v) {{\n    \
-                 return {q}{{Codec<{inner}>::Decode(v)}};\n  }}\n}};"
+                "struct codec<{q}> {{\n  \
+                 static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+                 codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
+                 static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
+                 return {q}{{codec<{inner}>::decode(v)}};\n  }}\n}};"
             );
             continue;
         }
@@ -1568,10 +1568,10 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let fqn = c.name.wire();
 
         buf.push_str("\ntemplate <>\n");
-        let _ = writeln!(buf, "struct Codec<{q}> {{");
+        let _ = writeln!(buf, "struct codec<{q}> {{");
         let _ = writeln!(
             buf,
-            "  static void Encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+            "  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
              auto* cls = value_msg.mutable_class_value();"
         );
         for field in &c.fields {
@@ -1579,7 +1579,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 buf,
                 "    {{\n      auto* entry = cls->add_fields();\n      \
                  entry->set_string_key(\"{wire}\");\n      \
-                 Codec<{ty}>::Encode(*entry->mutable_value(), v.{name});\n    }}",
+                 codec<{ty}>::encode(*entry->mutable_value(), v.{name});\n    }}",
                 wire = field.name.wire(),
                 ty = field.ty,
                 name = field.name.identifier()
@@ -1595,12 +1595,12 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         // non-default-constructible field types (baml::Box) work.
         let _ = writeln!(
             buf,
-            "  static {q} Decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
-             const auto& v = detail::Unwrap(raw);\n    \
+            "  static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
+             const auto& v = detail::unwrap(raw);\n    \
              if (v.value_case() != detail::pb::BamlOutboundValue::kClassValue ||\n      \
              (!v.class_value().name().empty() &&\n       \
              v.class_value().name() != \"{fqn}\")) {{\n      \
-             detail::KindMismatch(\"class {fqn}\", v);\n    }}",
+             detail::kind_mismatch(\"class {fqn}\", v);\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
@@ -1618,7 +1618,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             let _ = writeln!(
                 buf,
                 "      {kw} (field.key() == \"{wire}\") {{\n        \
-                 field_{name} = Codec<{ty}>::Decode(field.value());",
+                 field_{name} = codec<{ty}>::decode(field.value());",
                 wire = field.name.wire(),
                 ty = field.ty,
                 name = field.name.declared()
@@ -1631,14 +1631,14 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         let _ = writeln!(
             buf,
-            "        throw BamlError(\"unexpected field '\" + field.key() + \"' on {fqn}\");\n      \
+            "        throw error(\"unexpected field '\" + field.key() + \"' on {fqn}\");\n      \
              }}\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
                 buf,
                 "    if (!field_{name}.has_value()) {{\n      \
-                 throw BamlError(\"missing field '{wire}' on {fqn}\");\n    }}",
+                 throw error(\"missing field '{wire}' on {fqn}\");\n    }}",
                 name = field.name.declared(),
                 wire = field.name.wire()
             );
@@ -1775,7 +1775,7 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
          for (const BamlBytecodeChunk& chunk : kBamlBytecodeChunks) {{\n      \
          bytecode.append(chunk.data, chunk.len);\n    \
          }}\n    \
-         ::baml::InitializeRuntimeFromBytecode(\n        \
+         ::baml::initialize_runtime_from_bytecode(\n        \
          reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \
          \"{version}\");\n  \
          }});\n\

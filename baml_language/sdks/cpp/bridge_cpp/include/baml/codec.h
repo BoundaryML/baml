@@ -1,12 +1,12 @@
 #ifndef BAML_CODEC_H_
 #define BAML_CODEC_H_
 
-// Codec<T>: the typed boundary layer. `Encode` fills an InboundValue
-// message; `Decode` converts a BamlOutboundValue into T, throwing BamlError
+// codec<T>: the typed boundary layer. `encode` fills an InboundValue
+// message; `decode` converts a BamlOutboundValue into T, throwing error
 // on arm mismatches. Generated code adds specializations for its
 // classes/enums; this header owns the primitive and container instances.
 //
-// Decode sees values through detail::Unwrap (union metadata dropped) and
+// decode sees values through detail::unwrap (union metadata dropped) and
 // widens literal values to their base scalar (Python parity).
 
 #include <baml/box.h>
@@ -27,25 +27,25 @@
 namespace baml {
 
 template <typename T>
-struct Codec;  // primary template intentionally undefined
+struct codec;  // primary template intentionally undefined
 
 namespace detail {
 
-[[noreturn]] inline void KindMismatch(const char* expected,
-                                      const pb::BamlOutboundValue& got) {
-  throw BamlError(std::string("BAML decode error: expected ") + expected +
-                  ", got " + ArmName(got.value_case()));
+[[noreturn]] inline void kind_mismatch(const char* expected,
+                                       const pb::BamlOutboundValue& got) {
+  throw error(std::string("BAML decode error: expected ") + expected +
+              ", got " + arm_name(got.value_case()));
 }
 
 }  // namespace detail
 
 template <>
-struct Codec<int64_t> {
-  static void Encode(detail::pb::InboundValue& value_msg, int64_t v) {
+struct codec<int64_t> {
+  static void encode(detail::pb::InboundValue& value_msg, int64_t v) {
     value_msg.set_int_value(v);
   }
-  static int64_t Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static int64_t decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() == detail::pb::BamlOutboundValue::kIntValue) {
       return v.int_value();
     }
@@ -54,17 +54,17 @@ struct Codec<int64_t> {
             detail::pb::BamlLiteralValue::kIntValue) {
       return v.literal_value().int_value();
     }
-    detail::KindMismatch("int", v);
+    detail::kind_mismatch("int", v);
   }
 };
 
 template <>
-struct Codec<double> {
-  static void Encode(detail::pb::InboundValue& value_msg, double v) {
+struct codec<double> {
+  static void encode(detail::pb::InboundValue& value_msg, double v) {
     value_msg.set_float_value(v);
   }
-  static double Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static double decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     switch (v.value_case()) {
       case detail::pb::BamlOutboundValue::kFloatValue:
         return v.float_value();
@@ -73,31 +73,31 @@ struct Codec<double> {
         return static_cast<double>(v.int_value());
       case detail::pb::BamlOutboundValue::kLiteralValue:
         // Float literals ride as source text; malformed text surfaces as
-        // a BamlError, never a bare std:: exception.
+        // a error, never a bare std:: exception.
         if (v.literal_value().literal_case() ==
             detail::pb::BamlLiteralValue::kFloatValue) {
           try {
             return std::stod(v.literal_value().float_value());
           } catch (const std::exception&) {
-            throw BamlError("BAML decode error: malformed float literal '" +
-                            v.literal_value().float_value() + "'");
+            throw error("BAML decode error: malformed float literal '" +
+                        v.literal_value().float_value() + "'");
           }
         }
         break;
       default:
         break;
     }
-    detail::KindMismatch("float", v);
+    detail::kind_mismatch("float", v);
   }
 };
 
 template <>
-struct Codec<bool> {
-  static void Encode(detail::pb::InboundValue& value_msg, bool v) {
+struct codec<bool> {
+  static void encode(detail::pb::InboundValue& value_msg, bool v) {
     value_msg.set_bool_value(v);
   }
-  static bool Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static bool decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() == detail::pb::BamlOutboundValue::kBoolValue) {
       return v.bool_value();
     }
@@ -106,18 +106,18 @@ struct Codec<bool> {
             detail::pb::BamlLiteralValue::kBoolValue) {
       return v.literal_value().bool_value();
     }
-    detail::KindMismatch("bool", v);
+    detail::kind_mismatch("bool", v);
   }
 };
 
 template <>
-struct Codec<std::string> {
-  static void Encode(detail::pb::InboundValue& value_msg,
+struct codec<std::string> {
+  static void encode(detail::pb::InboundValue& value_msg,
                      const std::string& v) {
     value_msg.set_string_value(v);
   }
-  static std::string Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static std::string decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() == detail::pb::BamlOutboundValue::kStringValue) {
       return v.string_value();
     }
@@ -126,21 +126,21 @@ struct Codec<std::string> {
             detail::pb::BamlLiteralValue::kStringValue) {
       return v.literal_value().string_value();
     }
-    detail::KindMismatch("string", v);
+    detail::kind_mismatch("string", v);
   }
 };
 
 template <>
-struct Codec<std::vector<uint8_t>> {
-  static void Encode(detail::pb::InboundValue& value_msg,
+struct codec<std::vector<uint8_t>> {
+  static void encode(detail::pb::InboundValue& value_msg,
                      const std::vector<uint8_t>& v) {
     value_msg.set_uint8array_value(
         std::string(reinterpret_cast<const char*>(v.data()), v.size()));
   }
-  static std::vector<uint8_t> Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static std::vector<uint8_t> decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() != detail::pb::BamlOutboundValue::kUint8ArrayValue) {
-      detail::KindMismatch("uint8array", v);
+      detail::kind_mismatch("uint8array", v);
     }
     const std::string& bytes = v.uint8array_value();
     return std::vector<uint8_t>(bytes.begin(), bytes.end());
@@ -148,15 +148,15 @@ struct Codec<std::vector<uint8_t>> {
 };
 
 template <>
-struct Codec<std::monostate> {
-  static void Encode(detail::pb::InboundValue&, std::monostate) {
+struct codec<std::monostate> {
+  static void encode(detail::pb::InboundValue&, std::monostate) {
     // BAML null = absent InboundValue oneof: set nothing.
   }
-  static std::monostate Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static std::monostate decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() != detail::pb::BamlOutboundValue::kNullValue &&
         v.value_case() != detail::pb::BamlOutboundValue::VALUE_NOT_SET) {
-      detail::KindMismatch("null", v);
+      detail::kind_mismatch("null", v);
     }
     return std::monostate{};
   }
@@ -165,162 +165,162 @@ struct Codec<std::monostate> {
 // Boxes are transparent on the wire: the box exists only to break C++
 // type-recursion cycles.
 template <typename T>
-struct Codec<Box<T>> {
-  static void Encode(detail::pb::InboundValue& value_msg, const Box<T>& v) {
-    Codec<T>::Encode(value_msg, *v);
+struct codec<box<T>> {
+  static void encode(detail::pb::InboundValue& value_msg, const box<T>& v) {
+    codec<T>::encode(value_msg, *v);
   }
-  static Box<T> Decode(const detail::pb::BamlOutboundValue& v) {
-    return Box<T>(Codec<T>::Decode(v));
+  static box<T> decode(const detail::pb::BamlOutboundValue& v) {
+    return box<T>(codec<T>::decode(v));
   }
 };
 
 template <typename T>
-struct Codec<OptionalBox<T>> {
-  static void Encode(detail::pb::InboundValue& value_msg,
-                     const OptionalBox<T>& v) {
+struct codec<optional_box<T>> {
+  static void encode(detail::pb::InboundValue& value_msg,
+                     const optional_box<T>& v) {
     if (v.has_value()) {
-      Codec<T>::Encode(value_msg, *v);
+      codec<T>::encode(value_msg, *v);
     }
     // empty = BAML null = absent oneof: set nothing.
   }
-  static OptionalBox<T> Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static optional_box<T> decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() == detail::pb::BamlOutboundValue::kNullValue ||
         v.value_case() == detail::pb::BamlOutboundValue::VALUE_NOT_SET) {
-      return OptionalBox<T>();
+      return optional_box<T>();
     }
-    return OptionalBox<T>(Codec<T>::Decode(v));
+    return optional_box<T>(codec<T>::decode(v));
   }
 };
 
 template <typename T>
-struct Codec<std::optional<T>> {
-  static void Encode(detail::pb::InboundValue& value_msg,
+struct codec<std::optional<T>> {
+  static void encode(detail::pb::InboundValue& value_msg,
                      const std::optional<T>& v) {
     if (v.has_value()) {
-      Codec<T>::Encode(value_msg, *v);
+      codec<T>::encode(value_msg, *v);
     }
     // nullopt = BAML null = absent oneof: set nothing.
   }
-  static std::optional<T> Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static std::optional<T> decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() == detail::pb::BamlOutboundValue::kNullValue ||
         v.value_case() == detail::pb::BamlOutboundValue::VALUE_NOT_SET) {
       return std::nullopt;
     }
-    return Codec<T>::Decode(v);
+    return codec<T>::decode(v);
   }
 };
 
 template <typename T>
-struct Codec<std::vector<T>> {
-  static void Encode(detail::pb::InboundValue& value_msg,
+struct codec<std::vector<T>> {
+  static void encode(detail::pb::InboundValue& value_msg,
                      const std::vector<T>& v) {
     detail::pb::InboundListValue* list = value_msg.mutable_list_value();
     for (const T& item : v) {
-      Codec<T>::Encode(*list->add_values(), item);
+      codec<T>::encode(*list->add_values(), item);
     }
   }
-  static std::vector<T> Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static std::vector<T> decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() != detail::pb::BamlOutboundValue::kListValue) {
-      detail::KindMismatch("list", v);
+      detail::kind_mismatch("list", v);
     }
     std::vector<T> out;
     out.reserve(static_cast<size_t>(v.list_value().items_size()));
     for (const auto& item : v.list_value().items()) {
-      out.push_back(Codec<T>::Decode(item));
+      out.push_back(codec<T>::decode(item));
     }
     return out;
   }
 };
 
 template <typename T>
-struct Codec<std::unordered_map<std::string, T>> {
-  static void Encode(detail::pb::InboundValue& value_msg,
+struct codec<std::unordered_map<std::string, T>> {
+  static void encode(detail::pb::InboundValue& value_msg,
                      const std::unordered_map<std::string, T>& v) {
     detail::pb::InboundMapValue* map = value_msg.mutable_map_value();
     for (const auto& entry : v) {
       detail::pb::InboundMapEntry* e = map->add_entries();
       e->set_string_key(entry.first);
-      Codec<T>::Encode(*e->mutable_value(), entry.second);
+      codec<T>::encode(*e->mutable_value(), entry.second);
     }
   }
-  static std::unordered_map<std::string, T> Decode(
+  static std::unordered_map<std::string, T> decode(
       const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+    const auto& v = detail::unwrap(raw);
     if (v.value_case() != detail::pb::BamlOutboundValue::kMapValue) {
-      detail::KindMismatch("map", v);
+      detail::kind_mismatch("map", v);
     }
     std::unordered_map<std::string, T> out;
     for (const auto& entry : v.map_value().entries()) {
-      out.emplace(entry.key(), Codec<T>::Decode(entry.value()));
+      out.emplace(entry.key(), codec<T>::decode(entry.value()));
     }
     return out;
   }
 };
 
-// BAML literal types (baml::Lit). Encode writes the static value as its
-// plain scalar/enum arm (the engine types the parameter). Decode reuses
+// BAML literal types (baml::lit). encode writes the static value as its
+// plain scalar/enum arm (the engine types the parameter). decode reuses
 // the base codec for arm handling (plain and literal wire arms alike) and
 // then requires the exact value: a mismatch throws, which inside a union
 // rejects this alternative and lets the next one probe.
 template <auto... Vs>
-struct Codec<Lit<Vs...>> {
-  using L = Lit<Vs...>;
-  static constexpr detail::LitShape kShape =
-      detail::LitShapeOf<decltype(Vs)...>();
+struct codec<lit<Vs...>> {
+  using L = lit<Vs...>;
+  static constexpr detail::lit_shape shape =
+      detail::lit_shape_of<decltype(Vs)...>();
 
-  static void Encode(detail::pb::InboundValue& value_msg, const L&) {
-    if constexpr (kShape == detail::LitShape::kString) {
+  static void encode(detail::pb::InboundValue& value_msg, const L&) {
+    if constexpr (shape == detail::lit_shape::string) {
       value_msg.set_string_value(std::string(L::value));
-    } else if constexpr (kShape == detail::LitShape::kInt) {
+    } else if constexpr (shape == detail::lit_shape::integer) {
       value_msg.set_int_value(L::value);
-    } else if constexpr (kShape == detail::LitShape::kBool) {
+    } else if constexpr (shape == detail::lit_shape::boolean) {
       value_msg.set_bool_value(L::value);
     } else {
-      Codec<std::decay_t<decltype(L::value)>>::Encode(value_msg, L::value);
+      codec<std::decay_t<decltype(L::value)>>::encode(value_msg, L::value);
     }
   }
 
-  static L Decode(const detail::pb::BamlOutboundValue& raw) {
-    if constexpr (kShape == detail::LitShape::kString) {
-      if (Codec<std::string>::Decode(raw) != L::value) {
-        Mismatch("literal \"" + std::string(L::value) + "\"");
+  static L decode(const detail::pb::BamlOutboundValue& raw) {
+    if constexpr (shape == detail::lit_shape::string) {
+      if (codec<std::string>::decode(raw) != L::value) {
+        mismatch("literal \"" + std::string(L::value) + "\"");
       }
-    } else if constexpr (kShape == detail::LitShape::kInt) {
-      if (Codec<int64_t>::Decode(raw) != L::value) {
-        Mismatch("literal " + std::to_string(L::value));
+    } else if constexpr (shape == detail::lit_shape::integer) {
+      if (codec<int64_t>::decode(raw) != L::value) {
+        mismatch("literal " + std::to_string(L::value));
       }
-    } else if constexpr (kShape == detail::LitShape::kBool) {
-      if (Codec<bool>::Decode(raw) != L::value) {
-        Mismatch(L::value ? "literal true" : "literal false");
+    } else if constexpr (shape == detail::lit_shape::boolean) {
+      if (codec<bool>::decode(raw) != L::value) {
+        mismatch(L::value ? "literal true" : "literal false");
       }
     } else {
       using E = std::decay_t<decltype(L::value)>;
-      if (Codec<E>::Decode(raw) != L::value) {
-        Mismatch("enum-variant literal");
+      if (codec<E>::decode(raw) != L::value) {
+        mismatch("enum-variant literal");
       }
     }
     return L{};
   }
 
  private:
-  [[noreturn]] static void Mismatch(const std::string& expected) {
-    throw BamlError("BAML decode error: expected " + expected);
+  [[noreturn]] static void mismatch(const std::string& expected) {
+    throw error("BAML decode error: expected " + expected);
   }
 };
 
-// BAML unions (baml::Union<Ts...> = order-canonical std::variant). Encode
+// BAML unions (baml::variant<Ts...> = order-canonical std::variant). encode
 // writes the ACTIVE alternative's value with no union wrapper (the engine
-// types the member; Python parity). Decode receives the union-unwrapped
+// types the member; Python parity). decode receives the union-unwrapped
 // inner value and must pick an alternative from the concrete wire arm
 // alone -- alternatives are in canonical (sorted) order, so selection is
 // order-independent by construction:
 //
-//   pass 0 (literal): Lit alternatives claim their exact values first, so
-//     Lit<"auto"> beats a std::string sibling for the string "auto";
-//   pass 1 (strict): each non-Lit alternative decodes only its exact wire
+//   pass 0 (literal): lit alternatives claim their exact values first, so
+//     lit<"auto"> beats a std::string sibling for the string "auto";
+//   pass 1 (strict): each non-lit alternative decodes only its exact wire
 //     arms (int never satisfies a double alternative);
 //   pass 2 (lenient): the engine's int->float coercion is admitted, for
 //     unions with a float arm but no int arm.
@@ -329,38 +329,38 @@ struct Codec<Lit<Vs...>> {
 // codecs; structurally ambiguous alternatives (two lists) resolve by
 // probing elements.
 template <class... Ts>
-struct Codec<std::variant<Ts...>> {
+struct codec<std::variant<Ts...>> {
   using V = std::variant<Ts...>;
 
-  static void Encode(detail::pb::InboundValue& value_msg, const V& v) {
+  static void encode(detail::pb::InboundValue& value_msg, const V& v) {
     std::visit(
         [&value_msg](const auto& alt) {
           using T = std::decay_t<decltype(alt)>;
-          Codec<T>::Encode(value_msg, alt);
+          codec<T>::encode(value_msg, alt);
         },
         v);
   }
 
-  static V Decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& v = detail::Unwrap(raw);
+  static V decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
     std::optional<V> out;
-    const bool lit = (TryArm<Ts>(v, out, Pass::kLiteral) || ...);
+    const bool lit = (try_arm<Ts>(v, out, pass::literal) || ...);
     if (!lit) {
-      const bool strict = (TryArm<Ts>(v, out, Pass::kStrict) || ...);
+      const bool strict = (try_arm<Ts>(v, out, pass::strict) || ...);
       if (!strict) {
-        (TryArm<Ts>(v, out, Pass::kLenient) || ...);
+        (try_arm<Ts>(v, out, pass::lenient) || ...);
       }
     }
     if (!out.has_value()) {
-      detail::KindMismatch("union", v);
+      detail::kind_mismatch("union", v);
     }
     return std::move(*out);
   }
 
  private:
-  enum class Pass { kLiteral, kStrict, kLenient };
+  enum class pass { literal, strict, lenient };
 
-  static bool IsIntArm(const detail::pb::BamlOutboundValue& v) {
+  static bool is_int_arm(const detail::pb::BamlOutboundValue& v) {
     if (v.value_case() == detail::pb::BamlOutboundValue::kIntValue) {
       return true;
     }
@@ -370,19 +370,19 @@ struct Codec<std::variant<Ts...>> {
   }
 
   template <class T>
-  static bool TryArm(const detail::pb::BamlOutboundValue& v,
-                     std::optional<V>& out, Pass pass) {
-    if ((pass == Pass::kLiteral) != detail::IsLit<T>::value) {
+  static bool try_arm(const detail::pb::BamlOutboundValue& v,
+                      std::optional<V>& out, pass pass) {
+    if ((pass == pass::literal) != detail::is_lit<T>::value) {
       return false;
     }
-    if (pass == Pass::kStrict && std::is_same<T, double>::value &&
-        IsIntArm(v)) {
+    if (pass == pass::strict && std::is_same<T, double>::value &&
+        is_int_arm(v)) {
       return false;
     }
     try {
-      out.emplace(std::in_place_type<T>, Codec<T>::Decode(v));
+      out.emplace(std::in_place_type<T>, codec<T>::decode(v));
       return true;
-    } catch (const BamlError&) {
+    } catch (const error&) {
       return false;
     }
   }
@@ -393,8 +393,8 @@ namespace detail {
 // Extracts a human-readable message from a thrown BAML value: the `message`
 // field of an error class when present, else the class FQN, else the
 // value's arm name.
-inline std::string ErrorMessageOf(const pb::BamlOutboundValue& raw) {
-  const pb::BamlOutboundValue& v = Unwrap(raw);
+inline std::string error_message_of(const pb::BamlOutboundValue& raw) {
+  const pb::BamlOutboundValue& v = unwrap(raw);
   if (v.value_case() == pb::BamlOutboundValue::kClassValue) {
     const pb::BamlValueClass& cls = v.class_value();
     for (const auto& field : cls.fields()) {
@@ -408,10 +408,10 @@ inline std::string ErrorMessageOf(const pb::BamlOutboundValue& raw) {
   if (v.value_case() == pb::BamlOutboundValue::kStringValue) {
     return v.string_value();
   }
-  return ArmName(v.value_case());
+  return arm_name(v.value_case());
 }
 
-inline std::string JoinTrace(
+inline std::string join_trace(
     const google::protobuf::RepeatedPtrField<std::string>& trace) {
   std::string out;
   for (const std::string& line : trace) {
@@ -424,26 +424,27 @@ inline std::string JoinTrace(
 }
 
 // The FQN of a thrown class value, for class_name() routing.
-inline std::string ThrownClassName(const pb::BamlOutboundValue& raw) {
-  const pb::BamlOutboundValue& v = Unwrap(raw);
+inline std::string thrown_class_name(const pb::BamlOutboundValue& raw) {
+  const pb::BamlOutboundValue& v = unwrap(raw);
   return v.value_case() == pb::BamlOutboundValue::kClassValue
              ? v.class_value().name()
              : std::string();
 }
 
-// The re-encoded thrown value, kept on the exception so BamlError::get<T>()
+// The re-encoded thrown value, kept on the exception so error::get<T>()
 // can decode it as a typed value later.
-inline std::vector<uint8_t> RawPayload(const pb::BamlOutboundValue& v) {
+inline std::vector<uint8_t> raw_payload(const pb::BamlOutboundValue& v) {
   const std::string bytes = v.SerializeAsString();
   return std::vector<uint8_t>(bytes.begin(), bytes.end());
 }
 
-[[noreturn]] inline void ThrowFromResult(const pb::BamlOutboundResult& result) {
+[[noreturn]] inline void throw_from_result(
+    const pb::BamlOutboundResult& result) {
   const bool is_panic = result.result_case() == pb::BamlOutboundResult::kPanic;
   const pb::BamlOutboundValue& value =
       is_panic ? result.panic().value() : result.error().value();
-  std::string class_name = ThrownClassName(value);
-  std::string message = ErrorMessageOf(value);
+  std::string class_name = thrown_class_name(value);
+  std::string message = error_message_of(value);
 
   if (is_panic) {
     if (result.panic().is_exit_panic()) {
@@ -451,69 +452,71 @@ inline std::vector<uint8_t> RawPayload(const pb::BamlOutboundValue& v) {
       // (parity with Python's os._exit path).
       std::_Exit(static_cast<int>(result.panic().exit_code()));
     }
-    std::string trace = JoinTrace(result.panic().trace());
+    std::string trace = join_trace(result.panic().trace());
     if (class_name == "baml.panics.Cancelled") {
-      throw BamlCancelled(std::move(message), class_name, std::move(trace),
-                          RawPayload(value));
+      throw cancelled(std::move(message), class_name, std::move(trace),
+                      raw_payload(value));
     }
-    throw BamlPanic(std::move(message), class_name, std::move(trace),
-                    RawPayload(value));
+    throw panic(std::move(message), class_name, std::move(trace),
+                raw_payload(value));
   }
-  throw BamlError(std::move(message), class_name,
-                  JoinTrace(result.error().trace()), RawPayload(value));
+  throw error(std::move(message), class_name,
+              join_trace(result.error().trace()), raw_payload(value));
 }
 
-inline pb::BamlOutboundResult ParseResultEnvelope(
+inline pb::BamlOutboundResult parse_result_envelope(
     const std::vector<uint8_t>& envelope) {
   pb::BamlOutboundResult result;
   if (!result.ParseFromArray(envelope.data(),
                              static_cast<int>(envelope.size()))) {
-    throw BamlError("BAML decode error: malformed result envelope");
+    throw error("BAML decode error: malformed result envelope");
   }
   if (result.result_case() == pb::BamlOutboundResult::RESULT_NOT_SET) {
-    throw BamlError("BAML decode error: result envelope has no arm");
+    throw error("BAML decode error: result envelope has no arm");
   }
   return result;
 }
 
 // The typed error path: when the error arm's value decodes into the
-// function's declared `throws` union, throw BamlThrown<ThrownU> carrying
+// function's declared `throws` union, throw thrown<ThrownU> carrying
 // the typed payload. Anything else (undeclared throw, panic, exit) falls
-// through to the untyped ThrowFromResult.
+// through to the untyped throw_from_result.
 template <typename ThrownU>
-[[noreturn]] void ThrowFromResultTyped(const pb::BamlOutboundResult& result) {
+[[noreturn]] void throw_from_result_typed(
+    const pb::BamlOutboundResult& result) {
   if (result.result_case() == pb::BamlOutboundResult::kError) {
     const pb::BamlOutboundValue& value = result.error().value();
     std::optional<ThrownU> decoded;
     try {
-      decoded.emplace(Codec<ThrownU>::Decode(value));
-    } catch (const BamlError&) {
+      decoded.emplace(codec<ThrownU>::decode(value));
+    } catch (const error&) {
       // Not in the declared set: untyped fallback below.
     }
     if (decoded.has_value()) {
-      throw BamlThrown<ThrownU>(
-          std::move(*decoded), ErrorMessageOf(value), ThrownClassName(value),
-          JoinTrace(result.error().trace()), RawPayload(value));
+      throw thrown<ThrownU>(std::move(*decoded), error_message_of(value),
+                            thrown_class_name(value),
+                            join_trace(result.error().trace()),
+                            raw_payload(value));
     }
   }
-  ThrowFromResult(result);
+  throw_from_result(result);
 }
 
 // Decodes a BamlOutboundResult envelope into T. Non-ok arms throw:
-// BamlThrown<ThrownU> for declared throws (when ThrownU is not void),
-// else BamlError / BamlPanic / BamlCancelled.
+// thrown<ThrownU> for declared throws (when ThrownU is not void),
+// else error / panic / cancelled.
 template <typename T, typename ThrownU = void>
-T DecodeResult(const std::vector<uint8_t>& envelope) {
-  pb::BamlOutboundResult result = ParseResultEnvelope(envelope);
+T decode_result(const std::vector<uint8_t>& envelope) {
+  pb::BamlOutboundResult result = parse_result_envelope(envelope);
   if (result.result_case() != pb::BamlOutboundResult::kOk) {
     if constexpr (std::is_void<ThrownU>::value) {
-      ThrowFromResult(result);
+      throw_from_result(result);
     } else {
-      ThrowFromResultTyped<ThrownU>(result);
+      throw_from_result_typed<ThrownU>(result);
     }
   }
   if constexpr (!std::is_void<T>::value) {
-    return Codec<T>::Decode(result.ok());
+    return codec<T>::decode(result.ok());
   }
 }
 
@@ -523,21 +526,21 @@ T DecodeResult(const std::vector<uint8_t>& envelope) {
 // envelope carried. Declared in errors.h; defined here because decoding
 // needs the codec.
 template <typename T>
-T BamlError::get() const {
+T error::get() const {
   detail::pb::BamlOutboundValue value;
   if (!value.ParseFromArray(payload().data(),
                             static_cast<int>(payload().size()))) {
-    throw BamlError("BAML decode error: malformed error payload");
+    throw error("BAML decode error: malformed error payload");
   }
-  return Codec<T>::Decode(value);
+  return codec<T>::decode(value);
 }
 
 template <typename T>
-bool BamlError::is() const {
+bool error::is() const {
   try {
     (void)get<T>();
     return true;
-  } catch (const BamlError&) {
+  } catch (const error&) {
     return false;
   }
 }
