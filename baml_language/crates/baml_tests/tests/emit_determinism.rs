@@ -88,6 +88,43 @@ fn baml_src_project_emit_is_deterministic() {
     assert_deterministic(&root, true);
 }
 
+/// The default (parallel) emit must produce byte-identical output to the
+/// serial reference pass: parallel emit compiles each function into a
+/// watermark-based fragment pool and the serial merge replays the exact
+/// serial pool layout (including cross-function `GenericFunction` interning,
+/// which the `ns_instantiation_expr` fixtures in this corpus exercise).
+/// The serial path is selected the same way a user would get it — a
+/// single-threaded rayon pool (`RAYON_NUM_THREADS=1`).
+#[test]
+fn parallel_emit_is_byte_identical_to_serial() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
+    let sources = read_project(&root);
+    let serial = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .build()
+        .expect("build 1-thread rayon pool")
+        .install(|| compile_to_bytes(&root, &sources, true));
+    let parallel = compile_to_bytes(&root, &sources, true);
+
+    if serial != parallel {
+        let diff_at = serial
+            .iter()
+            .zip(parallel.iter())
+            .position(|(a, b)| a != b)
+            .unwrap_or_else(|| serial.len().min(parallel.len()));
+        panic!(
+            "parallel emit diverges from serial for {}: lengths {} vs {}, first difference at \
+             byte {} (context: {:02x?} vs {:02x?})",
+            root.display(),
+            serial.len(),
+            parallel.len(),
+            diff_at,
+            &serial[diff_at.saturating_sub(8)..(diff_at + 8).min(serial.len())],
+            &parallel[diff_at.saturating_sub(8)..(diff_at + 8).min(parallel.len())],
+        );
+    }
+}
+
 fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(root);

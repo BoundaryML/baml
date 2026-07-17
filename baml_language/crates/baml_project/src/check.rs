@@ -63,12 +63,75 @@ pub fn collect_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
 pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    for file in &source_files {
-        diagnostics.extend(lsp2_check_file(db, *file));
+    // Parallel by default; tiny projects skip the pool dispatch overhead.
+    // Thread count follows rayon's global pool (`RAYON_NUM_THREADS` to cap).
+    if source_files.len() > 8 {
+        collect_file_diagnostics_parallel(db, &source_files, &mut diagnostics);
+    } else {
+        for file in &source_files {
+            diagnostics.extend(lsp2_check_file(db, *file));
+        }
     }
     diagnostics.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut diagnostics);
     diagnostics
+}
+
+/// Run `check_file` for every file across worker threads.
+///
+/// Every query `check_file` reaches is read-only, and `ProjectDatabase`'s
+/// `Clone` produces a shared-storage salsa handle (the rust-analyzer
+/// concurrency model): workers share one memo table, so a scope inferred by
+/// one thread is a cache hit for every other. Output order does not matter —
+/// the caller sorts diagnostics by (file, span, message) — so workers just
+/// pull the next file off a shared atomic counter (files vary a lot in size;
+/// work-stealing beats fixed chunks).
+///
+/// The first file is checked serially before fanning out: it warms the
+/// package-level queries (package items / resolution context / alias maps)
+/// that every file reads, so cold workers don't all block on the same shared
+/// memo slots.
+fn collect_file_diagnostics_parallel(
+    db: &ProjectDatabase,
+    source_files: &[SourceFile],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // `ProjectDatabase` is `Send` but deliberately not `Sync` (each salsa
+    // handle carries thread-confined query-stack state), so tasks cannot share
+    // `&db` — every task MOVES its own cloned shared-storage handle instead
+    // (an Arc bump; all clones share one memo table). Small chunks keep
+    // work-stealing effective on rayon's global pool — files vary a lot in
+    // check cost — while amortizing the per-task clone.
+    const CHUNK: usize = 4;
+
+    let Some((first, rest)) = source_files.split_first() else {
+        return;
+    };
+    diagnostics.extend(lsp2_check_file(db, *first));
+
+    let chunks: Vec<&[SourceFile]> = rest.chunks(CHUNK).collect();
+    // Handles are cloned OUTSIDE the rayon scope: a `!Sync` database can't be
+    // borrowed by the (Send) scope closure, so each chunk's handle is created
+    // up front and MOVED into its task.
+    let handles: Vec<ProjectDatabase> = chunks.iter().map(|_| db.clone()).collect();
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<Diagnostic>>();
+    rayon::scope(move |s| {
+        for (chunk, db) in chunks.into_iter().zip(handles) {
+            let tx = tx.clone();
+            s.spawn(move |_| {
+                let mut out = Vec::new();
+                for file in chunk {
+                    out.extend(lsp2_check_file(&db, *file));
+                }
+                // Receiver outlives the scope; a send only fails if it
+                // dropped early, which would mean a panic elsewhere.
+                let _ = tx.send(out);
+            });
+        }
+    });
+    for out in rx {
+        diagnostics.extend(out);
+    }
 }
 
 /// The per-checked-file split alongside the merged, honest-ordered set produced
