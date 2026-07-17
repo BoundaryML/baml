@@ -40,6 +40,10 @@ class Wrapper<T> {
   inner T
 }
 
+class Mixed<T> {
+  choice T | string | null
+}
+
 function rt_color(c: Color) -> Color { c }
 function rt_point(p: Point) -> Point { p }
 function make_point(x: int, y: int) -> Point { Point { x: x, y: y, tag: null } }
@@ -52,6 +56,7 @@ function rt_point_or_string(u: Point | string) -> Point | string { u }
 function rt_opt_union(u: int | string | null) -> int | string | null { u }
 function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
 function rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T> { w }
+function rt_mixed<T>(m: Mixed<T>) -> Mixed<T> { m }
 "#;
 
 fn ensure_runtime() {
@@ -209,6 +214,74 @@ impl<T: BamlValue> __BamlValuePrivate for Wrapper<T> {
 /// this same private trait.
 fn ty_of<T: BamlValue>() -> wire::BamlTy {
     <T as __BamlValuePrivate>::baml_ty()
+}
+
+/// Generic union enum shape (`T | string` → `TOrString<T>`): the `TypeVar`
+/// arm holds a bare `T` and carries no `From` (a blanket `From<T>` would
+/// overlap the concrete arm's `From<String>`); the concrete arm keeps its
+/// `From`.
+#[derive(Debug, Clone, PartialEq)]
+enum TOrString<T: BamlValue> {
+    T(T),
+    String(String),
+}
+
+impl<T: BamlValue> From<String> for TOrString<T> {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl<T: BamlValue> __BamlValuePrivate for TOrString<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        match self {
+            Self::T(value) => value.to_baml(),
+            Self::String(value) => value.to_baml(),
+        }
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Ok(value) = T::from_baml(v.clone()) {
+            return Ok(Self::T(value));
+        }
+        if let Ok(value) = String::from_baml(v.clone()) {
+            return Ok(Self::String(value));
+        }
+        Err(decode::no_union_arm("TOrString", &v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![T::baml_ty(), String::baml_ty()])
+    }
+}
+
+/// A generic class carrying a generic-union field (`Mixed<T> { choice: T |
+/// string | null }` → `Option<TOrString<T>>`).
+#[derive(Debug, Clone, PartialEq)]
+struct Mixed<T: BamlValue> {
+    choice: Option<TOrString<T>>,
+}
+
+impl<T: BamlValue> __BamlValuePrivate for Mixed<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        encode::class(
+            "user.Mixed",
+            vec![T::baml_ty()],
+            vec![("choice", self.choice.to_baml())],
+        )
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut fields = decode::ClassFields::new(v, "user.Mixed")?;
+        Ok(Mixed {
+            choice: fields.take("choice")?,
+        })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Mixed", vec![T::baml_ty()])
+    }
 }
 
 /// Synthesized union enum shape: one variant per (null-stripped) arm,
@@ -532,6 +605,31 @@ fn round_trips_generic_class_carrying_its_type_arg() {
     )
     .expect("rt_wrapper<Wrapper<string>> succeeds");
     assert_eq!(out, nested);
+}
+
+#[test]
+fn round_trips_generic_union_field() {
+    ensure_runtime();
+    // `rt_mixed<T>(m: Mixed<T>) -> Mixed<T>`: the union field `T | string |
+    // null` round-trips each arm, with `T` bound to int.
+    let cases = [
+        Mixed {
+            choice: Some(TOrString::T(7i64)),
+        },
+        Mixed {
+            choice: Some(TOrString::String("hi".to_string())),
+        },
+        Mixed { choice: None },
+    ];
+    for m in cases {
+        let out = runtime::invoke_sync::<Mixed<i64>, Infallible>(
+            "user.rt_mixed",
+            encode::kwargs(vec![("m", Some(m.to_baml()))]),
+            encode::type_args(vec![("T", ty_of::<i64>())]),
+        )
+        .expect("rt_mixed<int> succeeds");
+        assert_eq!(out, m);
+    }
 }
 
 #[test]

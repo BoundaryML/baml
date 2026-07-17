@@ -107,11 +107,12 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     (
         "function_calls",
         "test_generic_calls.rs",
-        // Generic functions and generic class *shapes* emit; still missing
-        // for this file: methods on generic classes (`GenericBox.get`,
-        // `.pair_with`, `.new`, `NamedStatic.make`) and the generic union
-        // enum for `ContainerShapes.mixed` (`T | string | null`).
-        Gate::Later("needs generic-class methods + generic union enums"),
+        // Generic functions, generic class shapes, and generic union enums
+        // all emit now; the last missing piece for this file is methods on
+        // generic classes (`GenericBox.get`, `.pair_with`, `.new`,
+        // `NamedStatic.make`), which must bind the class type params into
+        // the call frame.
+        Gate::Later("needs generic-class methods"),
     ),
     (
         "function_calls",

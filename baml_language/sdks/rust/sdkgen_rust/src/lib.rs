@@ -278,12 +278,14 @@ pub fn to_source_code_with_bytecode(
     // Synthesized union enums land after their leaf's own symbols, in
     // shape order.
     for (leaf, union_enum) in union_registry.iter() {
+        // A generic union enum's own `<...>` params come into scope so its
+        // `TypeVar` arm payloads translate to those Rust generic params.
         let ctx = translate_ty::TyCtx {
             analysis: &analysis,
             unions: &union_registry,
             leaf,
             boxing_for: None,
-            generic_params: &[],
+            generic_params: &union_enum.generic_params,
         };
         match emit::union::emit(union_enum, &ctx) {
             Ok(tokens) => leaves.entry(leaf.clone()).or_default().push(LeafItem {
@@ -932,11 +934,10 @@ mod tests {
     }
 
     #[test]
-    fn generic_function_skips_when_a_typevar_is_unrepresentable() {
-        // tag_or_value<T>(x: T | string | null) -> string : `T` sits in a
-        // multi-arm union, which needs a generic union enum we don't emit —
-        // so the whole function skips, loudly, rather than emitting broken
-        // code.
+    fn typevar_in_a_union_synthesizes_a_generic_union_enum() {
+        // tag_or_value<T>(x: T | string | null) -> string : `T` in a union
+        // synthesizes a generic enum `TOrString<T>`, wrapped in `Option` for
+        // the null arm. The function's param accepts it via `impl Into<_>`.
         let n = name("user", &[], "tag_or_value");
         let mut f = nullary_string_fn(&n);
         f.generic_params = vec![baml_base::Name::new("T")];
@@ -958,16 +959,112 @@ mod tests {
         let pool = SymbolPool::from([(n, Symbol::Function(f))]);
 
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
-        assert_eq!(
-            generated.warnings.len(),
-            1,
-            "{:?}",
-            generated.warnings[0].fqn
-        );
-        assert_eq!(generated.warnings[0].fqn, "user.tag_or_value");
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // The generic enum: `T` variant holds `T`, `String` holds a String.
         assert!(
-            !flat(text(&generated, "src/lib.rs")).contains("fntag_or_value"),
-            "the function must not emit"
+            flat.contains(
+                "pubenumTOrString<T:::baml_bridge::BamlValue>{T(T),String(::std::string::String),}"
+            ),
+            "{lib}"
+        );
+        // The concrete arm gets a `From`; the `TypeVar` arm does not
+        // (coherence) — so exactly one `From` impl on the enum.
+        assert!(
+            flat.contains(
+                "impl<T:::baml_bridge::BamlValue>::std::convert::From<::std::string::String>forTOrString<T>"
+            ),
+            "{lib}"
+        );
+        assert_eq!(flat.matches("::std::convert::From").count(), 1, "{lib}");
+        // The param references the generic enum wrapped in `Option`.
+        assert!(
+            flat.contains("x:impl::std::convert::Into<::std::option::Option<crate::TOrString<T>>>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn generic_union_field_makes_the_enclosing_class_representable() {
+        // ContainerShapes<T> { mixed: T | string | null } — the union field
+        // becomes `Option<TOrString<T>>`, and the class now emits (it used
+        // to skip on the TypeVar-union field). The enum shares the class's
+        // `T`.
+        let c = name("user", &[], "ContainerShapes");
+        let mixed = Ty::Union(
+            vec![
+                typevar("T"),
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool =
+            SymbolPool::from([(c.clone(), generic_class(&c, &["T"], vec![("mixed", mixed)]))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains("pubstructContainerShapes<T:::baml_bridge::BamlValue>"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("pubmixed:::std::option::Option<crate::TOrString<T>>"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("pubenumTOrString<T:::baml_bridge::BamlValue>"),
+            "{flat}"
+        );
+    }
+
+    #[test]
+    fn multiple_typevars_in_a_union_parameterize_the_enum() {
+        // two_in_union<T, U>(x: T | U | int) -> string : the enum is generic
+        // over both, in first-appearance order; only the concrete `int` arm
+        // gets a `From`.
+        let n = name("user", &[], "two_in_union");
+        let mut f = nullary_string_fn(&n);
+        f.generic_params = vec![baml_base::Name::new("T"), baml_base::Name::new("U")];
+        f.arguments = vec![arg(
+            "x",
+            Ty::Union(
+                vec![
+                    typevar("T"),
+                    typevar("U"),
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let flat = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            flat.contains(
+                "pubenumTOrUOrInt<T:::baml_bridge::BamlValue,U:::baml_bridge::BamlValue>"
+            ),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("T(T),U(U),Int(::core::primitive::i64),"),
+            "{flat}"
+        );
+        // Only the `int` arm converts; `T` and `U` do not.
+        assert_eq!(flat.matches("::std::convert::From<").count(), 1, "{flat}");
+        assert!(
+            flat.contains("From<::core::primitive::i64>forTOrUOrInt<T,U>"),
+            "{flat}"
         );
     }
 

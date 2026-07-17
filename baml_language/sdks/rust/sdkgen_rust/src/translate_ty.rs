@@ -119,8 +119,27 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                         });
                     };
                     let enum_ident = idents::ident(&union_enum.rust_name);
-                    let mods = ctx.leaf.iter().map(|seg| idents::ident(seg));
-                    let path = quote! { crate::#(#mods::)*#enum_ident };
+                    let mods: Vec<_> = ctx.leaf.iter().map(|seg| idents::ident(seg)).collect();
+                    // A generic union enum (a `TypeVar` arm) is referenced
+                    // with its type parameters supplied — each must be a
+                    // generic param in scope at this site, else fail closed.
+                    let generics = if union_enum.generic_params.is_empty() {
+                        TokenStream::new()
+                    } else {
+                        let mut args = Vec::new();
+                        for param in &union_enum.generic_params {
+                            if !ctx.generic_params.iter().any(|scoped| scoped == param) {
+                                return Err(Unsupported {
+                                    reason: format!(
+                                        "union references type variable `{param}` not in scope"
+                                    ),
+                                });
+                            }
+                            args.push(idents::ident(param));
+                        }
+                        quote! { <#(#args),*> }
+                    };
+                    let path = quote! { crate::#(#mods::)*#enum_ident #generics };
                     // The enum holds class arms by value, so a same-SCC
                     // class arm makes the enum itself part of the
                     // containment cycle — box the enum reference.
