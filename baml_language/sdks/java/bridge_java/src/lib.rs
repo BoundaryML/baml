@@ -16,7 +16,7 @@
 //! `baml_bridge.BamlFfi`. JNI mangles the package `baml_bridge` as
 //! `baml_1bridge` (an underscore in a Java name is escaped `_1`).
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Once, OnceLock};
 
 use bex_project::{BexArgs, BexExternalAdt, CallId, MediaKind, MediaValue, RuntimeTy};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, kwargs_to_bex_values};
@@ -108,9 +108,31 @@ fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
-    _class: JClass<'_>,
+    class: JClass<'_>,
     bytecode: JByteArray<'_>,
 ) {
+    // Capture the JVM + `BamlFfi` class ref (idempotent) so the host-dispatch
+    // and host-release trampolines can call back into Java from an engine
+    // thread — host callables can fire during a *sync* call (no
+    // `nativeCallAsync` ever runs), so the route must be wired at init, not
+    // lazily on first async call. Reuses the async completion route's capture.
+    if let Err(e) = ensure_completion_route(&mut env, &class) {
+        throw_runtime_exception(
+            &mut env,
+            &format!("failed to wire host-callback route: {e}"),
+        );
+        return;
+    }
+    // Install the host-value dispatch + release callbacks once (bridge_cffi is
+    // first-call-wins, but the release side logs on a second registration — so
+    // guard with a `Once` to keep re-init quiet). These make BAML→host callable
+    // dispatch and GC-driven release land on the static `BamlFfi.hostDispatch` /
+    // `BamlFfi.hostRelease` methods.
+    REGISTER_HOST_CALLBACKS.call_once(|| {
+        bridge_cffi::register_host_dispatch_callback(host_dispatch_trampoline);
+        bridge_cffi::register_host_release_callback(host_release_trampoline);
+    });
+
     // Register this bridge with the versioned ABI (idempotent; mirrors
     // bridge_python). A canonical-version mismatch is a real deployment
     // error and surfaces as a Java exception via the panic handler.
@@ -204,6 +226,19 @@ static BAML_FFI_CLASS: OnceLock<GlobalRef> = OnceLock::new();
 /// The Java completion route: `static void completeCall(long, byte[])`.
 const COMPLETE_CALL_METHOD: &str = "completeCall";
 const COMPLETE_CALL_SIG: &str = "(J[B)V";
+
+/// The Java host-dispatch route: `static void hostDispatch(long, long, byte[])`.
+const HOST_DISPATCH_METHOD: &str = "hostDispatch";
+const HOST_DISPATCH_SIG: &str = "(JJ[B)V";
+/// The Java host-release route: `static void hostRelease(long)`.
+const HOST_RELEASE_METHOD: &str = "hostRelease";
+const HOST_RELEASE_SIG: &str = "(J)V";
+
+/// Guards the one-time `register_host_{dispatch,release}_callback` install so a
+/// runtime re-init (`nativeInitFromBytecode` replaces the runtime) does not
+/// re-register — `register_host_release_callback` logs a diagnostic on a second
+/// call, which would be spurious noise on every re-init.
+static REGISTER_HOST_CALLBACKS: Once = Once::new();
 
 /// Capture the JVM handle and a `GlobalRef` to the `BamlFfi` class (idempotent,
 /// first-call-wins). `class` is the `baml_bridge.BamlFfi` class object the JVM
@@ -413,6 +448,169 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
     // `call_id` round-trips u64 → i64 → u64; `cancel_function_call_by_id`
     // rejects a 0 id and an uninitialized runtime, returning false.
     jboolean::from(bridge_cffi::cancel_function_call_by_id(call_id as u64))
+}
+
+// ===========================================================================
+// Host-callable dispatch + release — the JVM analog of bridge_python's
+// `host_dispatch_callback` / `host_release_callback` (host_value.rs).
+//
+// When BAML invokes a host callable, the engine's `call_host_value` sysop fires
+// the registered dispatch callback on a runtime thread; the trampoline attaches
+// that thread to the JVM and hands (host_value_key, call_id, BamlToHostCall
+// bytes) to the static `BamlFfi.hostDispatch`, which submits the decode / invoke
+// / complete work to a Java executor and returns promptly (the api.rs
+// "return promptly; dispatches may be concurrent" contract — the Java executor
+// is the async boundary, so the Rust hop is a bounded inline JNI call rather
+// than a tokio spawn). The Java side reports the result via
+// `nativeCompleteHostCall` → `bridge_cffi::complete_host_call`. Release fires
+// when the engine drops the last `HostValueArc`; the trampoline forwards the key
+// to `BamlFfi.hostRelease`.
+//
+// The registry (callable + opaque-throwable objects) lives entirely Java-side
+// (BamlFfi.HOST_VALUES); Rust is a pure router, so identity is a plain JVM
+// reference (no GlobalRef bookkeeping) and `assertSame` round-trips for free.
+// ===========================================================================
+
+/// Dispatch a BAML→host callable invocation into Java. Copies the wire bytes,
+/// attaches the (engine) thread to the JVM, and calls the static
+/// `BamlFfi.hostDispatch(hostValueKey, callId, bamlToHostCall)`. On any failure
+/// to reach Java, completes the in-flight call with an empty-payload error so
+/// the engine surfaces a `BridgeFailure` (→ `SdkPanic`) instead of awaiting
+/// forever.
+///
+/// The registered `BamlHostDispatchCallback` derefs `args` inside an `unsafe`
+/// block; pointer validity is the engine's contract (documented on the callback
+/// type in `bridge_cffi::api`). This fn is private, so the public-only
+/// `not_unsafe_ptr_arg_deref` lint does not apply.
+extern "C" fn host_dispatch_trampoline(
+    host_value_key: u64,
+    call_id: u32,
+    args: *const u8,
+    length: usize,
+) {
+    // Copy the wire bytes: the dispatch task outlives this stack frame (the Java
+    // executor runs the callable asynchronously), and `complete_host_call`
+    // reads from a Java-owned array anyway.
+    let bytes: Vec<u8> = if length == 0 || args.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: the engine guarantees `args` is valid for `length` bytes for
+        // the duration of this call (see `sys_native::host_dispatch`).
+        unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
+    };
+
+    if let Err(e) = dispatch_into_java(host_value_key, call_id, &bytes) {
+        eprintln!("bridge_java: host dispatch for key {host_value_key} call {call_id} failed: {e}");
+        // Never leave the engine awaiting: an empty-payload error decodes to a
+        // BridgeFailure engine-side (ffi/host_value.rs), the correct routing for
+        // a bridge-layer fault (we could not even reach the callable).
+        complete_host_call_bridge_failure(call_id);
+    }
+}
+
+fn dispatch_into_java(host_value_key: u64, call_id: u32, bytes: &[u8]) -> Result<(), String> {
+    let vm = JVM
+        .get()
+        .ok_or("JavaVM was not captured before host dispatch")?;
+    let class = BAML_FFI_CLASS
+        .get()
+        .ok_or("BamlFfi class ref was not captured before host dispatch")?;
+    let mut env = vm
+        .attach_current_thread_as_daemon()
+        .map_err(|e| format!("attach failed: {e}"))?;
+    let payload = env
+        .byte_array_from_slice(bytes)
+        .map_err(|e| format!("args array alloc failed: {e}"))?;
+    let outcome = env.call_static_method(
+        class,
+        HOST_DISPATCH_METHOD,
+        HOST_DISPATCH_SIG,
+        &[
+            JValue::Long(host_value_key as jlong),
+            JValue::Long(u64::from(call_id) as jlong),
+            JValue::from(&payload),
+        ],
+    );
+    if let Err(e) = outcome {
+        // `hostDispatch` is written never to throw; clear any pending exception
+        // so the reused daemon worker is left clean.
+        let _ = env.exception_clear();
+        return Err(format!("hostDispatch invocation failed: {e}"));
+    }
+    Ok(())
+}
+
+/// Notify Java that a host-value key can be released (the engine dropped the
+/// last `HostValueArc`). Best-effort — a failure to reach Java only delays the
+/// registry entry's removal (a leak until process exit), matching the
+/// `xfail`/`@Disabled` release semantics across bridges.
+extern "C" fn host_release_trampoline(host_value_key: u64) {
+    if let Err(e) = release_into_java(host_value_key) {
+        eprintln!("bridge_java: host release for key {host_value_key} failed: {e}");
+    }
+}
+
+fn release_into_java(host_value_key: u64) -> Result<(), String> {
+    let vm = JVM
+        .get()
+        .ok_or("JavaVM was not captured before host release")?;
+    let class = BAML_FFI_CLASS
+        .get()
+        .ok_or("BamlFfi class ref was not captured before host release")?;
+    let mut env = vm
+        .attach_current_thread_as_daemon()
+        .map_err(|e| format!("attach failed: {e}"))?;
+    let outcome = env.call_static_method(
+        class,
+        HOST_RELEASE_METHOD,
+        HOST_RELEASE_SIG,
+        &[JValue::Long(host_value_key as jlong)],
+    );
+    if let Err(e) = outcome {
+        let _ = env.exception_clear();
+        return Err(format!("hostRelease invocation failed: {e}"));
+    }
+    Ok(())
+}
+
+/// Complete an in-flight host call with an empty error payload, which
+/// `bridge_cffi::complete_host_call` maps to a `BridgeFailure` — the routing for
+/// a bridge-layer fault (missing callable, unreachable JVM).
+fn complete_host_call_bridge_failure(call_id: u32) {
+    bridge_cffi::complete_host_call(call_id, 1, std::ptr::null(), 0);
+}
+
+/// `baml_bridge.BamlFfi.nativeCompleteHostCall(long callId, boolean isError, byte[] content)`.
+///
+/// Forwards a completed host-callable result (or thrown value) to
+/// `bridge_cffi::complete_host_call`. `content` is a protobuf-encoded
+/// `InboundValue` (host→engine direction); an empty error payload is the
+/// bridge-failure signal. `complete_host_call` reads `content` synchronously, so
+/// the Java-owned array stays valid for the call.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    call_id: jlong,
+    is_error: jboolean,
+    content: JByteArray<'local>,
+) {
+    let bytes = match env.convert_byte_array(&content) {
+        Ok(b) => b,
+        Err(e) => {
+            // Could not read the payload — still complete the call (with a
+            // bridge failure) so the engine does not hang on this id.
+            eprintln!("bridge_java: nativeCompleteHostCall failed to read content: {e}");
+            complete_host_call_bridge_failure(call_id as u32);
+            return;
+        }
+    };
+    bridge_cffi::complete_host_call(
+        call_id as u32,
+        i32::from(is_error != 0),
+        bytes.as_ptr() as *const i8,
+        bytes.len(),
+    );
 }
 
 // ===========================================================================

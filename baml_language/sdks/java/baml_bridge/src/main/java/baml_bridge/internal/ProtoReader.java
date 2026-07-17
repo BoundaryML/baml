@@ -109,6 +109,16 @@ public final class ProtoReader {
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
 
+    // BamlToHostCall (engine→host callable dispatch): args = 1.
+    // BamlToHostArg: value = 1 (BamlOutboundValue), arg_name = 2, is_optional_arg = 3.
+    private static final int TO_HOST_ARGS = 1;
+    private static final int TO_HOST_ARG_VALUE = 1;
+    private static final int TO_HOST_ARG_NAME = 2;
+    private static final int TO_HOST_ARG_IS_OPTIONAL = 3;
+
+    /** The synthetic BAML class a host-thrown native exception surfaces as. */
+    private static final String HOST_CALLABLE_CLASS = "baml.errors.HostCallable";
+
     // BamlHandleType (baml_handle.proto): the ADT_MEDIA_* discriminants the media
     // decode dispatches on. Every other handle type decodes to a bare BamlHandle.
     private static final int ADT_MEDIA_IMAGE = 6;
@@ -240,6 +250,18 @@ public final class ProtoReader {
         }
         String className = valueBytes == null ? null : outboundClassFqn(valueBytes);
         Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), true);
+        // A host-thrown native exception surfaces as a `baml.errors.HostCallable`
+        // instance carrying a hidden `_handle` into the Java-side host-value
+        // registry. On the SAME runtime, rehydrate the ORIGINAL Throwable by
+        // identity (assertSame holds — the object never left the JVM) and rethrow
+        // it unwrapped. A foreign/released key falls through to a metadata
+        // BamlError. Mirrors bridge_python's `_try_rehydrate_host_value` (proto.py).
+        if (HOST_CALLABLE_CLASS.equals(className)) {
+            Throwable original = rehydrateHostThrowable(value);
+            if (original != null) {
+                throw sneakyThrow(original);
+            }
+        }
         // A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         // synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
         // type error — surface it as Java's native IllegalArgumentException (the
@@ -258,6 +280,124 @@ public final class ProtoReader {
 
     /** The BAML FQN whose thrown value is remapped to {@link IllegalArgumentException}. */
     private static final String TYPE_MISMATCH_CLASS = "baml.errors.TypeMismatch";
+
+    /**
+     * The reshaped arguments of a BAML→host callable dispatch: required args in
+     * declared order ({@link #positional}) and supplied optionals keyed by BAML
+     * parameter name ({@link #optional}). The engine already resolved the call
+     * against the callee's declared params and dropped omitted optionals, so an
+     * omitted optional is simply absent from {@link #optional} (the host's own
+     * default then applies). Mirrors bridge_python's {@code decode_args} split.
+     */
+    public static final class HostCallArgs {
+        public final List<Object> positional;
+        public final Map<String, Object> optional;
+
+        HostCallArgs(List<Object> positional, Map<String, Object> optional) {
+            this.positional = positional;
+            this.optional = optional;
+        }
+    }
+
+    /**
+     * Decode a {@code BamlToHostCall} (engine→host callable dispatch) into its
+     * positional + optional argument buckets. Each arg's {@code value} is a
+     * {@code BamlOutboundValue} decoded wire-driven (the callable carries no
+     * host return descriptor); {@code is_optional_arg} routes it into the
+     * optional bucket keyed by {@code arg_name}, everything else is positional.
+     */
+    public static HostCallArgs decodeBamlToHostCall(byte[] bytes) {
+        WireReader r = new WireReader(bytes);
+        List<Object> positional = new ArrayList<>();
+        Map<String, Object> optional = new LinkedHashMap<>();
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == TO_HOST_ARGS) {
+                decodeToHostArg(r.readMessage(), positional, optional);
+            } else {
+                r.skipField(wire);
+            }
+        }
+        return new HostCallArgs(positional, optional);
+    }
+
+    private static void decodeToHostArg(
+            WireReader r, List<Object> positional, Map<String, Object> optional) {
+        byte[] valueBytes = null;
+        String argName = "";
+        boolean isOptional = false;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case TO_HOST_ARG_VALUE -> valueBytes = r.readBytes();
+                case TO_HOST_ARG_NAME -> argName = r.readString();
+                case TO_HOST_ARG_IS_OPTIONAL -> isOptional = r.readVarint() != 0;
+                default -> r.skipField(wire);
+            }
+        }
+        Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), false);
+        if (isOptional) {
+            optional.put(argName, value);
+        } else {
+            positional.add(value);
+        }
+    }
+
+    /**
+     * Rehydrate the original {@link Throwable} a {@code baml.errors.HostCallable}
+     * decoded value references via its hidden {@code _handle}, or null when the
+     * handle is absent, the wrong kind, or the key is foreign/released (the
+     * caller then builds a metadata {@link BamlError}). The decoded HostCallable
+     * is a field {@code Map} (it is not a registered class), so the {@code
+     * _handle} decodes to a bare {@link BamlHandle}.
+     */
+    private static Throwable rehydrateHostThrowable(Object value) {
+        BamlHandle handle = hostOpaqueHandle(value);
+        if (handle == null || handle.handleType() != BamlHandle.HOST_VALUE_OPAQUE) {
+            return null;
+        }
+        Object original = baml_bridge.BamlFfi.lookupHostValue(handle.key());
+        return original instanceof Throwable t ? t : null;
+    }
+
+    /**
+     * The {@code _handle} {@link BamlHandle} of a decoded {@code baml.errors.HostCallable}.
+     * The class is registered, so it usually reifies to a generated instance whose
+     * {@code _handle()} accessor is read reflectively (the runtime library cannot
+     * statically reference the generated class); a field {@code Map} is the
+     * unregistered-FQN fallback. Null when neither carries a {@link BamlHandle}.
+     */
+    private static BamlHandle hostOpaqueHandle(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return map.get("_handle") instanceof BamlHandle handle ? handle : null;
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            Object h = value.getClass().getMethod("_handle").invoke(value);
+            return h instanceof BamlHandle handle ? handle : null;
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Rethrow {@code t} with its exact runtime type, unwrapped, without a checked
+     * declaration (the generic-erasure "sneaky throw" idiom). The declared
+     * {@link RuntimeException} return lets callers write {@code throw
+     * sneakyThrow(t)}; the method never returns — it always throws {@code t}. Used
+     * to re-raise a rehydrated host exception so {@code assertSame} holds for any
+     * {@link Throwable} kind (checked, unchecked, or {@link Error}).
+     */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> RuntimeException sneakyThrow(Throwable t) throws T {
+        throw (T) t;
+    }
 
     /**
      * The message for the {@link IllegalArgumentException} a {@code

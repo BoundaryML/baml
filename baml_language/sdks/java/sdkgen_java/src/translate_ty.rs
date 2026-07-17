@@ -51,25 +51,45 @@ pub(crate) enum TyPosition {
 /// Built by the emitter from the pool's `Symbol::TypeAlias` entries.
 pub(crate) type AliasTable = BTreeMap<Name, (Ty, bool)>;
 
-/// **Vestigial — recursive-alias path only.** Anonymous unions render
-/// inline as `baml_bridge.Union{n}<...>` (decode is type-directed), so
-/// nothing records into this sink anymore and it stays empty in
-/// practice; recursive aliases mint their nominal type directly in the
-/// emitter. It is retained solely because `translate_ty`'s signatures
-/// still thread a `&mut UnionSink`. Keyed by (package, union
-/// identifier); the value would hold the arm list (null arm stripped).
+/// A generated host-callable functional interface (design point E): a
+/// `@FunctionalInterface` emitted for a callable whose own type carries
+/// optional parameters or arity > 2, for which no `java.util.function.*`
+/// shape fits. `required`/`optionals` carry the SAM's leading (positional)
+/// parameters and the nested `Opts` bag fields; `ret` is the boxed return
+/// type. The emitter renders it beside its owning package's other types.
+#[derive(Debug, Clone)]
+pub(crate) struct CallbackInterface {
+    /// The interface's simple name (e.g. `IntOptCallback`).
+    pub(crate) name: String,
+    /// Required (positional) params: `(java identifier, boxed java type)`.
+    pub(crate) required: Vec<(String, String)>,
+    /// Optional params folded into the `Opts` bag: `(BAML wire name, boxed java type)`.
+    pub(crate) optionals: Vec<(String, String)>,
+    /// The boxed return type of the SAM.
+    pub(crate) ret: String,
+}
+
+/// Collects the host-callable functional interfaces
+/// ([`CallbackInterface`]) that [`translate_callable`] mints, keyed by
+/// owning package. One entry per distinct callable signature within a
+/// package (deduped by a structural signature key), so the emitter emits
+/// each interface file exactly once. (`unions` is vestigial — anonymous
+/// unions render inline and recursive aliases mint directly — but the
+/// field is retained so nothing else in the sink plumbing changes.)
 #[derive(Debug, Default)]
 pub(crate) struct UnionSink {
-    // Never read: anonymous unions render inline and recursive aliases
-    // mint directly, so nothing records here. Retained so the sink type
-    // still threads through `translate_ty`'s signatures.
     #[allow(dead_code)]
     pub(crate) unions: BTreeMap<(PackagePath, String), Vec<Ty>>,
+    /// Per-package list of `(signature key, interface)` in insertion order.
+    pub(crate) callbacks: BTreeMap<PackagePath, Vec<(String, CallbackInterface)>>,
 }
 
 /// Everything `translate_ty` needs beyond the type itself.
 pub(crate) struct TranslateCtx<'a> {
     pub(crate) aliases: &'a AliasTable,
+    /// The package currently being rendered — where a minted host-callable
+    /// interface is placed (so it sits beside the function/class that uses it).
+    pub(crate) pkg: PackagePath,
 }
 
 /// Translate `ty` to a Java type expression. `sink` is threaded for the
@@ -429,9 +449,11 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
 }
 
 /// Host-callable types map onto `java.util.function` shapes by arity.
-/// Callables with optional parameters or arity > 2 need a generated
-/// functional interface (later capability); until then they fall back
-/// to `java.lang.Object` so surrounding code still compiles.
+/// A callable whose own type carries optional parameters (or arity > 2)
+/// has no `java.util.function` equivalent — Java SAMs are fixed-arity and
+/// have no structural `$opts?: { … }` — so a `@FunctionalInterface` is
+/// minted (design point E), one per distinct signature within the package,
+/// and recorded in the [`UnionSink`] for the emitter to render.
 fn translate_callable(
     params: &[baml_codegen_types::CallableParam],
     ret: &Ty,
@@ -442,23 +464,139 @@ fn translate_callable(
     let has_optional = params
         .iter()
         .any(|p| matches!(p.mode, CodegenFunctionParamMode::Optional));
-    if has_optional || params.len() > 2 {
-        return "java.lang.Object".to_string();
+    if !has_optional && params.len() <= 2 {
+        // Plain arity-≤-2 all-required callable → a java.util.function shape.
+        let ret_is_unit = matches!(ret, Ty::Void { .. });
+        let p: Vec<String> = params
+            .iter()
+            .map(|p| translate_ty(&p.ty, TyPosition::Boxed, ctx, sink))
+            .collect();
+        let r = translate_ty(ret, TyPosition::Boxed, ctx, sink);
+        return match (p.len(), ret_is_unit) {
+            (0, true) => "java.lang.Runnable".to_string(),
+            (0, false) => format!("java.util.function.Supplier<{r}>"),
+            (1, true) => format!("java.util.function.Consumer<{}>", p[0]),
+            (1, false) => format!("java.util.function.Function<{}, {r}>", p[0]),
+            (2, true) => format!("java.util.function.BiConsumer<{}, {}>", p[0], p[1]),
+            (2, false) => format!("java.util.function.BiFunction<{}, {}, {r}>", p[0], p[1]),
+            _ => unreachable!("arity > 2 handled below"),
+        };
     }
-    let ret_is_unit = matches!(ret, Ty::Void { .. });
-    let p: Vec<String> = params
+
+    // Needs a generated functional interface. Dedup per package by a structural
+    // signature key so identical callable types share one interface.
+    let sig = callback_signature_key(params, ret, ctx.aliases);
+    if let Some(name) = sink.callbacks.get(&ctx.pkg).and_then(|v| {
+        v.iter()
+            .find(|(k, _)| *k == sig)
+            .map(|(_, i)| i.name.clone())
+    }) {
+        return format!("{}.{}", ctx.pkg.java_package(), name);
+    }
+
+    // Translate the SAM's required params, optional-bag fields, and return type.
+    // (Recursion may register OTHER interfaces in the sink — harmless; a callable
+    // cannot contain itself, so it never re-registers this same signature.)
+    let mut required: Vec<(String, String)> = Vec::new();
+    let mut optionals: Vec<(String, String)> = Vec::new();
+    for (i, p) in params.iter().enumerate() {
+        let ty = translate_ty(&p.ty, TyPosition::Boxed, ctx, sink);
+        match p.mode {
+            CodegenFunctionParamMode::Optional => {
+                let wire = p
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("opt{i}"), |n| n.as_str().to_string());
+                optionals.push((wire, ty));
+            }
+            CodegenFunctionParamMode::Required => {
+                let ident = p
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("arg{i}"), |n| java_identifier(n.as_str()));
+                required.push((ident, ty));
+            }
+        }
+    }
+    let ret_ty = translate_ty(ret, TyPosition::Boxed, ctx, sink);
+    let base = callback_base_name(params, has_optional);
+
+    let entries = sink.callbacks.entry(ctx.pkg.clone()).or_default();
+    // Defensive re-check after the recursive translate_ty calls above.
+    if let Some((_, iface)) = entries.iter().find(|(k, _)| *k == sig) {
+        return format!("{}.{}", ctx.pkg.java_package(), iface.name);
+    }
+    let name = dedup_callback_name(&base, entries);
+    entries.push((
+        sig,
+        CallbackInterface {
+            name: name.clone(),
+            required,
+            optionals,
+            ret: ret_ty,
+        },
+    ));
+    format!("{}.{}", ctx.pkg.java_package(), name)
+}
+
+/// A structural signature key for a callable, used to dedup the minted
+/// interface per package: identical callable types (same param names, modes,
+/// types, and return) share one interface. Uses the same token vocabulary as
+/// the union/decode signatures.
+fn callback_signature_key(
+    params: &[baml_codegen_types::CallableParam],
+    ret: &Ty,
+    aliases: &AliasTable,
+) -> String {
+    use baml_codegen_types::CodegenFunctionParamMode;
+    let mut s = String::from("cb(");
+    for p in params {
+        let opt = matches!(p.mode, CodegenFunctionParamMode::Optional);
+        let name = p.name.as_ref().map_or("", |n| n.as_str());
+        s.push_str(name);
+        s.push_str(if opt { "?:" } else { ":" });
+        s.push_str(&crate::signature_token(&p.ty, aliases));
+        s.push(',');
+    }
+    s.push_str(")->");
+    s.push_str(&crate::signature_token(ret, aliases));
+    s
+}
+
+/// The base name of a minted callback interface: the required params' arm
+/// tokens concatenated, an `Opt` marker when the callable has optionals, then
+/// `Callback` — e.g. `(x: int, y?: int, z?: int) -> int` → `IntOptCallback`.
+/// Deduped against colliding distinct signatures by [`dedup_callback_name`].
+fn callback_base_name(params: &[baml_codegen_types::CallableParam], has_optional: bool) -> String {
+    use baml_codegen_types::CodegenFunctionParamMode;
+    let mut s = String::new();
+    for p in params
         .iter()
-        .map(|p| translate_ty(&p.ty, TyPosition::Boxed, ctx, sink))
-        .collect();
-    let r = translate_ty(ret, TyPosition::Boxed, ctx, sink);
-    match (p.len(), ret_is_unit) {
-        (0, true) => "java.lang.Runnable".to_string(),
-        (0, false) => format!("java.util.function.Supplier<{r}>"),
-        (1, true) => format!("java.util.function.Consumer<{}>", p[0]),
-        (1, false) => format!("java.util.function.Function<{}, {r}>", p[0]),
-        (2, true) => format!("java.util.function.BiConsumer<{}, {}>", p[0], p[1]),
-        (2, false) => format!("java.util.function.BiFunction<{}, {}, {r}>", p[0], p[1]),
-        _ => unreachable!("arity > 2 handled above"),
+        .filter(|p| matches!(p.mode, CodegenFunctionParamMode::Required))
+    {
+        s.push_str(&union_arm_token(&p.ty));
+    }
+    if has_optional {
+        s.push_str("Opt");
+    }
+    s.push_str("Callback");
+    s
+}
+
+/// Disambiguate a callback interface base name against the names already
+/// assigned in the package: `IntOptCallback`, then `IntOptCallback2`, … for
+/// distinct signatures that would otherwise collide.
+fn dedup_callback_name(base: &str, entries: &[(String, CallbackInterface)]) -> String {
+    if entries.iter().all(|(_, i)| i.name != base) {
+        return base.to_string();
+    }
+    let mut n = 2;
+    loop {
+        let candidate = format!("{base}{n}");
+        if entries.iter().all(|(_, i)| i.name != candidate) {
+            return candidate;
+        }
+        n += 1;
     }
 }
 
@@ -478,7 +616,12 @@ mod tests {
     }
 
     fn ctx_in(aliases: &AliasTable) -> TranslateCtx<'_> {
-        TranslateCtx { aliases }
+        TranslateCtx {
+            aliases,
+            pkg: PackagePath {
+                segments: vec!["callables".to_string()],
+            },
+        }
     }
 
     fn tr(ty: &Ty, pos: TyPosition) -> String {
@@ -788,6 +931,62 @@ mod tests {
             tr(&c, TyPosition::TopLevel),
             "java.util.function.Consumer<java.lang.Long>"
         );
+    }
+
+    #[test]
+    fn callable_with_optionals_mints_functional_interface() {
+        // `(x: int, y?: int, z?: int) -> int` has no java.util.function shape, so
+        // a `@FunctionalInterface` (`IntOptCallback`) is minted and recorded.
+        let aliases = AliasTable::new();
+        let ctx = ctx_in(&aliases);
+        let mut sink = UnionSink::default();
+        let f = callable(
+            vec![
+                CallableParam {
+                    name: Some(BaseName::new("x")),
+                    ty: int(),
+                    mode: CodegenFunctionParamMode::Required,
+                },
+                CallableParam {
+                    name: Some(BaseName::new("y")),
+                    ty: int(),
+                    mode: CodegenFunctionParamMode::Optional,
+                },
+                CallableParam {
+                    name: Some(BaseName::new("z")),
+                    ty: int(),
+                    mode: CodegenFunctionParamMode::Optional,
+                },
+            ],
+            int(),
+        );
+        let expr = translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);
+        assert_eq!(expr, "baml_sdk.callables.IntOptCallback");
+
+        let pkg = PackagePath {
+            segments: vec!["callables".to_string()],
+        };
+        let entries = sink.callbacks.get(&pkg).expect("interface registered");
+        assert_eq!(entries.len(), 1);
+        let iface = &entries[0].1;
+        assert_eq!(iface.name, "IntOptCallback");
+        assert_eq!(
+            iface.required,
+            vec![("x".to_string(), "java.lang.Long".to_string())]
+        );
+        assert_eq!(
+            iface.optionals,
+            vec![
+                ("y".to_string(), "java.lang.Long".to_string()),
+                ("z".to_string(), "java.lang.Long".to_string()),
+            ]
+        );
+        assert_eq!(iface.ret, "java.lang.Long");
+
+        // The same signature reuses the interface (deduped, no second entry).
+        let again = translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);
+        assert_eq!(again, "baml_sdk.callables.IntOptCallback");
+        assert_eq!(sink.callbacks[&pkg].len(), 1);
     }
 
     #[test]

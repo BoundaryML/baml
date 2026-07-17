@@ -30,6 +30,20 @@ public class BamlError extends RuntimeException {
         this.className = className;
     }
 
+    /**
+     * The construct/throw-direction constructor: wrap a BAML value to raise it
+     * from a host callable. When a host callable throws
+     * {@code new BamlError(value)} where {@code value} is a generated BAML class
+     * (e.g. a {@code ValidationError}), the bridge unwraps {@link #value()} and
+     * encodes it as its real BAML class, so BAML's typed
+     * {@code catch (e: ValidationError)} matches structurally (design point F).
+     * Leaves {@code bamlTrace} empty and {@code className} null — those describe
+     * a decoded thrown value, which a host-constructed error does not yet have.
+     */
+    public BamlError(Object value) {
+        this(value, List.of(), null);
+    }
+
     /** The decoded thrown value. */
     public Object value() {
         return value;

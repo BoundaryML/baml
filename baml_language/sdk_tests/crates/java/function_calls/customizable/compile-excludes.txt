@@ -4,5 +4,4 @@
 # Remove entries as capabilities are implemented — the goal is an
 # empty file. Paths are relative to the tests/ source root.
 #
-# These need host-callable features that are still design-TBD.
-TestHostCallables.java
+# (empty) — all function_calls capabilities have landed.

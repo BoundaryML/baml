@@ -68,6 +68,15 @@ public final class ProtoWriter {
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
 
+    // BamlHandleType discriminants for host-owned values (api.rs / baml_handle.proto).
+    // These keys live in the Java-side BamlFfi.HOST_VALUES registry, not
+    // HANDLE_TABLE, so their handle keys are written verbatim (no clone-for-wire).
+    private static final int HOST_VALUE_CALLABLE = 15;
+    private static final int HOST_VALUE_OPAQUE = 16;
+
+    /** The synthetic BAML class a host-thrown native exception is encoded as. */
+    private static final String HOST_CALLABLE_FQN = "baml.errors.HostCallable";
+
     // The single field name a handle-backed media class carries on the wire.
     private static final String MEDIA_DATA_FIELD = "_data";
 
@@ -234,6 +243,19 @@ public final class ProtoWriter {
             // unwrap to its bare inner value and encode that (inbound has no
             // union arm — the engine re-validates the union at the boundary).
             return encodeInboundValue(TypeRegistry.unionRecordInner(value));
+        } else if (isHostCallable(value)) {
+            // A host callable (a java.util.function.* shape, or a generated
+            // @FunctionalInterface marked with baml_bridge.BamlHostCallable):
+            // register it in the Java-side host-value table and emit
+            // InboundValue.handle{key, HOST_VALUE_CALLABLE}. The engine binds it
+            // to an Object::HostClosure and dispatches back into the host when
+            // BAML invokes it. Mirrors bridge_python's register_host_callable +
+            // Handle{HOST_VALUE_CALLABLE} branch (proto.py).
+            long key = baml_bridge.BamlFfi.registerHostCallable(value);
+            WireWriter handleMsg = new WireWriter();
+            handleMsg.writeInt64(HANDLE_KEY, key);
+            handleMsg.writeInt64(HANDLE_TYPE, HOST_VALUE_CALLABLE);
+            w.writeMessage(IV_HANDLE, handleMsg.toByteArray());
         } else {
             // A registered generated class encodes as a class_value; anything
             // else (handle / media / host-callable / arbitrary object) is not
@@ -368,5 +390,75 @@ public final class ProtoWriter {
             w.writeMessage(MAP_ENTRIES, encodeMapEntry(String.valueOf(e.getKey()), e.getValue()));
         }
         return w.toByteArray();
+    }
+
+    /**
+     * Whether {@code value} is a host callable the bridge can dispatch back into.
+     * Covers the generated {@link baml_bridge.BamlHostCallable} functional
+     * interfaces (callables with optionals / arity &gt; 2) plus the
+     * {@code java.util.function.*} shapes codegen uses for plain arity-&le;-2
+     * callables. Mirrors bridge_python's "any callable" test — an object reaching
+     * the encoder here is a BAML function argument, so a functional value in a
+     * callable-typed slot is a host callable.
+     */
+    private static boolean isHostCallable(Object value) {
+        return value instanceof baml_bridge.BamlHostCallable
+                || value instanceof java.util.function.Function
+                || value instanceof java.util.function.BiFunction
+                || value instanceof java.util.function.Supplier
+                || value instanceof java.util.function.Consumer
+                || value instanceof java.util.function.BiConsumer
+                || value instanceof Runnable;
+    }
+
+    /**
+     * Encode an {@code InboundValue} carrying a {@code baml.errors.HostCallable}
+     * instance for a native host exception thrown inside a callable (the opaque
+     * path, design point D). Fields: {@code message}, {@code class_name} (the
+     * Java simple name), {@code language} ({@code "java"}), and a hidden
+     * {@code _handle} = {@code Handle{key, HOST_VALUE_OPAQUE}} referencing the
+     * original {@code Throwable} in the Java-side registry — the outbound decoder
+     * rehydrates it by identity on same-runtime round trip
+     * ({@link ProtoReader}). Mirrors bridge_python's
+     * {@code build_host_callable_inbound} (host_value.rs).
+     */
+    public static byte[] encodeHostCallableError(
+            String className, String message, String traceback, long handleKey) {
+        WireWriter classBody = new WireWriter();
+        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("message", message));
+        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("class_name", className));
+        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("language", "java"));
+        // `traceback` is `string?` on the class but must be PRESENT on the wire
+        // (the engine rejects an Instance with a missing field). Always emit it.
+        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("traceback", traceback));
+
+        // The hidden `_handle` field: an InboundValue.handle{key, HOST_VALUE_OPAQUE}.
+        WireWriter handleMsg = new WireWriter();
+        handleMsg.writeInt64(HANDLE_KEY, handleKey);
+        handleMsg.writeInt64(HANDLE_TYPE, HOST_VALUE_OPAQUE);
+        WireWriter handleValue = new WireWriter();
+        handleValue.writeMessage(IV_HANDLE, handleMsg.toByteArray());
+        WireWriter handleEntry = new WireWriter();
+        handleEntry.writeString(MAP_ENTRY_STRING_KEY, "_handle");
+        handleEntry.writeMessage(MAP_ENTRY_VALUE, handleValue.toByteArray());
+        classBody.writeMessage(CLASS_FIELDS, handleEntry.toByteArray());
+
+        WireWriter classTy = new WireWriter();
+        classTy.writeString(TY_CLASS_NAME, HOST_CALLABLE_FQN);
+        classBody.writeMessage(CLASS_TY, classTy.toByteArray());
+
+        WireWriter iv = new WireWriter();
+        iv.writeMessage(IV_CLASS, classBody.toByteArray());
+        return iv.toByteArray();
+    }
+
+    /** One {@code InboundMapEntry} with a string key and a string value. */
+    private static byte[] stringFieldEntry(String key, String value) {
+        WireWriter fieldValue = new WireWriter();
+        fieldValue.writeString(IV_STRING, value);
+        WireWriter entry = new WireWriter();
+        entry.writeString(MAP_ENTRY_STRING_KEY, key);
+        entry.writeMessage(MAP_ENTRY_VALUE, fieldValue.toByteArray());
+        return entry.toByteArray();
     }
 }

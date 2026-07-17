@@ -5,11 +5,17 @@ import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -71,6 +77,44 @@ public final class BamlFfi {
      * rejects call_id 0).
      */
     private static final AtomicLong FALLBACK_CALL_ID = new AtomicLong(1);
+
+    /**
+     * Java-side host-value registry: callables handed to BAML as function
+     * arguments AND native throwables raised inside a callable, keyed by a
+     * process-unique {@code long}. Rust is a pure router — it forwards a key back
+     * to {@link #hostDispatch}/{@link #hostRelease}; storing the objects here (not
+     * behind a JNI {@code GlobalRef}) makes identity a plain JVM reference, so a
+     * rehydrated exception is {@code ==} the original (design points A + D).
+     * Callables and thrown objects share one keyspace ({@link #HOST_VALUE_KEY}) so
+     * keys never collide and a single {@link #hostRelease} clears either kind.
+     */
+    private static final ConcurrentHashMap<Long, Object> HOST_VALUES = new ConcurrentHashMap<>();
+
+    /** Shared key source for {@link #HOST_VALUES}; starts at 1 (0 is reserved). */
+    private static final AtomicLong HOST_VALUE_KEY = new AtomicLong(1);
+
+    /**
+     * Dedicated dispatch executor: BAML→host callable invocations run here, off
+     * the engine's runtime threads and the JNI attach frame, so a slow or blocking
+     * user callable cannot starve the engine and concurrent dispatches (allowed by
+     * the C ABI) get real parallelism (design point B). Daemon threads so the pool
+     * never keeps the JVM alive. A submitted callable must not synchronously
+     * re-enter BAML (api.rs: no blocking re-entry).
+     */
+    private static final ExecutorService HOST_DISPATCH_EXECUTOR =
+            Executors.newCachedThreadPool(hostDispatchThreadFactory());
+
+    private static ThreadFactory hostDispatchThreadFactory() {
+        AtomicLong seq = new AtomicLong(0);
+        return runnable -> {
+            Thread t = new Thread(runnable, "baml-host-dispatch-" + seq.getAndIncrement());
+            t.setDaemon(true);
+            return t;
+        };
+    }
+
+    /** Empty payload: an {@code isError} completion with no bytes ⇒ BridgeFailure. */
+    private static final byte[] EMPTY_PAYLOAD = new byte[0];
 
     /**
      * Best-effort telemetry-flush hooks, run immediately before an {@code os-exit}
@@ -164,6 +208,17 @@ public final class BamlFfi {
      * fire it and tolerate a {@code false}.
      */
     static native boolean nativeCancelFunctionCall(long callId);
+
+    /**
+     * Complete an in-flight host-callable dispatch
+     * ({@code bridge_cffi::complete_host_call}). {@code content} is a
+     * protobuf-encoded {@code InboundValue} (the callable's result on success, or
+     * the thrown value on error); an empty {@code content} with {@code isError}
+     * true is the bridge-failure signal. Called from the dispatch executor once a
+     * host callable finishes; unknown / cancelled call ids are ignored
+     * engine-side.
+     */
+    static native void nativeCompleteHostCall(long callId, boolean isError, byte[] content);
 
     // ---- Handle lifecycle + media (baml.media.*) ---------------------------
     // The JVM analog of bridge_python's media/handle FFI: media values are
@@ -502,6 +557,245 @@ public final class BamlFfi {
         CompletableFuture<byte[]> future = PENDING.remove(callId);
         if (future != null) {
             future.complete(resultEnvelope);
+        }
+    }
+
+    // ---- Host-callable registry + dispatch ---------------------------------
+    // A BAML function parameter typed as a callable receives a host function;
+    // mid-call the engine dispatches back into the host to invoke it. Encode
+    // registers the callable here and emits a Handle{HOST_VALUE_CALLABLE}; the
+    // engine's dispatch fires the Rust trampoline, which lands on hostDispatch;
+    // the result (or thrown value) flows back via nativeCompleteHostCall.
+
+    /**
+     * Register a host callable handed to BAML as a function argument; returns its
+     * process-unique key (emitted as {@code Handle{key, HOST_VALUE_CALLABLE}} by
+     * {@code ProtoWriter}). The engine binds the key to an {@code Object::HostClosure}
+     * and dispatches back through {@link #hostDispatch} when BAML invokes it.
+     */
+    public static long registerHostCallable(Object callable) {
+        long key = HOST_VALUE_KEY.getAndIncrement();
+        HOST_VALUES.put(key, callable);
+        return key;
+    }
+
+    /**
+     * Register an arbitrary host object — a native {@link Throwable} raised inside
+     * a callable — so a {@code baml.errors.HostCallable}'s {@code _handle} can
+     * resolve back to the original object by identity on round trip. Shares the
+     * keyspace with callables so keys never collide.
+     */
+    private static long registerHostOpaque(Object value) {
+        long key = HOST_VALUE_KEY.getAndIncrement();
+        HOST_VALUES.put(key, value);
+        return key;
+    }
+
+    /**
+     * Resolve a host-value key back to its object (callable or thrown), or
+     * {@code null} when the key is absent — released, or foreign to this runtime.
+     * Used by {@code ProtoReader} to rehydrate a host-thrown exception by
+     * identity, and never mints or mutates state.
+     */
+    public static Object lookupHostValue(long key) {
+        return HOST_VALUES.get(key);
+    }
+
+    /**
+     * Engine-driven release: drop the registry entry for {@code key} (the engine
+     * dropped the last reference to the host value). Called from the Rust release
+     * trampoline; a stale/absent key is a harmless no-op. Rarely fires per call
+     * (GC-driven) — hence the {@code @Disabled} release test.
+     */
+    static void hostRelease(long key) {
+        HOST_VALUES.remove(key);
+    }
+
+    /**
+     * Engine→host callable dispatch entry point, called from the Rust dispatch
+     * trampoline. Submits the decode / invoke / complete work to the dedicated
+     * executor and returns promptly (api.rs: the callback must return promptly;
+     * dispatches may be concurrent). Never throws across the JNI boundary.
+     */
+    static void hostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
+        try {
+            HOST_DISPATCH_EXECUTOR.execute(
+                    () -> runHostDispatch(hostValueKey, callId, bamlToHostCall));
+        } catch (Throwable t) {
+            // Could not even schedule (executor shut down / resource exhaustion):
+            // complete with a bridge failure so the engine never awaits forever.
+            safeComplete(callId, true, EMPTY_PAYLOAD);
+        }
+    }
+
+    /**
+     * Run one dispatch on the executor: resolve the callable, decode the args,
+     * invoke, and complete the call with the result (awaiting a returned
+     * {@link CompletableFuture}) or the thrown value. Wrapped so a dropped
+     * dispatch can never leave the engine awaiting: any thrown value routes to
+     * {@link #completeHostError}, and the call is always completed exactly once.
+     */
+    private static void runHostDispatch(long hostValueKey, long callId, byte[] bamlToHostCall) {
+        Object callable = HOST_VALUES.get(hostValueKey);
+        if (callable == null) {
+            // The engine dispatched a key the bridge no longer holds — a bridge
+            // fault, not a user exception → BridgeFailure (empty error payload).
+            safeComplete(callId, true, EMPTY_PAYLOAD);
+            return;
+        }
+        Object result;
+        try {
+            ProtoReader.HostCallArgs args = ProtoReader.decodeBamlToHostCall(bamlToHostCall);
+            result = invokeHostCallable(callable, args);
+        } catch (Throwable userError) {
+            completeHostError(callId, userError);
+            return;
+        }
+        // Async detection at the VALUE level (design point C): await a returned
+        // CompletableFuture, then encode; anything else encodes immediately. No
+        // typed async surface yet — this future-proofs the Object-typed slot.
+        if (result instanceof CompletableFuture<?> future) {
+            future.whenComplete(
+                    (value, err) -> {
+                        if (err != null) {
+                            completeHostError(callId, unwrapCompletion(err));
+                        } else {
+                            completeHostSuccess(callId, value);
+                        }
+                    });
+        } else {
+            completeHostSuccess(callId, result);
+        }
+    }
+
+    /**
+     * Invoke {@code callable} with the reshaped args — the invoke ladder. A
+     * generated {@link BamlHostCallable} folds the required + optional buckets
+     * back into its SAM ({@code __bamlDispatch}); the {@code java.util.function.*}
+     * shapes take their positional args directly (codegen only uses them for plain
+     * arity-&le;-2 all-required callables, so their optional bucket is empty).
+     */
+    private static Object invokeHostCallable(Object callable, ProtoReader.HostCallArgs args) {
+        List<Object> pos = args.positional;
+        if (callable instanceof BamlHostCallable hc) {
+            return hc.__bamlDispatch(pos, args.optional);
+        }
+        if (callable instanceof java.util.function.Function<?, ?>) {
+            @SuppressWarnings("unchecked")
+            java.util.function.Function<Object, Object> f =
+                    (java.util.function.Function<Object, Object>) callable;
+            return f.apply(pos.get(0));
+        }
+        if (callable instanceof java.util.function.BiFunction<?, ?, ?>) {
+            @SuppressWarnings("unchecked")
+            java.util.function.BiFunction<Object, Object, Object> f =
+                    (java.util.function.BiFunction<Object, Object, Object>) callable;
+            return f.apply(pos.get(0), pos.get(1));
+        }
+        if (callable instanceof java.util.function.Supplier<?> s) {
+            return s.get();
+        }
+        if (callable instanceof java.util.function.Consumer<?>) {
+            @SuppressWarnings("unchecked")
+            java.util.function.Consumer<Object> c = (java.util.function.Consumer<Object>) callable;
+            c.accept(pos.get(0));
+            return null;
+        }
+        if (callable instanceof java.util.function.BiConsumer<?, ?>) {
+            @SuppressWarnings("unchecked")
+            java.util.function.BiConsumer<Object, Object> c =
+                    (java.util.function.BiConsumer<Object, Object>) callable;
+            c.accept(pos.get(0), pos.get(1));
+            return null;
+        }
+        if (callable instanceof Runnable r) {
+            r.run();
+            return null;
+        }
+        // Defensive: only callables are registered, so this is unreachable.
+        throw new IllegalStateException(
+                "host-value key resolved to a non-callable object: " + callable.getClass());
+    }
+
+    /** Encode a successful callable result and complete the call. */
+    private static void completeHostSuccess(long callId, Object value) {
+        byte[] payload;
+        try {
+            payload = ProtoWriter.encodeInboundValue(value);
+        } catch (Throwable encodeError) {
+            // The callable returned a value the encoder can't map to a BAML value:
+            // a bridge fault (the declared return type should have matched).
+            safeComplete(callId, true, EMPTY_PAYLOAD);
+            return;
+        }
+        safeComplete(callId, false, payload);
+    }
+
+    /**
+     * Complete the call with a thrown value, via the three-way error branch
+     * (design points D + F):
+     *
+     * <ul>
+     *   <li>A {@link BamlError} / {@link BamlPanic} wrapping a codegenned BAML
+     *       value → unwrap {@code .value()} and encode it as its real BAML class,
+     *       so BAML's typed {@code catch (e: ValidationError)} matches
+     *       structurally.
+     *   <li>Anything else → register the {@link Throwable} under a fresh key and
+     *       encode a {@code baml.errors.HostCallable} carrying {@code _handle}, so
+     *       the decoder rehydrates the SAME object by identity on round trip.
+     * </ul>
+     */
+    private static void completeHostError(long callId, Throwable error) {
+        Object unwrapped = null;
+        if (error instanceof BamlError be) {
+            unwrapped = be.value();
+        } else if (error instanceof BamlPanic bp) {
+            unwrapped = bp.value();
+        }
+        if (unwrapped != null) {
+            try {
+                byte[] payload = ProtoWriter.encodeInboundValue(unwrapped);
+                safeComplete(callId, true, payload);
+                return;
+            } catch (Throwable notABamlValue) {
+                // Not encodable as a BAML value — fall through to the opaque path.
+            }
+        }
+        long handleKey = registerHostOpaque(error);
+        String className = error.getClass().getSimpleName();
+        String message = error.getMessage() != null ? error.getMessage() : error.toString();
+        byte[] payload =
+                ProtoWriter.encodeHostCallableError(className, message, renderTraceback(error), handleKey);
+        safeComplete(callId, true, payload);
+    }
+
+    /** Render a throwable's stack trace as a string for the {@code HostCallable.traceback} field. */
+    private static String renderTraceback(Throwable error) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        try (java.io.PrintWriter pw = new java.io.PrintWriter(sw)) {
+            error.printStackTrace(pw);
+        }
+        return sw.toString();
+    }
+
+    /**
+     * A {@code whenComplete} error is a {@link CompletionException} wrapping the
+     * real cause; unwrap it so the callable's actual exception drives the error
+     * branch (and round-trips by identity).
+     */
+    private static Throwable unwrapCompletion(Throwable err) {
+        return err instanceof CompletionException && err.getCause() != null
+                ? err.getCause()
+                : err;
+    }
+
+    /** Complete a host call, swallowing any native-completion failure (nothing more to do). */
+    private static void safeComplete(long callId, boolean isError, byte[] content) {
+        try {
+            nativeCompleteHostCall(callId, isError, content);
+        } catch (Throwable ignored) {
+            // The native completion is written never to throw; if it somehow does,
+            // the executor task must not propagate it.
         }
     }
 

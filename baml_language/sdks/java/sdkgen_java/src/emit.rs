@@ -48,7 +48,7 @@ use baml_codegen_types::{Class, Enum, Function, Ty};
 
 use crate::{
     routing::java_identifier,
-    translate_ty::{TranslateCtx, TyPosition, UnionSink, translate_ty},
+    translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
 
 /// Render a `///` docstring as a Javadoc block. Returns an empty
@@ -932,6 +932,104 @@ fn render_optional_configurator(
     out.push_str(&format!(
         "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
     ));
+    out
+}
+
+/// Render a generated host-callable `@FunctionalInterface` (design point E):
+/// a single abstract SAM `apply(<required…>[, Opts $opts])`, a `default`
+/// `__bamlDispatch` override that reshapes the bridge's flat declared-order
+/// arg list into that SAM call (required args positionally, supplied optionals
+/// folded into the bag), and — when the callable has optionals — a nested
+/// always-non-null `Opts` bag whose nullable accessors read each optional
+/// (`null` for the ones BAML omitted). Extends
+/// `baml_bridge.BamlHostCallable` so the wire encoder detects it by
+/// `instanceof`. `apply` stays the sole abstract method, so a lambda can
+/// implement it and the type is a valid `@FunctionalInterface`.
+pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
+    let has_opts = !iface.optionals.is_empty();
+
+    // SAM signature params: required params, then the Opts bag (if any).
+    let mut apply_params: Vec<String> = iface
+        .required
+        .iter()
+        .map(|(id, ty)| format!("{ty} {id}"))
+        .collect();
+    if has_opts {
+        apply_params.push("Opts $opts".to_string());
+    }
+
+    // __bamlDispatch → apply(...) reshape: cast each positional slot; the trailing
+    // Opts bag pulls each optional by its BAML wire name (null when absent).
+    let mut apply_args: Vec<String> = iface
+        .required
+        .iter()
+        .enumerate()
+        .map(|(i, (_, ty))| format!("({ty}) $positional.get({i})"))
+        .collect();
+    if has_opts {
+        let opts_args: Vec<String> = iface
+            .optionals
+            .iter()
+            .map(|(wire, ty)| format!("({ty}) $optional.get({wire:?})"))
+            .collect();
+        apply_args.push(format!("new Opts({})", opts_args.join(", ")));
+    }
+
+    let mut out = String::from("@FunctionalInterface\n");
+    out.push_str(&format!(
+        "public interface {} extends baml_bridge.BamlHostCallable {{\n",
+        iface.name
+    ));
+    out.push_str(&format!(
+        "    {} apply({});\n\n",
+        iface.ret,
+        apply_params.join(", ")
+    ));
+    out.push_str(
+        "    /**\n     * Bridge dispatch: reshape the engine's flat declared-order arg list\n     * into this callable's SAM. Required args arrive positionally; supplied\n     * optionals fold into the always-non-null {@code Opts} bag.\n     */\n    @Override\n    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {\n",
+    );
+    out.push_str(&format!(
+        "        return apply({});\n    }}\n",
+        apply_args.join(", ")
+    ));
+
+    if has_opts {
+        out.push_str(&render_opts_bag(&iface.optionals));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// The nested `Opts` bag for a callback interface with optional params: a
+/// `final` value holder (implicitly `public static` inside an interface) with
+/// one nullable boxed field per optional, a package-visible constructor the
+/// bridge's `__bamlDispatch` calls, and a `PreserveCase` public accessor per
+/// field (`null` when BAML omitted that optional). Field/accessor idents are
+/// the Java-escaped BAML wire names.
+fn render_opts_bag(optionals: &[(String, String)]) -> String {
+    let fields: Vec<(String, String)> = optionals
+        .iter()
+        .map(|(wire, ty)| (java_identifier(wire), ty.clone()))
+        .collect();
+
+    let mut out = String::from(
+        "\n    /**\n     * Optional-argument bag. Each accessor is {@code null} when BAML omitted\n     * the optional (the callable then applies its own fallback). Always\n     * constructed non-null \u{2014} a Java SAM is fixed-arity.\n     */\n    final class Opts {\n",
+    );
+    for (id, ty) in &fields {
+        out.push_str(&format!("        private final {ty} {id};\n"));
+    }
+    let ctor_params: Vec<String> = fields.iter().map(|(id, ty)| format!("{ty} {id}")).collect();
+    out.push_str(&format!("\n        Opts({}) {{\n", ctor_params.join(", ")));
+    for (id, _) in &fields {
+        out.push_str(&format!("            this.{id} = {id};\n"));
+    }
+    out.push_str("        }\n");
+    for (id, ty) in &fields {
+        out.push_str(&format!(
+            "\n        public {ty} {id}() {{\n            return this.{id};\n        }}\n"
+        ));
+    }
+    out.push_str("    }\n");
     out
 }
 

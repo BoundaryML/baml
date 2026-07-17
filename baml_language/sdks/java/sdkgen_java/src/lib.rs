@@ -135,7 +135,10 @@ pub fn to_source_code(
             s
         };
         let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
-        let ctx = TranslateCtx { aliases: &aliases };
+        let ctx = TranslateCtx {
+            aliases: &aliases,
+            pkg: pkg.clone(),
+        };
 
         match symbol {
             Symbol::Class(class) => {
@@ -226,7 +229,10 @@ pub fn to_source_code(
         } else {
             "Fns"
         };
-        let ctx = TranslateCtx { aliases: &aliases };
+        let ctx = TranslateCtx {
+            aliases: &aliases,
+            pkg: pkg.clone(),
+        };
         out.insert(
             java_file_path(&pkg, holder),
             with_package(
@@ -240,7 +246,10 @@ pub fn to_source_code(
     // minted union under the alias's own name; other recursive shapes
     // get a reserved placeholder until the aliases capability lands.
     for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
-        let ctx = TranslateCtx { aliases: &aliases };
+        let ctx = TranslateCtx {
+            aliases: &aliases,
+            pkg: pkg.clone(),
+        };
         let body = if let Ty::Union(items, _) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -265,9 +274,23 @@ pub fn to_source_code(
     // Anonymous multi-arm unions no longer mint nominal files: they
     // render inline as the runtime's generic arity family
     // (`baml_bridge.Union{n}<...>`) and decode is type-directed via the
-    // per-binding descriptors, so nothing records into `sink` anymore.
+    // per-binding descriptors, so nothing records into `sink.unions`.
     // The only nominal union files are the recursive aliases emitted
     // above (a positional generic cannot reference itself).
+
+    // Host-callable functional interfaces (design point E): a callable whose
+    // own type carries optional params / arity > 2 has no `java.util.function`
+    // shape, so `translate_callable` minted a `@FunctionalInterface` (recorded in
+    // `sink.callbacks`, deduped per package). Emit one file per interface beside
+    // its owning package, after all rendering has populated the sink.
+    for (pkg, entries) in &sink.callbacks {
+        for (_, iface) in entries {
+            out.insert(
+                java_file_path(pkg, &iface.name),
+                with_package(pkg, &emit::render_callback_interface(iface)),
+            );
+        }
+    }
 
     // Root runtime anchor. Loading any generated class must (in a
     // later phase) trigger idempotent runtime initialization from the
@@ -1090,6 +1113,99 @@ mod tests {
         // The nested opts class is static (instantiable from an instance method).
         assert!(file.contains("public static final class probe$Opts {"));
         assert!(file.contains("public probe$Opts opt1(java.lang.Long v) {"));
+    }
+
+    #[test]
+    fn optional_args_callable_mints_functional_interface_and_types_param() {
+        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+        // A free function taking a callable whose own type carries optionals
+        // (`(x: int, y?: int, z?: int) -> int`): the param types as the minted
+        // interface, and the interface file is emitted beside `Fns`.
+        let mut pool = SymbolPool::new();
+        let callback_ty = Ty::Function {
+            params: vec![
+                CallableParam {
+                    name: Some(BaseName::new("x")),
+                    ty: t_int(),
+                    mode: CodegenFunctionParamMode::Required,
+                },
+                CallableParam {
+                    name: Some(BaseName::new("y")),
+                    ty: t_int(),
+                    mode: CodegenFunctionParamMode::Optional,
+                },
+                CallableParam {
+                    name: Some(BaseName::new("z")),
+                    ty: t_int(),
+                    mode: CodegenFunctionParamMode::Optional,
+                },
+            ],
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        let f = Function {
+            name: BaseName::new("call_cb"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("callback"),
+                    docstring: None,
+                    ty: callback_ty,
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("x"),
+                    docstring: None,
+                    ty: t_int(),
+                    default: None,
+                },
+            ],
+            return_type: t_list(t_int()),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(name("user", &["host_cb"], "call_cb"), Symbol::Function(f));
+        let out = emit_sdk(&pool);
+
+        // The Fns param is typed as the minted interface (not Object).
+        let fns = &out[&PathBuf::from("host_cb/Fns.java")];
+        assert!(
+            fns.contains(
+                "public static java.util.List<java.lang.Long> call_cb(baml_sdk.host_cb.IntOptCallback callback, long x) {"
+            ),
+            "{fns}"
+        );
+
+        // The interface file: extends the marker, single-abstract SAM, the
+        // dispatch reshape, and a nested Opts bag with nullable accessors.
+        let iface = &out[&PathBuf::from("host_cb/IntOptCallback.java")];
+        assert!(
+            iface
+                .contains("public interface IntOptCallback extends baml_bridge.BamlHostCallable {"),
+            "{iface}"
+        );
+        assert!(
+            iface.contains("java.lang.Long apply(java.lang.Long x, Opts $opts);"),
+            "{iface}"
+        );
+        assert!(
+            iface.contains(
+                "default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {"
+            ),
+            "{iface}"
+        );
+        assert!(
+            iface.contains(
+                "return apply((java.lang.Long) $positional.get(0), new Opts((java.lang.Long) $optional.get(\"y\"), (java.lang.Long) $optional.get(\"z\")));"
+            ),
+            "{iface}"
+        );
+        assert!(iface.contains("final class Opts {"), "{iface}");
+        assert!(iface.contains("public java.lang.Long y() {"), "{iface}");
+        assert!(iface.contains("public java.lang.Long z() {"), "{iface}");
     }
 
     #[test]
