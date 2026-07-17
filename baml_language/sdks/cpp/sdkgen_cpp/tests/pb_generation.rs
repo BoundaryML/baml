@@ -21,10 +21,9 @@ const PROTO_FILES: &[&str] = &[
 ];
 
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .canonicalize()
-        .expect("workspace root")
+    // No canonicalize: on Windows it yields a \\?\ extended-length path,
+    // which protoc cannot relate its proto files to.
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
 fn pb_root() -> PathBuf {
@@ -37,10 +36,12 @@ fn generate() -> BTreeMap<String, String> {
     let types_root = workspace_root().join("crates/bridge_ctypes/types");
     let out = tempfile::tempdir().expect("temp dir");
     let protoc = protoc_bin_vendored::protoc_bin_path().expect("vendored protoc");
+    // Absolute file paths under --proto_path (bridge_ctypes/build.rs does
+    // the same): protoc rejects relative args it cannot map on Windows.
     let status = Command::new(protoc)
         .arg(format!("--proto_path={}", types_root.display()))
         .arg(format!("--cpp_out={}", out.path().display()))
-        .args(PROTO_FILES)
+        .args(PROTO_FILES.iter().map(|p| types_root.join(p)))
         .status()
         .expect("run protoc");
     assert!(status.success(), "protoc failed");
