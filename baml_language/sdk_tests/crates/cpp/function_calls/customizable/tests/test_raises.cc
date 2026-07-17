@@ -2,8 +2,7 @@
 // free-function subset of function_calls/customizable/test_raises.py:
 // Python asserts on runtime __doc__; the C++ surface is the generated
 // header's `/// Raises:` lines (unqualified type names), scraped from the
-// header text. The async-sibling and method/.pyi sub-cases are
-// post-step-8.
+// header text. The method/.pyi sub-cases are post-step-8.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
@@ -43,6 +42,17 @@ BAML_TEST(inferred_contract_without_clause_still_raises) {
   // inferred contract (callable_throws) still surfaces a Raises line.
   BAML_ASSERT(HeaderText().find("/// Raises: ParseError\n"
                                 "std::string InferredThrow(") !=
+              std::string::npos);
+}
+
+BAML_TEST(async_sibling_also_has_raises) {
+  // The Async sibling repeats the full doc block, and its return wraps the
+  // declared throws set as the Future's second parameter.
+  BAML_ASSERT(HeaderText().find(
+                  "/// Raises: ParseError, TimeoutError\n"
+                  "::baml::Future<std::string, "
+                  "::baml::Union<::baml_sdk::raises_test::ParseError, "
+                  "::baml_sdk::raises_test::TimeoutError>> LoadDocAsync(") !=
               std::string::npos);
 }
 

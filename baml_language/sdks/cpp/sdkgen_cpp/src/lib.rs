@@ -344,6 +344,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/errors.h"),
     ),
     (
+        "include/baml/future.h",
+        include_str!("../../bridge_cpp/include/baml/future.h"),
+    ),
+    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
@@ -376,6 +380,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
 /// Member name of the synthesized per-callable opts struct within its
 /// callable's identity.
 const OPTS_MEMBER: &str = "opts";
+
+/// Member name of the synthesized async sibling within its callable's
+/// identity.
+const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
 /// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
@@ -419,6 +427,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 request_namespace_segments(&mut requests, name);
                 let fqn = BamlFqn::symbol(name);
                 requests.insert(function_request(name));
+                requests.insert(async_request(&fqn, function));
                 request_callable_members(&mut requests, &fqn, function);
             }
             // Non-recursive aliases emit a `using` declaration; recursive
@@ -515,6 +524,18 @@ fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
         // $opts never even mint a type); C++ needs a name only because the
         // struct must be constructible.
         &format!("{}Opts", function.name.as_str()),
+    )
+}
+
+/// The request for a callable's async sibling. Shared between collection
+/// and emission so the lookup key cannot drift. Verbatim source spelling +
+/// "Async" (probe -> probeAsync), following the opts-struct convention:
+/// user names are never re-cased, only suffixed.
+fn async_request(callable: &BamlFqn, function: &Function) -> NameRequest {
+    NameRequest::synthesized(
+        callable.child(ASYNC_MEMBER),
+        CppNameKind::Function,
+        &format!("{}Async", function.name.as_str()),
     )
 }
 
@@ -785,6 +806,8 @@ struct EmittedOptParam {
 
 struct EmittedFn {
     name: CppName,
+    /// The async sibling's allocated name (`{name}Async`).
+    async_name: CppName,
     /// The BAML FQN the runtime call dispatches on (the wire symbol);
     /// never derived from C++ spellings.
     call_fqn: String,
@@ -890,6 +913,7 @@ fn emit_callable(
     Ok(EmittedFn {
         call_fqn: name.wire().to_string(),
         name,
+        async_name: names.get(&async_request(fqn, function)).clone(),
         ret,
         params,
         opt_params,
@@ -1114,6 +1138,26 @@ enum RenderPos {
     Def,
 }
 
+/// Which spelling of a callable renders: the synchronous form or the
+/// `{name}Async` sibling returning a `baml::Future`.
+#[derive(Clone, Copy)]
+enum FnVariant {
+    Sync,
+    Async,
+}
+
+const FN_VARIANTS: [FnVariant; 2] = [FnVariant::Sync, FnVariant::Async];
+
+/// The async sibling's return type: the sync return wrapped in
+/// `baml::Future`, with the declared throws union as the second parameter
+/// when the function has a typed throws set.
+fn future_ret(f: &EmittedFn) -> String {
+    match &f.thrown {
+        Some(u) => format!("::baml::Future<{}, {}>", f.ret, u),
+        None => format!("::baml::Future<{}>", f.ret),
+    }
+}
+
 fn push_doc(buf: &mut String, indent: &str, doc: Option<&String>, raises: &[String]) {
     if let Some(doc) = doc {
         for line in doc.lines() {
@@ -1148,7 +1192,7 @@ fn by_value_or_cref(ty: &str) -> String {
     }
 }
 
-fn signature(f: &EmittedFn, pos: RenderPos) -> String {
+fn signature(f: &EmittedFn, pos: RenderPos, variant: FnVariant) -> String {
     let mut params: Vec<String> = f
         .params
         .iter()
@@ -1165,12 +1209,11 @@ fn signature(f: &EmittedFn, pos: RenderPos) -> String {
             opts = GeneratorIdent::OptsParam.token()
         ));
     }
-    format!(
-        "{ret} {name}({params})",
-        ret = f.ret,
-        name = f.name.declared(),
-        params = params.join(", ")
-    )
+    let (ret, name) = match variant {
+        FnVariant::Sync => (f.ret.clone(), f.name.declared()),
+        FnVariant::Async => (future_ret(f), f.async_name.declared()),
+    };
+    format!("{ret} {name}({params})", params = params.join(", "))
 }
 
 fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
@@ -1197,8 +1240,9 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
 }
 
 /// Emits one binding body: runtime init, required args, set optional args,
-/// then the synchronous call.
-fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
+/// then the call (blocking `CallSync`, or `StartCall` returning the
+/// in-flight `baml::Future` for the async sibling).
+fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant) {
     let args = GeneratorIdent::ArgsLocal.token();
     let w = GeneratorIdent::WriterParam.token();
     let opts = GeneratorIdent::OptsParam.token();
@@ -1234,9 +1278,13 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
         Some(u) => format!(", {u}"),
         None => String::new(),
     };
+    let driver = match variant {
+        FnVariant::Sync => "CallSync",
+        FnVariant::Async => "StartCall",
+    };
     let _ = writeln!(
         buf,
-        "{indent}return ::baml::detail::CallSync<{ret}{thrown}>(\"{fqn}\", \
+        "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
          std::move({args}));",
         ret = f.ret,
         fqn = f.call_fqn,
@@ -1366,8 +1414,10 @@ fn render_header(
         open_namespaces(&mut buf, ns);
         for f in fns {
             render_opts_struct(&mut buf, "", f);
-            push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
-            let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl));
+            for variant in FN_VARIANTS {
+                push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
+                let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl, variant));
+            }
         }
         close_namespaces(&mut buf, ns);
     }
@@ -1562,9 +1612,11 @@ fn render_bindings(fns_by_namespace: &BTreeMap<Vec<String>, Vec<EmittedFn>>) -> 
         buf.push('\n');
         open_namespaces(&mut buf, ns);
         for f in fns {
-            let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def));
-            render_body(&mut buf, "  ", f);
-            buf.push_str("}\n");
+            for variant in FN_VARIANTS {
+                let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def, variant));
+                render_body(&mut buf, "  ", f, variant);
+                buf.push_str("}\n");
+            }
         }
         close_namespaces(&mut buf, ns);
     }
