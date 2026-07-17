@@ -527,7 +527,7 @@ pub mod cpp {
     pub use crate::cpp_test_suite as test_suite;
 }
 
-/// TypeScript runtime matrix test-side glue. Invoked from
+/// Node TypeScript test-side glue. Invoked from
 /// `crates/typescript/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript::test_suite!()`.
 pub mod typescript {
@@ -542,4 +542,19 @@ pub mod typescript {
     }
 
     pub use crate::typescript_test_suite as test_suite;
+}
+
+/// Browser and Cloudflare Workers TypeScript test-side glue. Invoked from
+/// `crates/typescript_web/src/lib.rs`.
+pub mod typescript_web {
+    /// `include!`s `OUT_DIR/typescript_web_tests.rs`, emitted by
+    /// `sdk_test_harness_setup::typescript_web::run_all_from_typescript_sources`.
+    #[macro_export]
+    macro_rules! typescript_web_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_web_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_web_test_suite as test_suite;
 }

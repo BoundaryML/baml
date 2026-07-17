@@ -1,5 +1,9 @@
 /// Arbitrary-precision signed integer.
 ///
+/// Literals are written with a trailing `n` in decimal (`42n`), hex
+/// (`0xFFn`), octal (`0o755n`), or binary (`0b1010n`), with `_` digit
+/// separators allowed (`1_000_000n`).
+///
 /// # Bitwise on negatives
 ///
 /// `&`, `|`, `^` use two's-complement semantics — bigints are treated as if
