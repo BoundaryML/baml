@@ -1155,6 +1155,43 @@ mod tests {
     }
 
     #[test]
+    fn companion_names_preserve_wire_identity_and_share_package_collision_scope() {
+        let companion = symbol(&["lorem"], "extract_resume$build_request");
+        let user_function = symbol(&["lorem"], "extract_resume_build_request");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(
+                    companion.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    user_function.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let companion_name =
+            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
+        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
+
+        assert_ne!(identifier(companion_name), identifier(user_name));
+        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequest_"));
+        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequest_"));
+        assert_eq!(
+            companion_name.wire(),
+            &BamlWireName::Symbol(companion.symbol.clone())
+        );
+        assert_eq!(
+            companion_name.wire().to_string(),
+            "user.lorem.extract_resume$build_request"
+        );
+    }
+
+    #[test]
     fn identifier_is_relative_to_the_current_package() {
         let fqn = symbol(&[], "lookup_invoice");
         let names = GoNames::new(
