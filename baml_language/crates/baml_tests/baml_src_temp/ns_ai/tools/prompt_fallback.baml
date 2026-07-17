@@ -89,11 +89,13 @@ function prompt_tool_turn<T>(
   tools: Tool[],
   output_suffix: string,
 ) -> Task<T> throws never {
+  //# Render the task with its output contract
   let rendered = state.recipe.render_with_output_format(
     provider.inner,
     reflect.type_of<T>(),
     output_suffix,
   );
+  //# Reattach prior tool-loop conversation
   let prior = prompt_tool_history(state.history);
   let prompt = if (prior.length() == 0) {
     rendered
@@ -135,12 +137,14 @@ implements ToolCallingProvider for PromptToolProvider {
 
   function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
+    //# Resume the prompt-tool transcript
     let state = match (transcript) {
       let value: PromptToolTranscript => value,
       _ => throw baml.errors.ToolError {
         message: "prompt tool adapter received another provider's transcript",
       },
     };
+    //# Resolve the backing generation provider
     let generation = match (self.inner) {
       let value: GenerationProvider => value,
       _ => throw baml.errors.UnknownError {
@@ -148,6 +152,7 @@ implements ToolCallingProvider for PromptToolProvider {
         message: ["prompt tool adapter requires GenerationProvider"],
       },
     };
+    //# Use plain generation when no tools are active
     if (tools.length() == 0) {
       let response = generation.generate<T>(prompt_tool_turn<T>(self, state, [], "")) catch (e) {
         _ => throw baml.errors.UnknownError {
@@ -157,6 +162,7 @@ implements ToolCallingProvider for PromptToolProvider {
       };
       return ModelStep<T> { outcome: response.value, meta: response.meta };
     }
+    //# Ask for tool calls or the final value
     let suffix = prompt_tool_output_suffix(tools);
     let response = generation.generate<T | ToolCalls>(
       prompt_tool_turn<T | ToolCalls>(self, state, tools, suffix),
@@ -166,8 +172,10 @@ implements ToolCallingProvider for PromptToolProvider {
         message: ["prompt tool generation failed"],
       },
     };
+    //# Preserve the chosen outcome
     match (response.value) {
       let calls: ToolCalls => {
+        //## Append tool calls to prompt history
         state.history.entries.push(ChatMessage.assistant(baml.json.stringify({
           "calls": calls.calls.map((call: ToolCall) -> json {
             { "id": call.id, "name": call.name, "args": call.args }
@@ -181,12 +189,14 @@ implements ToolCallingProvider for PromptToolProvider {
 
   function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
       throws baml.errors.ToolError {
+    //# Resume the prompt transcript receiving results
     let state = match (transcript) {
       let value: PromptToolTranscript => value,
       _ => throw baml.errors.ToolError {
         message: "prompt tool adapter received another provider's transcript",
       },
     };
+    //# Append tool results to prompt history
     for (let result in results) {
       state.history.entries.push(ChatMessage {
         message_role: MessageRole.Tool,
@@ -207,6 +217,7 @@ implements ToolCallingProvider for PromptToolProvider {
 
 function tool_calling_provider(provider: Provider) -> ToolCallingProvider
     throws baml.errors.Unsupported {
+  //# Prefer native tools and adapt generation-only providers
   match (provider) {
     let native: ToolCallingProvider => native,
     let generated: GenerationProvider => PromptToolProvider { inner: provider },

@@ -91,7 +91,9 @@ interface AgentRecorder {
 }
 
 function publish(event: AgentEvent, observers: AgentObserver[], recorders: AgentRecorder[]) -> null throws never {
+  //# Notify in-process observers
   for (let observer in observers) { observer.on_event(event); }
+  //# Persist through configured recorders
   for (let recorder in recorders) { recorder.record(event); }
   null
 }

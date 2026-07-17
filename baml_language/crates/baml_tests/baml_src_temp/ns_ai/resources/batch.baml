@@ -38,7 +38,9 @@ class FakeBatchProvider {
     function submit_batch<T>(self, tasks: Task<T>[], options: BatchOptions) -> Batch<T>
         throws baml.errors.UnknownError {
       let responses: Response<T>[] = [];
+      //# Execute every task in the batch
       for (let task in tasks) {
+        //## Generate one batch result
         let response = self.inner.generate<T>(task.with_provider(self.inner)) catch (e) {
           _ => throw baml.errors.UnknownError {
             data: e,

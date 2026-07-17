@@ -16,11 +16,15 @@ implements GenerationProvider for Fallback {
   function generate<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
+    //# Try generation providers in order
     for (let member in self.members) {
+      //## Select a generation-capable member
       match (member) {
         let provider: GenerationProvider => {
+          //### Attempt generation
           let response = provider.generate<T>(task.with_provider(member)) catch (e) {
             let failure: baml.errors.Failure => {
+              //#### Continue only after a replay-safe failure
               if (may_replay(policy, failure)) { continue; }
               throw e;
             },
@@ -38,12 +42,16 @@ implements GenerationProvider for Fallback {
 implements DriveProvider for Fallback {
   function drive<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
+    //# Try drive providers in order
     for (let member in self.members) {
+      //## Select a drive-capable member
       match (member) {
         let provider: DriveProvider => {
           let policy = provider.replay_policy<T>(task.with_provider(member));
+          //### Attempt provider drive
           let response = provider.drive<T>(task.with_provider(member)) catch (e) {
             let failure: baml.errors.Failure => {
+              //#### Continue only after a replay-safe failure
               if (may_replay(policy, failure)) { continue; }
               if (failure.is_retryable()) {
                 throw baml.errors.CannotRetry {
@@ -63,7 +71,9 @@ implements DriveProvider for Fallback {
   }
 
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
+    //# Prove the entire fallback chain is replay-safe
     for (let member in self.members) {
+      //## Inspect each member policy
       match (member) {
         let provider: DriveProvider => {
           let policy = provider.replay_policy<T>(task.with_provider(member));

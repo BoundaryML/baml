@@ -13,13 +13,16 @@ implements Provider for ModelHarness {
 
 implements DriveProvider for ModelHarness {
   function drive<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+    //# Open an isolated harness session
     let session = self.open(HarnessOptions {
       cwd: null,
       permission_mode: null,
       sandbox: null,
       attributes: {},
     });
+    //# Run the task inside the session
     let run = self.run<T>(session, task);
+    //# Return harness output as a provider response
     Response<T> {
       value: run.value,
       meta: Meta {
@@ -56,6 +59,7 @@ implements Harness for ModelHarness {
 
   function run<T>(self, session: HarnessSession, task: Task<T>) -> HarnessRun<T>
       throws baml.errors.UnknownError {
+    //# Validate the harness session
     let local = match (session) {
       let value: LocalHarnessSession => value,
       _ => throw baml.errors.UnknownError { data: null, message: ["unsupported harness session"] },
@@ -63,13 +67,16 @@ implements Harness for ModelHarness {
     if (local.is_stopped) {
       throw baml.errors.UnknownError { data: null, message: ["harness session is stopped"] };
     }
+    //# Resolve the backing drive provider
     let provider = match (self.inner) {
       let capability: DriveProvider => capability,
       _ => throw baml.errors.UnknownError { data: null, message: ["harness inner cannot drive"] },
     };
+    //# Run the model through the harness
     let response = provider.drive<T>(task.with_provider(self.inner)) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["harness model run failed"] },
     };
+    //# Save conversation and resumable coordinates
     local.history = task.messages().to_conversation();
     let event: AgentEvent = RunFinishedEvent { id: local.session_id, outcome: "done" };
     HarnessRun<T> {
@@ -92,12 +99,14 @@ implements Harness for ModelHarness {
 
   function restore_session(self, token: HarnessSessionToken) -> HarnessSession
       throws baml.errors.UnknownError {
+    //# Validate harness token ownership
     if (token.provider != self.label() || token.runtime != "baml" || token.version != 1) {
       throw baml.errors.UnknownError {
         data: token,
         message: ["harness token does not belong to this harness/runtime/version"],
       };
     }
+    //# Find the saved local session
     for (let session in self.sessions) {
       if (session.session_id == token.session_id) { return session; }
     }

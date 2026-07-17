@@ -37,16 +37,19 @@ class FakeSession {
     function id(self) -> string throws never { self.session_id }
     function run<T>(self, task: Task<T>) -> Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
+      //# Reject runs after session cleanup
       if (self.is_cleaned) {
         throw baml.errors.UnknownError {
           data: self.session_id,
           message: ["session has been cleaned up"],
         };
       }
+      //# Resolve the session drive provider
       let drive = match (self.owner.inner) {
         let value: DriveProvider => value,
         _ => throw baml.errors.Unsupported { message: "session inner cannot drive" },
       };
+      //# Run and retain the latest conversation
       let response = drive.drive<T>(task.with_provider(self.owner.inner));
       self.history = task.messages().to_conversation();
       response
@@ -83,6 +86,7 @@ implements Provider for FakeSessionProvider {
 
 implements SessionProvider for FakeSessionProvider {
   function open_session(self, options: SessionOptions) -> Session throws never {
+    //# Allocate and register a new session
     let session = FakeSession {
       owner: self,
       session_id: options.session_id ?? "session-" + (self.sessions.length() + 1).to_string(),
@@ -96,12 +100,14 @@ implements SessionProvider for FakeSessionProvider {
 
   function resume_session(self, token: SessionToken) -> Session
       throws baml.errors.UnknownError {
+    //# Validate session token ownership
     if (token.provider != self.name() || token.version != 1) {
       throw baml.errors.UnknownError {
         data: token,
         message: ["session token does not belong to this provider/version"],
       };
     }
+    //# Find the saved session
     for (let session in self.sessions) {
       if (session.session_id == token.id) { return session; }
     }

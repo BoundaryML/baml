@@ -1,14 +1,19 @@
 test "guide 05.03: a realtime-only provider opens a channel instead of returning T" {
+  //# Configure a realtime provider and recording channel
   let provider: root.ai.Provider = root.ai.FakeRealtimeProvider { transcript: "pong" };
   let channel = root.ai.RecordingChannel { frames: [] };
+  //# Open the live interaction
   let live = root.ai.drivers.open_live<string>(VoiceSupport_task("reply pong", provider), channel);
+  //# Collect transcript events and frames
   assert.equal(root.ai.collect_live_text(live), "pong")
   assert.is_true(channel.frames.length() > 0)
 }
 
 testset "integ-test-guide-05-realtime" {
   test "guide 05.03 live OpenAI: realtime WebSocket text exchange" {
+    //# Configure a recording channel
     let channel = root.ai.RecordingChannel { frames: [] };
+    //# Open a live OpenAI WebSocket interaction
     let live = root.ai.drivers.open_live<string>(
       VoiceSupport_task("Reply with exactly: pong", root.ai.OpenAiRealtime {
         model: "gpt-realtime",
@@ -17,7 +22,7 @@ testset "integ-test-guide-05-realtime" {
       }),
       channel,
     );
+    //# Collect and verify realtime transcript deltas
     assert.contains(root.ai.collect_live_text(live).to_lower_case(), "pong")
   }
 }
-

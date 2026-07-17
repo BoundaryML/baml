@@ -15,7 +15,9 @@ function aggregate_usage(responses: Meta[]) -> Usage throws never {
   let cached = 0;
   let reasoning = 0;
   let cost = 0.0;
+  //# Aggregate usage from every provider response
   for (let meta in responses) {
+    //## Add available token and cost counters
     match (meta.usage) {
       let usage: Usage => {
         input = input + usage.input_tokens;
@@ -35,4 +37,3 @@ function aggregate_usage(responses: Meta[]) -> Usage throws never {
     cost_usd: cost,
   }
 }
-

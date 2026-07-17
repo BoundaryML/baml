@@ -34,7 +34,9 @@ class McpDiscoveryHooks {
   implements root.ai.AgentHooks {
     function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
         throws baml.errors.ToolError {
+      //# Discover MCP tools after the first model step
       if (context.step == 1) {
+        //## Register every discovered MCP tool
         for (let tool in self.connection.tools()) {
           context.tool_registry.add(tool);
         }
@@ -58,6 +60,7 @@ function dispatch_with_mcp(
 }
 
 test "guide 02.07: MCP discovery changes the roster between model steps" {
+  //# Configure MCP discovery and the initial registry
   let connection = FakeMcpConnection { discoveries: 0, looked_up_orders: [] };
   let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
   let provider = root.ai.ScriptedToolProvider {
@@ -77,6 +80,7 @@ test "guide 02.07: MCP discovery changes the roster between model steps" {
     }`,
     usage_per_step: null,
   };
+  //# Attach mid-loop discovery and MCP dispatch
   let options = guide_agent_options(
     [],
     (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
@@ -86,13 +90,16 @@ test "guide 02.07: MCP discovery changes the roster between model steps" {
     hooks = McpDiscoveryHooks { connection: connection },
   );
 
+  //# Run the agent across changing tool rosters
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, []),
     options,
   );
 
+  //# Verify discovery and MCP execution
   assert.equal(connection.discoveries, 1)
   assert.equal(connection.looked_up_orders, ["O-42"])
+  //# Verify each model step saw the expected roster
   match (outcome) {
     let done: root.ai.Done<Resolution> => match (done.transcript) {
       let transcript: root.ai.ScriptedToolTranscript => {

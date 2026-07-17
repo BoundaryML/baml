@@ -11,15 +11,19 @@ implements Provider for Retry {
 implements GenerationProvider for Retry {
   function generate<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
+    //# Resolve the generation capability
     let provider = match (self.inner) {
       let capability: GenerationProvider => capability,
       _ => throw baml.errors.Unsupported { message: "retry inner cannot generate" },
     };
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     let attempt = 1;
+    //# Retry replay-safe generation
     while (attempt <= self.max_attempts) {
+      //## Attempt provider generation
       let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
         let failure: baml.errors.Failure => {
+          //### Decide whether this failure may replay
           if (attempt >= self.max_attempts || !may_replay(policy, failure)) { throw e; }
           attempt = attempt + 1;
           continue;
@@ -35,15 +39,20 @@ implements GenerationProvider for Retry {
 implements DriveProvider for Retry {
   function drive<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
+    //# Resolve the drive capability
     let provider = match (self.inner) {
       let capability: DriveProvider => capability,
       _ => throw baml.errors.Unsupported { message: "retry inner cannot drive" },
     };
+    //# Load the provider replay policy
     let policy = provider.replay_policy<T>(task.with_provider(self.inner));
     let attempt = 1;
+    //# Retry replay-safe drive calls
     while (attempt <= self.max_attempts) {
+      //## Attempt provider drive
       let result = provider.drive<T>(task.with_provider(self.inner)) catch (e) {
         let failure: baml.errors.Failure => {
+          //### Decide whether this failure may replay
           if (attempt >= self.max_attempts) { throw e; }
           if (!may_replay(policy, failure)) {
             if (failure.is_retryable()) {

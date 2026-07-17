@@ -99,12 +99,14 @@ class OpenAiRealtime {
 implements RealtimeProvider for OpenAiRealtime {
   function open_live<T>(self, task: Task<T>, channel: Channel) -> Live
       throws baml.errors.UnknownError {
+    //# Open the realtime WebSocket
     let ws = baml.ws.connect(
       "wss://api.openai.com/v1/realtime?model=" + self.model,
       { "Authorization": "Bearer " + self.api_key },
     ) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["realtime connect failed"] },
     };
+    //# Send the initial conversation item
     ws.send(baml.json.stringify({
       "type": "conversation.item.create",
       "item": {
@@ -115,6 +117,7 @@ implements RealtimeProvider for OpenAiRealtime {
     })) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["realtime send failed"] },
     };
+    //# Start a text response
     ws.send(baml.json.stringify({
       "type": "response.create",
       "response": { "output_modalities": ["text"] },
@@ -123,10 +126,13 @@ implements RealtimeProvider for OpenAiRealtime {
     };
     let text = "";
     let done = false;
+    //# Receive realtime events until completion
     while (!done) {
+      //## Read the next provider event
       let next = ws.next() catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["realtime receive failed"] },
       };
+      //## Forward and interpret the event
       match (next) {
         null => { done = true; },
         let raw: string => {
@@ -135,13 +141,16 @@ implements RealtimeProvider for OpenAiRealtime {
             _ => throw baml.errors.UnknownError { data: raw, message: ["realtime event JSON failed"] },
           };
           let kind = baml.json.path_or(event, ".type", "");
+          //### Accumulate transcript deltas
           if (kind == "response.output_text.delta" || kind == "response.text.delta") {
             text = text + baml.json.path_or(event, ".delta", "");
           }
+          //### Stop on provider completion
           if (kind == "response.done" || kind == "response.completed") { done = true; }
         },
       }
     }
+    //# Close the socket and expose buffered events
     ws.close();
     BufferedLive {
       items: [TranscriptDelta { text: text }, LiveClosed {}],
@@ -153,6 +162,7 @@ implements RealtimeProvider for OpenAiRealtime {
 
 function collect_live_text(live: Live) -> string throws never {
   let text = "";
+  //# Collect transcript deltas from live events
   for (let event in live.events()) {
     match (event) {
       let delta: TranscriptDelta => { text = text + delta.text; },

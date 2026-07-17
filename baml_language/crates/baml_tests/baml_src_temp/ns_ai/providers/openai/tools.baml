@@ -59,6 +59,7 @@ function openai_tool_schemas(tools: Tool[]) -> json[] throws baml.errors.Unknown
 implements ToolCallingProvider for OpenAi {
   function begin<T>(self, task: Task<T>) -> Transcript
       throws baml.errors.UnknownError {
+    //# Start the native OpenAI tool transcript
     let history = task.messages().to_conversation();
     OpenAiToolTranscript {
       owner: self,
@@ -73,10 +74,12 @@ implements ToolCallingProvider for OpenAi {
 
   function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
+    //# Resume the native OpenAI tool transcript
     let state = match (transcript) {
       let value: OpenAiToolTranscript => value,
       _ => throw baml.errors.ToolError { message: "OpenAI received another provider's transcript" },
     };
+    //# Build the request from the active tool roster
     state.tools_json = openai_tool_schemas(tools);
     let key = match (self.api_key) {
       let value: string => value,
@@ -99,6 +102,7 @@ implements ToolCallingProvider for OpenAi {
       "model": self.model,
       "body": body,
     }));
+    //# Call OpenAI with native tool schemas
     let response = baml.http.send(baml.http.Request {
       method: "POST",
       url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
@@ -120,6 +124,7 @@ implements ToolCallingProvider for OpenAi {
       "status_code": response.status_code,
       "body": text,
     }));
+    //# Parse the provider response and usage
     let wire: OpenAiToolResponse = baml.sap.parse<OpenAiToolResponse>(text) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["openai tools parse failed"] },
     };
@@ -146,8 +151,10 @@ implements ToolCallingProvider for OpenAi {
       attributes: {},
       raw: text,
     };
+    //# Return tool calls or the typed final value
     match (message.tool_calls) {
       let raw_calls: json[] => {
+        //## Preserve native tool calls in the transcript
         state.wire_messages.push({ "role": "assistant", "tool_calls": raw_calls });
         state.history.entries.push(ChatMessage {
           message_role: MessageRole.Assistant,
@@ -167,6 +174,7 @@ implements ToolCallingProvider for OpenAi {
         ModelStep<T> { outcome: calls, meta: meta }
       },
       null => {
+        //## Parse the final assistant value
         state.history.entries.push(ChatMessage.assistant(message.content ?? ""));
         let value = baml.sap.parse<T>(message.content ?? "") catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["openai agent final parse failed"] },
@@ -178,10 +186,12 @@ implements ToolCallingProvider for OpenAi {
 
   function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
       throws baml.errors.ToolError {
+    //# Resume the transcript receiving tool results
     let state = match (transcript) {
       let value: OpenAiToolTranscript => value,
       _ => throw baml.errors.ToolError { message: "OpenAI received another provider's transcript" },
     };
+    //# Append every tool result to provider wire state
     for (let result in results) {
       state.wire_messages.push({
         "role": "tool",

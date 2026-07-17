@@ -36,6 +36,7 @@ class Handoff {
 }
 
 function is_handoff(tools: Tool[], call: ToolCall) -> bool throws never {
+  //# Find whether the requested tool transfers control
   for (let tool in tools) {
     if (tool.name == call.name) { return tool.handoff; }
   }
@@ -67,10 +68,13 @@ function run_tool_calls(
 ) -> ToolResult[] throws never {
   let approved: ToolCall[] = [];
   let results: ToolResult[] = [];
+  //# Review proposed tool calls
   for (let original in calls) {
+    //## Publish the proposed call
     emit_agent_event(ToolCallEvent {
       id: options.run_id, phase: "proposed", call: original, result: null,
     }, options);
+    //## Reject tools outside the active registry
     let known = active_tools.filter((tool: Tool) -> bool { tool.name == original.name });
     if (known.length() != 1) {
       let unavailable = ToolResult.error(original, "tool is not in the active registry");
@@ -83,12 +87,14 @@ function run_tool_calls(
       }, options);
       continue;
     }
+    //## Apply the before-tool hook
     let decision = match (options.hooks) {
       let hooks: AgentHooks => hooks.before_tool_call(BeforeToolCall {
         run_id: options.run_id, step: step, call: original,
       }),
       null => ToolDecision.allow(original),
     };
+    //## Approve, rewrite, or block the call
     match (decision.call) {
       let call: ToolCall => {
         // Hooks may rewrite the tool name or arguments, but the provider owns
@@ -115,8 +121,11 @@ function run_tool_calls(
       },
     }
   }
+  //# Dispatch approved tool calls
   let dispatched = options.dispatch(approved);
+  //# Reconcile and publish tool results
   for (let call in approved) {
+    //## Match exactly one result to the call
     let matching = dispatched.filter((candidate: ToolResult) -> bool {
       candidate.id == call.id
     });
@@ -126,6 +135,7 @@ function run_tool_calls(
       _ => ToolResult.error(call, "dispatcher returned duplicate results for this tool call"),
     };
     results.push(result);
+    //## Apply the after-tool hook
     match (options.hooks) {
       let hooks: AgentHooks => hooks.after_tool_call(AfterToolCall {
         run_id: options.run_id, step: step, call: call, result: result,
@@ -141,6 +151,7 @@ function run_tool_calls(
 
 function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetReached | Handoff
     throws baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
+  //# Select the transcript-owning provider
   // A provider transcript is authoritative continuation state. Switching its
   // owner requires explicit import; display names are not identity keys.
   let selected: Provider = match (task.transcript) {
@@ -148,14 +159,17 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
     null => task.provider,
   };
   let provider = tool_calling_provider(selected);
+  //# Resume or begin the provider transcript
   let transcript = match (task.transcript) {
     let existing: Transcript => existing,
     null => provider.begin<T>(task),
   };
+  //# Build the active tool registry
   let registry = match (options.tool_registry) {
     let existing: ToolRegistry => existing,
     null => ToolRegistry.new(options.tools ?? task.tools),
   };
+  //# Initialize cumulative usage
   let usage = Usage {
     input_tokens: 0,
     output_tokens: 0,
@@ -164,10 +178,21 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
     cost_usd: 0.0,
   };
   let steps = 0;
+  //# Run provider steps until the agent stops
   while (true) {
+    //## Record the current agent state
+    log.info("run_agent " + {
+      "steps": steps,
+      "usage": usage,
+      "budget": options.budget,
+      "transcript": transcript,
+      "provider": provider.name(),
+      "tools": registry.snapshot().map((tool: Tool) -> string { tool.name }),
+    }.to_string());
     // A step is one provider.step call, including the final value-producing
     // call. Stop only between calls, so a completed tool round is always
     // submitted before a budget boundary is reported.
+    //## Enforce the step budget
     match (options.budget?.max_steps) {
       let max: int if steps >= max => return BudgetReached {
         transcript: transcript,
@@ -176,6 +201,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
       },
       _ => {},
     }
+    //## Enforce the cost budget
     match (options.budget?.max_cost_usd) {
       let max: float if (usage.cost_usd ?? 0.0) >= max => return BudgetReached {
         transcript: transcript,
@@ -186,6 +212,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
     }
     let tools = registry.snapshot();
     let roster_version = registry.version;
+    //## Prepare the next model step
     match (options.hooks) {
       let hooks: AgentHooks => {
         let plan = hooks.prepare_step(StepContext {
@@ -210,6 +237,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
           let replacement: Tool[] => registry.replace_all(replacement),
           null => {},
         }
+        //### Import conversation before switching providers
         match (plan.provider) {
           let next: Provider => {
             let importer = match (next) {
@@ -236,6 +264,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
       },
       null => {},
     }
+    //## Publish changes to the active tool roster
     if (registry.version != roster_version) {
       emit_agent_event(ToolRosterChangedEvent {
         id: options.run_id,
@@ -247,8 +276,10 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
     emit_agent_event(ModelStartedEvent {
       id: options.run_id, provider: selected.name(),
     }, options);
+    //## Ask the provider for its next step
     let step_result = provider.step<T>(transcript, tools);
     steps = steps + 1;
+    //## Accumulate provider usage
     match (step_result.meta.usage) {
       let step_usage: Usage => {
         add_usage(usage, step_usage);
@@ -256,8 +287,10 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
       },
       null => {},
     }
+    //## Handle tool calls or a final value
     match (step_result.outcome) {
       let calls: ToolCalls => {
+        //### Stop before dispatching a handoff tool
         for (let call in calls.calls) {
           if (is_handoff(tools, call)) {
             emit_agent_event(RunFinishedEvent {
@@ -271,10 +304,12 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
             };
           }
         }
+        //### Dispatch tools and continue the transcript
         let results = run_tool_calls(calls.calls, tools, options, steps);
         transcript = provider.submit(transcript, results);
       },
       let value: T => {
+        //### Return the typed final value
         let meta = Meta {
           provider: selected.name(),
           model: null,
@@ -309,6 +344,7 @@ implements Provider for Agent {
 
 implements DriveProvider for Agent {
   function drive<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+    //# Run the task through the agent loop
     let outcome = run_agent<T>(task.with_provider(self.inner), AgentOptions {
       budget: self.budget,
       tools: self.tools,
@@ -322,6 +358,7 @@ implements DriveProvider for Agent {
     }) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["agent drive failed"] },
     };
+    //# Require a completed typed result
     match (outcome) {
       let done: Done<T> => Response<T> {
         value: done.value,

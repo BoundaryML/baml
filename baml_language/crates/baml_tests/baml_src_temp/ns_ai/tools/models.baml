@@ -91,11 +91,13 @@ class ToolRegistry {
 
   function new(tools: Tool[]) -> ToolRegistry throws baml.errors.ToolError {
     let registry = ToolRegistry { roster: [], version: 0 };
+    //# Seed the registry through validated insertion
     for (let tool in tools) { registry.add(tool); }
     registry
   }
 
   function add(self, tool: Tool) -> null throws baml.errors.ToolError {
+    //# Reject duplicate tool names
     for (let existing in self.roster) {
       if (existing.name == tool.name) {
         throw ToolRegistryError {
@@ -111,7 +113,9 @@ class ToolRegistry {
 
   function add_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
     let combined = self.snapshot();
+    //# Stage the combined tool roster
     for (let tool in tools) { combined.push(tool); }
+    //# Validate before replacing live registry state
     let replacement = ToolRegistry.new(combined);
     self.roster = replacement.roster;
     self.version = self.version + 1;
@@ -124,6 +128,7 @@ class ToolRegistry {
 
   function replace(self, tool: Tool) -> bool throws never {
     let replaced = false;
+    //# Replace the matching tool without reordering
     self.roster = self.roster.map((existing: Tool) -> Tool {
       if (existing.name == tool.name) {
         replaced = true;
@@ -137,6 +142,7 @@ class ToolRegistry {
   }
 
   function replace_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
+    //# Validate the complete replacement roster
     let replacement = ToolRegistry.new(tools);
     self.roster = replacement.roster;
     self.version = self.version + 1;

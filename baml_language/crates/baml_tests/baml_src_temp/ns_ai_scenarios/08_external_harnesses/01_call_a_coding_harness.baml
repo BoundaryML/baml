@@ -1,17 +1,22 @@
 test "guide 08.01: a harness owns its session while returning typed output" {
+  //# Configure an in-process model harness
   let harness = fake_model_harness();
+  //# Submit a typed task through a harness session
   let run = root.ai.drivers.submit_harness<Resolution>(
     harness,
     InvestigateRepository_task(sample_ticket(), harness.inner),
     harness_options(),
   );
+  //# Verify output and resumable token ownership
   assert.equal(run.value.category, "billing")
   assert.equal(run.token.runtime, "baml")
 }
 
 test "guide 08.01: the harness task carries the evidence needed by the model" {
+  //# Render the harness investigation task
   let task = InvestigateRepository_task(sample_ticket(), fake_resolution());
   let prompt = baml.llm.prompt_to_text(task.prompt);
+  //# Verify the task carries repository evidence
   assert.contains(prompt, "Ticket: T-100")
   assert.contains(prompt, "Subject: Charged twice")
   assert.contains(prompt, "Body: I see two charges for order O-42.")
@@ -20,6 +25,7 @@ test "guide 08.01: the harness task carries the evidence needed by the model" {
 
 testset "integ-test-guide-08-model-harness" {
   test "guide 08.01 live OpenAI: real model behind the harness contract" {
+    //# Configure a live OpenAI-backed harness
     let harness = root.ai.ModelHarness {
       inner: root.ai.OpenAi {
         ...root.ai.openai(),
@@ -28,15 +34,18 @@ testset "integ-test-guide-08-model-harness" {
       },
       sessions: [],
     };
+    //# Execute a typed harness run
     let run = root.ai.drivers.submit_harness<Resolution>(
       harness,
       InvestigateRepository_task(sample_ticket(), harness.inner),
       harness_options(),
     );
+    //# Verify live typed output
     assert.is_true(run.value.reply.length() > 0)
   }
 
   test "guide 08.01 live Anthropic: same harness adapter" {
+    //# Configure a live Anthropic-backed harness
     let harness = root.ai.ModelHarness {
       inner: root.ai.Anthropic {
         ...root.ai.anthropic(),
@@ -45,11 +54,13 @@ testset "integ-test-guide-08-model-harness" {
       },
       sessions: [],
     };
+    //# Execute through the same harness contract
     let run = root.ai.drivers.submit_harness<Resolution>(
       harness,
       InvestigateRepository_task(sample_ticket(), harness.inner),
       harness_options(),
     );
+    //# Verify live typed output
     assert.is_true(run.value.summary.length() > 0)
   }
 }
