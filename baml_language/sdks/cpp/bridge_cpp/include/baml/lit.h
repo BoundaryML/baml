@@ -24,8 +24,8 @@
 // C++17 cannot pass a string literal as a template argument (class-type
 // NTTPs are C++20), so BAML_LIT explodes the literal into a char pack via
 // constant-expression indexing (the Boost.Metaparse technique), capped at
-// 64 characters. Generated code never uses the macro: the emitter spells
-// the char packs directly.
+// 256 characters. Generated code never uses the macro: the emitter spells
+// the char packs directly, at any length.
 //
 // A bare integer must NOT be spelled Lit<1>: template identity includes
 // the parameter's TYPE, and `1` deduces `int`, minting a type distinct
@@ -141,7 +141,8 @@ struct IsLit<Lit<Vs...>> : std::true_type {};
 template <std::size_t N, char... Cs>
 struct TrimNulls {
   static_assert(N <= sizeof...(Cs) + 1,
-                "string literal exceeds BAML_LIT's 64-character cap");
+                "string literal exceeds BAML_LIT's 256-character cap (name "
+                "the type via decltype of the generated function instead)");
   static constexpr char arr[] = {Cs...};
   static constexpr std::size_t Length() {
     std::size_t n = 0;
@@ -226,41 +227,29 @@ struct LitSelect<LitArg::kScalar, V, N, Cs...> {
 #define BAML_DETAIL_LIT_CH(s, i) (::baml::detail::LitCharAt((s), (i)))
 
 // clang-format off
+#define BAML_DETAIL_LIT_CH8(s, i)                                            \
+      BAML_DETAIL_LIT_CH(s, (i) + 0), BAML_DETAIL_LIT_CH(s, (i) + 1),        \
+      BAML_DETAIL_LIT_CH(s, (i) + 2), BAML_DETAIL_LIT_CH(s, (i) + 3),        \
+      BAML_DETAIL_LIT_CH(s, (i) + 4), BAML_DETAIL_LIT_CH(s, (i) + 5),        \
+      BAML_DETAIL_LIT_CH(s, (i) + 6), BAML_DETAIL_LIT_CH(s, (i) + 7)
+
+#define BAML_DETAIL_LIT_CH64(s, i)                                           \
+      BAML_DETAIL_LIT_CH8(s, (i) + 0),  BAML_DETAIL_LIT_CH8(s, (i) + 8),     \
+      BAML_DETAIL_LIT_CH8(s, (i) + 16), BAML_DETAIL_LIT_CH8(s, (i) + 24),    \
+      BAML_DETAIL_LIT_CH8(s, (i) + 32), BAML_DETAIL_LIT_CH8(s, (i) + 40),    \
+      BAML_DETAIL_LIT_CH8(s, (i) + 48), BAML_DETAIL_LIT_CH8(s, (i) + 56)
+
+// The 256-character cap applies to this macro only, never to generated
+// code (the emitter spells char packs at any length). Realistically it
+// should never be an issue: literal types are short tag strings, and a
+// 256+ character literal type is a pathological schema. If one ever
+// exists, decltype(the_generated_function()) names its type without the
+// macro, and a `const auto&` match arm catches it.
 #define BAML_LIT(s)                                                          \
   ::baml::detail::LitSelect<::baml::detail::LitArgOf(s),                     \
       ::baml::detail::LitValueOf(s), sizeof(s),                              \
-      BAML_DETAIL_LIT_CH(s, 0),  BAML_DETAIL_LIT_CH(s, 1),                   \
-      BAML_DETAIL_LIT_CH(s, 2),  BAML_DETAIL_LIT_CH(s, 3),                   \
-      BAML_DETAIL_LIT_CH(s, 4),  BAML_DETAIL_LIT_CH(s, 5),                   \
-      BAML_DETAIL_LIT_CH(s, 6),  BAML_DETAIL_LIT_CH(s, 7),                   \
-      BAML_DETAIL_LIT_CH(s, 8),  BAML_DETAIL_LIT_CH(s, 9),                   \
-      BAML_DETAIL_LIT_CH(s, 10), BAML_DETAIL_LIT_CH(s, 11),                  \
-      BAML_DETAIL_LIT_CH(s, 12), BAML_DETAIL_LIT_CH(s, 13),                  \
-      BAML_DETAIL_LIT_CH(s, 14), BAML_DETAIL_LIT_CH(s, 15),                  \
-      BAML_DETAIL_LIT_CH(s, 16), BAML_DETAIL_LIT_CH(s, 17),                  \
-      BAML_DETAIL_LIT_CH(s, 18), BAML_DETAIL_LIT_CH(s, 19),                  \
-      BAML_DETAIL_LIT_CH(s, 20), BAML_DETAIL_LIT_CH(s, 21),                  \
-      BAML_DETAIL_LIT_CH(s, 22), BAML_DETAIL_LIT_CH(s, 23),                  \
-      BAML_DETAIL_LIT_CH(s, 24), BAML_DETAIL_LIT_CH(s, 25),                  \
-      BAML_DETAIL_LIT_CH(s, 26), BAML_DETAIL_LIT_CH(s, 27),                  \
-      BAML_DETAIL_LIT_CH(s, 28), BAML_DETAIL_LIT_CH(s, 29),                  \
-      BAML_DETAIL_LIT_CH(s, 30), BAML_DETAIL_LIT_CH(s, 31),                  \
-      BAML_DETAIL_LIT_CH(s, 32), BAML_DETAIL_LIT_CH(s, 33),                  \
-      BAML_DETAIL_LIT_CH(s, 34), BAML_DETAIL_LIT_CH(s, 35),                  \
-      BAML_DETAIL_LIT_CH(s, 36), BAML_DETAIL_LIT_CH(s, 37),                  \
-      BAML_DETAIL_LIT_CH(s, 38), BAML_DETAIL_LIT_CH(s, 39),                  \
-      BAML_DETAIL_LIT_CH(s, 40), BAML_DETAIL_LIT_CH(s, 41),                  \
-      BAML_DETAIL_LIT_CH(s, 42), BAML_DETAIL_LIT_CH(s, 43),                  \
-      BAML_DETAIL_LIT_CH(s, 44), BAML_DETAIL_LIT_CH(s, 45),                  \
-      BAML_DETAIL_LIT_CH(s, 46), BAML_DETAIL_LIT_CH(s, 47),                  \
-      BAML_DETAIL_LIT_CH(s, 48), BAML_DETAIL_LIT_CH(s, 49),                  \
-      BAML_DETAIL_LIT_CH(s, 50), BAML_DETAIL_LIT_CH(s, 51),                  \
-      BAML_DETAIL_LIT_CH(s, 52), BAML_DETAIL_LIT_CH(s, 53),                  \
-      BAML_DETAIL_LIT_CH(s, 54), BAML_DETAIL_LIT_CH(s, 55),                  \
-      BAML_DETAIL_LIT_CH(s, 56), BAML_DETAIL_LIT_CH(s, 57),                  \
-      BAML_DETAIL_LIT_CH(s, 58), BAML_DETAIL_LIT_CH(s, 59),                  \
-      BAML_DETAIL_LIT_CH(s, 60), BAML_DETAIL_LIT_CH(s, 61),                  \
-      BAML_DETAIL_LIT_CH(s, 62), BAML_DETAIL_LIT_CH(s, 63)>::type
+      BAML_DETAIL_LIT_CH64(s, 0),   BAML_DETAIL_LIT_CH64(s, 64),             \
+      BAML_DETAIL_LIT_CH64(s, 128), BAML_DETAIL_LIT_CH64(s, 192)>::type
 // clang-format on
 
 #endif  // BAML_LIT_H_
