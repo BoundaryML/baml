@@ -759,6 +759,43 @@ mod tests {
     }
 
     #[test]
+    fn functions_with_arguments_carry_the_by_value_note() {
+        let with_args = name("user", &[], "takes_one");
+        let mut function = nullary_string_fn(&with_args);
+        function.docstring = Some("Frobnicates the input.".to_string());
+        function.arguments = vec![baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("x"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        }];
+        let nullary = name("user", &[], "takes_none");
+        let pool = SymbolPool::from([
+            (with_args, Symbol::Function(function)),
+            (
+                nullary.clone(),
+                Symbol::Function(nullary_string_fn(&nullary)),
+            ),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        // The note follows the BAML docstring after a blank `///` line.
+        let note_head = "/// Arguments are passed to the BAML runtime by value:";
+        assert!(
+            lib.contains(&format!("/// Frobnicates the input.\n///\n{note_head}")),
+            "{lib}"
+        );
+        // Exactly the sync + async bindings of `takes_one` carry the note;
+        // `takes_none` has no arguments to mutate, so a count of 2 also
+        // proves its absence there.
+        assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
+    }
+
+    #[test]
     fn namespaced_function_lands_in_its_module_with_ancestors_closed() {
         let n = name("user", &["a", "b"], "f");
         let pool = SymbolPool::from([(n.clone(), Symbol::Function(nullary_string_fn(&n)))]);

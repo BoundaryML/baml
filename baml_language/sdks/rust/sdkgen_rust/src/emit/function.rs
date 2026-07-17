@@ -84,7 +84,10 @@ pub(crate) fn emit(
         }
     }
 
-    let doc_attrs = doc_attrs(function.docstring.as_deref());
+    let mut doc_attrs = doc_attrs(function.docstring.as_deref());
+    if !function.arguments.is_empty() {
+        append_by_value_note(&mut doc_attrs);
+    }
     let sync_name = idents::ident(name.name().as_str());
     let async_name = format_ident!("{}_async", idents::dir_segment(name.name().as_str()));
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
@@ -127,6 +130,29 @@ fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
     match ty {
         baml_codegen_types::Ty::Union(items, _) => crate::unions::strip_null(items).0.len() >= 2,
         _ => false,
+    }
+}
+
+/// Append the by-value calling-convention note to a binding's doc block,
+/// separated from any preceding docstring by a blank `///` line.
+///
+/// BAML has reference semantics in-language — a function body may mutate
+/// its parameters (the stdlib iterator protocol advances `self` this way)
+/// — but the bridge deep-copies every argument onto the wire and only the
+/// return value comes back, so a mutating callee silently behaves like a
+/// no-op on the caller's values. Emitted on every generated binding with
+/// at least one argument (a `self` receiver is the most common risk, but
+/// any argument can be used out-param-style).
+pub(crate) fn append_by_value_note(attrs: &mut Vec<TokenStream>) {
+    if !attrs.is_empty() {
+        attrs.push(quote! { #[doc = ""] });
+    }
+    for line in [
+        " Arguments are passed to the BAML runtime by value: mutations the",
+        " BAML function body makes to its parameters stay runtime-side and",
+        " are never written back to the caller's values.",
+    ] {
+        attrs.push(quote! { #[doc = #line] });
     }
 }
 
