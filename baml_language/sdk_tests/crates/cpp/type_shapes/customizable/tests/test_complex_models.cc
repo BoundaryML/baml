@@ -3,7 +3,7 @@
 // - Keyword construction becomes aggregate init in field declaration order
 //   (matching the generated header).
 // - Union-typed fields (Invoice.payment, ComplexProfile.featured, flags
-//   elements) spell a baml::Union alternative explicitly; the spellings
+//   elements) spell a baml::variant alternative explicitly; the spellings
 //   below deliberately use the python declaration order, which is legal
 //   because baml::variant is order-canonical.
 #include <baml_sdk.h>

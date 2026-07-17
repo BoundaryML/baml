@@ -1,4 +1,4 @@
-// Static shape checks for the baml::Union surface (no python analog;
+// Static shape checks for the baml::variant surface (no python analog;
 // documents the compile-time contract the way optional_args_static.cc does
 // for opts structs). Each "must not compile" shape is pinned as a negative
 // trait assertion rather than a commented-out snippet.
