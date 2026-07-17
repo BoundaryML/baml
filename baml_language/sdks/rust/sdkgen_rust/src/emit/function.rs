@@ -88,9 +88,15 @@ pub(crate) fn emit(
     let sync_name = idents::ident(name.name().as_str());
     let async_name = format_ident!("{}_async", idents::dir_segment(name.name().as_str()));
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
+    let too_many_arguments_attr = if function.arguments.len() > 7 {
+        quote! { #[allow(clippy::too_many_arguments)] }
+    } else {
+        TokenStream::new()
+    };
 
     Ok(quote! {
         #(#doc_attrs)*
+        #too_many_arguments_attr
         pub fn #sync_name(#(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
@@ -101,6 +107,7 @@ pub(crate) fn emit(
         }
 
         #(#doc_attrs)*
+        #too_many_arguments_attr
         pub async fn #async_name(#(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
