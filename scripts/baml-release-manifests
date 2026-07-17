@@ -140,6 +140,10 @@ def main() -> None:
         "baml_bridge_pypi": {
             "version": args.pypi_version,
         },
+        "baml_bridge_go": {
+            "module": "github.com/boundaryml/baml-go",
+            "version": f"v{args.version}",
+        },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
     # Generated-SDK registry coordinates, recorded once a language's publisher

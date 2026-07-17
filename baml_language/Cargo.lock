@@ -767,6 +767,7 @@ dependencies = [
  "regex",
  "reqwest",
  "sdkgen_cpp",
+ "sdkgen_go",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
  "sdkgen_typescript_shared",
@@ -826,6 +827,7 @@ dependencies = [
  "borsh",
  "indexmap",
  "log",
+ "rayon",
  "rustc-hash 2.1.2",
  "salsa",
 ]
@@ -1119,6 +1121,7 @@ dependencies = [
  "bex_vm_types",
  "la-arena",
  "lsp-types",
+ "rayon",
  "salsa",
  "serde",
  "serde_json",
@@ -1174,6 +1177,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "rayon",
  "salsa",
  "serde_json",
  "syn 2.0.117",
@@ -6154,6 +6158,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
+name = "rayon"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6635,6 +6659,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_go"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
 name = "sdk_test_harness_runner"
 version = "0.1.0"
 
@@ -6642,14 +6674,17 @@ version = "0.1.0"
 name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
+ "baml_base",
  "baml_codegen_types",
  "baml_db",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "borsh",
  "proc-macro2",
  "quote",
  "sdkgen_cpp",
+ "sdkgen_go",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
  "sdkgen_typescript_shared",
@@ -6713,7 +6748,9 @@ dependencies = [
 name = "sdkgen_go"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_codegen_types",
+ "baml_type",
 ]
 
 [[package]]
