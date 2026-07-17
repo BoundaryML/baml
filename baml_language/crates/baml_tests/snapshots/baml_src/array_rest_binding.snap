@@ -350,15 +350,21 @@ function array_rest_binding.arb_rest_bind_chain_aliases_same_slice() -> int {
     call baml.Array.slice
     store_var _2
     load_var _2
-    container_len
-    store_var _7
-    load_var _2
+    store_var r
+    load_var r
+    load_const 4
+    call baml.Array.push
+    pop 1
+    load_var r
     container_len
     store_var _8
-    load_var _7
+    load_var _2
+    container_len
+    store_var _9
+    load_var _8
     load_const 10
     mul_int
-    load_var _8
+    load_var _9
     add_int
     return
 }

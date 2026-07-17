@@ -664,15 +664,15 @@ function comparable_sort.parity_main() -> int {
     call baml.Float.inf
     store_var _10
     call baml.Float.nan
-    store_var _11
+    store_var _12
     call baml.Float.nan
-    store_var _13
-    call baml.Float.inf
-    store_var _15
+    store_var _14
     call baml.Float.inf
     store_var _16
-    call baml.Float.nan
+    call baml.Float.inf
     store_var _17
+    call baml.Float.nan
+    store_var _19
     load_type float
     load_const 2.5
     load_var _7
@@ -682,22 +682,26 @@ function comparable_sort.parity_main() -> int {
     load_const 0.5
     load_var _10
     load_const 0.0
-    load_var _11
+    load_const 0.0
+    unary_op -
+    load_var _12
     load_const 1.5
     load_type float
-    alloc_array 8
+    alloc_array 9
     load_const 2.5
-    load_var _13
+    load_var _14
     load_const 0.0
-    load_var _15
+    load_var _16
     sub_float
     load_const 0.5
-    load_var _16
-    load_const 0.0
     load_var _17
+    load_const 0.0
+    load_const 0.0
+    unary_op -
+    load_var _19
     load_const 1.5
     load_type float
-    alloc_array 8
+    alloc_array 9
     call user.comparable_sort.check
     unary_op !
     pop_jump_if_false L1
@@ -788,6 +792,19 @@ function comparable_sort.parity_main() -> int {
     load_const 1
 
   L10:
+    return
+}
+
+function comparable_sort.phase2_compare_explicit_binding_main() -> int {
+    load_const 9
+    init_instance user.comparable_sort.Score .points
+    load_const 1
+    init_instance user.comparable_sort.Score .points
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var result
+    load_var result
     return
 }
 

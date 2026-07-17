@@ -229,10 +229,15 @@ test "rest_binding_generic_element_type" {
 
 function arb_rest_bind_chain_aliases_same_slice() -> int {
     match ([1, 2, 3]) {
-        [..let r: let s] => r.length() * 10 + s.length()
+        [..let r: let s] => {
+            r.push(4);
+            r.length() * 10 + s.length()
+        }
     }
 }
 
 test "rest_bind_chain_aliases_same_slice" {
-    assert.is_true(baml.deep_equals(arb_rest_bind_chain_aliases_same_slice(), 33))
+    // Mutating one chained binding is observed through the other, proving `r`
+    // and `s` reference the same slice rather than two equal-length copies.
+    assert.is_true(baml.deep_equals(arb_rest_bind_chain_aliases_same_slice(), 44))
 }

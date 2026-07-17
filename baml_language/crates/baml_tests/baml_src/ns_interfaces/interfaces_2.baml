@@ -47,12 +47,13 @@ interface F1saDescribable {
 class F1saPair<T> {
     first: T
     second: T
+    label: string
 }
 implements<T> F1saDescribable for F1saPair<T> {
-    function describe(self) -> string { return "a pair" }
+    function describe(self) -> string { return self.label }
 }
 function f1sa_main() -> string {
-    let p: F1saDescribable = F1saPair<int> { first: 1, second: 2 }
+    let p: F1saDescribable = F1saPair<int> { first: 1, second: 2, label: "a pair" }
     return p.describe()
 }
 test "form1_self_accesses_receiver_fields" {

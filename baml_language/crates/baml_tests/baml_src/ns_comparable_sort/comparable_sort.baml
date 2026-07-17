@@ -240,12 +240,19 @@ function phase2_compare_main() -> int throws never {
     return high.compare(low)
 }
 
+function phase2_compare_explicit_binding_main() -> int throws never {
+    let high = Score { points: 9 }
+    let low = Score { points: 1 }
+    let result = high.compare(low)
+    return result
+}
+
 test "phase2_user_class_compare_direct_call_in_main" {
     assert.equal(phase2_compare_main(), 1)
 }
 
 test "phase2_user_class_compare_with_explicit_binding_in_main" {
-    assert.equal(phase2_compare_main(), 1)
+    assert.equal(phase2_compare_explicit_binding_main(), 1)
 }
 
 // ── Phase 3 runtime: actually execute the blanket `sort` ───────────────────
@@ -469,8 +476,8 @@ function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.Com
 
 function parity_main() -> int throws never {
     if (!check([3, 1, 2, 1, 3], [3, 1, 2, 1, 3])) { return 1 }
-    let f = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, float.nan(), 1.5]
-    let g = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, float.nan(), 1.5]
+    let f = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5]
+    let g = [2.5, float.nan(), 0.0 - float.inf(), 0.5, float.inf(), 0.0, -0.0, float.nan(), 1.5]
     if (!check(f, g)) { return 2 }
     if (!check(["b", "a", "aa", "b"], ["b", "a", "aa", "b"])) { return 3 }
     if (!check([3n, 1n, 2n, 1n], [3n, 1n, 2n, 1n])) { return 4 }

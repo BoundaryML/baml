@@ -756,14 +756,14 @@ class GbrDog {
     name: string
     implements GbrNamed {}
 }
-function gbr_first_name(items: GbrNamed[]) -> string {
+function gbr_first_name<T extends GbrNamed>(items: T[]) -> string {
     return items[0].name
 }
 function gbr_main() -> string {
     let mydog = GbrDog { name: "Rex" }
     mydog.name // works
-    let dogs: GbrNamed[] = [GbrDog { name: "Rex" }, GbrDog { name: "Buddy" }]
-    return gbr_first_name(dogs)
+    let dogs: GbrDog[] = [GbrDog { name: "Rex" }, GbrDog { name: "Buddy" }]
+    return gbr_first_name<GbrDog>(dogs)
 }
 test "generic_bound_runtime" {
     assert.equal(gbr_main(), "Rex")
