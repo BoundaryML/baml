@@ -11,10 +11,11 @@
 // to the SAME std::variant instantiation. It is an alias, not a wrapper
 // class: a baml::Union value is a plain std::variant and works with
 // std::get, std::holds_alternative, std::visit, and every other variant
-// API. (Lowercase `union` is a C++ keyword; Union is also the regular
-// Google spelling for a type alias.)
+// API. (Lowercase `union` is a C++ keyword; Union follows the guide's
+// type-alias casing, while match mirrors std::visit per the vocabulary
+// rule in STYLE.md.)
 //
-// baml::Match(u, arms...) is the reading companion: one callable per
+// baml::match(u, arms...) is the reading companion: one callable per
 // alternative, dispatched by TYPE (never by index, which is meaningless
 // under canonical ordering). std::visit enforces exhaustiveness at compile
 // time; a `[](const auto&) { ... }` arm is the explicit catch-all.
@@ -94,7 +95,7 @@ Overloaded(Fs...) -> Overloaded<Fs...>;
 // `[](const auto&) { ... }` is the explicit catch-all (spell the parameter
 // `const auto&`, not `auto&&`, or it out-competes the exact arms).
 template <class V, class... Fs>
-decltype(auto) Match(V&& v, Fs&&... fs) {
+decltype(auto) match(V&& v, Fs&&... fs) {
   return std::visit(detail::Overloaded{std::forward<Fs>(fs)...},
                     std::forward<V>(v));
 }

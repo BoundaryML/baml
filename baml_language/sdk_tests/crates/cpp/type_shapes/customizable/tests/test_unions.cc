@@ -2,7 +2,7 @@
 // Port of roundtrip_tests/test_unions.py, plus the C++-only canonical-form
 // guarantees: baml::Union is an order-canonical std::variant alias
 // (variant<A, B> and variant<B, A> are the SAME type, matching BAML's
-// set-semantic unions), readable with baml::Match and every std::variant
+// set-semantic unions), readable with baml::match and every std::variant
 // API.
 #include <baml_sdk.h>
 #include <baml_test.h>
@@ -78,7 +78,7 @@ BAML_TEST(round_trip_union_container) {
 BAML_TEST(match_dispatches_by_type) {
   const IntOrString got =
       baml_sdk::unions::round_trip_dedup(IntOrString{int64_t{21}});
-  const int64_t doubled = baml::Match(
+  const int64_t doubled = baml::match(
       got,  //
       [](int64_t i) { return i * 2; },
       [](const std::string& s) { return static_cast<int64_t>(s.size()); });
@@ -86,7 +86,7 @@ BAML_TEST(match_dispatches_by_type) {
 
   const IntOrString str =
       baml_sdk::unions::round_trip_dedup(IntOrString{std::string("hello")});
-  const int64_t len = baml::Match(
+  const int64_t len = baml::match(
       str,  //
       [](const std::string& s) { return static_cast<int64_t>(s.size()); },
       [](const auto&) { return int64_t{-1}; });

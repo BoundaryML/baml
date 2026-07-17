@@ -177,7 +177,7 @@ template <typename T>
 struct Codec<OptionalBox<T>> {
   static void Encode(detail::pb::InboundValue& value_msg,
                      const OptionalBox<T>& v) {
-    if (v.HasValue()) {
+    if (v.has_value()) {
       Codec<T>::Encode(value_msg, *v);
     }
     // empty = BAML null = absent oneof: set nothing.
@@ -368,7 +368,7 @@ inline std::string ThrownClassName(const pb::BamlOutboundValue& raw) {
              : std::string();
 }
 
-// The re-encoded thrown value, kept on the exception so BamlError::Get<T>()
+// The re-encoded thrown value, kept on the exception so BamlError::get<T>()
 // can decode it as a typed value later.
 inline std::vector<uint8_t> RawPayload(const pb::BamlOutboundValue& v) {
   const std::string bytes = v.SerializeAsString();
@@ -460,7 +460,7 @@ T DecodeResult(const std::vector<uint8_t>& envelope) {
 // envelope carried. Declared in errors.h; defined here because decoding
 // needs the codec.
 template <typename T>
-T BamlError::Get() const {
+T BamlError::get() const {
   detail::pb::BamlOutboundValue value;
   if (!value.ParseFromArray(payload().data(),
                             static_cast<int>(payload().size()))) {
@@ -470,9 +470,9 @@ T BamlError::Get() const {
 }
 
 template <typename T>
-bool BamlError::Is() const {
+bool BamlError::is() const {
   try {
-    (void)Get<T>();
+    (void)get<T>();
     return true;
   } catch (const BamlError&) {
     return false;

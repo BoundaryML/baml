@@ -866,7 +866,7 @@ fn emit_callable(
     // The declared throws set as a C++ type for the typed error path:
     // always spelled as a ::baml::Union (a single thrown type wraps into a
     // one-alternative Union) so every catch site reads uniformly via
-    // baml::Match. A throws set this slice cannot translate falls back to
+    // baml::match. A throws set this slice cannot translate falls back to
     // the untyped BamlError path (None -> CallSync's ThrownU = void).
     let thrown = function.throws.as_ref().and_then(|ty| {
         match translate_ty(pool, names, ty, emitted_types, &BTreeSet::new()) {
@@ -1223,9 +1223,9 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
         let field = p.name.identifier();
         let _ = writeln!(
             buf,
-            "{indent}if ({opts}.{field}.IsSet()) {{\n{indent}  \
+            "{indent}if ({opts}.{field}.is_set()) {{\n{indent}  \
              {args}.AddArg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
-             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.Value()); }});\n{indent}}}",
+             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
             wire = p.name.wire(),
             ty = p.ty
         );

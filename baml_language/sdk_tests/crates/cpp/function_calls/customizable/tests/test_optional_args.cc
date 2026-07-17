@@ -12,8 +12,8 @@ using Probe = std::vector<std::optional<int64_t>>;
 BAML_TEST(optional_args_runtime_matrix) {
   BAML_ASSERT(baml_sdk::optional_args_probe(1) == (Probe{1, 5, 99}));
   BAML_ASSERT(baml_sdk::optional_args_probe(1, optional_args_probeOpts{}
-                                                   .set_opt1(baml::kUnset)
-                                                   .set_opt2(baml::kUnset)) ==
+                                                   .set_opt1(baml::unset)
+                                                   .set_opt2(baml::unset)) ==
               (Probe{1, 5, 99}));
   BAML_ASSERT(baml_sdk::optional_args_probe(
                   1, optional_args_probeOpts{}.set_opt1(std::nullopt)) ==
@@ -41,11 +41,11 @@ BAML_TEST(unset_and_null_differ_in_one_call) {
   // unset means "omit this argument"; nullopt means "pass an explicit
   // null". The two must stay distinct within a single call.
   BAML_ASSERT(baml_sdk::optional_args_probe(1, optional_args_probeOpts{}
-                                                   .set_opt1(baml::kUnset)
+                                                   .set_opt1(baml::unset)
                                                    .set_opt2(std::nullopt)) ==
               (Probe{1, 5, std::nullopt}));
   BAML_ASSERT(baml_sdk::optional_args_probe(1, optional_args_probeOpts{}
                                                    .set_opt1(std::nullopt)
-                                                   .set_opt2(baml::kUnset)) ==
+                                                   .set_opt2(baml::unset)) ==
               (Probe{1, std::nullopt, 99}));
 }

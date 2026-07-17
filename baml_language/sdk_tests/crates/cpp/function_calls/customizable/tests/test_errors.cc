@@ -2,7 +2,7 @@
 // function_calls/customizable/test_errors.py (panic / cancellation /
 // os-exit / traceback-splicing coverage stays post-step-8):
 // - a declared throw surfaces as BamlThrown<baml::Union<...>> carrying the
-//   decoded value, readable with baml::Match (the analog of Python's
+//   decoded value, readable with baml::match (the analog of Python's
 //   BamlError.value), while catch(BamlError&) keeps working;
 // - single-member and multi-member `throws` agree on class_name (the
 //   engine wraps multi-member throws in union_variant_value);
@@ -36,12 +36,12 @@ BAML_TEST(user_throw_surfaces_declared_instance) {
     baml_sdk::throws_test::ThrowMyError();
     baml_test::Fail("ThrowMyError did not throw");
   } catch (const baml::BamlThrown<baml::Union<MyError>>& e) {
-    const MyError got = baml::Match(e.value,  //
+    const MyError got = baml::match(e.value,  //
                                     [](const MyError& m) { return m; });
     BAML_ASSERT((got == MyError{42, "boom"}));
     // The untyped probes still work on the same exception.
-    BAML_ASSERT(e.Is<MyError>());
-    BAML_ASSERT(!e.Is<ParseError>());
+    BAML_ASSERT(e.is<MyError>());
+    BAML_ASSERT(!e.is<ParseError>());
   }
 }
 
@@ -66,7 +66,7 @@ BAML_TEST(union_throws_preserves_class_name) {
     // so both spellings are the same catchable type.
     BAML_ASSERT_EQ(single_name, std::string("user.raises_test.ParseError"));
     BAML_ASSERT_EQ(e.class_name(), single_name);
-    const bool is_parse = baml::Match(
+    const bool is_parse = baml::match(
         e.value,  //
         [](const ParseError&) { return true; },
         [](const TimeoutError&) { return false; });
@@ -81,7 +81,7 @@ BAML_TEST(typed_throw_is_still_a_baml_error) {
     baml_test::Fail("ThrowMyError did not throw");
   } catch (const baml::BamlError& e) {
     BAML_ASSERT_EQ(e.class_name(), std::string("user.throws_test.MyError"));
-    BAML_ASSERT(e.Is<MyError>());
-    BAML_ASSERT((e.Get<MyError>() == MyError{42, "boom"}));
+    BAML_ASSERT(e.is<MyError>());
+    BAML_ASSERT((e.get<MyError>() == MyError{42, "boom"}));
   }
 }

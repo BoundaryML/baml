@@ -71,7 +71,7 @@ Runtime-loading failures carry stable codes (`BAML_RUNTIME_NOT_FOUND`,
 `BAML_RUNTIME_VERSION_MISMATCH`, `BAML_RUNTIME_CONFIG_CONFLICT`, ...) on
 `baml::RuntimeError::code()`. BAML-level failures surface as
 `baml::BamlError` / `baml::BamlPanic` / `baml::BamlCancelled` with typed
-payload access (`Is<T>()` / `Get<T>()`).
+payload access (`is<T>()` / `get<T>()`).
 
 ## Layout
 

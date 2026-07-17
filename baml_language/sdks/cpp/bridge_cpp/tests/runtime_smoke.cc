@@ -49,13 +49,13 @@ static void TestCallRegistryRoundTrip() {
 static void TestArgTwoState() {
   // Non-nullable optional argument (BAML `count: int = 5`).
   baml::Arg<int64_t> unset_arg;
-  assert(unset_arg.IsUnset() && !unset_arg.IsSet());
+  assert(unset_arg.is_unset() && !unset_arg.is_set());
 
-  baml::Arg<int64_t> explicit_unset = baml::kUnset;
-  assert(explicit_unset.IsUnset());
+  baml::Arg<int64_t> explicit_unset = baml::unset;
+  assert(explicit_unset.is_unset());
 
   baml::Arg<int64_t> value_arg = int64_t{42};
-  assert(value_arg.IsSet() && value_arg.Value() == 42);
+  assert(value_arg.is_set() && value_arg.value() == 42);
 
   // Null is not in a non-nullable argument's type: rejected at compile time.
   static_assert(
@@ -67,21 +67,21 @@ static void TestArgTwoState() {
 
   // Nullable optional argument (BAML `lang: string? = "en"`).
   baml::Arg<std::optional<std::string>> lang_value = std::string("fr");
-  assert(lang_value.IsSet() && lang_value.Value().has_value());
+  assert(lang_value.is_set() && lang_value.value().has_value());
 
   baml::Arg<std::optional<std::string>> lang_null = std::nullopt;
-  assert(lang_null.IsSet() && !lang_null.Value().has_value());
+  assert(lang_null.is_set() && !lang_null.value().has_value());
 
   baml::Arg<std::optional<std::string>> lang_null2 = std::monostate{};
-  assert(lang_null2.IsSet() && !lang_null2.Value().has_value());
+  assert(lang_null2.is_set() && !lang_null2.value().has_value());
 
   // Bare-null-typed argument: monostate is the VALUE there.
   baml::Arg<std::monostate> null_typed_arg = std::monostate{};
-  assert(null_typed_arg.IsSet());
+  assert(null_typed_arg.is_set());
 
   bool threw = false;
   try {
-    (void)unset_arg.Value();
+    (void)unset_arg.value();
   } catch (const std::logic_error&) {
     threw = true;
   }
@@ -95,11 +95,11 @@ static void TestArgTwoState() {
       return *this;
     }
   };
-  assert(Opts{}.set_lang("fr").lang.Value().value() == "fr");
-  assert(Opts{}.set_lang(std::nullopt).lang.IsSet());
-  assert(!Opts{}.set_lang(std::nullopt).lang.Value().has_value());
-  assert(Opts{}.set_lang(std::monostate{}).lang.IsSet());
-  assert(Opts{}.lang.IsUnset());
+  assert(Opts{}.set_lang("fr").lang.value().value() == "fr");
+  assert(Opts{}.set_lang(std::nullopt).lang.is_set());
+  assert(!Opts{}.set_lang(std::nullopt).lang.value().has_value());
+  assert(Opts{}.set_lang(std::monostate{}).lang.is_set());
+  assert(Opts{}.lang.is_unset());
   std::printf("arg two-state ok\n");
 }
 
