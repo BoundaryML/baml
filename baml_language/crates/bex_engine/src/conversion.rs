@@ -833,10 +833,8 @@ impl BexEngine {
                 let ty = realize_host_ty(ty)?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_type(ty))
             }
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-                return Err(EngineError::CannotConvert {
-                    type_name: "PromptAst".to_string(),
-                });
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(arc)) => {
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))

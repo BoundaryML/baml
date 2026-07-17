@@ -7,11 +7,12 @@ underlying FFI interfaces).
 
 ```bash
 # Run every SDK test target across all fixtures.
-cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript_node
+cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript_node -p sdk_test_csharp
 
 # Run SDK tests for a specific generator.
 cargo nextest run -p sdk_test_python_pydantic2
 cargo nextest run -p sdk_test_typescript_node
+cargo nextest run -p sdk_test_csharp
 
 # Or run the python/nodejs tests specifically
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
@@ -54,6 +55,12 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
   - `sdks/nodejs/bridge_nodejs`
   - `sdks/nodejs/sdkgen_typescript_node`
 
+`sdk_test_csharp` provides coverage for
+
+  - `sdks/csharp/bridge_csharp`
+  - `sdks/csharp/sdkgen_csharp`
+  - `crates/bridge_cffi`
+
 ## Directory structure
 
 There are two dimensions for SDK tests: generators and fixtures.
@@ -62,6 +69,7 @@ There is one Rust crate per SDK generator:
 
   - `sdk_test_python_pydantic2` for the `python/pydantic2` generator
   - `sdk_test_typescript_node` for the `typescript/node` generator
+  - `sdk_test_csharp` for the `csharp` generator
 
 Each crate fans out over every **fixture** in `sdk_tests/fixtures/`.
 Each fixture is a single `baml_src/` tree that contains `.baml` source
@@ -69,6 +77,10 @@ for testing different aspects of each SDK.
 
 Host-language test code for each generated SDK/fixture lives in the
 corresponding `customizable/` tree.
+
+The initial C# bridge slice opts in only fixtures that have a
+`crates/csharp/<fixture>/customizable/` directory. This restriction is removed
+once the C# generator can compile every shared nominal and generic fixture.
 
 ```text
 sdk_tests/
@@ -119,7 +131,7 @@ sdk_tests/
   `crates/<G>/<F>/` is the output for one generator.
 - **Generator directory** (under `crates/`): lowercase snake
   matching the generator key (`python_pydantic2`,
-  `typescript_node`).
+  `typescript_node`, `csharp`).
 - **Rust crate name**: `sdk_test_<generator>` -- one per generator.
 
 ## Adding a Fixture

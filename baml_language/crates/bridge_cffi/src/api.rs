@@ -93,6 +93,8 @@ pub struct BamlApiV1 {
     /// An empty buffer means compatible. A non-empty buffer is an owned UTF-8
     /// diagnostic that must be released with [`crate::free_buffer`].
     pub register_bridge: unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer,
+    /// Flush the process event sink before a host exits or completes a test.
+    pub flush_events: extern "C" fn(),
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -118,6 +120,7 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     media_base64: crate::baml_media_base64,
     media_mime_type: crate::baml_media_mime_type,
     register_bridge: crate::register_bridge_ffi,
+    flush_events: crate::flush_events,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -177,5 +180,6 @@ mod tests {
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
+        assert_same_function!(api.flush_events, crate::flush_events);
     }
 }

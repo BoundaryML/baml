@@ -445,6 +445,22 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
+/// C# generator's test-side glue. Invoked from
+/// `crates/csharp/src/lib.rs` as
+/// `sdk_test_harness_runner::csharp::test_suite!()`.
+pub mod csharp {
+    /// `include!`s `OUT_DIR/csharp_tests.rs`, the per-fixture scaffold emitted
+    /// by `sdk_test_harness_setup::csharp::run_all`.
+    #[macro_export]
+    macro_rules! csharp_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/csharp_tests.rs"));
+        };
+    }
+
+    pub use crate::csharp_test_suite as test_suite;
+}
+
 /// Node.js + TypeScript generator's test-side glue. Invoked from
 /// `crates/typescript_node/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript_node::test_suite!()`.

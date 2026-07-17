@@ -385,6 +385,16 @@ jobs:
                 "timeout": 30,
               },
               {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
@@ -399,6 +409,16 @@ jobs:
                 "package-name": "sdk_test_typescript_node",
                 "sdk-path": "typescript_node",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
@@ -419,6 +439,16 @@ jobs:
                 "package-name": "sdk_test_typescript_node",
                 "sdk-path": "typescript_node",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
@@ -433,14 +463,15 @@ jobs:
             core.setOutput("matrix", JSON.stringify(matrix, null, 2));
 
   # SDK tests (codegen end-to-end). The `sdk_test_*` generator crates emit
-  # generated Python/TypeScript projects from `.baml` sources via build.rs,
+  # generated Python/TypeScript/C# projects from `.baml` sources via build.rs,
   # then run their language-specific checks under nextest. Their setup scripts
   # do the expensive package-manager/native-build work (`uv sync` + `maturin`
-  # for Python, `pnpm install` + NAPI build for TypeScript). Run the generated
+  # for Python, `pnpm install` + NAPI build for TypeScript, native C ABI build
+  # for C#). Run the generated
   # setup guards first so CI exposes setup cost/failures as a separate step; the
   # full test step re-runs the setup scripts, but the warm path should be cheap.
-  # Keep Python and TypeScript as separate matrix entries so setup/test timing
-  # and failures are attributed to the specific SDK generator.
+  # Keep every SDK as a separate matrix entry so setup/test timing and failures
+  # are attributed to the specific generator.
   sdk-tests:
     name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
     needs: sdk-test-matrix
@@ -466,6 +497,12 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: ${{ matrix.install-args }}
+
+      - name: "Install .NET 10"
+        if: matrix.sdk-label == 'csharp'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
 
       - name: "Verify sccache"
         run: sccache --version

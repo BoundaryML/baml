@@ -403,6 +403,16 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-csharp-sdk:
+    name: Build C# SDK
+    needs: [plan, build-bridge-cffi]
+    uses: ./.github/workflows/build2-csharp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
@@ -414,6 +424,7 @@ jobs:
       - build-python-sdk
       - build-nodejs-sdk
       - build-bridge-cffi
+      - build-csharp-sdk
     steps:
       - run: echo "all release build jobs completed"
 

@@ -2,6 +2,33 @@ nextest-version = "0.9.98"
 
 experimental = ["setup-scripts"]
 
+# C# fixtures share the Baml.Bridge project-reference output. MSBuild cannot
+# safely generate the same deps.json from multiple fixture processes at once.
+[test-groups.csharp_dotnet]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_csharp) & test(/::dotnet$/)'
+test-group = 'csharp_dotnet'
+
+# C# tests consume the bridge_cffi C ABI. Build it once and publish its
+# absolute path to every selected sdk_test_csharp test process.
+[scripts.setup.csharp_bridge_unix]
+command = './sdk_tests/crates/csharp/setup.sh'
+
+[scripts.setup.csharp_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/csharp/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_csharp)'
+platform = { host = 'cfg(unix)' }
+setup = 'csharp_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_csharp)'
+platform = { host = 'cfg(windows)' }
+setup = 'csharp_bridge_win'
+
 # nodejs tests need `.node` addon. build it, install fixtures. fire only
 # when a typescript_node test is selected. setup.sh / setup.ps1 are
 # byte-for-byte equivalent — same pnpm steps in the host shell of each

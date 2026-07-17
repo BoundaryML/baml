@@ -1,0 +1,104 @@
+name: BAML Release - Build C# SDK
+
+# Assembles the platform-neutral managed bridge and the eight immutable
+# bridge_cffi artifacts into one deterministic baml-bridge NuGet package.
+# Native libraries are built by build2-bridge-cffi.reusable.yaml; this workflow
+# only verifies, renames, packs, inspects, and records their bytes.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to package"
+        type: string
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Assemble atomic NuGet package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download native bridge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-cffi-*
+          path: native-download
+          merge-multiple: true
+
+      - name: Verify and stage all native RIDs
+        run: |
+          set -euo pipefail
+          (
+            cd native-download
+            sha256sum --check ./*.sha256
+          )
+
+          stage=artifacts/csharp-native
+          install -Dm755 native-download/libbaml_cffi-x86_64-unknown-linux-gnu.so "$stage/runtimes/linux-x64/native/libbridge_cffi.so"
+          install -Dm755 native-download/libbaml_cffi-aarch64-unknown-linux-gnu.so "$stage/runtimes/linux-arm64/native/libbridge_cffi.so"
+          install -Dm755 native-download/libbaml_cffi-x86_64-unknown-linux-musl.so "$stage/runtimes/linux-musl-x64/native/libbridge_cffi.so"
+          install -Dm755 native-download/libbaml_cffi-aarch64-unknown-linux-musl.so "$stage/runtimes/linux-musl-arm64/native/libbridge_cffi.so"
+          install -Dm755 native-download/libbaml_cffi-x86_64-apple-darwin.dylib "$stage/runtimes/osx-x64/native/libbridge_cffi.dylib"
+          install -Dm755 native-download/libbaml_cffi-aarch64-apple-darwin.dylib "$stage/runtimes/osx-arm64/native/libbridge_cffi.dylib"
+          install -Dm755 native-download/baml_cffi-x86_64-pc-windows-msvc.dll "$stage/runtimes/win-x64/native/bridge_cffi.dll"
+          install -Dm755 native-download/baml_cffi-aarch64-pc-windows-msvc.dll "$stage/runtimes/win-arm64/native/bridge_cffi.dll"
+
+      - name: Pack and inspect baml-bridge
+        run: |
+          set -euo pipefail
+          baml_language/sdks/csharp/bridge_csharp/tools/pack-all-native.sh \
+            artifacts/csharp-native \
+            artifacts/csharp-package
+
+          package=$(find artifacts/csharp-package -maxdepth 1 -type f -name '*.nupkg' -print -quit)
+          test -n "$package"
+          size=$(stat -c %s "$package")
+          # nuget.org documents an approximately 250 MB hard limit. The design
+          # requires a safety ceiling no greater than 80% of that limit.
+          if (( size > 200000000 )); then
+            echo "::error::baml-bridge package is $size bytes; the 200,000,000-byte safety ceiling is exceeded"
+            exit 1
+          fi
+
+          sha256sum "$package" artifacts/csharp-package/*.snupkg > artifacts/csharp-package/SHA256SUMS
+          jq -n \
+            --arg source_sha "${{ inputs.source_sha }}" \
+            --arg version "$(jq -r .canonical_version release-plan.json)" \
+            --argjson package_size "$size" \
+            '{source_sha: $source_sha, version: $version, package_size: $package_size, package_size_ceiling: 200000000}' \
+            > artifacts/csharp-package/provenance.json
+
+      - name: Upload immutable NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-sdk-nuget
+          path: artifacts/csharp-package/
+          if-no-files-found: error
