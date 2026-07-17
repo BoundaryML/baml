@@ -4,7 +4,8 @@
 #include <baml_test.h>
 
 BAML_TEST(hello_world_returns_literal) {
-  BAML_ASSERT_EQ(baml_sdk::hello_world(), std::string("hello world"));
+  BAML_ASSERT(baml_sdk::hello_world() == BAML_LIT("hello world"){});
+  BAML_ASSERT(BAML_LIT("hello world")::value == "hello world");
 }
 
 BAML_TEST(single_required_arg_round_trips) {
