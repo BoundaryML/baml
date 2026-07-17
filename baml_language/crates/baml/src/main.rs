@@ -110,7 +110,7 @@ enum FetchPolicy {
 /// Wrapper-owned command surface, parsed with the same clap styling as
 /// `baml-cli` so `baml toolchain --help` renders like `baml check --help`.
 ///
-/// Only entered when argv[1] names one of the subcommands below; every
+/// Only entered when `argv[1]` names one of the subcommands below; every
 /// other invocation must stay pass-through-transparent (flags included),
 /// which a top-level clap parse would break. See [`run`].
 #[derive(Parser, Debug)]
