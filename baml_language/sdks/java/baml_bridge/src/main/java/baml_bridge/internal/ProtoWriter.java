@@ -1,5 +1,7 @@
 package baml_bridge.internal;
 
+import baml_bridge.BamlType;
+import baml_bridge.BamlTypes;
 import baml_bridge.TypeRegistry;
 
 import java.math.BigInteger;
@@ -17,7 +19,8 @@ import java.util.Map;
  * <h2>Field numbers (against {@code baml_inbound.proto})</h2>
  * <pre>
  * CallFunctionArgs: kwargs = 1 (repeated InboundMapEntry), call_id = 2 (uint64),
- *                   type_args = 3 (unused here — empty)
+ *                   type_args = 3 (repeated BamlTyArg — explicit-generics bindings)
+ * BamlTyArg:        type_var = 1 (string), type_value = 2 (BamlTy)
  * InboundMapEntry:  string_key = 1, value = 6 (InboundValue)
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
@@ -28,7 +31,9 @@ import java.util.Map;
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
  * InboundClassValue: fields = 2 (repeated InboundMapEntry), class_ty = 3 (BamlTyClass)
  *                    (field 1, formerly `name`, is reserved — the FQN lives on class_ty)
- * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (unused here — generics reify later)
+ * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (unused for a class value — an
+ *                    instance's generics reify later; on the type-token path a reified
+ *                    BamlType renders its own class_ty.type_args, see {@link BamlType})
  * InboundEnumValue:  name = 1 (BAML FQN), value = 2 (wire variant name)
  * </pre>
  */
@@ -36,6 +41,11 @@ public final class ProtoWriter {
     // CallFunctionArgs
     private static final int CALL_ARGS_KWARGS = 1;
     private static final int CALL_ARGS_CALL_ID = 2;
+    private static final int CALL_ARGS_TYPE_ARGS = 3;
+
+    // BamlTyArg (one explicit TypeVar binding).
+    private static final int TY_ARG_TYPE_VAR = 1;
+    private static final int TY_ARG_TYPE_VALUE = 2;
 
     // InboundMapEntry
     private static final int MAP_ENTRY_STRING_KEY = 1;
@@ -79,11 +89,26 @@ public final class ProtoWriter {
 
     /**
      * Encode positional args (paired with their declared parameter names) plus a
-     * nonzero {@code call_id} into {@code CallFunctionArgs} bytes. The engine
+     * nonzero {@code call_id} into {@code CallFunctionArgs} bytes, with no
+     * explicit-generics bindings. Byte-identical to the four-arg overload with a
+     * {@code null} bag.
+     */
+    public static byte[] encodeCallFunctionArgs(String[] names, Object[] args, long callId) {
+        return encodeCallFunctionArgs(names, args, callId, null);
+    }
+
+    /**
+     * As {@link #encodeCallFunctionArgs(String[], Object[], long)}, but also
+     * encodes an optional {@code typeArgs} bag as {@code CallFunctionArgs.type_args}
+     * — one {@code BamlTyArg{type_var, type_value}} per binding, in the bag's
+     * insertion (De Bruijn) order. A {@code null} or empty bag writes no
+     * {@code type_args} field, so the output is byte-identical to the pre-generics
+     * encoding (the regression that non-generic callers depend on). The engine
      * rejects a zero {@code call_id}, so the caller must mint one via
      * {@code BamlFfi.nativeNewCallId()}.
      */
-    public static byte[] encodeCallFunctionArgs(String[] names, Object[] args, long callId) {
+    public static byte[] encodeCallFunctionArgs(
+            String[] names, Object[] args, long callId, BamlTypes typeArgs) {
         if (names.length != args.length) {
             throw new IllegalArgumentException(
                     "names/args length mismatch: " + names.length + " vs " + args.length);
@@ -93,7 +118,20 @@ public final class ProtoWriter {
             w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], args[i]));
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
+        if (typeArgs != null && !typeArgs.isEmpty()) {
+            for (Map.Entry<String, BamlType> binding : typeArgs.bindings()) {
+                w.writeMessage(CALL_ARGS_TYPE_ARGS, encodeTypeArg(binding.getKey(), binding.getValue()));
+            }
+        }
         return w.toByteArray();
+    }
+
+    /** One {@code BamlTyArg}: TypeVar name on {@code type_var}, the lowered type on {@code type_value}. */
+    private static byte[] encodeTypeArg(String typeVar, BamlType type) {
+        WireWriter arg = new WireWriter();
+        arg.writeString(TY_ARG_TYPE_VAR, typeVar);
+        arg.writeMessage(TY_ARG_TYPE_VALUE, type.toWireTy());
+        return arg.toByteArray();
     }
 
     /** One {@code InboundMapEntry} with a string key and (unless null) a value. */

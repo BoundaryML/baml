@@ -198,12 +198,31 @@ public final class BamlFfi {
      */
     public static Object callSync(
             String fqn, String[] names, Object[] args, String returnDesc, BamlCallContext ctx) {
+        return callSync(fqn, names, args, returnDesc, ctx, null);
+    }
+
+    /**
+     * Explicit-generics variant of
+     * {@link #callSync(String, String[], Object[], String, BamlCallContext)}:
+     * threads a {@link BamlTypes} bag of TypeVar bindings into
+     * {@code CallFunctionArgs.type_args} so a generic function/method's TypeVars
+     * are bound at the call. Package-private and <em>not</em> yet reached from any
+     * generated code — the explicit-generics emitter surface is deferred; a
+     * {@code null} bag is exactly the five-arg (non-generic) behavior.
+     */
+    static Object callSync(
+            String fqn,
+            String[] names,
+            Object[] args,
+            String returnDesc,
+            BamlCallContext ctx,
+            BamlTypes typeArgs) {
         long callId = newCallId();
         if (ctx != null) {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId);
+            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
             byte[] response = nativeCallSync(fqn, request);
             return decodeResult(response, returnDesc);
         } finally {
@@ -257,6 +276,24 @@ public final class BamlFfi {
      */
     public static CompletableFuture<Object> callAsync(
             String fqn, String[] names, Object[] args, String returnDesc, BamlCallContext ctx) {
+        return callAsync(fqn, names, args, returnDesc, ctx, null);
+    }
+
+    /**
+     * Explicit-generics variant of
+     * {@link #callAsync(String, String[], Object[], String, BamlCallContext)}:
+     * threads a {@link BamlTypes} bag of TypeVar bindings into
+     * {@code CallFunctionArgs.type_args}. Package-private and <em>not</em> yet
+     * reached from any generated code (the emitter surface is deferred); a
+     * {@code null} bag is exactly the five-arg (non-generic) behavior.
+     */
+    static CompletableFuture<Object> callAsync(
+            String fqn,
+            String[] names,
+            Object[] args,
+            String returnDesc,
+            BamlCallContext ctx,
+            BamlTypes typeArgs) {
         long callId = newCallId();
         CompletableFuture<byte[]> raw = new CompletableFuture<>();
         PENDING.put(callId, raw);
@@ -265,7 +302,7 @@ public final class BamlFfi {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId);
+            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
             nativeCallAsync(callId, fqn, request);
         } catch (Throwable t) {
             // Arg-encode / JNI-glue failure before the engine took ownership of

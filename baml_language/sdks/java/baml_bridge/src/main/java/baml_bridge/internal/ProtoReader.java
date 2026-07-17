@@ -3,6 +3,7 @@ package baml_bridge.internal;
 import baml_bridge.BamlError;
 import baml_bridge.BamlHandle;
 import baml_bridge.BamlPanic;
+import baml_bridge.BamlType;
 import baml_bridge.TypeRegistry;
 import baml_sdk.baml.media.Audio;
 import baml_sdk.baml.media.Image;
@@ -93,6 +94,7 @@ public final class ProtoReader {
     // BamlValueClass / BamlValueEnum
     private static final int CLASS_NAME = 1;
     private static final int CLASS_FIELDS = 2;
+    private static final int CLASS_TYPE_ARGS = 3; // repeated BamlTy (concrete generic args)
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
 
@@ -787,6 +789,7 @@ public final class ProtoReader {
     private static Object decodeClass(WireReader r, boolean lenient) {
         String fqn = null;
         Map<String, Object> fields = new LinkedHashMap<>();
+        List<byte[]> typeArgBytes = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -794,7 +797,13 @@ public final class ProtoReader {
             switch (field) {
                 case CLASS_NAME -> fqn = r.readString();
                 case CLASS_FIELDS -> decodeMapEntry(r.readMessage(), fields, lenient);
-                default -> r.skipField(wire); // type_args
+                case CLASS_TYPE_ARGS -> {
+                    if (typeArgBytes == null) {
+                        typeArgBytes = new ArrayList<>();
+                    }
+                    typeArgBytes.add(r.readBytes());
+                }
+                default -> r.skipField(wire);
             }
         }
         // A media stdlib class wraps its engine handle in a `_data` field; the
@@ -803,7 +812,35 @@ public final class ProtoReader {
             return fields.get(MEDIA_DATA_FIELD);
         }
         Object instance = TypeRegistry.constructClass(fqn, fields);
-        return instance != null ? instance : fields;
+        if (instance == null) {
+            return fields;
+        }
+        bindReifiedTypeArgs(instance, typeArgBytes);
+        return instance;
+    }
+
+    /**
+     * Convert a generic class value's wire {@code type_args} (each a
+     * {@code BamlTy}) into {@link BamlType} tokens and retain them for
+     * {@code instance} in the {@link TypeRegistry} side-table, so the (future)
+     * emitted {@code bamlTypeArgs()} accessor can surface them. Binding is
+     * all-or-nothing: if any arg falls outside {@code BamlType}'s minimal grammar
+     * (so {@link BamlType#fromWireTy} yields {@code null}), nothing is stored —
+     * a partial list would misalign the De Bruijn positions.
+     */
+    private static void bindReifiedTypeArgs(Object instance, List<byte[]> typeArgBytes) {
+        if (typeArgBytes == null || typeArgBytes.isEmpty()) {
+            return;
+        }
+        List<BamlType> tokens = new ArrayList<>(typeArgBytes.size());
+        for (byte[] tyBytes : typeArgBytes) {
+            BamlType token = BamlType.fromWireTy(tyBytes);
+            if (token == null) {
+                return; // an unrepresentable arg poisons the whole binding
+            }
+            tokens.add(token);
+        }
+        TypeRegistry.bindTypeArgs(instance, tokens);
     }
 
     /**
@@ -1032,6 +1069,7 @@ public final class ProtoReader {
         String fqn = null;
         List<String> keys = new ArrayList<>();
         List<byte[]> vals = new ArrayList<>();
+        List<byte[]> typeArgBytes = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -1055,7 +1093,13 @@ public final class ProtoReader {
                     keys.add(key);
                     vals.add(vb);
                 }
-                default -> r.skipField(wire); // type_args
+                case CLASS_TYPE_ARGS -> {
+                    if (typeArgBytes == null) {
+                        typeArgBytes = new ArrayList<>();
+                    }
+                    typeArgBytes.add(r.readBytes());
+                }
+                default -> r.skipField(wire);
             }
         }
         String[] order = TypeRegistry.classFieldOrder(fqn);
@@ -1078,7 +1122,11 @@ public final class ProtoReader {
             return fields.get(MEDIA_DATA_FIELD);
         }
         Object instance = TypeRegistry.constructClass(fqn, fields);
-        return instance != null ? instance : fields;
+        if (instance == null) {
+            return fields;
+        }
+        bindReifiedTypeArgs(instance, typeArgBytes);
+        return instance;
     }
 
     /**

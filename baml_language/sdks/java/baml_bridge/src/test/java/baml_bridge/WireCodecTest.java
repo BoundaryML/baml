@@ -2,7 +2,9 @@ package baml_bridge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,6 +16,7 @@ import baml_sdk.baml.media.Image;
 import baml_sdk.baml.media.Pdf;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -825,5 +828,279 @@ class WireCodecTest {
         BamlHandle h = assertInstanceOf(BamlHandle.class, decoded);
         assertEquals(9L, h.key());
         assertEquals(FUNCTION_REF, h.handleType());
+    }
+
+    // -- explicit generics: BamlType / BamlTypes tokens ----------------------
+    // The runtime substrate for explicit generics. BamlType is a value token;
+    // BamlTypes an ordered bag; the encoder threads a bag into
+    // CallFunctionArgs.type_args; the decoder reconstructs a class value's
+    // reified type_args into the TypeRegistry side-table.
+
+    @Test
+    void baml_type_primitive_value_equality() {
+        assertEquals(BamlType.INT, BamlType.INT);
+        assertEquals(BamlType.INT.hashCode(), BamlType.INT.hashCode());
+        assertNotEquals(BamlType.INT, BamlType.STRING);
+        assertNotEquals(BamlType.INT, BamlType.FLOAT);
+        assertNotEquals(BamlType.BOOL, BamlType.INT);
+        assertEquals("int", BamlType.INT.toString());
+        assertEquals("string", BamlType.STRING.toString());
+        assertEquals("bool", BamlType.BOOL.toString());
+        assertEquals("float", BamlType.FLOAT.toString());
+    }
+
+    @Test
+    void baml_type_of_registered_class_and_enum() {
+        BamlType resume = BamlType.of(Resume.class);
+        assertEquals(BamlType.of(Resume.class), resume);
+        assertEquals(BamlType.of(Resume.class).hashCode(), resume.hashCode());
+        assertEquals(RESUME_FQN, resume.toString());
+
+        BamlType sentiment = BamlType.of(Sentiment.class);
+        assertEquals(BamlType.of(Sentiment.class), sentiment);
+        assertEquals(SENTIMENT_FQN, sentiment.toString());
+        // A class token and an enum token (different FQNs, different wire arms).
+        assertNotEquals(resume, sentiment);
+    }
+
+    @Test
+    void baml_type_reified_generic_distinct_from_bare() {
+        BamlType bare = BamlType.of(Resume.class);
+        BamlType reified = BamlType.of(Resume.class, BamlType.INT);
+        assertNotEquals(bare, reified);
+        assertEquals(BamlType.of(Resume.class, BamlType.INT), reified);
+        assertEquals(RESUME_FQN + "<int>", reified.toString());
+    }
+
+    @Test
+    void baml_type_nested_reified_equality_and_hashcode() {
+        BamlType a = BamlType.of(Box.class, BamlType.of(Resume.class, BamlType.INT));
+        BamlType b = BamlType.of(Box.class, BamlType.of(Resume.class, BamlType.INT));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+        // A different nested arg breaks equality.
+        BamlType c = BamlType.of(Box.class, BamlType.of(Resume.class, BamlType.STRING));
+        assertNotEquals(a, c);
+    }
+
+    @Test
+    void baml_type_of_unregistered_class_throws() {
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> BamlType.of(String.class));
+        assertTrue(ex.getMessage().contains(String.class.getName()));
+        // The reified overload also rejects an unregistered class.
+        assertThrows(
+                IllegalArgumentException.class, () -> BamlType.of(String.class, BamlType.INT));
+    }
+
+    @Test
+    void baml_types_ordering_and_chaining() {
+        BamlTypes types = BamlTypes.of("T", BamlType.INT).and("U", BamlType.STRING);
+        List<String> names = new ArrayList<>();
+        List<BamlType> values = new ArrayList<>();
+        for (Map.Entry<String, BamlType> e : types.bindings()) {
+            names.add(e.getKey());
+            values.add(e.getValue());
+        }
+        assertEquals(List.of("T", "U"), names); // insertion order preserved
+        assertEquals(List.of(BamlType.INT, BamlType.STRING), values);
+        assertFalse(types.isEmpty());
+    }
+
+    @Test
+    void baml_types_chaining_is_immutable() {
+        BamlTypes one = BamlTypes.of("T", BamlType.INT);
+        BamlTypes two = one.and("U", BamlType.STRING);
+        // `and` returns a new bag; the receiver is unchanged (still one binding).
+        assertEquals(1, one.bindings().size());
+        assertEquals(2, two.bindings().size());
+    }
+
+    @Test
+    void baml_types_duplicate_name_rejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> BamlTypes.of("T", BamlType.INT).and("T", BamlType.STRING));
+    }
+
+    // -- encode: CallFunctionArgs.type_args ----------------------------------
+
+    /** A type_args bag rides CallFunctionArgs.type_args (=3) as BamlTyArg entries. */
+    @Test
+    void encode_call_args_with_type_args() {
+        byte[] got = ProtoWriter.encodeCallFunctionArgs(
+                new String[] {"x"}, new Object[] {7L}, 5L, BamlTypes.of("T", BamlType.INT));
+
+        // kwargs entry {string_key:"x", value:int 7}.
+        WireWriter xVal = new WireWriter();
+        xVal.writeInt64(3, 7L); // InboundValue.int_value = 3
+        WireWriter xEntry = new WireWriter();
+        xEntry.writeString(1, "x"); // InboundMapEntry.string_key = 1
+        xEntry.writeMessage(6, xVal.toByteArray()); // value = 6
+
+        // type_args entry {type_var:"T", type_value: BamlTy{primitive{kind:INT=2}}}.
+        WireWriter prim = new WireWriter();
+        prim.writeInt64(1, PRIM_INT); // BamlTyPrimitive.kind = 1
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(1, prim.toByteArray()); // BamlTy.primitive = 1
+        WireWriter tyArg = new WireWriter();
+        tyArg.writeString(1, "T"); // BamlTyArg.type_var = 1
+        tyArg.writeMessage(2, ty.toByteArray()); // BamlTyArg.type_value = 2
+
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(1, xEntry.toByteArray()); // CallFunctionArgs.kwargs = 1
+        expected.writeInt64(2, 5L); // call_id = 2
+        expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
+
+        assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /** A reified generic class binding renders type_value as class_ty{name, type_args}. */
+    @Test
+    void encode_call_args_reified_class_type_value() {
+        byte[] got = ProtoWriter.encodeCallFunctionArgs(
+                new String[0],
+                new Object[0],
+                9L,
+                BamlTypes.of("T", BamlType.of(Resume.class, BamlType.INT)));
+
+        // type_value = BamlTy.class_ty{ name = RESUME_FQN, type_args = [BamlTy.primitive int] }.
+        WireWriter argPrim = new WireWriter();
+        argPrim.writeInt64(1, PRIM_INT); // BamlTyPrimitive.kind = 1
+        WireWriter argTy = new WireWriter();
+        argTy.writeMessage(1, argPrim.toByteArray()); // BamlTy.primitive = 1
+        WireWriter classTy = new WireWriter();
+        classTy.writeString(1, RESUME_FQN); // BamlTyClass.name = 1
+        classTy.writeMessage(2, argTy.toByteArray()); // BamlTyClass.type_args = 2
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(2, classTy.toByteArray()); // BamlTy.class_ty = 2
+        WireWriter tyArg = new WireWriter();
+        tyArg.writeString(1, "T");
+        tyArg.writeMessage(2, ty.toByteArray());
+
+        WireWriter expected = new WireWriter();
+        expected.writeInt64(2, 9L); // call_id = 2 (no kwargs)
+        expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
+
+        assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /** Regression pin: no bag → byte-identical to the pre-generics 3-arg encoding. */
+    @Test
+    void encode_call_args_without_type_args_is_byte_identical() {
+        byte[] threeArg =
+                ProtoWriter.encodeCallFunctionArgs(new String[] {"n"}, new Object[] {7L}, 123L);
+        byte[] nullBag = ProtoWriter.encodeCallFunctionArgs(
+                new String[] {"n"}, new Object[] {7L}, 123L, null);
+        assertArrayEquals(threeArg, nullBag);
+    }
+
+    // -- decode: BamlValueClass.type_args → TypeRegistry side-table -----------
+
+    /** A class_value carrying type_args (=3) binds reified BamlType tokens to the instance. */
+    @Test
+    void decode_class_value_binds_reified_type_args() {
+        byte[] classValue = ovResumeWithTypeArgs(
+                "Alice", 30L, tyPrimitive(PRIM_INT), tyClass(RESUME_FQN), tyEnum(SENTIMENT_FQN));
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(classValue));
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals(
+                List.of(BamlType.INT, BamlType.of(Resume.class), BamlType.of(Sentiment.class)),
+                TypeRegistry.typeArgsOf(r));
+    }
+
+    /** A nested reified class arg round-trips through the side-table. */
+    @Test
+    void decode_class_value_binds_nested_reified_type_arg() {
+        byte[] nestedClassTy = tyClass(RESUME_FQN, tyPrimitive(PRIM_INT)); // Resume<int>
+        byte[] classValue = ovResumeWithTypeArgs("Nim", 5L, nestedClassTy);
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(classValue));
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals(
+                List.of(BamlType.of(Resume.class, BamlType.INT)), TypeRegistry.typeArgsOf(r));
+    }
+
+    /** A class_value without type_args leaves the side-table empty for the instance. */
+    @Test
+    void decode_class_value_without_type_args_has_empty_side_table() {
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovResume("Bob", 40L)));
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals(List.of(), TypeRegistry.typeArgsOf(r));
+    }
+
+    /** An out-of-grammar type arg (e.g. list<int>) skips the whole binding (all-or-nothing). */
+    @Test
+    void decode_class_value_out_of_grammar_type_arg_skips_binding() {
+        byte[] listTy = tyList(tyPrimitive(PRIM_INT)); // list<int> — outside the minimal grammar
+        byte[] classValue = ovResumeWithTypeArgs("Cara", 22L, tyPrimitive(PRIM_INT), listTy);
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(classValue));
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals(List.of(), TypeRegistry.typeArgsOf(r));
+    }
+
+    /** typeArgsOf tolerates an object that was never bound (a fresh instance). */
+    @Test
+    void type_args_of_unbound_instance_is_empty() {
+        assertEquals(List.of(), TypeRegistry.typeArgsOf(new Resume("x", 1L)));
+        assertEquals(List.of(), TypeRegistry.typeArgsOf(null));
+    }
+
+    // -- BamlTy builders (decode side) ---------------------------------------
+
+    /** A BamlTy wrapping a class_ty (BamlTy.class_ty = 2): name + optional nested type_args. */
+    private static byte[] tyClass(String fqn, byte[]... typeArgs) {
+        WireWriter cls = new WireWriter();
+        cls.writeString(1, fqn); // BamlTyClass.name = 1
+        for (byte[] a : typeArgs) {
+            cls.writeMessage(2, a); // BamlTyClass.type_args = 2 (repeated)
+        }
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(2, cls.toByteArray()); // BamlTy.class_ty = 2
+        return ty.toByteArray();
+    }
+
+    /** A BamlTy wrapping an enum (BamlTy.enum = 3). */
+    private static byte[] tyEnum(String fqn) {
+        WireWriter en = new WireWriter();
+        en.writeString(1, fqn); // BamlTyEnum.name = 1
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(3, en.toByteArray()); // BamlTy.enum = 3
+        return ty.toByteArray();
+    }
+
+    /** A BamlTy wrapping a list (BamlTy.list = 4) — outside BamlType's minimal grammar. */
+    private static byte[] tyList(byte[] itemTy) {
+        WireWriter list = new WireWriter();
+        list.writeMessage(1, itemTy); // BamlTyList.item = 1
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(4, list.toByteArray()); // BamlTy.list = 4
+        return ty.toByteArray();
+    }
+
+    /** ovResume (a BamlValueClass) plus type_args (=3), one repeated BamlTy per arg. */
+    private static byte[] ovResumeWithTypeArgs(String name, long age, byte[]... typeArgs) {
+        WireWriter nameVal = new WireWriter();
+        nameVal.writeString(OV_STRING, name);
+        WireWriter nameEntry = new WireWriter();
+        nameEntry.writeString(1, "name");
+        nameEntry.writeMessage(2, nameVal.toByteArray());
+
+        WireWriter ageVal = new WireWriter();
+        ageVal.writeInt64(OV_INT, age);
+        WireWriter ageEntry = new WireWriter();
+        ageEntry.writeString(1, "age");
+        ageEntry.writeMessage(2, ageVal.toByteArray());
+
+        WireWriter cls = new WireWriter();
+        cls.writeString(1, RESUME_FQN); // BamlValueClass.name = 1
+        cls.writeMessage(2, nameEntry.toByteArray()); // fields = 2
+        cls.writeMessage(2, ageEntry.toByteArray());
+        for (byte[] a : typeArgs) {
+            cls.writeMessage(3, a); // BamlValueClass.type_args = 3
+        }
+
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_CLASS, cls.toByteArray());
+        return ov.toByteArray();
     }
 }

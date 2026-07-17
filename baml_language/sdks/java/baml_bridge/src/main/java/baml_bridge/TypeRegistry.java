@@ -1,8 +1,13 @@
 package baml_bridge;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -281,6 +286,121 @@ public final class TypeRegistry {
         }
         String wire = entry.wireFor(constant.name());
         return wire == null ? null : new EnumWire(entry.bamlFqn, wire);
+    }
+
+    // -- type tokens (Java class -> BAML FQN) --------------------------------
+
+    /**
+     * The BAML FQN of the registered generated <em>class</em> whose Java type is
+     * {@code javaClass}, or {@code null} when {@code javaClass} is not a
+     * registered class. The reverse index the value encoder keys on
+     * ({@link #classWire}), exposed for {@link BamlType#of(Class)} to resolve a
+     * class token's FQN without loading anything.
+     */
+    public static String classFqnForJavaClass(Class<?> javaClass) {
+        ClassEntry entry = classesByJavaName.get(javaClass.getName());
+        return entry == null ? null : entry.bamlFqn;
+    }
+
+    /**
+     * The BAML FQN of the registered generated <em>enum</em> whose Java type is
+     * {@code javaClass}, or {@code null} when {@code javaClass} is not a
+     * registered enum. The enum counterpart of {@link #classFqnForJavaClass}.
+     */
+    public static String enumFqnForJavaClass(Class<?> javaClass) {
+        EnumEntry entry = enumsByJavaName.get(javaClass.getName());
+        return entry == null ? null : entry.bamlFqn;
+    }
+
+    // -- reified type-argument side-table ------------------------------------
+    //
+    // A generic class value arrives with its concrete type_args on the wire, but
+    // the generated instance has no field to hold them yet (that emitter surface
+    // is deferred). Until it lands, the decoder stashes the reified BamlType
+    // tokens here, keyed by the instance's identity. The future emitted
+    // `bamlTypeArgs()` accessor will delegate to (or replace) `typeArgsOf`.
+    //
+    // Weak-identity keyed: the runtime must not keep a decoded value alive, and
+    // must key on identity (generated value classes may be records with value
+    // equality, so two distinct-but-equal instances must not collide). The JDK
+    // has no weak-identity map, so this composes a WeakReference key that hashes
+    // and compares by referent identity, expunging cleared keys via a queue.
+
+    private static final ReferenceQueue<Object> TYPE_ARGS_QUEUE = new ReferenceQueue<>();
+    private static final Map<WeakIdentityKey, List<BamlType>> TYPE_ARGS = new HashMap<>();
+
+    /**
+     * Retain the reified generic {@code typeArgs} for a decoded {@code instance}.
+     * A null/empty list (a non-generic instance) is a no-op. The list is
+     * defensively copied; the instance is held only weakly.
+     */
+    public static void bindTypeArgs(Object instance, List<BamlType> typeArgs) {
+        if (instance == null || typeArgs == null || typeArgs.isEmpty()) {
+            return;
+        }
+        List<BamlType> snapshot = List.copyOf(typeArgs);
+        synchronized (TYPE_ARGS) {
+            expungeStaleTypeArgs();
+            TYPE_ARGS.put(new WeakIdentityKey(instance, TYPE_ARGS_QUEUE), snapshot);
+        }
+    }
+
+    /**
+     * The reified generic type-args retained for {@code instance}, or an empty
+     * list when none were bound (a non-generic instance, or one decoded without
+     * type_args). Never {@code null}.
+     */
+    public static List<BamlType> typeArgsOf(Object instance) {
+        if (instance == null) {
+            return List.of();
+        }
+        synchronized (TYPE_ARGS) {
+            expungeStaleTypeArgs();
+            List<BamlType> args = TYPE_ARGS.get(new WeakIdentityKey(instance, null));
+            return args == null ? List.of() : args;
+        }
+    }
+
+    /** Drop entries whose instance has been collected. Caller holds the monitor. */
+    private static void expungeStaleTypeArgs() {
+        Reference<?> ref;
+        while ((ref = TYPE_ARGS_QUEUE.poll()) != null) {
+            // The enqueued reference is the key itself; remove it by identity.
+            TYPE_ARGS.remove(ref);
+        }
+    }
+
+    /**
+     * A map key that holds its referent weakly and hashes/compares by referent
+     * <em>identity</em> (not {@code equals}). The cached identity hash stays
+     * valid after the referent is cleared, so a stale key still lands in its
+     * original bucket for {@link #expungeStaleTypeArgs} to remove.
+     */
+    private static final class WeakIdentityKey extends WeakReference<Object> {
+        private final int hash;
+
+        WeakIdentityKey(Object referent, ReferenceQueue<Object> queue) {
+            super(referent, queue);
+            this.hash = System.identityHashCode(referent);
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof WeakIdentityKey other)) {
+                return false;
+            }
+            Object mine = get();
+            // A cleared key never matches a live lookup (identity is gone).
+            return mine != null && mine == other.get();
+        }
     }
 
     // -- encode payloads -----------------------------------------------------
