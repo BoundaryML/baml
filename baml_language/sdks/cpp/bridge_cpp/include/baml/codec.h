@@ -12,6 +12,7 @@
 #include <baml/box.h>
 #include <baml/detail/proto.h>
 #include <baml/errors.h>
+#include <baml/lit.h>
 
 #include <cstdint>
 #include <cstdlib>
@@ -259,6 +260,57 @@ struct Codec<std::unordered_map<std::string, T>> {
   }
 };
 
+// BAML literal types (baml::Lit). Encode writes the static value as its
+// plain scalar/enum arm (the engine types the parameter). Decode reuses
+// the base codec for arm handling (plain and literal wire arms alike) and
+// then requires the exact value: a mismatch throws, which inside a union
+// rejects this alternative and lets the next one probe.
+template <auto... Vs>
+struct Codec<Lit<Vs...>> {
+  using L = Lit<Vs...>;
+  static constexpr detail::LitShape kShape =
+      detail::LitShapeOf<decltype(Vs)...>();
+
+  static void Encode(detail::pb::InboundValue& value_msg, const L&) {
+    if constexpr (kShape == detail::LitShape::kString) {
+      value_msg.set_string_value(std::string(L::value));
+    } else if constexpr (kShape == detail::LitShape::kInt) {
+      value_msg.set_int_value(L::value);
+    } else if constexpr (kShape == detail::LitShape::kBool) {
+      value_msg.set_bool_value(L::value);
+    } else {
+      Codec<std::decay_t<decltype(L::value)>>::Encode(value_msg, L::value);
+    }
+  }
+
+  static L Decode(const detail::pb::BamlOutboundValue& raw) {
+    if constexpr (kShape == detail::LitShape::kString) {
+      if (Codec<std::string>::Decode(raw) != L::value) {
+        Mismatch("literal \"" + std::string(L::value) + "\"");
+      }
+    } else if constexpr (kShape == detail::LitShape::kInt) {
+      if (Codec<int64_t>::Decode(raw) != L::value) {
+        Mismatch("literal " + std::to_string(L::value));
+      }
+    } else if constexpr (kShape == detail::LitShape::kBool) {
+      if (Codec<bool>::Decode(raw) != L::value) {
+        Mismatch(L::value ? "literal true" : "literal false");
+      }
+    } else {
+      using E = std::decay_t<decltype(L::value)>;
+      if (Codec<E>::Decode(raw) != L::value) {
+        Mismatch("enum-variant literal");
+      }
+    }
+    return L{};
+  }
+
+ private:
+  [[noreturn]] static void Mismatch(const std::string& expected) {
+    throw BamlError("BAML decode error: expected " + expected);
+  }
+};
+
 // BAML unions (baml::Union<Ts...> = order-canonical std::variant). Encode
 // writes the ACTIVE alternative's value with no union wrapper (the engine
 // types the member; Python parity). Decode receives the union-unwrapped
@@ -266,8 +318,10 @@ struct Codec<std::unordered_map<std::string, T>> {
 // alone -- alternatives are in canonical (sorted) order, so selection is
 // order-independent by construction:
 //
-//   pass 1 (strict): each alternative decodes only its exact wire arms
-//     (int never satisfies a double alternative);
+//   pass 0 (literal): Lit alternatives claim their exact values first, so
+//     Lit<"auto"> beats a std::string sibling for the string "auto";
+//   pass 1 (strict): each non-Lit alternative decodes only its exact wire
+//     arms (int never satisfies a double alternative);
 //   pass 2 (lenient): the engine's int->float coercion is admitted, for
 //     unions with a float arm but no int arm.
 //
@@ -290,9 +344,12 @@ struct Codec<std::variant<Ts...>> {
   static V Decode(const detail::pb::BamlOutboundValue& raw) {
     const auto& v = detail::Unwrap(raw);
     std::optional<V> out;
-    const bool strict = (TryArm<Ts>(v, out, false) || ...);
-    if (!strict) {
-      (TryArm<Ts>(v, out, true) || ...);
+    const bool lit = (TryArm<Ts>(v, out, Pass::kLiteral) || ...);
+    if (!lit) {
+      const bool strict = (TryArm<Ts>(v, out, Pass::kStrict) || ...);
+      if (!strict) {
+        (TryArm<Ts>(v, out, Pass::kLenient) || ...);
+      }
     }
     if (!out.has_value()) {
       detail::KindMismatch("union", v);
@@ -301,6 +358,8 @@ struct Codec<std::variant<Ts...>> {
   }
 
  private:
+  enum class Pass { kLiteral, kStrict, kLenient };
+
   static bool IsIntArm(const detail::pb::BamlOutboundValue& v) {
     if (v.value_case() == detail::pb::BamlOutboundValue::kIntValue) {
       return true;
@@ -312,8 +371,12 @@ struct Codec<std::variant<Ts...>> {
 
   template <class T>
   static bool TryArm(const detail::pb::BamlOutboundValue& v,
-                     std::optional<V>& out, bool lenient) {
-    if (!lenient && std::is_same<T, double>::value && IsIntArm(v)) {
+                     std::optional<V>& out, Pass pass) {
+    if ((pass == Pass::kLiteral) != detail::IsLit<T>::value) {
+      return false;
+    }
+    if (pass == Pass::kStrict && std::is_same<T, double>::value &&
+        IsIntArm(v)) {
       return false;
     }
     try {

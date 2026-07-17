@@ -26,6 +26,20 @@ static_assert(
                  std::vector<baml::Union<std::string, int64_t>>>::value,
     "canonicalization must hold under std::vector");
 
+// Literal types are ordinary alternatives: the BAML_LIT macro family hits
+// the canonical char-pack / normalized-scalar instantiations, and Lit
+// unions canonicalize like any other.
+static_assert(
+    std::is_same<BAML_LIT("draft"), baml::Lit<'d', 'r', 'a', 'f', 't'>>::value,
+    "BAML_LIT must produce the canonical char pack");
+static_assert(std::is_same<BAML_LIT(1), baml::Lit<int64_t{1}>>::value,
+              "BAML_LIT must normalize ints to int64_t");
+static_assert(std::is_same<BAML_LIT(1), baml::IntLit<1>>::value,
+              "IntLit must agree with BAML_LIT");
+static_assert(std::is_same<baml::Union<BAML_LIT("a"), BAML_LIT("b")>,
+                           baml::Union<BAML_LIT("b"), BAML_LIT("a")>>::value,
+              "Lit unions must be order-canonical");
+
 // Alternatives are a set, not a list: duplicates collapse, so type-based
 // construction and access are never ambiguous.
 static_assert(

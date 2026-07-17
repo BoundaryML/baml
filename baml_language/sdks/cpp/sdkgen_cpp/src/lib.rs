@@ -348,6 +348,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/future.h"),
     ),
     (
+        "include/baml/lit.h",
+        include_str!("../../bridge_cpp/include/baml/lit.h"),
+    ),
+    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
@@ -972,15 +976,22 @@ fn translate_ty(
             return Translated::Unsupported("media type (post-step-8)".to_string());
         }
         Ty::Literal(lit, ..) => {
-            // Literal types widen to their base type (Python parity).
+            // Literal types are singleton ::baml::Lit types (each distinct
+            // value a distinct C++ type), spelled as char packs / typed
+            // scalars directly -- the BAML_LIT macro family is user-side
+            // sugar only. Float literals stay widened: float NTTPs are
+            // C++20 and BAML has no float literal types in practice.
             match lit {
-                baml_base::Literal::Int(_) => "int64_t".to_string(),
+                baml_base::Literal::Int(v) => format!("::baml::Lit<{}>", lit_int_spelling(*v)),
                 baml_base::Literal::Bigint(_) => {
                     return Translated::Unsupported("bigint literal (post-step-8)".to_string());
                 }
                 baml_base::Literal::Float(_) => "double".to_string(),
-                baml_base::Literal::String(_) => "std::string".to_string(),
-                baml_base::Literal::Bool(_) => "bool".to_string(),
+                baml_base::Literal::String(s) => {
+                    let chars: Vec<String> = s.bytes().map(lit_char_spelling).collect();
+                    format!("::baml::Lit<{}>", chars.join(", "))
+                }
+                baml_base::Literal::Bool(b) => format!("::baml::Lit<{b}>"),
             }
         }
         Ty::TypeVar(name, _) => {
@@ -1023,9 +1034,7 @@ fn translate_ty(
                     .to_string(),
             );
         }
-        // An enum-variant type (`Sentiment.Positive`) widens to its enum
-        // (Python parity: the variant tag narrows values, not the C++ type).
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+        Ty::Enum(name, _) => {
             return if emitted_types.contains(name) {
                 Translated::Cpp(
                     names
@@ -1033,6 +1042,26 @@ fn translate_ty(
                         .identifier()
                         .to_string(),
                 )
+            } else {
+                Translated::NotYet
+            };
+        }
+        // An enum-variant type (`Sentiment.Positive`) is a singleton Lit
+        // over the enum value, so unions of variants dispatch and match
+        // per-variant at compile time.
+        Ty::EnumVariant(name, variant, _) => {
+            return if emitted_types.contains(name) {
+                let enum_path = names
+                    .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
+                    .identifier()
+                    .to_string();
+                let variant_name = names
+                    .get(&NameRequest::new(
+                        BamlFqn::member(name, variant.as_str()),
+                        CppNameKind::EnumVariant,
+                    ))
+                    .declared();
+                Translated::Cpp(format!("::baml::Lit<{enum_path}::{variant_name}>"))
             } else {
                 Translated::NotYet
             };
@@ -1186,10 +1215,40 @@ fn close_namespaces(buf: &mut String, ns: &[String]) {
 }
 
 fn by_value_or_cref(ty: &str) -> String {
+    // Lit types are empty unit structs: by value.
+    if ty.starts_with("::baml::Lit<") {
+        return ty.to_string();
+    }
     match ty {
         "int64_t" | "double" | "bool" | "std::monostate" => ty.to_string(),
         _ => format!("const {ty}&"),
     }
+}
+
+/// Spells one byte of a BAML string literal as a C++ char literal for a
+/// `::baml::Lit` char pack. Bytes, not code points: the pack mirrors the
+/// literal's UTF-8 encoding, matching what `BAML_LIT`'s sizeof-based
+/// expansion produces.
+fn lit_char_spelling(b: u8) -> String {
+    match b {
+        b'\'' => "'\\''".to_string(),
+        b'\\' => "'\\\\'".to_string(),
+        b'\n' => "'\\n'".to_string(),
+        b'\r' => "'\\r'".to_string(),
+        b'\t' => "'\\t'".to_string(),
+        0x20..=0x7e => format!("'{}'", b as char),
+        _ => format!("'\\x{b:02x}'"),
+    }
+}
+
+/// Spells an int literal's value as the canonical `int64_t{...}` template
+/// argument. `i64::MIN` has no valid literal spelling (the unary minus
+/// applies after the out-of-range positive literal), hence the subtraction.
+fn lit_int_spelling(v: i64) -> String {
+    if v == i64::MIN {
+        return "int64_t{-9223372036854775807 - 1}".to_string();
+    }
+    format!("int64_t{{{v}}}")
 }
 
 fn signature(f: &EmittedFn, pos: RenderPos, variant: FnVariant) -> String {

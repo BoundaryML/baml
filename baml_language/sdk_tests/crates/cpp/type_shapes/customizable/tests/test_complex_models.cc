@@ -42,7 +42,7 @@ BAML_TEST(
   const ContactMethod phone{"phone", "+1-555-0100", false};
   const Invoice invoice{
       "inv-001",
-      "sent",
+      BAML_LIT("sent"){},
       {LineItem{
           "sdk-pro",
           2,
@@ -55,7 +55,7 @@ BAML_TEST(
   };
   const Invoice wire_invoice{
       "inv-002",
-      "paid",
+      BAML_LIT("paid"){},
       {LineItem{
           "sdk-enterprise",
           1,
@@ -73,9 +73,10 @@ BAML_TEST(
       {home, office},
       {invoice, wire_invoice},
       {
-          AuditEvent{"system", "created", {{"source", "fixture"}}},
-          AuditEvent{
-              "reviewer", "approved", {{"level", "2"}, {"region", "us"}}},
+          AuditEvent{"system", BAML_LIT("created"){}, {{"source", "fixture"}}},
+          AuditEvent{"reviewer",
+                     BAML_LIT("approved"){},
+                     {{"level", "2"}, {"region", "us"}}},
       },
       {{"cohort", "beta"}, {"owner_kind", "internal"}},
       Featured{invoice},
