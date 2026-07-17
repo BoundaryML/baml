@@ -11,11 +11,19 @@ Functions are PascalCase except the following, all sanctioned by the Google
 guide itself:
 
 1. Accessors returning stored state keep snake_case: `message()`,
-   `class_name()`, `baml_trace()`, `payload()`, `bytes()`, `code()`.
-2. std-mimicking vocabulary API keeps std spelling: `Arg` (`is_set`,
-   `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
-   `operator->`), `OwnedBuffer` (`data`, `size`, `empty`, `to_string`),
-   `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`.
+   `class_name()`, `baml_trace()`, `payload()`, `bytes()`, `code()`, and
+   `detail::OwnedBuffer`'s `empty()`/`to_string()`. Generated opts
+   setters are `set_<param>` -- the guide's own mutator convention.
+2. The vocabulary rule (Abseil's practice: structure is Google-cased,
+   vocabulary is std-cased). Types stay PascalCase (`Union`, `Box`,
+   `Arg`, `Unset`; lowercase `union` is a C++ keyword regardless), but
+   API that a user's muscle memory or generic code treats as
+   optional/variant-shaped keeps std spelling, exactly as
+   `absl::optional::has_value` / `absl::visit` / `absl::nullopt` do:
+   `baml::match` (mirrors `std::visit`), `baml::unset` (mirrors
+   `std::nullopt`), `Arg::is_set`/`is_unset`/`value`,
+   `Box`/`OptionalBox::has_value`, `BamlError::is<T>`/`get<T>` (mirror
+   `std::holds_alternative`/`std::get`).
 3. Type traits keep std spelling: `is_std_optional`, `has_set_opt1`,
    `has_set_opt3`.
 4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.

@@ -31,7 +31,7 @@ class BamlError : public std::runtime_error {
   const std::vector<uint8_t>& payload() const { return payload_; }
 
   // Typed access to the thrown BAML value. Defined in the codec header;
-  // instantiating these requires the generated typemap.
+  // instantiating these requires the generated codecs.
   template <typename T>
   bool is() const;
   template <typename T>
@@ -53,6 +53,26 @@ class BamlError : public std::runtime_error {
 class BamlPanic : public BamlError {
  public:
   using BamlError::BamlError;
+};
+
+// A thrown BAML value decoded into the function's declared `throws` set:
+// generated bindings throw BamlThrown<baml::Union<A, B>> when the error
+// arm decodes into that set, so a catch site reads the typed payload with
+// baml::match instead of probing is<T>()/get<T>(). The template argument
+// is order-canonical (baml::Union), so BamlThrown<Union<A, B>> and
+// BamlThrown<Union<B, A>> are the same catchable type. Derives BamlError:
+// untyped catch sites keep working, and an undeclared thrown value (one
+// outside the declared set) still surfaces as a plain BamlError.
+template <class U>
+class BamlThrown : public BamlError {
+ public:
+  BamlThrown(U thrown, std::string message, std::string class_name,
+             std::string baml_trace, std::vector<uint8_t> payload)
+      : BamlError(std::move(message), std::move(class_name),
+                  std::move(baml_trace), std::move(payload)),
+        value(std::move(thrown)) {}
+
+  U value;
 };
 
 // Cancellation surfaces as the engine panic `baml.panics.Cancelled`.

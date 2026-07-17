@@ -17,7 +17,10 @@
 namespace baml {
 namespace detail {
 
-template <typename Ret>
+// ThrownU is the function's declared `throws` set as a baml::Union (void
+// when the function declares none): the error arm then surfaces as
+// BamlThrown<ThrownU> instead of an untyped BamlError.
+template <typename Ret, typename ThrownU = void>
 Ret CallSync(const std::string& fqn, ArgsEncoder&& args) {
   CallRegistry::Started started = CallRegistry::Instance().Begin();
   const uint64_t engine_call_id = Api().new_function_call();
@@ -25,7 +28,7 @@ Ret CallSync(const std::string& fqn, ArgsEncoder&& args) {
   Api().call_function(fqn.c_str(),
                       reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
-  return DecodeResult<Ret>(started.envelope.get());
+  return DecodeResult<Ret, ThrownU>(started.envelope.get());
 }
 
 }  // namespace detail
