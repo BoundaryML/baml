@@ -5,6 +5,9 @@ syntax = "proto3";
 package baml_bridge.cffi.v1;
 
 option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
 
 // The wire representation of BAML types, 1:1 with RuntimeTy.
 //

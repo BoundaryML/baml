@@ -2,6 +2,7 @@
 members = [
   "crates/*",
   "forks/*",
+  "sdks/cpp/sdkgen_cpp",
   "sdks/go/sdkgen_go",
   "sdks/typescript/bridge_typescript",
   "sdks/typescript/bridge_typescript_web",
@@ -11,6 +12,7 @@ members = [
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
+  "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
   "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
@@ -64,6 +66,7 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
+sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }

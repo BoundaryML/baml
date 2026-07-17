@@ -44,6 +44,7 @@ pub enum BridgeLanguage {
     Go = 3,
     Rust = 4,
     CSharp = 5,
+    Cpp = 6,
 }
 
 impl BridgeLanguage {
@@ -54,6 +55,7 @@ impl BridgeLanguage {
             Self::Go => "go",
             Self::Rust => "rust",
             Self::CSharp => "csharp",
+            Self::Cpp => "cpp",
         }
     }
 
@@ -64,6 +66,7 @@ impl BridgeLanguage {
             Self::Go => "Go",
             Self::Rust => "Rust",
             Self::CSharp => "C#",
+            Self::Cpp => "C++",
         }
     }
 }
@@ -78,6 +81,7 @@ impl TryFrom<u32> for BridgeLanguage {
             3 => Ok(Self::Go),
             4 => Ok(Self::Rust),
             5 => Ok(Self::CSharp),
+            6 => Ok(Self::Cpp),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }

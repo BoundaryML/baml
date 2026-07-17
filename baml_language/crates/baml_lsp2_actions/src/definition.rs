@@ -373,8 +373,14 @@ fn resolve_field_access_at(
             field_name,
         } => {
             let target_file = class_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            // Read the canonical (PPIR) tree, not the HIR pre-expansion tree: this
+            // `class_loc` is inferred from a member access, so it can be a synthetic
+            // `$stream` class (the type of a streamed partial), which is absent from
+            // the pre-expansion tree and would panic on index here. PPIR carries it,
+            // and a `$stream` field's name-span is the original class field's, so
+            // goto-definition still lands on the user-authored field.
+            let target_item_tree = baml_compiler2_ppir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_ppir::file_item_tree_source_map(db, target_file);
             let class = &target_item_tree[class_loc.id(db)];
             let field_idx = class.fields.iter().position(|f| f.name == *field_name)?;
             let field_spans = target_source_map.class_field_spans.get(&class_loc.id(db))?;

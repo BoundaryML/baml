@@ -162,6 +162,21 @@ fn validate_sdk(language: &str, package: &SdkPackage) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    fn full_target_artifacts() -> BTreeMap<String, Artifact> {
+        SUPPORTED_RELEASE_TARGETS
+            .iter()
+            .map(|target| {
+                (
+                    (*target).to_string(),
+                    Artifact {
+                        url: format!("https://example.com/{target}.tar.gz"),
+                        sha256: "a".repeat(64),
+                    },
+                )
+            })
+            .collect()
+    }
+
     fn artifact() -> Artifact {
         Artifact {
             url: "https://example.com/x".to_string(),
@@ -170,16 +185,12 @@ mod tests {
     }
 
     fn manifest_with(cffi: Option<BTreeMap<String, Artifact>>) -> ToolchainManifest {
-        let artifacts = crate::SUPPORTED_RELEASE_TARGETS
-            .iter()
-            .map(|t| ((*t).to_string(), artifact()))
-            .collect();
         ToolchainManifest {
             schema: crate::MANIFEST_SCHEMA,
             version: "0.15.0".to_string(),
             channel: Channel::Canary,
             released_at: "2026-07-14T00:00:00Z".to_string(),
-            artifacts,
+            artifacts: full_target_artifacts(),
             vsix: None,
             baml_bridge_pypi: None,
             cffi,

@@ -295,7 +295,7 @@ fn lower_class_method_signature<'db>(
     ns_path: &[Name],
     diags: &mut Vec<TirTypeError>,
 ) -> LoweredClassMethodSignature {
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
     let body = baml_compiler2_ppir::function_body(db, method_loc);
 
     let mut all_generic_params = class_data.generic_params.clone();
@@ -323,20 +323,21 @@ fn lower_class_method_signature<'db>(
         bounds: method_bounds,
         self_ty: Some(self_ty.clone()),
     };
-    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<TirTypeError>| {
-        crate::lower_type_expr::lower_type_expr(te, &ctx, diags)
+    let lower_with_self = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                           diags: &mut Vec<TirTypeError>| {
+        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags)
     };
 
     let mut params = Vec::new();
     for param in &sig.params {
         let param_ty = if param.name.as_str() == "self"
             && matches!(
-                param.ty.kind,
-                baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                sig.type_refs[param.type_ref].kind,
+                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
             ) {
             self_ty.clone()
         } else {
-            lower_with_self(&param.ty, diags)
+            lower_with_self(param.type_ref, diags)
         };
         params.push(exported_function_param(
             param.name.clone(),
@@ -345,14 +346,14 @@ fn lower_class_method_signature<'db>(
         ));
     }
 
-    let return_type = sig.return_type.as_ref().map_or(
+    let return_type = sig.return_type.map_or(
         Ty::Unknown {
             attr: TyAttr::default(),
         },
-        |te| lower_with_self(te, diags),
+        |id| lower_with_self(id, diags),
     );
 
-    let declared_throws = sig.throws.as_ref().map(|te| lower_with_self(te, diags));
+    let declared_throws = sig.throws.map(|id| lower_with_self(id, diags));
     let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
     let builtin_kind = match body.as_ref() {
@@ -504,7 +505,7 @@ fn lower_function_export<'db>(
     name: &Name,
 ) -> ExportedFunction {
     let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let mut diags = Vec::new();
     let function_generic_params: Vec<Name> = sig
@@ -528,7 +529,12 @@ fn lower_function_export<'db>(
 
     let mut params = Vec::new();
     for param in &sig.params {
-        let param_ty = crate::lower_type_expr::lower_type_expr(&param.ty, &sig_scope, &mut diags);
+        let param_ty = crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
+            param.type_ref,
+            &sig_scope,
+            &mut diags,
+        );
         params.push(exported_function_param(
             param.name.clone(),
             param_ty,
@@ -536,17 +542,16 @@ fn lower_function_export<'db>(
         ));
     }
 
-    let return_type = sig.return_type.as_ref().map_or(
+    let return_type = sig.return_type.map_or(
         Ty::Unknown {
             attr: TyAttr::default(),
         },
-        |te| crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags),
+        |id| crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags),
     );
 
-    let declared_throws = sig
-        .throws
-        .as_ref()
-        .map(|te| crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags));
+    let declared_throws = sig.throws.map(|id| {
+        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags)
+    });
     let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
 
     let builtin_kind = match body.as_ref() {

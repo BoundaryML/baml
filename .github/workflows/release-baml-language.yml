@@ -428,6 +428,18 @@ jobs:
           path: ${{ runner.temp }}/go-sdk-mirror
           if-no-files-found: error
 
+  # Verify-only: the C++ SDK ships no artifact (headers are vendored at
+  # generate time); it consumes the shared bridge_cffi artifacts.
+  verify-cpp-sdk:
+    name: Verify C++ SDK
+    needs: [plan, build-bridge-cffi]
+    uses: ./.github/workflows/verify-cpp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   build-rust-sdk:
     name: Build Rust SDK
     needs: [plan]
@@ -463,6 +475,7 @@ jobs:
       # dylib-loader SDK depends on.
       - build-bridge-cffi
       - build-go-sdk
+      - verify-cpp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
       # build + consumer verification gate the release: a failure here blocks
       # publishing rather than shipping a release the Rust SDK isn't part of.

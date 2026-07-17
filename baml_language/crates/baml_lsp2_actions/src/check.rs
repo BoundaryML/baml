@@ -395,7 +395,8 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             param_types.push((param.name.clone(), param_ty));
         }
 
-        if let Some(scope_id) = function_scope_id(index, func_data) {
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+        if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
                 context, res_ctx, pkg_id, scope_id, aliases,
@@ -1620,22 +1621,6 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
     } else {
         DiagnosticId::JinjaInvalidType
     }
-}
-
-fn function_scope_id<'db>(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
-    func_data: &baml_compiler2_hir::item_tree::Function,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    index
-        .scopes
-        .iter()
-        .zip(index.scope_ids.iter())
-        .find_map(|(scope, scope_id)| {
-            (matches!(scope.kind, ScopeKind::Function)
-                && scope.range == func_data.span
-                && scope.name.as_ref() == Some(&func_data.name))
-            .then_some(*scope_id)
-        })
 }
 
 fn is_function_default_signature_diagnostic(

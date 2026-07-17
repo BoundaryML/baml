@@ -605,6 +605,21 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
+/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as
+/// `sdk_test_harness_runner::cpp::test_suite!()`.
+pub mod cpp {
+    /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
+    /// by `sdk_test_harness_setup::cpp::run_all`.
+    #[macro_export]
+    macro_rules! cpp_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/cpp_tests.rs"));
+        };
+    }
+
+    pub use crate::cpp_test_suite as test_suite;
+}
+
 /// Rust generator's test-side glue. Invoked from
 /// `crates/rust/src/lib.rs` as
 /// `sdk_test_harness_runner::rust::test_suite!()`.
