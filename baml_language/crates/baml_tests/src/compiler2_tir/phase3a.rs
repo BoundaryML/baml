@@ -1530,7 +1530,7 @@ fn optional_call_chain_continues() {
         "test.baml",
         r#"
 class User { name string }
-function f(callback: (() -> User)?) -> string? {
+function f(callback: (() -> User throws never)?) -> string? {
     callback?.()?.name
 }
 "#,

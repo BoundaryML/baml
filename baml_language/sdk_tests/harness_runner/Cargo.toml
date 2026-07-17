@@ -10,12 +10,13 @@
 #     `mod build_diagnostics { #[test] fn no_build_failures }` block
 #     that reads `$OUT_DIR/build_diagnostics.txt` written by
 #     `sdk_test_harness_setup`'s `BuildDiagnostics::finalize`.
-#   - `python_pydantic2::test_suite!` / `typescript_node::test_suite!`
+#   - `python_pydantic2::test_suite!` / `typescript::test_suite!` /
+#     `typescript_web::test_suite!`
 #     — one per generator; each just `include!`s the OUT_DIR scaffold
 #     emitted by `sdk_test_harness_setup::<generator>::run_all`.
 #
 # Std-only deps so it can ride along in `[dev-dependencies]` without
-# dragging sdkgen_python_pydantic2 / sdkgen_typescript_node / baml_project onto the
+# dragging sdkgen_python_pydantic2 / sdkgen_typescript_shared / baml_project onto the
 # test-binary compile path.
 #
 # Package named `sdk_test_*` so cargo-stow's

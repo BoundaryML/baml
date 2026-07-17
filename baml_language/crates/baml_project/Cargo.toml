@@ -30,10 +30,12 @@ baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_lsp2_actions = { workspace = true }
+baml_type = { workspace = true }
 baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }
 la-arena = { workspace = true }
 lsp-types = { workspace = true }
+rayon = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

@@ -55,6 +55,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   TYPE_ALIAS_DEF
     KW_TYPE "type"
     WORD "NamedLimit"
@@ -78,6 +82,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   CLASS_DEF
     KW_CLASS "class"
     WORD "Counter"

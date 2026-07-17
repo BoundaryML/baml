@@ -1,8 +1,11 @@
 //! Unified type system for BAML.
 //!
-//! Includes five main type representations:
+//! Includes six main type representations:
 //! - [`Ty`]: the full type representation containing all compiler and runtime types.
 //! - [`RuntimeTy`]: the runtime-facing deep subset of [`Ty`] that excludes type inference helper types.
+//! - [`CodegenTy`]: the generator-independent deep subset used for public API
+//!   declarations. It preserves aliases and generic type variables, but excludes
+//!   compiler-only inference states and unresolved associated-type projections.
 //! - [`ConcreteTy`]: like [`RuntimeTy`] but only the concrete-layout variants (plus `never`).
 //!   Not deep: parameter types are [`RuntimeTy`]s.
 //! - [`RealizedTy`]: the realized deep subset of [`RuntimeTy`] that excludes type variables.
@@ -13,9 +16,11 @@
 //! ```text
 //!     `Ty`
 //!      ↑
-//!  `RuntimeTy` <- `RealizedTy`
-//!      ↑               ↑
-//! `ConcreteTy` <- `ConcreteRealizedTy`
+//!  `RuntimeTy` <- `CodegenTy`
+//!      ↑              ↑
+//! `ConcreteTy`    `RealizedTy`
+//!      ↑              ↑
+//!      `ConcreteRealizedTy`
 //! ```
 
 use std::fmt;
@@ -26,6 +31,7 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+mod codegen_ty;
 mod defs;
 mod family;
 mod names;
@@ -35,6 +41,7 @@ mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
@@ -42,6 +49,7 @@ pub use family::*;
 pub use names::*;
 pub use primitive::*;
 pub use runtime_ty::*;
+pub use template::SubstituteError;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
@@ -913,16 +921,12 @@ impl Ty {
                 member,
                 ..
             } => {
-                if let Some(interface) = interface {
-                    format!(
-                        "({} as {}).{}",
-                        base.render_with(s),
-                        interface.to_ty().render_with(s),
-                        member
-                    )
-                } else {
-                    format!("{}.{}", base.render_with(s), member)
-                }
+                format!(
+                    "({} as {}).{}",
+                    base.render_with(s),
+                    interface.to_ty().render_with(s),
+                    member
+                )
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
@@ -1124,10 +1128,7 @@ impl fmt::Display for Ty {
                 interface,
                 member,
                 ..
-            } => match interface {
-                Some(iface) => write!(f, "({base} as {}).{member}", iface.to_ty()),
-                None => write!(f, "{base}.{member}"),
-            },
+            } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
@@ -1209,7 +1210,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1325,7 +1326,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },

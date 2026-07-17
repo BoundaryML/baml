@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use baml_compiler_diagnostics::Diagnostic;
 use baml_db::{FileId, SourceFile};
 use baml_lsp2_actions::check_file as lsp2_check_file;
-use baml_workspace::Project;
 
 use crate::ProjectDatabase;
 
@@ -38,14 +37,18 @@ pub struct CheckResult {
 /// `baml_compiler_tir`. All diagnostics now come from the compiler2 pipeline via
 /// `baml_lsp2_actions::check_file`.
 ///
-/// The `project` and `source_files` parameters are accepted for API compatibility
-/// with existing callers but are not used — the compiler2 pipeline derives the
-/// file set internally from [`baml_compiler2_hir::compiler2_all_files`].
-pub fn collect_diagnostics(
-    db: &ProjectDatabase,
-    _project: Project,
-    _source_files: &[SourceFile],
-) -> Vec<Diagnostic> {
+/// Diagnostics are ALWAYS collected over the full project: the compiler2 pipeline
+/// derives the file set internally from [`baml_compiler2_hir::compiler2_all_files`]
+/// and checks every file.
+///
+/// Per-file narrowing is deliberately not done yet. Callers that hold a per-file
+/// "dirty set" (e.g. from the bytecode-cache reuse plan) must NOT expect this
+/// function to honor it as a filter. Per-file diagnostics invalidation is not yet
+/// proven complete — narrowing the checked set to only the dirty files would risk
+/// surfacing stale diagnostics for clean files that transitively depend on a
+/// changed signature. Until that invalidation is proven sound, every file is
+/// re-diagnosed on every call.
+pub fn collect_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     collect_compiler2_diagnostics(db)
 }
 
@@ -60,17 +63,129 @@ pub fn collect_diagnostics(
 pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    for file in &source_files {
-        diagnostics.extend(lsp2_check_file(db, *file));
+    // Parallel by default; tiny projects skip the pool dispatch overhead.
+    // Thread count follows rayon's global pool (`RAYON_NUM_THREADS` to cap).
+    if source_files.len() > 8 {
+        collect_file_diagnostics_parallel(db, &source_files, &mut diagnostics);
+    } else {
+        for file in &source_files {
+            diagnostics.extend(lsp2_check_file(db, *file));
+        }
     }
+    diagnostics.extend(package_level_diagnostics(db, &source_files));
+    sort_diagnostics(&mut diagnostics);
+    diagnostics
+}
 
-    // Collect package-level diagnostics (name conflicts and namespace shadows).
-    // Discover all unique packages from file metadata.
-    let mut seen_packages = std::collections::HashSet::new();
+/// Run `check_file` for every file across worker threads.
+///
+/// Every query `check_file` reaches is read-only, and `ProjectDatabase`'s
+/// `Clone` produces a shared-storage salsa handle (the rust-analyzer
+/// concurrency model): workers share one memo table, so a scope inferred by
+/// one thread is a cache hit for every other. Output order does not matter —
+/// the caller sorts diagnostics by (file, span, message) — so workers just
+/// pull the next file off a shared atomic counter (files vary a lot in size;
+/// work-stealing beats fixed chunks).
+///
+/// The first file is checked serially before fanning out: it warms the
+/// package-level queries (package items / resolution context / alias maps)
+/// that every file reads, so cold workers don't all block on the same shared
+/// memo slots.
+fn collect_file_diagnostics_parallel(
+    db: &ProjectDatabase,
+    source_files: &[SourceFile],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // `ProjectDatabase` is `Send` but deliberately not `Sync` (each salsa
+    // handle carries thread-confined query-stack state), so tasks cannot share
+    // `&db` — every task MOVES its own cloned shared-storage handle instead
+    // (an Arc bump; all clones share one memo table). Small chunks keep
+    // work-stealing effective on rayon's global pool — files vary a lot in
+    // check cost — while amortizing the per-task clone.
+    const CHUNK: usize = 4;
+
+    let Some((first, rest)) = source_files.split_first() else {
+        return;
+    };
+    diagnostics.extend(lsp2_check_file(db, *first));
+
+    let chunks: Vec<&[SourceFile]> = rest.chunks(CHUNK).collect();
+    // Handles are cloned OUTSIDE the rayon scope: a `!Sync` database can't be
+    // borrowed by the (Send) scope closure, so each chunk's handle is created
+    // up front and MOVED into its task.
+    let handles: Vec<ProjectDatabase> = chunks.iter().map(|_| db.clone()).collect();
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<Diagnostic>>();
+    rayon::scope(move |s| {
+        for (chunk, db) in chunks.into_iter().zip(handles) {
+            let tx = tx.clone();
+            s.spawn(move |_| {
+                let mut out = Vec::new();
+                for file in chunk {
+                    out.extend(lsp2_check_file(&db, *file));
+                }
+                // Receiver outlives the scope; a send only fails if it
+                // dropped early, which would mean a panic elsewhere.
+                let _ = tx.send(out);
+            });
+        }
+    });
+    for out in rx {
+        diagnostics.extend(out);
+    }
+}
+
+/// The per-checked-file split alongside the merged, honest-ordered set produced
+/// by [`collect_compiler2_diagnostics_narrowed`].
+pub struct NarrowedDiagnostics {
+    /// Merged set: freshly-checked files' diagnostics, the caller-supplied
+    /// clean-file `precomputed`, and the always-recomputed package-level
+    /// diagnostics — sorted by the same comparator as the honest collector, so
+    /// it renders byte-identically to a full run.
+    pub merged: Vec<Diagnostic>,
+    /// Only the diagnostics `check_file` freshly produced for the checked
+    /// files. Excludes `precomputed` and the package-level set, so it is exactly
+    /// what the caller persists per dirty file (the package-level set is never
+    /// cached — it is recomputed every compile).
+    pub fresh: Vec<Diagnostic>,
+}
+
+/// Like [`collect_compiler2_diagnostics`], but run `check_file` only for files
+/// where `should_check(file)` is true and fold in `precomputed` — diagnostics
+/// for the skipped (clean) files, already rehydrated with current-process
+/// `FileId`s. Builtins must be forced through `should_check` by the caller
+/// (they never appear in the manifest / clean set). Package-level
+/// conflicts/shadows are always recomputed. The final sort re-runs on
+/// current-process `FileId`s, so the merged set renders byte-identically to the
+/// honest collector when `should_check` is all-true and `precomputed` is empty.
+pub fn collect_compiler2_diagnostics_narrowed(
+    db: &ProjectDatabase,
+    should_check: &dyn Fn(SourceFile) -> bool,
+    precomputed: Vec<Diagnostic>,
+) -> NarrowedDiagnostics {
+    let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut fresh: Vec<Diagnostic> = Vec::new();
     for file in &source_files {
+        if should_check(*file) {
+            fresh.extend(lsp2_check_file(db, *file));
+        }
+    }
+    let mut merged = fresh.clone();
+    merged.extend(precomputed);
+    merged.extend(package_level_diagnostics(db, &source_files));
+    sort_diagnostics(&mut merged);
+    NarrowedDiagnostics { merged, fresh }
+}
+
+/// Package-level diagnostics (cross-file name conflicts and namespace shadows),
+/// emitted outside `check_file` and therefore recomputed on every compile —
+/// never served from the per-file diagnostics cache.
+fn package_level_diagnostics(db: &ProjectDatabase, source_files: &[SourceFile]) -> Vec<Diagnostic> {
+    let mut seen_packages = std::collections::HashSet::new();
+    for file in source_files {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         seen_packages.insert(pkg_info.package.clone());
     }
+    let mut diagnostics = Vec::new();
     for pkg_name in seen_packages {
         let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
         let items = baml_compiler2_hir::package::package_items(db, pkg_id);
@@ -81,27 +196,48 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
             diagnostics.push(shadow.to_diagnostic(db));
         }
     }
+    diagnostics
+}
+
+/// Total, deterministic diagnostic ordering.
+///
+/// The primary key is unchanged — (`file_id`, primary span start, message) —
+/// so any set of diagnostics without exact ties renders exactly as before.
+/// But parallel check ([`collect_file_diagnostics_parallel`]) collects file
+/// chunks in nondeterministic completion order, and a `sort_by` leaves
+/// elements that compare `Equal` in their (now-arbitrary) input order. So two
+/// *distinct* diagnostics sharing the same file/start/message would render in
+/// run-dependent order. The tie-breakers below — span end, then a structural
+/// `Debug` encoding that totally covers the remaining fields (id, severity,
+/// phase, annotations, related info) — give a total order, guaranteeing
+/// byte-identical output regardless of thread scheduling. They only run on
+/// exact (file, start, message) ties, so non-tied output is untouched and the
+/// `Debug` formatting cost is not paid in the common case.
+fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
+    use std::cmp::Ordering;
     diagnostics.sort_by(|a, b| {
         let a_span = a.primary_span();
         let b_span = b.primary_span();
-        match (a_span, b_span) {
-            (Some(sa), Some(sb)) => {
-                let file_cmp = sa.file_id.as_u32().cmp(&sb.file_id.as_u32());
-                if file_cmp != std::cmp::Ordering::Equal {
-                    return file_cmp;
-                }
-                let start_cmp = sa.range.start().cmp(&sb.range.start());
-                if start_cmp != std::cmp::Ordering::Equal {
-                    return start_cmp;
-                }
-                a.message.cmp(&b.message)
-            }
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
+        let primary = match (a_span, b_span) {
+            (Some(sa), Some(sb)) => sa
+                .file_id
+                .as_u32()
+                .cmp(&sb.file_id.as_u32())
+                .then_with(|| sa.range.start().cmp(&sb.range.start()))
+                .then_with(|| a.message.cmp(&b.message)),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
             (None, None) => a.message.cmp(&b.message),
-        }
+        };
+        primary
+            .then_with(|| match (a_span, b_span) {
+                (Some(sa), Some(sb)) => sa.range.end().cmp(&sb.range.end()),
+                _ => Ordering::Equal,
+            })
+            // Structural catch-all: a stable, total encoding of every remaining
+            // field, so distinct diagnostics never compare Equal.
+            .then_with(|| format!("{a:?}").cmp(&format!("{b:?}")))
     });
-    diagnostics
 }
 
 impl ProjectDatabase {
@@ -172,7 +308,74 @@ impl ProjectDatabase {
 mod tests {
     use std::path::Path;
 
+    use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
+    use baml_db::{FileId, Span};
+    use text_size::TextRange;
+
     use super::*;
+
+    /// `sort_diagnostics` must impose a total order: diagnostics tied on the
+    /// primary key (file, start, message) but differing elsewhere must sort
+    /// into the same sequence regardless of input order, or parallel check
+    /// (which produces them in nondeterministic completion order) would render
+    /// nondeterministically.
+    #[test]
+    fn sort_diagnostics_is_a_total_order_over_ties() {
+        let at = |start: u32, end: u32| Span {
+            file_id: FileId::new(0),
+            range: TextRange::new(start.into(), end.into()),
+        };
+        // All four share (file 0, start 10, message "dup") — the entire primary
+        // key — but differ in span end, id, severity, and phase.
+        let make = |id, sev, end, phase| {
+            let mut d = Diagnostic::new(id, sev, "dup");
+            d = d.with_primary_span(at(10, end)).with_phase(phase);
+            d
+        };
+        let originals = vec![
+            make(
+                DiagnosticId::TypeMismatch,
+                Severity::Error,
+                20,
+                DiagnosticPhase::Type,
+            ),
+            make(
+                DiagnosticId::UnknownType,
+                Severity::Warning,
+                15,
+                DiagnosticPhase::Parse,
+            ),
+            make(
+                DiagnosticId::TypeMismatch,
+                Severity::Warning,
+                20,
+                DiagnosticPhase::Type,
+            ),
+            make(
+                DiagnosticId::UnknownVariable,
+                Severity::Error,
+                20,
+                DiagnosticPhase::Hir,
+            ),
+        ];
+
+        // Sorting any permutation must yield the identical sequence.
+        let mut canonical = originals.clone();
+        sort_diagnostics(&mut canonical);
+        for rotate in 0..originals.len() {
+            let mut perm = originals.clone();
+            perm.rotate_left(rotate);
+            perm.reverse();
+            sort_diagnostics(&mut perm);
+            assert_eq!(
+                format!("{perm:?}"),
+                format!("{canonical:?}"),
+                "sort is not a total order: permutation (rotate {rotate}, reversed) diverged",
+            );
+        }
+        // And the span-end tie-breaker actually ran (the end=15 one sorts first).
+        assert_eq!(canonical[0].primary_span().unwrap().range.end(), 15.into());
+    }
 
     #[test]
     #[ignore = "compiler2: llm_types.baml builtin causes unreachable arm errors from catch expressions"]
@@ -203,5 +406,55 @@ mod tests {
 
         let result = db.check();
         assert!(!result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn narrowed_all_dirty_equals_honest() {
+        // The oracle floor: with `should_check` all-true and no precomputed
+        // clean-file set, the narrowed collector must reproduce the honest
+        // collector's merged set exactly (same diagnostics, same order).
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/narrow-eq"));
+        db.add_or_update_file(
+            Path::new("/narrow-eq/a.baml"),
+            "class Foo {\n  x int\n}\nfunction bad() -> int {\n  \"nope\"\n}\n",
+        );
+        db.add_or_update_file(
+            Path::new("/narrow-eq/b.baml"),
+            "function ok() -> int {\n  1\n}\n",
+        );
+
+        let honest = collect_compiler2_diagnostics(&db);
+        let narrowed = collect_compiler2_diagnostics_narrowed(&db, &|_| true, Vec::new());
+        assert_eq!(
+            honest, narrowed.merged,
+            "narrowed all-true must equal honest"
+        );
+        // `fresh` is exactly `merged` minus the always-recomputed package-level
+        // set (with `precomputed` empty here): removing the package-level
+        // diagnostics from the merged set must leave precisely the fresh set.
+        // This pins that the narrowed collector neither double-counts a
+        // check_file diagnostic into `fresh` nor leaks a package-level one there.
+        let source_files = baml_compiler2_hir::compiler2_all_files(&db);
+        let package_level = package_level_diagnostics(&db, &source_files);
+        assert_eq!(
+            narrowed.merged.len(),
+            narrowed.fresh.len() + package_level.len(),
+            "merged = fresh + package-level (precomputed empty)"
+        );
+        let mut fresh_sorted = narrowed.fresh;
+        sort_diagnostics(&mut fresh_sorted);
+        let mut merged_minus_pkg = narrowed.merged;
+        for pkg in &package_level {
+            let pos = merged_minus_pkg
+                .iter()
+                .position(|d| d == pkg)
+                .expect("each package-level diagnostic appears in merged");
+            merged_minus_pkg.remove(pos);
+        }
+        assert_eq!(
+            fresh_sorted, merged_minus_pkg,
+            "fresh must equal merged with the package-level diagnostics removed"
+        );
     }
 }

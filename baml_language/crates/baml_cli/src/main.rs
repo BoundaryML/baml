@@ -5,6 +5,15 @@
 
 use std::io::Write as _;
 
+/// The compiler workload is dominated by small short-lived allocations
+/// (`Ty` trees, `Vec`s, `SmolStr`s): the system allocator measured ~35% of
+/// remaining single-threaded CPU in the cold-compile audit. Installing
+/// mimalloc as the global allocator substantially cuts cold `baml check` /
+/// `baml build` wall time. This affects allocation only, not any rendered
+/// bytes, so it is safe with respect to `BAML_CACHE_VERIFY`.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() {
     // TODO: baml_log is disabled for now
     // baml_log::init()?;

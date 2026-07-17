@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.SearchService {
   base: string
 }
-type user.NarrowSearcher = (query: string, filter?: string?) -> string[]
-type user.Searcher = (query: string, max_results?: int) -> int
+type user.NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
+type user.Searcher = (query: string, max_results?: int) -> int throws never
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string  [llm] {
   baml.llm.call_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
@@ -38,7 +38,7 @@ function user.SearchDocs(query: string, max_results: int = 10, filter: string? =
   {  } [query]
 }
 function user.TestClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.UseMixedArgs() -> int  [expr] {
   {  } Search("dogs", max_results = 3, filter = "all")

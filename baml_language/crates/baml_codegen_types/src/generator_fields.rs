@@ -19,6 +19,18 @@ pub enum OutputType {
     /// Swift SDK (`BamlBridge` SwiftPM runtime).
     #[strum(serialize = "swift")]
     Swift,
+    /// Go SDK using the `baml_go` runtime.
+    #[strum(serialize = "go")]
+    Go,
+    /// Rust SDK (`bridge_rust` runtime crate, library name `baml_rs`).
+    #[strum(serialize = "rust")]
+    Rust,
+    /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
+    #[strum(serialize = "typescript/web")]
+    TypescriptWeb,
+    /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
+    #[strum(serialize = "cpp")]
+    Cpp,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as

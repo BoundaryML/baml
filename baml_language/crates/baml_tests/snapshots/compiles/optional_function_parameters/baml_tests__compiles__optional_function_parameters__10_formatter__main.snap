@@ -1,9 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type Searcher = (query: string, max_results?: int) -> int;
+type Searcher = (query: string, max_results?: int) -> int throws never;
 
-type NarrowSearcher = (query: string, filter?: string?) -> string[];
+type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never;
 
 client<llm> TestClient {
     provider: openai,

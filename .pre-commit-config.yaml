@@ -58,6 +58,14 @@ repos:
         files: ^baml_language/
         priority: 2
 
+      - id: clang-format-cpp
+        name: clang-format (C++ SDK)
+        entry: bash -c 'cd baml_language && mise run fmt-cpp'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(sdks/cpp/|sdk_tests/crates/cpp/).*\.(h|cc)$
+        priority: 2
+
       - id: cargo-stow
         name: cargo stow
         entry: bash -c 'cd baml_language && mise run stow'

@@ -109,7 +109,7 @@ pub(crate) fn lower_projection(
             } else {
                 Ty::AssociatedTypeProjection {
                     base: Box::new(base),
-                    interface: Some(Box::new(interface)),
+                    interface: Box::new(interface),
                     member,
                     attr: TyAttr::default(),
                 }
@@ -280,20 +280,15 @@ fn determine_interface(
             interface: inner_interface,
             member: inner_member,
             ..
-        } => {
-            let inner_interface = inner_interface.as_ref().unwrap_or_else(|| {
-                unreachable!("a symbolic projection base always carries its determined interface")
-            });
-            determine_chained(
-                ctx,
-                &base,
-                inner_base,
-                inner_interface,
-                inner_member,
-                explicit,
-                member,
-            )
-        }
+        } => determine_chained(
+            ctx,
+            &base,
+            inner_base,
+            inner_interface,
+            inner_member,
+            explicit,
+            member,
+        ),
         // Already-errored bases — and the unfilled `_` inference hole, which the
         // fill machinery resolves or diagnoses — propagate without a fresh diagnostic.
         Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => {
@@ -448,11 +443,11 @@ pub(crate) fn scope_types_equivalent(
 ) -> bool {
     let pkg_id = PackageId::new(db, pkg.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
     let gctx = GlobalTypeContext {
         db,
         res_ctx,
-        aliases: &aliases,
+        aliases,
         bounds,
     };
     baml_type::normalize::equivalent(a, b, &gctx)
@@ -608,7 +603,7 @@ fn associated_type_bound_interface(
             .map(|(_, pin)| pin.clone())
             .unwrap_or_else(|| Ty::AssociatedTypeProjection {
                 base: Box::new(self_ty.clone()),
-                interface: Some(Box::new(realized.clone())),
+                interface: Box::new(realized.clone()),
                 member: assoc.name.clone(),
                 attr: TyAttr::default(),
             });
@@ -774,7 +769,7 @@ pub(crate) fn resolve_concrete_realized_interface(
 ) -> Option<baml_type::Interface> {
     let pkg_id = PackageId::new(db, pkg.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
     let realized = !crate::generics::contains_typevar(base)
         && !interface
             .generics
@@ -786,12 +781,12 @@ pub(crate) fn resolve_concrete_realized_interface(
             .any(|(_, ty)| crate::generics::contains_typevar(ty));
     let resolved = if realized {
         // Realized fast path: unique by coherence, bounds discharged by bounded re-entry.
-        crate::interfaces::get_implements_block(db, pkg_id, base, interface, &aliases)
+        crate::interfaces::get_implements_block(db, pkg_id, base, interface, aliases)
     } else {
         let gctx = GlobalTypeContext {
             db,
             res_ctx,
-            aliases: &aliases,
+            aliases,
             bounds,
         };
         crate::interfaces::get_implements_block_symbolic(
@@ -799,7 +794,7 @@ pub(crate) fn resolve_concrete_realized_interface(
             pkg_id,
             base,
             interface,
-            &aliases,
+            aliases,
             |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
         )
     };
@@ -826,16 +821,16 @@ pub(crate) fn resolve_concrete_projection(
 ) -> ConcreteProjection {
     let pkg_id = PackageId::new(db, pkg.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
     let gctx = GlobalTypeContext {
         db,
         res_ctx,
-        aliases: &aliases,
+        aliases,
         bounds,
     };
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
-    for resolved in crate::interfaces::impls_for_type(db, pkg_id, base, &aliases, |a, b| {
+    for resolved in crate::interfaces::impls_for_type(db, pkg_id, base, aliases, |a, b| {
         baml_type::normalize::is_subtype(a, b, &gctx)
     }) {
         let interface = resolved.implemented_interface(db);

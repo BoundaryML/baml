@@ -10,16 +10,23 @@ import json
 from pathlib import Path
 
 
-TARGETS = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-]
+def _toolchain_required_targets() -> list[str]:
+    """Target triples the toolchain (and wrapper) release must ship, read from
+    the repository's platform contract (`release/platforms.json`) so the target
+    set lives in one machine-readable place instead of a hand-copied list.
+    Required = the `toolchain` artifact is present and not experimental."""
+    contract = json.loads(
+        (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
+    )
+    targets = []
+    for target in contract["targets"]:
+        toolchain = target["artifacts"].get("toolchain")
+        if toolchain is not None and not toolchain.get("experimental", False):
+            targets.append(target["triple"])
+    return targets
+
+
+TARGETS = _toolchain_required_targets()
 
 
 def sha256(path: Path) -> str:
@@ -34,7 +41,9 @@ def artifact_url(tag: str, path: Path) -> str:
     return f"https://github.com/BoundaryML/baml/releases/download/{tag}/{path.name}"
 
 
-def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[str, str]]:
+def collect_artifacts(
+    root: Path, product: str, version: str, tag: str | None = None
+) -> dict[str, dict[str, str]]:
     artifacts = {}
     prefix = f"{product}-{version}-"
     for path in sorted(root.iterdir()):
@@ -48,7 +57,7 @@ def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[
         else:
             continue
         artifacts[target] = {
-            "url": artifact_url(f"{product}-{version}", path),
+            "url": artifact_url(tag or f"{product}-{version}", path),
             "sha256": sha256(path),
         }
     missing = sorted(set(TARGETS) - set(artifacts))
@@ -58,15 +67,50 @@ def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[
     return artifacts
 
 
+def collect_cffi_artifacts(root: Path, version: str) -> dict[str, dict[str, str]]:
+    """The engine cdylibs (`libbaml_cffi-<triple>.{so,dylib}` /
+    `baml_cffi-<triple>.dll`), recorded as bookkeeping — the dylib-loader SDKs
+    construct these GitHub-release URLs directly, so the manifest does not need
+    to be consulted at load time. Only the targets actually built are recorded
+    (experimental targets may be absent), so no required/extra check applies.
+    """
+    tag = f"baml-language-{version}"
+    artifacts: dict[str, dict[str, str]] = {}
+    for path in sorted(root.iterdir()):
+        name = path.name
+        if name.endswith(".sha256"):
+            continue
+        if name.startswith("libbaml_cffi-"):
+            rest = name[len("libbaml_cffi-") :]
+        elif name.startswith("baml_cffi-"):
+            rest = name[len("baml_cffi-") :]
+        else:
+            continue
+        for ext in (".so", ".dylib", ".dll"):
+            if rest.endswith(ext):
+                target = rest[: -len(ext)]
+                artifacts[target] = {
+                    "url": artifact_url(tag, path),
+                    "sha256": sha256(path),
+                }
+                break
+    return artifacts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--toolchain-dir", required=True, type=Path)
+    parser.add_argument("--cffi-dir", required=True, type=Path)
     parser.add_argument("--wrapper-dir", required=True, type=Path)
     parser.add_argument("--vsix-dir", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--channel", required=True, choices=["canary", "nightly"])
     parser.add_argument("--version", required=True)
     parser.add_argument("--pypi-version", required=True)
+    # Optional until the crates.io publisher lands; when set, the toolchain
+    # manifest records `sdks.rust`. crates.io's version encoding is the identity
+    # of the canonical version (SemVer prereleases are valid).
+    parser.add_argument("--crates-io-version", default=None)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
     args = parser.parse_args()
@@ -96,7 +140,23 @@ def main() -> None:
         "baml_bridge_pypi": {
             "version": args.pypi_version,
         },
+        "baml_bridge_go": {
+            "module": "github.com/boundaryml/baml-go",
+            "version": f"v{args.version}",
+        },
+        "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
+    # Generated-SDK registry coordinates, recorded once a language's publisher
+    # lands. Rust is gated on --crates-io-version so a manifest never claims a
+    # baml_bridge crate that has not been published to crates.io yet.
+    if args.crates_io_version:
+        toolchain["sdks"] = {
+            "rust": {
+                "registry": "crates_io",
+                "package": "baml_bridge",
+                "version": args.crates_io_version,
+            },
+        }
     text = json.dumps(toolchain, indent=2, sort_keys=True) + "\n"
     (args.out / "version" / f"{args.version}.json").write_text(text)
     (args.out / f"{args.channel}.json").write_text(text)

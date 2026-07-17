@@ -7,21 +7,20 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_tir::interfaces`), run on `baml_type::RuntimeTy`: unify the rule's
+//! in `baml_compiler2_tir::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 
 use std::borrow::Cow;
 
-use baml_type::{
-    Literal, MediaKind, Name, RealizedTy, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
-};
+use baml_type::{Literal, MediaKind, Name, RealizedTy, TyAttr, TyTemplate, TypeName};
 use bex_vm_types::{
     HeapPtr,
+    errors::VmInternalError,
     types::{Object, Package, RuntimeImplRule},
 };
 
-use crate::BexVm;
+use crate::{BexVm, type_context::RuntimeTypeContext};
 
 /// Dereference a package pointer to its [`Package`]. The runtime `vm.packages`
 /// index only ever holds `Object::Package` pointers.
@@ -59,17 +58,22 @@ fn collect_package_rules<'a>(
 /// reach this.
 const MAX_OBLIGATION_DEPTH: usize = 128;
 
-/// An in-progress membership goal — does `RuntimeTy` implement the interface `TypeName`
+/// An in-progress membership goal — does `RealizedTy` implement the interface `TypeName`
 /// at these args / associated bindings? Tracked on a stack so a goal that
 /// recurses back to itself (an inductive cycle, with no concrete-impl base case)
 /// is detected and rejected rather than spun on until the depth backstop.
-type Obligation = (RuntimeTy, TypeName, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>);
+type Obligation = (
+    RealizedTy,
+    TypeName,
+    Vec<RealizedTy>,
+    Vec<(Name, RealizedTy)>,
+);
 
 /// The package that owns `ty`, if any. Primitives/containers have none — their
 /// impls live in the interface's package (orphan rule).
-fn type_package(ty: &RuntimeTy) -> Option<&Name> {
+fn type_package(ty: &RealizedTy) -> Option<&Name> {
     match ty {
-        RuntimeTy::Class(tn, ..) | RuntimeTy::Enum(tn, ..) | RuntimeTy::Interface(tn, ..) => {
+        RealizedTy::Class(tn, ..) | RealizedTy::Enum(tn, ..) | RealizedTy::Interface(tn, ..) => {
             Some(tn.package())
         }
         _ => None,
@@ -83,20 +87,20 @@ fn type_package(ty: &RuntimeTy) -> Option<&Name> {
 /// types; every other type passes through untouched. Only the top level is
 /// normalized — nested type args keep their literal form so invariance holds
 /// (`Box<1>` is not `Box<int>`).
-fn concrete_base(ty: &RuntimeTy) -> Cow<'_, RuntimeTy> {
+fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
     match ty {
         // Persist the type's attr onto the base (consistent with the enum-variant
         // arm below), so a literal carrying a non-default attr normalizes to its
         // base with that attr intact rather than silently dropping it.
-        RuntimeTy::Literal(lit, _, attr) => Cow::Owned(match lit {
-            Literal::Int(_) => RuntimeTy::Int { attr: attr.clone() },
-            Literal::Bigint(_) => RuntimeTy::Bigint { attr: attr.clone() },
-            Literal::Float(_) => RuntimeTy::Float { attr: attr.clone() },
-            Literal::String(_) => RuntimeTy::String { attr: attr.clone() },
-            Literal::Bool(_) => RuntimeTy::Bool { attr: attr.clone() },
+        RealizedTy::Literal(lit, _, attr) => Cow::Owned(match lit {
+            Literal::Int(_) => RealizedTy::Int { attr: attr.clone() },
+            Literal::Bigint(_) => RealizedTy::Bigint { attr: attr.clone() },
+            Literal::Float(_) => RealizedTy::Float { attr: attr.clone() },
+            Literal::String(_) => RealizedTy::String { attr: attr.clone() },
+            Literal::Bool(_) => RealizedTy::Bool { attr: attr.clone() },
         }),
-        RuntimeTy::EnumVariant(name, _, attr) => {
-            Cow::Owned(RuntimeTy::Enum(name.clone(), attr.clone()))
+        RealizedTy::EnumVariant(name, _, attr) => {
+            Cow::Owned(RealizedTy::Enum(name.clone(), attr.clone()))
         }
         _ => Cow::Borrowed(ty),
     }
@@ -110,7 +114,7 @@ fn concrete_base(ty: &RuntimeTy) -> Cow<'_, RuntimeTy> {
 /// it never changes an existing pair's answer.
 fn candidate_rules<'a>(
     vm: &'a BexVm,
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     iface: &TypeName,
 ) -> Vec<&'a RuntimeImplRule> {
     let base = concrete_base(concrete_ty);
@@ -163,27 +167,51 @@ fn candidate_rules<'a>(
 /// no-match case.
 pub(crate) fn resolve_implements_rule<'a>(
     vm: &'a BexVm,
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     iface: &TypeName,
-    iface_args: &[RuntimeTy],
-) -> Option<(&'a RuntimeImplRule, Vec<RuntimeTy>)> {
-    let mut fallback: Option<(&'a RuntimeImplRule, Vec<RuntimeTy>)> = None;
+    iface_args: &[RealizedTy],
+) -> Option<(&'a RuntimeImplRule, Vec<RealizedTy>)> {
+    resolve_implements_rule_exact(vm, concrete_ty, iface, iface_args).or_else(|| {
+        // Defensive fallback for the (compile-time-coherence-forbidden) no-match
+        // case: the first applicable rule.
+        candidate_rules(vm, concrete_ty, iface)
+            .into_iter()
+            .find_map(|rule| {
+                rule_applies(vm, rule, concrete_ty, &mut Vec::new())
+                    .map(|type_args| (rule, type_args))
+            })
+    })
+}
+
+/// [`resolve_implements_rule`] without the first-applicable fallback: `None`
+/// unless a rule's realized interface args match a non-empty request exactly
+/// (an empty request still matches any instantiation). Operator dispatch
+/// resolves with the operands' runtime types as the request — the type checker
+/// proved that exact instantiation is implemented, so on a proof/registry
+/// desync the dispatch must surface as unresolved rather than silently select
+/// a near-miss specialization (whose method glue would read the rhs as the
+/// wrong type).
+pub(crate) fn resolve_implements_rule_exact<'a>(
+    vm: &'a BexVm,
+    concrete_ty: &RealizedTy,
+    iface: &TypeName,
+    iface_args: &[RealizedTy],
+) -> Option<(&'a RuntimeImplRule, Vec<RealizedTy>)> {
     for rule in candidate_rules(vm, concrete_ty, iface) {
         let Some(type_args) = rule_applies(vm, rule, concrete_ty, &mut Vec::new()) else {
             continue;
         };
         // Select on the interface's input args only (associated types are outputs).
-        let rule_args: Vec<RuntimeTy> = rule
+        let rule_args: Vec<RealizedTy> = rule
             .interface_args
             .iter()
-            .map(|t| substitute_checked(t, &type_args))
+            .map(|t| substitute_checked(vm, t, &type_args))
             .collect();
         if iface_args.is_empty() || ty_args_equivalent(&rule_args, iface_args) {
             return Some((rule, type_args));
         }
-        fallback.get_or_insert((rule, type_args));
     }
-    fallback
+    None
 }
 
 /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
@@ -191,10 +219,24 @@ pub(crate) fn resolve_implements_rule<'a>(
 /// (from [`resolve_implements_rule`]). The result is the `frame.type_args` to
 /// seed the resolved callee with: the impl's own generics for an impl method, or
 /// the interface's args + associated types for an inherited default.
-pub(crate) fn realize_frame(template: &[TyTemplate], bound_args: &[RuntimeTy]) -> Vec<RuntimeTy> {
+pub(crate) fn realize_frame(
+    vm: &BexVm,
+    template: &[TyTemplate],
+    bound_args: &[RealizedTy],
+) -> Result<Vec<RealizedTy>, VmInternalError> {
+    // Materialization boundary: seeding a bytecode frame's realized type args.
+    // The impl's frame templates realize fully against the (realized) bound args —
+    // every projection reduced through the impl registry — or it is an internal
+    // error, never a silent `unknown`.
+    let ctx = RuntimeTypeContext::new(vm);
     template
         .iter()
-        .map(|t| substitute_checked(t, bound_args))
+        .map(|t| {
+            t.substitute(bound_args, &ctx)
+                .map_err(|e| VmInternalError::TypeSubstitution {
+                    message: e.to_string(),
+                })
+        })
         .collect()
 }
 
@@ -207,10 +249,10 @@ pub(crate) fn realize_frame(template: &[TyTemplate], bound_args: &[RuntimeTy]) -
 /// bounded impl's nested obligations.
 pub(crate) fn type_implements(
     vm: &BexVm,
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     iface: &TypeName,
-    requested_args: &[RuntimeTy],
-    requested_assoc: &[(Name, RuntimeTy)],
+    requested_args: &[RealizedTy],
+    requested_assoc: &[(Name, RealizedTy)],
 ) -> bool {
     prove(
         vm,
@@ -229,10 +271,10 @@ pub(crate) fn type_implements(
 /// repeating) is likewise rejected.
 fn prove(
     vm: &BexVm,
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     iface: &TypeName,
-    requested_args: &[RuntimeTy],
-    requested_assoc: &[(Name, RuntimeTy)],
+    requested_args: &[RealizedTy],
+    requested_assoc: &[(Name, RealizedTy)],
     stack: &mut Vec<Obligation>,
 ) -> bool {
     // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
@@ -251,7 +293,7 @@ fn prove(
         .into_iter()
         .any(|rule| {
             rule_applies(vm, rule, concrete_ty, stack).is_some_and(|bindings| {
-                interface_request_matches(rule, &bindings, requested_args, requested_assoc)
+                interface_request_matches(vm, rule, &bindings, requested_args, requested_assoc)
             })
         });
     stack.pop();
@@ -263,18 +305,18 @@ fn prove(
 fn rule_applies(
     vm: &BexVm,
     rule: &RuntimeImplRule,
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     stack: &mut Vec<Obligation>,
-) -> Option<Vec<RuntimeTy>> {
+) -> Option<Vec<RealizedTy>> {
     let base = concrete_base(concrete_ty);
     let concrete_ty = &*base;
-    let mut bindings: Vec<Option<RuntimeTy>> = vec![None; rule.generic_param_bounds.len()];
+    let mut bindings: Vec<Option<RealizedTy>> = vec![None; rule.generic_param_bounds.len()];
     if !match_template(&rule.for_ty_pattern, concrete_ty, &mut bindings) {
         return None;
     }
     // The for-type pattern must constrain every generic param — a param the
     // pattern never mentions could not be inferred from the receiver.
-    let type_args: Vec<RuntimeTy> = bindings.into_iter().collect::<Option<_>>()?;
+    let type_args: Vec<RealizedTy> = bindings.into_iter().collect::<Option<_>>()?;
 
     // Bounds as nested obligations (rustc winnowing): every interface in a param's
     // bound set must be implemented by that param's bound type arg, at the bound's
@@ -284,15 +326,15 @@ fn rule_applies(
             // The bound's args/assoc may reference the impl's params (`T extends
             // Container<U>`), so substitute them with the bindings, then require
             // the arg to implement the interface at that exact instantiation.
-            let req_args: Vec<RuntimeTy> = bound
+            let req_args: Vec<RealizedTy> = bound
                 .args
                 .iter()
-                .map(|t| substitute_checked(t, &type_args))
+                .map(|t| substitute_checked(vm, t, &type_args))
                 .collect();
-            let req_assoc: Vec<(Name, RuntimeTy)> = bound
+            let req_assoc: Vec<(Name, RealizedTy)> = bound
                 .assoc
                 .iter()
-                .map(|(n, t)| (n.clone(), substitute_checked(t, &type_args)))
+                .map(|(n, t)| (n.clone(), substitute_checked(vm, t, &type_args)))
                 .collect();
             // An interface-existential type arg satisfies a bound that names the
             // same interface directly: the type checker only forms `Iterable<Item
@@ -336,13 +378,13 @@ fn rule_applies(
 /// *implement* an interface, so this must not be folded into `prove` /
 /// `type_implements` (reflection relies on `Iterable` not implementing itself).
 fn interface_existential_satisfies_bound(
-    concrete_ty: &RuntimeTy,
+    concrete_ty: &RealizedTy,
     iface: &TypeName,
-    requested_args: &[RuntimeTy],
-    requested_assoc: &[(Name, RuntimeTy)],
+    requested_args: &[RealizedTy],
+    requested_assoc: &[(Name, RealizedTy)],
 ) -> bool {
     let base = concrete_base(concrete_ty);
-    let RuntimeTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
+    let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
         return false;
     };
     ex_qtn == iface
@@ -350,19 +392,19 @@ fn interface_existential_satisfies_bound(
         && associated_bindings_equivalent(ex_assoc, requested_assoc)
 }
 
-/// Unify a `TyTemplate` pattern against a concrete `RuntimeTy`, binding each
+/// Unify a `TyTemplate` pattern against a concrete `RealizedTy`, binding each
 /// `TypeArgRef(n)` into `bindings[n]`. A repeated param must bind consistently.
 fn match_template(
     pattern: &TyTemplate,
-    concrete: &RuntimeTy,
-    bindings: &mut [Option<RuntimeTy>],
+    concrete: &RealizedTy,
+    bindings: &mut [Option<RealizedTy>],
 ) -> bool {
     // A fully-realized pattern carries no frame refs or holes: compare it to
     // the concrete type semantically (union-order-insensitive, matching the
     // type checker). The flattened successor to the old `Concrete(t)` arm —
     // `ty_equivalent` falls back to structural `==` for non-union leaves.
     if let Ok(realized) = <&RealizedTy>::try_from(pattern) {
-        return ty_equivalent(realized.as_runtime_ty(), concrete);
+        return ty_equivalent(realized, concrete);
     }
 
     match pattern {
@@ -383,11 +425,11 @@ fn match_template(
             }
         }
         TyTemplate::List(inner, _) => match concrete {
-            RuntimeTy::List(elem, _) => match_template(inner, elem, bindings),
+            RealizedTy::List(elem, _) => match_template(inner, elem, bindings),
             _ => false,
         },
         TyTemplate::Map { key, value, .. } => match concrete {
-            RuntimeTy::Map {
+            RealizedTy::Map {
                 key: ckey,
                 value: cvalue,
                 ..
@@ -395,11 +437,11 @@ fn match_template(
             _ => false,
         },
         TyTemplate::Class(name, args, _) => match concrete {
-            RuntimeTy::Class(cname, cargs, _) => name == cname && all_match(args, cargs, bindings),
+            RealizedTy::Class(cname, cargs, _) => name == cname && all_match(args, cargs, bindings),
             _ => false,
         },
         TyTemplate::Interface(name, args, assoc, _) => match concrete {
-            RuntimeTy::Interface(cname, cargs, cassoc, _) => {
+            RealizedTy::Interface(cname, cargs, cassoc, _) => {
                 // Each *concrete* binding must match a same-named pattern binding, found
                 // order-insensitively; extra pattern bindings don't constrain. This
                 // direction mirrors the compiler's selection matcher
@@ -431,7 +473,7 @@ fn match_template(
             throws,
             ..
         } => match concrete {
-            RuntimeTy::Function {
+            RealizedTy::Function {
                 params: cparams,
                 ret: cret,
                 throws: cthrows,
@@ -449,7 +491,7 @@ fn match_template(
             _ => false,
         },
         TyTemplate::Future(value, error, _) => match concrete {
-            RuntimeTy::Future(cvalue, cerror, _) => {
+            RealizedTy::Future(cvalue, cerror, _) => {
                 match_template(value, cvalue, bindings) && match_template(error, cerror, bindings)
             }
             _ => false,
@@ -458,7 +500,7 @@ fn match_template(
         // distinct concrete member, with type-var bindings consistent across the
         // chosen pairing (so `Box<T | int>` matches a value `Box<int | string>`).
         TyTemplate::Union(parts, _) => match concrete {
-            RuntimeTy::Union(cparts, _) => match_union(parts, cparts, bindings),
+            RealizedTy::Union(cparts, _) => match_union(parts, cparts, bindings),
             _ => false,
         },
         // Realized leaves are handled by the fast path above.
@@ -469,8 +511,8 @@ fn match_template(
 /// Pairwise-unify positional template args against concrete args (same arity).
 fn all_match(
     patterns: &[TyTemplate],
-    concretes: &[RuntimeTy],
-    bindings: &mut [Option<RuntimeTy>],
+    concretes: &[RealizedTy],
+    bindings: &mut [Option<RealizedTy>],
 ) -> bool {
     patterns.len() == concretes.len()
         && patterns
@@ -486,8 +528,8 @@ fn all_match(
 /// (e.g. `[T, int]` against `[int, string]` must pick `T = string`, not `T = int`).
 fn match_union(
     patterns: &[TyTemplate],
-    concretes: &[RuntimeTy],
-    bindings: &mut [Option<RuntimeTy>],
+    concretes: &[RealizedTy],
+    bindings: &mut [Option<RealizedTy>],
 ) -> bool {
     if patterns.len() != concretes.len() {
         return false;
@@ -502,9 +544,9 @@ fn match_union(
 
 fn match_union_rec(
     patterns: &[TyTemplate],
-    concretes: &[RuntimeTy],
+    concretes: &[RealizedTy],
     used: &mut [bool],
-    bindings: &mut [Option<RuntimeTy>],
+    bindings: &mut [Option<RealizedTy>],
 ) -> bool {
     let Some((first, rest)) = patterns.split_first() else {
         return true;
@@ -531,20 +573,21 @@ fn match_union_rec(
 /// request. The rule's interface args / bindings are concretised with the
 /// `for_ty_pattern` bindings, then compared; an empty request matches any.
 fn interface_request_matches(
+    vm: &BexVm,
     rule: &RuntimeImplRule,
-    bindings: &[RuntimeTy],
-    requested_args: &[RuntimeTy],
-    requested_assoc: &[(Name, RuntimeTy)],
+    bindings: &[RealizedTy],
+    requested_args: &[RealizedTy],
+    requested_assoc: &[(Name, RealizedTy)],
 ) -> bool {
-    let rule_args: Vec<RuntimeTy> = rule
+    let rule_args: Vec<RealizedTy> = rule
         .interface_args
         .iter()
-        .map(|t| substitute_checked(t, bindings))
+        .map(|t| substitute_checked(vm, t, bindings))
         .collect();
-    let rule_assoc: Vec<(Name, RuntimeTy)> = rule
+    let rule_assoc: Vec<(Name, RealizedTy)> = rule
         .interface_assoc
         .iter()
-        .map(|(n, t)| (n.clone(), substitute_checked(t, bindings)))
+        .map(|(n, t)| (n.clone(), substitute_checked(vm, t, bindings)))
         .collect();
     (requested_args.is_empty() || ty_args_equivalent(&rule_args, requested_args))
         && associated_bindings_equivalent(&rule_assoc, requested_assoc)
@@ -556,7 +599,7 @@ fn interface_request_matches(
 /// semantically irrelevant — the type checker treats `int | string` and
 /// `string | int` as identical). Falls back to structural `==` for non-union
 /// leaves.
-pub(super) fn ty_args_equivalent(a: &[RuntimeTy], b: &[RuntimeTy]) -> bool {
+pub(super) fn ty_args_equivalent(a: &[RealizedTy], b: &[RealizedTy]) -> bool {
     a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| ty_equivalent(x, y))
 }
 
@@ -567,14 +610,14 @@ pub(super) fn ty_args_equivalent(a: &[RuntimeTy], b: &[RuntimeTy]) -> bool {
 /// constructor. Every variant that carries a nested type recurses here; bare leaves
 /// (primitives, enums, opaque handles, sentinels) and mismatched-constructor pairs fall
 /// to structural `==`, which is exact for them.
-pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
+pub(super) fn ty_equivalent(a: &RealizedTy, b: &RealizedTy) -> bool {
     match (a, b) {
         // Order-insensitive comparison of union members via a one-to-one matching:
         // each `a` member must pair with a *distinct* equivalent `b` member. A
         // plain `all(|x| any(|y| ...))` would wrongly accept `int | int` as
         // equivalent to `int | string` (both left members match the single `int`
         // on the right), so consume each matched member.
-        (RuntimeTy::Union(am, _), RuntimeTy::Union(bm, _)) => {
+        (RealizedTy::Union(am, _), RealizedTy::Union(bm, _)) => {
             if am.len() != bm.len() {
                 return false;
             }
@@ -591,57 +634,39 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
             true
         }
         // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
-        (RuntimeTy::Class(an, aa, _), RuntimeTy::Class(bn, ba, _)) => {
+        (RealizedTy::Class(an, aa, _), RealizedTy::Class(bn, ba, _)) => {
             an == bn && ty_args_equivalent(aa, ba)
         }
-        (RuntimeTy::Interface(an, aa, ab, _), RuntimeTy::Interface(bn, ba, bb, _)) => {
+        (RealizedTy::Interface(an, aa, ab, _), RealizedTy::Interface(bn, ba, bb, _)) => {
             an == bn && ty_args_equivalent(aa, ba) && associated_bindings_exactly_equivalent(ab, bb)
         }
         // Recurse through container wrappers so a union nested inside them is still
         // compared order-insensitively (`Box<(int | string)?>` ==
         // `Box<(string | int)?>`); otherwise the wrapper would fall to the
         // structural `==` below and defeat the union-set comparison.
-        (RuntimeTy::List(ai, _), RuntimeTy::List(bi, _)) => ty_equivalent(ai, bi),
+        (RealizedTy::List(ai, _), RealizedTy::List(bi, _)) => ty_equivalent(ai, bi),
         (
-            RuntimeTy::Map {
+            RealizedTy::Map {
                 key: ak, value: av, ..
             },
-            RuntimeTy::Map {
+            RealizedTy::Map {
                 key: bk, value: bv, ..
             },
         ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
         // The remaining nested-type-bearing constructors, so a union buried in a future,
         // function signature, or associated projection is still compared
         // order-insensitively rather than falling to the order-sensitive `==` below.
-        (RuntimeTy::Future(av, ae, _), RuntimeTy::Future(bv, be, _)) => {
+        (RealizedTy::Future(av, ae, _), RealizedTy::Future(bv, be, _)) => {
             ty_equivalent(av, bv) && ty_equivalent(ae, be)
         }
         (
-            RuntimeTy::AssociatedTypeProjection {
-                base: abase,
-                interface: aiface,
-                member: amember,
-                ..
-            },
-            RuntimeTy::AssociatedTypeProjection {
-                base: bbase,
-                interface: biface,
-                member: bmember,
-                ..
-            },
-        ) => {
-            amember == bmember
-                && ty_equivalent(abase, bbase)
-                && opt_iface_equivalent(aiface.as_deref(), biface.as_deref())
-        }
-        (
-            RuntimeTy::Function {
+            RealizedTy::Function {
                 params: ap,
                 ret: aret,
                 throws: athrows,
                 ..
             },
-            RuntimeTy::Function {
+            RealizedTy::Function {
                 params: bp,
                 ret: bret,
                 throws: bthrows,
@@ -659,25 +684,9 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
     }
 }
 
-/// Equivalence of two optional interface *constraints* (the `as I` annotation of
-/// an associated-type projection), mirroring the `RuntimeTy::Interface` arm of
-/// [`ty_equivalent`]: same name, equivalent generic arguments, and exactly
-/// equivalent associated-type bindings.
-fn opt_iface_equivalent(a: Option<&RuntimeInterface>, b: Option<&RuntimeInterface>) -> bool {
-    match (a, b) {
-        (Some(x), Some(y)) => {
-            x.name == y.name
-                && ty_args_equivalent(&x.generics, &y.generics)
-                && associated_bindings_exactly_equivalent(&x.associated_types, &y.associated_types)
-        }
-        (None, None) => true,
-        (Some(_), None) | (None, Some(_)) => false,
-    }
-}
-
 pub(super) fn associated_bindings_equivalent(
-    impl_bindings: &[(Name, RuntimeTy)],
-    requested_bindings: &[(Name, RuntimeTy)],
+    impl_bindings: &[(Name, RealizedTy)],
+    requested_bindings: &[(Name, RealizedTy)],
 ) -> bool {
     requested_bindings.is_empty()
         || requested_bindings
@@ -690,8 +699,8 @@ pub(super) fn associated_bindings_equivalent(
 }
 
 fn associated_bindings_exactly_equivalent(
-    a: &[(Name, RuntimeTy)],
-    b: &[(Name, RuntimeTy)],
+    a: &[(Name, RealizedTy)],
+    b: &[(Name, RealizedTy)],
 ) -> bool {
     a.len() == b.len()
         && associated_bindings_equivalent(a, b)
@@ -701,7 +710,7 @@ fn associated_bindings_exactly_equivalent(
 /// One implementor of an interface: the concrete implementor type plus the
 /// interface args / associated bindings that impl pins (empty = "matches any
 /// instantiation", for blanket impls and typevar-bearing dimensions).
-type ImplementorEntry = (RuntimeTy, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>);
+type ImplementorEntry = (RealizedTy, Vec<RealizedTy>, Vec<(Name, RealizedTy)>);
 
 /// The concrete types that nominally implement `iface`, each paired with the
 /// interface instantiation its impl fixes — the inverse of [`type_implements`].
@@ -729,7 +738,7 @@ pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<Implement
                     // Blanket impl: its bounds decide membership; every concrete
                     // type satisfying them is an implementor, at the interface
                     // instantiation the blanket pins (typevar dimensions erased).
-                    let (args, assoc) = pinned_interface_instantiation(rule);
+                    let (args, assoc) = pinned_interface_instantiation(vm, rule);
                     for ty in concrete_types(vm) {
                         if rule_applies(vm, rule, &ty, &mut Vec::new()).is_some() {
                             push_unique(&mut out, (ty, args.clone(), assoc.clone()));
@@ -741,13 +750,13 @@ pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<Implement
                 other if <&RealizedTy>::try_from(other).is_ok() => {
                     let realized = <&RealizedTy>::try_from(other)
                         .unwrap_or_else(|_| unreachable!("guarded by the `is_ok` above"));
-                    let (args, assoc) = pinned_interface_instantiation(rule);
-                    push_unique(&mut out, (realized.as_runtime_ty().clone(), args, assoc));
+                    let (args, assoc) = pinned_interface_instantiation(vm, rule);
+                    push_unique(&mut out, (realized.clone(), args, assoc));
                 }
                 // A generic class for-type (`Foo<T>`) is reported by its base.
                 TyTemplate::Class(name, _, _) => {
-                    let (args, assoc) = pinned_interface_instantiation(rule);
-                    let base = RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default());
+                    let (args, assoc) = pinned_interface_instantiation(vm, rule);
+                    let base = RealizedTy::Class(name.clone(), Vec::new(), TyAttr::default());
                     push_unique(&mut out, (base, args, assoc));
                 }
                 _ => {}
@@ -763,14 +772,15 @@ pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<Implement
 /// generic class is reported by its base, so a per-instantiation arg can't be
 /// named — empty then matches any requested instantiation).
 fn pinned_interface_instantiation(
+    vm: &BexVm,
     rule: &RuntimeImplRule,
-) -> (Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>) {
+) -> (Vec<RealizedTy>, Vec<(Name, RealizedTy)>) {
     let args = if rule.interface_args.iter().any(template_has_type_arg_ref) {
         Vec::new()
     } else {
         rule.interface_args
             .iter()
-            .map(|t| substitute_checked(t, &[]))
+            .map(|t| substitute_checked(vm, t, &[]))
             .collect()
     };
     let assoc = if rule
@@ -782,26 +792,28 @@ fn pinned_interface_instantiation(
     } else {
         rule.interface_assoc
             .iter()
-            .map(|(n, t)| (n.clone(), substitute_checked(t, &[])))
+            .map(|(n, t)| (n.clone(), substitute_checked(vm, t, &[])))
             .collect()
     };
     (args, assoc)
 }
 
-/// [`TyTemplate::substitute`], asserting in debug builds that every `TypeArgRef`
-/// is in range. The resolver always substitutes a *complete* env (one binding per
-/// impl generic param), so an out-of-range index means a malformed rule —
-/// `substitute` would silently yield `unknown`, which could then make distinct
-/// types compare equal (`unknown == unknown`). Release builds keep the graceful
-/// fallback. (We can't assert inside `substitute` itself: stdlib sys-op paths
-/// rely on its out-of-range → `unknown` behavior.)
-fn substitute_checked(template: &TyTemplate, env: &[RuntimeTy]) -> RuntimeTy {
+/// Realize an impl rule's interface-arg [`TyTemplate`] against a *complete* env
+/// (one binding per impl generic param) for the resolver's own arg *comparison* —
+/// not value materialization. A debug assert catches an out-of-range `TypeArgRef`
+/// (a malformed rule); in release, a substitution failure falls back to the top
+/// type, keeping selection conservative without aborting the query. (Value
+/// materialization uses [`realize_frame`], which is strict.)
+fn substitute_checked(vm: &BexVm, template: &TyTemplate, env: &[RealizedTy]) -> RealizedTy {
     debug_assert!(
         max_type_arg_ref(template).is_none_or(|n| (n as usize) < env.len()),
         "impl rule references a type arg out of range for an env of {}",
         env.len(),
     );
-    template.substitute(env)
+    let ctx = RuntimeTypeContext::new(vm);
+    template
+        .substitute(env, &ctx)
+        .unwrap_or_else(|_| RealizedTy::unknown())
 }
 
 /// The largest `TypeArgRef` de Bruijn index anywhere in `t`, if any.
@@ -835,14 +847,18 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
             base, interface, ..
         } => max_type_arg_ref(base)
             .into_iter()
-            .chain(interface.iter().flat_map(|iface| {
-                iface.generics.iter().filter_map(max_type_arg_ref).chain(
-                    iface
-                        .associated_types
-                        .iter()
-                        .filter_map(|(_, t)| max_type_arg_ref(t)),
-                )
-            }))
+            .chain(
+                interface
+                    .generics
+                    .iter()
+                    .filter_map(max_type_arg_ref)
+                    .chain(
+                        interface
+                            .associated_types
+                            .iter()
+                            .filter_map(|(_, t)| max_type_arg_ref(t)),
+                    ),
+            )
             .max(),
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => None,
@@ -878,36 +894,34 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
             base, interface, ..
         } => {
             template_has_type_arg_ref(base)
-                || interface.as_ref().is_some_and(|iface| {
-                    iface.generics.iter().any(template_has_type_arg_ref)
-                        || iface
-                            .associated_types
-                            .iter()
-                            .any(|(_, t)| template_has_type_arg_ref(t))
-                })
+                || interface.generics.iter().any(template_has_type_arg_ref)
+                || interface
+                    .associated_types
+                    .iter()
+                    .any(|(_, t)| template_has_type_arg_ref(t))
         }
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => false,
     }
 }
 
-/// Every loaded concrete type — classes, enums, and the primitives — as a `RuntimeTy` at
+/// Every loaded concrete type — classes, enums, and the primitives — as a `RealizedTy` at
 /// its base (no type args). The candidate set a blanket impl's bounds are checked
 /// against: a blanket `for T` can be satisfied by any concrete type, not just
 /// classes. (`all_class_and_enum_ptrs` covers both classes and enums across every
 /// loaded package.) `$stream` companions are filtered later by
 /// `push_unique`.
-fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
-    let mut types: Vec<RuntimeTy> = vm
+fn concrete_types(vm: &BexVm) -> Vec<RealizedTy> {
+    let mut types: Vec<RealizedTy> = vm
         .all_class_and_enum_ptrs()
         .filter_map(|ptr| match vm.get_object(ptr) {
-            Object::Class(class) => Some(RuntimeTy::Class(
+            Object::Class(class) => Some(RealizedTy::Class(
                 class.name.clone(),
                 Vec::new(),
                 TyAttr::default(),
             )),
             Object::Enum(enum_def) => {
-                Some(RuntimeTy::Enum(enum_def.name.clone(), TyAttr::default()))
+                Some(RealizedTy::Enum(enum_def.name.clone(), TyAttr::default()))
             }
             _ => None,
         })
@@ -920,34 +934,34 @@ fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
     // Parameterized subjects (`List`/`Map`) and non-value types are intentionally omitted:
     // their instantiations can't be enumerated.
     types.extend([
-        RuntimeTy::Int {
+        RealizedTy::Int {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Bigint {
+        RealizedTy::Bigint {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Float {
+        RealizedTy::Float {
             attr: TyAttr::default(),
         },
-        RuntimeTy::String {
+        RealizedTy::String {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Bool {
+        RealizedTy::Bool {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Null {
+        RealizedTy::Null {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Uint8Array {
+        RealizedTy::Uint8Array {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Type {
+        RealizedTy::Type {
             attr: TyAttr::default(),
         },
-        RuntimeTy::Resource {
+        RealizedTy::Resource {
             attr: TyAttr::default(),
         },
-        RuntimeTy::PromptAst {
+        RealizedTy::PromptAst {
             attr: TyAttr::default(),
         },
     ]);
@@ -960,7 +974,7 @@ fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
             MediaKind::Pdf,
             MediaKind::Generic,
         ]
-        .map(|kind| RuntimeTy::Media(kind, TyAttr::default())),
+        .map(|kind| RealizedTy::Media(kind, TyAttr::default())),
     );
     types
 }
@@ -976,9 +990,9 @@ fn push_unique(out: &mut Vec<ImplementorEntry>, entry: ImplementorEntry) {
 }
 
 /// Whether `ty` is an internal `…$stream` companion type.
-fn is_stream_companion(ty: &RuntimeTy) -> bool {
+fn is_stream_companion(ty: &RealizedTy) -> bool {
     match ty {
-        RuntimeTy::Class(tn, ..) | RuntimeTy::Enum(tn, ..) => tn.name().ends_with("$stream"),
+        RealizedTy::Class(tn, ..) | RealizedTy::Enum(tn, ..) => tn.name().ends_with("$stream"),
         _ => false,
     }
 }
@@ -998,15 +1012,15 @@ mod tests {
     // resolver, where the literal-/attr-sensitivity would otherwise be untested.)
     #[test]
     fn concrete_literal_pattern_matches_only_the_literal() {
-        let one = RuntimeTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
+        let one = RealizedTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
         let pattern = TyTemplate::from(RealizedTy::Literal(
             Literal::Int(1),
             Freshness::Regular,
             TyAttr::default(),
         ));
-        let mut binds: Vec<Option<RuntimeTy>> = Vec::new();
+        let mut binds: Vec<Option<RealizedTy>> = Vec::new();
         assert!(match_template(&pattern, &one, &mut binds));
-        assert!(!match_template(&pattern, &RuntimeTy::int(), &mut binds));
+        assert!(!match_template(&pattern, &RealizedTy::int(), &mut binds));
     }
 
     #[test]
@@ -1017,20 +1031,20 @@ mod tests {
         // such nested unions order-sensitively (only `Class`/`List`/`Map`/`Interface`
         // recursed). Built with explicit member order so the two genuinely differ.
         let attr = || TyAttr::default();
-        let never = || RuntimeTy::Never { attr: attr() };
-        let str_ty = || RuntimeTy::String { attr: attr() };
-        let int_string = RuntimeTy::Union(vec![RuntimeTy::int(), str_ty()], attr());
-        let string_int = RuntimeTy::Union(vec![str_ty(), RuntimeTy::int()], attr());
+        let never = || RealizedTy::Never { attr: attr() };
+        let str_ty = || RealizedTy::String { attr: attr() };
+        let int_string = RealizedTy::Union(vec![RealizedTy::int(), str_ty()], attr());
+        let string_int = RealizedTy::Union(vec![str_ty(), RealizedTy::int()], attr());
 
-        let a = RuntimeTy::Future(Box::new(int_string), Box::new(never()), attr());
-        let b = RuntimeTy::Future(Box::new(string_int), Box::new(never()), attr());
+        let a = RealizedTy::Future(Box::new(int_string), Box::new(never()), attr());
+        let b = RealizedTy::Future(Box::new(string_int), Box::new(never()), attr());
         assert!(
             ty_equivalent(&a, &b),
             "Future<int | string> ≡ Future<string | int>"
         );
 
         // A genuinely different value type is still distinguished.
-        let c = RuntimeTy::Future(Box::new(RuntimeTy::int()), Box::new(never()), attr());
+        let c = RealizedTy::Future(Box::new(RealizedTy::int()), Box::new(never()), attr());
         assert!(!ty_equivalent(&a, &c));
     }
 }

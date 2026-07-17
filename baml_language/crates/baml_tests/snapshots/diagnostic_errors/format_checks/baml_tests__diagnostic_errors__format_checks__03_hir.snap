@@ -99,7 +99,7 @@ class user.LongAttrField {
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
-  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
   deeply_nested: int | string | bool | float | null[]?
 }
 class user.ManyFields {
@@ -207,7 +207,7 @@ class user.TypeVariety {
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
   deep_generic: map<string, map<string, int[]>>
-  fn_type: (x: int, y: int) -> string
+  fn_type: (x: int, y: int) -> string throws never
   paren_union_array: int | string | bool[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
@@ -227,58 +227,58 @@ function user.processData(first_input: map<string, int>, second_input: int | str
   {  } map { "result": 1 }
 }
 function user.ArrayConfigClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } }
+  baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } }
 }
 function user.ArrayOfObjectsClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, map { "server_label": "calculator", "server_url": "https://calc.exam..." }] } } }
+  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, map { "server_label": "calculator", "server_url": "https://calc.exam..." }] } } }
 }
 function user.BasicClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.C$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "C", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "C", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.CommaClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "CommaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100 } } }
+  baml.llm.PrimitiveClient { name: "CommaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100 } } }
 }
 function user.DeeplyNestedClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } }
 }
 function user.EnvClient$new(lenient: bool) -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "EnvClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.ExtraWhitespaceClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ExtraWhitespaceCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "ExtraWhitespaceCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.FullClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "FullClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 } } }
+  baml.llm.PrimitiveClient { name: "FullClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 } } }
 }
 function user.LongArrayClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongArrayClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } }
+  baml.llm.PrimitiveClient { name: "LongArrayClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } }
 }
 function user.LongArrayOfObjectsClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "this_is_a_very_lo...", "server_url": "https://some-extr...", "type": "mcp", "description": "Averylongdescript..." }, map { "server_label": "another_long_serv...", "server_url": "https://another-l..." }] } } }
+  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "this_is_a_very_lo...", "server_url": "https://some-extr...", "type": "mcp", "description": "Averylongdescript..." }, map { "server_label": "another_long_serv...", "server_url": "https://another-l..." }] } } }
 }
 function user.LongNestedValuesClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.LongOptionClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongOptionClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "LongOptionClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.ManyOptionsClient$new(lenient: bool) -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "ManyOptionsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"] } } }
 }
 function user.MixedValuesClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "MixedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "#inlineraw#" } } }
+  baml.llm.PrimitiveClient { name: "MixedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "#inlineraw#" } } }
 }
 function user.NestedConfigClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.RawStringConfigClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "RawStringConfigCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "system_prompt": "#Youareahelpfulas..." } } }
+  baml.llm.PrimitiveClient { name: "RawStringConfigCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "system_prompt": "#Youareahelpfulas..." } } }
 }
 function user.SameLineClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.StringProviderClient$new(lenient: bool) -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
@@ -296,28 +296,28 @@ function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) ->
   baml.llm.render_prompt(client, "TestTarget", map {  })
 }
 function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaClientBlock$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaClientBlock", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaClientBlock", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaDeeplyNestedClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaDeeplyNestedClientBlock$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaLongValueClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TriviaLongValueClientBlock$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TypedValuesClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TypedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "temperature": 0.5, "max_tokens": 2048, "stream": true } } }
+  baml.llm.PrimitiveClient { name: "TypedValuesClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "temperature": 0.5, "max_tokens": 2048, "stream": true } } }
 }
 enum user.DottedAttrEnum {X, Y}
 enum user.DynamicEnum {X, Y}
@@ -344,13 +344,13 @@ enum user.WithCommas {A, B, C}
 function user.ComplexReturn(x: int) -> int | string | null  [expr] {
   {  } x
 }
-function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>  [expr] {
+function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never throws never throws never throws never  [expr] {
   {  } 1
 }
 function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int  [expr] {
   {  } if (a Gt 0) {  } if (b Gt 0) {  } if (c Gt 0) { return a Mul b Mul c Mul d Add a Mul b Mul c Add a Mul b Add a Add b Mul c Mul d Add b Mul c Add b Add c Mul d Add c Add d } else { return 0 } else { return 0 } else { return 0 }
 }
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string  [expr] {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string throws never throws never) -> string  [expr] {
   {  } "done"
 }
 function user.DeeplyNestedBody(a: int, b: int, c: int) -> int  [expr] {
@@ -557,24 +557,24 @@ class user.TypeAliasSuccess {
 type user.AliasChain = user.SimpleAlias
 type user.AlwaysTrue = true
 type user.ArrayOptional = int[]?
-type user.BinaryOp = (a: int, b: int) -> int
-type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string?
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.ComplexFn = (items: int[], lookup: map<string, int>) -> string? throws never
 type user.ComplexMap = map<string, int | string | bool>
 type user.ComplexPostfix = int | string?[][]
-type user.Curried = (x: int) -> (y: int) -> int
-type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
+type user.Curried = (x: int) -> (y: int) -> int throws never throws never
+type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never throws never throws never throws never
 type user.DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
 type user.DeepParenUnion = int | string | bool | float | null | int[][]?
 type user.DeepPostfix = int | string | bool | float?[][]?
 type user.DoubleArray = int[][]
 type user.DoubleOptional = int??
 type user.ExtraWhitespace = int | string | bool | float | null
-type user.FnFactory = (config: string) -> (int) -> int
+type user.FnFactory = (config: string) -> (int) -> int throws never throws never
 type user.HttpOk = 200
 type user.IntList = int[]
-type user.IntToInt = (x: int) -> int
+type user.IntToInt = (x: int) -> int throws never
 type user.Json = int | float | string | bool | null | user.Json[] | map<string, user.Json>
-type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
+type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string throws never
 type user.LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
 type user.Matrix = int[][]
 type user.MaybeInt = int?
@@ -586,7 +586,7 @@ type user.NestedParenUnion = int | string | bool | float[]
 type user.OptionalArray = int?[]
 type user.OptionalUnion = int | string?
 type user.ParenUnion = int | string[]
-type user.Producer = () -> string
+type user.Producer = () -> string throws never
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
 type user.Role = "user" | "assistant" | "system"
 type user.SimpleAlias = int
@@ -599,18 +599,18 @@ type user.TriviaAlias = int
 type user.TriviaAliasBlock = int
 type user.TriviaArray = int[]
 type user.TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
-type user.TriviaFnType = (x: int) -> string
-type user.TriviaFnTypeBlock = (x: int) -> string
+type user.TriviaFnType = (x: int) -> string throws never
+type user.TriviaFnTypeBlock = (x: int) -> string throws never
 type user.TriviaGeneric = map<string, int>
 type user.TriviaGenericBlock = map<string, int>
-type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
+type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string throws never
 type user.TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 type user.TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 type user.TriviaOptional = int?
 type user.TriviaParen = int | string[]
 type user.TriviaUnion = int | string | bool
 type user.TriviaUnionBlock = int | string | bool
-type user.UnionParamFn = (value: int | string) -> bool
-type user.UnnamedParams = (int, int) -> int
+type user.UnionParamFn = (value: int | string) -> bool throws never
+type user.UnnamedParams = (int, int) -> int throws never
 type user.VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 type user.WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>

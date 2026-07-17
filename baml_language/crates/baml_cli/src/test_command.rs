@@ -13,7 +13,12 @@ use bex_engine::{
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter};
+use crate::{
+    bytecode_cache::CacheContext,
+    project_load::{build_db_from_sources, resolve_project_sources},
+    reporter::Reporter,
+    test_filter::TestFilter,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -76,65 +81,151 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), &reporter, false)?;
-        if baml_files.is_empty() {
+        let resolved = resolve_project_sources(self.from.as_deref())?;
+        if resolved.files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                from.display()
+                resolved.root.display()
             ));
             return Ok(crate::ExitCode::NoTestsRun);
         }
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
 
-        // ── 2. Diagnostics ─────────────────────────────────────────────────
-        // Keep `baml test` quiet during the compile phase. `baml check` and
-        // `baml generate` own the compile/count progress lines.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-        if !errors.is_empty() {
-            // Render the full ariadne block so test errors look like
-            // run/pack errors instead of the previous "bullet list of
-            // messages" shape.
-            let mut sources = std::collections::HashMap::new();
-            let mut file_paths = std::collections::HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(&db);
-                sources.insert(file_id, sf.text(&db).to_string());
-                file_paths.insert(file_id, sf.path(&db));
+        let cache = CacheContext::open(&resolved, /* emit_test_cases */ true);
+
+        // Warm `--list` fast path. The flattened test list (legacy tests +
+        // fully-expanded testset leaf names) is a pure function of the compiled
+        // Program, cached under its key. On a hit we render + select directly
+        // and skip engine boot, `$init`/`$init_test`, and in-VM testset
+        // expansion entirely — the whole `--list` discovery floor. Gated off
+        // under BAML_CACHE_VERIFY (the oracle must run honest discovery) and
+        // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
+        // honest path below.
+        if self.list {
+            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref()) {
+                return Ok(exit);
             }
-            let rendered = baml_db::baml_compiler_diagnostics::render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &baml_db::baml_compiler_diagnostics::render::RenderConfig::cli_auto(),
-            );
-            reporter.abandon();
-            eprintln!("{rendered}");
-            return Ok(crate::ExitCode::Other);
         }
 
-        // ── 3. Discover legacy tests from HIR ──────────────────────────────
-        let legacy = discover_legacy_tests(&db, project);
-
-        // ── 4. Compile + engine + runtime ──────────────────────────────────
-        let compile_options = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: true,
+        let cached_program = if CacheContext::verify_enabled() {
+            None
+        } else {
+            cache.as_ref().and_then(CacheContext::load)
         };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
-        let engine = Arc::new(
-            BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
-                .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
-        );
+        let cached_engine = cached_program.and_then(|program| {
+            // Bytecode-cache hit: the Program carries everything the test run
+            // needs — compiled test cases for the legacy runner, testset code
+            // for the in-VM registry — so the database (typecheck, HIR
+            // discovery, emit) is skipped entirely.
+            let legacy = legacy_tests_from_program(&program);
+            match BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()) {
+                Ok(engine) => Some((Arc::new(engine), legacy)),
+                Err(error) => {
+                    crate::bytecode_cache::cache_debug(format_args!(
+                        "cached program rejected by VM; recompiling: {error:?}"
+                    ));
+                    None
+                }
+            }
+        });
+
+        let (engine, legacy) = if let Some(hit) = cached_engine {
+            hit
+        } else {
+            let mut db = build_db_from_sources(&resolved, |_| {});
+            let project = db
+                .get_project()
+                .ok_or_else(|| anyhow!("No project context"))?;
+
+            // Seed the stdlib typed interface before the first typecheck query
+            // (gated off under verify so the oracle exercises the honest path) and
+            // prepare the per-file reuse plan — the same warm-database setup `run`
+            // and `check` run.
+            let (reuse_plan, stdlib_interface_hit) = match &cache {
+                Some(ctx) => {
+                    let prep = ctx.prepare_warm_db(&mut db);
+                    (prep.reuse_plan, prep.stdlib_interface_hit)
+                }
+                None => (None, false),
+            };
+
+            // ── 2. Diagnostics ─────────────────────────────────────────────
+            // Keep `baml test` quiet during the compile phase. `baml check`
+            // and `baml generate` own the compile/count progress lines. With a
+            // cache, gate through the incremental collector (narrow to the reuse
+            // plan's dirty files, serve clean files from their cached blobs, and
+            // carry the fresh per-file blobs into the manifest); without one,
+            // run the honest full check. The merged set is byte-identical.
+            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = &cache {
+                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+                (incremental.merged, Some(incremental.fresh_by_file))
+            } else {
+                (baml_project::collect_diagnostics(&db), None)
+            };
+            let errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|d| d.severity == Severity::Error)
+                .cloned()
+                .collect();
+            if !errors.is_empty() {
+                // Render the full ariadne block so test errors look like
+                // run/pack errors instead of a bullet list of messages. Sources
+                // and paths cover every user file plus builtins — an error in one
+                // file may carry related spans elsewhere.
+                let rendered = crate::check_command::render_project_diagnostics(&db, &errors);
+                reporter.abandon();
+                eprintln!("{rendered}");
+                return Ok(crate::ExitCode::Other);
+            }
+
+            // ── 3. Discover legacy tests from HIR ──────────────────────────
+            let legacy = discover_legacy_tests(&db, project);
+
+            // ── 4. Compile + engine + runtime ──────────────────────────────
+            let compile_options = baml_compiler2_emit::CompileOptions {
+                emit_test_cases: true,
+            };
+            let compiled = crate::bytecode_cache::compile_program_artifacts(
+                &db,
+                &compile_options,
+                cache.as_ref(),
+                reuse_plan.as_ref(),
+            )
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            if let Some(ctx) = &cache {
+                let fresh = fresh_diagnostics
+                    .as_ref()
+                    .expect("a cache is present, so fresh diagnostics were computed");
+                ctx.verify_and_store(
+                    &db,
+                    &compiled,
+                    fresh,
+                    reuse_plan.as_ref(),
+                    stdlib_interface_hit,
+                    || build_db_from_sources(&resolved, |_| {}),
+                )?;
+            }
+            // Warm-run evidence: with the stdlib interface seeded this is 0 (the
+            // seed served every stdlib package); a cold run reports up to 6.
+            crate::bytecode_cache::cache_debug(format_args!(
+                "stdlib interface: {} honest derivation(s) this process",
+                baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+            ));
+            // Warm-incremental evidence: with the diagnostics cache serving clean
+            // files this counts only the dirty files' scopes.
+            crate::bytecode_cache::cache_debug(format_args!(
+                "scope inferences: {} this process",
+                baml_db::baml_compiler2_tir::inference::scope_inferences()
+            ));
+
+            let bytecode = compiled.program;
+            let engine = Arc::new(
+                BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
+                    .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
+            );
+            (engine, legacy)
+        };
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
 
@@ -197,31 +288,44 @@ impl TestArgs {
                 None => Vec::new(),
             };
 
-            if legacy_selected.is_empty() && testset_names.is_empty() {
-                reporter.finish("Finished", "no tests selected");
-                return Ok(crate::ExitCode::NoTestsRun);
+            // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
+            // later `--list` skips engine boot entirely. The cached datum is the
+            // UNFILTERED flattened list, so any -i/-x is served from one entry;
+            // with no filters the display list above already IS the unfiltered
+            // list, so no extra VM call. Written only from an error-free
+            // discovery (never-save-on-error).
+            if let Some(ctx) = &cache {
+                let all_leaf_names = if self.include.is_empty() && self.exclude.is_empty() {
+                    testset_names.clone()
+                } else {
+                    match &registry {
+                        Some(reg) => match list_selected_testset_names(&run_ctx, reg, &[], &[]) {
+                            Ok(names) => names,
+                            Err(e) => {
+                                reporter.abandon();
+                                crate::reporter::print_error(format_args!(
+                                    "failed to list tests: {e}"
+                                ));
+                                return Ok(crate::ExitCode::Other);
+                            }
+                        },
+                        None => Vec::new(),
+                    }
+                };
+                let disco = crate::bytecode_cache::TestDiscovery {
+                    legacy: legacy.iter().map(cached_legacy_test).collect(),
+                    testset_leaf_names: all_leaf_names,
+                };
+                ctx.verify_test_discovery(&disco)?;
+                ctx.store_test_discovery(&disco);
             }
 
-            reporter.status(
-                "Selected",
-                format!("{} test(s)", legacy_selected.len() + testset_names.len()),
-            );
-            // Indented list under the cargo-style status line. These are
-            // content (the actual list), not status updates, so they go to
-            // stdout as plain prints.
-            for t in &legacy_selected {
-                println!(
-                    "  {}::{}  ({})",
-                    t.function_name,
-                    t.test_name,
-                    t.file_path.display()
-                );
-            }
-            for name in &testset_names {
-                let (func, test) = split_top(name);
-                println!("  {func}::{test}  (<testset>)");
-            }
-            return Ok(crate::ExitCode::Success);
+            let legacy_lines: Vec<crate::bytecode_cache::CachedLegacyTest> = legacy_selected
+                .iter()
+                .copied()
+                .map(cached_legacy_test)
+                .collect();
+            return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
         }
 
         // ── 8. Execute ─────────────────────────────────────────────────────
@@ -303,6 +407,101 @@ impl TestArgs {
             Ok(crate::ExitCode::Success)
         }
     }
+
+    /// Warm `--list` fast path: render the flattened test list straight from the
+    /// discovery cache and skip engine boot entirely. The include/exclude filter
+    /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
+    /// `testing.leaf_selected` used on the honest path, so the selection (and
+    /// hence stdout) is byte-identical to a cold run. Returns `None` when the
+    /// cache is absent/disabled, under `BAML_CACHE_VERIFY`, or on a discovery
+    /// miss/corruption — every case falls through to honest discovery.
+    fn try_cached_list(
+        &self,
+        reporter: &Reporter,
+        cache: Option<&CacheContext>,
+    ) -> Option<crate::ExitCode> {
+        if CacheContext::verify_enabled() {
+            return None;
+        }
+        let disco = cache?.load_test_discovery()?;
+        let filter = TestFilter::new(
+            self.include.iter().map(|s| s.as_str()),
+            self.exclude.iter().map(|s| s.as_str()),
+        );
+        let legacy_selected: Vec<crate::bytecode_cache::CachedLegacyTest> = disco
+            .legacy
+            .into_iter()
+            .filter(|t| filter.includes(&t.function_name, &t.test_name))
+            .collect();
+        let testset_names: Vec<String> = disco
+            .testset_leaf_names
+            .into_iter()
+            .filter(|name| {
+                let (func, test) = split_top(name);
+                filter.includes(&func, &test)
+            })
+            .collect();
+        crate::bytecode_cache::cache_debug(format_args!(
+            "served `test --list` from discovery cache ({} legacy + {} testset leaf(s) selected); \
+             engine boot skipped",
+            legacy_selected.len(),
+            testset_names.len(),
+        ));
+        Some(render_test_list(reporter, &legacy_selected, &testset_names))
+    }
+}
+
+/// Render the selected `--list` output to stdout and return the exit code.
+/// Shared by the honest path and the warm discovery-cache path so both produce
+/// byte-identical stdout. Status/`Selected` lines go to stderr (via the
+/// reporter); only the list itself is stdout content.
+fn render_test_list(
+    reporter: &Reporter,
+    legacy_selected: &[crate::bytecode_cache::CachedLegacyTest],
+    testset_names: &[String],
+) -> crate::ExitCode {
+    if legacy_selected.is_empty() && testset_names.is_empty() {
+        reporter.finish("Finished", "no tests selected");
+        return crate::ExitCode::NoTestsRun;
+    }
+    reporter.status(
+        "Selected",
+        format!("{} test(s)", legacy_selected.len() + testset_names.len()),
+    );
+    // Indented list under the cargo-style status line. These are content (the
+    // actual list), not status updates, so they go to stdout as plain prints.
+    //
+    // Canonicalize the order at this single render point — both the fresh-compile
+    // and bytecode-cache paths flow through here — so `--list` output is
+    // byte-identical between them regardless of upstream map/enumeration order.
+    // Sort by (function, test) so each function's tests group together (a legacy
+    // `test` is function-attached), with the path as a final deterministic tiebreak.
+    let mut legacy_sorted: Vec<&crate::bytecode_cache::CachedLegacyTest> =
+        legacy_selected.iter().collect();
+    legacy_sorted.sort_by(|a, b| {
+        a.function_name
+            .cmp(&b.function_name)
+            .then_with(|| a.test_name.cmp(&b.test_name))
+            .then_with(|| a.file_path.cmp(&b.file_path))
+    });
+    for t in legacy_sorted {
+        println!("  {}::{}  ({})", t.function_name, t.test_name, t.file_path);
+    }
+    for name in testset_names {
+        let (func, test) = split_top(name);
+        println!("  {func}::{test}  (<testset>)");
+    }
+    crate::ExitCode::Success
+}
+
+/// Project a Rust-side [`LegacyTest`] into the cache/render payload shape (its
+/// root-relative `file_path` rendered to the display string `--list` prints).
+fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest {
+    crate::bytecode_cache::CachedLegacyTest {
+        function_name: t.function_name.clone(),
+        test_name: t.test_name.clone(),
+        file_path: t.file_path.display().to_string(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,25 +513,64 @@ fn discover_legacy_tests(
     db: &ProjectDatabase,
     project: baml_workspace::Project,
 ) -> Vec<LegacyTest> {
-    use baml_db::baml_compiler2_hir;
+    use baml_db::baml_compiler2_ppir::item_data::{file_tests, test_data};
 
     let mut tests = Vec::new();
+    let root = project.root(db);
 
     for source_file in db.get_source_files() {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
+        // Root-relative for display, matching how emit records source paths —
+        // keeps `--list` output identical between compiled and
+        // bytecode-cache-served runs.
         let file_path = source_file.path(db);
+        let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
 
-        for test in item_tree.tests.values() {
+        for test_loc in file_tests(db, source_file) {
+            let test = test_data(db, *test_loc);
             for func_ref in &test.function_refs {
                 tests.push(LegacyTest {
                     function_name: func_ref.to_string(),
                     test_name: test.name.to_string(),
-                    file_path: file_path.clone(),
+                    file_path: file_path.to_path_buf(),
                 });
             }
         }
     }
 
+    tests
+}
+
+/// Derive the legacy-test list from a compiled [`bex_vm_types::Program`]
+/// (bytecode-cache hit path).
+///
+/// `Program::test_cases` holds the same (test, target functions) pairs that
+/// HIR discovery yields — `run_legacy_test` already resolves each test against
+/// the engine's copy by name — so no database is needed for execution.
+///
+/// Each test's `file_path` comes from [`bex_vm_types::TestCase::source_file`] —
+/// the test-defining file recorded at emit (`baml_compiler2_emit` Pass 8 via
+/// `relative_source_path`) in the same project-root-relative form
+/// [`discover_legacy_tests`] derives — so `--list` output is byte-identical
+/// between a fresh compile and a bytecode-cache hit.
+fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest> {
+    let mut tests = Vec::new();
+    for tc in &program.test_cases {
+        // `source_file` is empty only for a blob predating the field, which the
+        // cache format version already gates out, so the `<unknown>` fallback is
+        // unreachable in practice.
+        let file_path = if tc.source_file.is_empty() {
+            PathBuf::from("<unknown>")
+        } else {
+            PathBuf::from(&tc.source_file)
+        };
+        for func in &tc.function_names {
+            tests.push(LegacyTest {
+                function_name: func.clone(),
+                test_name: tc.name.clone(),
+                file_path: file_path.clone(),
+            });
+        }
+    }
     tests
 }
 

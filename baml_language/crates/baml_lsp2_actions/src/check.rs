@@ -25,7 +25,7 @@ use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
 };
-use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
+use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
@@ -93,7 +93,23 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // never taint a scope, so unrelated type errors elsewhere in the file are
     // unaffected.
     let tainted = parse_error_tainted_scopes(index, &parse_errors);
-    for (file_scope_idx, scope_id) in index.scope_ids.iter().enumerate() {
+    // Drive inference with PPIR's canonical (post-`$stream`-expansion) ScopeIds,
+    // not HIR's. `ScopeId` is a Salsa *tracked* struct, so HIR's index and
+    // PPIR's expanded index mint distinct Salsa IDs for the same
+    // (file, FileScopeId) pair; keying `infer_scope_types` with HIR IDs here
+    // made every scope in a `$stream`-expanded file get inferred a second time
+    // when TIR/MIR later asked with the PPIR ID. The original file's scopes are
+    // a prefix of the expanded index — the same invariant `infer_scope_types`
+    // relies on when it resolves a `FileScopeId` in the expanded arena — and we
+    // iterate only that prefix, so synthetic `*$stream` scopes are never
+    // visited and diagnostics are unchanged.
+    let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
+    for (file_scope_idx, scope_id) in ppir_index
+        .scope_ids
+        .iter()
+        .take(index.scopes.len())
+        .enumerate()
+    {
         if tainted.contains(&file_scope_idx) {
             continue;
         }
@@ -153,16 +169,15 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
-    let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
-    let ast_items = {
-        let tree = baml_compiler_parser::syntax_tree(db, file);
-        let (items, _, _) = baml_compiler2_ast::lower_file(&tree);
-        items
-    };
+    // Salsa-cached per package — previously rebuilt (and cloned per function
+    // below) on every file check.
+    let aliases = baml_compiler2_tir::inference::package_resolved_aliases(db, pkg_id);
+    // Reuse the memoized CST → AST lowering instead of re-lowering here.
+    let ast_items = &baml_compiler2_hir::file_ast(db, file).items;
     diagnostics.extend(validate_associated_type_bindings_in_items(
         db,
         file_id,
-        &ast_items,
+        ast_items,
         pkg_items,
         &pkg_info.namespace_path,
     ));
@@ -207,11 +222,15 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        let body = baml_compiler2_hir::body::function_body(db, func_loc);
-
         // Expression-body functions already have their signatures checked
         // during scope inference (step 3). Only check non-expr bodies here.
-        if matches!(body.as_ref(), FunctionBody::Expr(_)) {
+        // Read the body discriminant straight off the item tree already in
+        // hand — the `function_body` query clones the whole `ExprBody` arena
+        // on execution, far too expensive for a body-kind test.
+        if matches!(
+            func_data.body,
+            Some(baml_compiler2_ast::FunctionBodyDef::Expr(..))
+        ) {
             continue;
         }
 
@@ -396,14 +415,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             param_types.push((param.name.clone(), param_ty));
         }
 
-        if let Some(scope_id) = function_scope_id(index, func_data) {
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+        if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
-                context,
-                res_ctx,
-                pkg_id,
-                scope_id,
-                aliases.clone(),
+                context, res_ctx, pkg_id, scope_id, aliases,
             );
             builder.set_generic_params(generic_params);
             for (name, ty) in &param_types {
@@ -435,6 +451,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 _call_throws,
                 _template_body_params,
                 _default_parameter_inference,
+                _nested_lambda_inference,
             ) = builder.finish();
             for tir_diag in type_check_diagnostics.diagnostics {
                 if !is_function_default_signature_diagnostic(&tir_diag) {
@@ -1626,44 +1643,6 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
     }
 }
 
-fn collect_type_aliases_for_resolution_context<'db>(
-    db: &'db dyn Db,
-    res_ctx: &'db baml_compiler2_tir::package_interface::PackageResolutionContext<'db>,
-) -> std::collections::HashMap<baml_compiler2_tir::ty::QualifiedTypeName, baml_compiler2_tir::ty::Ty>
-{
-    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &res_ctx.own_items);
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
-        for types_in_ns in dep_iface.types.values() {
-            for exported in types_in_ns.values() {
-                if let baml_compiler2_tir::package_interface::ExportedType::TypeAlias {
-                    qtn,
-                    resolved,
-                } = exported
-                {
-                    aliases.insert(qtn.clone(), resolved.clone());
-                }
-            }
-        }
-    }
-    aliases
-}
-
-fn function_scope_id<'db>(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
-    func_data: &baml_compiler2_hir::item_tree::Function,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    index
-        .scopes
-        .iter()
-        .zip(index.scope_ids.iter())
-        .find_map(|(scope, scope_id)| {
-            (matches!(scope.kind, ScopeKind::Function)
-                && scope.range == func_data.span
-                && scope.name.as_ref() == Some(&func_data.name))
-            .then_some(*scope_id)
-        })
-}
-
 fn is_function_default_signature_diagnostic(
     diag: &baml_compiler2_tir::infer_context::TirDiagnostic<'_>,
 ) -> bool {
@@ -1936,7 +1915,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::RestSubPatternNotSupported => DiagnosticId::TypeMismatch,
+        TirTypeError::RestSubPatternNotBinding => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
         TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,
@@ -2043,6 +2022,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::AssociatedTypeDefaultViolatesBound { .. }
         | TirTypeError::CyclicImplHeader
         | TirTypeError::InterfaceMethodMissingThrows { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::FunctionTypeMissingThrows => DiagnosticId::FunctionTypeMissingThrows,
     }
 }
 

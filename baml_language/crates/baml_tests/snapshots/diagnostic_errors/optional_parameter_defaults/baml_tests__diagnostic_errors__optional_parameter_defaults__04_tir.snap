@@ -73,7 +73,7 @@ function user.Counter.Current(self: user.Counter = null) -> int throws never {
   { : int
     self.value : int
   }
-  !! 245..249: `self` cannot have a default value
+  !! 271..275: `self` cannot have a default value
 }
 function user.LambdaDefault() -> int throws never {
   { : int
@@ -97,7 +97,7 @@ function user.OptionalNameMismatch() -> int throws never {
     let f: NamedLimit = Filtered : (query: string, filter?: string | null) -> int throws never -> (query: string, limit?: string | null) -> int throws never
     f("cats", limit = "recent") : int
   }
-  !! 511..519: type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
+  !! 537..545: type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
 }
 type user.NamedFilter$stream = unknown
 type user.NamedLimit$stream = unknown

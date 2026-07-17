@@ -9,6 +9,11 @@ use std::ops::Range;
 use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
+use crate::ids::{
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+};
+
 /// Dense sequential index into the per-file scope arena.
 /// `FileScopeId(0)` is always the Project scope (outermost).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -82,6 +87,30 @@ pub enum ScopeKind {
     Let,
 }
 
+/// The item a scope was opened for.
+///
+/// The builder creates an item's scope in the same step that allocates the item,
+/// so this link is recorded directly rather than reconstructed. Before it
+/// existed, ~20 sites across TIR/MIR/LSP recovered it by comparing
+/// `item.span == scope.range` — which made item spans load-bearing *semantic
+/// identity* and blocked moving them into the source map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ItemScopeOwner {
+    Function(LocalItemId<FunctionMarker>),
+    Class(LocalItemId<ClassMarker>),
+    Enum(LocalItemId<EnumMarker>),
+    Interface(LocalItemId<InterfaceMarker>),
+    TypeAlias(LocalItemId<TypeAliasMarker>),
+    TemplateString(LocalItemId<TemplateStringMarker>),
+    Client(LocalItemId<ClientMarker>),
+    Test(LocalItemId<TestMarker>),
+    RetryPolicy(LocalItemId<RetryPolicyMarker>),
+    Let(LocalItemId<LetMarker>),
+    /// An out-of-body `implement I for T { … }` block, which opens a scope for
+    /// its own generic parameters.
+    Impl(LocalItemId<ImplMarker>),
+}
+
 /// A single scope node in the per-file scope tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scope {
@@ -91,6 +120,13 @@ pub struct Scope {
     pub kind: ScopeKind,
     /// Optional name (packages, namespaces, items have names; blocks don't).
     pub name: Option<Name>,
+    /// The item this scope was opened for, if any. `None` for structural scopes
+    /// (Project/Package/Namespace/File) and for expression scopes (`Block`,
+    /// `Lambda`, `MatchArm`, …).
+    ///
+    /// Lives on `Scope` rather than in a parallel vec so it cannot drift out of
+    /// step with the scope arena.
+    pub owner: Option<ItemScopeOwner>,
     /// Source range of this scope. Used by `scope_at_offset()` to find the
     /// innermost scope containing a cursor position. Structural scopes
     /// (Project, Package, Namespace) use the file's full range.

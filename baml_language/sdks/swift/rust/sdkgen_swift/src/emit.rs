@@ -39,12 +39,12 @@ pub(crate) fn render_type_alias(alias: &TypeAlias, ctx: &TranslateCtx) -> Option
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    let name = escape_ident(alias.name.name.as_str());
+    let name = escape_ident(alias.name.name().as_str());
     Some(format!("public typealias {name} = {target}\n"))
 }
 
 pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
-    let name = escape_ident(enum_.name.name.as_str());
+    let name = escape_ident(enum_.name.name().as_str());
     let fqn = key.to_string();
     let doc = enum_
         .docstring
@@ -303,7 +303,7 @@ pub(crate) fn render_callable(
                 name,
                 inner: translate_optional_arg_inner(&arg.ty, ctx)?,
             });
-        } else if let Ty::Callable { params: cparams, ret } = &arg.ty {
+        } else if let Ty::Function { params: cparams, ret, .. } = &arg.ty {
             let (ty, wrapper) = render_callable_param(&name, cparams, ret, ctx)?;
             params.push(Param::Callable { name, ty, wrapper });
         } else {
@@ -315,7 +315,7 @@ pub(crate) fn render_callable(
     }
 
     let ret = match &function.return_type {
-        Ty::Unit => None,
+        Ty::Void { .. } => None,
         other => Some(translate_ty(other, ctx)?),
     };
 
@@ -438,13 +438,13 @@ pub(crate) fn render_callable(
 /// same reason).
 fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
-        Ty::TypeVar(v) => v.as_str() == name,
-        Ty::List(inner) => ty_contains_type_var(inner, name),
-        Ty::Map { key, value } => {
+        Ty::TypeVar(v, _) => v.as_str() == name,
+        Ty::List(inner, _) => ty_contains_type_var(inner, name),
+        Ty::Map { key, value, .. } => {
             ty_contains_type_var(key, name) || ty_contains_type_var(value, name)
         }
-        Ty::Union(members) => members.iter().any(|m| ty_contains_type_var(m, name)),
-        Ty::Class(_, args) => args.iter().any(|a| ty_contains_type_var(a, name)),
+        Ty::Union(members, _) => members.iter().any(|m| ty_contains_type_var(m, name)),
+        Ty::Class(_, args, _) => args.iter().any(|a| ty_contains_type_var(a, name)),
         _ => false,
     }
 }
@@ -542,7 +542,7 @@ pub(crate) fn render_recursive_union_alias(
     );
     out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
     for (i, arm) in arms.iter().enumerate() {
-        if let Ty::Class(class_name, _) = arm {
+        if let Ty::Class(class_name, _, _) = arm {
             let _ = writeln!(
                 out,
                 "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v)) }}",
@@ -571,9 +571,9 @@ pub(crate) fn render_recursive_union_alias(
 /// Unqualified leaf names of a throws contract, for doc rendering.
 fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
     match ty {
-        Ty::Class(name, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Enum(name) | Ty::TypeAlias(name) => vec![format!("`{}`", name.bare_name())],
-        Ty::Union(members) => members.iter().flat_map(thrown_leaf_names).collect(),
+        Ty::Class(name, _, _) => vec![format!("`{}`", name.bare_name())],
+        Ty::Enum(name, _) | Ty::TypeAlias(name, _) => vec![format!("`{}`", name.bare_name())],
+        Ty::Union(members, _) => members.iter().flat_map(thrown_leaf_names).collect(),
         _ => Vec::new(),
     }
 }
@@ -610,7 +610,7 @@ fn render_callable_param(
     }
     let invoke = invoke_args.join(", ");
     let (ret_ty, wrapper_body) = match ret {
-        Ty::Unit => (
+        Ty::Void { .. } => (
             "Swift.Void".to_string(),
             format!(
                 "try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"

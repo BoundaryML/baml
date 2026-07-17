@@ -1329,8 +1329,8 @@ fn class_key(qtn: &baml_type::TypeName) -> String {
     qtn.render_dotted(false)
 }
 
-fn classify_cell_ty(ty: &baml_type::RuntimeTy) -> Result<CellTy, String> {
-    use baml_type::RuntimeTy;
+fn classify_cell_ty(ty: &baml_type::RealizedTy) -> Result<CellTy, String> {
+    use baml_type::RealizedTy;
     let nullable = ty.is_nullable_union();
     let base = if nullable {
         ty.strip_null()
@@ -1338,15 +1338,17 @@ fn classify_cell_ty(ty: &baml_type::RuntimeTy) -> Result<CellTy, String> {
         ty.clone()
     };
     let target = match &base {
-        RuntimeTy::String { .. } => Target::Str,
-        RuntimeTy::Int { .. } => Target::Int,
-        RuntimeTy::Bigint { .. } => Target::Bigint,
-        RuntimeTy::Float { .. } => Target::Float,
-        RuntimeTy::Bool { .. } => Target::Bool,
-        RuntimeTy::Enum(qtn, _) => Target::Enum(qtn.clone()),
-        RuntimeTy::Class(qtn, _, _) if class_key(qtn) == INSTANT_FQN => Target::Instant,
-        RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATE_FQN => Target::PlainDate,
-        RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATETIME_FQN => Target::PlainDateTime,
+        RealizedTy::String { .. } => Target::Str,
+        RealizedTy::Int { .. } => Target::Int,
+        RealizedTy::Bigint { .. } => Target::Bigint,
+        RealizedTy::Float { .. } => Target::Float,
+        RealizedTy::Bool { .. } => Target::Bool,
+        RealizedTy::Enum(qtn, _) => Target::Enum(qtn.clone()),
+        RealizedTy::Class(qtn, _, _) if class_key(qtn) == INSTANT_FQN => Target::Instant,
+        RealizedTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATE_FQN => Target::PlainDate,
+        RealizedTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATETIME_FQN => {
+            Target::PlainDateTime
+        }
         other => return Err(format!("type `{other}` is not cell-decodable")),
     };
     Ok(CellTy { target, nullable })
@@ -1501,10 +1503,10 @@ fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<RecordData>, VmRustFnError> 
 fn decode_record_to_instance(
     vm: &mut BexVm,
     rd: &RecordData,
-    ty: &baml_type::RuntimeTy,
+    ty: &baml_type::RealizedTy,
 ) -> Result<Value, DecodeFail> {
-    use baml_type::RuntimeTy;
-    let RuntimeTy::Class(qtn, type_args, _) = ty else {
+    use baml_type::RealizedTy;
+    let RealizedTy::Class(qtn, type_args, _) = ty else {
         return Err(DecodeFail::Info(ErrInfo::new(
             Kind::Options,
             format!("decode target `{ty}` is not a class; CSV decodes into flat classes"),
@@ -1529,7 +1531,7 @@ fn decode_record_to_instance(
 
     let mut field_values = Vec::with_capacity(class_fields.len());
     for (fi, cf) in class_fields.iter().enumerate() {
-        let field_ty = cf.field_template.substitute(type_args);
+        let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
         let cell_ty = classify_cell_ty(&field_ty).map_err(|msg| {
             DecodeFail::Info(ErrInfo::new(
                 Kind::Options,
@@ -1632,11 +1634,15 @@ fn decode_record_to_instance(
     }
 
     Ok(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(class_ptr, type_args.clone(), field_values),
+        Instance::new(
+            class_ptr,
+            type_args.clone().into_boxed_slice(),
+            field_values,
+        ),
     ))))
 }
 
-fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<baml_type::RuntimeTy, VmRustFnError> {
+fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<baml_type::RealizedTy, VmRustFnError> {
     // `.first()` is the method's own first generic only because `CsvRecord` is
     // non-generic, so MIR's receiver-class-type-arg prepend (which would push
     // class args ahead of the method's) contributes nothing here. A generic
@@ -1654,7 +1660,7 @@ fn cell_to_optional(
     vm: &mut BexVm,
     rd: &RecordData,
     col: Option<usize>,
-    ty: &baml_type::RuntimeTy,
+    ty: &baml_type::RealizedTy,
 ) -> Result<Option<Value>, VmRustFnError> {
     let cell_ty = match classify_cell_ty(ty) {
         Ok(c) => c,
@@ -2026,7 +2032,7 @@ fn md_escape(text: &str) -> String {
     out
 }
 
-fn md_value_text(vm: &mut BexVm, v: Value, field_ty: Option<&baml_type::RuntimeTy>) -> String {
+fn md_value_text(vm: &mut BexVm, v: Value, field_ty: Option<&baml_type::RealizedTy>) -> String {
     // Prompt text is not meant to round-trip: non-finite floats render as-is.
     if let ValueKind::Object(ptr) = v.kind() {
         if let Object::Float(f) = vm.get_object(ptr) {
@@ -2161,7 +2167,7 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
                             .map(|n| Value::object(vm.alloc_string(n)))
                             .collect();
                         // CSV header names are always strings.
-                        Value::object(vm.alloc_array(baml_type::RuntimeTy::string(), items))
+                        Value::object(vm.alloc_array(baml_type::RealizedTy::string(), items))
                     }
                 };
                 Ok(copy::csv::CsvHeaders { names: names_value }.to_value(vm))
@@ -2417,9 +2423,9 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     }
 
     fn _validate_columns(vm: &mut BexVm, r: &Value) -> Result<(), VmRustFnError> {
-        use baml_type::RuntimeTy;
+        use baml_type::RealizedTy;
         let ty = current_type_arg(vm, "baml.csv.rows")?;
-        let RuntimeTy::Class(qtn, type_args, _) = &ty else {
+        let RealizedTy::Class(qtn, type_args, _) = &ty else {
             let info = ErrInfo::new(
                 Kind::Options,
                 format!("rows target `{ty}` is not a class; CSV decodes into flat classes"),
@@ -2444,7 +2450,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         let header = lock(&st).header.clone();
 
         for cf in &class_fields {
-            let field_ty = cf.field_template.substitute(type_args);
+            let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
             let cell_ty = match classify_cell_ty(&field_ty) {
                 Ok(c) => c,
                 Err(msg) => {
@@ -2618,19 +2624,24 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     }
 
     fn _to_markdown(vm: &mut BexVm, rows: &[Value], max_rows: i64) -> bex_str::BexStr {
-        use baml_type::RuntimeTy;
+        use baml_type::RealizedTy;
         let ty = vm.current_call_type_args().first().cloned();
         let max = usize::try_from(max_rows).unwrap_or(0);
 
         // Header names + field types from T (or the first row's class).
         let class_info = match &ty {
-            Some(RuntimeTy::Class(qtn, type_args, _)) => {
+            Some(RealizedTy::Class(qtn, type_args, _)) => {
                 vm.lookup_type(qtn)
                     .and_then(|ptr| match vm.get_object(ptr) {
                         Object::Class(c) => Some(
                             c.fields
                                 .iter()
-                                .map(|f| (f.name.clone(), f.field_template.substitute(type_args)))
+                                .map(|f| {
+                                    (
+                                        f.name.clone(),
+                                        vm.realize_field_ty(&f.field_template, type_args),
+                                    )
+                                })
                                 .collect::<Vec<_>>(),
                         ),
                         _ => None,

@@ -83,26 +83,72 @@ pub fn parse_string_attr_value(raw: &str) -> Option<String> {
     Some(rest[1..rest.len() - 1 - hash_count].to_string())
 }
 
-/// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
-///
-/// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
-/// digits, so a parse failure here indicates the CST has been corrupted.
-/// Callers should pass the digit-only string (with the trailing `n` suffix
-/// already stripped).
-pub fn parse_bigint_literal_digits(digits: &str) -> num_bigint::BigInt {
-    num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10).unwrap_or_else(|| {
-        unreachable!("CST bigint_literal returned non-decimal digits: {digits:?}")
-    })
+/// Push diagnostics for a failed numeric literal. `InvalidDigits` gets one
+/// diagnostic per offending digit with a one-character span (rustc-style);
+/// every other error spans the whole token.
+fn push_num_lit_error(
+    error: baml_base::num_lit::IntLitError,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    use baml_base::num_lit::IntLitError;
+    if let IntLitError::InvalidDigits { positions, .. } = &error {
+        for (offset, ch) in positions {
+            let offset = u32::try_from(*offset).expect("literal token exceeds u32 length");
+            let start = token_range.start() + text_size::TextSize::from(offset);
+            let span = text_size::TextRange::new(start, start + text_size::TextSize::of(*ch));
+            diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+                error: error.clone(),
+                span,
+            });
+        }
+    } else {
+        diags.push(LoweringDiagnostic::InvalidNumericLiteral {
+            error,
+            span: token_range,
+        });
+    }
 }
 
-/// Parse the raw text of a `BIGINT_LITERAL` token (digits plus trailing
-/// lowercase `n` suffix) into a [`num_bigint::BigInt`]. The lexer guarantees
-/// the suffix is present, so its absence panics with `unreachable!`.
-pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
+/// Lower the raw text of an `INTEGER_LITERAL` token (`42`, `1_000`, `0xFF`,
+/// `0o755`, `0b1010`) into its value, emitting diagnostics for invalid
+/// literals and returning `0` as the placeholder (compilation already
+/// failed). Signs are handled by callers; the VM's i63 `int` range is
+/// enforced later in type inference.
+pub fn lower_int_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> i64 {
+    match baml_base::num_lit::parse_int_literal(text) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            0
+        }
+    }
+}
+
+/// Lower the raw text of a `BIGINT_LITERAL` token (digits plus trailing
+/// lowercase `n` suffix, e.g. `42n` or `0xFFn`) into a
+/// [`num_bigint::BigInt`], emitting diagnostics for invalid literals and
+/// returning `0` as the placeholder. The lexer guarantees the suffix is
+/// present, so its absence panics with `unreachable!`.
+pub fn lower_bigint_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> num_bigint::BigInt {
     let digits = text
         .strip_suffix('n')
         .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
-    parse_bigint_literal_digits(digits)
+    match baml_base::num_lit::parse_bigint_literal(digits) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            num_bigint::BigInt::from(0)
+        }
+    }
 }
 
 // `unescape_string_literal` lives in `baml_base::escape` and is re-exported
@@ -498,74 +544,30 @@ function Extract(client: string, text: string) -> string {
     }
 
     #[test]
-    fn named_openai_client_defaults_api_key_to_env_var() {
-        // B-489: a named `client<llm>` with `provider openai` and no explicit
-        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
-        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
-        // panics, so offline render still works without the var set).
-        let source = r#"
-client<llm> C {
-  provider openai
-  options { model "gpt-4o" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "named openai client with no api_key should default to OPENAI_API_KEY"
-        );
-    }
-
-    #[test]
-    fn named_anthropic_client_defaults_api_key_to_env_var() {
-        let source = r#"
-client<llm> C {
-  provider anthropic
-  options { model "claude-3-5-sonnet-20241022" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
-        );
-    }
-
-    #[test]
-    fn named_client_explicit_api_key_suppresses_env_default() {
-        // An explicit `api_key` wins: no env-var default is synthesized.
-        let source = r#"
-client<llm> C {
-  provider openai
-  options { model "gpt-4o"  api_key "sk-explicit" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "explicit api_key must suppress the OPENAI_API_KEY default"
-        );
-    }
-
-    #[test]
-    fn named_client_unknown_provider_gets_no_env_default() {
-        // Providers without a ubiquitous env-var convention are untouched.
-        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
-        // base_url/location), but the `$new` companion is still synthesized —
-        // so tolerate diagnostics and only assert on the api_key default.
-        let source = r#"
-client<llm> C {
-  provider vertex-ai
-  options { model "gemini-2.0-flash" }
-}
-"#;
-        let (items, _diags) = parse_and_lower_with_diagnostics(source);
-        let new_fn = client_new_companion(items, "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
-                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "vertex-ai must not default an api_key env var"
-        );
+    fn named_clients_do_not_apply_provider_defaults_during_lowering() {
+        for (provider, model, env_var) in [
+            ("openai", "gpt-4o", "OPENAI_API_KEY"),
+            ("openai-responses", "gpt-4o", "OPENAI_API_KEY"),
+            (
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                "ANTHROPIC_API_KEY",
+            ),
+        ] {
+            let source = format!(
+                r#"
+client<llm> C {{
+  provider {provider}
+  options {{ model "{model}" }}
+}}
+"#
+            );
+            let new_fn = client_new_companion(parse_and_lower(&source), "C");
+            assert!(
+                !new_companion_reads_env(&new_fn, env_var),
+                "{provider} defaults must be applied at runtime"
+            );
+        }
     }
 
     #[test]

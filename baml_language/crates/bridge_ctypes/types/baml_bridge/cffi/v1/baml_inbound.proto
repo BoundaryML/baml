@@ -10,6 +10,9 @@ import "baml_bridge/cffi/v1/baml_handle.proto";
 import "baml_bridge/cffi/v1/baml_type.proto";
 
 option go_package = "./cffi";
+// C++ generates against the lite runtime (no descriptors/reflection);
+// ignored by every other generator in this repo (prost, protoc-gen-go).
+option optimize_for = LITE_RUNTIME;
 
 // -----------------------------------------------------------------------------
 // Inbound values — host language to engine (value-only, no type metadata)

@@ -10,6 +10,16 @@ function deep_equals<T>(a: T, b: T) -> bool throws never {
   $rust_function
 }
 
+/// Implemented by all concrete types.
+/// Can be used to check or bound a type to only include concrete types.
+interface Concrete {
+
+}
+
+implement<T> Concrete for T {
+
+}
+
 /// The structured value a tagged template literal produces.
 ///
 /// BEP-049 §10. A `tag` ` `…` ` call site lowers to `tag(body = () -> TaggedString { … })`;

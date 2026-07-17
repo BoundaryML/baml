@@ -105,7 +105,7 @@ pub fn to_source_code_with_bytecode(
         // Sort key uses the RAW name: bare_name() strips `$stream`, so
         // a base function and its `$stream` companion would collide in
         // the decl map and silently overwrite each other.
-        let bare = key.name.as_str().to_string();
+        let bare = key.name().as_str().to_string();
         namespaces
             .entry(ns)
             .or_default()
@@ -246,8 +246,8 @@ fn direct_class_targets<'p>(
         // Parameterized targets box exactly like bare ones —
         // `GenericLinkedList<T>` self-references store inline via
         // Optional the same way.
-        Ty::Class(name, _) => out.push(name.to_string()),
-        Ty::Union(members) => {
+        Ty::Class(name, _, _) => out.push(name.to_string()),
+        Ty::Union(members, _) => {
             let (non_null, _) = normalize_union(members);
             // A >=2-arm union renders as an `indirect` BamlUnionN — its
             // payload is heap-boxed, so it breaks cycles on its own.
@@ -256,7 +256,7 @@ fn direct_class_targets<'p>(
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
                     direct_class_targets(&alias.resolves_to, pool, out);
@@ -332,7 +332,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType),
+            is_rust: matches!(prop.ty, Ty::RustType { .. }),
         });
     }
 
@@ -365,7 +365,7 @@ fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, bool)> {
     if !alias.recursive {
         return None;
     }
-    let Ty::Union(members) = &alias.resolves_to else {
+    let Ty::Union(members, _) = &alias.resolves_to else {
         return None;
     };
     let (non_null, nullable) = normalize_union(members);
@@ -555,6 +555,47 @@ mod tests {
         assert!(files[&PathBuf::from("BamlRoot.swift")].contains("public enum Baml"));
     }
 
+    fn int() -> Ty {
+        Ty::Int {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+    fn float() -> Ty {
+        Ty::Float {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+    fn string() -> Ty {
+        Ty::String {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+    fn null() -> Ty {
+        Ty::Null {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+    fn list(inner: Ty) -> Ty {
+        Ty::List(Box::new(inner), baml_base::TyAttr::EMPTY)
+    }
+    fn map(key: Ty, value: Ty) -> Ty {
+        Ty::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, baml_base::TyAttr::EMPTY)
+    }
+    fn literal(value: baml_base::Literal) -> Ty {
+        Ty::Literal(
+            value,
+            baml_codegen_types::Freshness::Regular,
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+
     #[test]
     fn translate_ty_primitive_subset() {
         let ctx = TranslateCtx {
@@ -564,50 +605,40 @@ mod tests {
             nullable_aliases: BTreeSet::new(),
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
-        assert_eq!(t(&Ty::Int).as_deref(), Some("Swift.Int"));
-        assert_eq!(t(&Ty::Float).as_deref(), Some("Swift.Double"));
-        assert_eq!(t(&Ty::List(Box::new(Ty::Int))).as_deref(), Some("[Swift.Int]"));
+        assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&float()).as_deref(), Some("Swift.Double"));
+        assert_eq!(t(&list(int())).as_deref(), Some("[Swift.Int]"));
         assert_eq!(
-            t(&Ty::Map {
-                key: Box::new(Ty::String),
-                value: Box::new(Ty::List(Box::new(Ty::Int)))
-            })
-            .as_deref(),
+            t(&map(string(), list(int()))).as_deref(),
             Some("[Swift.String: [Swift.Int]]")
         );
         // string?[] → [String?]
         assert_eq!(
-            t(&Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Null])))).as_deref(),
+            t(&list(union(vec![string(), null()]))).as_deref(),
             Some("[Swift.String?]")
         );
         // (int | string)[] — family reference, inline, no registry.
         assert_eq!(
-            t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))).as_deref(),
+            t(&list(union(vec![int(), string()]))).as_deref(),
             Some("[BamlUnion2<Swift.Int, Swift.String>]")
         );
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
-            t(&Ty::Union(vec![Ty::Int, Ty::String, Ty::Null])).as_deref(),
+            t(&union(vec![int(), string(), null()])).as_deref(),
             Some("BamlUnion2<Swift.Int, Swift.String>?")
         );
         // int | int → dedup + singleton collapse.
-        assert_eq!(t(&Ty::Union(vec![Ty::Int, Ty::Int])).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&union(vec![int(), int()])).as_deref(), Some("Swift.Int"));
         // Literal-only unions collapse to their base type — no raw enums.
         assert_eq!(
-            t(&Ty::Union(vec![
-                Ty::Literal(baml_base::Literal::String("draft".into())),
-                Ty::Literal(baml_base::Literal::String("sent".into())),
+            t(&union(vec![
+                literal(baml_base::Literal::String("draft".into())),
+                literal(baml_base::Literal::String("sent".into())),
             ]))
             .as_deref(),
             Some("Swift.String")
         );
         // map with non-string key — not yet
-        assert_eq!(
-            t(&Ty::Map {
-                key: Box::new(Ty::Int),
-                value: Box::new(Ty::Int)
-            }),
-            None
-        );
+        assert_eq!(t(&map(int(), int())), None);
     }
 }

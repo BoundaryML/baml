@@ -68,10 +68,7 @@ pub(super) fn resolve_token_class(
         if let Some(class) = scope_resolution_index(db, owner).get(&range).copied() {
             return Some(class);
         }
-        match sem_index.scopes[fsi.index() as usize].parent {
-            Some(parent) => fsi = parent,
-            None => return None,
-        }
+        fsi = sem_index.scopes[fsi.index() as usize].parent?;
     }
 }
 

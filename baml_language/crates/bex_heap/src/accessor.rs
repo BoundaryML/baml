@@ -572,7 +572,8 @@ impl<'a> BexValue<'a> {
                     actual: obj.to_string(),
                 });
             };
-            Ok((**ty).clone())
+            // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
+            Ok((**ty).clone().into())
         }
 
         match self {
@@ -826,7 +827,13 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name.to_string(),
-                type_args: instance.class_type_args.to_vec(),
+                // Instances store realized class type args; widen them into the
+                // `RuntimeTy` the external boundary carries.
+                type_args: instance
+                    .class_type_args
+                    .iter()
+                    .map(baml_type::RuntimeTy::from)
+                    .collect(),
                 fields,
             })
         }
@@ -851,7 +858,9 @@ fn convert_object(
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
+        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
+            (**ty).clone().into(),
+        ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)

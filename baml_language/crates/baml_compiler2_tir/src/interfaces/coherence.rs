@@ -1,10 +1,13 @@
 use baml_base::{Literal, Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_type::{FunctionParamTy, Ty, TypeName};
+use baml_type::{FunctionParamTy, Ty, TypeName, normalize::TypeContext as _};
 
-use crate::interfaces::{
-    ImplData, TypeBindings, contains_bound_typevar, impl_data, impl_data_source_map,
-    interface_loc_qtn, package_impl_locs,
+use crate::{
+    interfaces::{
+        ImplData, TypeBindings, contains_bound_typevar, impl_data, impl_data_source_map,
+        interface_loc_qtn, package_impl_locs,
+    },
+    type_context::AliasEquivCtx,
 };
 
 /// Three-valued result of an overlap decision. Overlap is undecidable in general
@@ -183,8 +186,8 @@ fn package_impls_with_spans<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<(&'db ImplData<'db>, Span)> {
     package_impl_locs(db, pkg_id)
-        .into_iter()
-        .filter_map(|loc| {
+        .iter()
+        .filter_map(|&loc| {
             let data = impl_data(db, loc).as_ref().ok()?;
             let span = impl_data_source_map(db, loc)
                 .as_ref()
@@ -431,12 +434,7 @@ fn var_under_union(name: &Name, ty: &Ty) -> bool {
             | Ty::Future(k, v, _) => occurs(name, k, in_union) || occurs(name, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
-            } => {
-                occurs(name, base, in_union)
-                    || interface
-                        .as_ref()
-                        .is_some_and(|i| i.tys().any(|t| occurs(name, t, in_union)))
-            }
+            } => occurs(name, base, in_union) || interface.tys().any(|t| occurs(name, t, in_union)),
             Ty::Function {
                 params,
                 ret,
@@ -543,9 +541,7 @@ fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(nf(base, enum_variants)),
-            interface: interface
-                .as_ref()
-                .map(|i| Box::new(i.map_tys(|t| nf(t, enum_variants)))),
+            interface: Box::new(interface.map_tys(|t| nf(t, enum_variants))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -786,7 +782,7 @@ fn unify_into_at(
 
     // Structurally-equal (or alias-equal) subjects unify with no new bindings;
     // this also resolves ground unions order-insensitively via the normalizer.
-    if crate::normalize::is_same_normalized_type(&x, &y, aliases) {
+    if AliasEquivCtx(aliases).equivalent(&x, &y) {
         return Overlap::Yes;
     }
 
@@ -1142,10 +1138,9 @@ fn unions_set_equal(
     aliases: &std::collections::HashMap<TypeName, Ty>,
 ) -> bool {
     xs.len() == ys.len()
-        && xs.iter().all(|x| {
-            ys.iter()
-                .any(|y| crate::normalize::is_same_normalized_type(x, y, aliases))
-        })
+        && xs
+            .iter()
+            .all(|x| ys.iter().any(|y| AliasEquivCtx(aliases).equivalent(x, y)))
 }
 
 /// Whether `member` can be a *subtype* of `candidate` under some substitution
@@ -1373,9 +1368,7 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
             base, interface, ..
         } => {
             occurs_in(n, base, vars, bindings)
-                || interface
-                    .as_ref()
-                    .is_some_and(|i| i.tys().any(|t| occurs_in(n, t, vars, bindings)))
+                || interface.tys().any(|t| occurs_in(n, t, vars, bindings))
         }
         Ty::Function {
             params,
@@ -1810,7 +1803,11 @@ mod tests {
         // not `Unknown` (which is only for search-budget exhaustion).
         let proj = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::type_var("T")),
-            interface: None,
+            interface: Box::new(
+                interface("Iter", vec![])
+                    .as_interface()
+                    .expect("interface() builds an existential"),
+            ),
             member: Name::new("Item"),
             attr: TyAttr::default(),
         };

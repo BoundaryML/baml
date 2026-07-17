@@ -41,12 +41,15 @@ use crate::{
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Starting fuel for projection reduction in one `from_ty` walk: the maximum
-/// length of a reduction chain (`(A as I).X` → `(B as J).Y` → …) before a
-/// projection is left opaque. Generous for any real program; bounds a cyclic
-/// `type A = (C as I).B` / `type B = (C as J).A` (itself a declaration-level error
-/// caught elsewhere) so normalization terminates instead of recursing forever.
-const PROJECTION_REDUCTION_FUEL: u32 = 256;
+/// Starting fuel for projection reduction: the maximum length of a reduction
+/// chain (`(A as I).X` → `(B as J).Y` → …) before a projection is left opaque (the
+/// canonical algebra) or its realization fails (the runtime). Generous for any
+/// real program; bounds a cyclic `type A = (C as I).B` / `type B = (C as J).A`
+/// (itself a declaration-level error caught elsewhere) so both the `from_ty` walk
+/// here and the runtime `TyTemplate::substitute` reduction terminate instead of
+/// recursing forever. Shared by both paths so the single limit shrinks in one
+/// place once declaration-level cycle rejection lands.
+pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
@@ -162,7 +165,15 @@ pub trait TypeContext {
     /// dead symbolic type with no error, a silent soundness hole (same class as
     /// [`associated_type_bound`](Self::associated_type_bound)). A context over
     /// already-realized values (the runtime) returns `Opaque` explicitly.
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep;
+    ///
+    /// `fuel` is the remaining projection-reduction budget. A context that itself
+    /// drives the reduction recursion — the runtime, whose `project` realizes the
+    /// impl binding through `TyTemplate::substitute` and can re-enter `project` —
+    /// threads it on so a cyclic associated-type binding terminates. A single-step
+    /// reducer whose recursion is instead bounded by its caller (the canonical
+    /// `from_ty` walk, which decrements its own fuel) ignores it.
+    fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
+    -> ProjectionStep;
 
     // ── type algebra (defaulted; the canonical implementation) ──────────────
     //
@@ -209,6 +220,20 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
+        // Reflexivity fast path: structurally identical spellings (attrs
+        // included) trivially canonicalize to the same form.
+        if a == b {
+            return true;
+        }
+        // Cheap definite-mismatch filter. MIR impl dispatch probes every
+        // candidate impl's pattern against the receiver through `equivalent`
+        // (`match_ty_pattern_into`), so the overwhelmingly common case is a
+        // miss between two nominal types with different names — decidable from
+        // the outermost constructor alone, without the two allocation-heavy
+        // canonicalization walks below.
+        if heads_definitely_differ(a, b) {
+            return false;
+        }
         NormalTy::canonical(a, self) == NormalTy::canonical(b, self)
     }
 
@@ -218,6 +243,30 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
+        // Reflexivity fast path: structurally identical spellings canonicalize
+        // to the same form (canonicalization is deterministic and attr-erasure
+        // applies to both sides), and `is_subtype_of` starts with a `self == sup`
+        // fast path — so the two allocation-heavy canonicalization walks below
+        // would only rediscover `true`.
+        if sub == sup {
+            return true;
+        }
+        // Narrow definite-mismatch filter. Unlike `equivalent`, differing heads
+        // do NOT generally refute subtyping (a literal is a subtype of its base,
+        // a member of its union, a class of an interface it implements) — but
+        // those pairs are different `Ty` *variants*, for which
+        // `heads_definitely_differ` already answers `false`. Of the same-variant
+        // nominal pairs it does claim, only interface-to-interface can still be
+        // a subtype under different names (`A <: B` iff `A` requires `B`), so it
+        // is excluded. For the rest the canonical walk below is a foregone
+        // `false`: class heads are preserved by canonicalization and the class
+        // subtype rule requires equal names (generic args are invariant), while
+        // enums and enum variants are nominal with no cross-name rule at all.
+        if !matches!((sub, sup), (Ty::Interface(..), Ty::Interface(..)))
+            && heads_definitely_differ(sub, sup)
+        {
+            return false;
+        }
         let sub = NormalTy::canonical(sub, self);
         let sup = NormalTy::canonical(sup, self);
         sub.is_subtype_of(&sup, self, &mut HashSet::new())
@@ -331,6 +380,38 @@ pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
 /// Pending removal once every caller uses the method form.
 pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
     ctx.is_subtype(sub, sup)
+}
+
+/// True only when `a` and `b` provably canonicalize to different forms, judged
+/// from their outermost constructor alone — a cheap reject for [`TypeContext::
+/// equivalent`] that skips the two canonicalization walks on the common
+/// nominal-mismatch case (e.g. probing an `impl for Foo` pattern against a
+/// receiver of an unrelated class).
+///
+/// Soundness rests on `NormalTy::from_ty` being *head-stable* for the variants
+/// decided here: a `Class`/`Interface`/`Enum`/`EnumVariant` maps to the same
+/// constructor carrying the *verbatim* qualified name (only its type arguments
+/// are rewritten), and equality is nominal, so two of the same kind with
+/// different names can never share a canonical form.
+///
+/// This is deliberately *conservative* — it decides only same-kind pairs whose
+/// heads are stable and never uses a cross-kind "different discriminant ⇒
+/// differ" catch-all. That catch-all would be unsound under the current
+/// normalization: `List`/`EvolvingList` and `Map`/`EvolvingMap` are distinct
+/// `Ty` constructors that canonicalize to the *same* `NormalTy` head, and
+/// `TypeAlias` / `Union` / `AssociatedTypeProjection` / generic `Media` /
+/// `Infer` heads can be rewritten into any other shape. Leaving every such case
+/// undecided (`false`) preserves correctness; only the unambiguous nominal
+/// misses are fast-rejected. Context-independent: canonicalization preserves
+/// these nominal heads regardless of the `TypeContext`.
+fn heads_definitely_differ(a: &Ty, b: &Ty) -> bool {
+    match (a, b) {
+        (Ty::Class(q1, ..), Ty::Class(q2, ..))
+        | (Ty::Interface(q1, ..), Ty::Interface(q2, ..))
+        | (Ty::Enum(q1, ..), Ty::Enum(q2, ..)) => q1 != q2,
+        (Ty::EnumVariant(q1, v1, ..), Ty::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
+        _ => false,
+    }
 }
 
 /// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
@@ -628,7 +709,11 @@ enum NormalTy {
     Future(Box<NormalTy>, Box<NormalTy>),
     AssociatedTypeProjection {
         base: Box<NormalTy>,
-        interface: Option<Box<NormalTy>>,
+        /// The declaring interface (a normalized `NormalTy::Interface`), always
+        /// present — mirrors the non-optional `Ty::AssociatedTypeProjection`
+        /// qualifier it is built from, and is what makes a realized-base
+        /// projection reducible via [`TypeContext::project`].
+        interface: Box<NormalTy>,
         member: Name,
     },
     // Recursion
@@ -770,27 +855,19 @@ impl NormalTy {
                 // *is* the type the impl binds (like `1 + 1` *is* `2`). Reduce it to
                 // that whenever the context can determine it — the reduced type
                 // becomes the canonical form, so the projection compares equal to /
-                // is assignable from its realization. Only a `Some(interface)`
-                // projection is reducible (the qualifier names the impl); fuel guards
-                // a cyclic reduction.
-                if let Some(iface) = interface
-                    && fuel > 0
-                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, iface, member)
+                // is assignable from its realization. The qualifier always names the
+                // impl; fuel guards a cyclic reduction.
+                if fuel > 0
+                    && let ProjectionStep::Reduced(reduced) =
+                        ctx.project(base, interface, member, fuel)
                 {
                     return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
                 }
-                // Not reducible — symbolic base, an unresolved `(T as ?).M` qualifier,
-                // or exhausted fuel: an opaque leaf, equal only to a
-                // structurally-identical projection. The two spellings `(T as ?).M`
-                // and `(T as I).M` of the same associated type are deliberately NOT
-                // equated here; the TIR must resolve the interface to `Some(I)` before
-                // an equivalence/subtype check relies on it (pinned by
-                // `projection_with_unresolved_interface_is_opaque`).
+                // Not reducible — symbolic base or exhausted fuel: an opaque leaf,
+                // equal only to a structurally-identical projection.
                 NormalTy::AssociatedTypeProjection {
                     base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
-                    interface: interface
-                        .as_ref()
-                        .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding, fuel))),
+                    interface: Box::new(Self::from_ty(&interface.to_ty(), ctx, expanding, fuel)),
                     member: member.clone(),
                 }
             }
@@ -862,10 +939,7 @@ impl NormalTy {
             }
             NormalTy::AssociatedTypeProjection {
                 base, interface, ..
-            } => {
-                base.mentions_rec_var(var)
-                    || interface.as_ref().is_some_and(|i| i.mentions_rec_var(var))
-            }
+            } => base.mentions_rec_var(var) || interface.mentions_rec_var(var),
             NormalTy::Int
             | NormalTy::Bigint
             | NormalTy::Float
@@ -927,7 +1001,7 @@ impl NormalTy {
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.canonicalize(ctx)),
-                interface: interface.map(|i| Box::new(i.canonicalize(ctx))),
+                interface: Box::new(interface.canonicalize(ctx)),
                 member,
             },
             NormalTy::Function {
@@ -1022,7 +1096,7 @@ impl NormalTy {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
             base,
-            interface: Some(iface),
+            interface: iface,
             member: proj_member,
         } = value
         else {
@@ -1052,10 +1126,6 @@ impl NormalTy {
         ctx: &C,
         assumptions: &mut HashSet<(NormalTy, NormalTy)>,
     ) -> bool {
-        let pair = (self.clone(), sup.clone());
-        if assumptions.contains(&pair) {
-            return true;
-        }
         if self == sup {
             return true;
         }
@@ -1078,8 +1148,57 @@ impl NormalTy {
             return true;
         }
 
+        // ── Termination argument ──────────────────────────────────────────
+        // The co-inductive assumption set exists *only* to terminate cycles,
+        // and a cycle can only arise through an arm that *expands* (regenerates)
+        // a type rather than descending into a strictly-smaller subterm:
+        //   * μ-unfolding — `body.substitute(var, self)` can reproduce the same
+        //     pair (`(_, Mu)` on the right, `(Mu, _)` on the left);
+        //   * a `TypeVar` / `AssociatedTypeProjection` on the left — its bound is
+        //     looked up through the context and may mention the variable itself.
+        // Every *structural* arm (unions, invariant containers, functions,
+        // literals, enum-variant, the nominal interface facts) either recurses
+        // into a strictly-smaller subterm of a finite regular tree or is
+        // terminal, so those arms terminate WITHOUT any assumption bookkeeping.
+        // Any infinite derivation must therefore pass through an expanding arm
+        // infinitely often, and the pairs seen at those arms are drawn from the
+        // finite subterm closure of the (regular) operands — so recording pairs
+        // only at the expanding arms still guarantees a repeat is detected and
+        // the recursion is capped. Restricting the bookkeeping this way spares
+        // the deep `NormalTy` clone + full-tree hash on the millions of purely
+        // structural steps, which profiling showed dominated subtype-checking
+        // cost (this is now the *only* equivalence path post-unification).
+        let expanding = matches!(
+            self,
+            NormalTy::Mu { .. } | NormalTy::TypeVar(_) | NormalTy::AssociatedTypeProjection { .. }
+        ) || matches!(sup, NormalTy::Mu { .. });
+        if !expanding {
+            return self.is_subtype_of_inner(sup, ctx, assumptions);
+        }
+        // On the (few) expanding arms, probe by linear scan rather than cloning
+        // to hash: the pairs on the current path are bounded by the
+        // expanding-arm recursion depth, so a scan beats hashing the whole tree.
+        if assumptions.iter().any(|(a, b)| a == self && b == sup) {
+            return true;
+        }
+        let pair = (self.clone(), sup.clone());
         assumptions.insert(pair.clone());
-        let result = match (self, sup) {
+        let result = self.is_subtype_of_inner(sup, ctx, assumptions);
+        assumptions.remove(&pair);
+        result
+    }
+
+    /// The structural rules of [`Self::is_subtype_of`]. Callers MUST go through
+    /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
+    /// co-inductive assumption bookkeeping (only performed on the expanding
+    /// arms — see the termination argument there).
+    fn is_subtype_of_inner<C: TypeContext>(
+        &self,
+        sup: &NormalTy,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        match (self, sup) {
             // μ-unfolding (equirecursive).
             (NormalTy::Mu { var, body }, _) => {
                 body.substitute(var, self)
@@ -1139,16 +1258,14 @@ impl NormalTy {
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
             // any of its associated type's declared bounds is — the projection
-            // analogue of the `TypeVar` rule above. Fires only when the projection
-            // carries a resolved interface; an unresolved one (`interface: None`)
-            // stays opaque (equal only to itself, via reflexivity). A realized-base
-            // projection is intended to be resolved to a concrete type by an
-            // upstream pre-pass before reaching here. Must precede the interface
-            // arms below, which would otherwise ask `implements_interface` about a
-            // non-concrete projection.
+            // analogue of the `TypeVar` rule above. The projection always carries
+            // its declaring interface; a realized-base projection is intended to be
+            // resolved to a concrete type by an upstream pre-pass before reaching
+            // here. Must precede the interface arms below, which would otherwise ask
+            // `implements_interface` about a non-concrete projection.
             (
                 NormalTy::AssociatedTypeProjection {
-                    interface: Some(iface),
+                    interface: iface,
                     member,
                     ..
                 },
@@ -1238,9 +1355,7 @@ impl NormalTy {
             }
 
             _ => false,
-        };
-        assumptions.remove(&pair);
-        result
+        }
     }
 
     // ── conversion out: NormalTy → Ty ──────────────────────────────────────
@@ -1311,7 +1426,13 @@ impl NormalTy {
                 member,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
-                interface: interface.and_then(|i| i.into_interface()).map(Box::new),
+                // The projection's qualifier is always a normalized interface, so
+                // it round-trips back to an `Interface` here.
+                interface: Box::new(
+                    interface
+                        .into_interface()
+                        .unwrap_or_else(|| unreachable!("projection qualifier is an interface")),
+                ),
                 member,
                 attr,
             },
@@ -1544,9 +1665,7 @@ impl NormalTy {
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.substitute(var, replacement)),
-                interface: interface
-                    .as_ref()
-                    .map(|i| Box::new(i.substitute(var, replacement))),
+                interface: Box::new(interface.substitute(var, replacement)),
                 member: member.clone(),
             },
             // A nested μ binding the same name shadows it; do not substitute inside.

@@ -1,0 +1,270 @@
+name: BAML Release - Build bridge_cffi
+
+# Builds the standalone `bridge_cffi` engine cdylib, one per target. This is a
+# LANGUAGE-NEUTRAL artifact: every dylib-loader SDK dlopens the same library at
+# runtime (the Rust `baml_bridge` crate today; the Go bridge when it migrates),
+# so it is built once here rather than inside any one language's SDK workflow.
+#
+# Adapts the legacy `libbaml-cffi` job shape (build -> rename to the loader's
+# expected asset name -> `.sha256` sidecar) but repointed at
+# `baml_language/crates/bridge_cffi`, stamped from the frozen plan, and built
+# with `release-bridge-cffi` (`panic = "unwind"` — the dylib loads into the
+# user's process, so `bridge_cffi`'s catch_unwind boundary must be able to
+# unwind). Unlike the legacy engine's `baml_cffi`, `bridge_cffi` vendors protoc
+# and has no Go bindings, so no protoc/protoc-gen-go/Go setup is needed.
+#
+# The smoke is language-neutral too: strict C11 and C++17 programs include only
+# the checked-in public header, load the artifact, resolve `baml_get_api_v1`,
+# validate the append-only table prefix, and call/free `version()` while also
+# asserting the product version stamped into the release plan.
+#
+# Consumer contract (for other bridges): one artifact per target named
+# `bridge-cffi-<target>`, each containing the cdylib plus its `.sha256`. The
+# cdylib filename matches `baml_bridge::loader::target_lib_filename`
+# (`libbaml_cffi-<triple>.{so,dylib}` on Unix, `baml_cffi-<triple>.dll` on
+# Windows); its C ABI `version()` returns the plan's canonical version. A Go
+# (or any) dylib-loader SDK consumes these the same way.
+#
+# NOTE (open question): the filename reuses the legacy `baml_cffi` convention;
+# the two families never collide because new-graph assets live under
+# `baml-language-<version>` tags, but a distinguishing name
+# (`bridge_cffi-<triple>`) is still on the table — it would change the loader
+# and this job together.
+#
+# Cross-compilation status (validate the full matrix with a `workflow_dispatch`
+# dry-run before other bridges depend on this):
+#   - darwin x86_64/aarch64: native cargo, aws-lc-sys cross-compile confirmed.
+#   - linux gnu x86_64/aarch64: `cross` with prebuilt aws-lc-sys bindings.
+#   - linux musl x86_64/aarch64: `cross`, aws-lc-sys builds fine. musl defaults
+#     to `+crt-static`, which cannot emit a cdylib, so the build disables
+#     `crt-static` (RUSTFLAGS in the build step + `Cross.toml` passthrough) to
+#     produce a musl `.so` dynamically linked against musl libc. Experimental
+#     until an Alpine (or other real musl) dlopen smoke proves a consumer loads
+#     it.
+#   - windows aarch64: experimental until a native arm64 smoke runner exists.
+#   - windows x86_64: `AWS_LC_SYS_PREBUILT_NASM=1` (below) lets aws-lc-sys use
+#     its prebuilt NASM objects if the runner has no NASM.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  # Manual-only standalone trigger for testing this reusable workflow before it
+  # is wired into the release graph (with no inputs it builds a canary-stamped
+  # artifact). It is otherwise invoked via `workflow_call`.
+  workflow_dispatch:
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-bridge-cffi
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The cffi build matrix is generated from the repository's platform contract
+  # (`release/platforms.json`) so the target set + per-target build config live
+  # in one machine-readable place, not a hand-copied YAML list. The experimental
+  # musl + arm64-Windows targets carry `experimental: true` in the contract,
+  # which drives `continue-on-error` on the build job below.
+  matrix:
+    name: Compute target matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Generate the cffi build matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # One entry per target whose `cffi` artifact is present (a missing
+          # `cffi` means unsupported → excluded). Each entry is the fields the
+          # build job reads: target + runner (as `os`) + the true-valued
+          # use_cross / smoke / experimental flags.
+          include="$(jq -c '[.targets[]
+            | select(.artifacts.cffi != null)
+            | .artifacts.cffi as $c
+            | {target: .triple, os: $c.runner}
+              + ({use_cross: $c.use_cross, smoke: $c.smoke, experimental: $c.experimental}
+                 | with_entries(select(.value == true)))]' release/platforms.json)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
+  build:
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        _: ${{ fromJson(needs.matrix.outputs.include) }}
+
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.os }}
+    # Experimental targets are built when possible but never block the release.
+    continue-on-error: ${{ matrix._.experimental || false }}
+    env:
+      CARGO: cargo
+      # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
+      # runner has no NASM installed (consulted only there; harmless elsewhere).
+      AWS_LC_SYS_PREBUILT_NASM: "1"
+    steps:
+      - name: Setup build environment (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        shell: powershell
+        run: |
+          # rustup is not preinstalled on aarch64 Windows runners
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
+              .\rustup-init.exe --default-toolchain stable -y
+              Remove-Item "rustup-init.exe"
+              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
+          }
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix._.target }}
+          enable-cache: false
+
+      - name: Install cross (Linux targets)
+        if: matrix._.use_cross
+        run: |
+          set -euo pipefail
+          cargo install cross --locked --version 0.2.5
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
+
+      - name: Build bridge_cffi cdylib
+        working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
+          # release artifact. `release-bridge-cffi` = release + panic = "unwind".
+          #
+          # musl targets default to `+crt-static`, and rustc cannot emit a
+          # cdylib under a static CRT — it silently drops the crate type and
+          # produces only the `.rlib`. Disable `crt-static` so the build yields
+          # a real musl `.so`, dynamically linked against musl libc and
+          # dlopen-loadable on a musl consumer (e.g. Alpine). Scoped to musl so
+          # the other targets keep their `.cargo/config.toml` rustflags (the
+          # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
+          # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
+          if [[ "$TARGET" == *-musl ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
+          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
+
+      - name: Rename and checksum artifact
+        id: artifact
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          target="${{ matrix._.target }}"
+          outdir="target/${target}/release-bridge-cffi"
+          case "$target" in
+            *windows*) base="bridge_cffi.dll";    asset="baml_cffi-${target}.dll" ;;
+            *apple*)   base="libbridge_cffi.dylib"; asset="libbaml_cffi-${target}.dylib" ;;
+            *)         base="libbridge_cffi.so";    asset="libbaml_cffi-${target}.so" ;;
+          esac
+
+          if [[ ! -f "${outdir}/${base}" ]]; then
+            echo "::error::expected cdylib ${outdir}/${base} not found"
+            ls -la "${outdir}" || true
+            exit 1
+          fi
+          mv "${outdir}/${base}" "${outdir}/${asset}"
+
+          # sha256 sidecar in `sha256sum` format (`<hash>  <name>`), which the
+          # loader's checksum parser reads.
+          (
+            cd "${outdir}"
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "${asset}"
+            else
+              shasum -a 256 "${asset}"
+            fi
+          ) > "${outdir}/${asset}.sha256"
+
+          echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
+          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
+          echo "Built ${asset}"
+          cat "${outdir}/${asset}.sha256"
+
+      - name: Smoke test the public C and C++ ABI (Unix)
+        if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}
+        working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+        run: |
+          set -euo pipefail
+          expected="$(jq -r .canonical_version ../release-plan.json)"
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
+            "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
+            "$expected"
+
+      - name: Smoke test the public C and C++ ABI (Windows)
+        if: ${{ matrix._.smoke && contains(matrix._.target, 'windows') }}
+        shell: powershell
+        working-directory: baml_language
+        env:
+          MSVC_ARCH: ${{ startsWith(matrix._.target, 'aarch64-') && 'arm64' || 'x64' }}
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio installation not found"
+          }
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          $expected = jq -r .canonical_version ..\release-plan.json
+          $library = "$env:ARTIFACT_DIR/$env:ARTIFACT_ASSET"
+          & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload cdylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-cffi-${{ matrix._.target }}
+          path: |
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
+          if-no-files-found: error
