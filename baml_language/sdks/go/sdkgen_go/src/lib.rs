@@ -4,7 +4,8 @@
 //! and alias-typed functions over primitives, transparent non-recursive type
 //! aliases, enums, classes, lists, string-keyed maps, and nullable wrappers at
 //! any position; defaulted function arguments via typed functional options;
-//! and non-generic class declarations composed from the same shapes.
+//! non-generic class declarations composed from the same shapes; and instance
+//! methods on user classes, including `Self` nested anywhere in their types.
 //! Nullable and container class edges support finite recursive values, while
 //! impossible required-only direct class cycles remain omitted. A BAML package
 //! becomes one Go package. BAML namespaces stay within that Go package and
@@ -24,7 +25,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
-use baml_type::TyAttr;
+use baml_type::{RESERVED_USER_PACKAGE, TyAttr};
 
 mod names;
 mod packages;
@@ -224,12 +225,13 @@ fn generated_functions<'a>(
         })
         .collect::<Vec<_>>();
     functions.sort_by(|(left, _), (right, _)| left.cmp(right));
-    functions
+    let mut generated = functions
         .into_iter()
         .map(|(name, function)| {
             let fqn = BamlFqn::symbol(name);
             GeneratedFunction {
                 function,
+                receiver: None,
                 go_name: names
                     .project(&fqn, GoNameKind::Function, GoVisibility::Exported)
                     .clone(),
@@ -267,14 +269,103 @@ fn generated_functions<'a>(
                     .collect(),
             }
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    let mut classes = pool
+        .iter()
+        .filter_map(|(name, symbol)| match symbol {
+            Symbol::Class(class)
+                if name.package() == package.baml_name()
+                    // Stdlib classes use native/handle codecs rather than the
+                    // ordinary field codecs used by user-authored classes.
+                    && name.package().as_str() == RESERVED_USER_PACKAGE
+                    && wireable_classes.contains(name)
+                    && class.generic_params.is_empty() =>
+            {
+                Some((name, class))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    classes.sort_by(|(left, _), (right, _)| left.cmp(right));
+    for (owner_name, class) in classes {
+        let mut methods = class
+            .instance_methods
+            .iter()
+            .filter(|method| supported_function(method, pool, wireable_classes, projection))
+            .collect::<Vec<_>>();
+        methods.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left.origin.span_start.cmp(&right.origin.span_start))
+        });
+        let class_fqn = BamlFqn::symbol(owner_name);
+        for method in methods {
+            let method_fqn = class_fqn.member(&method.name);
+            generated.push(GeneratedFunction {
+                function: method,
+                receiver: Some(GeneratedReceiver {
+                    owner_name,
+                    go_name: names
+                        .project(&class_fqn, GoNameKind::Class, GoVisibility::Exported)
+                        .clone(),
+                }),
+                go_name: names
+                    .project(&method_fqn, GoNameKind::Method, GoVisibility::Exported)
+                    .clone(),
+                option_type: method
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.default.is_some())
+                    .then(|| {
+                        names
+                            .project(
+                                &method_fqn,
+                                GoNameKind::MethodOptionType,
+                                GoVisibility::Exported,
+                            )
+                            .clone()
+                    }),
+                arguments: method
+                    .arguments
+                    .iter()
+                    .map(|argument| GeneratedArgument {
+                        argument,
+                        go_name: names
+                            .project(
+                                &method_fqn.member(&argument.name),
+                                GoNameKind::Parameter,
+                                GoVisibility::Exported,
+                            )
+                            .clone(),
+                        option_setter: argument.default.as_ref().map(|_| {
+                            names
+                                .project(
+                                    &method_fqn.member(&argument.name),
+                                    GoNameKind::MethodOptionSetter,
+                                    GoVisibility::Exported,
+                                )
+                                .clone()
+                        }),
+                    })
+                    .collect(),
+            });
+        }
+    }
+    generated
 }
 
 struct GeneratedFunction<'a> {
     function: &'a Function,
+    receiver: Option<GeneratedReceiver<'a>>,
     go_name: GoName,
     option_type: Option<GoName>,
     arguments: Vec<GeneratedArgument<'a>>,
+}
+
+struct GeneratedReceiver<'a> {
+    owner_name: &'a Name,
+    go_name: GoName,
 }
 
 struct GeneratedArgument<'a> {
@@ -331,6 +422,15 @@ impl WireCodecs {
     ) -> Self {
         let mut collected = CollectedCodecTypes::default();
         for routed in functions {
+            if let Some(receiver) = &routed.receiver {
+                collect_projected_codec_types(
+                    &GoTy::Class(receiver.owner_name.clone()),
+                    current_package,
+                    pool,
+                    projection,
+                    &mut collected,
+                );
+            }
             for ty in routed
                 .function
                 .arguments
@@ -903,6 +1003,7 @@ fn render_functions(
     let bootstrap_package = GeneratorIdent::BootstrapPackage;
     let runtime_package = GeneratorIdent::RuntimePackage;
     let context_parameter = GeneratorIdent::ContextParameter;
+    let receiver_parameter = GeneratorIdent::ReceiverParameter;
     let error_local = GeneratorIdent::ErrorLocal;
     let result_local = GeneratorIdent::ResultLocal;
     let zero_local = GeneratorIdent::ZeroLocal;
@@ -942,6 +1043,14 @@ fn render_functions(
         projection,
     };
     for routed in functions {
+        if let Some(receiver) = &routed.receiver {
+            add_projected_type_imports(
+                &GoTy::Class((*receiver.owner_name).clone()),
+                &import_context,
+                &mut imports,
+                &mut visited_class_imports,
+            );
+        }
         for ty in routed
             .function
             .arguments
@@ -1038,12 +1147,23 @@ fn render_functions(
         let docstring =
             docstring_with_generated_notes(function.docstring.as_deref(), &dynamic_notes);
         render_go_doc_comment(&mut out, &go_name.to_string(), docstring.as_deref());
+        let receiver = routed.receiver.as_ref().map(|receiver| {
+            format!(
+                "({receiver_parameter} {}) ",
+                receiver.go_name.identifier(current_package)
+            )
+        });
+        let receiver = receiver.as_deref().unwrap_or("");
         if function_returns_only_error(&function.return_type) {
-            let _ = writeln!(out, "func {go_name}({}) {error_type} {{", params.join(", "));
+            let _ = writeln!(
+                out,
+                "func {receiver}{go_name}({}) {error_type} {{",
+                params.join(", ")
+            );
         } else {
             let _ = writeln!(
                 out,
-                "func {go_name}({}) ({}, {error_type}) {{",
+                "func {receiver}{go_name}({}) ({}, {error_type}) {{",
                 params.join(", "),
                 function_go_type(
                     &function.return_type,
@@ -1085,8 +1205,26 @@ fn render_functions(
                 out,
                 "\t{arguments_local} := map[{string_type}]{runtime_package}.Input{{"
             );
-            if !required_arguments.is_empty() {
+            if routed.receiver.is_some() || !required_arguments.is_empty() {
                 out.push('\n');
+            }
+            if let Some(receiver) = &routed.receiver {
+                let receiver_ty = Ty::Class(
+                    (*receiver.owner_name).clone(),
+                    Vec::new(),
+                    TyAttr::default(),
+                );
+                let _ = writeln!(
+                    out,
+                    "\t\t\"self\": {},",
+                    input_expression(
+                        &receiver_ty,
+                        &receiver_parameter.to_string(),
+                        current_baml_package,
+                        codecs,
+                        projection,
+                    )
+                );
             }
             for argument in &required_arguments {
                 let argument_identifier = argument.go_name.identifier(current_package).to_string();
@@ -1103,7 +1241,7 @@ fn render_functions(
                     )
                 );
             }
-            if !required_arguments.is_empty() {
+            if routed.receiver.is_some() || !required_arguments.is_empty() {
                 out.push('\t');
             }
             out.push_str("}\n");
@@ -1132,8 +1270,26 @@ fn render_functions(
             let _ = writeln!(out, "{arguments_local})");
         } else {
             let _ = write!(out, "map[{string_type}]{runtime_package}.Input{{");
-            if !required_arguments.is_empty() {
+            if routed.receiver.is_some() || !required_arguments.is_empty() {
                 out.push('\n');
+                if let Some(receiver) = &routed.receiver {
+                    let receiver_ty = Ty::Class(
+                        (*receiver.owner_name).clone(),
+                        Vec::new(),
+                        TyAttr::default(),
+                    );
+                    let _ = writeln!(
+                        out,
+                        "\t\t\"self\": {},",
+                        input_expression(
+                            &receiver_ty,
+                            &receiver_parameter.to_string(),
+                            current_baml_package,
+                            codecs,
+                            projection,
+                        )
+                    );
+                }
                 for argument in &required_arguments {
                     let argument_identifier =
                         argument.go_name.identifier(current_package).to_string();
@@ -1733,11 +1889,19 @@ fn render_class_codecs(
             out,
             "func {decoder}({value_parameter} {runtime_package}.Value) ({go_type}, {error_type}) {{"
         );
-        let _ = writeln!(
-            out,
-            "\t{class_value_local}, {error_local} := {value_parameter}.Class({:?})",
-            class_name.wire().to_string()
-        );
+        if class.properties.is_empty() {
+            let _ = writeln!(
+                out,
+                "\t_, {error_local} := {value_parameter}.Class({:?})",
+                class_name.wire().to_string()
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "\t{class_value_local}, {error_local} := {value_parameter}.Class({:?})",
+                class_name.wire().to_string()
+            );
+        }
         let _ = writeln!(out, "\tif {error_local} != nil {{");
         let _ = writeln!(out, "\t\tvar {zero_local} {go_type}");
         let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
@@ -2128,7 +2292,8 @@ fn render_types(
         body.push_str("}\n\n");
         let _ = writeln!(
             body,
-            "func ({class_name}) BAMLClassName() string {{ return {:?} }}\n",
+            "func ({class_name}) {}() string {{ return {:?} }}\n",
+            GeneratorIdent::ClassNameMethod,
             generated.go_name.wire().to_string()
         );
     }

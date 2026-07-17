@@ -110,7 +110,24 @@ impl<'a> GoTypeProjection<'a> {
                     .map(|argument| &argument.ty)
                     .chain(std::iter::once(&function.return_type))
                     .collect(),
-                Symbol::Class(class) => class.properties.iter().map(|field| &field.ty).collect(),
+                Symbol::Class(class) => class
+                    .properties
+                    .iter()
+                    .map(|field| &field.ty)
+                    .chain(
+                        class
+                            .static_methods
+                            .iter()
+                            .chain(&class.instance_methods)
+                            .flat_map(|method| {
+                                method
+                                    .arguments
+                                    .iter()
+                                    .map(|argument| &argument.ty)
+                                    .chain(std::iter::once(&method.return_type))
+                            }),
+                    )
+                    .collect(),
                 Symbol::TypeAlias(alias) => vec![&alias.resolves_to],
                 Symbol::Enum(_) => Vec::new(),
             };

@@ -52,8 +52,11 @@ impl BamlFqn {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum GoNameKind {
     Function,
+    Method,
     FunctionOptionType,
+    MethodOptionType,
     FunctionOptionSetter,
+    MethodOptionSetter,
     Class,
     Enum,
     EnumVariant,
@@ -71,6 +74,10 @@ pub(crate) enum GoVisibility {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum BamlWireName {
     Symbol(Name),
+    Method {
+        owner: Name,
+        method: baml_base::Name,
+    },
     Key(baml_base::Name),
     /// Synthesized Go-only declarations have no independent BAML wire name.
     StructuralUnion,
@@ -80,6 +87,7 @@ impl fmt::Display for BamlWireName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Symbol(name) => write!(f, "{name}"),
+            Self::Method { owner, method } => write!(f, "{owner}.{method}"),
             Self::Key(name) => write!(f, "{name}"),
             Self::StructuralUnion => f.write_str("<structural union>"),
         }
@@ -200,10 +208,17 @@ impl NameRequest {
             GoNameKind::Function
             | GoNameKind::FunctionOptionType
             | GoNameKind::FunctionOptionSetter
+            | GoNameKind::MethodOptionType
+            | GoNameKind::MethodOptionSetter
             | GoNameKind::Class
             | GoNameKind::Enum
             | GoNameKind::EnumVariant
             | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.package().clone()),
+            GoNameKind::Method => NameScope::Class(
+                self.fqn
+                    .parent()
+                    .expect("method FQN must include its owning class"),
+            ),
             GoNameKind::Parameter => NameScope::Function(
                 self.fqn
                     .parent()
@@ -231,9 +246,11 @@ impl NameScope {
         mut candidate: GoIdent,
         generated_package_aliases: &BTreeSet<String>,
     ) -> GoIdent {
-        while matches!(self, Self::Function(_))
+        while (matches!(self, Self::Function(_))
             && (is_protected_go_identifier(candidate.name.as_ref())
-                || generated_package_aliases.contains(candidate.name.as_ref()))
+                || generated_package_aliases.contains(candidate.name.as_ref())))
+            || (matches!(self, Self::Class(_))
+                && is_protected_go_identifier(candidate.name.as_ref()))
         {
             candidate = candidate.with_trailing_underscore();
         }
@@ -388,6 +405,45 @@ impl GoNames {
                         GoVisibility::Exported,
                     )
                 }));
+                for method in class.static_methods.iter().chain(&class.instance_methods) {
+                    let method_fqn = fqn.member(&method.name);
+                    requests.push(NameRequest::new(
+                        method_fqn.clone(),
+                        GoNameKind::Method,
+                        GoVisibility::Exported,
+                    ));
+                    if method
+                        .arguments
+                        .iter()
+                        .any(|argument| argument.default.is_some())
+                    {
+                        requests.push(NameRequest::new(
+                            method_fqn.clone(),
+                            GoNameKind::MethodOptionType,
+                            GoVisibility::Exported,
+                        ));
+                    }
+                    requests.extend(method.arguments.iter().map(|argument| {
+                        NameRequest::new(
+                            method_fqn.member(&argument.name),
+                            GoNameKind::Parameter,
+                            GoVisibility::Exported,
+                        )
+                    }));
+                    requests.extend(
+                        method
+                            .arguments
+                            .iter()
+                            .filter(|argument| argument.default.is_some())
+                            .map(|argument| {
+                                NameRequest::new(
+                                    method_fqn.member(&argument.name),
+                                    GoNameKind::MethodOptionSetter,
+                                    GoVisibility::Exported,
+                                )
+                            }),
+                    );
+                }
             }
             if let Symbol::Enum(enum_) = symbol {
                 for variant in &enum_.variants {
@@ -818,11 +874,24 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             }
             push_upper_component(&mut value, request.fqn.symbol.name());
         }
+        GoNameKind::Method => {
+            push_upper_component(&mut value, request.fqn.leaf());
+        }
         GoNameKind::FunctionOptionType => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
             push_upper_component(&mut value, request.fqn.symbol.name());
+            value.push_str("Option");
+        }
+        GoNameKind::MethodOptionType => {
+            for segment in request.fqn.symbol.namespace() {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, request.fqn.symbol.name());
+            for member in &request.fqn.members {
+                push_upper_component(&mut value, member);
+            }
             value.push_str("Option");
         }
         GoNameKind::FunctionOptionSetter => {
@@ -832,6 +901,16 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             }
             push_upper_component(&mut value, request.fqn.symbol.name());
             push_upper_component(&mut value, request.fqn.leaf());
+        }
+        GoNameKind::MethodOptionSetter => {
+            value.push_str("With");
+            for segment in request.fqn.symbol.namespace() {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, request.fqn.symbol.name());
+            for member in &request.fqn.members {
+                push_upper_component(&mut value, member);
+            }
         }
         GoNameKind::EnumVariant => {
             for segment in request.fqn.symbol.namespace() {
@@ -870,7 +949,12 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         | GoNameKind::Class
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
+        GoNameKind::Method | GoNameKind::MethodOptionType => BamlWireName::Method {
+            owner: request.fqn.symbol.clone(),
+            method: request.fqn.leaf().clone(),
+        },
         GoNameKind::FunctionOptionSetter
+        | GoNameKind::MethodOptionSetter
         | GoNameKind::EnumVariant
         | GoNameKind::Parameter
         | GoNameKind::Field => BamlWireName::Key(request.fqn.leaf().clone()),
@@ -915,6 +999,7 @@ fn short_hash(request: &NameRequest) -> String {
     }
     hash.byte(match request.kind {
         GoNameKind::Function => 0,
+        GoNameKind::Method => 9,
         GoNameKind::Class => 1,
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
@@ -923,6 +1008,8 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::FunctionOptionType => 6,
         GoNameKind::FunctionOptionSetter => 7,
         GoNameKind::EnumVariant => 8,
+        GoNameKind::MethodOptionType => 10,
+        GoNameKind::MethodOptionSetter => 11,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
@@ -1131,6 +1218,70 @@ mod tests {
         );
         assert_eq!(identifier(setter), "WithBillingLookupInvoiceMaxRows");
         assert_eq!(setter.wire(), &BamlWireName::Key(BaseName::new("max_rows")));
+    }
+
+    #[test]
+    fn methods_have_exact_wire_identity_and_share_the_class_collision_scope() {
+        let class = symbol(&["method_edges"], "edge_box");
+        let method = class.member(&BaseName::new("roundTrip"));
+        let field = class.member(&BaseName::new("round_trip"));
+        let marker_method = class.member(&BaseName::new("BAMLClassName"));
+        let value = method.member(&BaseName::new("value"));
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(method.clone(), GoNameKind::Method, GoVisibility::Exported),
+                request(field.clone(), GoNameKind::Field, GoVisibility::Exported),
+                request(
+                    marker_method.clone(),
+                    GoNameKind::Method,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    method.clone(),
+                    GoNameKind::MethodOptionType,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    value.clone(),
+                    GoNameKind::MethodOptionSetter,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let method_name = names.project(&method, GoNameKind::Method, GoVisibility::Exported);
+        let field_name = names.project(&field, GoNameKind::Field, GoVisibility::Exported);
+        assert_ne!(identifier(method_name), identifier(field_name));
+        assert!(identifier(method_name).starts_with("RoundTrip_"));
+        assert!(identifier(field_name).starts_with("RoundTrip_"));
+        assert_eq!(
+            method_name.wire(),
+            &BamlWireName::Method {
+                owner: method.symbol.clone(),
+                method: BaseName::new("roundTrip"),
+            }
+        );
+        assert_eq!(
+            identifier(names.project(&marker_method, GoNameKind::Method, GoVisibility::Exported,)),
+            "BAMLClassName_"
+        );
+        assert_eq!(
+            identifier(names.project(
+                &method,
+                GoNameKind::MethodOptionType,
+                GoVisibility::Exported,
+            )),
+            "MethodEdgesEdgeBoxRoundTripOption"
+        );
+        assert_eq!(
+            identifier(names.project(
+                &value,
+                GoNameKind::MethodOptionSetter,
+                GoVisibility::Exported,
+            )),
+            "WithMethodEdgesEdgeBoxRoundTripValue"
+        );
     }
 
     #[test]

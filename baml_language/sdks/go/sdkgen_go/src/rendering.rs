@@ -15,6 +15,7 @@ pub(crate) enum GeneratorIdent {
     BootstrapPackage,
     RuntimePackage,
     ContextParameter,
+    ReceiverParameter,
     ErrorLocal,
     ResultLocal,
     ZeroLocal,
@@ -37,6 +38,7 @@ pub(crate) enum GeneratorIdent {
     BoolType,
     ByteType,
     ErrorType,
+    ClassNameMethod,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -135,6 +137,7 @@ impl GeneratorIdent {
         Self::BootstrapPackage,
         Self::RuntimePackage,
         Self::ContextParameter,
+        Self::ReceiverParameter,
         Self::ErrorLocal,
         Self::ResultLocal,
         Self::ZeroLocal,
@@ -157,6 +160,7 @@ impl GeneratorIdent {
         Self::BoolType,
         Self::ByteType,
         Self::ErrorType,
+        Self::ClassNameMethod,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -166,6 +170,7 @@ impl GeneratorIdent {
             Self::BootstrapPackage => "bootstrap",
             Self::RuntimePackage => "baml_go",
             Self::ContextParameter => "ctx_",
+            Self::ReceiverParameter => "receiver_",
             Self::ErrorLocal => "err_",
             Self::ResultLocal => "result_",
             Self::ZeroLocal => "zero_",
@@ -188,6 +193,7 @@ impl GeneratorIdent {
             Self::BoolType => "bool",
             Self::ByteType => "byte",
             Self::ErrorType => "error",
+            Self::ClassNameMethod => "BAMLClassName",
         }
     }
 }
