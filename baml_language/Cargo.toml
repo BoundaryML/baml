@@ -288,6 +288,9 @@ wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
 getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+rand_core = "0.6"
+rand_chacha = "0.3"
+rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }

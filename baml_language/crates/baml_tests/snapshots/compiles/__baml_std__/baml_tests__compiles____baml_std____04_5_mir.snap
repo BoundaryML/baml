@@ -8539,6 +8539,132 @@ fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
 
 fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
 
+fn baml.random.SystemRandom.get() -> baml.random.SystemRandom {
+    // Locals:
+    let _0: baml.random.SystemRandom // _0 // return
+
+    bb0: {
+        _0 = baml.random.SystemRandom {  };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.random.ChaCha20.new = builtin(vm)
+
+fn baml.random.Xoshiro256PlusPlus.new = builtin(vm)
+
+fn baml.random.ChaCha20.Rng.random = builtin(vm)
+
+fn baml.random.Xoshiro256PlusPlus.Rng.random = builtin(vm)
+
+fn baml.random.SystemRandom.Rng.random = builtin(io)
+
+fn baml.random.Xoshiro256PlusPlus.Rng.random_int = builtin(vm)
+
+fn baml.random.SystemRandom.Rng.random_int = builtin(io)
+
+fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.random.Rng // self // param
+    let _2: uint8array // bytes
+    let _3: int
+    let _4: int
+    let _5: int
+    let _6: int
+    let _7: int
+    let _8: int
+    let _9: int
+    let _10: int
+    let _11: int
+    let _12: uint8array
+    let _13: 0
+    let _14: int
+    let _15: int
+    let _16: uint8array
+    let _17: 1
+    let _18: int
+    let _19: int
+    let _20: uint8array
+    let _21: 2
+    let _22: int
+    let _23: int
+    let _24: uint8array
+    let _25: 3
+    let _26: int
+    let _27: int
+    let _28: uint8array
+    let _29: 4
+    let _30: int
+    let _31: int
+    let _32: uint8array
+    let _33: 5
+    let _34: int
+    let _35: int
+    let _36: uint8array
+    let _37: 6
+    let _38: int
+    let _39: uint8array
+    let _40: 7
+
+    bb0: {
+        _2 = virtual_call random as baml.random.Rng(copy _1, const 8_i64) -> [bb1];
+    }
+
+    bb1: {
+        _12 = copy _2;
+        _13 = const 0_i64;
+        _11 = copy _12[_13];
+        _10 = copy _11 & const 127_i64;
+        _9 = copy _10 << const 7_i64;
+        _16 = copy _2;
+        _17 = const 1_i64;
+        _15 = copy _16[_17];
+        _14 = copy _15 << const 6_i64;
+        _8 = copy _9 | copy _14;
+        _20 = copy _2;
+        _21 = const 2_i64;
+        _19 = copy _20[_21];
+        _18 = copy _19 << const 5_i64;
+        _7 = copy _8 | copy _18;
+        _24 = copy _2;
+        _25 = const 3_i64;
+        _23 = copy _24[_25];
+        _22 = copy _23 << const 4_i64;
+        _6 = copy _7 | copy _22;
+        _28 = copy _2;
+        _29 = const 4_i64;
+        _27 = copy _28[_29];
+        _26 = copy _27 << const 3_i64;
+        _5 = copy _6 | copy _26;
+        _32 = copy _2;
+        _33 = const 5_i64;
+        _31 = copy _32[_33];
+        _30 = copy _31 << const 2_i64;
+        _4 = copy _5 | copy _30;
+        _36 = copy _2;
+        _37 = const 6_i64;
+        _35 = copy _36[_37];
+        _34 = copy _35 << const 1_i64;
+        _3 = copy _4 | copy _34;
+        _39 = copy _2;
+        _40 = const 7_i64;
+        _38 = copy _39[_40];
+        _0 = copy _3 | copy _38;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
+
 fn baml.spawn.TaskGroup.active_count = builtin(vm)
 
 fn baml.spawn.CancelToken.any = builtin(vm)

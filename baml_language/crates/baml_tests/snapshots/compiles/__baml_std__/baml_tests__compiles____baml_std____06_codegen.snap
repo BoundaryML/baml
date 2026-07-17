@@ -6015,6 +6015,92 @@ function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown {
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
 }
 
+function baml.random.ChaCha20.Rng.random(self: baml.random.ChaCha20, bytes: int) -> uint8array {
+}
+
+function baml.random.ChaCha20.Rng.random_int(self: baml.random.ChaCha20) -> int {
+}
+
+function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
+}
+
+function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
+    load_var self
+    load_const 8
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var bytes
+    load_var bytes
+    load_const 0
+    load_array_element
+    load_const 127
+    bin_op &
+    load_const 7
+    bin_op <<
+    load_var bytes
+    load_const 1
+    load_array_element
+    load_const 6
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 2
+    load_array_element
+    load_const 5
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 3
+    load_array_element
+    load_const 4
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 4
+    load_array_element
+    load_const 3
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 5
+    load_array_element
+    load_const 2
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 6
+    load_array_element
+    load_const 1
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 7
+    load_array_element
+    bin_op |
+    return
+}
+
+function baml.random.SystemRandom.Rng.random(self: baml.random.SystemRandom, bytes: int) -> uint8array {
+}
+
+function baml.random.SystemRandom.Rng.random_int(self: baml.random.SystemRandom) -> int {
+}
+
+function baml.random.SystemRandom.get() -> baml.random.SystemRandom {
+    alloc_instance baml.random.SystemRandom
+    return
+}
+
+function baml.random.Xoshiro256PlusPlus.Rng.random(self: baml.random.Xoshiro256PlusPlus, bytes: int) -> uint8array {
+}
+
+function baml.random.Xoshiro256PlusPlus.Rng.random_int(self: baml.random.Xoshiro256PlusPlus) -> int {
+}
+
+function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+}
+
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
 }
 

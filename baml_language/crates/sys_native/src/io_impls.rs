@@ -7,11 +7,9 @@
 use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
-// Only the non-`bundle-http` HTTP stubs use `VmPanic` (to surface an
-// unsupported-platform panic); under `bundle-http` the real impls run instead.
-#[cfg(not(feature = "bundle-http"))]
-use sys_ops::io::VmPanic;
-use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError, owned};
+use sys_ops::io::{
+    self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
+};
 
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
@@ -163,6 +161,54 @@ impl io::IoNamespaceTime for NativeSysOps {
         }
     }
 }
+
+// ============================================================================
+// Random (operating-system entropy)
+// ============================================================================
+
+impl io::IoClassRandomSystemRandom for NativeSysOps {
+    fn random(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        bytes: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let Ok(n) = usize::try_from(bytes) else {
+            return SysOpOutput::err(VmPanic::AllocFailure {
+                message: "Cannot allocate negative size array".to_string(),
+            });
+        };
+        let mut buf = vec![0u8; n];
+        match getrandom::getrandom(&mut buf) {
+            Ok(()) => SysOpOutput::ok(buf),
+            Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
+                resource: "randomness".to_string(),
+                message: format!("SystemRandom.random: system entropy unavailable: {e}"),
+            }),
+        }
+    }
+
+    fn random_int(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        let mut buf = [0u8; 8];
+        match getrandom::getrandom(&mut buf) {
+            // Arithmetic shift right by one maps the uniform 64-bit draw onto
+            // the BAML i63 range `[INT_MIN, INT_MAX]`.
+            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
+            Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
+                resource: "randomness".to_string(),
+                message: format!("SystemRandom.random_int: system entropy unavailable: {e}"),
+            }),
+        }
+    }
+}
+
+impl io::IoNamespaceRandom for NativeSysOps {}
 
 // ============================================================================
 // IO (stdin input)

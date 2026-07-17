@@ -1382,6 +1382,30 @@ class baml.panics.UserPanic {
 }
 type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow
 
+--- <builtin>/baml/ns_random/random.baml ---
+class baml.random.ChaCha20 {
+  _state: $rust_type
+}
+class baml.random.SystemRandom {
+}
+class baml.random.Xoshiro256PlusPlus {
+  _state: $rust_type
+}
+function baml.random.get() -> baml.random.SystemRandom  [expr] {
+  {  } baml.random.SystemRandom {  }
+}
+function baml.random.new(seed: uint8array = Rng.random(SystemRandom.get(), 32)) -> baml.random.ChaCha20  [builtin]
+function baml.random.new(seed: uint8array = Rng.random(SystemRandom.get(), 32)) -> baml.random.Xoshiro256PlusPlus  [builtin]
+function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
+function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
+function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
+function baml.random.random_int(self: ?) -> int  [builtin]
+function baml.random.random_int(self: ?) -> int  [builtin]
+function baml.random.random_int(self: ?) -> int  [expr] {
+  { let bytes = self.random(8) } bytes[0] BitAnd 127 Shl 7 BitOr bytes[1] Shl 6 BitOr bytes[2] Shl 5 BitOr bytes[3] Shl 4 BitOr bytes[4] Shl 3 BitOr bytes[5] Shl 2 BitOr bytes[6] Shl 1 BitOr bytes[7]
+}
+function baml.random.random_int(self: ?) -> int  [builtin]
+
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.CancelToken {
   _handle: $rust_type

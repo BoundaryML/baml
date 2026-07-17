@@ -2799,6 +2799,35 @@ class baml.panics.IntegerOverflow$stream {
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
+--- <builtin>/baml/ns_random/random.baml ---
+function baml.random.Rng.random_int(self: baml.random.Rng) -> int throws never {
+  { : int
+    let bytes = self.random(8) : uint8array
+    bytes[0] & 127 << 7 | bytes[1] << 6 | bytes[2] << 5 | bytes[3] << 4 | bytes[4] << 3 | bytes[5] << 2 | bytes[6] << 1 | bytes[7] : int
+  }
+}
+class baml.random.SystemRandom {
+}
+function baml.random.SystemRandom.get() -> baml.random.SystemRandom throws never {
+  { : baml.random.SystemRandom
+    SystemRandom {  } : baml.random.SystemRandom
+  }
+}
+class baml.random.Xoshiro256PlusPlus {
+  _state: $rust_type
+}
+class baml.random.ChaCha20 {
+  _state: $rust_type
+}
+class baml.random.SystemRandom$stream {
+}
+class baml.random.Xoshiro256PlusPlus$stream {
+  _state: $rust_type
+}
+class baml.random.ChaCha20$stream {
+  _state: $rust_type
+}
+
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {
   body: () -> T throws E
