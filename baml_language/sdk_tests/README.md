@@ -78,7 +78,7 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
 
 `sdk_test_typescript_web` provides coverage for
 
-  - `sdks/typescript/bridge_typescript_web`; runtime Vitest coverage remains ignored until the Web implementation change is applied
+  - `sdks/typescript/bridge_typescript_web`
   - `sdks/typescript/sdkgen_typescript_shared`
 
 `sdk_test_rust` provides coverage for
@@ -182,6 +182,32 @@ sdk_tests/
 ### TypeScript runtime selection
 
 Every checked-in `*.test.ts` and helper `*.ts` file lives under `crates/typescript/<fixture>/customizable`. The Node build copies the complete corpus into its Node tree, while the Web build reads that sibling source and copies it into its own Chromium and workerd trees. Each Vitest config sets `BAML_TEST_RUNTIME`; import `isTestRuntime` from the generated `test_runtime.js` helper and use `describe.runIf(isTestRuntime("node"))`, `describe.runIf(isTestRuntime("web"))`, or `describe.runIf(isTestRuntime("workers"))` to interleave runtime-specific coverage in one test file.
+
+Portable bridge semantics must run without a runtime gate so the same assertion executes in Node, Chromium, and workerd. Use the smallest capability-specific `describe.runIf` block for platform behavior: local listeners and mutable host files are Node-only, mocked `globalThis.fetch` runs in Chromium and workerd, and synchronous bundle reads are workerd-only. Every remaining runtime gate needs a nearby comment naming the concrete unavailable capability.
+
+The full Web parity gate includes generated ESM imports, TypeScript declarations, Chromium Vitest, and workerd Vitest for every fixture:
+
+```bash
+cd baml_language
+cargo nextest run -p sdk_test_typescript_web
+```
+
+Use fixture and runner filters while iterating, but rerun the complete crate before merging:
+
+```bash
+cargo nextest run -p sdk_test_typescript_web function_calls::
+cargo nextest run -p sdk_test_typescript_web type_shapes::vitest_web
+cargo nextest run -p sdk_test_typescript_web type_shapes::vitest_workers
+```
+
+Raw Web bridge boundary tests cover contracts hidden by generated SDKs, including WASM exports, exact package-root exports, declaration synchronization, handle ownership, callable registry cleanup, call contexts, setup errors, and sync deadlock rejection:
+
+```bash
+cd baml_language/sdks/typescript/bridge_typescript_web
+pnpm build:debug
+pnpm test:web
+pnpm test:workers
+```
 
 ## Adding a Fixture
 

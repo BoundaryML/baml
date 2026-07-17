@@ -24,6 +24,9 @@ impl BamlCallContext {
     #[napi]
     pub fn abort(&self) {
         if let Ok(mut aborted) = self.aborted.lock() {
+            if *aborted {
+                return;
+            }
             *aborted = true;
         }
         let call_ids = self
@@ -49,12 +52,17 @@ impl BamlCallContext {
                 "callId must be a decimal uint64 string",
             )
         })?;
-        if let Ok(mut ids) = self.active_call_ids.lock()
-            && !ids.contains(&call_id)
-        {
-            ids.push(call_id);
-        }
-        if self.aborted() {
+        let newly_attached = if let Ok(mut ids) = self.active_call_ids.lock() {
+            if ids.contains(&call_id) {
+                false
+            } else {
+                ids.push(call_id);
+                true
+            }
+        } else {
+            false
+        };
+        if self.aborted() && newly_attached {
             bridge_cffi::cancel_function_call_by_id(call_id);
         }
         Ok(())

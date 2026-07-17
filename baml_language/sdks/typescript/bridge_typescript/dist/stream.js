@@ -21,6 +21,7 @@
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
 import { getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { supportsSyncStreamPulls } from './platform.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
 const STREAM_FINAL_FN = 'baml.llm.Stream.final';
@@ -53,6 +54,9 @@ export class BamlStream {
         return (await this._callAsync(STREAM_FINAL_FN));
     }
     _callSync(fqn) {
+        if (!supportsSyncStreamPulls) {
+            throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
+        }
         const rt = getRuntime();
         const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall() });
         const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null);
