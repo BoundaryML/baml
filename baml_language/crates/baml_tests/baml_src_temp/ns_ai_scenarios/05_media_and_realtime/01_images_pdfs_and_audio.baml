@@ -27,4 +27,20 @@ testset "integ-test-guide-05-image-input" {
     ));
     assert.is_true(value.length() > 0)
   }
+
+  test "guide 05.01 live Anthropic: PDF input reaches the same task abstraction" {
+    let value = root.ai.drivers.drive<string>(InspectPdf_task(
+      pdf.from_url(
+        "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        "application/pdf",
+      ),
+      live_anthropic(),
+    ));
+    log.info(baml.json.stringify({
+      "guide": "05.01",
+      "media": "pdf",
+      "summary_length": value.length(),
+    }));
+    assert.contains(value.to_lower_case(), "dummy")
+  }
 }

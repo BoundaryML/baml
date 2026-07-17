@@ -1136,6 +1136,19 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn collect_garbage(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // BexEngine intercepts this operation before ordinary sys-op dispatch
+        // so it can release the calling VM's heap permit and coordinate a
+        // stop-the-world collection. This fallback keeps the generated IO
+        // contract complete for alternate dispatchers.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _heap: &Arc<BexHeap>,

@@ -100,7 +100,8 @@ implements ToolCallingProvider for OpenAi {
       "event": "llm.tools.request",
       "provider": "openai",
       "model": self.model,
-      "body": body,
+      "message_count": state.wire_messages.length(),
+      "tool_count": state.tools_json.length(),
     }));
     //# Call OpenAI with native tool schemas
     let response = baml.http.send(baml.http.Request {
@@ -122,7 +123,7 @@ implements ToolCallingProvider for OpenAi {
       "provider": "openai",
       "model": self.model,
       "status_code": response.status_code,
-      "body": text,
+      "response_bytes": text.length(),
     }));
     //# Parse the provider response and usage
     let wire: OpenAiToolResponse = baml.sap.parse<OpenAiToolResponse>(text) catch (e) {

@@ -18,6 +18,7 @@ testset "integ-test-guide-06-provider-matrix" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     });
     //# Verify the live result
+    log.info(baml.json.stringify({ "guide": "06.04", "provider": "openai", "summary_length": result.summary.length() }));
     assert.is_true(result.summary.length() > 0)
   }
 
@@ -29,6 +30,7 @@ testset "integ-test-guide-06-provider-matrix" {
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
     });
     //# Verify the live result
+    log.info(baml.json.stringify({ "guide": "06.04", "provider": "anthropic", "summary_length": result.summary.length() }));
     assert.is_true(result.summary.length() > 0)
   }
 }

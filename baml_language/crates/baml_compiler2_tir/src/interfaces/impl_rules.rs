@@ -487,6 +487,49 @@ pub fn impl_data<'db>(
         .get(&iface_loc.id(db))
         .ok_or(ImplDataError::Malformed)?;
 
+    // A direct class method may implement a same-named interface method. This
+    // matters in particular for magic methods such as `cleanup`: the VM only
+    // registers a direct `cleanup(self) -> void` as a finalizer, while callers
+    // still need `Resource.cleanup()` virtual dispatch to reach that one body.
+    //
+    // Explicit methods inside `implements I { ... }` remain higher priority.
+    // Only in-body class impls inherit direct methods; a free/out-of-body impl
+    // must continue to provide its own overrides explicitly.
+    let direct_class_method_ids: Vec<_> = match &block.subject {
+        ImplSubject::InClass {
+            class,
+            out_of_body: false,
+        } => {
+            let class_data = item_tree
+                .classes
+                .get(class)
+                .ok_or(ImplDataError::Malformed)?;
+            let explicit_names: Vec<&Name> = block
+                .methods
+                .iter()
+                .map(|id| &item_tree[*id].name)
+                .collect();
+            class_data
+                .methods
+                .iter()
+                // `Class::methods` is flattened with implements-block methods;
+                // only entries without an interface target are direct methods.
+                .filter(|id| !item_tree.method_to_iface_target.contains_key(id))
+                .filter(|id| {
+                    let name = &item_tree[**id].name;
+                    !explicit_names.contains(&name)
+                        && (iface_data.required_methods.iter().any(|m| m.name == *name)
+                            || iface_data
+                                .default_methods
+                                .iter()
+                                .any(|default_id| iface_tree[*default_id].name == *name))
+                })
+                .copied()
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
     let mut assoc_diags = Vec::new();
     // The impl's own generic bounds, so a `T.member` projection in a binding value
     // (`type Item = T.Elem`) resolves through the impl generic's declared bound.
@@ -522,11 +565,16 @@ pub fn impl_data<'db>(
                 ImplDiagnosticLocation::InterfaceTarget,
             ));
         }
-        let override_names: Vec<&Name> = block
+        let mut override_names: Vec<&Name> = block
             .methods
             .iter()
             .map(|id| &item_tree[*id].name)
             .collect();
+        override_names.extend(
+            direct_class_method_ids
+                .iter()
+                .map(|id| &item_tree[*id].name),
+        );
         let default_names: Vec<&Name> = iface_data
             .default_methods
             .iter()
@@ -756,6 +804,7 @@ pub fn impl_data<'db>(
     let methods = block
         .methods
         .iter()
+        .chain(direct_class_method_ids.iter())
         .map(|id| baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id))
         .collect();
     let field_links = block

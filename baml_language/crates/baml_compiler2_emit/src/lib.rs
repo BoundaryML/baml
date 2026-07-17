@@ -331,6 +331,11 @@ fn build_packages(
         idx.map(ObjectIndex::from_raw)
     };
 
+    // Per interface, every declared method name. Direct class methods with one
+    // of these names can satisfy an in-body `implements I {}` block; the TIR
+    // conformance pass has already checked their signatures.
+    let mut iface_method_names: indexmap::IndexMap<baml_type::TypeName, indexmap::IndexSet<Name>> =
+        indexmap::IndexMap::new();
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
     // inherits these for any method it doesn't override, so each baked rule's
     // method table is complete (the resolver needs no separate default lookup; a
@@ -352,13 +357,18 @@ fn build_packages(
     for file in all_files {
         let item_tree = file_item_tree(db, *file);
         for (iface_id, iface_data) in &item_tree.interfaces {
-            if iface_data.default_methods.is_empty() {
-                continue;
-            }
             let iface_tn = qualify_def(
                 db,
                 Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
                 &iface_data.name,
+            );
+            let method_names = iface_method_names.entry(iface_tn.clone()).or_default();
+            method_names.extend(iface_data.required_methods.iter().map(|m| m.name.clone()));
+            method_names.extend(
+                iface_data
+                    .default_methods
+                    .iter()
+                    .map(|id| item_tree[*id].name.clone()),
             );
             iface_assoc_order
                 .entry(iface_tn.clone())
@@ -653,6 +663,23 @@ fn build_packages(
                     ))
                 })
                 .collect();
+            // Direct methods are not tagged with an interface target. For an
+            // in-body `implements I {}` they may nevertheless be the method
+            // implementation (notably the magic direct `cleanup` method). Keep
+            // them separate so an explicit method in the implements block can
+            // retain priority for this interface instantiation.
+            let direct_class_methods: Vec<(Name, String)> = class_data
+                .methods
+                .iter()
+                .filter(|m| !item_tree.method_to_iface_target.contains_key(m))
+                .map(|&m| {
+                    (
+                        item_tree[m].name.clone(),
+                        def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                            .to_string(),
+                    )
+                })
+                .collect();
 
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
@@ -721,6 +748,27 @@ fn build_packages(
                         ))
                     })
                     .collect();
+                // Explicit implements-block methods win, then matching direct
+                // class methods, then interface defaults. Out-of-body impls must
+                // remain self-contained and cannot borrow direct class methods.
+                if !block.is_out_of_body
+                    && let Some(declared_names) = iface_method_names.get(&iface_tn)
+                {
+                    for (name, fqn) in &direct_class_methods {
+                        if !declared_names.contains(name) {
+                            continue;
+                        }
+                        let Some(fqn) = resolve_fqn(fqn) else {
+                            continue;
+                        };
+                        methods
+                            .entry(name.clone())
+                            .or_insert_with(|| ProgramMethodImpl {
+                                fqn,
+                                frame: impl_frame.clone(),
+                            });
+                    }
+                }
                 let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
                 program_packages

@@ -14,7 +14,8 @@ function primitive_stream<TPartial, T>(
     "provider": provider_name,
     "method": request.method,
     "url": request.url,
-    "body": request.body,
+    // Prompts and encoded media must not leak into routine integration logs.
+    "request_bytes": request.body.length(),
   }));
   let sse = baml.http.fetch_sse(request) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " stream open failed"] },

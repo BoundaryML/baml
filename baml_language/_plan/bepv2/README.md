@@ -79,7 +79,6 @@ operations return resources.
 - [7. Custom capabilities](./pages/07-custom-capabilities.md)
 - [8. Reliability and errors](./pages/08-reliability-and-errors.md)
 - [9. Normative signatures](./pages/09-normative-signatures.md)
-- [10. Workflows](./pages/10-workflows.md)
 - [11. Tool calling after BEP-062](./pages/11-tool-calling-after-bep-062.md) —
   function-backed tools, reflection-based dispatch, and the remaining runtime
   tool boundary

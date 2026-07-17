@@ -38,7 +38,8 @@ function primitive_generate<T>(
     "event": "llm.request",
     "provider": provider_name,
     "model": model,
-    "body": request.body,
+    // Never emit prompts or encoded media into ordinary integration logs.
+    "request_bytes": request.body.length(),
   }));
   let http_response = baml.http.send(request) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " send failed"] },
@@ -51,7 +52,7 @@ function primitive_generate<T>(
     "provider": provider_name,
     "model": model,
     "status_code": http_response.status_code,
-    "body": body,
+    "response_bytes": body.length(),
   }));
   if (!http_response.ok()) {
     throw baml.errors.UnknownError {
@@ -98,4 +99,3 @@ function primitive_generate<T>(
     transcript: null,
   }
 }
-

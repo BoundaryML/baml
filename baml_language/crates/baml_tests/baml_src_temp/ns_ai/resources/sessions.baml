@@ -32,6 +32,13 @@ class FakeSession {
   is_cleaned: bool,
   cleanup_count: int,
 
+  function cleanup(self) -> void throws never {
+    if (!self.is_cleaned) {
+      self.is_cleaned = true;
+      self.cleanup_count = self.cleanup_count + 1;
+    }
+  }
+
   implements Session {
     function provider(self) -> Provider throws never { self.owner }
     function id(self) -> string throws never { self.session_id }
@@ -63,15 +70,7 @@ class FakeSession {
       }
     }
   }
-  implements Resource {
-    function cleanup(self) -> null throws never {
-      if (!self.is_cleaned) {
-        self.is_cleaned = true;
-        self.cleanup_count = self.cleanup_count + 1;
-      }
-      null
-    }
-  }
+  implements Resource {}
 }
 
 class FakeSessionProvider {

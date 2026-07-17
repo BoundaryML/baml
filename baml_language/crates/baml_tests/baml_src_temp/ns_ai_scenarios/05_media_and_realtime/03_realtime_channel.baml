@@ -19,10 +19,24 @@ testset "integ-test-guide-05-realtime" {
         model: "gpt-realtime",
         voice: "alloy",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+        output_audio: false,
       }),
       channel,
     );
     //# Collect and verify realtime transcript deltas
-    assert.contains(root.ai.collect_live_text(live).to_lower_case(), "pong")
+    let transcript = root.ai.collect_live_text(live);
+    log.info(baml.json.stringify({
+      "guide": "05.03",
+      "provider_frames": channel.frames.length(),
+      "transcript_length": transcript.length(),
+    }));
+    assert.contains(transcript.to_lower_case(), "pong")
+    match (live) {
+      let session: root.ai.OpenAiRealtimeLive => {
+        assert.is_true(session.is_closed)
+        assert.is_true(session.items.length() > 0)
+      },
+      _ => assert.is_true(false),
+    }
   }
 }

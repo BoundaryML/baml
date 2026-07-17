@@ -16,6 +16,9 @@ interface BatchProvider requires Provider {
 class FakeBatch<T> {
   responses: Response<T>[],
   cancelled: bool,
+
+  function cleanup(self) -> void throws never { self.cancel(); }
+
   implements Batch<T> {
     function status(self) -> JobStatus throws never {
       if (self.cancelled) { JobStatus.Cancelled } else { JobStatus.Complete }
@@ -23,9 +26,7 @@ class FakeBatch<T> {
     function results(self) -> Response<T>[] throws never { self.responses }
     function cancel(self) -> null throws never { self.cancelled = true; null }
   }
-  implements Resource {
-    function cleanup(self) -> null throws never { self.cancel() }
-  }
+  implements Resource {}
 }
 
 class FakeBatchProvider {

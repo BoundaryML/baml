@@ -125,6 +125,68 @@ function main() -> int {{
 }
 
 #[tokio::test]
+async fn direct_cleanup_satisfies_and_dispatches_through_resource_interface() {
+    // `cleanup` must remain a direct class method so the emitter marks the
+    // class finalizable. The same method also satisfies the Resource contract;
+    // virtual dispatch must not fall back to the interface default.
+    let output = baml_test!(
+        r#"
+interface Resource {
+  function cleanup(self) -> void throws never
+}
+class R {
+  log string[]
+  function cleanup(self) -> void throws never {
+    self.log.push("cleaned")
+  }
+  implements Resource {}
+}
+function clean(resource: Resource) -> void throws never {
+  resource.cleanup()
+}
+function main() -> string[] {
+  let r = R { log: [] }
+  clean(r)
+  clean(r)
+  r.log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["cleaned"]);
+}
+
+#[tokio::test]
+async fn baml_collect_garbage_runs_unreachable_cleanup_before_returning() {
+    // BAML tests sometimes need to observe a finalizer deterministically. The
+    // builtin performs a major collection and drains the finalizer queue before
+    // returning, so the shared log is already updated at the next statement.
+    let output = baml_test!(
+        r#"
+class Resource {
+  log string[]
+  function cleanup(self) -> void throws never {
+    self.log.push("cleaned")
+  }
+}
+function abandon(log: string[]) -> void throws never {
+  let resource = Resource { log: log }
+  resource.log.push("created")
+}
+function main() -> string[] {
+  let log: string[] = []
+  abandon(log)
+  baml.sys.collect_garbage()
+  log
+}
+"#
+    );
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["created", "cleaned"]
+    );
+}
+
+#[tokio::test]
 async fn cleanup_with_explicit_throws_never_is_accepted() {
     // `throws never` is the language-blessed "provably cannot fail" spelling and
     // is equivalent to no throws clause — it must be ACCEPTED as the magic shape

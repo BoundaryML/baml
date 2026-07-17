@@ -41,7 +41,7 @@ must keep separate:
   and a fixed `I -> O` workflow cannot honestly implement universally generic
   `Generate<T>`.
 
-[Page 10](./pages/10-workflows.md) turns those constraints into a fresh
+The removed workflow draft captured those constraints in a fresh
 executor-based design: ordinary BAML authoring, typed durable commands,
 resource tokens, replay rather than VM snapshots, and explicit adapters
 where the signatures are honest.
