@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +128,21 @@ func TestGoCodegenContextDeadline(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed >= 500*time.Millisecond {
 		t.Fatalf("deadline took %s", elapsed)
+	}
+}
+
+// Go-specific bridge boundary: a value that cannot be serialized never
+// reaches BAML's semantic argument relation and remains distinguishable from
+// a BAML InvalidArgument failure.
+func TestGoCodegenDefaultArgumentSerializationErrorNamesArgument(t *testing.T) {
+	_, err := baml_sdk.DefaultArgsMatrix(
+		context.Background(),
+		baml_sdk.WithDefaultArgsMatrixBigintValue(nil),
+	)
+	if err == nil || !strings.Contains(err.Error(), `argument "bigint_value"`) || !strings.Contains(err.Error(), "uninitialized") {
+		t.Fatalf("serialization error = %v", err)
+	}
+	if strings.Contains(err.Error(), "BAML error") {
+		t.Fatalf("bridge serialization error was misclassified as runtime error: %v", err)
 	}
 }

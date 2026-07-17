@@ -30,9 +30,9 @@ func TestDynamicUnionAcceptsNaturalGoIntegers(t *testing.T) {
 func TestDynamicUnionDelegatesSemanticValidationToBAML(t *testing.T) {
 	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), []string{"not", "an", "arm"})
 	if err == nil {
-		t.Fatal("expected BAML invalid-function-arguments error")
+		t.Fatal("expected BAML argument type-mismatch error")
 	}
-	if !strings.Contains(err.Error(), "BAML") {
+	if !strings.Contains(err.Error(), "BAML error") || !strings.Contains(err.Error(), "baml.errors.TypeMismatch") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -829,7 +829,11 @@ fn supported_function(
             .iter()
             .all(|arg| supported_wire_type(&arg.ty, wireable_classes, projection))
         && (supported_wire_type(&function.return_type, wireable_classes, projection)
-            || matches!(function.return_type, Ty::Void { .. }))
+            || function_returns_only_error(&function.return_type))
+}
+
+fn function_returns_only_error(return_type: &Ty) -> bool {
+    matches!(return_type, Ty::Void { .. } | Ty::Never { .. })
 }
 
 fn supported_wire_type(
@@ -1025,10 +1029,16 @@ fn render_functions(
             names,
             DynamicDocContext::Return,
         ));
+        if function.throws.is_some() || matches!(function.return_type, Ty::Never { .. }) {
+            dynamic_notes.push(
+                "BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet."
+                    .to_string(),
+            );
+        }
         let docstring =
             docstring_with_generated_notes(function.docstring.as_deref(), &dynamic_notes);
         render_go_doc_comment(&mut out, &go_name.to_string(), docstring.as_deref());
-        if matches!(function.return_type, Ty::Void { .. }) {
+        if function_returns_only_error(&function.return_type) {
             let _ = writeln!(out, "func {go_name}({}) {error_type} {{", params.join(", "));
         } else {
             let _ = writeln!(
@@ -1048,7 +1058,7 @@ fn render_functions(
             out,
             "\tif {error_local} := {bootstrap_package}.Ensure(); {error_local} != nil {{"
         );
-        if matches!(function.return_type, Ty::Void { .. }) {
+        if function_returns_only_error(&function.return_type) {
             let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
         } else {
             let _ = writeln!(
@@ -1106,7 +1116,7 @@ fn render_functions(
             out.push_str("\t\t}\n\t}\n");
         }
 
-        if matches!(function.return_type, Ty::Void { .. }) {
+        if function_returns_only_error(&function.return_type) {
             let _ = write!(
                 out,
                 "\t_, {error_local} := {runtime_package}.Call({context_parameter}, "
@@ -1146,6 +1156,14 @@ fn render_functions(
         }
         if matches!(function.return_type, Ty::Void { .. }) {
             let _ = writeln!(out, "\treturn {error_local}");
+        } else if matches!(function.return_type, Ty::Never { .. }) {
+            let _ = writeln!(out, "\tif {error_local} != nil {{");
+            let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
+            let _ = writeln!(
+                out,
+                "\treturn {runtime_package}.UnexpectedNeverReturn({:?})",
+                routed.go_name.wire().to_string()
+            );
         } else {
             let _ = writeln!(out, "\tif {error_local} != nil {{");
             let _ = writeln!(
@@ -2543,6 +2561,12 @@ mod tests {
         }
     }
 
+    fn ty_never() -> Ty {
+        Ty::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
     fn ty_union(members: Vec<Ty>) -> Ty {
         Ty::Union(members, TyAttr::default())
     }
@@ -3428,7 +3452,7 @@ mod tests {
     }
 
     #[test]
-    fn emits_void_as_error_only_and_imports_math_big_for_bigint() {
+    fn emits_void_and_never_as_error_only_and_imports_math_big_for_bigint() {
         let void_name = Name::new(BaseName::new("user"), vec![], BaseName::new("no_op"));
         let void_function = Function {
             name: BaseName::new("no_op"),
@@ -3460,9 +3484,25 @@ mod tests {
             watchers: vec![],
             origin: origin(),
         };
+        let never_name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("always_panics"),
+        );
+        let never_function = Function {
+            name: BaseName::new("always_panics"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: ty_never(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
         let pool = SymbolPool::from([
             (void_name, Symbol::Function(void_function)),
             (bigint_name, Symbol::Function(bigint_function)),
+            (never_name, Symbol::Function(never_function)),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -3474,6 +3514,11 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("\n\t\"math/big\"\n"));
         assert!(functions.contains("func NoOp(ctx_ context.Context) error"));
+        assert!(functions.contains("func AlwaysPanics(ctx_ context.Context) error"));
+        assert!(functions.contains("return baml_go.UnexpectedNeverReturn(\"user.always_panics\")"));
+        assert!(functions.contains(
+            "// AlwaysPanics BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet."
+        ));
         assert!(functions.contains(
             "func RoundTripBigint(ctx_ context.Context, value *big.Int) (*big.Int, error)"
         ));

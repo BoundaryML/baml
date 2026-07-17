@@ -11,8 +11,13 @@ func TestGoCodegenFunctionDocComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "// ChainChainInner Innermost step — throws, so the error unwinds up through middle + outer.\nfunc ChainChainInner"
-	if !strings.Contains(string(contents), want) {
-		t.Errorf("missing attached function doc comment %q", want)
+	wants := []string{
+		"// ChainChainInner Innermost step — throws, so the error unwinds up through middle + outer.",
+		"// BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet.\nfunc ChainChainInner",
+	}
+	for _, want := range wants {
+		if !strings.Contains(string(contents), want) {
+			t.Errorf("missing attached function doc comment %q", want)
+		}
 	}
 }

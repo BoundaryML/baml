@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ var (
 	registerCallbackOnce sync.Once
 	nextCallbackID       atomic.Uint32
 	pendingCalls         sync.Map
+	processExit          = os.Exit
 )
 
 var nativeRuntime = newNativeRuntimeState()
@@ -212,13 +214,28 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	}
 	nativeCall(function, encoded, callbackID)
 
-	select {
-	case payload := <-call.result:
-		return decodeResult(payload)
-	case <-ctx.Done():
+	payload, err := waitForCallResult(ctx, call.result)
+	if err != nil {
 		pendingCalls.Delete(callbackID)
 		nativeCancel(engineCallID)
-		return Value{}, ctx.Err()
+		return Value{}, err
+	}
+	return decodeResult(payload)
+}
+
+func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error) {
+	select {
+	case payload := <-result:
+		// Cancellation is part of the public Go API contract. If the native
+		// result and ctx.Done become ready together, preserve the exact context
+		// error instead of nondeterministically exposing the runtime's
+		// cancellation panic envelope.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -274,7 +291,13 @@ func decodeResult(payload []byte) (Value, error) {
 	if err := proto.Unmarshal(payload, result); err != nil {
 		return Value{}, fmt.Errorf("decode BAML result: %w", err)
 	}
+	return decodeResultEnvelope(result)
+}
 
+func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
+	if result == nil {
+		return Value{}, errors.New("BAML returned a nil result envelope")
+	}
 	switch item := result.Result.(type) {
 	case *cffi.BamlOutboundResult_Ok:
 		if item.Ok == nil {
@@ -282,17 +305,91 @@ func decodeResult(payload []byte) (Value, error) {
 		}
 		return Value{value: item.Ok}, nil
 	case *cffi.BamlOutboundResult_Error:
-		return Value{}, outboundFailure("BAML error", item.Error.GetTrace())
+		if item.Error == nil {
+			return Value{}, errors.New("BAML returned an empty error payload")
+		}
+		return Value{}, outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
 	case *cffi.BamlOutboundResult_Panic:
-		return Value{}, outboundFailure("BAML panic", item.Panic.GetTrace())
+		if item.Panic == nil {
+			return Value{}, errors.New("BAML returned an empty panic payload")
+		}
+		if item.Panic.GetIsExitPanic() {
+			processExit(processExitCode(item.Panic.GetExitCode()))
+			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
+		}
+		return Value{}, outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
 	default:
 		return Value{}, errors.New("BAML returned an empty result envelope")
 	}
 }
 
-func outboundFailure(kind string, trace []string) error {
-	if len(trace) == 0 {
-		return errors.New(kind)
+func processExitCode(code int64) int {
+	// Match the Rust bridge's host contract: process APIs consume an i32 exit
+	// code, and an out-of-range BAML value falls back to a generic failure.
+	if code < math.MinInt32 || code > math.MaxInt32 {
+		return 1
 	}
-	return fmt.Errorf("%s:\n%s", kind, strings.Join(trace, "\n"))
+	return int(code)
+}
+
+// outboundFailure intentionally returns a plain Go error. The current Go SDK
+// does not expose a structured BAML error hierarchy, but retaining the thrown
+// class name, conventional message field, and BAML trace in Error() keeps the
+// string contract useful and distinguishes errors from non-exit panics.
+func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string) error {
+	className, message := outboundFailureIdentity(value)
+	if className == "" {
+		className = "baml." + kind
+	}
+
+	var rendered strings.Builder
+	fmt.Fprintf(&rendered, "BAML %s: %s", kind, className)
+	if message != "" {
+		fmt.Fprintf(&rendered, ": %s", message)
+	}
+	for _, line := range trace {
+		rendered.WriteString("\n    ")
+		rendered.WriteString(line)
+	}
+	return errors.New(rendered.String())
+}
+
+func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {
+	// A thrown member of a union is wrapped in the same selected-arm envelope
+	// as an ordinary union value. Aliases and throws unions must not hide the
+	// concrete class identity from the host error string.
+	for depth := 0; value != nil && depth < 64; depth++ {
+		switch item := value.Value.(type) {
+		case *cffi.BamlOutboundValue_UnionVariantValue:
+			if item.UnionVariantValue == nil {
+				return "", ""
+			}
+			value = item.UnionVariantValue.GetValue()
+			continue
+		case *cffi.BamlOutboundValue_ClassValue:
+			if item.ClassValue == nil {
+				return "", ""
+			}
+			message := ""
+			for _, field := range item.ClassValue.GetFields() {
+				if field != nil && field.GetKey() == "message" && field.GetValue() != nil {
+					if decoded, err := (Value{value: field.GetValue()}).String(); err == nil {
+						message = decoded
+					}
+					break
+				}
+			}
+			return item.ClassValue.GetName(), message
+		default:
+			return "", ""
+		}
+	}
+	return "", ""
+}
+
+// UnexpectedNeverReturn reports native/runtime drift for a BAML function
+// whose canonical return type is never. Generated functions call this only
+// when the bridge unexpectedly receives an ok result arm.
+func UnexpectedNeverReturn(function string) error {
+	return fmt.Errorf("BAML never-returning function %q returned successfully", function)
 }
