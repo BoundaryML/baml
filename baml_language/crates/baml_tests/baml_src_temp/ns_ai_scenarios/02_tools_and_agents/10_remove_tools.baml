@@ -143,3 +143,45 @@ test "guide 02.09: remove application and provider-owned tools together" {
     _ => assert.is_true(false),
   }
 }
+
+testset "integ-test-guide-02-remove-tools" {
+  test "guide 02.09 live OpenAI: removing a tool changes the next provider request" {
+    let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
+    let hooks = ToolRosterHooks { ...tool_roster_hooks(), remove_name: "lookup_account" };
+    let observer = GuideObserver { kinds: [] };
+    let provider = live_openai();
+    let outcome = root.ai.drivers.run_agent<Resolution>(
+      ToolInstructions_task(
+        provider,
+        [],
+        `First call search_knowledge with query "duplicate charge". After its result, lookup_account will be removed. Return the final resolution without calling a removed tool.`,
+      ),
+      guide_agent_options(
+        [],
+        guide_dispatch,
+        tool_registry = registry,
+        hooks = hooks,
+        observers = [observer],
+      ),
+    );
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => match (done.transcript) {
+        let transcript: root.ai.OpenAiToolTranscript => {
+          let names = transcript.tools_json.map((schema: json) -> string {
+            baml.json.path_or<string>(schema, ".function.name", "")
+          });
+          log.info("live removed tools " + {
+            "registry": registry.snapshot().map((tool: root.ai.Tool) -> string { tool.name }),
+            "provider_tools": names,
+            "events": observer.kinds,
+          }.to_string());
+          assert.equal(names, ["search_knowledge"]);
+          assert.equal(registry.snapshot().length(), 1);
+          assert.contains(observer.kinds.join(","), "tool_roster_changed");
+        },
+        _ => assert.is_true(false),
+      },
+      _ => assert.is_true(false),
+    }
+  }
+}

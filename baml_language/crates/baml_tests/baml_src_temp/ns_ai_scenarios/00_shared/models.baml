@@ -44,6 +44,22 @@ function fake_resolution() -> root.ai.FakeProvider throws never {
   }`)
 }
 
+function live_openai() -> root.ai.OpenAi throws baml.errors.Io | baml.errors.ParseError {
+  root.ai.OpenAi {
+    ...root.ai.openai(),
+    model: "gpt-5.6-luna",
+    api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+  }
+}
+
+function live_anthropic() -> root.ai.Anthropic throws baml.errors.Io | baml.errors.ParseError {
+  root.ai.Anthropic {
+    ...root.ai.anthropic(),
+    model: "claude-sonnet-4-6",
+    api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+  }
+}
+
 function default_task_options() -> root.ai.TaskOptions throws never {
   root.ai.TaskOptions {
     tool_registry: null,

@@ -185,7 +185,6 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
       "steps": steps,
       "usage": usage,
       "budget": options.budget,
-      "transcript": transcript,
       "provider": provider.name(),
       "tools": registry.snapshot().map((tool: Tool) -> string { tool.name }),
     }.to_string());

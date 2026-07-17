@@ -53,3 +53,40 @@ test "guide 04.05: transcript tokens validate provider ownership" {
   };
   assert.equal(label, "rejected")
 }
+
+testset "integ-test-guide-04-save-and-resume" {
+  test "guide 04.05 live OpenAI: save after a tool request and resume to completion" {
+    let provider = live_openai();
+    let task = ToolInstructions_task(
+      provider,
+      [knowledge_tool()],
+      `Call search_knowledge exactly once with query "duplicate charge". After its result, return the final resolution.`,
+    );
+    let transcript = provider.begin<Resolution>(task);
+    let first = provider.step<Resolution>(transcript, [knowledge_tool()]);
+    let calls = match (first.outcome) {
+      let value: root.ai.ToolCalls => value,
+      let value: Resolution => baml.sys.panic("expected a live tool request before save"),
+    };
+    let token = root.ai.drivers.save_transcript(provider, transcript);
+    let restored = root.ai.drivers.restore_transcript(provider, token);
+    let resumed = provider.submit(restored, guide_dispatch(calls.calls));
+    let hooks = no_op_hooks();
+    let outcome = root.ai.drivers.run_agent<Resolution>(
+      task.with_transcript(resumed),
+      guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks),
+    );
+    log.info("live transcript resume " + {
+      "saved_provider": token.provider,
+      "saved_bytes": token.sealed.length(),
+      "pre_resume_calls": calls.calls.map((call: root.ai.ToolCall) -> string { call.name }),
+      "replayed_dispatches": hooks.after_calls,
+    }.to_string());
+    assert.equal(token.provider, "openai")
+    assert.equal(hooks.after_calls.length(), 0)
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      _ => assert.is_true(false),
+    }
+  }
+}

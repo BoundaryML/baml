@@ -38,3 +38,56 @@ test "guide 02.06: replacement is explicit" {
   assert.is_true(registry.replace(replacement))
   assert.equal(registry.snapshot()[0].description, "Replacement handler contract.")
 }
+
+class AddAccountAfterFirstStepHooks {
+  after_calls: string[],
+
+  implements root.ai.AgentHooks {
+    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
+        throws baml.errors.ToolError {
+      if (context.step == 1 && !context.tool_registry.contains("lookup_account")) {
+        context.tool_registry.add(account_tool());
+      }
+      root.ai.StepPlan { provider: null, tools: null, stop: null }
+    }
+
+    function after_tool_call(self, event: root.ai.AfterToolCall) -> null throws never {
+      self.after_calls.push(event.call.name);
+      null
+    }
+  }
+}
+
+testset "integ-test-guide-02-dynamic-tool-registry" {
+  test "guide 02.06 live OpenAI: a tool added after turn one is used on turn two" {
+    let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
+    let hooks = AddAccountAfterFirstStepHooks { after_calls: [] };
+    let observer = GuideObserver { kinds: [] };
+    let provider = live_openai();
+    let outcome = root.ai.drivers.run_agent<Resolution>(
+      ToolInstructions_task(
+        provider,
+        [],
+        `First call search_knowledge with query "duplicate charge". A lookup_account tool will be added after that result. Then call lookup_account with customer_id "C-1" before returning the final resolution.`,
+      ),
+      guide_agent_options(
+        [],
+        guide_dispatch,
+        tool_registry = registry,
+        hooks = hooks,
+        observers = [observer],
+      ),
+    );
+    log.info("live dynamic registry " + {
+      "calls": hooks.after_calls,
+      "registry": registry.snapshot().map((tool: root.ai.Tool) -> string { tool.name }),
+      "events": observer.kinds,
+    }.to_string());
+    assert.equal(hooks.after_calls, ["search_knowledge", "lookup_account"])
+    assert.contains(observer.kinds.join(","), "tool_roster_changed")
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      _ => assert.is_true(false),
+    }
+  }
+}

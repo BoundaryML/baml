@@ -64,3 +64,97 @@ test "guide 02.08: a cost budget stops between provider steps" {
     _ => assert.is_true(false),
   }
 }
+
+class LiveCostedToolProvider {
+  inner: root.ai.OpenAi,
+  cost_per_step_usd: float,
+
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "costed-" + self.inner.name() }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+}
+
+implements root.ai.ToolCallingProvider for LiveCostedToolProvider {
+  function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Transcript
+      throws baml.errors.ToolError | baml.errors.UnknownError {
+    self.inner.begin<T>(task.with_provider(self.inner))
+  }
+
+  function step<T>(self, transcript: root.ai.Transcript, tools: root.ai.Tool[])
+      -> root.ai.ModelStep<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+    let result = self.inner.step<T>(transcript, tools);
+    match (result.meta.usage) {
+      let usage: root.ai.Usage => { usage.cost_usd = self.cost_per_step_usd; },
+      null => {},
+    }
+    result
+  }
+
+  function submit(
+    self,
+    transcript: root.ai.Transcript,
+    results: root.ai.ToolResult[],
+  ) -> root.ai.Transcript throws baml.errors.ToolError | baml.errors.UnknownError {
+    self.inner.submit(transcript, results)
+  }
+}
+
+testset "integ-test-guide-02-budgets" {
+  test "guide 02.08 live OpenAI: step budget stops after one real provider turn" {
+    let provider = live_openai();
+    let options = root.ai.AgentOptions {
+      ...guide_agent_options([knowledge_tool()], guide_dispatch),
+      budget: root.ai.Budget { max_steps: 1, max_cost_usd: null },
+    };
+    let outcome = root.ai.drivers.run_agent<Resolution>(
+      ToolInstructions_task(
+        provider,
+        [knowledge_tool()],
+        `Call search_knowledge with query "duplicate charge" before returning a final resolution.`,
+      ),
+      options,
+    );
+    match (outcome) {
+      let stopped: root.ai.BudgetReached => {
+        log.info("live step budget " + {
+          "steps": stopped.steps_taken,
+          "reason": stopped.reason,
+        }.to_string());
+        assert.equal(stopped.steps_taken, 1);
+        assert.equal(stopped.reason, "max_steps");
+      },
+      _ => assert.is_true(false),
+    }
+  }
+
+  test "guide 02.08 live OpenAI: cost budget stops after metered real provider usage" {
+    let provider = LiveCostedToolProvider {
+      inner: live_openai(),
+      cost_per_step_usd: 0.02,
+    };
+    let options = root.ai.AgentOptions {
+      ...guide_agent_options([knowledge_tool()], guide_dispatch),
+      budget: root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
+    };
+    let outcome = root.ai.drivers.run_agent<Resolution>(
+      ToolInstructions_task(
+        provider,
+        [knowledge_tool()],
+        `Call search_knowledge with query "duplicate charge" before returning a final resolution.`,
+      ),
+      options,
+    );
+    match (outcome) {
+      let stopped: root.ai.BudgetReached => {
+        log.info("live cost budget " + {
+          "steps": stopped.steps_taken,
+          "reason": stopped.reason,
+        }.to_string());
+        assert.equal(stopped.steps_taken, 1);
+        assert.equal(stopped.reason, "max_cost_usd");
+      },
+      _ => assert.is_true(false),
+    }
+  }
+}

@@ -8,15 +8,43 @@ test "guide 03.01: retry repeats only a replay-safe direct call" {
   assert.equal(flaky.calls, 2)
 }
 
+class FlakyOnceLiveGeneration {
+  inner: root.ai.OpenAi,
+  attempts: int,
+
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "flaky-once-openai" }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+
+  implements root.ai.GenerationProvider {
+    function generate<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
+        throws baml.errors.CallError | baml.errors.UnknownError {
+      self.attempts = self.attempts + 1;
+      if (self.attempts == 1) {
+        throw root.ai.FakeCallFailure {
+          message: "retryable failure before the live provider call",
+          retryable: true,
+        };
+      }
+      self.inner.generate<T>(task.with_provider(self.inner))
+    }
+  }
+}
+
 testset "integ-test-guide-03-retry" {
-  test "guide 03.01 live OpenAI: retry wrapper preserves the typed result" {
-    //# Wrap a live provider with bounded retry
-    let provider = root.ai.retry(root.ai.OpenAi {
-      ...root.ai.openai(),
-      model: "gpt-5.6-luna",
-      api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-    }, 2);
-    //# Execute and verify the typed result
-    assert.is_true(ResolveTicket_manual(sample_ticket(), provider).reply.length() > 0)
+  test "guide 03.01 live OpenAI: a retryable failure causes exactly one retry" {
+    let flaky = FlakyOnceLiveGeneration { inner: live_openai(), attempts: 0 };
+    let response = root.ai.drivers.generate_with_meta<Resolution>(
+      ResolveTicket_task(sample_ticket(), root.ai.retry(flaky, 2)),
+    );
+    log.info("live retry " + {
+      "attempts": flaky.attempts,
+      "provider": response.meta.provider,
+      "request_id": response.meta.request_id,
+    }.to_string());
+    assert.equal(flaky.attempts, 2)
+    assert.equal(response.meta.provider, "openai")
+    assert.is_true(response.value.reply.length() > 0)
   }
 }

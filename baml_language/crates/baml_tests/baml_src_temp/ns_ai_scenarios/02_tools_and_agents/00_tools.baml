@@ -63,6 +63,26 @@ function ResolveTicketWithTools_task(
   )
 }
 
+function ToolInstructions_task(
+  provider: root.ai.Provider,
+  tools: root.ai.Tool[],
+  instructions: string,
+) -> root.ai.Task<Resolution> throws never {
+  root.ai.task_named<Resolution>(
+    provider,
+    "ToolInstructions",
+    { "instructions": instructions },
+    tools,
+    default_task_options(),
+    (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+      baml.llm.assemble_prompt_ast(
+        ["", "\n", ""],
+        [instructions, ctx.output_format],
+      )
+    },
+  )
+}
+
 // Future compiler lowering:
 //   ResolveTicketWithTools(ticket, $provider = agent)
 // becomes root.ai.drivers.drive(ResolveTicketWithTools_task(...)). The selected
