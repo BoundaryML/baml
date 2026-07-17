@@ -690,6 +690,12 @@ class Stream<TStream, TFinal> {
       }
 
       let content = self._acc.content();
+      // Providers may begin with a role-only or otherwise content-empty SSE
+      // delta. There is no partial value to parse yet; wait for the next event
+      // instead of asking SAP to coerce an empty incomplete string to TStream.
+      if (content.trim().length() == 0) {
+        continue;
+      }
       let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial<TStream, TFinal>(content, self._cache);
       match (parsed) {
         root.stream.StreamNoYield => {

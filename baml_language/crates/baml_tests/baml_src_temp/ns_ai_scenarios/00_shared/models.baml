@@ -112,11 +112,6 @@ function drain_resolution_stream(
 ) -> Resolution throws baml.errors.UnknownError | baml.errors.StreamError
     | baml.errors.Unsupported | baml.errors.Io | baml.errors.LlmClient {
   let stream = root.ai.drivers.stream<Resolution$stream, Resolution>(task);
-  // final() still drains the provider's SSE response. Calling next() first is
-  // currently unsafe when a provider emits an initial empty SSE event because
-  // the builtin partial parser attempts to parse that empty content as
-  // Resolution$stream instead of yielding StreamNoYield. Track that runtime
-  // issue separately; this conformance helper verifies the real streaming
-  // request and typed final result without hiding it behind a fake provider.
+  // final() drains the provider's SSE response and validates the typed result.
   stream.final()
 }

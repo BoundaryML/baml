@@ -225,14 +225,54 @@ function message_text(message: Message) -> string throws never {
   message.parts().map((part: MessagePart) -> string { part.text() ?? "" }).join("")
 }
 
+function openai_message_provider_data(message: Message) -> json? throws never {
+  for (let part in message.parts()) {
+    match (part) {
+      let data: ProviderDataPart => {
+        if (data.provider == "openai") { return data.data; }
+      },
+      _ => null,
+    }
+  }
+  null
+}
+
 implements TranscriptImportProvider for OpenAi {
   function import_conversation(self, conversation: Conversation) -> TranscriptImport throws never {
-    let wire: json[] = conversation.entries.map((message: Message) -> json {
-      {
-        "role": message_role_name(message.role()),
-        "content": message_text(message),
+    let wire: json[] = [];
+    for (let message in conversation.entries) {
+      let provider_data = openai_message_provider_data(message);
+      match (message.role()) {
+        MessageRole.Assistant => {
+          let tool_calls = baml.json.path_or<json[]?>(provider_data, ".tool_calls", null);
+          match (tool_calls) {
+            let calls: json[] => wire.push({ "role": "assistant", "tool_calls": calls }),
+            null => wire.push({ "role": "assistant", "content": message_text(message) }),
+          };
+        },
+        MessageRole.Tool => {
+          let call_id = baml.json.path_or<string?>(provider_data, ".tool_call_id", null);
+          match (call_id) {
+            let id: string => wire.push({
+              "role": "tool",
+              "tool_call_id": id,
+              "content": baml.json.stringify(baml.json.path_or(provider_data, ".output", null)),
+            }),
+            // A foreign/provider-neutral tool result has no valid OpenAI call
+            // ID. Preserve it as user-visible context instead of emitting an
+            // orphan `role: tool` frame that OpenAI must reject.
+            null => wire.push({
+              "role": "user",
+              "content": "Imported tool result: " + baml.json.stringify(provider_data),
+            }),
+          };
+        },
+        _ => wire.push({
+          "role": message_role_name(message.role()),
+          "content": message_text(message),
+        }),
       }
-    });
+    }
     TranscriptImport {
       transcript: OpenAiToolTranscript {
         owner: self,
@@ -241,7 +281,7 @@ implements TranscriptImportProvider for OpenAi {
         wire_messages: wire,
       },
       fidelity: TranscriptFidelity.MessagesOnly,
-      warnings: ["provider-specific continuation metadata was not imported"],
+      warnings: ["message import; matching OpenAI tool-call frames were retained when available"],
     }
   }
 }

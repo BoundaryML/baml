@@ -20,6 +20,44 @@ test "guide 03.04: prepare_step can switch providers through transcript import" 
   assert.contains(hooks.hook_events.join(","), "provider_changed")
 }
 
+test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" {
+  let provider = root.ai.OpenAi { ...root.ai.openai(), api_key: "unused" };
+  let calls: json[] = [{
+    "id": "call-1",
+    "type": "function",
+    "function": { "name": "search_knowledge", "arguments": "{}" },
+  }];
+  let conversation = root.ai.Conversation { entries: [
+    root.ai.ChatMessage {
+      message_role: root.ai.MessageRole.Assistant,
+      content: [root.ai.ProviderDataPart {
+        provider: "openai",
+        data: { "tool_calls": calls },
+      }],
+      metadata: null,
+    },
+    root.ai.ChatMessage {
+      message_role: root.ai.MessageRole.Tool,
+      content: [root.ai.ProviderDataPart {
+        provider: "openai",
+        data: { "tool_call_id": "call-1", "output": { "ok": true } },
+      }],
+      metadata: null,
+    },
+  ] };
+  let imported = provider.import_conversation(conversation);
+  match (imported.transcript) {
+    let state: root.ai.OpenAiToolTranscript => {
+      assert.equal(state.wire_messages.length(), 2)
+      assert.equal(baml.json.path_or(state.wire_messages[0], ".role", ""), "assistant")
+      assert.equal(baml.json.path_or(state.wire_messages[0], ".tool_calls[0].id", ""), "call-1")
+      assert.equal(baml.json.path_or(state.wire_messages[1], ".role", ""), "tool")
+      assert.equal(baml.json.path_or(state.wire_messages[1], ".tool_call_id", ""), "call-1")
+    },
+    _ => assert.is_true(false),
+  }
+}
+
 class NamedOpenAiToolProvider {
   label: string,
   inner: root.ai.OpenAi,

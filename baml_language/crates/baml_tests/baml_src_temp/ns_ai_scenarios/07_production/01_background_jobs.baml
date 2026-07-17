@@ -21,7 +21,9 @@ testset "integ-test-guide-07-background" {
     };
     let submitted = root.ai.drivers.submit_background<Resolution>(
       ResolveTicket_task(sample_ticket(), provider),
-      root.ai.BackgroundOptions { idempotency_key: "guide-07-01-T-100" },
+      root.ai.BackgroundOptions {
+        idempotency_key: "guide-07-01-T-100-" + baml.sys.now_ms().to_string(),
+      },
     );
     let persisted = submitted.token();
     assert.equal(persisted.provider, "openai-background")
@@ -32,21 +34,24 @@ testset "integ-test-guide-07-background" {
     assert.equal(resumed.token().id, persisted.id)
     let complete: root.ai.Response<Resolution>? = null;
     let attempts = 0;
-    while (complete == null && attempts < 30) {
+    let started_ms = baml.sys.now_ms();
+    let deadline_ms = started_ms + 60_000;
+    while (complete == null && baml.sys.now_ms() < deadline_ms) {
       complete = resumed.poll();
       attempts = attempts + 1;
       if (complete == null) {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(250)) catch (e) { _ => null };
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(500)) catch (e) { _ => null };
       }
     }
     let response = match (complete) {
       let value: root.ai.Response<Resolution> => value,
-      null => baml.sys.panic("background response did not complete within 30 polls"),
+      null => baml.sys.panic("background response did not complete within 60 seconds"),
     };
     log.info(baml.json.stringify({
       "guide": "07.01",
       "job_id": persisted.id,
       "polls": attempts,
+      "elapsed_ms": baml.sys.now_ms() - started_ms,
       "provider": response.meta.provider,
       "input_tokens": response.meta.usage?.input_tokens ?? 0,
     }));

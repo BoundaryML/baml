@@ -175,6 +175,63 @@ async fn stream_class_in_namespace_final_value() {
     );
 }
 
+#[tokio::test]
+async fn stream_next_skips_empty_initial_content_delta() {
+    let server = MockServer::start().await;
+    // OpenAI commonly emits a role-only first delta whose accumulated content
+    // is still empty. Stream.next() must wait for a parseable partial rather
+    // than asking SAP to coerce "" into the expanded class type.
+    let sse_body = openai_sse_body(
+        &["", r#"{\"title\": \"Hello\", \"word_count\": 1}"#],
+        "stop",
+    );
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let source = format!(
+        r##"
+        client<llm> TestClient {{
+            provider openai
+            options {{
+                model "gpt-4o"
+                api_key "test-key"
+                base_url "{uri}"
+            }}
+        }}
+
+        class Doc {{
+            title string
+            word_count int
+        }}
+
+        function TestFunc() -> Doc {{
+            client TestClient
+            prompt #"Return a tiny document."#
+        }}
+
+        function main() -> string {{
+            let stream = TestFunc$stream();
+            let _ = stream.next();
+            stream.final().title
+        }}
+    "##
+    );
+
+    let output = baml_test!(&source);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello".to_string().into()))
+    );
+}
+
 /// Pin for the `$parse_stream` companion's type-arg threading: its body is
 /// synthesized by PPIR as `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)`
 /// (see `synthesize_llm_make_stream_call`), so `StreamCache.new` gets its

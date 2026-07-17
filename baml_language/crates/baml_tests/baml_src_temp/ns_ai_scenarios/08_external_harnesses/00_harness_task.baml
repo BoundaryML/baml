@@ -44,3 +44,8 @@ function harness_options() -> root.ai.HarnessOptions throws never {
 function fake_model_harness() -> root.ai.ModelHarness throws never {
   root.ai.ModelHarness { inner: fake_resolution(), sessions: [] }
 }
+
+function live_openai_model_harness() -> root.ai.ModelHarness
+    throws baml.errors.Io | baml.errors.ParseError {
+  root.ai.ModelHarness { inner: live_openai(), sessions: [] }
+}

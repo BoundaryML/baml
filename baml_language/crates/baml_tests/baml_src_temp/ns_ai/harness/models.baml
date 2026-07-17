@@ -21,6 +21,7 @@ interface HarnessSession requires Resource {
 
 class LocalHarnessSession {
   session_id: string,
+  options: HarnessOptions,
   history: Conversation,
   is_stopped: bool,
   is_cleaned: bool,
@@ -50,12 +51,23 @@ class HarnessRun<T> {
   conversation: Conversation,
 }
 
+// A harness stream owns the provider stream and the session it is updating.
+// next() exposes normalized harness events; final() remains the authoritative
+// typed outcome and continuation token.
+interface HarnessEventStream<T> requires Resource {
+  function next(self) -> AgentEvent | baml.stream.StreamFinished
+    throws baml.errors.UnknownError
+  function final(self) -> HarnessRun<T> throws baml.errors.UnknownError
+}
+
 interface Harness {
   function label(self) -> string throws never { "harness" }
   function open(self, options: HarnessOptions) -> HarnessSession
     throws baml.errors.UnknownError
   function run<T>(self, session: HarnessSession, task: Task<T>) -> HarnessRun<T>
     throws baml.errors.UnknownError
+  function stream<TPartial, T>(self, session: HarnessSession, task: Task<T>)
+    -> HarnessEventStream<T> throws baml.errors.UnknownError
   function save_session(self, session: HarnessSession) -> HarnessSessionToken
     throws baml.errors.UnknownError
   function restore_session(self, token: HarnessSessionToken) -> HarnessSession
