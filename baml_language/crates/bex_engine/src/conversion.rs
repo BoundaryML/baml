@@ -837,8 +837,16 @@ impl BexEngine {
                         .alloc_variant(*enum_ptr, index),
                 )
             }
-            BexExternalValue::Union { value, .. } => {
-                return self.convert_external_to_vm_value_with_ty(holder, *value, expected_ty);
+            BexExternalValue::Union { value, metadata } => {
+                // A typed host union carries an authoritative selected arm.
+                // Materialize against that arm so container/class realized
+                // types retain the host's exact choice rather than re-guessing
+                // from an overlapping payload shape.
+                return self.convert_external_to_vm_value_with_ty(
+                    holder,
+                    *value,
+                    Some(&metadata.selected_option),
+                );
             }
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_collector(c))
@@ -1735,8 +1743,52 @@ fn find_matching_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
 ) -> Result<RuntimeTy, EngineError> {
+    if let BexExternalValue::Union { metadata, value } = value
+        && members
+            .iter()
+            .any(|member| selected_arm_equal(member, &metadata.selected_option))
+        && value_matches_type(value, &metadata.selected_option)
+    {
+        return Ok(metadata.selected_option.clone());
+    }
+    // Realized container descriptors are an exact discriminator even when a
+    // broader arm would also accept every payload value (for example
+    // `int[]` also inhabits `int?[]`). Prefer that identity before ordinary
+    // assignability checks.
     for member in members {
-        if !matches!(member, RuntimeTy::BuiltinUnknown { .. }) && value_matches_type(value, member)
+        let exact_container = match (value, member) {
+            (BexExternalValue::Array { element_type, .. }, RuntimeTy::List(expected, _)) => {
+                runtime_ty_structurally_equal(element_type, expected)
+            }
+            (
+                BexExternalValue::Map {
+                    key_type,
+                    value_type,
+                    ..
+                },
+                RuntimeTy::Map { key, value, .. },
+            ) => {
+                runtime_ty_structurally_equal(key_type, key)
+                    && runtime_ty_structurally_equal(value_type, value)
+            }
+            _ => false,
+        };
+        if exact_container {
+            return Ok(member.clone());
+        }
+    }
+    // Exact literal arms outrank their broad primitive (`"draft"` before
+    // `string`) regardless of declaration order.
+    for member in members {
+        if matches!(member, RuntimeTy::Literal(..)) && value_matches_type(value, member) {
+            return Ok(member.clone());
+        }
+    }
+    for member in members {
+        if !matches!(
+            member,
+            RuntimeTy::Literal(..) | RuntimeTy::BuiltinUnknown { .. }
+        ) && value_matches_type(value, member)
         {
             return Ok(member.clone());
         }
@@ -1799,14 +1851,40 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Bool(_), RuntimeTy::Bool { .. }) => true,
         (BexExternalValue::String(_), RuntimeTy::String { .. }) => true,
         // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), RuntimeTy::Literal(Literal::Int(_), _, _)) => true,
-        (BexExternalValue::Bigint(_), RuntimeTy::Literal(Literal::Bigint(_), _, _)) => true,
-        (BexExternalValue::Float(_), RuntimeTy::Literal(Literal::Float(_), _, _)) => true,
+        (BexExternalValue::Int(value), RuntimeTy::Literal(Literal::Int(expected), _, _)) => {
+            value == expected
+        }
+        (BexExternalValue::Bigint(value), RuntimeTy::Literal(Literal::Bigint(expected), _, _)) => {
+            value == expected
+        }
+        (BexExternalValue::Float(value), RuntimeTy::Literal(Literal::Float(expected), _, _)) => {
+            float_literal_matches(*value, expected)
+        }
         (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array { .. }) => true,
-        (BexExternalValue::String(_), RuntimeTy::Literal(Literal::String(_), _, _)) => true,
-        (BexExternalValue::Bool(_), RuntimeTy::Literal(Literal::Bool(_), _, _)) => true,
-        (BexExternalValue::Array { .. }, RuntimeTy::List(_, _)) => true,
-        (BexExternalValue::Map { .. }, RuntimeTy::Map { .. }) => true,
+        (BexExternalValue::String(value), RuntimeTy::Literal(Literal::String(expected), _, _)) => {
+            value.as_str() == expected
+        }
+        (BexExternalValue::Bool(value), RuntimeTy::Literal(Literal::Bool(expected), _, _)) => {
+            value == expected
+        }
+        (BexExternalValue::Array { element_type, .. }, RuntimeTy::List(expected_element, _)) => {
+            runtime_ty_compatible(element_type, expected_element)
+        }
+        (
+            BexExternalValue::Map {
+                key_type,
+                value_type,
+                ..
+            },
+            RuntimeTy::Map {
+                key: expected_key,
+                value: expected_value,
+                ..
+            },
+        ) => {
+            runtime_ty_compatible(key_type, expected_key)
+                && runtime_ty_compatible(value_type, expected_value)
+        }
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
         // every non-builtin object as `map_value`, no FQN), so a `Map`
         // matches a `Class` slot at the FFI boundary — it is promoted to an
@@ -1836,6 +1914,12 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
+        (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
+            members.iter().any(|member| {
+                selected_arm_equal(member, &metadata.selected_option)
+                    && value_matches_type(value, member)
+            })
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, RuntimeTy::Union(members, _)) => {
@@ -1943,6 +2027,86 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
         // treated leniently as compatible.
         _ => true,
     }
+}
+
+/// Exact semantic identity ignoring source-only type attributes and union
+/// member ordering. Unlike `runtime_ty_compatible`, this never treats a
+/// concrete nested optional as its non-optional inner type.
+fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
+    use RuntimeTy as T;
+    match (left, right) {
+        (T::String { .. }, T::String { .. })
+        | (T::Int { .. }, T::Int { .. })
+        | (T::Bigint { .. }, T::Bigint { .. })
+        | (T::Float { .. }, T::Float { .. })
+        | (T::Bool { .. }, T::Bool { .. })
+        | (T::Null { .. }, T::Null { .. })
+        | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
+        (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
+        (
+            T::Map {
+                key: left_key,
+                value: left_value,
+                ..
+            },
+            T::Map {
+                key: right_key,
+                value: right_value,
+                ..
+            },
+        ) => {
+            runtime_ty_structurally_equal(left_key, right_key)
+                && runtime_ty_structurally_equal(left_value, right_value)
+        }
+        (T::Class(left_name, left_args, _), T::Class(right_name, right_args, _)) => {
+            left_name == right_name
+                && left_args.len() == right_args.len()
+                && left_args
+                    .iter()
+                    .zip(right_args)
+                    .all(|(left, right)| runtime_ty_structurally_equal(left, right))
+        }
+        (T::Enum(left, _), T::Enum(right, _)) => left == right,
+        (T::Union(left, _), T::Union(right, _)) => {
+            left.len() == right.len()
+                && left.iter().all(|left_member| {
+                    right.iter().any(|right_member| {
+                        runtime_ty_structurally_equal(left_member, right_member)
+                    })
+                })
+        }
+        _ => false,
+    }
+}
+
+/// A selected non-null arm may be represented as `T` or through the legacy
+/// top-level nullable wrapper `T | null`. This tolerance is deliberately
+/// root-only; recursive structural comparison preserves nested optionality.
+fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
+    if runtime_ty_structurally_equal(left, right) {
+        return true;
+    }
+    sole_non_null(left).is_some_and(|inner| runtime_ty_structurally_equal(inner, right))
+        || sole_non_null(right).is_some_and(|inner| runtime_ty_structurally_equal(left, inner))
+}
+
+fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+    let RuntimeTy::Union(members, _) = ty else {
+        return None;
+    };
+    if !members.iter().any(RuntimeTy::is_null) {
+        return None;
+    }
+    let mut non_null = members.iter().filter(|member| !member.is_null());
+    let only = non_null.next()?;
+    non_null.next().is_none().then_some(only)
+}
+
+fn float_literal_matches(value: f64, source: &str) -> bool {
+    source
+        .parse::<f64>()
+        .is_ok_and(|expected| value.to_bits() == expected.to_bits())
 }
 
 /// Structurally check a generic call's argument against its now-concrete
@@ -2277,33 +2441,51 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
     match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, RuntimeTy::Null { .. })),
-        ValueKind::Int(_) => members.iter().find(|m| {
-            matches!(
-                m,
-                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _)
-            )
-        }),
-        ValueKind::Bool(_) => members.iter().find(|m| {
-            matches!(
-                m,
-                RuntimeTy::Bool { .. } | RuntimeTy::Literal(Literal::Bool(_), _, _)
-            )
-        }),
+        ValueKind::Int(value) => members
+            .iter()
+            .find(|member| {
+                matches!(member, RuntimeTy::Literal(Literal::Int(expected), _, _) if value == *expected)
+            })
+            .or_else(|| {
+                members
+                    .iter()
+                    .find(|member| matches!(member, RuntimeTy::Int { .. }))
+            }),
+        ValueKind::Bool(value) => members
+            .iter()
+            .find(|member| {
+                matches!(member, RuntimeTy::Literal(Literal::Bool(expected), _, _) if value == *expected)
+            })
+            .or_else(|| {
+                members
+                    .iter()
+                    .find(|member| matches!(member, RuntimeTy::Bool { .. }))
+            }),
         ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
-                Object::Float(_) => members.iter().find(|m| {
-                    matches!(
-                        m,
-                        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _)
-                    )
-                }),
-                Object::String(_) => members.iter().find(|m| {
-                    matches!(
-                        m,
-                        RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _)
-                    )
-                }),
+                Object::Float(value) => members
+                    .iter()
+                    .find(|member| {
+                        matches!(member, RuntimeTy::Literal(Literal::Float(expected), _, _)
+                            if float_literal_matches(*value, expected))
+                    })
+                    .or_else(|| {
+                        members
+                            .iter()
+                            .find(|member| matches!(member, RuntimeTy::Float { .. }))
+                    }),
+                Object::String(value) => members
+                    .iter()
+                    .find(|member| {
+                        matches!(member, RuntimeTy::Literal(Literal::String(expected), _, _)
+                            if value.as_str() == expected)
+                    })
+                    .or_else(|| {
+                        members
+                            .iter()
+                            .find(|member| matches!(member, RuntimeTy::String { .. }))
+                    }),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
@@ -2338,32 +2520,40 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                         None
                     }
                 }
-                Object::Array(elements) => {
-                    // For arrays, check first element to determine which List type
-                    if let Some(first) = elements.get(0) {
-                        members.iter().find(|m| {
-                            if let RuntimeTy::List(elem_ty, _) = m {
-                                find_matching_union_member(first, &[elem_ty.as_ref().clone()])
-                                    .is_some()
-                            } else {
-                                false
-                            }
-                        })
-                    } else {
-                        // Empty array - match any List type
-                        members.iter().find(|m| matches!(m, RuntimeTy::List(_, _)))
-                    }
+                // Containers carry their realized element/key/value types in
+                // the VM heap. Those descriptors remain authoritative even
+                // when the container is empty, where payload inspection cannot
+                // distinguish `int[]` from `string[]` (or analogous maps).
+                Object::Array(array) => {
+                    let actual_element = array.element_ty.as_runtime_ty();
+                    members.iter().find(|member| {
+                        matches!(member, RuntimeTy::List(expected, _)
+                            if runtime_ty_structurally_equal(actual_element, expected))
+                    })
                 }
-                Object::Map(_) => members.iter().find(|m| matches!(m, RuntimeTy::Map { .. })),
+                Object::Map(map) => {
+                    let actual_key = map.key_ty.as_runtime_ty();
+                    let actual_value = map.value_ty.as_runtime_ty();
+                    members.iter().find(|member| {
+                        matches!(member, RuntimeTy::Map { key, value, .. }
+                            if runtime_ty_structurally_equal(actual_key, key)
+                                && runtime_ty_structurally_equal(actual_value, value))
+                    })
+                }
                 Object::Uint8Array(_) => members
                     .iter()
                     .find(|m| matches!(m, RuntimeTy::Uint8Array { .. })),
-                Object::Bigint(_) => members.iter().find(|m| {
-                    matches!(
-                        m,
-                        RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _)
-                    )
-                }),
+                Object::Bigint(value) => members
+                    .iter()
+                    .find(|member| {
+                        matches!(member, RuntimeTy::Literal(Literal::Bigint(expected), _, _)
+                            if value.as_ref() == expected)
+                    })
+                    .or_else(|| {
+                        members
+                            .iter()
+                            .find(|member| matches!(member, RuntimeTy::Bigint { .. }))
+                    }),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Interface(_)
@@ -2534,6 +2724,31 @@ pub(crate) fn coerce_arg_to_declared_type(
     ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
+        (BexExternalValue::Union { value, metadata }, declared @ RuntimeTy::Union(members, _)) => {
+            members
+                .iter()
+                .find(|member| selected_arm_equal(member, &metadata.selected_option))
+                .ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!(
+                        "host-selected arm `{}` is not a member of declared union `{declared}`",
+                        metadata.selected_option
+                    ),
+                })?;
+            let selected_type = &metadata.selected_option;
+            let coerced = coerce_arg_to_declared_type(*value, selected_type)?;
+            if !value_matches_type(&coerced, selected_type) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host-selected union payload `{}` does not inhabit arm `{selected_type}`",
+                        coerced.type_name()
+                    ),
+                });
+            }
+            Ok(BexExternalValue::Union {
+                value: Box::new(coerced),
+                metadata: UnionMetadata::new(declared.clone(), selected_type.clone()),
+            })
+        }
         // ── Class / enum naming (incoming only) ──────────────────────────
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
             // Promoting a bare `Map` to an `Instance` fabricates a class value
@@ -2745,6 +2960,149 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
                 .collect(),
         },
+    }
+}
+
+#[cfg(test)]
+mod union_container_selection_tests {
+    use baml_type::{Freshness, TyAttr};
+
+    use super::*;
+
+    fn list(inner: RuntimeTy) -> RuntimeTy {
+        RuntimeTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    fn map(value: RuntimeTy) -> RuntimeTy {
+        RuntimeTy::Map {
+            key: Box::new(RuntimeTy::string()),
+            value: Box::new(value),
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn string_literal(value: &str) -> RuntimeTy {
+        RuntimeTy::Literal(
+            Literal::String(value.to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        )
+    }
+
+    fn float_literal(value: &str) -> RuntimeTy {
+        RuntimeTy::Literal(
+            Literal::Float(value.to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn literal_matching_checks_value_and_prefers_exact_literal() {
+        let draft = string_literal("draft");
+        let published = string_literal("published");
+        let value = BexExternalValue::String("draft".into());
+        assert!(value_matches_type(&value, &draft));
+        assert!(!value_matches_type(&value, &published));
+        assert_eq!(
+            find_matching_member(&value, &[RuntimeTy::string(), draft.clone()]).unwrap(),
+            draft
+        );
+    }
+
+    #[test]
+    fn float_literal_matching_preserves_negative_zero_and_decimal_precision() {
+        let negative_zero = float_literal("-0.0");
+        let precise = float_literal("1.2345678901234567e-300");
+        assert!(value_matches_type(
+            &BexExternalValue::Float(-0.0),
+            &negative_zero
+        ));
+        assert!(!value_matches_type(
+            &BexExternalValue::Float(0.0),
+            &negative_zero
+        ));
+        assert!(value_matches_type(
+            &BexExternalValue::Float(1.234_567_890_123_456_7e-300),
+            &precise
+        ));
+        assert_eq!(
+            find_matching_member(
+                &BexExternalValue::Float(-0.0),
+                &[RuntimeTy::float(), negative_zero.clone()]
+            )
+            .unwrap(),
+            negative_zero
+        );
+    }
+
+    #[test]
+    fn host_selected_overlapping_arm_survives_argument_coercion() {
+        let draft = string_literal("draft");
+        let declared = RuntimeTy::union([RuntimeTy::string(), draft.clone()]);
+        let selected = BexExternalValue::union(
+            BexExternalValue::String("draft".into()),
+            [RuntimeTy::string(), draft],
+            RuntimeTy::string(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected union metadata was lost")
+        };
+        assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn structural_type_identity_preserves_nested_optional_arms() {
+        let int_list = list(RuntimeTy::int());
+        let optional_int_list = list(RuntimeTy::optional(RuntimeTy::int()));
+        assert!(!runtime_ty_structurally_equal(
+            &int_list,
+            &optional_int_list
+        ));
+        assert!(!runtime_ty_structurally_equal(
+            &map(RuntimeTy::int()),
+            &map(RuntimeTy::optional(RuntimeTy::int()))
+        ));
+    }
+
+    #[test]
+    fn empty_array_uses_its_declared_element_type_to_select_union_arm() {
+        let int_list = list(RuntimeTy::int());
+        let string_list = list(RuntimeTy::string());
+        let value = BexExternalValue::Array {
+            element_type: RuntimeTy::string(),
+            items: Vec::new(),
+        };
+        let wrapped = maybe_wrap_union(
+            value,
+            &RuntimeTy::Union(vec![int_list, string_list.clone()], TyAttr::default()),
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper")
+        };
+        assert_eq!(metadata.selected_option, string_list);
+    }
+
+    #[test]
+    fn empty_map_uses_its_declared_value_type_to_select_union_arm() {
+        let int_map = map(RuntimeTy::int());
+        let string_map = map(RuntimeTy::string());
+        let value = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::string(),
+            entries: indexmap::IndexMap::new(),
+        };
+        let wrapped = maybe_wrap_union(
+            value,
+            &RuntimeTy::Union(vec![int_map, string_map.clone()], TyAttr::default()),
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper")
+        };
+        assert_eq!(metadata.selected_option, string_map);
     }
 }
 

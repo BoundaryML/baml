@@ -64,6 +64,7 @@ func TestEnumDocSummaryAndMembers(t *testing.T) {
 
 func TestEnumSummaryOnlyOmitsMemberComments(t *testing.T) {
 	source := readGeneratedTypes(t)
+	compactSource := strings.NewReplacer(" ", "", "\t", "").Replace(source)
 	if !strings.Contains(source, "// DocsPriority Pin the \"summary only, no member rollup\" case: this enum has a") {
 		t.Error("priority summary missing")
 	}
@@ -71,7 +72,7 @@ func TestEnumSummaryOnlyOmitsMemberComments(t *testing.T) {
 		if strings.Contains(source, "// DocsPriority"+variant+" ") {
 			t.Errorf("%s unexpectedly documented", variant)
 		}
-		if !strings.Contains(source, "DocsPriority"+variant+" DocsPriority = \""+variant+"\"") {
+		if !strings.Contains(compactSource, "DocsPriority"+variant+"DocsPriority=\""+variant+"\"") {
 			t.Errorf("%s missing", variant)
 		}
 	}

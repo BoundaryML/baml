@@ -11,7 +11,11 @@ use std::{
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
-use crate::{packages::GoPackages, rendering::is_protected_go_identifier};
+use crate::{
+    packages::GoPackages,
+    rendering::is_protected_go_identifier,
+    types::{GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
+};
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
@@ -67,6 +71,8 @@ pub(crate) enum GoVisibility {
 pub(crate) enum BamlWireName {
     Symbol(Name),
     Key(baml_base::Name),
+    /// Synthesized Go-only declarations have no independent BAML wire name.
+    StructuralUnion,
 }
 
 impl fmt::Display for BamlWireName {
@@ -74,6 +80,7 @@ impl fmt::Display for BamlWireName {
         match self {
             Self::Symbol(name) => write!(f, "{name}"),
             Self::Key(name) => write!(f, "{name}"),
+            Self::StructuralUnion => f.write_str("<structural union>"),
         }
     }
 }
@@ -266,12 +273,67 @@ impl GoScope {
 
 pub(crate) struct GoNames {
     allocations: HashMap<NameRequest, GoName>,
+    unions: BTreeMap<(baml_base::Name, GoUnionKey), GoUnionNames>,
+}
+
+pub(crate) struct GoUnionNames {
+    type_name: GoName,
+    variant_name: GoName,
+    kind_name: GoName,
+    arms: BTreeMap<GoTy, GoUnionArmNames>,
+}
+
+pub(crate) struct GoUnionArmNames {
+    wrapper: GoName,
+    constructor: GoName,
+    kind_constant: GoName,
+    as_method: GoName,
+}
+
+impl GoUnionNames {
+    pub(crate) fn type_name(&self) -> &GoName {
+        &self.type_name
+    }
+
+    pub(crate) fn variant_name(&self) -> &GoName {
+        &self.variant_name
+    }
+
+    pub(crate) fn kind_name(&self) -> &GoName {
+        &self.kind_name
+    }
+
+    pub(crate) fn arm(&self, ty: &GoTy) -> &GoUnionArmNames {
+        &self.arms[ty]
+    }
+}
+
+impl GoUnionArmNames {
+    pub(crate) fn wrapper(&self) -> &GoName {
+        &self.wrapper
+    }
+
+    pub(crate) fn constructor(&self) -> &GoName {
+        &self.constructor
+    }
+
+    pub(crate) fn kind_constant(&self) -> &GoName {
+        &self.kind_constant
+    }
+
+    pub(crate) fn as_method(&self) -> &GoName {
+        &self.as_method
+    }
 }
 
 impl GoNames {
     /// Build one name table for every generated package. All declarations
     /// reserve names even when their codegen feature has not been implemented.
-    pub(crate) fn for_pool(pool: &SymbolPool, packages: &GoPackages) -> Self {
+    pub(crate) fn for_pool(
+        pool: &SymbolPool,
+        packages: &GoPackages,
+        projection: &GoTypeProjection<'_>,
+    ) -> Self {
         let mut requests = Vec::new();
         let mut wire_overrides = HashMap::new();
         for (name, symbol) in pool {
@@ -345,12 +407,14 @@ impl GoNames {
             .iter()
             .map(|package| package.go_name().as_str().to_string())
             .collect();
-        Self::allocate(
+        let mut names = Self::allocate(
             requests,
             |request| packages.get(request.fqn.symbol.package()).go_name().clone(),
             &generated_package_aliases,
             &wire_overrides,
-        )
+        );
+        names.allocate_unions(packages, projection);
+        names
     }
 
     /// The canonical naming operation: `(FQN, kind, visibility) -> GoName`.
@@ -364,6 +428,12 @@ impl GoNames {
         self.allocations
             .get(&request)
             .expect("name request was not registered during allocation")
+    }
+
+    pub(crate) fn union(&self, package: &baml_base::Name, key: &GoUnionKey) -> &GoUnionNames {
+        self.unions
+            .get(&(package.clone(), key.clone()))
+            .expect("typed union name was not registered during allocation")
     }
 
     #[cfg(test)]
@@ -437,8 +507,289 @@ impl GoNames {
                 }
             }
         }
-        Self { allocations }
+        Self {
+            allocations,
+            unions: BTreeMap::new(),
+        }
     }
+
+    fn allocate_unions(&mut self, packages: &GoPackages, projection: &GoTypeProjection<'_>) {
+        let mut used = BTreeMap::<GoPackageName, BTreeSet<Box<str>>>::new();
+        for name in self.allocations.values() {
+            used.entry(name.canonical.package.clone())
+                .or_default()
+                .insert(name.canonical.name.clone());
+        }
+
+        for package in packages.iter() {
+            let package_name = package.go_name().clone();
+            for key in projection.typed_unions_in(package.baml_name()) {
+                let raw_arm_components = key
+                    .members()
+                    .iter()
+                    .map(|member| union_type_component(member, self))
+                    .collect::<Vec<_>>();
+                let disambiguated = raw_arm_components
+                    .iter()
+                    .enumerate()
+                    .map(|(index, component)| {
+                        if raw_arm_components
+                            .iter()
+                            .filter(|candidate| *candidate == component)
+                            .count()
+                            == 1
+                        {
+                            component.clone()
+                        } else {
+                            disambiguated_union_component(&key.members()[index], component)
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let arm_components = disambiguated
+                    .iter()
+                    .enumerate()
+                    .map(|(index, component)| {
+                        if disambiguated
+                            .iter()
+                            .filter(|candidate| *candidate == component)
+                            .count()
+                            == 1
+                        {
+                            component.clone()
+                        } else {
+                            // A theoretical full identity-hash collision is
+                            // still made mathematically unique by structural
+                            // order, which is independent of declaration order.
+                            format!("{component}Arm{}", index + 1)
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let mut base = arm_components.join("Or");
+                if base.is_empty() {
+                    base.push_str("BamlUnion");
+                }
+                loop {
+                    let mut family = vec![
+                        base.clone(),
+                        format!("{base}Variant"),
+                        format!("{base}Kind"),
+                    ];
+                    for component in &arm_components {
+                        family.push(format!("{base}{component}"));
+                        family.push(format!("New{base}From{component}"));
+                        family.push(format!("{base}Kind{component}"));
+                    }
+                    let unique_family = family.iter().collect::<BTreeSet<_>>();
+                    assert_eq!(
+                        unique_family.len(),
+                        family.len(),
+                        "structural union generated duplicate package declarations: {family:?}"
+                    );
+                    let methods = arm_components
+                        .iter()
+                        .map(|component| format!("As{component}"))
+                        .collect::<Vec<_>>();
+                    assert_eq!(
+                        methods.iter().collect::<BTreeSet<_>>().len(),
+                        methods.len(),
+                        "structural union generated duplicate arm methods: {methods:?}"
+                    );
+                    let package_used = used.entry(package_name.clone()).or_default();
+                    if family
+                        .iter()
+                        .all(|candidate| !package_used.contains(candidate.as_str()))
+                    {
+                        package_used.extend(family.into_iter().map(Into::into));
+                        break;
+                    }
+                    base.push('_');
+                }
+
+                let synthetic = |value: String| GoName {
+                    canonical: GoIdent::new(package_name.clone(), value),
+                    wire: BamlWireName::StructuralUnion,
+                };
+                let arms = key
+                    .members()
+                    .iter()
+                    .cloned()
+                    .zip(arm_components.iter())
+                    .map(|(member, component)| {
+                        let arm = GoUnionArmNames {
+                            wrapper: synthetic(format!("{base}{component}")),
+                            constructor: synthetic(format!("New{base}From{component}")),
+                            kind_constant: synthetic(format!("{base}Kind{component}")),
+                            as_method: synthetic(format!("As{component}")),
+                        };
+                        (member, arm)
+                    })
+                    .collect();
+                self.unions.insert(
+                    (package.baml_name().clone(), key.clone()),
+                    GoUnionNames {
+                        type_name: synthetic(base.clone()),
+                        variant_name: synthetic(format!("{base}Variant")),
+                        kind_name: synthetic(format!("{base}Kind")),
+                        arms,
+                    },
+                );
+            }
+        }
+    }
+}
+
+fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
+    match ty {
+        GoTy::String => "String".into(),
+        GoTy::Int => "Int".into(),
+        GoTy::Bigint => "Bigint".into(),
+        GoTy::Float => "Float".into(),
+        GoTy::Bool => "Bool".into(),
+        GoTy::Null => "Null".into(),
+        GoTy::Uint8Array => "Uint8Array".into(),
+        GoTy::Literal(literal) => literal_component(literal),
+        GoTy::Class(name) => names
+            .project(
+                &BamlFqn::symbol(name),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            )
+            .canonical
+            .name
+            .to_string(),
+        GoTy::Enum(name) => names
+            .project(
+                &BamlFqn::symbol(name),
+                GoNameKind::Enum,
+                GoVisibility::Exported,
+            )
+            .canonical
+            .name
+            .to_string(),
+        GoTy::List(inner) => format!("{}List", union_type_component(inner, names)),
+        GoTy::Map { key, value } => format!(
+            "{}To{}Map",
+            union_type_component(key, names),
+            union_type_component(value, names)
+        ),
+        GoTy::Optional(inner) => format!("Optional{}", union_type_component(inner, names)),
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => key
+            .members()
+            .iter()
+            .map(|member| union_type_component(member, names))
+            .collect::<Vec<_>>()
+            .join("Or"),
+        GoTy::Unsupported => "Unsupported".into(),
+    }
+}
+
+fn disambiguated_union_component(ty: &GoTy, base: &str) -> String {
+    match ty {
+        GoTy::String => "PrimitiveString".into(),
+        GoTy::Int => "PrimitiveInt".into(),
+        GoTy::Bigint => "PrimitiveBigint".into(),
+        GoTy::Float => "PrimitiveFloat".into(),
+        GoTy::Bool => "PrimitiveBool".into(),
+        GoTy::Null => "PrimitiveNull".into(),
+        GoTy::Uint8Array => "PrimitiveUint8Array".into(),
+        GoTy::Class(name) => format!("Class{base}{}", nominal_type_hash(name, GoNameKind::Class)),
+        GoTy::Enum(name) => format!("Enum{base}{}", nominal_type_hash(name, GoNameKind::Enum)),
+        _ => {
+            let mut hash = StableFnv::new();
+            hash_go_ty(&mut hash, ty);
+            format!("{base}Type{:016x}", hash.finish())
+        }
+    }
+}
+
+fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
+    match ty {
+        GoTy::String => hash.byte(0),
+        GoTy::Int => hash.byte(1),
+        GoTy::Bigint => hash.byte(2),
+        GoTy::Float => hash.byte(3),
+        GoTy::Bool => hash.byte(4),
+        GoTy::Null => hash.byte(5),
+        GoTy::Uint8Array => hash.byte(6),
+        GoTy::Literal(literal) => {
+            hash.byte(7);
+            hash.component(&literal_component(literal));
+        }
+        GoTy::Class(name) => {
+            hash.byte(8);
+            hash.component(&nominal_type_hash(name, GoNameKind::Class));
+        }
+        GoTy::Enum(name) => {
+            hash.byte(9);
+            hash.component(&nominal_type_hash(name, GoNameKind::Enum));
+        }
+        GoTy::List(inner) => {
+            hash.byte(10);
+            hash_go_ty(hash, inner);
+        }
+        GoTy::Map { key, value } => {
+            hash.byte(11);
+            hash_go_ty(hash, key);
+            hash_go_ty(hash, value);
+        }
+        GoTy::Optional(inner) => {
+            hash.byte(12);
+            hash_go_ty(hash, inner);
+        }
+        GoTy::TypedUnion(key) => {
+            hash.byte(13);
+            for member in key.members() {
+                hash_go_ty(hash, member);
+            }
+        }
+        GoTy::DynamicUnion { key, nullable } => {
+            hash.byte(14);
+            hash.byte(u8::from(*nullable));
+            for member in key.members() {
+                hash_go_ty(hash, member);
+            }
+        }
+        GoTy::Unsupported => hash.byte(15),
+    }
+}
+
+fn nominal_type_hash(name: &Name, kind: GoNameKind) -> String {
+    let mut hash = StableFnv::new();
+    hash.component(name.package().as_str());
+    hash.usize(name.namespace().len());
+    for segment in name.namespace() {
+        hash.component(segment.as_str());
+    }
+    hash.component(name.name().as_str());
+    hash.byte(match kind {
+        GoNameKind::Class => 1,
+        GoNameKind::Enum => 2,
+        _ => unreachable!("only nominal union-arm kinds are hashed"),
+    });
+    format!("{:016x}", hash.finish())
+}
+
+fn literal_component(literal: &GoLiteral) -> String {
+    let kind = match literal {
+        GoLiteral::String(_) => "String",
+        GoLiteral::Int(_) => "Int",
+        GoLiteral::Bigint(_) => "Bigint",
+        GoLiteral::Float(_) => "Float",
+        GoLiteral::Bool(_) => "Bool",
+    };
+    let value = match literal {
+        GoLiteral::String(value) | GoLiteral::Bigint(value) | GoLiteral::Float(value) => {
+            value.clone()
+        }
+        GoLiteral::Int(value) => value.to_string(),
+        GoLiteral::Bool(value) => value.to_string(),
+    };
+    let mut hash = StableFnv::new();
+    hash.component(kind);
+    hash.component(&value);
+    let bytes = hash.finish().to_le_bytes();
+    let short = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    format!("{kind}Literal{short:08x}")
 }
 
 fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {

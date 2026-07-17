@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -119,6 +121,39 @@ func BigInt(value *big.Int) Input {
 		return Input{}
 	}
 	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_BigintValue{BigintValue: value.Text(16)}}}
+}
+
+// MustBigIntLiteral parses a generator-owned decimal bigint literal. Generated
+// source only calls this with compiler-validated constants.
+func MustBigIntLiteral(value string) *big.Int {
+	integer, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		panic("invalid generated BAML bigint literal: " + value)
+	}
+	return integer
+}
+
+// MustFloatLiteral parses compiler-owned BAML float source text at runtime.
+// Generated source must not embed float literals as Go constants: Go's
+// constant conversion loses the sign bit of -0.0 before it becomes float64.
+// strconv.ParseFloat preserves IEEE-754 details such as signed zero and uses
+// the same decimal/exponent syntax accepted by BAML's compiler. BAML has no
+// NaN or infinity literal syntax, so those non-finite spellings are rejected
+// even though strconv accepts them. Finite decimal underflow follows normal
+// IEEE rounding to signed zero; overflow is rejected.
+func MustFloatLiteral(value string) float64 {
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		var numberError *strconv.NumError
+		underflow := errors.As(err, &numberError) && numberError.Err == strconv.ErrRange && !math.IsInf(parsed, 0)
+		if !underflow {
+			panic("invalid generated BAML float literal: " + value)
+		}
+	}
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		panic("invalid generated BAML float literal: " + value)
+	}
+	return parsed
 }
 
 func Float64(value float64) Input {

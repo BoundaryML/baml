@@ -110,6 +110,10 @@ pub(crate) struct GeneratorManifest {
     /// generated subpackages must import one another by module path.
     pub sdk_import_path: Option<Spanned<String>>,
 
+    /// Maximum non-null union arity represented as a closed generated Go
+    /// union. Larger unions use `any`. Go-only; defaults to 3.
+    pub max_typed_union_arity: Option<Spanned<i64>>,
+
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -274,5 +278,20 @@ mod tests {
                 .to_string()
                 .contains("cannot be empty")
         );
+    }
+
+    #[test]
+    fn parses_zero_go_union_threshold_with_a_value_span() {
+        let manifest = parse(
+            "[generator.go]\noutput_type = \"go\"\nnaming_convention = \"language\"\nmax_typed_union_arity = 0\n",
+        )
+        .unwrap();
+        let threshold = manifest.generator["go"]
+            .get_ref()
+            .max_typed_union_arity
+            .as_ref()
+            .unwrap();
+        assert_eq!(*threshold.get_ref(), 0);
+        assert!(threshold.span().end > threshold.span().start);
     }
 }

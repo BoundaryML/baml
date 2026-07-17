@@ -6,7 +6,246 @@ import (
 	"strconv"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
+	"google.golang.org/protobuf/proto"
 )
+
+// BAMLType is a typed wire descriptor used to dispatch closed union results.
+// Its protobuf representation remains private so generated code cannot depend
+// on wire implementation details or parse diagnostic type strings.
+type BAMLType struct {
+	value *cffi.BamlTy
+}
+
+type PrimitiveType int
+
+const (
+	StringType PrimitiveType = iota + 1
+	IntType
+	FloatType
+	BoolType
+	NullType
+	BytesType
+	BigintType
+)
+
+func PrimitiveBAMLType(kind PrimitiveType) BAMLType {
+	protoKind := cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_UNSPECIFIED
+	switch kind {
+	case StringType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_STRING
+	case IntType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_INT
+	case FloatType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_FLOAT
+	case BoolType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BOOL
+	case NullType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_NULL
+	case BytesType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BYTES
+	case BigintType:
+		protoKind = cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_BIGINT
+	}
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Primitive{Primitive: &cffi.BamlTyPrimitive{Kind: protoKind}}}}
+}
+
+func ClassBAMLType(name string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Name: name}}}}
+}
+
+func EnumBAMLType(name string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Enum{Enum: &cffi.BamlTyEnum{Name: name}}}}
+}
+
+func ListBAMLType(item BAMLType) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_List{List: &cffi.BamlTyList{Item: item.value}}}}
+}
+
+func MapBAMLType(key, value BAMLType) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Map{Map: &cffi.BamlTyMap{Key: key.value, Value: value.value}}}}
+}
+
+func OptionalBAMLType(inner BAMLType) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Optional{Optional: &cffi.BamlTyOptional{Inner: inner.value}}}}
+}
+
+func UnionBAMLType(options ...BAMLType) BAMLType {
+	encoded := make([]*cffi.BamlTy, len(options))
+	for index, option := range options {
+		encoded[index] = option.value
+	}
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Union{Union: &cffi.BamlTyUnion{Options: encoded}}}}
+}
+
+func StringLiteralBAMLType(value string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_StringValue{StringValue: value}}}}}
+}
+
+func IntLiteralBAMLType(value int64) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_IntValue{IntValue: value}}}}}
+}
+
+func BigintLiteralBAMLType(value string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_BigintValue{BigintValue: value}}}}}
+}
+
+func FloatLiteralBAMLType(value string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_FloatValue{FloatValue: value}}}}}
+}
+
+func BoolLiteralBAMLType(value bool) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_BoolValue{BoolValue: value}}}}}
+}
+
+func (value BAMLType) Equal(other BAMLType) bool {
+	return equalBAMLType(value.value, other.value, true)
+}
+
+func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	// RuntimeTy serializes a selected non-null arm from a flattened nullable
+	// union as Optional<T> in a few legacy paths. Tolerate that wrapper only at
+	// the selected arm's root. Recursive calls deliberately pass false so
+	// list<int> remains distinct from list<int?>.
+	if allowTopLevelOptional {
+		leftOptional, leftIsOptional := left.Ty.(*cffi.BamlTy_Optional)
+		rightOptional, rightIsOptional := right.Ty.(*cffi.BamlTy_Optional)
+		switch {
+		case leftIsOptional && rightIsOptional && leftOptional.Optional != nil && rightOptional.Optional != nil:
+			return equalBAMLType(leftOptional.Optional.Inner, rightOptional.Optional.Inner, false)
+		case leftIsOptional && leftOptional.Optional != nil:
+			return equalBAMLType(leftOptional.Optional.Inner, right, false)
+		case rightIsOptional && rightOptional.Optional != nil:
+			return equalBAMLType(left, rightOptional.Optional.Inner, false)
+		}
+	}
+	switch leftValue := left.Ty.(type) {
+	case *cffi.BamlTy_List:
+		rightValue, ok := right.Ty.(*cffi.BamlTy_List)
+		return ok && leftValue.List != nil && rightValue.List != nil && equalBAMLType(leftValue.List.Item, rightValue.List.Item, false)
+	case *cffi.BamlTy_Map:
+		rightValue, ok := right.Ty.(*cffi.BamlTy_Map)
+		return ok && leftValue.Map != nil && rightValue.Map != nil &&
+			equalBAMLType(leftValue.Map.Key, rightValue.Map.Key, false) && equalBAMLType(leftValue.Map.Value, rightValue.Map.Value, false)
+	case *cffi.BamlTy_Union:
+		rightValue, ok := right.Ty.(*cffi.BamlTy_Union)
+		if !ok || leftValue.Union == nil || rightValue.Union == nil || len(leftValue.Union.Options) != len(rightValue.Union.Options) {
+			return false
+		}
+		matched := make([]bool, len(rightValue.Union.Options))
+		for _, leftOption := range leftValue.Union.Options {
+			found := false
+			for index, rightOption := range rightValue.Union.Options {
+				if !matched[index] && equalBAMLType(leftOption, rightOption, false) {
+					matched[index] = true
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	default:
+		// Optionality is semantically significant at every nested position:
+		// list<int> must not compare equal to list<int?>. Selected union arms
+		// arrive in canonical non-optional form, so no wrapper erasure is
+		// needed here.
+		return proto.Equal(left, right)
+	}
+}
+
+// UnionVariant returns the typed selected arm and its payload without guessing
+// from the payload shape.
+func (value Value) UnionVariant() (BAMLType, Value, error) {
+	if value.value == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML value is uninitialized")
+	}
+	envelope, ok := value.value.Value.(*cffi.BamlOutboundValue_UnionVariantValue)
+	if !ok || envelope.UnionVariantValue == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("expected BAML union variant, got %T", value.value.Value)
+	}
+	return validateUnionVariant(envelope.UnionVariantValue)
+}
+
+// validateUnionVariant treats outbound union metadata as untrusted ABI input.
+// The Go bridge and native runtime require an exact product-version match, so
+// self_type and selected_type are mandatory. selected_option_index remains
+// optional solely for envelopes emitted during its protobuf rollout; when it
+// is present, it must agree exactly with selected_type and self_type.
+func validateUnionVariant(variant *cffi.BamlValueUnionVariant) (BAMLType, Value, error) {
+	if variant == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant metadata is missing")
+	}
+	if variant.SelfType == nil || variant.SelfType.Ty == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant is missing self type metadata")
+	}
+	if variant.SelectedType == nil || variant.SelectedType.Ty == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant is missing selected type metadata")
+	}
+	if variant.Value == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant has an empty value")
+	}
+
+	options, err := unionTypeOptions(variant.SelfType)
+	if err != nil {
+		return BAMLType{}, Value{}, err
+	}
+	selectedIndex := -1
+	for index, option := range options {
+		if equalBAMLType(option, variant.SelectedType, false) {
+			selectedIndex = index
+			break
+		}
+	}
+	if selectedIndex < 0 {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected type is not a member of self type")
+	}
+	if variant.SelectedOptionIndex != nil {
+		rawIndex := *variant.SelectedOptionIndex
+		if uint64(rawIndex) >= uint64(len(options)) {
+			return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d is outside self type with %d options", rawIndex, len(options))
+		}
+		index := int(rawIndex)
+		if index != selectedIndex || !equalBAMLType(options[index], variant.SelectedType, false) {
+			return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d disagrees with selected type at index %d", index, selectedIndex)
+		}
+	}
+	return BAMLType{value: variant.SelectedType}, Value{value: variant.Value}, nil
+}
+
+func unionTypeOptions(selfType *cffi.BamlTy) ([]*cffi.BamlTy, error) {
+	switch union := selfType.Ty.(type) {
+	case *cffi.BamlTy_Union:
+		if union.Union == nil || len(union.Union.Options) == 0 {
+			return nil, fmt.Errorf("BAML union variant self type has no options")
+		}
+		return union.Union.Options, nil
+	case *cffi.BamlTy_Optional:
+		if union.Optional == nil || union.Optional.Inner == nil || union.Optional.Inner.Ty == nil {
+			return nil, fmt.Errorf("BAML union variant optional self type is missing its inner type")
+		}
+		// RuntimeTy's canonical nullable order is [inner, null]. This is also
+		// the order used by selected_option_index in the Rust encoder.
+		return []*cffi.BamlTy{
+			union.Optional.Inner,
+			PrimitiveBAMLType(NullType).value,
+		}, nil
+	default:
+		return nil, fmt.Errorf("BAML union variant self type is not a union or optional type")
+	}
+}
+
+func (value Value) IsNull() (bool, error) {
+	return value.isNull()
+}
+
+func UnexpectedUnionVariant(name string, selected BAMLType) error {
+	return fmt.Errorf("BAML returned selected arm %v outside generated union %s", selected.value, name)
+}
 
 func (value Value) isNull() (bool, error) {
 	unwrapped, err := value.unwrapUnionVariants()
@@ -203,10 +442,11 @@ func (value Value) unwrapUnionVariants() (Value, error) {
 		if !ok {
 			return value, nil
 		}
-		if item.UnionVariantValue == nil || item.UnionVariantValue.Value == nil {
-			return Value{}, fmt.Errorf("BAML union variant has an empty value")
+		_, payload, err := validateUnionVariant(item.UnionVariantValue)
+		if err != nil {
+			return Value{}, err
 		}
-		value = Value{value: item.UnionVariantValue.Value}
+		value = payload
 	}
 	return Value{}, fmt.Errorf("BAML union variant nesting exceeds 64 levels")
 }

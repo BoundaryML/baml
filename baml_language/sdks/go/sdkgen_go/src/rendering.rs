@@ -25,6 +25,12 @@ pub(crate) enum GeneratorIdent {
     ClassValueLocal,
     DecodedLocal,
     CodecValueParameter,
+    UnionArmLocal,
+    UnionOkLocal,
+    UnionNullLocal,
+    UnionSelectedLocal,
+    UnionPayloadLocal,
+    UnionVariantField,
     StringType,
     Int64Type,
     Float64Type,
@@ -45,6 +51,12 @@ pub(crate) enum EnumCodecDirection {
     Decode,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UnionCodecDirection {
+    Encode,
+    Decode,
+}
+
 /// A generator-owned package declaration. Projected BAML declarations are
 /// exported and can never start with `_`, so this namespace cannot collide
 /// with user code. The stable index comes from sorted BAML class FQNs.
@@ -58,6 +70,27 @@ pub(crate) struct ClassCodecIdent {
 pub(crate) struct EnumCodecIdent {
     direction: EnumCodecDirection,
     index: usize,
+}
+
+pub(crate) struct UnionCodecIdent {
+    direction: UnionCodecDirection,
+    index: usize,
+}
+
+impl UnionCodecIdent {
+    pub(crate) fn new(direction: UnionCodecDirection, index: usize) -> Self {
+        Self { direction, index }
+    }
+}
+
+impl fmt::Display for UnionCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let direction = match self.direction {
+            UnionCodecDirection::Encode => "Encode",
+            UnionCodecDirection::Decode => "Decode",
+        };
+        write!(f, "_baml{direction}Union{}", self.index)
+    }
 }
 
 impl EnumCodecIdent {
@@ -112,6 +145,12 @@ impl GeneratorIdent {
         Self::ClassValueLocal,
         Self::DecodedLocal,
         Self::CodecValueParameter,
+        Self::UnionArmLocal,
+        Self::UnionOkLocal,
+        Self::UnionNullLocal,
+        Self::UnionSelectedLocal,
+        Self::UnionPayloadLocal,
+        Self::UnionVariantField,
         Self::StringType,
         Self::Int64Type,
         Self::Float64Type,
@@ -137,6 +176,12 @@ impl GeneratorIdent {
             Self::ClassValueLocal => "classValue_",
             Self::DecodedLocal => "decoded_",
             Self::CodecValueParameter => "value_",
+            Self::UnionArmLocal => "arm_",
+            Self::UnionOkLocal => "ok_",
+            Self::UnionNullLocal => "null_",
+            Self::UnionSelectedLocal => "selected_",
+            Self::UnionPayloadLocal => "payload_",
+            Self::UnionVariantField => "variant_",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",

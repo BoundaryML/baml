@@ -23,6 +23,9 @@ pub enum CtypesError {
     #[error("Invalid bigint hex string ({len} bytes)")]
     InvalidBigint { len: usize },
 
+    #[error("Union selected type `{selected}` is not a member of declared union `{union}`")]
+    UnionSelectedTypeNotMember { selected: String, union: String },
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }
