@@ -32,7 +32,10 @@ static size_t CountOccurrences(const std::string& text,
 }
 
 BAML_TEST(class_doc_summary_and_attributes_section) {
+  // Anchored on the namespace open so nothing precedes the summary line
+  // (python parity: exact __doc__ equality).
   const std::string expected =
+      "namespace docs {\n"
       "/// A document with a title and an optional body.\n"
       "///\n"
       "/// Attributes:\n"
@@ -43,18 +46,26 @@ BAML_TEST(class_doc_summary_and_attributes_section) {
 }
 
 BAML_TEST(undocumented_field_listed_as_bare_name_under_attributes) {
-  const std::string text = HeaderText();
   // Note: `id` is documented, `text` is not - the any-doc rule lists every
-  // field, the undocumented one as a bare name.
-  BAML_ASSERT(text.find("/// A multi-line summary.\n/// Continuation line") !=
-              std::string::npos);
-  BAML_ASSERT(text.find("/// Attributes:\n///     id: Stable identifier") !=
-              std::string::npos);
-  BAML_ASSERT(text.find("///     text\nstruct Note {") != std::string::npos);
+  // field, the undocumented one as a bare name. One contiguous block
+  // (python parity: exact __doc__ equality), pinning the blank separator
+  // line between the summary and the Attributes: section.
+  const std::string expected =
+      "namespace docs {\n"
+      "/// A multi-line summary.\n"
+      "/// Continuation line of the summary, preserved verbatim in the\n"
+      "/// rendered block-form docstring.\n"
+      "///\n"
+      "/// Attributes:\n"
+      "///     id: Stable identifier \u2014 surfaces in URLs.\n"
+      "///     text\n"
+      "struct Note {";
+  BAML_ASSERT(HeaderText().find(expected) != std::string::npos);
 }
 
 BAML_TEST(enum_doc_summary_and_members_section) {
   const std::string expected =
+      "namespace docs {\n"
       "/// Sentiment labels surfaced by the model.\n"
       "///\n"
       "/// Members:\n"
@@ -68,14 +79,32 @@ BAML_TEST(enum_doc_summary_and_members_section) {
 
 BAML_TEST(enum_summary_only_omits_members_section) {
   const std::string text = HeaderText();
-  const size_t decl = text.find("enum class Priority : uint64_t {");
+  // The class-level summary is present verbatim with NO Members: rollup
+  // between it and the declaration (python parity: exact __doc__
+  // equality for the summary-only case).
+  const std::string expected =
+      "namespace docs {\n"
+      "/// Pin the \"summary only, no member rollup\" case: this enum has a\n"
+      "/// class-level `///` but every variant is bare.\n"
+      "// Enumerator values: FNV-1a-64 of the wire value (reorder-stable).\n"
+      "enum class Priority : uint64_t {";
+  const size_t decl = text.find(expected);
   BAML_ASSERT(decl != std::string::npos);
-  const std::string before =
-      text.substr(decl < 400 ? 0 : decl - 400, decl < 400 ? decl : size_t{400});
-  BAML_ASSERT(before.find("Members:") == std::string::npos);
-  // Variants still usable.
+  // Exactly three members (python parity: {m.value} set equality pins
+  // exhaustiveness)...
+  const size_t body_start = decl + expected.size();
+  const size_t body_end = text.find("};", body_start);
+  BAML_ASSERT(body_end != std::string::npos);
+  const std::string body = text.substr(body_start, body_end - body_start);
+  BAML_ASSERT_EQ(CountOccurrences(body, "="), size_t{3});
+  // ...with these wire values.
+  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::HIGH)),
+                 std::string("HIGH"));
+  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::MEDIUM)),
+                 std::string("MEDIUM"));
+  BAML_ASSERT_EQ(std::string(baml::Codec<Priority>::ToWire(Priority::LOW)),
+                 std::string("LOW"));
   BAML_ASSERT(Priority::HIGH != Priority::LOW);
-  (void)Priority::MEDIUM;
 }
 
 BAML_TEST(no_inline_field_or_variant_doc_artifacts) {
