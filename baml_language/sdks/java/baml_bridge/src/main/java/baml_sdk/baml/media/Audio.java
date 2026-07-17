@@ -67,7 +67,7 @@ public final class Audio implements BamlMedia {
     }
 
     /** MIME type, or {@code null} when none is set. */
-    public String mimeType() {
+    public String mime_type() {
         return handle.mediaMimeType();
     }
 

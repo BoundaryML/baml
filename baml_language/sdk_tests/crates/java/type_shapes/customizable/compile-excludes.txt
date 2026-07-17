@@ -4,4 +4,3 @@
 # Remove entries as capabilities are implemented — the goal is an
 # empty file. Paths are relative to the tests/ source root.
 roundtrip_tests/TestStreams.java
-roundtrip_tests/TestHandles.java

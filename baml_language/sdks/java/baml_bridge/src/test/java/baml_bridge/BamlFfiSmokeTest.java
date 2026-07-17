@@ -110,7 +110,7 @@ class BamlFfiSmokeTest {
     void media_from_url_exposes_accessors() {
         Image img = Image.from_url("https://example.com/asset", "image/png");
         assertEquals("https://example.com/asset", img.url());
-        assertEquals("image/png", img.mimeType());
+        assertEquals("image/png", img.mime_type());
         assertNull(img.file()); // not file-backed
         assertEquals("", img.base64()); // no base64 payload for a bare URL
     }

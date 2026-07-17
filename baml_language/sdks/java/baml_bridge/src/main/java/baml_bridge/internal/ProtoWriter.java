@@ -159,6 +159,17 @@ public final class ProtoWriter {
             // with the stdlib FQN on class_ty.name. Mirrors bridge_python's
             // media encode branch (proto.py: class_value(name, {_data: handle})).
             w.writeMessage(IV_CLASS, encodeMediaClass(media));
+        } else if (value instanceof baml_bridge.BamlHandle handle) {
+            // A bare engine handle (a $rust_type shell's private field, e.g.
+            // baml.fs.File `_handle` / baml.http.Response `_body`): an
+            // InboundValue.handle carrying BamlHandle{key, handle_type}. The
+            // key is a fresh clone — the engine drains its copy on decode
+            // while the Java shell keeps its own row (same contract as the
+            // media `_data` handle).
+            WireWriter handleMsg = new WireWriter();
+            handleMsg.writeInt64(HANDLE_KEY, handle.cloneKeyForWire());
+            handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());
+            w.writeMessage(IV_HANDLE, handleMsg.toByteArray());
         } else if (value instanceof baml_bridge.BamlUnion) {
             // Generic-family arm record (Union2..Union10): unwrap to the
             // single `value()` component — no union envelope inbound.
