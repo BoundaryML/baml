@@ -1192,6 +1192,80 @@ mod tests {
     }
 
     #[test]
+    fn parse_companion_preserves_wire_identity_and_collides_canonically() {
+        let companion = symbol(&["lorem"], "extract_resume$parse");
+        let user_function = symbol(&["lorem"], "extract_resume_parse");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(
+                    companion.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    user_function.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let companion_name =
+            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
+        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
+
+        assert_ne!(identifier(companion_name), identifier(user_name));
+        assert!(identifier(companion_name).starts_with("LoremExtractResumeParse_"));
+        assert!(identifier(user_name).starts_with("LoremExtractResumeParse_"));
+        assert_eq!(
+            companion_name.wire(),
+            &BamlWireName::Symbol(companion.symbol.clone())
+        );
+        assert_eq!(
+            companion_name.wire().to_string(),
+            "user.lorem.extract_resume$parse"
+        );
+    }
+
+    #[test]
+    fn build_request_stream_companion_preserves_wire_identity_and_collides_canonically() {
+        let companion = symbol(&["lorem"], "extract_resume$build_request_stream");
+        let user_function = symbol(&["lorem"], "extract_resume_build_request_stream");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(
+                    companion.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    user_function.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let companion_name =
+            names.project(&companion, GoNameKind::Function, GoVisibility::Exported);
+        let user_name = names.project(&user_function, GoNameKind::Function, GoVisibility::Exported);
+
+        assert_ne!(identifier(companion_name), identifier(user_name));
+        assert!(identifier(companion_name).starts_with("LoremExtractResumeBuildRequestStream_"));
+        assert!(identifier(user_name).starts_with("LoremExtractResumeBuildRequestStream_"));
+        assert_eq!(
+            companion_name.wire(),
+            &BamlWireName::Symbol(companion.symbol.clone())
+        );
+        assert_eq!(
+            companion_name.wire().to_string(),
+            "user.lorem.extract_resume$build_request_stream"
+        );
+    }
+
+    #[test]
     fn identifier_is_relative_to_the_current_package() {
         let fqn = symbol(&[], "lookup_invoice");
         let names = GoNames::new(
