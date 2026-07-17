@@ -3,8 +3,10 @@
 //! with required + optional arguments (per-function opts structs, spec D4),
 //! classes + enums with generated `Codec<T>` specializations, transparent
 //! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
+//! multi-member unions as order-canonical `::baml::Union` variants, and
+//! typed error unions via `BamlThrown`.
 //! Post-step-8 features (async, methods, callbacks, generics, streaming
-//! companions, media/handles, unions) are skipped and reported in a trailing
+//! companions, media/handles) are skipped and reported in a trailing
 //! header comment (no silent caps); the full implementation is preserved on
 //! the avery/bridge-cpp-full branch.
 //!
@@ -344,6 +346,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
     (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
+    ),
+    (
+        "include/baml/union.h",
+        include_str!("../../bridge_cpp/include/baml/union.h"),
     ),
     (
         "include/baml/detail/call.h",
@@ -789,6 +795,9 @@ struct EmittedFn {
     opts_name: Option<CppName>,
     doc: Option<String>,
     raises: Vec<String>,
+    /// The declared throws set as a `::baml::Union<...>` spelling, when
+    /// every member translates; `None` uses the untyped `BamlError` path.
+    thrown: Option<String>,
 }
 
 fn emit_callable(
@@ -854,6 +863,24 @@ fn emit_callable(
         Some(ty) => vec![unqualified_leaf_name(ty)],
     };
 
+    // The declared throws set as a C++ type for the typed error path:
+    // always spelled as a ::baml::Union (a single thrown type wraps into a
+    // one-alternative Union) so every catch site reads uniformly via
+    // baml::match. A throws set this slice cannot translate falls back to
+    // the untyped BamlError path (None -> CallSync's ThrownU = void).
+    let thrown = function.throws.as_ref().and_then(|ty| {
+        match translate_ty(pool, names, ty, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => {
+                if t.starts_with("::baml::Union<") {
+                    Some(t)
+                } else {
+                    Some(format!("::baml::Union<{t}>"))
+                }
+            }
+            Translated::NotYet | Translated::Unsupported(_) => None,
+        }
+    });
+
     let opts_name = if opt_params.is_empty() {
         None
     } else {
@@ -869,6 +896,7 @@ fn emit_callable(
         opts_name,
         doc: function.docstring.clone(),
         raises,
+        thrown,
     })
 }
 
@@ -1042,18 +1070,16 @@ fn translate_ty(
                     other => return other,
                 }
             }
-            // Multi-member unions (std::variant) are disabled pending a
-            // representation redesign; only the null-normalized single-
-            // member forms (T? and bare T after dedup) emit.
+            // Multi-member unions spell ::baml::Union<...>, an
+            // order-canonical std::variant alias: the C++ type system
+            // dedups spellings (Union<A, B> == Union<B, A>), so
+            // declaration order is fine here; sorting the rendered text
+            // just keeps regenerated headers byte-stable.
             alternatives.sort();
             let inner = match alternatives.as_slice() {
                 [] => return Translated::Unsupported("empty union".to_string()),
                 [single] => single.clone(),
-                _ => {
-                    return Translated::Unsupported(
-                        "union type (disabled pending redesign)".to_string(),
-                    );
-                }
+                many => format!("::baml::Union<{}>", many.join(", ")),
             };
             if had_null {
                 // A nullable boxed recursive edge cannot be optional<Box<T>>
@@ -1204,9 +1230,14 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
             ty = p.ty
         );
     }
+    let thrown = match &f.thrown {
+        Some(u) => format!(", {u}"),
+        None => String::new(),
+    };
     let _ = writeln!(
         buf,
-        "{indent}return ::baml::detail::CallSync<{ret}>(\"{fqn}\", std::move({args}));",
+        "{indent}return ::baml::detail::CallSync<{ret}{thrown}>(\"{fqn}\", \
+         std::move({args}));",
         ret = f.ret,
         fqn = f.call_fqn,
     );
@@ -1372,7 +1403,9 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
              e->set_value(ToWire(v));\n  }}\n  \
              static {q} Decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
              const auto& v = detail::Unwrap(raw);\n    \
-             if (v.value_case() != detail::pb::BamlOutboundValue::kEnumValue) {{\n      \
+             if (v.value_case() != detail::pb::BamlOutboundValue::kEnumValue ||\n      \
+             (!v.enum_value().name().empty() &&\n       \
+             v.enum_value().name() != \"{fqn}\")) {{\n      \
              detail::KindMismatch(\"enum {fqn}\", v);\n    }}\n    \
              return FromWire(v.enum_value().value());\n  }}",
         );

@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -258,6 +259,72 @@ struct Codec<std::unordered_map<std::string, T>> {
   }
 };
 
+// BAML unions (baml::Union<Ts...> = order-canonical std::variant). Encode
+// writes the ACTIVE alternative's value with no union wrapper (the engine
+// types the member; Python parity). Decode receives the union-unwrapped
+// inner value and must pick an alternative from the concrete wire arm
+// alone -- alternatives are in canonical (sorted) order, so selection is
+// order-independent by construction:
+//
+//   pass 1 (strict): each alternative decodes only its exact wire arms
+//     (int never satisfies a double alternative);
+//   pass 2 (lenient): the engine's int->float coercion is admitted, for
+//     unions with a float arm but no int arm.
+//
+// Class/enum alternatives dispatch precisely by wire FQN inside their own
+// codecs; structurally ambiguous alternatives (two lists) resolve by
+// probing elements.
+template <class... Ts>
+struct Codec<std::variant<Ts...>> {
+  using V = std::variant<Ts...>;
+
+  static void Encode(detail::pb::InboundValue& value_msg, const V& v) {
+    std::visit(
+        [&value_msg](const auto& alt) {
+          using T = std::decay_t<decltype(alt)>;
+          Codec<T>::Encode(value_msg, alt);
+        },
+        v);
+  }
+
+  static V Decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::Unwrap(raw);
+    std::optional<V> out;
+    const bool strict = (TryArm<Ts>(v, out, false) || ...);
+    if (!strict) {
+      (TryArm<Ts>(v, out, true) || ...);
+    }
+    if (!out.has_value()) {
+      detail::KindMismatch("union", v);
+    }
+    return std::move(*out);
+  }
+
+ private:
+  static bool IsIntArm(const detail::pb::BamlOutboundValue& v) {
+    if (v.value_case() == detail::pb::BamlOutboundValue::kIntValue) {
+      return true;
+    }
+    return v.value_case() == detail::pb::BamlOutboundValue::kLiteralValue &&
+           v.literal_value().literal_case() ==
+               detail::pb::BamlLiteralValue::kIntValue;
+  }
+
+  template <class T>
+  static bool TryArm(const detail::pb::BamlOutboundValue& v,
+                     std::optional<V>& out, bool lenient) {
+    if (!lenient && std::is_same<T, double>::value && IsIntArm(v)) {
+      return false;
+    }
+    try {
+      out.emplace(std::in_place_type<T>, Codec<T>::Decode(v));
+      return true;
+    } catch (const BamlError&) {
+      return false;
+    }
+  }
+};
+
 namespace detail {
 
 // Extracts a human-readable message from a thrown BAML value: the `message`
@@ -346,22 +413,44 @@ inline pb::BamlOutboundResult ParseResultEnvelope(
   return result;
 }
 
-// Decodes a BamlOutboundResult envelope into T, throwing BamlError /
-// BamlPanic / BamlCancelled for the non-ok arms.
-template <typename T>
+// The typed error path: when the error arm's value decodes into the
+// function's declared `throws` union, throw BamlThrown<ThrownU> carrying
+// the typed payload. Anything else (undeclared throw, panic, exit) falls
+// through to the untyped ThrowFromResult.
+template <typename ThrownU>
+[[noreturn]] void ThrowFromResultTyped(const pb::BamlOutboundResult& result) {
+  if (result.result_case() == pb::BamlOutboundResult::kError) {
+    const pb::BamlOutboundValue& value = result.error().value();
+    std::optional<ThrownU> decoded;
+    try {
+      decoded.emplace(Codec<ThrownU>::Decode(value));
+    } catch (const BamlError&) {
+      // Not in the declared set: untyped fallback below.
+    }
+    if (decoded.has_value()) {
+      throw BamlThrown<ThrownU>(
+          std::move(*decoded), ErrorMessageOf(value), ThrownClassName(value),
+          JoinTrace(result.error().trace()), RawPayload(value));
+    }
+  }
+  ThrowFromResult(result);
+}
+
+// Decodes a BamlOutboundResult envelope into T. Non-ok arms throw:
+// BamlThrown<ThrownU> for declared throws (when ThrownU is not void),
+// else BamlError / BamlPanic / BamlCancelled.
+template <typename T, typename ThrownU = void>
 T DecodeResult(const std::vector<uint8_t>& envelope) {
   pb::BamlOutboundResult result = ParseResultEnvelope(envelope);
   if (result.result_case() != pb::BamlOutboundResult::kOk) {
-    ThrowFromResult(result);
+    if constexpr (std::is_void<ThrownU>::value) {
+      ThrowFromResult(result);
+    } else {
+      ThrowFromResultTyped<ThrownU>(result);
+    }
   }
-  return Codec<T>::Decode(result.ok());
-}
-
-template <>
-inline void DecodeResult<void>(const std::vector<uint8_t>& envelope) {
-  pb::BamlOutboundResult result = ParseResultEnvelope(envelope);
-  if (result.result_case() != pb::BamlOutboundResult::kOk) {
-    ThrowFromResult(result);
+  if constexpr (!std::is_void<T>::value) {
+    return Codec<T>::Decode(result.ok());
   }
 }
 
