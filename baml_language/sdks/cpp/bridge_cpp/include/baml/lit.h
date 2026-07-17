@@ -37,6 +37,13 @@
 // Every Lit carries its value statically: `decltype(x)::value` (also
 // implicitly convertible), so a catch-all match arm can recover the
 // runtime value: `match(u, [](auto l) { return decltype(l)::value; })`.
+//
+// Possible future representation: identity as an FNV-1a-64 hash NTTP
+// (Lit<0x...>) with an emitter-generated hash->string side-table. That
+// would delete the char-pack macro machinery and the length cap, at the
+// cost of unreadable literal types in compiler diagnostics and no ::value
+// for off-schema spellings. Same user-facing API either way; revisit if
+// the char packs become a problem in practice.
 
 #include <cstddef>
 #include <cstdint>
