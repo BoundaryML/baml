@@ -464,32 +464,49 @@ fn render_callable_pair(
         format!("<{}> ", generic_names.join(", "))
     };
 
-    let sync_body = if ret_top == "void" {
-        format!(
-            "        baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?});"
-        )
-    } else {
-        format!(
-            "        return ({ret_boxed}) baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?});"
-        )
-    };
-
-    // Async siblings return the boxed shape; the cast happens in a
-    // thenApply so the future's element type is precise.
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
-    let async_body = format!(
-        "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}, {descriptor:?}).thenApply(v$ -> ({ret_boxed}) v$);"
-    );
+    let params = param_decls.join(", ");
 
-    let mut out = format!(
-        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
-        params = param_decls.join(", "),
+    // Required-only pair, then the trailing-`ctx` overload pair (same body,
+    // `BamlCallContext` threaded to the runtime as the last argument) for
+    // cancellation. `ctx` is always last, per the cancellation design.
+    let mut out = render_method_pair(
+        &doc,
+        static_kw,
+        &generics_kw,
+        &ident,
+        &params,
+        "",
+        &ret_top,
+        &ret_boxed,
+        &async_ret,
+        fqn,
+        &names_literal,
+        &args_literal,
+        &descriptor,
+        false,
     );
+    out.push_str(&render_method_pair(
+        &doc,
+        static_kw,
+        &generics_kw,
+        &ident,
+        &params,
+        "",
+        &ret_top,
+        &ret_boxed,
+        &async_ret,
+        fqn,
+        &names_literal,
+        &args_literal,
+        &descriptor,
+        true,
+    ));
 
     // Optional-argument configurator: a second sync/async overload pair
-    // (trailing `Consumer<<Ident>$Opts>`) plus the nested opts class. The
-    // required-only pair above stays untouched, so omitting the configurator
-    // still lets the engine evaluate BAML defaults.
+    // (trailing `Consumer<<Ident>$Opts>`), its own trailing-`ctx` pair, and
+    // the nested opts class. The required-only pairs above stay untouched, so
+    // omitting the configurator still lets the engine evaluate BAML defaults.
     if !optionals.is_empty() {
         out.push_str(&render_optional_configurator(
             &ident,
@@ -511,6 +528,65 @@ fn render_callable_pair(
     }
 
     out
+}
+
+/// Render one sync + `_async` method-pair entry point for a callable. The two
+/// siblings share a body shape: the sync method `callSync`s (returning the
+/// boxed result, or nothing for `void`); the async method returns the
+/// caller-cancellable `callAsync` future reinterpreted to the declared element
+/// type via a wildcard-bridge cast — deliberately NOT a `thenApply` stage,
+/// which would hand back a derived future whose `cancel` no longer reaches the
+/// engine call (see `BamlFfi.callAsync` / `CancellableCall`).
+///
+/// `params` is the already-joined Java parameter list (required args, plus an
+/// optional configurator when present); when `with_ctx`, a trailing
+/// `baml_bridge.BamlCallContext ctx` is appended and threaded to the runtime as
+/// the last `callSync`/`callAsync` argument. `prologue` runs before the runtime
+/// call (opts instantiation, or empty). `call_names` / `call_args` are the
+/// runtime name/arg array expressions (base literals, or the opts accessors).
+#[allow(clippy::too_many_arguments)]
+fn render_method_pair(
+    doc: &str,
+    static_kw: &str,
+    generics_kw: &str,
+    ident: &str,
+    params: &str,
+    prologue: &str,
+    ret_top: &str,
+    ret_boxed: &str,
+    async_ret: &str,
+    fqn: &str,
+    call_names: &str,
+    call_args: &str,
+    descriptor: &str,
+    with_ctx: bool,
+) -> String {
+    let sig_params = if with_ctx {
+        if params.is_empty() {
+            "baml_bridge.BamlCallContext ctx".to_string()
+        } else {
+            format!("{params}, baml_bridge.BamlCallContext ctx")
+        }
+    } else {
+        params.to_string()
+    };
+    let ctx_arg = if with_ctx { ", ctx" } else { "" };
+
+    let sync_call = format!(
+        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{ctx_arg})"
+    );
+    let sync_body = if ret_top == "void" {
+        format!("{prologue}        {sync_call};")
+    } else {
+        format!("{prologue}        return ({ret_boxed}) {sync_call};")
+    };
+    let async_body = format!(
+        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{ctx_arg});"
+    );
+
+    format!(
+        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({sig_params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({sig_params}) {{\n{async_body}\n    }}\n"
+    )
 }
 
 /// Emit the optional-argument configurator for a callable that has ≥1
@@ -576,18 +652,40 @@ fn render_optional_configurator(
     let call_names = format!("$opts.$names({names_literal})");
     let call_args = format!("$opts.$args({args_literal})");
 
-    let sync_body = if ret_top == "void" {
-        format!(
-            "{prologue}        baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?});"
-        )
-    } else {
-        format!(
-            "{prologue}        return ({ret_boxed}) baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?});"
-        )
-    };
-    let async_body = format!(
-        "{prologue}        return baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}).thenApply(v$ -> ({ret_boxed}) v$);"
+    // Configurator pair, then its trailing-`ctx` overload pair (`ctx` last,
+    // after the configurator).
+    let mut out = render_method_pair(
+        doc,
+        static_kw,
+        generics_kw,
+        ident,
+        &params,
+        &prologue,
+        ret_top,
+        ret_boxed,
+        async_ret,
+        fqn,
+        &call_names,
+        &call_args,
+        descriptor,
+        false,
     );
+    out.push_str(&render_method_pair(
+        doc,
+        static_kw,
+        generics_kw,
+        ident,
+        &params,
+        &prologue,
+        ret_top,
+        ret_boxed,
+        async_ret,
+        fqn,
+        &call_names,
+        &call_args,
+        descriptor,
+        true,
+    ));
 
     // Fluent boxed setters. The wire key is the BAML arg name; the setter
     // method name is the Java-escaped identifier (they differ only when the
@@ -602,9 +700,10 @@ fn render_optional_configurator(
         ));
     }
 
-    format!(
-        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
-    )
+    out.push_str(&format!(
+        "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
+    ));
+    out
 }
 
 /// A minted union: sealed interface + one record per arm, per the

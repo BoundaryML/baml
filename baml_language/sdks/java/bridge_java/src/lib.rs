@@ -24,7 +24,7 @@ use indexmap::IndexMap;
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JByteArray, JClass, JString, JValue},
-    sys::{jint, jlong},
+    sys::{jboolean, jint, jlong},
 };
 use prost::Message;
 
@@ -393,6 +393,26 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeNewCallId(
     // Call ids fit u64; JNI `long` is i64. The counter starts at 1 and the
     // low 63 bits are what the engine keys on, so the bit cast is faithful.
     bridge_cffi::new_function_call_id() as jlong
+}
+
+/// `baml_bridge.BamlFfi.nativeCancelFunctionCall(long callId) -> boolean`.
+///
+/// Cancel an in-flight function call by id via
+/// [`bridge_cffi::cancel_function_call_by_id`], the same entry point
+/// `bridge_python`'s `BamlCallContext.abort` funnels through. Returns `true`
+/// when the runtime accepted the cancel, `false` otherwise (unknown /
+/// already-completed id, id 0, or an uninitialized runtime). Never throws:
+/// both `BamlCallContext.abort()` and a host `future.cancel(true)` fire it and
+/// tolerate a `false`, so there is no envelope or exception to surface.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCancelFunctionCall(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    call_id: jlong,
+) -> jboolean {
+    // `call_id` round-trips u64 → i64 → u64; `cancel_function_call_by_id`
+    // rejects a 0 id and an uninitialized runtime, returning false.
+    jboolean::from(bridge_cffi::cancel_function_call_by_id(call_id as u64))
 }
 
 // ===========================================================================

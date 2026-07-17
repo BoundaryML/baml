@@ -742,9 +742,41 @@ mod tests {
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
         ));
-        assert!(file.contains(
-            "baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\").thenApply(v$ -> (java.lang.Long) v$)"
-        ));
+        // The async sibling returns the callAsync future itself (the object
+        // that owns `cancel`), reinterpreted to the element type via a
+        // wildcard-bridge cast — no `thenApply` stage.
+        assert!(
+            file.contains(
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
+            ),
+            "{file}"
+        );
+        assert!(!file.contains("thenApply"), "{file}");
+
+        // Trailing-`ctx` overload pair (cancellation): `BamlCallContext` last,
+        // threaded to the runtime as the final callSync/callAsync argument.
+        assert!(
+            file.contains(
+                "public static long extract_resume(long x, baml_bridge.BamlCallContext ctx) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\", ctx);"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains("public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x, baml_bridge.BamlCallContext ctx) {"),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\", ctx);"
+            ),
+            "{file}"
+        );
     }
 
     #[test]
@@ -782,9 +814,10 @@ mod tests {
         // Both arms, unqualified (FQN leaf only), one tag per line.
         assert!(file.contains(" * @throws ParseError\n"), "{file}");
         assert!(file.contains(" * @throws TimeoutError\n"), "{file}");
-        // Sync + async binding each carry both tags → two of each.
-        assert_eq!(file.matches("@throws ParseError").count(), 2, "{file}");
-        assert_eq!(file.matches("@throws TimeoutError").count(), 2, "{file}");
+        // Each entry point carries the same javadoc: the required-only pair
+        // (sync + async) and its trailing-`ctx` overload pair → four of each.
+        assert_eq!(file.matches("@throws ParseError").count(), 4, "{file}");
+        assert_eq!(file.matches("@throws TimeoutError").count(), 4, "{file}");
         // The summary precedes the `@throws` block.
         let summary = file.find("Load a document from a path.").unwrap();
         let throws = file.find("@throws").unwrap();
@@ -857,7 +890,21 @@ mod tests {
         assert!(file.contains(
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
         ));
-        assert!(file.contains("thenApply(v$ -> (java.lang.String) v$)"));
+        assert!(!file.contains("thenApply"), "{file}");
+        assert!(file.contains(
+            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\");"
+        ), "{file}");
+
+        // Trailing-`ctx` overloads land on both the static and instance methods.
+        assert!(file.contains(
+            "public static java.lang.String create(java.lang.String name, baml_bridge.BamlCallContext ctx) {"
+        ), "{file}");
+        assert!(file.contains(
+            "public java.lang.String greet(java.lang.String greeting, baml_bridge.BamlCallContext ctx) {"
+        ), "{file}");
+        assert!(file.contains(
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\", ctx);"
+        ), "{file}");
     }
 
     #[test]
@@ -927,6 +974,18 @@ mod tests {
         assert!(file.contains(
             "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"int\");"
         ));
+
+        // The configurator overload gains its own trailing-`ctx` pair, with
+        // `ctx` after the Consumer (always last).
+        assert!(file.contains(
+            "public static long optional_args_probe(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
+        ), "{file}");
+        assert!(file.contains(
+            "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
+        ), "{file}");
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"int\", ctx);"
+        ), "{file}");
 
         // Nested opts class with BOXED fluent setters (null must be passable).
         assert!(file.contains("public static final class optional_args_probe$Opts {"));

@@ -4,10 +4,7 @@
 # Remove entries as capabilities are implemented — the goal is an
 # empty file. Paths are relative to the tests/ source root.
 #
-# These need cancellation / generics / host-callable features that are
-# still design-TBD.
-TestCancellation.java
-TestErrors.java
+# These need generics / host-callable features that are still design-TBD.
 TestGenericCalls.java
 TestGenericInference.java
 TestHostCallables.java

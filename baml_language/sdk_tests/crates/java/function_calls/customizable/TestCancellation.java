@@ -3,17 +3,20 @@
 // Port of python_pydantic2/function_calls/customizable/test_cancellation.py.
 //
 // java-port notes (asyncio -> CompletableFuture), per ref-java-state-of-
-// completeness.md:
+// completeness.md. Cancellation follows Design B:
 //   * `_ctx=ctx` becomes a trailing `BamlCallContext` overload:
-//     `Fns.SleepMs(ms, ctx)` / `Fns.SleepMs_async(ms, ctx)`  (INVENTED overload,
-//     flagged in the report).
+//     `Fns.SleepMs(ms, ctx)` / `Fns.SleepMs_async(ms, ctx)` (the decided
+//     trailing-parameter overload; `ctx` is always last).
 //   * Engine-driven cancellation (ctx.abort()) completes the async future
-//     exceptionally with `BamlCancelledError` (carrying the decoded
-//     `baml.panics.Cancelled` on `.value()`); `future.join()` surfaces it
-//     wrapped in `CompletionException`. This is the analog of Python's
+//     exceptionally with `BamlCancelledError`, which extends
+//     `java.util.concurrent.CancellationException` and carries the decoded
+//     `baml.panics.Cancelled` on `.value()`. Because it IS a
+//     CancellationException, the future reports `isCancelled() == true` and
+//     `future.join()` surfaces the `BamlCancelledError` DIRECTLY (unwrapped —
+//     not inside a `CompletionException`). This is the analog of Python's
 //     `asyncio.CancelledError` whose `.reason` is a `BamlCancelledError`.
-//   * `future.cancel(true)` maps to `cancel_function_call(call_id)` and puts
-//     the future in the CANCELLED state, so `join()` throws a raw
+//   * `future.cancel(true)` fires `cancel_function_call(call_id)` engine-side
+//     then puts the future in the CANCELLED state, so `join()` throws a raw
 //     `CancellationException` (Python `task.cancel()` -> `CancelledError`).
 //   * asyncio.TaskGroup has no Java analog; sibling cancellation is modeled
 //     manually via `whenComplete`.
@@ -113,9 +116,12 @@ class TestCancellation {
         sleepMillis(50);
         ctx.abort();
 
-        CompletionException ex = assertThrows(CompletionException.class, future::join);
-        BamlCancelledError reason = assertInstanceOf(BamlCancelledError.class, ex.getCause());
+        // Design B: BamlCancelledError extends CancellationException, so join()
+        // surfaces it DIRECTLY (not wrapped in CompletionException) and the
+        // future reports itself cancelled.
+        BamlCancelledError reason = assertThrows(BamlCancelledError.class, future::join);
         assertCancelledReason(reason);
+        assertTrue(future.isCancelled());
         assertFastCancellation(start);
     }
 
