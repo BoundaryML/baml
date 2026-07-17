@@ -76,6 +76,7 @@ fi
 if [ "$MODE" = run ]; then
     case "$(uname -s)" in
         Darwin) RUNTIME_LIB="libbridge_cffi.dylib" ;;
+        MSYS* | MINGW* | CYGWIN*) RUNTIME_LIB="bridge_cffi.dll" ;;
         *) RUNTIME_LIB="libbridge_cffi.so" ;;
     esac
     BAML_RUNTIME_PATH="$WORKSPACE_ROOT/target/debug/$RUNTIME_LIB" \

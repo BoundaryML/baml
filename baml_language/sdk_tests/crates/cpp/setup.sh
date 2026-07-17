@@ -31,16 +31,21 @@ echo "==> cargo build -p bridge_cffi (dev cdylib for cpp sdk tests)"
 # cmake/dependencies.cmake abseil pin.
 PROTOBUF_SRC="$WORKSPACE_ROOT/target/cpp-protobuf-src"
 ABSL_SRC="$WORKSPACE_ROOT/target/cpp-absl-src"
-if [[ ! -d "$PROTOBUF_SRC" ]]; then
-    echo "==> clone pinned protobuf v31.1"
-    git clone --quiet --depth 1 --branch v31.1 \
-        https://github.com/protocolbuffers/protobuf.git "$PROTOBUF_SRC"
-fi
-if [[ ! -d "$ABSL_SRC" ]]; then
-    echo "==> clone pinned abseil 20250127.0"
-    git clone --quiet --depth 1 --branch 20250127.0 \
-        https://github.com/abseil/abseil-cpp.git "$ABSL_SRC"
-fi
+
+# Atomic: clone into a temp dir and rename into place, so an interrupted
+# clone can never leave a half-populated cache that the -d guard would
+# accept on the next run.
+clone_pinned() {
+    local repo="$1" tag="$2" dest="$3"
+    [[ -d "$dest" ]] && return 0
+    echo "==> clone pinned $repo@$tag"
+    local tmp="$dest.tmp.$$"
+    rm -rf "$tmp"
+    git clone --quiet --depth 1 --branch "$tag" "$repo" "$tmp"
+    mv "$tmp" "$dest" 2> /dev/null || rm -rf "$tmp" # lost a concurrent race
+}
+clone_pinned https://github.com/protocolbuffers/protobuf.git v31.1 "$PROTOBUF_SRC"
+clone_pinned https://github.com/abseil/abseil-cpp.git 20250127.0 "$ABSL_SRC"
 
 # Per-run breadcrumb for the in-test guard; see setup_guard in
 # harness_runner and SETUP_ENV_VAR in harness_setup/src/cpp.rs.

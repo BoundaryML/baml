@@ -18,7 +18,9 @@ target_include_directories(runtime_smoke PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../include
   ${CMAKE_CURRENT_SOURCE_DIR}/../pb
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../../crates/bridge_cffi/include)
-target_link_libraries(runtime_smoke PRIVATE protobuf::libprotobuf-lite)
+find_package(Threads REQUIRED)
+target_link_libraries(runtime_smoke PRIVATE
+  protobuf::libprotobuf-lite Threads::Threads ${CMAKE_DL_LIBS})
 if(NOT MSVC)
   target_compile_options(runtime_smoke PRIVATE -Wall -Wextra -Werror)
 endif()

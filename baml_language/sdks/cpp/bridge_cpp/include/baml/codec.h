@@ -70,10 +70,16 @@ struct Codec<double> {
       case detail::pb::BamlOutboundValue::kIntValue:
         return static_cast<double>(v.int_value());
       case detail::pb::BamlOutboundValue::kLiteralValue:
-        // Float literals ride as source text.
+        // Float literals ride as source text; malformed text surfaces as
+        // a BamlError, never a bare std:: exception.
         if (v.literal_value().literal_case() ==
             detail::pb::BamlLiteralValue::kFloatValue) {
-          return std::stod(v.literal_value().float_value());
+          try {
+            return std::stod(v.literal_value().float_value());
+          } catch (const std::exception&) {
+            throw BamlError("BAML decode error: malformed float literal '" +
+                            v.literal_value().float_value() + "'");
+          }
         }
         break;
       default:

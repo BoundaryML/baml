@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Configure, build, and run the bridge_cpp core smoke against the locally
 # built cdylib. Builds bridge_cffi first if the library is missing. CMake
-# drives the build (the bridge decodes with pinned protobuf-lite, fetched
-# by cmake/fetch_protobuf.cmake); the protobuf clone is cached under
-# target/cpp-fetchcontent across runs.
+# drives the build; the pinned protobuf/abseil sources are cloned once
+# into target/cpp-protobuf-src and target/cpp-absl-src (shared with the
+# sdk-test harness) and passed via FETCHCONTENT_SOURCE_DIR_* overrides.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -18,15 +18,18 @@ if ! ls "$libdir"/libbridge_cffi.* "$libdir"/bridge_cffi.dll > /dev/null 2>&1; t
 fi
 
 # Pre-cloned pinned sources (shared with the sdk-test harness; cloned here
-# when missing so this script stays self-sufficient).
-if [[ ! -d target/cpp-protobuf-src ]]; then
-    git clone --quiet --depth 1 --branch v31.1 \
-        https://github.com/protocolbuffers/protobuf.git target/cpp-protobuf-src
-fi
-if [[ ! -d target/cpp-absl-src ]]; then
-    git clone --quiet --depth 1 --branch 20250127.0 \
-        https://github.com/abseil/abseil-cpp.git target/cpp-absl-src
-fi
+# when missing so this script stays self-sufficient). Atomic temp+rename so
+# an interrupted clone cannot poison the cache.
+clone_pinned() {
+    local repo="$1" tag="$2" dest="$3"
+    [[ -d "$dest" ]] && return 0
+    local tmp="$dest.tmp.$$"
+    rm -rf "$tmp"
+    git clone --quiet --depth 1 --branch "$tag" "$repo" "$tmp"
+    mv "$tmp" "$dest" 2> /dev/null || rm -rf "$tmp" # lost a concurrent race
+}
+clone_pinned https://github.com/protocolbuffers/protobuf.git v31.1 target/cpp-protobuf-src
+clone_pinned https://github.com/abseil/abseil-cpp.git 20250127.0 target/cpp-absl-src
 
 build_dir="target/bridge-cpp-smoke"
 cmake -B "$build_dir" -S "$bridge_cpp_dir/tests" \
