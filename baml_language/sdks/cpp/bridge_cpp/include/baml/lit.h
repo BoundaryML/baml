@@ -80,10 +80,10 @@ struct LitBase {
   static_assert(
       S != LitShape::kInvalid,
       "unsupported baml::Lit shape. The four literal spellings: "
-      "BAML_LIT(\"...\") for strings; BAML_LIT_INT(n) / baml::IntLit<n> for "
-      "ints (a bare integer deduces `int`, not int64_t, which would mint a "
-      "second type); BAML_LIT_BOOL(b) / baml::Lit<true> for bools; "
-      "BAML_LIT_ENUM(E::V) / baml::Lit<E::V> for enum variants");
+      "BAML_LIT(\"...\") for strings; BAML_LIT(n) / baml::IntLit<n> for ints "
+      "(a bare Lit<1> deduces `int`, not int64_t, which would mint a second "
+      "type); BAML_LIT(b) / baml::BoolLit<b> for bools; BAML_LIT(E::V) / "
+      "baml::Lit<E::V> for enum variants");
 };
 
 template <auto... Cs>
@@ -177,7 +177,11 @@ constexpr LitArg LitArgOf(T) {
 }
 
 // The scalar value, normalized: every integral type lands on int64_t so
-// BAML_LIT(42) and BAML_LIT(int64_t{42}) are the same type.
+// BAML_LIT(42) and BAML_LIT(int64_t{42}) are the same type. An unsigned
+// value above INT64_MAX must not wrap into an aliased identity
+// (BAML_LIT(UINT64_MAX) == BAML_LIT(-1)); reaching the throw during
+// constant evaluation makes the call non-constant, so the out-of-range
+// spelling fails to compile with this message in the diagnostic.
 template <std::size_t N>
 constexpr int64_t LitValueOf(const char (&)[N]) {
   return 0;  // placeholder; the string path never reads it
@@ -188,7 +192,10 @@ template <class T, std::enable_if_t<std::is_integral<T>::value &&
                                         !std::is_same<T, char>::value,
                                     int> = 0>
 constexpr int64_t LitValueOf(T v) {
-  return static_cast<int64_t>(v);
+  return std::is_signed<T>::value ||
+                 static_cast<uint64_t>(v) <= static_cast<uint64_t>(INT64_MAX)
+             ? static_cast<int64_t>(v)
+             : throw "BAML int literals must be representable in int64_t";
 }
 template <class T, std::enable_if_t<std::is_enum<T>::value, int> = 0>
 constexpr T LitValueOf(T v) {
