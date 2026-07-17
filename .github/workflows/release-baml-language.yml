@@ -56,6 +56,7 @@ jobs:
       channel: ${{ steps.plan.outputs.channel }}
       version: ${{ steps.plan.outputs.version }}
       pypi_version: ${{ steps.plan.outputs.pypi_version }}
+      crates_io_version: ${{ steps.plan.outputs.crates_io_version }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
@@ -99,12 +100,14 @@ jobs:
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
-          pypi_version="$(jq -r .pypi_version release-plan.json)"
+          pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
+          crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
             echo "version=$version"
             echo "pypi_version=$pypi_version"
+            echo "crates_io_version=$crates_io_version"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
             cat release-plan.json
@@ -140,40 +143,40 @@ jobs:
           name: release-plan
           path: release-plan.json
 
+  # The toolchain/wrapper build matrix (and, over time, the others) is generated
+  # from the repository's platform contract (`release/platforms.json`) so the
+  # target set + per-target runners live in one machine-readable place.
+  build-matrix:
+    name: Compute build matrices
+    needs: [plan]
+    runs-on: ubuntu-latest
+    outputs:
+      toolchain: ${{ steps.gen.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Generate build matrices from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # target + toolchain runner (as `os`); `libc` rides along so the musl
+          # setup step can key on it.
+          toolchain="$(jq -c '[.targets[]
+            | select(.artifacts.toolchain != null)
+            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+          jq . <<<"$toolchain"
+
   build-toolchain:
     name: Build toolchain (${{ matrix.target }})
-    needs: [plan, build-vsix]
+    needs: [plan, build-vsix, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -201,9 +204,11 @@ jobs:
           cache-on-failure: true
           enable-cross: false
           skip-protoc: true
-      - name: Build tools setup
-        if: matrix.before
-        run: ${{ matrix.before }}
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
       - name: Build CLI and pack host
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
       - name: Archive layout smoke
@@ -299,38 +304,14 @@ jobs:
 
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
-    needs: [plan]
+    # The wrapper is a native release build of the workspace, so it uses the
+    # same per-target runners as the toolchain and reuses that generated matrix.
+    needs: [plan, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -345,9 +326,11 @@ jobs:
           cache-on-failure: true
           enable-cross: false
           skip-protoc: true
-      - name: Build tools setup
-        if: matrix.before
-        run: ${{ matrix.before }}
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
       - name: Build wrapper
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
       - name: Archive wrapper
@@ -392,11 +375,85 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-web-sdk:
+    name: Build Web SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-web-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   # Language-neutral engine cdylib, shared by every dylib-loader SDK.
   build-bridge-cffi:
     name: Build bridge_cffi cdylib
     needs: [plan]
     uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  build-go-sdk:
+    name: Build Go SDK mirror
+    needs: [plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - name: Stamp version
+        run: scripts/baml-language-version stamp --plan release-plan.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: baml_language/sdks/go/baml_go/go.mod
+          cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
+      - name: Assemble and test public module
+        run: |
+          set -euo pipefail
+          scripts/assemble-go-sdk-mirror --out "$RUNNER_TEMP/go-sdk-mirror"
+          cd "$RUNNER_TEMP/go-sdk-mirror"
+          test "$(go list -m)" = "github.com/boundaryml/baml-go"
+          go test ./...
+          go vet ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-sdk-mirror
+          path: ${{ runner.temp }}/go-sdk-mirror
+          if-no-files-found: error
+
+  # Verify-only: the C++ SDK ships no artifact (headers are vendored at
+  # generate time); it consumes the shared bridge_cffi artifacts.
+  verify-cpp-sdk:
+    name: Verify C++ SDK
+    needs: [plan, build-bridge-cffi]
+    uses: ./.github/workflows/verify-cpp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  build-rust-sdk:
+    name: Build Rust SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-rust-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  verify-rust-sdk:
+    name: Verify Rust SDK
+    needs: [plan, build-toolchain, build-bridge-cffi, build-rust-sdk]
+    uses: ./.github/workflows/verify-rust-sdk.reusable.yaml
     permissions:
       contents: read
     with:
@@ -413,7 +470,17 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      - build-web-sdk
+      # The engine cdylib is required — it is the shared artifact every
+      # dylib-loader SDK depends on.
       - build-bridge-cffi
+      - build-go-sdk
+      - verify-cpp-sdk
+      # The Rust SDK is production-ready (crates.io publisher live), so its
+      # build + consumer verification gate the release: a failure here blocks
+      # publishing rather than shipping a release the Rust SDK isn't part of.
+      - build-rust-sdk
+      - verify-rust-sdk
     steps:
       - run: echo "all release build jobs completed"
 
@@ -458,6 +525,20 @@ jobs:
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     # npm OIDC is pinned to release-baml-language.yml
     uses: ./.github/workflows/publish2-nodejs-sdk.yaml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      channel: ${{ needs.plan.outputs.channel }}
+
+  publish-web-sdk:
+    name: Publish Web npm
+    needs: [plan, build-web-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # npm OIDC is pinned to release-baml-language.yml
+    uses: ./.github/workflows/publish2-web-sdk.yaml
     permissions:
       id-token: write
       contents: read
@@ -603,10 +684,165 @@ jobs:
             fi
           done
 
+  publish-go-sdk:
+    name: Publish Go SDK mirror
+    needs: [plan, build-go-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: go-sdk-mirror
+          path: /tmp/go-sdk-package
+      - name: Clone BoundaryML/baml-go
+        env:
+          DEPLOY_KEY: ${{ secrets.BAML_GO_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_go_mirror_key
+          chmod 600 ~/.ssh/baml_go_mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
+          git clone git@github.com:BoundaryML/baml-go.git /tmp/baml-go
+          if ! git -C /tmp/baml-go rev-parse --verify HEAD >/dev/null 2>&1; then
+            git -C /tmp/baml-go switch --orphan main
+          fi
+      - name: Publish immutable module tag
+        env:
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
+          tag="v$VERSION"
+          rsync -a --delete --exclude .git /tmp/go-sdk-package/ /tmp/baml-go/
+          cd /tmp/baml-go
+          git add -A
+
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            if git diff --cached --quiet "$tag" --; then
+              echo "$tag already exists with identical module content"
+              exit 0
+            fi
+            echo "::error::$tag already exists with different module content"
+            exit 1
+          fi
+
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for v$VERSION"
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$tag" -m "$tag"
+          git push --atomic origin main "$tag"
+
+  publish-crates-io:
+    name: Publish Rust crates.io
+    # After the cffi asset publisher: the loader downloads the engine cdylib
+    # from the `baml-language-<version>` GitHub release on first call, so those
+    # assets must be live before the crate that fetches them lands on crates.io.
+    needs: [plan, all-builds, build-rust-sdk, verify-rust-sdk, publish-bridge-cffi-release]
+    # Publishes on every real canary release, like PyPI/npm above.
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # crates.io trusted publishing is bound to this top-level workflow identity,
+    # like PyPI/npm above. Match the builder's runner + toolchain so the
+    # repackaged `.crate` is byte-reproducible.
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-sdk-crate
+          path: dist/rust
+      - name: Repackage and prove bytes match the verified crate
+        id: crate
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          verified="$(find "$GITHUB_WORKSPACE/dist/rust" -name 'baml_bridge-*.crate' | head -n1)"
+          if [[ -z "$verified" ]]; then
+            echo "::error::verified crate not found under dist/rust"
+            find "$GITHUB_WORKSPACE/dist/rust" -type f || true
+            exit 1
+          fi
+          # Repackage from the stamped source (no rebuild: --no-verify) and prove
+          # the bytes are identical to the crate the verifier already smoked.
+          # crates.io forces repackaging, so this is the contract's "prove the
+          # package inputs match the verified artifact" step; if cargo ever stops
+          # producing a reproducible `.crate` here it fails closed rather than
+          # publishing unverified bytes.
+          rm -f target/package/baml_bridge-*.crate
+          cargo package -p baml_bridge --no-verify --allow-dirty
+          repacked="$(find target/package -name 'baml_bridge-*.crate' | head -n1)"
+          have="$(sha256sum "$repacked" | cut -d' ' -f1)"
+          want="$(sha256sum "$verified" | cut -d' ' -f1)"
+          if [[ "$have" != "$want" ]]; then
+            echo "::error::repackaged crate ($have) != verified crate ($want)"
+            exit 1
+          fi
+          echo "sha256=$have" >> "$GITHUB_OUTPUT"
+          echo "crate matches verified artifact ($have)"
+      - name: Skip if this exact version is already on crates.io
+        id: exists
+        env:
+          VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          WANT_CKSUM: ${{ steps.crate.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          # Sparse-index path for a 4+ char name is <first2>/<next2>/<name>.
+          index="$(curl -fsSL "https://index.crates.io/ba/ml/baml_bridge" || true)"
+          entry="$(printf '%s\n' "$index" | jq -c "select(.vers == \"$VERSION\")" 2>/dev/null || true)"
+          if [[ -z "$entry" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "baml_bridge $VERSION not yet on crates.io; will publish"
+          else
+            have="$(printf '%s' "$entry" | jq -r .cksum)"
+            if [[ "$have" == "$WANT_CKSUM" ]]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "baml_bridge $VERSION already published with identical bytes; skipping"
+            else
+              echo "::error::baml_bridge $VERSION exists on crates.io with different content"
+              exit 1
+            fi
+          fi
+      - name: Mint crates.io trusted-publishing token
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish baml_bridge to crates.io
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        working-directory: baml_language
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Publish the already-verified crate; --no-verify skips a rebuild (the
+          # verifier already smoked it). No cargo-release, no git tags.
+          cargo publish -p baml_bridge --no-verify --allow-dirty
+
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-go-sdk, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && needs.publish-go-sdk.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -646,6 +882,11 @@ jobs:
           args=()
           if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
             args+=(--wrapper-changed)
+          fi
+          # Record sdks.rust only when the crate actually published this run, so
+          # the manifest never promises a baml_bridge version absent from crates.io.
+          if [[ "${{ needs.publish-crates-io.result }}" == "success" ]]; then
+            args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           fi
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
@@ -710,9 +951,36 @@ jobs:
           aws s3 cp scripts/install.ps1 "s3://$PKG_BUCKET/install.ps1" --content-type text/plain --cache-control "public, max-age=60, must-revalidate"
           aws s3 cp tools/pkg_boundaryml_com/data/index.html "s3://$PKG_BUCKET/index.html" --content-type text/html --cache-control "public, max-age=300"
 
+  smoke-go-release:
+    name: Smoke published Go SDK (${{ matrix.os }})
+    needs: [plan, publish-go-sdk, publish-pkg-boundaryml-com]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: baml_language/sdks/go/baml_go/go.mod
+          cache: false
+      - name: Prove installation and runtime call outside the repository
+        run: |
+          python scripts/smoke-go-release.py \
+            --version "${{ needs.plan.outputs.version }}" \
+            --work-dir "$RUNNER_TEMP/baml-go-release-smoke"
+
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
-    needs: [plan, publish-pkg-boundaryml-com]
+    needs: [plan, publish-pkg-boundaryml-com, smoke-go-release]
     if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     permissions:
@@ -856,6 +1124,9 @@ jobs:
           if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
+          # Dry-run rehearses the real manifest shape: a real run publishes the
+          # Rust SDK and records sdks.rust, so include it here too.
+          args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \

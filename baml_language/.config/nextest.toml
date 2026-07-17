@@ -2,29 +2,106 @@ nextest-version = "0.9.98"
 
 experimental = ["setup-scripts"]
 
-# TypeScript tests need the native bridge and fixture packages. Fire only
-# when a typescript_node test is selected. setup.sh / setup.ps1 are
-# byte-for-byte equivalent — same pnpm steps in the host shell of each
-# platform.
-[scripts.setup.typescript_node_pnpm_unix]
+# The rust sdk-test fixture tests each spawn a `cargo` subprocess into one
+# shared CARGO_TARGET_DIR, whose build lock serializes them anyway — running
+# them concurrently only multiplies waiting cargo processes and their rustc
+# swarms. Cap the package at 2 in-flight tests (rustfmt is lock-free, so one
+# fmt check can overlap one cargo build); the setup-script pre-warm absorbs
+# the cold build of the shared stack before tests fan out.
+[test-groups]
+rust-sdk-fixture = { max-threads = 2 }
+# Java: each fixture's javac+junit gates share one gradle project dir and its
+# exclusive lock — serialize per fixture (see comment above the java overrides).
+java-fixture-type-shapes = { max-threads = 1 }
+java-fixture-function-calls = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_rust)'
+test-group = 'rust-sdk-fixture'
+
+# Node TypeScript tests build only the native bridge and Node fixture packages.
+[scripts.setup.typescript_pnpm_unix]
 command = './sdk_tests/crates/typescript/setup.sh'
 capture-stdout = true
 capture-stderr = true
 
-[scripts.setup.typescript_node_pnpm_win]
+[scripts.setup.typescript_pnpm_win]
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/typescript/setup.ps1']
 capture-stdout = true
 capture-stderr = true
 
 [[profile.default.scripts]]
-filter = 'package(=sdk_test_typescript_node)'
+filter = 'package(=sdk_test_typescript)'
 platform = { host = 'cfg(unix)' }
-setup = 'typescript_node_pnpm_unix'
+setup = 'typescript_pnpm_unix'
 
 [[profile.default.scripts]]
-filter = 'package(=sdk_test_typescript_node)'
+filter = 'package(=sdk_test_typescript)'
 platform = { host = 'cfg(windows)' }
-setup = 'typescript_node_pnpm_win'
+setup = 'typescript_pnpm_win'
+
+# Browser and Workers tests share the Web/Wasm bridge build and Chromium install.
+[scripts.setup.typescript_web_pnpm_unix]
+command = './sdk_tests/crates/typescript_web/setup.sh'
+capture-stdout = true
+capture-stderr = true
+
+[scripts.setup.typescript_web_pnpm_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/typescript_web/setup.ps1']
+capture-stdout = true
+capture-stderr = true
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_typescript_web)'
+platform = { host = 'cfg(unix)' }
+setup = 'typescript_web_pnpm_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_typescript_web)'
+platform = { host = 'cfg(windows)' }
+setup = 'typescript_web_pnpm_win'
+
+# rust tests need each fixture's generated crate pre-built into the shared
+# CARGO_TARGET_DIR so the parallel test-time cargo invocations hit a warm
+# cache. fire only when a rust sdk-test is selected.
+[scripts.setup.rust_cargo_unix]
+command = './sdk_tests/crates/rust/setup.sh'
+
+[scripts.setup.rust_cargo_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/rust/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_cargo_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_cargo_win'
+
+# baml_bridge is dylib-only: its tests load the engine cdylib at run time
+# (located next to the test binary in <target>/<profile>/). Build it before
+# any baml_bridge test runs — the lib test binary mixes pure loader/encode
+# tests with engine-dependent ones (completion, live_engine, conversions),
+# so this fires for the whole package. The general cargo-test jobs exclude
+# baml_bridge entirely (the non-cacheable cdylib build is too heavy there);
+# it runs in the rust sdk-tests leg, reusing sdk_test_rust's engine build.
+[scripts.setup.rust_bridge_engine_unix]
+command = './sdks/rust/bridge_rust/build-engine.sh'
+
+[scripts.setup.rust_bridge_engine_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdks/rust/bridge_rust/build-engine.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_bridge_engine_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_bridge_engine_win'
 
 # java tests need the shared Gradle home staged (and, once the Java
 # bridge lands, the native bridge library built + per-fixture Gradle
@@ -56,9 +133,6 @@ setup = 'java_gradle_win'
 # fixtures still run in parallel (different dirs — already proven safe by
 # the two javac gates). Add a group + override here when a fixture joins
 # GREEN_JUNIT_FIXTURES in sdk_tests/harness_setup/src/java.rs.
-[test-groups]
-java-fixture-type-shapes = { max-threads = 1 }
-java-fixture-function-calls = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java) & test(/^type_shapes::/)'
@@ -88,3 +162,38 @@ setup = 'python_pydantic2_uv_unix'
 filter = 'package(=sdk_test_python_pydantic2)'
 platform = { host = 'cfg(windows)' }
 setup = 'python_pydantic2_uv_win'
+
+[scripts.setup.go_bridge_unix]
+command = './sdk_tests/crates/go/setup.sh'
+
+[scripts.setup.go_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/go/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_go)'
+platform = { host = 'cfg(unix)' }
+setup = 'go_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_go)'
+platform = { host = 'cfg(windows)' }
+setup = 'go_bridge_win'
+
+# cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
+# when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte
+# equivalent — same cargo build in the host shell of each platform.
+[scripts.setup.cpp_cdylib_unix]
+command = './sdk_tests/crates/cpp/setup.sh'
+
+[scripts.setup.cpp_cdylib_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/cpp/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_cpp)'
+platform = { host = 'cfg(unix)' }
+setup = 'cpp_cdylib_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_cpp)'
+platform = { host = 'cfg(windows)' }
+setup = 'cpp_cdylib_win'

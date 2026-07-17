@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Per-fixture pnpm setup for the sdk_test_typescript_node crate — Unix.
+# Per-fixture pnpm setup for the sdk_test_typescript crate — Unix.
 # Windows uses the parallel `setup.ps1`; keep the two in sync.
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
-# selects any sdk_test_typescript_node test. Run the suite with
+# selects any sdk_test_typescript test. Run the suite with
 # `cargo nextest run`, not `cargo test`: plain `cargo test` skips this
 # script and can't pass `setup_guard::ran` (see ../../README.md).
 #
 # This script turns those generated/ dirs into a real `node_modules/`
-# tree and builds the native TypeScript bridge. Idempotent — re-runs are
-# no-ops in steady state. Web runtime activation lands in a child change.
+# tree and builds only the native TypeScript bridge. Web/Wasm setup lives in
+# the sibling `typescript_web` crate.
 
 set -euo pipefail
 
@@ -70,5 +70,5 @@ done
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
 # harness_setup/src/typescript.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
-    echo "SDK_TEST_TYPESCRIPT_NODE_SETUP=1" >> "$NEXTEST_ENV"
+    echo "SDK_TEST_TYPESCRIPT_SETUP=1" >> "$NEXTEST_ENV"
 fi

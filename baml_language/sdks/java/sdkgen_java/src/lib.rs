@@ -728,6 +728,48 @@ mod tests {
     }
 
     #[test]
+    fn ctx_param_name_yields_to_user_argument_named_ctx() {
+        // The shared go_codegen fixtures declare a BAML argument literally
+        // named `ctx`; the synthetic cancellation parameter must escape
+        // (`ctx` -> `ctx$`) instead of colliding (javac: "variable ctx is
+        // already defined").
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["lorem"], "reserved_args"),
+            Symbol::Function(Function {
+                name: BaseName::new("reserved_args"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("ctx"),
+                    docstring: None,
+                    ty: t_string(),
+                    default: None,
+                }],
+                return_type: t_string(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("lorem/Fns.java")];
+        assert!(
+            file.contains("reserved_args(java.lang.String ctx, baml_bridge.BamlCallContext ctx$)"),
+            "{file}"
+        );
+        assert!(
+            file.contains(", \"string\", ctx$);"),
+            "escaped name must thread to the runtime call: {file}"
+        );
+        // The plain pair keeps the user's `ctx` untouched.
+        assert!(
+            file.contains("reserved_args(java.lang.String ctx) {"),
+            "{file}"
+        );
+    }
+
+    #[test]
     fn function_emits_sync_and_async_bindings() {
         let mut pool = SymbolPool::new();
         pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(0));

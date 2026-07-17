@@ -55,13 +55,9 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin},
+    ast::{AstSourceMap, ExprBody, FunctionBodyDef, FunctionOrigin},
 };
-use baml_compiler2_hir::{
-    body::FunctionBody,
-    loc::FunctionLoc,
-    scope::{FileScopeId, ScopeKind},
-};
+use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::FileScopeId};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
 use text_size::TextSize;
 
@@ -118,6 +114,8 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
     for (func_local_id, func_data) in &item_tree.functions {
+        let func_loc = FunctionLoc::new(db, file, *func_local_id);
+
         // Process user-written functions and methods, plus the synthesized
         // `$init_test*` registration functions (so test/testset bodies — which
         // lower to lambdas — get hints). Skip LLM declarative functions: we must
@@ -127,12 +125,10 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
         let is_user = func_data.origin == FunctionOrigin::UserDefined;
         let is_test_init = func_data.name.as_str().starts_with("$init_test");
         if (!is_user && !is_test_init)
-            || matches!(func_data.declarative_meta, Some(DeclarativeMeta::Llm(_)))
+            || baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
         {
             continue;
         }
-
-        let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
         let body = baml_compiler2_hir::body::function_body(db, func_loc);
         let FunctionBody::Expr(expr_body) = body.as_ref() else {
@@ -143,9 +139,12 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
             continue;
         };
 
-        let owner_scope = function_scope_for(index, func_data.span, &func_data.name)
+        let owner_scope = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .map(|scope| scope.file_scope_id(db))
             .unwrap_or_else(|| {
-                index.scope_at_offset(func_data.span.start(), Some(&func_data.name))
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+                index.scope_at_offset(func_span.start(), Some(&func_data.name))
             });
         process_body(
             db,
@@ -352,23 +351,6 @@ fn is_synthetic_registration(body: &ExprBody, callee: ExprId) -> bool {
         _ => return false,
     };
     matches!(name, "register_test" | "register_test_set")
-}
-
-fn function_scope_for(
-    index: &SemanticIndex<'_>,
-    span: text_size::TextRange,
-    name: &baml_base::Name,
-) -> Option<FileScopeId> {
-    index
-        .scopes
-        .iter()
-        .enumerate()
-        .find(|(_, scope)| {
-            matches!(scope.kind, ScopeKind::Function)
-                && scope.range == span
-                && scope.name.as_ref() == Some(name)
-        })
-        .map(|(idx, _)| FileScopeId::new(u32::try_from(idx).expect("scope index fits in u32")))
 }
 
 fn scope_at_offset_within_body(

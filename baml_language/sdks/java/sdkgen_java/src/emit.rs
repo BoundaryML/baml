@@ -466,6 +466,14 @@ fn render_callable_pair(
 
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
     let params = param_decls.join(", ");
+    // Java identifiers already claimed by BAML arguments — the synthetic
+    // trailing params must yield to them (go_codegen fixtures name an
+    // argument `ctx`).
+    let taken: Vec<String> = required
+        .iter()
+        .map(|a| java_identifier(a.name.as_str()))
+        .collect();
+    let ctx_name = synthetic_param_name("ctx", &taken);
 
     // Required-only pair, then the trailing-`ctx` overload pair (same body,
     // `BamlCallContext` threaded to the runtime as the last argument) for
@@ -484,7 +492,7 @@ fn render_callable_pair(
         &names_literal,
         &args_literal,
         &descriptor,
-        false,
+        None,
     );
     out.push_str(&render_method_pair(
         &doc,
@@ -500,7 +508,7 @@ fn render_callable_pair(
         &names_literal,
         &args_literal,
         &descriptor,
-        true,
+        Some(&ctx_name),
     ));
 
     // Optional-argument configurator: a second sync/async overload pair
@@ -522,6 +530,7 @@ fn render_callable_pair(
             &names_literal,
             &args_literal,
             &param_decls,
+            &taken,
             ctx,
             sink,
         ));
@@ -539,11 +548,26 @@ fn render_callable_pair(
 /// engine call (see `BamlFfi.callAsync` / `CancellableCall`).
 ///
 /// `params` is the already-joined Java parameter list (required args, plus an
-/// optional configurator when present); when `with_ctx`, a trailing
-/// `baml_bridge.BamlCallContext ctx` is appended and threaded to the runtime as
-/// the last `callSync`/`callAsync` argument. `prologue` runs before the runtime
+/// optional configurator when present); when `ctx_name` is set, a trailing
+/// `baml_bridge.BamlCallContext <ctx_name>` is appended and threaded to the
+/// runtime as the last `callSync`/`callAsync` argument (the name has already
+/// been escaped past any colliding user argument). `prologue` runs before the runtime
 /// call (opts instantiation, or empty). `call_names` / `call_args` are the
 /// runtime name/arg array expressions (base literals, or the opts accessors).
+/// Name for a synthetic (emitter-owned) parameter: `base`, escaped with
+/// trailing `$`s until it collides with no user parameter (yield-to-user,
+/// the `Fns` -> `Fns$` policy). Call sites are unaffected — Java parameter
+/// names are not part of the call-site API — but javadoc/IDE hints keep the
+/// pretty name whenever no BAML argument claims it (e.g. an argument
+/// literally named `ctx`, as the shared `go_codegen` fixtures do).
+fn synthetic_param_name(base: &str, taken: &[String]) -> String {
+    let mut name = base.to_string();
+    while taken.iter().any(|t| t == &name) {
+        name.push('$');
+    }
+    name
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_method_pair(
     doc: &str,
@@ -559,18 +583,14 @@ fn render_method_pair(
     call_names: &str,
     call_args: &str,
     descriptor: &str,
-    with_ctx: bool,
+    ctx_name: Option<&str>,
 ) -> String {
-    let sig_params = if with_ctx {
-        if params.is_empty() {
-            "baml_bridge.BamlCallContext ctx".to_string()
-        } else {
-            format!("{params}, baml_bridge.BamlCallContext ctx")
-        }
-    } else {
-        params.to_string()
+    let sig_params = match ctx_name {
+        Some(name) if params.is_empty() => format!("baml_bridge.BamlCallContext {name}"),
+        Some(name) => format!("{params}, baml_bridge.BamlCallContext {name}"),
+        None => params.to_string(),
     };
-    let ctx_arg = if with_ctx { ", ctx" } else { "" };
+    let ctx_arg = ctx_name.map(|n| format!(", {n}")).unwrap_or_default();
 
     let sync_call = format!(
         "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{ctx_arg})"
@@ -619,6 +639,7 @@ fn render_optional_configurator(
     names_literal: &str,
     args_literal: &str,
     param_decls: &[String],
+    taken: &[String],
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -644,6 +665,12 @@ fn render_optional_configurator(
     overload_params.push(format!("{cfg_ty} $cfg"));
     let params = overload_params.join(", ");
 
+    // The ctx param must dodge user args AND this overload's own synthetics.
+    let mut taken_cfg = taken.to_vec();
+    taken_cfg.push("$cfg".to_string());
+    taken_cfg.push("$opts".to_string());
+    let ctx_name = synthetic_param_name("ctx", &taken_cfg);
+
     // Shared prologue: instantiate the opts holder and run the configurator.
     let prologue =
         format!("        {opts_ty} $opts = new {opts_ty}();\n        $cfg.accept($opts);\n");
@@ -668,7 +695,7 @@ fn render_optional_configurator(
         &call_names,
         &call_args,
         descriptor,
-        false,
+        None,
     );
     out.push_str(&render_method_pair(
         doc,
@@ -684,7 +711,7 @@ fn render_optional_configurator(
         &call_names,
         &call_args,
         descriptor,
-        true,
+        Some(&ctx_name),
     ));
 
     // Fluent boxed setters. The wire key is the BAML arg name; the setter

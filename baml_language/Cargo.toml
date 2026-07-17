@@ -2,12 +2,15 @@
 members = [
   "crates/*",
   "forks/*",
+  "sdks/cpp/sdkgen_cpp",
   "sdks/go/sdkgen_go",
   "sdks/java/bridge_java",
   "sdks/java/sdkgen_java",
   "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
+  "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
@@ -15,7 +18,9 @@ members = [
   # (see below); its per-fixture tests are `#[ignore]`d while
   # `sdkgen_java` is a stub.
   "sdk_tests/crates/java",
+  "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
+  "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
@@ -25,6 +30,8 @@ members = [
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
   "sdk_tests/crates/typescript",
+  "sdk_tests/crates/typescript_web",
+  "sdk_tests/crates/rust",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",
@@ -36,6 +43,10 @@ exclude = [
   # unsupported features through resolver feature unification.
   "forks/aws-config-systest",
   "forks/google-cloud-auth-systest",
+  # Rust SDK release-verification fixtures (a `baml.toml` BAML project + a
+  # consumer smoke, not a crate); the `sdks/rust/*` members glob would
+  # otherwise try to load it as a workspace member.
+  "sdks/rust/verify",
 ]
 resolver = "2"
 
@@ -61,10 +72,13 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
+sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_java = { path = "sdks/java/sdkgen_java" }
 bridge_java = { path = "sdks/java/bridge_java" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
+sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
@@ -177,6 +191,7 @@ insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
+libloading = "0.8"
 libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
@@ -204,6 +219,7 @@ prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
 ratatui = "0.29"
+rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
@@ -255,6 +271,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 unicode-normalization = "0.1.25"
+ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
 url = "2.5.2"
 uuid = { version = "1", features = [ "v4" ] }
 walkdir = { version = "2.4" }
@@ -414,10 +431,20 @@ inherits = "release"
 # two artifacts with `unwind` turns an engine panic into a catchable
 # `BamlPanic` / JS error instead of killing the host process.
 #
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs — the Rust `baml_bridge`
+# crate today, the Go bridge when it migrates — dlopen at runtime, again
+# *inside the user's process*. It needs `unwind` for the same reason:
+# `bridge_cffi`'s `catch_unwind` -> `SdkPanic` boundary only fires when the
+# stack can unwind. Host-process safety over the ~+5 MB of unwind tables (the
+# contract mandates `panic = "unwind"` for a library loaded into a user's
+# server).
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
-# binary can't mix strategies), so the SDKs need their own profile rather than a
-# package override. maturin (`--profile release-bridge-python`) and napi
-# (`--profile release-bridge-node`) select these at build time. The CLI and wasm
+# binary can't mix strategies), so these artifacts need their own profile rather
+# than a package override. maturin (`--profile release-bridge-python`), napi
+# (`--profile release-bridge-node`), and the standalone cdylib matrix
+# (`--profile release-bridge-cffi`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -428,11 +455,6 @@ panic = "unwind"
 inherits = "release"
 panic = "unwind"
 
-# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
-# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
-# *inside the user's process* — so it needs `unwind` for the same reason: its
-# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
-# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
 [profile.release-bridge-cffi]
 inherits = "release"
 panic = "unwind"

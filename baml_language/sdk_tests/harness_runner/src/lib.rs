@@ -53,6 +53,72 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Same as [`run_test_cmd`], but treats the listed process exit codes as
+/// successful outcomes. This lets a harness model tool-specific non-error
+/// statuses explicitly—for example, pytest uses exit code 5 when collection
+/// succeeds but finds no tests.
+pub fn run_test_cmd_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    allowed_exit_codes: &[i32],
+) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[],
+        allowed_exit_codes,
+    );
+}
+
+/// Run the Go toolchain against one generated fixture. Prefer the repository's
+/// mise-managed Go binary so a globally installed `go` cannot accidentally use
+/// a different GOROOT than the pinned compiler.
+pub fn run_go_test(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let dir = manifest.join(fixture).join("generated");
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let go = resolve_mise_tool("go").unwrap_or_else(|_| PathBuf::from("go"));
+
+    let output = Command::new(&go)
+        .args(["test", "./..."])
+        .current_dir(&dir)
+        .env_remove("GOROOT")
+        .env("CGO_ENABLED", "1")
+        .env("GOCACHE", workspace_root.join("target/go-build-cache"))
+        .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to spawn `{}` for fixture `{fixture}`: {e}",
+                go.display()
+            )
+        });
+    assert!(
+        output.status.success(),
+        "fixture `{fixture}` `go test ./...` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn go_runtime_library(workspace_root: &Path) -> PathBuf {
+    let filename = if cfg!(target_os = "macos") {
+        "libbridge_cffi.dylib"
+    } else if cfg!(target_os = "windows") {
+        "bridge_cffi.dll"
+    } else {
+        "libbridge_cffi.so"
+    };
+    workspace_root.join("target").join("debug").join(filename)
+}
+
 /// Run a toolchain command from a workspace-relative directory. Used for
 /// package-level checks that do not belong to a generated fixture app.
 pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -124,6 +190,24 @@ pub fn run_test_cmd_with_env(
     cache_env_var: &str,
     extra_env: &[(&str, &str)],
 ) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        extra_env,
+        &[],
+    );
+}
+
+fn run_test_cmd_with_env_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    extra_env: &[(&str, &str)],
+    allowed_exit_codes: &[i32],
+) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
     );
@@ -149,8 +233,13 @@ pub fn run_test_cmd_with_env(
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, extra_env)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` for fixture `{fixture}`: {e}"));
+    let accepted = output.status.success()
+        || output
+            .status
+            .code()
+            .is_some_and(|code| allowed_exit_codes.contains(&code));
     assert!(
-        output.status.success(),
+        accepted,
         "fixture `{fixture}` `{cmd}` failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
@@ -379,12 +468,16 @@ fn run_test_process(
 }
 
 fn resolve_mise_uv() -> io::Result<PathBuf> {
-    let output = Command::new("mise").args(["which", "uv"]).output()?;
+    resolve_mise_tool("uv")
+}
+
+fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
+    let output = Command::new("mise").args(["which", tool]).output()?;
     if !output.status.success() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             format!(
-                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
+                "`{tool}` is not on PATH and `mise which {tool}` failed:\n{}.",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
@@ -394,7 +487,7 @@ fn resolve_mise_uv() -> io::Result<PathBuf> {
     if path.is_empty() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
-            "`uv` is not on PATH and `mise which uv` returned an empty path",
+            format!("`{tool}` is not on PATH and `mise which {tool}` returned an empty path"),
         ));
     }
 
@@ -463,7 +556,7 @@ pub fn __check_setup_ran(env_var: &str) {
 ///
 /// // An optional setup guard may be ignored with the same reason as its suite.
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "target temporarily disabled", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
+///     ignore = "target temporarily disabled", "SDK_TEST_TYPESCRIPT_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -557,19 +650,77 @@ pub mod java {
     pub use crate::java_test_suite as test_suite;
 }
 
-/// Node.js + TypeScript generator's test-side glue. Invoked from
-/// `crates/typescript/src/lib.rs` as
-/// `sdk_test_harness_runner::typescript_node::test_suite!()`.
-pub mod typescript_node {
-    /// `include!`s `OUT_DIR/typescript_node_tests.rs` — the
-    /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::typescript::run_all`.
+/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as
+/// `sdk_test_harness_runner::cpp::test_suite!()`.
+pub mod cpp {
+    /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
+    /// by `sdk_test_harness_setup::cpp::run_all`.
     #[macro_export]
-    macro_rules! typescript_node_test_suite {
+    macro_rules! cpp_test_suite {
         () => {
-            include!(concat!(env!("OUT_DIR"), "/typescript_node_tests.rs"));
+            include!(concat!(env!("OUT_DIR"), "/cpp_tests.rs"));
         };
     }
 
-    pub use crate::typescript_node_test_suite as test_suite;
+    pub use crate::cpp_test_suite as test_suite;
+}
+
+/// Rust generator's test-side glue. Invoked from
+/// `crates/rust/src/lib.rs` as
+/// `sdk_test_harness_runner::rust::test_suite!()`.
+pub mod rust {
+    /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::rust::run_all`.
+    #[macro_export]
+    macro_rules! rust_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/rust_tests.rs"));
+        };
+    }
+
+    pub use crate::rust_test_suite as test_suite;
+}
+
+/// Node TypeScript test-side glue. Invoked from
+/// `crates/typescript/src/lib.rs` as
+/// `sdk_test_harness_runner::typescript::test_suite!()`.
+pub mod typescript {
+    /// `include!`s `OUT_DIR/typescript_tests.rs` — the
+    /// per-fixture scaffold emitted by
+    /// `sdk_test_harness_setup::typescript::run_all`.
+    #[macro_export]
+    macro_rules! typescript_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_test_suite as test_suite;
+}
+
+/// Go generator's test-side glue.
+pub mod go {
+    #[macro_export]
+    macro_rules! go_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/go_tests.rs"));
+        };
+    }
+
+    pub use crate::go_test_suite as test_suite;
+}
+
+/// Browser and Cloudflare Workers TypeScript test-side glue. Invoked from
+/// `crates/typescript_web/src/lib.rs`.
+pub mod typescript_web {
+    /// `include!`s `OUT_DIR/typescript_web_tests.rs`, emitted by
+    /// `sdk_test_harness_setup::typescript_web::run_all_from_typescript_sources`.
+    #[macro_export]
+    macro_rules! typescript_web_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_web_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_web_test_suite as test_suite;
 }

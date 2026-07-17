@@ -9,6 +9,8 @@
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
+//! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
+//!   `Remainder`/`Negate` for the numeric primitives)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
 //!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
@@ -31,6 +33,7 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+mod ops_math;
 mod resolve;
 pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;

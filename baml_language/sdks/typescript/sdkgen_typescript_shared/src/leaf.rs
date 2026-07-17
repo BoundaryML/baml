@@ -163,6 +163,11 @@ const JS_RESERVED: &[&str] = &[
     "static",
     "yield",
     "await",
+    // Restricted binding identifiers in strict mode. TypeScript modules are
+    // always strict, so these are illegal as parameters and top-level consts
+    // even though they are not ordinary ECMAScript keywords.
+    "arguments",
+    "eval",
 ];
 
 fn is_js_reserved(name: &str) -> bool {
@@ -312,6 +317,26 @@ pub(crate) fn safe_param_name(name: &str) -> String {
     }
 }
 
+pub(crate) fn safe_required_param_names(
+    names: &[&str],
+    reserve_options_param: bool,
+) -> Vec<String> {
+    let mut used = BTreeSet::new();
+    if reserve_options_param {
+        used.insert("$opts".to_string());
+    }
+    names
+        .iter()
+        .map(|name| {
+            let mut candidate = safe_param_name(name);
+            while !used.insert(candidate.clone()) {
+                candidate.push('_');
+            }
+            candidate
+        })
+        .collect()
+}
+
 pub(crate) fn option_field_name(name: &str) -> String {
     if is_ts_property_identifier(name) {
         name.to_string()
@@ -342,11 +367,11 @@ fn fn_type_sig(
     is_async: bool,
 ) -> String {
     let required = required_positional_count(defaults);
-    let mut params: Vec<String> = names
+    let required_names = safe_required_param_names(&names[..required], required < names.len());
+    let mut params: Vec<String> = required_names
         .iter()
         .zip(tys.iter())
-        .take(required)
-        .map(|(n, t)| format!("{}: {}", safe_param_name(n), t.expr))
+        .map(|(name, ty)| format!("{name}: {}", ty.expr))
         .collect();
     if required < names.len() {
         let mut fields = Vec::new();
@@ -1192,6 +1217,60 @@ mod tests {
             "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined } | undefined) => number;"
         ));
         assert!(!ts.contains("default_?:"));
+    }
+
+    #[test]
+    fn strict_mode_and_projected_parameter_collisions_keep_wire_names() {
+        let b = body(
+            &["lorem"],
+            vec![func_sym_with_defaults(
+                "extract",
+                "user.lorem.extract",
+                SyncAsync::Sync,
+                vec![
+                    (
+                        "arguments",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        None,
+                    ),
+                    (
+                        "arguments_",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        None,
+                    ),
+                    (
+                        "$opts",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        None,
+                    ),
+                    (
+                        "eval",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                            Literal::String("x".to_string()),
+                        ))),
+                    ),
+                ],
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            )],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
+        assert!(ts.contains(
+            "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
+        ));
+        assert!(ts.contains(
+            "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined } | undefined) => string;"
+        ));
     }
 
     #[test]

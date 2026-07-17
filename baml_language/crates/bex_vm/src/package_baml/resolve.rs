@@ -171,7 +171,32 @@ pub(crate) fn resolve_implements_rule<'a>(
     iface: &TypeName,
     iface_args: &[RealizedTy],
 ) -> Option<(&'a RuntimeImplRule, Vec<RealizedTy>)> {
-    let mut fallback: Option<(&'a RuntimeImplRule, Vec<RealizedTy>)> = None;
+    resolve_implements_rule_exact(vm, concrete_ty, iface, iface_args).or_else(|| {
+        // Defensive fallback for the (compile-time-coherence-forbidden) no-match
+        // case: the first applicable rule.
+        candidate_rules(vm, concrete_ty, iface)
+            .into_iter()
+            .find_map(|rule| {
+                rule_applies(vm, rule, concrete_ty, &mut Vec::new())
+                    .map(|type_args| (rule, type_args))
+            })
+    })
+}
+
+/// [`resolve_implements_rule`] without the first-applicable fallback: `None`
+/// unless a rule's realized interface args match a non-empty request exactly
+/// (an empty request still matches any instantiation). Operator dispatch
+/// resolves with the operands' runtime types as the request — the type checker
+/// proved that exact instantiation is implemented, so on a proof/registry
+/// desync the dispatch must surface as unresolved rather than silently select
+/// a near-miss specialization (whose method glue would read the rhs as the
+/// wrong type).
+pub(crate) fn resolve_implements_rule_exact<'a>(
+    vm: &'a BexVm,
+    concrete_ty: &RealizedTy,
+    iface: &TypeName,
+    iface_args: &[RealizedTy],
+) -> Option<(&'a RuntimeImplRule, Vec<RealizedTy>)> {
     for rule in candidate_rules(vm, concrete_ty, iface) {
         let Some(type_args) = rule_applies(vm, rule, concrete_ty, &mut Vec::new()) else {
             continue;
@@ -185,9 +210,8 @@ pub(crate) fn resolve_implements_rule<'a>(
         if iface_args.is_empty() || ty_args_equivalent(&rule_args, iface_args) {
             return Some((rule, type_args));
         }
-        fallback.get_or_insert((rule, type_args));
     }
-    fallback
+    None
 }
 
 /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De

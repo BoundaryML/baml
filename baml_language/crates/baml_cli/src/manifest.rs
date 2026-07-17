@@ -93,7 +93,7 @@ impl Script {
 /// never needs to know codegen rules.
 #[derive(Debug, Deserialize)]
 pub(crate) struct GeneratorManifest {
-    /// e.g. `"python/pydantic"`, `"typescript/node"`. Required for codegen;
+    /// e.g. `"python/pydantic"`, `"typescript/node"`, `"go"`. Required for codegen;
     /// `Option` so a missing value yields a precise diagnostic rather than
     /// aborting the whole parse.
     pub output_type: Option<Spanned<String>>,
@@ -105,6 +105,10 @@ pub(crate) struct GeneratorManifest {
     /// `".."` when omitted.
     #[serde(default)]
     pub output_dir: Option<String>,
+
+    /// Import path of the generated SDK root. Required only by Go because
+    /// generated subpackages must import one another by module path.
+    pub sdk_import_path: Option<Spanned<String>>,
 
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
@@ -233,7 +237,8 @@ mod tests {
              [generator.lang_python]\n\
              output_type = \"python/pydantic\"\n\
              naming_convention = \"preserve-case\"\n\
-             output_dir = \"../python\"\n",
+             output_dir = \"../python\"\n\
+             sdk_import_path = \"example.com/project/baml_sdk\"\n",
         )
         .unwrap();
         let g = &m.generator["lang_python"];
@@ -242,6 +247,10 @@ mod tests {
             "python/pydantic"
         );
         assert_eq!(g.get_ref().output_dir.as_deref(), Some("../python"));
+        assert_eq!(
+            g.get_ref().sdk_import_path.as_ref().unwrap().get_ref(),
+            "example.com/project/baml_sdk"
+        );
     }
 
     #[test]

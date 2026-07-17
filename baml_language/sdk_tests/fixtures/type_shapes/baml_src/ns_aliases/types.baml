@@ -33,3 +33,15 @@ function round_trip_rec_list(r: RecList) -> RecList {
 function round_trip_alias_container(c: AliasContainer) -> AliasContainer {
   c
 }
+
+// Nullable reference to a recursive alias from inside the alias's own
+// emission cycle: the C++ emitter must fold the null into the box
+// (OptionalBox<RecList>), since optional<Box<T>> is not viable for
+// incomplete T.
+class MaybeRec {
+  v RecList?
+}
+
+function round_trip_maybe_rec(m: MaybeRec) -> MaybeRec {
+  m
+}
