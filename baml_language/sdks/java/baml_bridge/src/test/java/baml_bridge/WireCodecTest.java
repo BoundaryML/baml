@@ -367,6 +367,16 @@ class WireCodecTest {
         record StringValue(String value) implements IntOrString {}
     }
 
+    // A generated-shape union over two differently-typed LIST arms
+    // (`int[] | string[]`). Exercises the wire-driven `pickArm` path's typed-
+    // container matching: the arm is chosen from the wire `item_type`, not by
+    // declaration order — so an empty `string[]` still lands on the string arm.
+    public sealed interface ListUnion permits ListUnion.IntListValue, ListUnion.StrListValue {
+        record IntListValue(List<Long> value) implements ListUnion {}
+
+        record StrListValue(List<String> value) implements ListUnion {}
+    }
+
     // A generated-shape value class with a single Object field, registered WITH a
     // per-field type-directed descriptor (union[int;string]) to exercise the
     // 4-arg registerClass + fieldDescs decode path.
@@ -411,6 +421,16 @@ class WireCodecTest {
                 new String[] {"int", "string"},
                 new String[] {
                     IntOrString.IntValue.class.getName(), IntOrString.StringValue.class.getName()
+                });
+        // Signature = sorted arm tokens (`list<int>` < `list<string>`); arm
+        // tokens + records in declaration order (int[] = arm0, string[] = arm1).
+        TypeRegistry.registerUnion(
+                "list<int>|list<string>",
+                ListUnion.class.getName(),
+                new String[] {"list<int>", "list<string>"},
+                new String[] {
+                    ListUnion.IntListValue.class.getName(),
+                    ListUnion.StrListValue.class.getName()
                 });
     }
 
@@ -838,6 +858,150 @@ class WireCodecTest {
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "tv:T"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "unknown"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "union[")); // malformed
+    }
+
+    // -- typed-container union arm selection (empty-list correctness fix) -----
+    // The wire `item_type` / `key_type`+`value_type` on a list/map value now
+    // drives arm selection, so a differently-typed container arm is told apart
+    // even when the container is EMPTY (no items to sniff). A container value
+    // WITHOUT its type on the wire keeps the pre-fix first-match compatibility.
+
+    // BamlTyPrimitiveKind.STRING already covered by PRIM_STRING/PRIM_INT above.
+
+    /** BamlOutboundValue.list_value (=11) with item_type (=1) + optional items (=2). */
+    private static byte[] ovListTyped(byte[] itemTy, byte[]... items) {
+        WireWriter list = new WireWriter();
+        list.writeMessage(1, itemTy); // BamlValueList.item_type = 1
+        for (byte[] it : items) {
+            list.writeMessage(2, it); // items = 2
+        }
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_LIST, list.toByteArray());
+        return ov.toByteArray();
+    }
+
+    /** BamlOutboundValue.list_value (=11) carrying items only — NO item_type. */
+    private static byte[] ovListUntyped(byte[]... items) {
+        WireWriter list = new WireWriter();
+        for (byte[] it : items) {
+            list.writeMessage(2, it); // items = 2
+        }
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_LIST, list.toByteArray());
+        return ov.toByteArray();
+    }
+
+    /** A BamlTy wrapping a map (BamlTy.map = 5): key (=1) + value (=2). */
+    private static byte[] tyMap(byte[] keyTy, byte[] valueTy) {
+        WireWriter map = new WireWriter();
+        map.writeMessage(1, keyTy); // BamlTyMap.key = 1
+        map.writeMessage(2, valueTy); // BamlTyMap.value = 2
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(5, map.toByteArray()); // BamlTy.map = 5
+        return ty.toByteArray();
+    }
+
+    /** BamlOutboundValue.map_value (=12) with key_type (=1) + value_type (=2), no entries. */
+    private static byte[] ovMapTyped(byte[] keyTy, byte[] valueTy) {
+        WireWriter map = new WireWriter();
+        map.writeMessage(1, keyTy); // BamlValueMap.key_type = 1
+        map.writeMessage(2, valueTy); // BamlValueMap.value_type = 2
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_MAP, map.toByteArray());
+        return ov.toByteArray();
+    }
+
+    // --- descriptor-driven path (generic Union{k}) ---
+
+    /** An EMPTY typed int[] lands on the int[] arm via item_type — not the first list arm. */
+    @Test
+    void decode_desc_union_empty_typed_int_list_picks_int_arm() {
+        byte[] env = okEnvelope(ovListTyped(tyPrimitive(PRIM_INT))); // empty int[]
+        Object decoded =
+                ProtoReader.decodeOutboundResult(env, "union[list<string>;list<int>]");
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
+        assertEquals(List.of(), arm.value());
+    }
+
+    /**
+     * An empty typed string[] lands on the string[] arm even though it is
+     * declared SECOND — arm order does not decide it, item_type does.
+     */
+    @Test
+    void decode_desc_union_empty_typed_string_list_picks_string_arm_regardless_of_order() {
+        byte[] env = okEnvelope(ovListTyped(tyPrimitive(PRIM_STRING))); // empty string[]
+        Object decoded =
+                ProtoReader.decodeOutboundResult(env, "union[list<int>;list<string>]");
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
+        assertEquals(List.of(), arm.value());
+    }
+
+    /** A list WITHOUT item_type keeps the pre-fix first-match fallback (first list arm). */
+    @Test
+    void decode_desc_union_untyped_list_falls_back_to_first_list_arm() {
+        byte[] env = okEnvelope(ovListUntyped(ovInt(1))); // [1], no item_type
+        Object decoded =
+                ProtoReader.decodeOutboundResult(env, "union[list<string>;list<int>]");
+        // Bare "list" is an element-type wildcard → the FIRST list arm (Arm0),
+        // even though the sole element is an int. This is the back-compat lane.
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        assertEquals(List.of(1L), arm.value());
+    }
+
+    /** An empty typed map is disambiguated by its value_type (map<string,int> arm). */
+    @Test
+    void decode_desc_union_empty_typed_map_picks_matching_value_type_arm() {
+        byte[] env = okEnvelope(ovMapTyped(tyPrimitive(PRIM_STRING), tyPrimitive(PRIM_INT)));
+        Object decoded = ProtoReader.decodeOutboundResult(
+                env, "union[map<string,string>;map<string,int>]");
+        Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
+        assertEquals(Map.of(), arm.value());
+    }
+
+    // --- wire-driven path (registered nominal record, pickArm) ---
+
+    /**
+     * An empty typed string[] inside a `int[] | string[]` union_variant reifies
+     * onto the registered StrListValue record — the item_type picks the arm, so
+     * the string arm wins over the first-declared int arm.
+     */
+    @Test
+    void decode_union_empty_typed_string_list_arm_constructs_registered_record() {
+        byte[] selfType =
+                tyUnion(tyList(tyPrimitive(PRIM_INT)), tyList(tyPrimitive(PRIM_STRING)));
+        byte[] inner = ovListTyped(tyPrimitive(PRIM_STRING)); // empty string[]
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, inner)));
+        ListUnion.StrListValue v = assertInstanceOf(ListUnion.StrListValue.class, decoded);
+        assertEquals(List.of(), v.value());
+    }
+
+    /** A non-empty typed int[] arm reifies onto IntListValue (arm proven by item_type). */
+    @Test
+    void decode_union_typed_int_list_arm_constructs_registered_record() {
+        byte[] selfType =
+                tyUnion(tyList(tyPrimitive(PRIM_INT)), tyList(tyPrimitive(PRIM_STRING)));
+        byte[] inner = ovListTyped(tyPrimitive(PRIM_INT), ovInt(1), ovInt(2));
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, inner)));
+        ListUnion.IntListValue v = assertInstanceOf(ListUnion.IntListValue.class, decoded);
+        assertEquals(List.of(1L, 2L), v.value());
+    }
+
+    /**
+     * A list WITHOUT item_type on the wire-driven path keeps the first-match
+     * fallback: bare "list" picks the first list arm (IntListValue).
+     */
+    @Test
+    void decode_union_untyped_list_arm_falls_back_to_first_registered_record() {
+        byte[] selfType =
+                tyUnion(tyList(tyPrimitive(PRIM_INT)), tyList(tyPrimitive(PRIM_STRING)));
+        byte[] inner = ovListUntyped(ovString("x")); // ["x"], no item_type
+        Object decoded =
+                ProtoReader.decodeOutboundResult(okEnvelope(ovUnion(selfType, inner)));
+        // Bare "list" → first list arm (int[]), even though the element is a
+        // string — the untyped-wire back-compat lane, unchanged by the fix.
+        assertInstanceOf(ListUnion.IntListValue.class, decoded);
     }
 
     // -- media handle decode (baml.media.*) ----------------------------------

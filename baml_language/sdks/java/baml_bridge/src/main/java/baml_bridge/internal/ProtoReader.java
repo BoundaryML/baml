@@ -86,7 +86,10 @@ public final class ProtoReader {
     private static final int LIT_FLOAT = 5;
 
     // BamlValueList / BamlValueMap / BamlOutboundMapEntry
+    private static final int LIST_ITEM_TYPE = 1; // BamlValueList.item_type (BamlTy)
     private static final int LIST_ITEMS = 2;
+    private static final int MAP_KEY_TYPE = 1; // BamlValueMap.key_type (BamlTy)
+    private static final int MAP_VALUE_TYPE = 2; // BamlValueMap.value_type (BamlTy)
     private static final int MAP_ENTRIES = 3;
     private static final int MAP_ENTRY_KEY = 1;
     private static final int MAP_ENTRY_VALUE = 2;
@@ -685,11 +688,15 @@ public final class ProtoReader {
 
     /**
      * A discriminator token for the inner {@code BamlOutboundValue}: a primitive
-     * kind, a class/enum FQN, {@code "list"} / {@code "map"} sentinels (prefix-
-     * matched against {@code list<...>} / {@code map<...>} arms), or a
-     * {@code "lit:<base>:<value>"} token. The inner {@code bigint} literal channel
-     * is hex on the wire but normalized to decimal here so it matches the arm
-     * token's decimal spelling.
+     * kind, a class/enum FQN, a <em>typed</em> container token
+     * ({@code "list<int>"} / {@code "map<string,int>"}, read from the wire
+     * {@code item_type} / {@code key_type}+{@code value_type}) — falling back to
+     * the bare {@code "list"} / {@code "map"} sentinel only when that type is
+     * absent or untokenizable — or a {@code "lit:<base>:<value>"} token. The
+     * typed container tokens let a union tell {@code string[]} from {@code int[]}
+     * even when the list is EMPTY (the element type is the only evidence). The
+     * inner {@code bigint} literal channel is hex on the wire but normalized to
+     * decimal here so it matches the arm token's decimal spelling.
      */
     private static String innerDiscriminator(WireReader r) {
         String token = "?";
@@ -728,18 +735,139 @@ public final class ProtoReader {
                 }
                 case OV_CLASS, OV_ENUM -> token = nameField(r.readMessage());
                 case OV_LITERAL -> token = literalValueToken(r.readMessage());
-                case OV_LIST -> {
-                    r.skipField(wire);
-                    token = "list";
-                }
-                case OV_MAP -> {
-                    r.skipField(wire);
-                    token = "map";
-                }
+                case OV_LIST -> token = listDiscriminator(r.readMessage());
+                case OV_MAP -> token = mapDiscriminator(r.readMessage());
                 default -> r.skipField(wire);
             }
         }
         return token;
+    }
+
+    /**
+     * The container discriminator token for a wire {@code list_value}: {@code
+     * "list<" + tyToken(item_type) + ">"} when the list carries a <em>precise</em>
+     * element type ({@code BamlValueList.item_type} — the engine populates it even
+     * for an empty list, so it is the sole evidence for arm selection), or the
+     * bare {@code "list"} sentinel when {@code item_type} is absent (a pre-typed
+     * wire) or {@link #impreciseInner imprecise}. The {@code list<D>} spelling
+     * matches the descriptor grammar (see {@link Desc}) so a typed list arm is
+     * told apart from a differently-typed one.
+     */
+    private static String listDiscriminator(WireReader list) {
+        WireReader itemType = null;
+        while (list.hasRemaining()) {
+            int tag = list.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == LIST_ITEM_TYPE && itemType == null) {
+                itemType = list.readMessage();
+            } else {
+                list.skipField(wire); // items and any unknown fields
+            }
+        }
+        if (itemType == null) {
+            return "list";
+        }
+        String inner = tyToken(itemType);
+        return impreciseInner(inner) ? "list" : "list<" + inner + ">";
+    }
+
+    /**
+     * Whether a container element token is <em>imprecise</em> — it proves nothing
+     * about the element type, so the container falls back to its bare base token
+     * (a wildcard that stays compatible with any same-base arm). Covers {@code "?"}
+     * (an unrecognized {@code BamlTy}) and {@code "null"} (the placeholder element
+     * type the engine emits for a recursive-alias / heterogeneous container, e.g.
+     * a {@code RecList[]} whose {@code item_type} arrives as the {@code null}
+     * primitive). Only a concrete, non-null element token (e.g. {@code "string"},
+     * {@code "int"}, an FQN) is trusted to <em>reject</em> a differently-typed arm.
+     */
+    private static boolean impreciseInner(String inner) {
+        return inner.equals("?") || inner.equals("null");
+    }
+
+    /**
+     * The container discriminator token for a wire {@code map_value}: {@code
+     * "map<" + tyToken(key_type) + "," + tyToken(value_type) + ">"} when the map
+     * carries both its key and value types ({@code BamlValueMap.key_type} /
+     * {@code value_type}), or the bare {@code "map"} sentinel when either is
+     * absent or untokenizable ({@code "?"}). The {@code map<K,V>} spelling
+     * matches the descriptor grammar (see {@link #mapToken} / {@link Desc}).
+     */
+    private static String mapDiscriminator(WireReader map) {
+        WireReader keyType = null;
+        WireReader valueType = null;
+        while (map.hasRemaining()) {
+            int tag = map.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == MAP_KEY_TYPE && keyType == null) {
+                keyType = map.readMessage();
+            } else if (field == MAP_VALUE_TYPE && valueType == null) {
+                valueType = map.readMessage();
+            } else {
+                map.skipField(wire); // entries and any unknown fields
+            }
+        }
+        if (keyType == null || valueType == null) {
+            return "map";
+        }
+        String k = tyToken(keyType);
+        String v = tyToken(valueType);
+        return (impreciseInner(k) || impreciseInner(v)) ? "map" : "map<" + k + "," + v + ">";
+    }
+
+    /**
+     * Whether a wire container discriminator token ({@code wireToken}, from
+     * {@link #innerDiscriminator}) matches a container <em>arm</em> token
+     * ({@code armToken} — a {@code list<...>} / {@code map<...>} descriptor
+     * token, or a bare {@code "list"} / {@code "map"}). Shared by both arm-picking
+     * paths (the descriptor-driven {@link #armMatchesToken} and the wire-driven
+     * {@code TypeRegistry.UnionEntry.pickArm}).
+     *
+     * <h3>Compat lattice (chosen deliberately)</h3>
+     * <ul>
+     *   <li><b>Exact</b> — identical tokens match ({@code list<int>} ≡
+     *       {@code list<int>}; bare {@code list} ≡ bare {@code list}).</li>
+     *   <li><b>Bare is an element-type wildcard</b> — if EITHER side is bare
+     *       ({@code "list"} / {@code "map"}), they match by base kind alone
+     *       ({@code list} ↔ {@code list<int>}; {@code map} ↔ {@code map<K,V>}).
+     *       A bare wire token is what a pre-typed engine (or an item type we
+     *       could not tokenize) produces; a bare arm token is a base-only
+     *       container arm. Both mean "some list/map, element type unproven", so
+     *       they stay compatible with any typed arm of the same base — preserving
+     *       the pre-fix behavior for old wires.</li>
+     *   <li><b>Typed vs differently-typed does NOT match</b> — two typed tokens
+     *       that differ are incompatible ({@code list<string>} ≠ {@code list<int>};
+     *       {@code map<string,int>} ≠ {@code map<string,string>}). This is the
+     *       correctness fix: an empty {@code int[]} no longer lands on a
+     *       {@code string[]} arm just because it was declared first.</li>
+     *   <li><b>Different base never matches</b> — {@code list<...>} ≠
+     *       {@code map<...>}.</li>
+     * </ul>
+     */
+    public static boolean containerTokenMatches(String armToken, String wireToken) {
+        if (armToken.equals(wireToken)) {
+            return true; // exact: bare≡bare or typed≡same-typed
+        }
+        String base = containerBase(wireToken);
+        if (!base.equals(containerBase(armToken))) {
+            return false; // list vs map (or a non-container token)
+        }
+        // Same base kind, tokens differ ⇒ match iff at least one is bare (an
+        // unproven-element wildcard); two differing typed tokens are rejected.
+        return isBareContainer(wireToken) || isBareContainer(armToken);
+    }
+
+    /** Whether {@code token} is a bare (base-only) container discriminator. */
+    private static boolean isBareContainer(String token) {
+        return token.equals("list") || token.equals("map");
+    }
+
+    /** The base kind of a container token ({@code "list<int>"} → {@code "list"}). */
+    private static String containerBase(String token) {
+        int lt = token.indexOf('<');
+        return lt < 0 ? token : token.substring(0, lt);
     }
 
     /** Tokenize a {@code BamlLiteralValue} (outbound); its bigint channel is hex. */
@@ -1172,12 +1300,14 @@ public final class ProtoReader {
     /**
      * Whether a union arm descriptor matches a wire discriminator token (from
      * {@link #innerDiscriminator}). Primitives/FQNs match their token exactly;
-     * {@code list<>} / {@code map<>} match the {@code "list"} / {@code "map"}
-     * sentinels; a literal arm matches an exact {@code lit:base:value} token, else
-     * its base (a same-base literal union is erased in codegen, so at most one
-     * literal arm per base survives — base match cannot be ambiguous); a nested
-     * union matches if any of its arms match; {@code tv:} / {@code unknown} are
-     * wildcards (wire-driven).
+     * {@code list<>} / {@code map<>} match a wire container token under the
+     * {@link #containerTokenMatches} lattice (typed-vs-same-typed or bare on
+     * either side — so {@code list<string>} no longer swallows an {@code int[]});
+     * a literal arm matches an exact {@code lit:base:value} token, else its base
+     * (a same-base literal union is erased in codegen, so at most one literal arm
+     * per base survives — base match cannot be ambiguous); a nested union matches
+     * if any of its arms match; {@code tv:} / {@code unknown} are wildcards
+     * (wire-driven).
      */
     private static boolean armMatchesToken(Desc arm, String token) {
         switch (arm.kind) {
@@ -1185,9 +1315,11 @@ public final class ProtoReader {
             case FQN:
                 return arm.text.equals(token);
             case LIST:
-                return token.equals("list");
             case MAP:
-                return token.equals("map");
+                // arm.toString() renders the descriptor container token
+                // (list<D> / map<K,V>); the lattice tells a typed wire arm from a
+                // differently-typed one while keeping bare-token compatibility.
+                return containerTokenMatches(arm.toString(), token);
             case LIT: {
                 if (token.startsWith("lit:")) {
                     String exact = "lit:" + arm.text + ":" + arm.litValue;

@@ -1,5 +1,7 @@
 package baml_bridge;
 
+import baml_bridge.internal.ProtoReader;
+
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
@@ -639,18 +641,24 @@ public final class TypeRegistry {
 
         /**
          * The declaration-order index of the arm matching {@code discriminator}, or
-         * -1. A {@code "list"} / {@code "map"} discriminator picks the first arm whose
-         * token is a {@code list<...>} / {@code map<...>}; a {@code "lit:<base>:..."}
-         * discriminator prefers an exact literal token then the first literal arm of
-         * that base; every other discriminator (primitives and class/enum FQNs)
-         * matches an arm token exactly.
+         * -1. A container discriminator ({@code "list"} / {@code "map"} or a typed
+         * {@code "list<int>"} / {@code "map<string,int>"}) picks the first arm the
+         * {@link ProtoReader#containerTokenMatches} lattice accepts — a typed wire
+         * token matches only a same-typed (or bare) arm, so an empty {@code int[]}
+         * no longer lands on a {@code string[]} arm declared first, while a bare
+         * (pre-typed) wire still matches any container arm of that base; a
+         * {@code "lit:<base>:..."} discriminator prefers an exact literal token
+         * then the first literal arm of that base; every other discriminator
+         * (primitives and class/enum FQNs) matches an arm token exactly.
          */
         private int pickArm(String discriminator) {
-            if (discriminator.equals("list")) {
-                return firstWithPrefix("list<");
-            }
-            if (discriminator.equals("map")) {
-                return firstWithPrefix("map<");
+            if (isContainerDiscriminator(discriminator)) {
+                for (int i = 0; i < armTokens.length; i++) {
+                    if (ProtoReader.containerTokenMatches(armTokens[i], discriminator)) {
+                        return i;
+                    }
+                }
+                return -1;
             }
             if (discriminator.startsWith("lit:")) {
                 for (int i = 0; i < armTokens.length; i++) {
@@ -677,6 +685,19 @@ public final class TypeRegistry {
                 }
             }
             return -1;
+        }
+
+        /**
+         * Whether {@code discriminator} is a container token — bare
+         * {@code "list"} / {@code "map"} or a typed {@code "list<...>"} /
+         * {@code "map<...>"} — routed through the {@code containerTokenMatches}
+         * lattice rather than exact-arm matching.
+         */
+        private static boolean isContainerDiscriminator(String discriminator) {
+            return discriminator.equals("list")
+                    || discriminator.equals("map")
+                    || discriminator.startsWith("list<")
+                    || discriminator.startsWith("map<");
         }
 
         private Constructor<?> constructor(int idx) {
