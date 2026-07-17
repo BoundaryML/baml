@@ -1,6 +1,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+pub mod platforms;
 pub mod skills;
 
 use std::{

@@ -527,6 +527,22 @@ pub mod cpp {
     pub use crate::cpp_test_suite as test_suite;
 }
 
+/// Rust generator's test-side glue. Invoked from
+/// `crates/rust/src/lib.rs` as
+/// `sdk_test_harness_runner::rust::test_suite!()`.
+pub mod rust {
+    /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::rust::run_all`.
+    #[macro_export]
+    macro_rules! rust_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/rust_tests.rs"));
+        };
+    }
+
+    pub use crate::rust_test_suite as test_suite;
+}
+
 /// Node TypeScript test-side glue. Invoked from
 /// `crates/typescript/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript::test_suite!()`.

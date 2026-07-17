@@ -115,7 +115,7 @@ jobs:
       # process-global OnceLock, which nextest's process-per-test model would
       # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not package(=baml_bridge)'
         working-directory: baml_language
 
       # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
@@ -217,7 +217,7 @@ jobs:
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not package(=baml_bridge)'
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -326,7 +326,7 @@ jobs:
       # process-global OnceLocks build and share it instead of relinking it for
       # every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e) and not package(=baml_bridge)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
@@ -413,13 +413,24 @@ jobs:
                 "timeout": 30,
               },
               {
-                // The C++ sdk-test crate needs only the host C++ toolchain
-                // (preinstalled on the runners) plus nextest; its setup.sh
-                // builds the bridge_cffi cdylib with cargo. Windows joins
-                // once the MSVC test driver lands (test.sh is bash + c++).
+                // The C++ sdk-test crate needs the host C++ toolchain and
+                // CMake (preinstalled on the runners) plus nextest; its
+                // setup.sh builds the bridge_cffi cdylib with cargo and
+                // pre-clones the pinned protobuf sources. Windows joins
+                // once the MSVC test driver lands (test.sh is bash).
                 "sdk-label": "cpp",
                 "package-name": "sdk_test_cpp",
                 "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
@@ -467,6 +478,16 @@ jobs:
                 "timeout": 40,
               },
               {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
@@ -491,6 +512,16 @@ jobs:
                 "package-name": "sdk_test_typescript_web",
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
@@ -598,6 +629,18 @@ jobs:
 
       - name: "Run sdk tests"
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+
+      # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
+      # cdylib at run time, and its lib test binary mixes pure (loader/encode)
+      # with engine-dependent (completion, live-engine) tests, so the whole
+      # package runs here — where sdk_test_rust's setup already built the engine
+      # into the main target dir — instead of in the general cargo-test lane
+      # (where the non-cacheable cdylib build ran as a silent nextest setup
+      # script and stalled the Windows job).
+      - name: "Run rust bridge tests"
+        if: matrix.sdk-label == 'rust'
+        run: cargo nextest run -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"

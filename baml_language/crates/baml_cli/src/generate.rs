@@ -158,13 +158,19 @@ impl GenerateArgs {
                 .clone()
                 .unwrap_or_else(|| generator.output_dir.clone());
 
-            let generated = match generator.output_type {
+            // Unified to bytes at the write boundary: python/TS emit text
+            // only; the rust generator also ships the embedded bytecode as
+            // a binary file.
+            let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
                     sdkgen_python_pydantic2::to_source_code_with_bytecode(
                         &pool,
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
                 }
                 OutputType::TypescriptNode => {
                     sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
@@ -172,6 +178,9 @@ impl GenerateArgs {
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
                 }
                 OutputType::TypescriptWeb => {
                     sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
@@ -179,6 +188,32 @@ impl GenerateArgs {
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
+                }
+                OutputType::Rust => {
+                    let generated = sdkgen_rust::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        &sdkgen_rust::RustGenOptions {
+                            naming_convention: generator.naming_convention,
+                            package_name: "baml_sdk".to_string(),
+                            // The runtime crate is not published yet; pin the
+                            // matching version for when it is.
+                            runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
+                            manifest_extra: None,
+                            edition: "2024".to_string(),
+                        },
+                    );
+                    for warning in &generated.warnings {
+                        reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
+                    }
+                    generated
+                        .files
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
                 }
                 OutputType::Cpp => {
                     // The C++ emitter embeds source paths (reference
@@ -191,6 +226,9 @@ impl GenerateArgs {
                         })
                         .collect();
                     sdkgen_cpp::to_source_code_with_bytecode(&pool, &source_paths, &baml_bytecode)
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
                 }
             };
 
@@ -278,7 +316,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "cpp""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "rust", "cpp""#,
             table_range,
             &mut diags,
         );

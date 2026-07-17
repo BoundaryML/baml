@@ -29,6 +29,17 @@ pub struct BamlBridgePypi {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SdkPackage {
+    /// Registry the package was published to, e.g. `crates_io`.
+    pub registry: String,
+    /// Package name as it appears on the registry, e.g. `baml_bridge`.
+    pub package: String,
+    /// Registry-encoded version (the identity of the canonical version for
+    /// crates.io; pypi/npm have their own encodings).
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolchainManifest {
     pub schema: u32,
     pub version: String,
@@ -45,6 +56,12 @@ pub struct ToolchainManifest {
     /// keeps older manifests without this field deserializable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cffi: Option<BTreeMap<String, Artifact>>,
+    /// Generated-SDK registry coordinates (`language -> {registry, package,
+    /// version}`), e.g. `rust -> crates_io/baml_bridge`. Recorded once a
+    /// language's registry publisher lands; `default` keeps older manifests
+    /// deserializable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sdks: Option<BTreeMap<String, SdkPackage>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +88,11 @@ impl ToolchainManifest {
         if let Some(cffi) = &self.cffi {
             for (target, artifact) in cffi {
                 validate_artifact(&format!("cffi/{target}"), artifact)?;
+            }
+        }
+        if let Some(sdks) = &self.sdks {
+            for (language, package) in sdks {
+                validate_sdk(language, package)?;
             }
         }
         Ok(())
@@ -129,6 +151,13 @@ fn validate_artifact(name: &str, artifact: &Artifact) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_sdk(language: &str, package: &SdkPackage) -> anyhow::Result<()> {
+    if package.registry.is_empty() || package.package.is_empty() || package.version.is_empty() {
+        anyhow::bail!("sdk {language} has an empty registry, package, or version");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,6 +194,7 @@ mod tests {
             vsix: None,
             baml_bridge_pypi: None,
             cffi,
+            sdks: None,
         }
     }
 
@@ -210,6 +240,47 @@ mod tests {
             format!("{err}").contains("cffi/aarch64-apple-darwin"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn sdks_map_round_trips_and_validates() {
+        let mut manifest = manifest_with(None);
+        manifest.sdks = Some(BTreeMap::from([(
+            "rust".to_string(),
+            SdkPackage {
+                registry: "crates_io".to_string(),
+                package: "baml_bridge".to_string(),
+                version: "0.15.0".to_string(),
+            },
+        )]));
+        manifest.validate().unwrap();
+
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(json.contains("\"sdks\""), "sdks should serialize: {json}");
+        let back: ToolchainManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.sdks.as_ref().unwrap()["rust"].package, "baml_bridge");
+        back.validate().unwrap();
+    }
+
+    #[test]
+    fn sdks_is_omitted_when_absent() {
+        let json = serde_json::to_string(&manifest_with(None)).unwrap();
+        assert!(!json.contains("\"sdks\""), "sdks should be omitted: {json}");
+    }
+
+    #[test]
+    fn empty_sdk_field_is_rejected() {
+        let mut manifest = manifest_with(None);
+        manifest.sdks = Some(BTreeMap::from([(
+            "rust".to_string(),
+            SdkPackage {
+                registry: String::new(),
+                package: "baml_bridge".to_string(),
+                version: "0.15.0".to_string(),
+            },
+        )]));
+        let err = manifest.validate().unwrap_err();
+        assert!(format!("{err}").contains("rust"), "{err}");
     }
 }
 

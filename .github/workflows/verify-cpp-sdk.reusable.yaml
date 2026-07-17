@@ -52,7 +52,19 @@ jobs:
       - id: derive
         run: |
           set -euo pipefail
-          matrix="$(jq -c '{include: [.targets[] | select(.sdks.cpp != null and .sdks.cpp != "unsupported")]}' release/platforms.json)"
+          # Every target with a cffi artifact gets consumer-verified. The
+          # verify runner must be NATIVE for the triple (the cffi build may
+          # cross-compile; a consumer smoke cannot), so it is derived from
+          # os/arch rather than reusing the build runner.
+          matrix="$(jq -c '{include: [.targets[]
+            | select(.artifacts.cffi != null)
+            | {target: .triple,
+               libc: .libc,
+               runner: (if .os == "macos" then (if .arch == "aarch64" then "macos-14" else "macos-15-intel" end)
+                        elif .os == "linux" then (if .arch == "aarch64" then "ubuntu-24.04-arm" else "ubuntu-latest" end)
+                        else (if .arch == "aarch64" then "windows-11-arm" else "windows-2022" end) end),
+               smoke_container: (if .libc == "musl" then "alpine:3.21" else null end),
+               msvc_arch: (if .arch == "aarch64" then "arm64" else "amd64" end)}]}' release/platforms.json)"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   verify:
