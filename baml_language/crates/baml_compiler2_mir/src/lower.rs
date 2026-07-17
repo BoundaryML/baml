@@ -681,10 +681,13 @@ fn enclosing_free_impl(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Option<&baml_compiler2_hir::item_tree::ImplBlock> {
-    item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block.methods.contains(&func_id).then_some(block)
-    })
+    match item_tree.method_owners.get(&func_id)? {
+        baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id) => {
+            item_tree.impls.get(impl_id)
+        }
+        baml_compiler2_hir::item_tree::MethodOwner::Class(_)
+        | baml_compiler2_hir::item_tree::MethodOwner::Interface(_) => None,
+    }
 }
 
 /// An out-of-body impl block's declared generics as `(param names, each's single optional
@@ -1335,45 +1338,38 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::Let(loc) => item_tree[loc.id(db)].name.clone(),
     };
 
-    // For function definitions, check if this is a class method by searching
-    // the item tree's class methods lists.
+    // Function definitions: a method needs a Method-shaped ItemRef so it gets a
+    // distinct global slot keyed on its owner's name (instead of colliding with
+    // same-named free functions in the package).
     if let Definition::Function(func_loc) = def {
-        let func_local_id = func_loc.id(db);
-        for (class_id, class_data) in &item_tree.classes {
-            if class_data.methods.contains(&func_local_id) {
+        use baml_compiler2_hir::item_tree::MethodOwner;
+        match item_tree.method_owners.get(&func_loc.id(db)) {
+            Some(MethodOwner::Class(class_id)) => {
                 let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_id);
                 return method_item_ref(db, class_loc, func_loc);
             }
-        }
-        // BEP-044: interface default methods are also stored in
-        // `item_tree.functions` and need a Method-shaped ItemRef so they
-        // get a distinct global slot keyed on the interface name (instead
-        // of colliding with same-named free functions in the package).
-        for iface_data in item_tree.interfaces.values() {
-            if iface_data.default_methods.contains(&func_local_id) {
+            Some(MethodOwner::Interface(iface_id)) => {
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: iface_data.name.clone(),
+                    class: item_tree[*iface_id].name.clone(),
                     name,
                 };
             }
-        }
-        for impl_id in &item_tree.free_impls {
-            let Some(block) = item_tree.impls.get(impl_id) else {
-                continue;
-            };
-            if block.methods.contains(&func_local_id)
-                && let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } =
+            Some(MethodOwner::FreeImpl(impl_id)) => {
+                let block = &item_tree.impls[impl_id];
+                if let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } =
                     &block.subject
-            {
-                return ItemRef::Method {
-                    package: pkg_info.package.clone(),
-                    namespace: pkg_info.namespace_path,
-                    class: Name::new(format!("{}$for${}", block.interface_target, for_target)),
-                    name,
-                };
+                {
+                    return ItemRef::Method {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path,
+                        class: Name::new(format!("{}$for${}", block.interface_target, for_target)),
+                        name,
+                    };
+                }
             }
+            None => {}
         }
     }
 
@@ -1523,7 +1519,7 @@ use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
@@ -1646,6 +1642,13 @@ struct PackageLoweringData {
     enum_variants: EnumVariantIndices,
     interface_implementors: ImplementorsByInterface,
     resolved_aliases: ResolvedAliases,
+    /// Every method name any in-scope interface (own package + dependency
+    /// closure) declares, required or default. Fast pre-filter for
+    /// [`LoweringContext::dispatch_target_for_concrete`]: a member name absent
+    /// here can never dispatch through an interface impl, so the (hot) impl
+    /// enumeration is skipped for the overwhelmingly common plain-method /
+    /// field-access case.
+    interface_method_names: FxHashSet<Name>,
 }
 
 /// # Safety
@@ -1672,6 +1675,77 @@ unsafe impl salsa::Update for PackageLoweringData {
     }
 }
 
+/// Project-wide class → runtime type-tag map. See
+/// [`class_type_tags_for_project`].
+#[derive(Debug, PartialEq)]
+struct ProjectClassTypeTags {
+    tags: IndexMap<TypeName, i64>,
+}
+
+/// Mirrors [`PackageLoweringData`]'s impl: the map holds no Salsa-interned
+/// (`'db`) data, so storing it by value is sound; `maybe_update` uses
+/// `PartialEq` for proper Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ProjectClassTypeTags {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Build `class_type_tags` for every class in the project, once, memoized by
+/// Salsa.
+///
+/// Tags are content-addressed (`typetag::class_type_tag` over the
+/// fully-qualified name), so they match the `class.type_tag` values the
+/// emitter assigns by construction — no iteration-order coupling — and a
+/// class keeps its tag regardless of what other code exists.
+///
+/// This was previously an untracked helper called from every
+/// `LoweringContext` construction — i.e. the whole project's item trees were
+/// walked, and every class name re-rendered and re-hashed, once per lowered
+/// function/let (see `crates/tools_compile_profile/README.md`, July 2026
+/// audit, item #4). `project` is only the memo key; the body's file/item
+/// reads are tracked as dependencies through `db` as usual.
+#[salsa::tracked(returns(ref))]
+fn class_type_tags_for_project(
+    db: &dyn crate::Db,
+    _project: baml_workspace::Project,
+) -> ProjectClassTypeTags {
+    let all_files = compiler2_all_files(db);
+    let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
+
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+
+        for class_data in item_tree.classes.values() {
+            let class_qtn = QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                class_data.name.clone(),
+            );
+            let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
+            // Use entry to avoid overwriting if the same class appears via multiple paths
+            // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
+            tags.entry(class_qtn).or_insert(type_tag);
+        }
+    }
+
+    ProjectClassTypeTags { tags }
+}
+
 /// Build the package-invariant [`PackageLoweringData`] once per package,
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
@@ -1679,7 +1753,9 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{package_dependencies, package_items};
+    use baml_compiler2_hir::package::{
+        package_dependencies, package_dependency_closure, package_items,
+    };
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
@@ -1720,12 +1796,48 @@ fn package_lowering_data<'db>(
         );
     }
 
+    // Collect every interface-declared method name in scope (own package +
+    // dependency closure). `dispatch_target_for_concrete` previously enumerated
+    // every impl block in the closure (via `l1_impls_for_recv`, which probes
+    // each impl's pattern against the receiver — running alias normalization /
+    // subtype checks per probe) for EVERY method call and field access, just to
+    // conclude "no impl provides this member" for the overwhelmingly common
+    // non-interface member. This set answers that in one hash lookup. Names are
+    // collected package-wide (not per receiver type), so the filter stays a
+    // pure fast path: any name declared by ANY reachable interface still falls
+    // through to the full impl enumeration + `mir_interface_declares_method`.
+    let mut interface_method_names = FxHashSet::default();
+    let mut all_pkgs = vec![pkg_id];
+    all_pkgs.extend(package_dependency_closure(db, pkg_id).iter().copied());
+    for pkg in all_pkgs {
+        let items = package_items(db, pkg);
+        for ns in items.namespaces.values() {
+            for def in ns.types.values() {
+                let baml_compiler2_hir::contributions::Definition::Interface(iface_loc) = def
+                else {
+                    continue;
+                };
+                let itree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = itree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                for sig in &iface_data.required_methods {
+                    interface_method_names.insert(sig.name.clone());
+                }
+                for &fn_id in &iface_data.default_methods {
+                    interface_method_names.insert(itree[fn_id].name.clone());
+                }
+            }
+        }
+    }
+
     PackageLoweringData {
         class_fields,
         class_field_types,
         enum_variants,
         interface_implementors,
         resolved_aliases,
+        interface_method_names,
     }
 }
 
@@ -1837,8 +1949,10 @@ struct LoweringContext<'db> {
     class_field_types: &'db ClassFieldTypes,
     enum_variants: &'db EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
-    /// for union-type switch optimization (ported from MIR 1).
-    class_type_tags: IndexMap<TypeName, i64>,
+    /// for union-type switch optimization (ported from MIR 1). Borrowed from
+    /// the Salsa-memoized [`class_type_tags_for_project`] (was rebuilt per
+    /// lowered function).
+    class_type_tags: &'db IndexMap<TypeName, i64>,
     /// BEP-044: for every interface, the list of classes that implement it
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
@@ -1852,6 +1966,11 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
+
+    /// All method names declared by in-scope interfaces — see
+    /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
+    /// `dispatch_target_for_concrete`.
+    interface_method_names: &'db FxHashSet<Name>,
 
     /// Stack of pending `defer` block bodies (BEP-042), parallel to
     /// lexical scopes. Each entry is the `AstExprId` of a defer body
@@ -2187,8 +2306,9 @@ impl<'db> LoweringContext<'db> {
 
     /// Populate `class_fields` and `enum_variants` from a single package's items.
     ///
-    /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
-    /// the same file-iteration order as the emitter (`generate_project_bytecode`).
+    /// Note: `class_type_tags` is built separately via the project-wide
+    /// [`class_type_tags_for_project`] query (tags are content-addressed, so
+    /// they match the emitter's values without iteration-order coupling).
     fn populate_from_package(
         db: &'db dyn crate::Db,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
@@ -2468,36 +2588,6 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Build `class_type_tags` for every class in the project.
-    ///
-    /// Tags are content-addressed (`typetag::class_type_tag` over the
-    /// fully-qualified name), so they match the `class.type_tag` values the
-    /// emitter assigns by construction — no iteration-order coupling — and a
-    /// class keeps its tag regardless of what other code exists.
-    fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
-        let all_files = compiler2_all_files(db);
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-
-        for file in &all_files {
-            let item_tree = file_item_tree(db, *file);
-            let pkg_info = file_package(db, *file);
-
-            for class_data in item_tree.classes.values() {
-                let class_qtn = QualifiedTypeName::new(
-                    pkg_info.package.clone(),
-                    pkg_info.namespace_path.clone(),
-                    class_data.name.clone(),
-                );
-                let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
-                // Use entry to avoid overwriting if the same class appears via multiple paths
-                // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
-                class_type_tags.entry(class_qtn).or_insert(type_tag);
-            }
-        }
-
-        class_type_tags
-    }
-
     fn new(
         db: &'db dyn crate::Db,
         func_loc: FunctionLoc<'db>,
@@ -2507,34 +2597,15 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = func_loc.file(db);
 
-        // --- Resolve FunctionLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let func_data = &item_tree[func_loc.id(db)];
-        let func_span = func_data.span;
-
         let index = file_semantic_index(db, file);
-        // For synthesized functions whose span is `0..0` (e.g. `$init_test_N`),
-        // `scope_at_offset` may return a descendant Lambda scope instead of the
-        // Function scope itself, because all synthesized expressions share span
-        // `0..0` and the descendant search finds a matching lambda first.
-        // Avoid this by searching explicitly for a `ScopeKind::Function` scope
-        // with the correct name and span before falling back to `scope_at_offset`.
-        let func_scope_id: FileScopeId = index
-            .scopes
-            .iter()
-            .enumerate()
-            .find_map(|(i, scope)| {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
-                    && scope.range == func_span
-                    && scope.name.as_ref() == Some(&func_data.name)
-                {
-                    #[allow(clippy::cast_possible_truncation)]
-                    Some(FileScopeId::new(i as u32))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
+        // The scope this function opened, from the recorded item↔scope index.
+        // Exact — no span match, so companion functions and synthesized `0..0`
+        // functions (which the old scan special-cased) resolve correctly.
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (func + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -2633,10 +2704,12 @@ impl<'db> LoweringContext<'db> {
         // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
         // already follows type-var bounds — so default methods keep dispatching
         // through the concrete implementor.
-        for iface in item_tree.interfaces.values() {
-            if iface.default_methods.contains(&func_loc.id(db))
-                && let Some(def) =
-                    pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id)) =
+            item_tree.method_owners.get(&func_loc.id(db))
+        {
+            let iface = &item_tree[*iface_id];
+            if let Some(def) =
+                pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
             {
                 let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface.name);
                 let args = iface
@@ -2666,7 +2739,6 @@ impl<'db> LoweringContext<'db> {
                         baml_compiler2_tir::ty::TyAttr::default(),
                     ),
                 );
-                break;
             }
         }
 
@@ -2674,9 +2746,10 @@ impl<'db> LoweringContext<'db> {
         // (was rebuilt — and every class field re-lowered — per function).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Build class_type_tags using the same file-iteration order as the emitter,
-        // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        // Tags are content-addressed over each class's fully-qualified name,
+        // so they match the emitter's `class.type_tag` values by construction.
+        // Memoized project-wide (was rebuilt here per lowered function).
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2736,6 +2809,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -2756,14 +2830,13 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = let_loc.file(db);
 
-        // --- Resolve LetLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let let_data = &item_tree[let_loc.id(db)];
-        let let_span = let_data.span;
         let let_name = let_data.name.clone();
-
         let index = file_semantic_index(db, file);
-        let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
+        let let_scope_id = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
+            .expect("every item-tree let has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (let + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -2790,9 +2863,10 @@ impl<'db> LoweringContext<'db> {
         // (was rebuilt — and every class field re-lowered — per let binding).
         let pkg_data = package_lowering_data(db, pkg_id);
 
-        // Build class_type_tags using the same file-iteration order as the emitter,
-        // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        // Tags are content-addressed over each class's fully-qualified name,
+        // so they match the emitter's `class.type_tag` values by construction.
+        // Memoized project-wide (was rebuilt here per lowered function).
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
 
         LoweringContext {
             db,
@@ -2821,6 +2895,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -3279,34 +3354,33 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower a method-signature type expression (a parameter or return type) to
     /// a runtime type. In a method signature `Self` is the receiver type
-    /// variable and `Self.Assoc` is an associated-type projection onto it.
-    /// A bare `lower_type_expr_in_ns` has neither in scope and would erase both
-    /// to `Ty::Unknown`, tripping the runtime lowering boundary — so rewrite
-    /// `Self.Assoc` paths into projections and bind `Self` as a type variable.
+    /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
+    /// `lower_type_expr_in_ns` has neither in scope and would erase both to
+    /// `Ty::Unknown`, tripping the runtime lowering boundary — so bind `Self` to
+    /// its rigid type variable through the `self_ty` channel, which roots both a
+    /// bare `Self` and each `Self.Assoc` projection at it.
     fn lower_signature_runtime_ty(
         &self,
         te: &baml_compiler2_ast::TypeExpr,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
         ns_context: &[baml_base::Name],
     ) -> RuntimeTy {
-        let self_subst = std::collections::HashMap::from([(
-            baml_base::Name::new("Self"),
-            baml_compiler2_tir::lower_type_expr::type_expr_for_name(baml_base::Name::new("Self")),
-        )]);
-        let te = baml_compiler2_tir::lower_type_expr::substitute_paths_in(te, &self_subst);
         let mut generic_params = self.enclosing_generic_params();
         generic_params.push(baml_base::Name::new("Self"));
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let mut diags = Vec::new();
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db: self.db,
                 package_items: pkg_items,
                 ns_context,
                 generic_params: &generic_params,
                 bounds: &generic_param_bounds,
-                self_ty: None,
+                self_ty: Some(Tir2Ty::TypeVar(
+                    baml_base::Name::new("Self"),
+                    TyAttr::default(),
+                )),
             },
             &mut diags,
         );
@@ -3565,6 +3639,19 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
         ) {
+            return None;
+        }
+        // Fast pre-filter: a member name no in-scope interface declares can
+        // never dispatch through an impl, so skip the per-call impl enumeration
+        // entirely. `l1_impls_for_recv` probes every impl block's pattern
+        // against the receiver (each probe running alias normalization / subtype
+        // checks via the canonical algebra), so this hash lookup collapses the
+        // dominant "plain method / field access" case — where the accessed
+        // member is not an interface method — to O(1). Correctness: the set is
+        // the union of every method declared by any reachable interface, so any
+        // name that COULD dispatch is still present and falls through to the
+        // full enumeration + `mir_interface_declares_method` check below.
+        if !self.interface_method_names.contains(method) {
             return None;
         }
         for resolved in self.l1_impls_for_recv(recv_ty) {
@@ -3854,17 +3941,18 @@ impl<'db> LoweringContext<'db> {
         let fl = self.func_loc?;
         let item_tree = file_item_tree(self.db, fl.file(self.db));
         let func_id = fl.id(self.db);
-        item_tree
-            .interfaces
-            .values()
-            .find(|iface_data| iface_data.default_methods.contains(&func_id))
-            .map(|iface_data| {
-                iface_data
-                    .associated_types
-                    .iter()
-                    .map(|assoc| assoc.name.clone())
-                    .collect()
-            })
+        let baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id) =
+            item_tree.method_owners.get(&func_id)?
+        else {
+            return None;
+        };
+        Some(&item_tree[*iface_id]).map(|iface_data| {
+            iface_data
+                .associated_types
+                .iter()
+                .map(|assoc| assoc.name.clone())
+                .collect()
+        })
     }
 
     /// Rewrite every `Self.X` path (where `X` is one of `assoc_names`) to the bare `X`
@@ -3996,13 +4084,13 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
         let func_data = &item_tree[func_loc.id(self.db)];
+        let func_span = baml_compiler2_ppir::item_data::function_source_map(self.db, func_loc).span;
         // Set the function-level span on the builder so MirFunction::span is populated.
-        self.builder.set_span(baml_base::Span::new(
-            self.file.file_id(self.db),
-            func_data.span,
-        ));
-        let func_scope_id: FileScopeId =
-            index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
+        self.builder
+            .set_span(baml_base::Span::new(self.file.file_id(self.db), func_span));
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(self.db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
             let parent = &index.scopes[parent_idx.index() as usize];
@@ -6537,6 +6625,24 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // Arithmetic over non-primitive operands (a user type, or a union /
+        // interface-existential / type variable involving one) dispatches through
+        // the matching `baml.ops` interface, resolved at runtime from the
+        // operands' concrete types by the `__union_*` driver. Primitive operands
+        // keep the specialized/`exec_binop` fast path below.
+        if matches!(
+            op,
+            AstBinaryOp::Add
+                | AstBinaryOp::Sub
+                | AstBinaryOp::Mul
+                | AstBinaryOp::Div
+                | AstBinaryOp::Mod
+        ) && !self.arithmetic_uses_primitive_opcode(lhs, rhs)
+        {
+            self.lower_arithmetic_via_driver(expr_id, op, lhs, rhs, dest);
+            return;
+        }
+
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
         // `int` operand to a small local `BigInt` in the VM (the specialized
         // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
@@ -6596,51 +6702,175 @@ impl LoweringContext<'_> {
     ) {
         let lhs_op = self.lower_to_operand(lhs);
         let rhs_op = self.lower_to_operand(rhs);
+        let bool_ty = RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        };
+        if matches!(op, AstBinaryOp::Eq) {
+            self.lower_via_ops_driver("equals_equals", vec![lhs_op, rhs_op], bool_ty, dest);
+            return;
+        }
+        // `!=`: call into a bool temp, then negate into `dest` (`assign` handles
+        // projection destinations, so this covers both local and projection cases).
+        let eq_dest = Place::local(self.builder.temp(bool_ty.clone()));
+        self.lower_via_ops_driver(
+            "equals_equals",
+            vec![lhs_op, rhs_op],
+            bool_ty,
+            eq_dest.clone(),
+        );
+        self.builder.assign(
+            dest,
+            Rvalue::UnaryOp {
+                op: crate::UnaryOp::Not,
+                operand: Operand::Copy(eq_dest),
+            },
+        );
+    }
+
+    /// Emit `dest = baml.ops.<driver>(args)` — the shared shape of the operator
+    /// dispatch drivers (`equals_equals`, `__union_add`, …, `__union_neg`). A
+    /// driver may yield (it can call user bytecode), so the call splits the block
+    /// and lowering resumes in a fresh one. The call terminator's destination
+    /// must be a `Place::Local` (the emitter stores its result with
+    /// `emit_store_place`, which only handles locals), so a projection/capture
+    /// `dest` is routed through a `result_ty`-typed temp and copied through.
+    fn lower_via_ops_driver(
+        &mut self,
+        driver: &str,
+        args: Vec<Operand>,
+        result_ty: RuntimeTy,
+        dest: Place,
+    ) {
         let callee = Operand::Constant(Constant::Function(ItemRef::Free {
             package: Name::new("baml"),
             namespace: vec![Name::new("ops")],
-            name: Name::new("equals_equals"),
+            name: Name::new(driver),
         }));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        // The driver call's destination must be a `Place::Local` (the emitter
-        // stores its result with `emit_store_place`, which only handles locals).
-        // Route through a bool temp whenever we must post-process the result —
-        // always for `!=` (we negate into `dest`), and for `==` when `dest` is a
-        // projection/capture (we copy into it after the call). When `op == Eq`
-        // and `dest` is already a local, the call writes straight into it.
-        let is_ne = matches!(op, AstBinaryOp::Ne);
-        let needs_temp = is_ne || !matches!(dest, Place::Local(_));
-        let eq_dest = if needs_temp {
-            Place::local(self.builder.temp(RuntimeTy::Bool {
-                attr: TyAttr::default(),
-            }))
+        let needs_temp = !matches!(dest, Place::Local(_));
+        let call_dest = if needs_temp {
+            Place::local(self.builder.temp(result_ty))
         } else {
             dest.clone()
         };
         let resume = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![lhs_op, rhs_op],
-            eq_dest.clone(),
-            resume,
-            unwind,
-        );
+        self.builder
+            .call(callee, args, call_dest.clone(), resume, unwind);
         self.builder.set_current_block(resume);
-        if is_ne {
-            // `assign` handles projection destinations, so negating into `dest`
-            // covers both local and projection cases.
-            self.builder.assign(
-                dest,
-                Rvalue::UnaryOp {
-                    op: crate::UnaryOp::Not,
-                    operand: Operand::Copy(eq_dest),
-                },
-            );
-        } else if needs_temp {
-            // `op == Eq` with a projection/capture `dest`: copy the temp through.
+        if needs_temp {
             self.builder
-                .assign(dest, Rvalue::Use(Operand::Copy(eq_dest)));
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
         }
+    }
+
+    /// Whether `ty` is a primitive the specialized arithmetic opcodes /
+    /// `exec_binop` handle directly — int/bigint/float, plus `string` when
+    /// `include_string` (binary `+` concatenates; unary `-` has no string form).
+    /// A literal counts as its base; a union counts only when every member is
+    /// the SAME primitive kind (`int | 3`): a mixed-kind union (`int | float`)
+    /// would let emit pick a single-kind opcode for a value of the other kind —
+    /// UB in the specialized handlers — so it goes through the `__union_*`
+    /// interface driver, as does anything else (a user type, or a union /
+    /// existential / type variable involving one). Must stay aligned with TIR's
+    /// `infer_arithmetic` union rule, which types those operands via the
+    /// interface path.
+    fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
+        use baml_base::Literal;
+        /// The primitive kind of a non-union member, literal widened to base.
+        /// The builtin wrapper classes (`baml.Float` …) count as their
+        /// primitive — `self` inside their method bodies is class-typed but
+        /// primitive-valued (mirrors TIR's `infer_arithmetic`).
+        fn kind(ty: &RuntimeTy, include_string: bool) -> Option<u8> {
+            match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(0),
+                RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _) => Some(1),
+                RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => Some(2),
+                RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
+                    include_string.then_some(3)
+                }
+                RuntimeTy::Class(name, args, _)
+                    if args.is_empty()
+                        && name.package().as_str() == "baml"
+                        && name.namespace().is_empty() =>
+                {
+                    match name.name().as_str() {
+                        "Int" => Some(0),
+                        "Bigint" => Some(1),
+                        "Float" => Some(2),
+                        "String" => include_string.then_some(3),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
+        match ty {
+            RuntimeTy::Union(members, _) => {
+                // `null` members are transparent: only a chain-narrowed
+                // compound-assign target still carries `| null` here (its
+                // null case never reaches the op — the `?.` guard skips it),
+                // and binary operands with a possible `null` are rejected by
+                // TIR before lowering.
+                let mut first = None;
+                members
+                    .iter()
+                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
+                    .all(|m| match kind(m, include_string) {
+                        Some(k) => *first.get_or_insert(k) == k,
+                        None => false,
+                    })
+                    && first.is_some()
+            }
+            _ => kind(ty, include_string).is_some(),
+        }
+    }
+
+    /// Whether both arithmetic operands are [`Self::arith_primitive`] (string
+    /// included: `+` concatenates, and TIR rejects strings under the other ops
+    /// before lowering).
+    fn arithmetic_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        Self::arith_primitive(&self.expr_ty(lhs), true)
+            && Self::arith_primitive(&self.expr_ty(rhs), true)
+    }
+
+    /// Lower `a OP b` through the `baml.ops.__union_<op>` driver — the general
+    /// case for operands whose static types don't pin a single impl. The driver
+    /// resolves `<typeof a as Op<typeof b>>` at runtime and tail-calls it; its
+    /// `unknown` result is the operator's value, re-typed by `dest`.
+    fn lower_arithmetic_via_driver(
+        &mut self,
+        expr_id: AstExprId,
+        op: AstBinaryOp,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        let driver = match op {
+            AstBinaryOp::Add => "__union_add",
+            AstBinaryOp::Sub => "__union_sub",
+            AstBinaryOp::Mul => "__union_mul",
+            AstBinaryOp::Div => "__union_div",
+            AstBinaryOp::Mod => "__union_rem",
+            _ => unreachable!("lower_arithmetic_via_driver: non-arithmetic op {op:?}"),
+        };
+        let lhs_op = self.lower_to_operand(lhs);
+        let rhs_op = self.lower_to_operand(rhs);
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
+    }
+
+    /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
+    /// opcode has no string form).
+    fn negate_uses_primitive_opcode(&self, operand: AstExprId) -> bool {
+        Self::arith_primitive(&self.expr_ty(operand), false)
+    }
+
+    /// Lower `-a` through the `baml.ops.__union_neg` driver (single dispatch on
+    /// `a`'s runtime type). Mirrors [`Self::lower_arithmetic_via_driver`].
+    fn lower_negate_via_driver(&mut self, expr_id: AstExprId, operand: AstExprId, dest: Place) {
+        let operand_op = self.lower_to_operand(operand);
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver("__union_neg", vec![operand_op], result_ty, dest);
     }
 
     fn lower_short_circuit(
@@ -6800,21 +7030,7 @@ impl LoweringContext<'_> {
         self.chain_null_exits.push(bb_null);
 
         let place = self.lower_lvalue(inner_target);
-        let current = Operand::Copy(place.clone());
-        // Mixed `bigint OP= int` does NOT widen the int rhs: the specialized
-        // `*Bigint` opcodes accept a lone `int` operand and resolve it in the
-        // VM without allocating a heap bigint (mirrors the plain `AssignOp`
-        // path). Lower the value naturally.
-        let rhs = self.lower_to_operand(value);
-        let mir_op = Self::convert_assign_op(op);
-        self.builder.assign(
-            place,
-            Rvalue::BinaryOp {
-                op: mir_op,
-                left: current,
-                right: rhs,
-            },
-        );
+        self.emit_assign_op(place, inner_target, op, value);
 
         self.chain_null_exits.pop();
 
@@ -6826,6 +7042,51 @@ impl LoweringContext<'_> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+    }
+
+    /// Emit `place = place OP value` — the shared body of both `AssignOp`
+    /// lowerings (plain and `?.`-chain targets). An arithmetic op whose
+    /// operands aren't primitive routes through the `__union_*` driver, exactly
+    /// like the binary-expression form (`v += w` and `v = v + w` must agree);
+    /// everything else emits the raw opcode. Mixed `bigint OP= int` does NOT
+    /// widen the int rhs on the opcode path: the specialized `*Bigint` opcodes
+    /// accept a lone `int` operand and resolve it in the VM without allocating
+    /// a heap bigint.
+    fn emit_assign_op(
+        &mut self,
+        place: Place,
+        target: AstExprId,
+        op: AstAssignOp,
+        value: AstExprId,
+    ) {
+        let mir_op = Self::convert_assign_op(op);
+        let driver = match mir_op {
+            BinOp::Add => Some("__union_add"),
+            BinOp::Sub => Some("__union_sub"),
+            BinOp::Mul => Some("__union_mul"),
+            BinOp::Div => Some("__union_div"),
+            BinOp::Mod => Some("__union_rem"),
+            _ => None,
+        };
+        if let Some(driver) = driver
+            && !self.arithmetic_uses_primitive_opcode(target, value)
+        {
+            let current = Operand::Copy(place.clone());
+            let rhs = self.lower_to_operand(value);
+            let result_ty = self.expr_ty(target);
+            self.lower_via_ops_driver(driver, vec![current, rhs], result_ty, place);
+            return;
+        }
+        let current = Operand::Copy(place.clone());
+        let rhs = self.lower_to_operand(value);
+        self.builder.assign(
+            place,
+            Rvalue::BinaryOp {
+                op: mir_op,
+                left: current,
+                right: rhs,
+            },
+        );
     }
 
     /// Lower `obj?.member` — null-check obj, then access member or produce null.
@@ -7022,6 +7283,13 @@ impl LoweringContext<'_> {
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
                 return;
             }
+        }
+        // Negation of a non-primitive operand (a user type, or a union /
+        // existential / type variable involving one) dispatches through
+        // `baml.ops.Negate`, resolved at runtime from the operand's concrete type.
+        if matches!(op, AstUnaryOp::Neg) && !self.negate_uses_primitive_opcode(expr) {
+            self.lower_negate_via_driver(expr_id, expr, dest);
+            return;
         }
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
@@ -8871,11 +9139,10 @@ impl LoweringContext<'_> {
         // class-method convention — interface params first, then fn params — so
         // `TypeVar(T)` lowers to `TypeArgRef(N)` against the frame type args the
         // interface-dispatch switch seeds (see `emit_method_candidate_switch`).
-        if let Some(iface_data) = item_tree
-            .interfaces
-            .values()
-            .find(|iface_data| iface_data.default_methods.contains(&func_id))
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id)) =
+            item_tree.method_owners.get(&func_id)
         {
+            let iface_data = &item_tree[*iface_id];
             let mut params = iface_data.generic_params.clone();
             params.extend(
                 iface_data
@@ -8886,12 +9153,18 @@ impl LoweringContext<'_> {
             params.extend(item_tree[func_id].generic_params.iter().cloned());
             return params;
         }
-        let mut params: Vec<baml_base::Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_id))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        let mut params: Vec<baml_base::Name> = match item_tree.method_owners.get(&func_id) {
+            Some(baml_compiler2_hir::item_tree::MethodOwner::Class(class_id)) => {
+                item_tree[*class_id].generic_params.clone()
+            }
+            // `Interface` owners are handled by the early return above; a free
+            // impl's own generics are not enclosing-type parameters.
+            Some(
+                baml_compiler2_hir::item_tree::MethodOwner::Interface(_)
+                | baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(_),
+            )
+            | None => Vec::new(),
+        };
         params.extend(item_tree[func_id].generic_params.iter().cloned());
         // Inside a (possibly nested) generic lambda body, the lambda's own
         // type params follow the enclosing function's, matching the runtime
@@ -8919,14 +9192,11 @@ impl LoweringContext<'_> {
             .clone();
         let item_tree = file_item_tree(self.db, fl.file(self.db));
         let func_id = fl.id(self.db);
-        if let Some(impl_id) = item_tree.free_impls.iter().copied().find(|impl_id| {
-            item_tree
-                .impls
-                .get(impl_id)
-                .is_some_and(|block| block.methods.contains(&func_id))
-        }) {
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id)) =
+            item_tree.method_owners.get(&func_id)
+        {
             let impl_loc =
-                baml_compiler2_hir::loc::ImplLoc::new(self.db, fl.file(self.db), impl_id);
+                baml_compiler2_hir::loc::ImplLoc::new(self.db, fl.file(self.db), *impl_id);
             for (name, conjunction) in
                 baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(self.db, impl_loc)
             {
@@ -11475,21 +11745,7 @@ impl LoweringContext<'_> {
                     self.lower_assign_op_optional_chain(inner, op, value);
                 } else {
                     let place = self.lower_lvalue(target);
-                    let current = Operand::Copy(place.clone());
-                    // Mixed `bigint OP= int` does NOT widen the int rhs: the
-                    // specialized `*Bigint` opcodes accept a lone `int` operand
-                    // and resolve it in the VM without allocating a heap bigint.
-                    // Lower the value naturally.
-                    let rhs = self.lower_to_operand(value);
-                    let mir_op = Self::convert_assign_op(op);
-                    self.builder.assign(
-                        place,
-                        Rvalue::BinaryOp {
-                            op: mir_op,
-                            left: current,
-                            right: rhs,
-                        },
-                    );
+                    self.emit_assign_op(place, target, op, value);
                 }
             }
 

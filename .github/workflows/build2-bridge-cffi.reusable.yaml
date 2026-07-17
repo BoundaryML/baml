@@ -13,9 +13,10 @@ name: BAML Release - Build bridge_cffi
 # unwind). Unlike the legacy engine's `baml_cffi`, `bridge_cffi` vendors protoc
 # and has no Go bindings, so no protoc/protoc-gen-go/Go setup is needed.
 #
-# The smoke is language-neutral too: a stdlib `ctypes` dlopen + `version()`
-# handshake, so this workflow depends on no SDK crate. Full C-ABI invocation is
-# exercised by each SDK's own verify job.
+# The smoke is language-neutral too: strict C11 and C++17 programs include only
+# the checked-in public header, load the artifact, resolve `baml_get_api_v1`,
+# validate the append-only table prefix, and call/free `version()` while also
+# asserting the product version stamped into the release plan.
 #
 # Consumer contract (for other bridges): one artifact per target named
 # `bridge-cffi-<target>`, each containing the cdylib plus its `.sha256`. The
@@ -72,52 +73,46 @@ defaults:
     shell: bash
 
 jobs:
+  # The cffi build matrix is generated from the repository's platform contract
+  # (`release/platforms.json`) so the target set + per-target build config live
+  # in one machine-readable place, not a hand-copied YAML list. The experimental
+  # musl + arm64-Windows targets carry `experimental: true` in the contract,
+  # which drives `continue-on-error` on the build job below.
+  matrix:
+    name: Compute target matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Generate the cffi build matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # One entry per target whose `cffi` artifact is present (a missing
+          # `cffi` means unsupported → excluded). Each entry is the fields the
+          # build job reads: target + runner (as `os`) + the true-valued
+          # use_cross / smoke / experimental flags.
+          include="$(jq -c '[.targets[]
+            | select(.artifacts.cffi != null)
+            | .artifacts.cffi as $c
+            | {target: .triple, os: $c.runner}
+              + ({use_cross: $c.use_cross, smoke: $c.smoke, experimental: $c.experimental}
+                 | with_entries(select(.value == true)))]' release/platforms.json)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
   build:
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        _:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-            use_cross: true
-            # Built via cross (older-glibc image) but a normal x86_64-linux-gnu
-            # .so, so the x86_64 glibc host can dlopen it for the smoke.
-            smoke: true
-
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
-            use_cross: true
-
-          # Experimental: the musl cdylib builds (crt-static disabled in the
-          # build step so rustc emits a `.so`), but no Alpine/musl dlopen smoke
-          # validates it yet — so a leg failing must not fail the release (see
-          # continue-on-error below).
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-22.04
-            use_cross: true
-            experimental: true
-
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-22.04
-            use_cross: true
-            experimental: true
-
-          - target: x86_64-apple-darwin
-            os: macos-14
-
-          - target: aarch64-apple-darwin
-            os: macos-14
-            smoke: true
-
-          - target: x86_64-pc-windows-msvc
-            os: windows-2022
-            smoke: true
-
-          # Experimental until a native arm64-Windows smoke exists.
-          - target: aarch64-pc-windows-msvc
-            os: windows-11-arm
-            smoke: true
-            experimental: true
+        _: ${{ fromJson(needs.matrix.outputs.include) }}
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.os }}
@@ -173,6 +168,8 @@ jobs:
 
       - name: Build bridge_cffi cdylib
         working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
         run: |
           set -euo pipefail
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
@@ -186,10 +183,10 @@ jobs:
           # the other targets keep their `.cargo/config.toml` rustflags (the
           # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
           # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
-          if [[ "${{ matrix._.target }}" == *-musl ]]; then
+          if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
           fi
-          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "${{ matrix._.target }}"
+          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
 
       - name: Rename and checksum artifact
         id: artifact
@@ -227,18 +224,41 @@ jobs:
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
 
-      - name: Smoke test the built library
-        if: matrix._.smoke
+      - name: Smoke test the public C and C++ ABI (Unix)
+        if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}
         working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
         run: |
           set -euo pipefail
-          # Language-neutral smoke: dlopen + C-ABI version() handshake against
-          # the version this commit was stamped to. `release-plan.json` was
-          # written at the repo root by the stamp step.
           expected="$(jq -r .canonical_version ../release-plan.json)"
-          python3 ../scripts/smoke-bridge-cffi.py \
-            "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}" \
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
+            "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
             "$expected"
+
+      - name: Smoke test the public C and C++ ABI (Windows)
+        if: ${{ matrix._.smoke && contains(matrix._.target, 'windows') }}
+        shell: powershell
+        working-directory: baml_language
+        env:
+          MSVC_ARCH: ${{ startsWith(matrix._.target, 'aarch64-') && 'arm64' || 'x64' }}
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio installation not found"
+          }
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          $expected = jq -r .canonical_version ..\release-plan.json
+          $library = "$env:ARTIFACT_DIR/$env:ARTIFACT_ASSET"
+          & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Upload cdylib artifact
         uses: actions/upload-artifact@v4

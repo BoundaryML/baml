@@ -3,7 +3,7 @@
 //! Uses `TextRange` (file-relative) — `FileId` is added at the conversion
 //! boundary in `check_file()`.
 
-use baml_base::{FileId, Span};
+use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
@@ -87,7 +87,7 @@ pub enum LoweringDiagnostic {
     /// A client is missing required provider-specific options.
     MissingClientOptions {
         client_name: String,
-        message: String,
+        error: ClientOptionsValidationError,
         span: TextRange,
     },
 
@@ -174,6 +174,16 @@ pub enum LoweringDiagnostic {
     /// plain function reference (e.g. `(foo)<int>`). Only a path reference to a
     /// generic function may be specialized into a value (`foo<int>`).
     TypeArgsOnNonPathBase { span: TextRange },
+
+    /// A numeric literal token failed validation (`baml_base::num_lit`):
+    /// uppercase base prefix, no digits after the prefix, a digit invalid
+    /// for the base, or an integer magnitude exceeding `i64::MAX`. For
+    /// `InvalidDigits` one diagnostic is pushed per offending digit, with
+    /// `span` covering just that digit.
+    InvalidNumericLiteral {
+        error: baml_base::num_lit::IntLitError,
+        span: TextRange,
+    },
 }
 
 impl LoweringDiagnostic {
@@ -305,12 +315,12 @@ impl LoweringDiagnostic {
             ),
             LoweringDiagnostic::MissingClientOptions {
                 client_name: _,
-                message,
+                error,
                 span,
             } => (
                 DiagnosticId::MissingClientOptions,
                 Severity::Error,
-                message.clone(),
+                error.to_string(),
                 *span,
                 "missing options",
             ),
@@ -494,6 +504,25 @@ impl LoweringDiagnostic {
                 *span,
                 "specialize a generic function directly, e.g. `foo<int>`",
             ),
+            LoweringDiagnostic::InvalidNumericLiteral { error, span } => {
+                use baml_base::num_lit::IntLitError;
+                (
+                    DiagnosticId::InvalidNumericLiteral,
+                    Severity::Error,
+                    error.message(),
+                    *span,
+                    match error {
+                        IntLitError::UppercaseBasePrefix { .. } => {
+                            "base prefixes (`0x`, `0o`, `0b`) are lowercase"
+                        }
+                        IntLitError::NoDigits => "expected at least one digit",
+                        IntLitError::InvalidDigits { .. } => "invalid digit",
+                        IntLitError::TooLarge => {
+                            "does not fit in `int`; use a `bigint` literal (`n` suffix) for arbitrary precision"
+                        }
+                    },
+                )
+            }
         };
 
         Diagnostic::new(id, severity, message)

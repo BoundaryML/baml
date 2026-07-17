@@ -280,8 +280,20 @@ struct StackifyCodegen<'ctx, 'obj> {
     enum_object_indices: &'ctx HashMap<String, usize>,
     /// Enum variant mappings (enum name -> variant name -> variant index).
     enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
-    /// Shared object pool.
+    /// Read-only snapshot of pooled class field metadata (name + type, in
+    /// field order), keyed by every name registered in `class_object_indices`.
+    /// Field lookups resolve through this map instead of reading the object
+    /// pool, so codegen never reads pool contents (parallel emit compiles
+    /// against fragment pools that don't contain the pre-existing objects).
+    class_fields: &'ctx crate::ClassFieldSnapshot,
+    /// Object pool this function's codegen mints into. Serial emit passes the
+    /// whole program pool; parallel emit passes a worker-local fragment pool.
     objects: &'obj mut ObjectPool,
+    /// Program-absolute index of `objects[0]`. Serial emit mints into the
+    /// program pool directly (base 0); parallel workers mint into a fresh
+    /// fragment pool based at the shared watermark, so every index this
+    /// codegen embeds is program-absolute either way.
+    objects_base: usize,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult,
@@ -385,6 +397,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         ctx: MirCodegenContext<'ctx, 'obj>,
         analysis: AnalysisResult,
     ) -> Self {
+        // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
+        // one instruction + one parallel `meta` entry per bytecode op, and a
+        // MIR statement lowers to a few ops, so growing these from empty costs
+        // several doubling reallocations (memcpy of the whole buffer) per
+        // function — measurable across a project-wide emit. The estimate only
+        // sets initial capacity; being off is harmless.
+        let stmt_count: usize = body
+            .blocks
+            .iter()
+            .map(|b| b.statements.len() + 1) // +1 for the terminator
+            .sum();
+        let est_instructions = stmt_count * 3;
+        let mut bytecode = Bytecode::new();
+        bytecode.instructions.reserve(est_instructions);
+        bytecode.meta.reserve(est_instructions);
+
         Self {
             body,
             arity,
@@ -394,23 +422,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
             enum_variants: ctx.enum_variants,
+            class_fields: ctx.class_fields,
             objects: ctx.objects,
+            objects_base: ctx.objects_base,
             analysis,
-            local_slots: HashMap::new(),
+            local_slots: HashMap::with_capacity(body.locals.len()),
             real_local_count: 0,
-            block_addresses: HashMap::new(),
-            block_end_addresses: HashMap::new(),
+            block_addresses: HashMap::with_capacity(body.blocks.len()),
+            block_end_addresses: HashMap::with_capacity(body.blocks.len()),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
             trap_pc: None,
-            bytecode: Bytecode::new(),
+            bytecode,
             current_debug_span: None,
             pending_sequence_point: false,
             next_line_discriminator: HashMap::new(),
             next_block: None,
             current_block_start: 0,
-            local_types: HashMap::new(),
+            local_types: HashMap::with_capacity(body.locals.len()),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
@@ -422,13 +452,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Look up a field name from the `ObjectPool` given a class name and field index.
+    /// Append an object to the pool, returning its program-absolute index
+    /// (`objects_base` + local position). The ONLY way codegen adds pool
+    /// objects: parallel emit relies on every minted index being expressed
+    /// relative to the shared watermark.
+    fn mint_object(&mut self, object: Object) -> usize {
+        let idx = self.objects_base + self.objects.len();
+        self.objects.push(object);
+        idx
+    }
+
+    /// Look up a field name from the class-field snapshot given a class name
+    /// and field index.
     fn lookup_class_field_name(&self, class_name: &str, field_idx: usize) -> Option<String> {
-        let &obj_idx = self.class_object_indices.get(class_name)?;
-        match self.objects.get(obj_idx)? {
-            Object::Class(class) => class.fields.get(field_idx).map(|f| f.name.clone()),
-            _ => None,
-        }
+        self.class_fields
+            .get(class_name)?
+            .get(field_idx)
+            .map(|(name, _)| name.clone())
     }
 
     fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
@@ -442,6 +482,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .copied()
             })
             .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied())
+    }
+
+    /// Class field metadata for a class type name, resolved through the same
+    /// name fallbacks as [`Self::class_object_index_for_type_name`] but
+    /// against the read-only snapshot instead of the pool.
+    fn class_fields_for_type_name(&self, tn: &TypeName) -> Option<&[(String, RuntimeTy)]> {
+        let full_name = tn.render_dotted(false);
+        self.class_fields
+            .get(&full_name)
+            .or_else(|| self.class_fields.get(tn.display_name().as_str()))
+            .or_else(|| self.class_fields.get(tn.name().as_str()))
+            .map(Vec::as_slice)
     }
 
     /// Enum-object index for an enum type name, mirroring
@@ -469,15 +521,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    RuntimeTy::Class(type_name, _, _) => {
-                        let obj_idx = self.class_object_index_for_type_name(type_name)?;
-                        match self.objects.get(obj_idx)? {
-                            Object::Class(class) => {
-                                class.fields.get(*field).map(|f| f.field_type.clone())
-                            }
-                            _ => None,
-                        }
-                    }
+                    RuntimeTy::Class(type_name, _, _) => self
+                        .class_fields_for_type_name(type_name)?
+                        .get(*field)
+                        .map(|(_, field_type)| field_type.clone()),
                     _ => None,
                 }
             }
@@ -1388,8 +1435,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let call_site_span = self.current_debug_span;
 
                         // 1. Push event name "$baml_log"
-                        let log_str_idx = self.objects.len();
-                        self.objects.push(Object::String("$baml_log".into()));
+                        let log_str_idx = self.mint_object(Object::String("$baml_log".into()));
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
@@ -1405,8 +1451,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             LogLevel::Warn => "warn",
                             LogLevel::Error => "error",
                         };
-                        let level_val_idx = self.objects.len();
-                        self.objects.push(Object::String(level_str.into()));
+                        let level_val_idx = self.mint_object(Object::String(level_str.into()));
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1419,8 +1464,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                         // 4. Push key "level"
-                        let level_key_idx = self.objects.len();
-                        self.objects.push(Object::String("level".into()));
+                        let level_key_idx = self.mint_object(Object::String("level".into()));
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1430,8 +1474,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         );
 
                         // 5. Push key "data"
-                        let data_key_idx = self.objects.len();
-                        self.objects.push(Object::String("data".into()));
+                        let data_key_idx = self.mint_object(Object::String("data".into()));
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -1815,9 +1858,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // reference it via ConstValue::Object so that `to_value()` can
                 // resolve it to a HeapPtr at load time.
                 let operand_str = format!("{v}n");
-                let obj_idx = self.objects.len();
-                self.objects
-                    .push(Object::Bigint(std::sync::Arc::new(v.clone())));
+                let obj_idx = self.mint_object(Object::Bigint(std::sync::Arc::new(v.clone())));
                 let const_idx =
                     self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(const_idx));
@@ -1830,8 +1871,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
-                let obj_idx = self.objects.len();
-                self.objects.push(Object::String(s.as_str().into()));
+                let obj_idx = self.mint_object(Object::String(s.as_str().into()));
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -1872,20 +1912,27 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .get(&name_str)
                     .unwrap_or_else(|| panic!("undefined function: {name_str}"));
                 let gidx = GlobalIndex::from_raw(global_idx);
-                let existing = self.objects.iter().position(|o| {
-                    matches!(o, Object::GenericFunction(gf)
+                // Serial emit scans the whole program pool here, so identical
+                // instantiations minted by EARLIER functions are reused too.
+                // Parallel emit scans only this worker's fragment; the serial
+                // merge replays the cross-function dedup in original function
+                // order (see `merge_function_fragment`), reproducing the exact
+                // serial candidate set and pool layout.
+                let existing = self
+                    .objects
+                    .iter()
+                    .position(|o| {
+                        matches!(o, Object::GenericFunction(gf)
                         if gf.function == gidx && gf.type_args.as_ref() == type_args.as_slice())
-                });
+                    })
+                    .map(|local| self.objects_base + local);
                 let pool_idx = match existing {
                     Some(idx) => idx,
                     None => {
-                        let idx = self.objects.len();
-                        self.objects
-                            .push(Object::GenericFunction(bex_vm_types::GenericFunction {
-                                function: gidx,
-                                type_args: type_args.clone().into_boxed_slice(),
-                            }));
-                        idx
+                        self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
+                            function: gidx,
+                            type_args: type_args.clone().into_boxed_slice(),
+                        }))
                     }
                 };
                 let const_idx =
@@ -3067,8 +3114,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             write!(display, "\\x{b:02x}").unwrap();
         }
         display.push('"');
-        let obj_idx = self.objects.len();
-        self.objects.push(Object::Uint8Array(bytes.to_vec().into()));
+        let obj_idx = self.mint_object(Object::Uint8Array(bytes.to_vec().into()));
         let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(display));
@@ -3569,6 +3615,7 @@ mod tests {
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
         let enum_variants = HashMap::new();
+        let class_fields = HashMap::new();
         let mut objects = ObjectPool::default();
         let lambda_object_indices = Vec::new();
         let lambda_names = Vec::new();
@@ -3587,7 +3634,9 @@ mod tests {
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,
                 enum_variants: &enum_variants,
+                class_fields: &class_fields,
                 objects: &mut objects,
+                objects_base: 0,
                 lambda_object_indices: &lambda_object_indices,
                 lambda_names: &lambda_names,
                 capture_types: &capture_types,

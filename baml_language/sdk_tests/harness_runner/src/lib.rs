@@ -53,6 +53,72 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Same as [`run_test_cmd`], but treats the listed process exit codes as
+/// successful outcomes. This lets a harness model tool-specific non-error
+/// statuses explicitly—for example, pytest uses exit code 5 when collection
+/// succeeds but finds no tests.
+pub fn run_test_cmd_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    allowed_exit_codes: &[i32],
+) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[],
+        allowed_exit_codes,
+    );
+}
+
+/// Run the Go toolchain against one generated fixture. Prefer the repository's
+/// mise-managed Go binary so a globally installed `go` cannot accidentally use
+/// a different GOROOT than the pinned compiler.
+pub fn run_go_test(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let dir = manifest.join(fixture).join("generated");
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let go = resolve_mise_tool("go").unwrap_or_else(|_| PathBuf::from("go"));
+
+    let output = Command::new(&go)
+        .args(["test", "./..."])
+        .current_dir(&dir)
+        .env_remove("GOROOT")
+        .env("CGO_ENABLED", "1")
+        .env("GOCACHE", workspace_root.join("target/go-build-cache"))
+        .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to spawn `{}` for fixture `{fixture}`: {e}",
+                go.display()
+            )
+        });
+    assert!(
+        output.status.success(),
+        "fixture `{fixture}` `go test ./...` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn go_runtime_library(workspace_root: &Path) -> PathBuf {
+    let filename = if cfg!(target_os = "macos") {
+        "libbridge_cffi.dylib"
+    } else if cfg!(target_os = "windows") {
+        "bridge_cffi.dll"
+    } else {
+        "libbridge_cffi.so"
+    };
+    workspace_root.join("target").join("debug").join(filename)
+}
+
 /// Run a toolchain command from a workspace-relative directory. Used for
 /// package-level checks that do not belong to a generated fixture app.
 pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -95,6 +161,24 @@ pub fn run_test_cmd_with_env(
     cache_env_var: &str,
     extra_env: &[(&str, &str)],
 ) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        extra_env,
+        &[],
+    );
+}
+
+fn run_test_cmd_with_env_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    extra_env: &[(&str, &str)],
+    allowed_exit_codes: &[i32],
+) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
     );
@@ -120,8 +204,13 @@ pub fn run_test_cmd_with_env(
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, extra_env)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` for fixture `{fixture}`: {e}"));
+    let accepted = output.status.success()
+        || output
+            .status
+            .code()
+            .is_some_and(|code| allowed_exit_codes.contains(&code));
     assert!(
-        output.status.success(),
+        accepted,
         "fixture `{fixture}` `{cmd}` failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
@@ -137,26 +226,27 @@ fn workspace_root_from_manifest(manifest: &Path) -> &Path {
 
 /// Assert the generated TypeScript Node SDK fixture is native ESM output, not
 /// CommonJS masquerading under a `"type": "module"` package.
-pub fn assert_typescript_node_generated_esm(fixture: &str) {
+pub fn assert_typescript_node_generated_esm(fixture: &str, runtime_dir: &str) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
     );
-    let generated = manifest.join(fixture).join("generated");
+    let generated_root = manifest.join(fixture).join("generated");
+    let generated = generated_root.join(runtime_dir);
     assert!(
         generated.exists(),
         "{fixture}/generated/ not found at {} - did build.rs run?",
         generated.display()
     );
 
-    let package_json = fs::read_to_string(generated.join("package.json"))
+    let package_json = fs::read_to_string(generated_root.join("package.json"))
         .unwrap_or_else(|e| panic!("{fixture}: read generated/package.json: {e}"));
     assert!(
         package_json.contains(r#""type": "module""#),
         "{fixture}: generated package.json must mark the fixture as ESM"
     );
 
-    let tsconfig = fs::read_to_string(generated.join("tsconfig.json"))
-        .unwrap_or_else(|e| panic!("{fixture}: read generated/tsconfig.json: {e}"));
+    let tsconfig = fs::read_to_string(generated_root.join("tsconfig.node.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/tsconfig.node.json: {e}"));
     assert!(
         tsconfig.contains(r#""module": "nodenext""#)
             && tsconfig.contains(r#""moduleResolution": "nodenext""#),
@@ -199,6 +289,74 @@ pub fn assert_typescript_node_generated_esm(fixture: &str) {
     assert!(
         saw_esm_syntax,
         "{fixture}: generated baml_sdk did not contain ESM import/export syntax"
+    );
+}
+
+/// Assert that the browser generator emits ESM with browser-oriented module
+/// resolution and dispatches exclusively through the web bridge package.
+pub fn assert_typescript_web_generated_esm(fixture: &str, runtime_dir: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let generated_root = manifest.join(fixture).join("generated");
+    let generated = generated_root.join(runtime_dir);
+    assert!(
+        generated.exists(),
+        "{fixture}/generated/ not found at {} - did build.rs run?",
+        generated.display()
+    );
+    let package_json = fs::read_to_string(generated_root.join("package.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/package.json: {e}"));
+    assert!(
+        package_json.contains(r#""type": "module""#),
+        "{fixture}: generated package.json must mark the fixture as ESM"
+    );
+    let tsconfig = fs::read_to_string(generated_root.join(format!("tsconfig.{runtime_dir}.json")))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/tsconfig.{runtime_dir}.json: {e}"));
+    assert!(
+        tsconfig.contains(r#""module": "ESNext""#)
+            && tsconfig.contains(r#""moduleResolution": "Bundler""#),
+        "{fixture}: generated tsconfig.json must use browser ESM resolution"
+    );
+    let mut saw_web_bridge = false;
+    for path in collect_ts_files(&generated.join("baml_sdk")) {
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{fixture}: read {}: {e}", path.display()));
+        assert!(
+            !contents.contains("@boundaryml/baml-bridge\""),
+            "{fixture}: generated {} still dispatches through the Node bridge",
+            path.display()
+        );
+        if contents.contains("@boundaryml/baml-bridge-web") {
+            saw_web_bridge = true;
+        }
+        for (line_no, line) in contents.lines().enumerate() {
+            if let Some(specifier) = import_from_specifier(line) {
+                assert!(
+                    !specifier.starts_with('.') || specifier.ends_with(".js"),
+                    "{fixture}: generated {}:{} has extensionless relative import `{specifier}`",
+                    path.display(),
+                    line_no + 1
+                );
+            }
+        }
+    }
+    assert!(
+        saw_web_bridge,
+        "{fixture}: generated SDK never imports @boundaryml/baml-bridge-web"
+    );
+    let inlined_bytecode = fs::read_to_string(generated.join("baml_sdk/_inlinedbaml.ts"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated bytecode module: {e}"));
+    assert!(
+        inlined_bytecode.contains("export const BYTECODE = new Uint8Array([")
+            && !inlined_bytecode.contains("new Uint8Array([])"),
+        "{fixture}: generated SDK must contain non-empty BAML bytecode"
+    );
+    let root = fs::read_to_string(generated.join("baml_sdk/index.ts"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated SDK root: {e}"));
+    assert!(
+        root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE)"),
+        "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode"
     );
 }
 
@@ -281,12 +439,16 @@ fn run_test_process(
 }
 
 fn resolve_mise_uv() -> io::Result<PathBuf> {
-    let output = Command::new("mise").args(["which", "uv"]).output()?;
+    resolve_mise_tool("uv")
+}
+
+fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
+    let output = Command::new("mise").args(["which", tool]).output()?;
     if !output.status.success() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             format!(
-                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
+                "`{tool}` is not on PATH and `mise which {tool}` failed:\n{}.",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
@@ -296,7 +458,7 @@ fn resolve_mise_uv() -> io::Result<PathBuf> {
     if path.is_empty() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
-            "`uv` is not on PATH and `mise which uv` returned an empty path",
+            format!("`{tool}` is not on PATH and `mise which {tool}` returned an empty path"),
         ));
     }
 
@@ -363,10 +525,9 @@ pub fn __check_setup_ran(env_var: &str) {
 /// // Default — fail loudly if setup.sh didn't run.
 /// ::sdk_test_harness_runner::setup_guard!("SDK_TEST_PYTHON_PYDANTIC2_SETUP");
 ///
-/// // Ignored while the generator's other tests are (typescript_node
-/// // is `#[ignore]`d wholesale until sdkgen_typescript_node lands).
+/// // An optional setup guard may be ignored with the same reason as its suite.
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "sdkgen_typescript_node is a stub", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
+///     ignore = "target temporarily disabled", "SDK_TEST_TYPESCRIPT_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -399,9 +560,8 @@ macro_rules! setup_guard {
 /// // Default — fail loudly on any recorded diagnostic.
 /// ::sdk_test_harness_runner::build_diagnostics!();
 ///
-/// // Skip — every fixture records a codegen failure (typescript_node
-/// // while sdkgen_typescript_node is a stub).
-/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "sdkgen_typescript_node is a stub");
+/// // Skip while a target is temporarily disabled.
+/// ::sdk_test_harness_runner::build_diagnostics!(ignore = "target temporarily disabled");
 /// ```
 ///
 /// `env!("OUT_DIR")` inside the expansion resolves at the macro's
@@ -461,19 +621,77 @@ pub mod csharp {
     pub use crate::csharp_test_suite as test_suite;
 }
 
-/// Node.js + TypeScript generator's test-side glue. Invoked from
-/// `crates/typescript_node/src/lib.rs` as
-/// `sdk_test_harness_runner::typescript_node::test_suite!()`.
-pub mod typescript_node {
-    /// `include!`s `OUT_DIR/typescript_node_tests.rs` — the
-    /// per-fixture scaffold emitted by
-    /// `sdk_test_harness_setup::typescript_node::run_all`.
+/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as
+/// `sdk_test_harness_runner::cpp::test_suite!()`.
+pub mod cpp {
+    /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
+    /// by `sdk_test_harness_setup::cpp::run_all`.
     #[macro_export]
-    macro_rules! typescript_node_test_suite {
+    macro_rules! cpp_test_suite {
         () => {
-            include!(concat!(env!("OUT_DIR"), "/typescript_node_tests.rs"));
+            include!(concat!(env!("OUT_DIR"), "/cpp_tests.rs"));
         };
     }
 
-    pub use crate::typescript_node_test_suite as test_suite;
+    pub use crate::cpp_test_suite as test_suite;
+}
+
+/// Rust generator's test-side glue. Invoked from
+/// `crates/rust/src/lib.rs` as
+/// `sdk_test_harness_runner::rust::test_suite!()`.
+pub mod rust {
+    /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::rust::run_all`.
+    #[macro_export]
+    macro_rules! rust_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/rust_tests.rs"));
+        };
+    }
+
+    pub use crate::rust_test_suite as test_suite;
+}
+
+/// Node TypeScript test-side glue. Invoked from
+/// `crates/typescript/src/lib.rs` as
+/// `sdk_test_harness_runner::typescript::test_suite!()`.
+pub mod typescript {
+    /// `include!`s `OUT_DIR/typescript_tests.rs` — the
+    /// per-fixture scaffold emitted by
+    /// `sdk_test_harness_setup::typescript::run_all`.
+    #[macro_export]
+    macro_rules! typescript_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_test_suite as test_suite;
+}
+
+/// Go generator's test-side glue.
+pub mod go {
+    #[macro_export]
+    macro_rules! go_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/go_tests.rs"));
+        };
+    }
+
+    pub use crate::go_test_suite as test_suite;
+}
+
+/// Browser and Cloudflare Workers TypeScript test-side glue. Invoked from
+/// `crates/typescript_web/src/lib.rs`.
+pub mod typescript_web {
+    /// `include!`s `OUT_DIR/typescript_web_tests.rs`, emitted by
+    /// `sdk_test_harness_setup::typescript_web::run_all_from_typescript_sources`.
+    #[macro_export]
+    macro_rules! typescript_web_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_web_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_web_test_suite as test_suite;
 }

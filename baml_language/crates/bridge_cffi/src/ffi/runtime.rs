@@ -2,9 +2,10 @@
 
 use std::{collections::HashMap, ffi::CStr, panic::AssertUnwindSafe, sync::OnceLock};
 
+use super::super::panic::ffi_safe_ptr;
 use crate::{
     Buffer, initialize_runtime,
-    initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_impl, panic::ffi_safe_ptr,
+    initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_impl,
 };
 
 /// Returns the BAML version as a Buffer containing raw UTF-8 bytes.
@@ -43,6 +44,7 @@ pub enum BridgeLanguage {
     Go = 3,
     Rust = 4,
     CSharp = 5,
+    Cpp = 6,
 }
 
 impl BridgeLanguage {
@@ -53,6 +55,7 @@ impl BridgeLanguage {
             Self::Go => "go",
             Self::Rust => "rust",
             Self::CSharp => "csharp",
+            Self::Cpp => "cpp",
         }
     }
 
@@ -63,6 +66,7 @@ impl BridgeLanguage {
             Self::Go => "Go",
             Self::Rust => "Rust",
             Self::CSharp => "C#",
+            Self::Cpp => "C++",
         }
     }
 }
@@ -77,6 +81,7 @@ impl TryFrom<u32> for BridgeLanguage {
             3 => Ok(Self::Go),
             4 => Ok(Self::Rust),
             5 => Ok(Self::CSharp),
+            6 => Ok(Self::Cpp),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }
@@ -94,7 +99,11 @@ pub struct BridgeInfo {
 /// Fields may only be appended. Existing fields must retain their order,
 /// types, and semantics for the lifetime of ABI version 1. The `language`
 /// field is a raw `uint32_t` at the C boundary and is validated before it is
-/// converted to [`BridgeLanguage`].
+/// interpreted as a `BamlBridgeLanguage` value. Consumers set `struct_size` to
+/// the size they provide. `sdk_version` is borrowed for `sdk_version_len` bytes
+/// only during `register_bridge`; it is copied before that function returns.
+/// A zero length permits a null pointer. The version is UTF-8 and identifies
+/// the BAML product release, independently of the table's ABI version.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct BamlBridgeInfoV1 {

@@ -70,6 +70,20 @@ impl BexEngine {
     /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the pointer is valid (from a handle which is a GC root)
+    //
+    // BUG: this walk has no cycle detection (no visited set, no depth
+    // budget). BAML permits self-referencing values; one reaching the host
+    // boundary makes this recursion diverge. Reproduced via the python
+    // bridge with `class Node { value int  next Node? }` and a body doing
+    // `n.next = n`: the call never returns — a process sample shows every
+    // frame pinned in this function's recursion for minutes at full CPU
+    // (no catchable failure ever surfaces, so `call_and_encode` cannot
+    // fold it into the result envelope). Every language bridge is exposed
+    // identically (`BexExternalValue` and the outbound protobuf are both
+    // trees, so no bridge can see — let alone handle — a cycle). The fix
+    // belongs here: track visited `HeapPtr`s (identity, not equality) and
+    // return an `EngineError` so a cyclic value surfaces on the
+    // envelope's error arm in every SDK.
     fn convert_heap_ptr_to_external_with_type(
         &self,
         ptr: HeapPtr,

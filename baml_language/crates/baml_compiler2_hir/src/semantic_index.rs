@@ -34,11 +34,13 @@ pub enum PathResolution {
     Unknown,
 }
 
+use rustc_hash::FxHashMap;
+
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
-    scope::{FileScopeId, Scope, ScopeId, ScopeKind},
+    scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
 };
 
 // ── DefinitionSite ───────────────────────────────────────────────────────────
@@ -222,6 +224,13 @@ pub struct FileSemanticIndex<'db> {
     /// Avoids repeated Salsa interning at query time.
     pub scope_ids: Vec<ScopeId<'db>>,
 
+    /// Item → the scope it opened. The inverse of `Scope::owner`.
+    ///
+    /// Recorded by the builder, which creates the scope in the same step that
+    /// allocates the item. Replaces the `item.span == scope.range` join that
+    /// consumers used to do, and is what lets item spans move into the source map.
+    pub item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
+
     /// Per-file item tree — maps `LocalItemId` to item data.
     pub item_tree: Arc<ItemTree>,
 
@@ -397,6 +406,16 @@ impl FileSemanticIndex<'_> {
             BindingKind::Local(_) => self.local_binding(binding_id).map(|binding| binding.site),
             BindingKind::Parameter(param_idx) => Some(DefinitionSite::Parameter(param_idx)),
         }
+    }
+
+    /// The scope opened for `owner`, if it opened one.
+    pub fn item_scope(&self, owner: ItemScopeOwner) -> Option<FileScopeId> {
+        self.item_scopes.get(&owner).copied()
+    }
+
+    /// The item `scope` was opened for, if it belongs to one.
+    pub fn scope_owner(&self, scope: FileScopeId) -> Option<ItemScopeOwner> {
+        self.scopes.get(scope.index() as usize)?.owner
     }
 
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {

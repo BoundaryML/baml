@@ -208,7 +208,14 @@ pub fn render_diagnostic(
     config: &RenderConfig,
 ) -> String {
     match config.format {
-        DiagnosticFormat::Ariadne => render_ariadne(diagnostic, sources, file_paths, config.color),
+        DiagnosticFormat::Ariadne => {
+            // Single-diagnostic path builds its own one-shot cache. The batch
+            // path (`render_diagnostics`) shares one cache across diagnostics
+            // instead; this cache is exactly what that code used to build
+            // per-diagnostic, so the rendered bytes are unchanged.
+            let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
+            render_ariadne(diagnostic, sources, &mut cache, config.color)
+        }
         DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
     }
 }
@@ -223,9 +230,25 @@ pub fn render_diagnostics(
     file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
+    // Build the ariadne `SourceCache` ONCE for the whole batch. Previously
+    // each diagnostic reconstructed its own cache inside
+    // `render_report_to_string`, and every `SourceCache::new` eagerly clones
+    // `sources`/`file_paths` and ariadne then computes a line index over every
+    // touched file. On warning-heavy projects that per-diagnostic rebuild was a
+    // large fraction of `baml check` wall time. Hoisting it is a pure
+    // construction move: the cache handed to `render_ariadne` is byte-for-byte
+    // the same object it would have built itself, so rendered output is
+    // identical (safe under `BAML_CACHE_VERIFY`).
+    let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
+        .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
     diagnostics
         .iter()
-        .map(|d| render_diagnostic(d, sources, file_paths, config))
+        .map(|d| match (&config.format, &mut ariadne_cache) {
+            (DiagnosticFormat::Ariadne, Some(cache)) => {
+                render_ariadne(d, sources, cache, config.color)
+            }
+            _ => render_concise(d, sources, file_paths),
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -259,10 +282,15 @@ fn translate_span(span: Span, sources: &HashMap<FileId, String>) -> Span {
 }
 
 /// Render a diagnostic using Ariadne (pretty CLI output).
+///
+/// Takes a pre-built [`SourceCache`] by `&mut` so batch rendering can share a
+/// single line-index computation across all diagnostics instead of rebuilding
+/// it per diagnostic. The cache carries the same `sources`/`file_paths` used
+/// elsewhere here, so filename display and rendered bytes are unchanged.
 fn render_ariadne(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
-    file_paths: &HashMap<FileId, PathBuf>,
+    cache: &mut SourceCache,
     color: bool,
 ) -> String {
     // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
@@ -321,7 +349,7 @@ fn render_ariadne(
         .finish();
 
     // Render to string using SourceCache for proper filename display.
-    let rendered = render_report_to_string(&report, sources, file_paths);
+    let rendered = render_report_to_string(&report, cache);
 
     // See the rant above the `report_kind` match — ariadne paints the
     // `Custom` keyword unconditionally, so `with_color(false)` doesn't
@@ -427,17 +455,15 @@ fn render_concise(
 }
 
 /// Render an ariadne Report to a String using `SourceCache` for proper filename display.
-fn render_report_to_string(
-    report: &Report<'_, Span>,
-    sources: &HashMap<FileId, String>,
-    file_paths: &HashMap<FileId, PathBuf>,
-) -> String {
+///
+/// The `SourceCache` is now supplied by the caller (built once per batch)
+/// rather than reconstructed here per diagnostic. `report.write` only reads
+/// from the cache (populating ariadne's internal line index lazily), so
+/// reusing one cache across reports produces identical bytes.
+fn render_report_to_string(report: &Report<'_, Span>, cache: &mut SourceCache) -> String {
     let mut output = Vec::new();
 
-    // Use SourceCache for proper filename display
-    let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
-
-    report.write(&mut cache, &mut output).unwrap_or_else(|_| {
+    report.write(cache, &mut output).unwrap_or_else(|_| {
         output.clear();
         output.extend_from_slice(b"<error rendering diagnostic>");
     });

@@ -693,6 +693,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_bridge"
+version = "0.15.0"
+dependencies = [
+ "hex",
+ "indexmap",
+ "libloading 0.8.9",
+ "num-bigint",
+ "prost",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "ureq",
+]
+
+[[package]]
 name = "baml_builtins2"
 version = "0.0.0-beta"
 dependencies = [
@@ -747,12 +762,16 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "mimalloc",
  "object 0.36.3",
  "regex",
  "reqwest",
  "sdkgen_csharp",
+ "sdkgen_cpp",
+ "sdkgen_go",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_rust",
+ "sdkgen_typescript_shared",
  "serde",
  "serde_json",
  "sha2",
@@ -772,6 +791,7 @@ name = "baml_codegen_types"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_type",
  "strum",
 ]
 
@@ -808,6 +828,7 @@ dependencies = [
  "borsh",
  "indexmap",
  "log",
+ "rayon",
  "rustc-hash 2.1.2",
  "salsa",
 ]
@@ -839,6 +860,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
+ "baml_workspace",
  "indexmap",
  "num-bigint",
  "rustc-hash 2.1.2",
@@ -1100,6 +1122,7 @@ dependencies = [
  "bex_vm_types",
  "la-arena",
  "lsp-types",
+ "rayon",
  "salsa",
  "serde",
  "serde_json",
@@ -1155,6 +1178,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "rayon",
  "salsa",
  "serde_json",
  "syn 2.0.117",
@@ -1575,6 +1599,7 @@ dependencies = [
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "cbindgen",
  "futures",
  "indexmap",
  "libc",
@@ -1582,6 +1607,7 @@ dependencies = [
  "prost",
  "serde_json",
  "sys_native",
+ "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
@@ -1605,25 +1631,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridge_nodejs"
-version = "0.0.0-beta"
-dependencies = [
- "baml_version",
- "bex_events",
- "bex_project",
- "bridge_cffi",
- "bridge_ctypes",
- "indexmap",
- "log",
- "napi",
- "napi-build",
- "napi-derive",
- "prost",
- "serde_json",
- "sys_native",
-]
-
-[[package]]
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
@@ -1642,6 +1649,34 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "bridge_typescript"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_version",
+ "bex_events",
+ "bex_project",
+ "bridge_cffi",
+ "bridge_ctypes",
+ "indexmap",
+ "log",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "prost",
+ "serde_json",
+ "sys_native",
+]
+
+[[package]]
+name = "bridge_typescript_web"
+version = "0.0.0-beta"
+dependencies = [
+ "bridge_cffi",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -1871,6 +1906,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "cbindgen"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "975982cdb7ad6a142be15bdf84aea7ec6a9e5d4d797c004d43185b24cfe4e684"
+dependencies = [
+ "clap",
+ "heck 0.5.0",
+ "indexmap",
+ "log",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -4265,6 +4319,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4514,6 +4577,15 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -6087,6 +6159,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
+name = "rayon"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6568,6 +6660,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_cpp"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_go"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
 name = "sdk_test_harness_runner"
 version = "0.1.0"
 
@@ -6575,14 +6683,21 @@ version = "0.1.0"
 name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
+ "baml_base",
  "baml_codegen_types",
  "baml_db",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "borsh",
+ "proc-macro2",
+ "quote",
  "sdkgen_csharp",
+ "sdkgen_cpp",
+ "sdkgen_go",
  "sdkgen_python_pydantic2",
- "sdkgen_typescript_node",
+ "sdkgen_rust",
+ "sdkgen_typescript_shared",
 ]
 
 [[package]]
@@ -6604,7 +6719,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_typescript_node"
+name = "sdk_test_rust"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_typescript"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_typescript_web"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6623,10 +6754,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkgen_cpp"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "baml_version",
+ "flate2",
+ "protoc-bin-vendored",
+ "tempfile",
+]
+
+[[package]]
 name = "sdkgen_go"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_codegen_types",
+ "baml_type",
 ]
 
 [[package]]
@@ -6641,7 +6786,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdkgen_typescript_node"
+name = "sdkgen_rust"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "indexmap",
+ "pretty_assertions",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "sdkgen_typescript_shared"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
@@ -7688,6 +7847,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
 
 [[package]]
+name = "tools_compile_profile"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_compiler_diagnostics",
+ "baml_project",
+ "baml_workspace",
+ "clap",
+ "mimalloc",
+ "salsa",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "tools_onionskin"
 version = "0.0.0-beta"
 dependencies = [
@@ -8104,6 +8278,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
+name = "ureq"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dea7109cdcd5864d4eeb1b58a1648dc9bf520360d7af16ec26d0a9354bafcfc0"
+dependencies = [
+ "base64",
+ "flate2",
+ "log",
+ "percent-encoding",
+ "rustls",
+ "rustls-pki-types",
+ "ureq-proto",
+ "utf8-zero",
+ "webpki-roots",
+]
+
+[[package]]
+name = "ureq-proto"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e994ba84b0bd1b1b0cf92878b7ef898a5c1760108fe7b6010327e274917a808c"
+dependencies = [
+ "base64",
+ "http",
+ "httparse",
+ "log",
+]
+
+[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8115,6 +8318,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "utf8-zero"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e"
 
 [[package]]
 name = "utf8_iter"
@@ -8538,6 +8747,15 @@ name = "webpki-root-certs"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
 dependencies = [
  "rustls-pki-types",
 ]

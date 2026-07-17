@@ -22,7 +22,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind},
@@ -728,6 +728,7 @@ fn apply_generic_env(
 
 #[derive(Clone, Copy)]
 struct GenericLookupContext<'a, 'db> {
+    db: &'db dyn crate::Db,
     index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
     item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
 }
@@ -788,28 +789,30 @@ fn free_impl_generics(
     }
 }
 
-/// The out-of-body `implement … for …` block whose method list contains `func_data`, as its
-/// declared generics, if any. A method is identified by its source span (unique per declaration).
-/// Reads the unified `impls` store via the `free_impls` index.
+/// The out-of-body `implement … for …` block whose method list contains `func_id`, as its
+/// declared generics, if any. Reads the unified `impls` store via the `free_impls` index.
+///
+/// Membership is by id. It used to be by source span, which cannot distinguish a function
+/// from its companions — all of `f`, `f$stream` and `f$parse_stream` carry one span.
 fn enclosing_impl_generics_for_func(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    func_data: &baml_compiler2_hir::item_tree::Function,
+    func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Option<(Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>)> {
-    item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block
-            .methods
-            .iter()
-            .any(|&mid| item_tree[mid].span == func_data.span)
-            .then(|| free_impl_generics(block))
-    })
+    match item_tree.method_owners.get(&func_id)? {
+        baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id) => {
+            Some(free_impl_generics(&item_tree.impls[impl_id]))
+        }
+        baml_compiler2_hir::item_tree::MethodOwner::Class(_)
+        | baml_compiler2_hir::item_tree::MethodOwner::Interface(_) => None,
+    }
 }
 
-fn generic_env_for_function_data(
-    ctx: GenericLookupContext<'_, '_>,
+fn generic_env_for_function_data<'db>(
+    ctx: GenericLookupContext<'_, 'db>,
     function_scope: &baml_compiler2_hir::scope::Scope,
-    func_data: &baml_compiler2_hir::item_tree::Function,
+    func_loc: FunctionLoc<'db>,
 ) -> GenericEnv {
+    let func_data = &ctx.item_tree[func_loc.id(ctx.db)];
     let mut env = GenericEnv::from_params(func_data.generic_params.clone());
     env.add_bounds_for_declared_params(&func_data.generic_params, &func_data.generic_param_bounds);
     // A method in a generic `implements<T …> Iface for Target` block sees the
@@ -818,7 +821,7 @@ fn generic_env_for_function_data(
     // scope. Mirror the `ScopeKind::Function` arm: impl generics take the place
     // of parent-type generics so a nested lambda body can resolve them too.
     if let Some((generic_params, generic_param_bounds)) =
-        enclosing_impl_generics_for_func(ctx.item_tree, func_data)
+        enclosing_impl_generics_for_func(ctx.item_tree, func_loc.id(ctx.db))
     {
         env.prepend_declared(&generic_params, &generic_param_bounds);
     } else {
@@ -836,11 +839,14 @@ fn enclosing_function_generic_env_from_let(
         let scope = &ctx.index.scopes[fsi.index() as usize];
         match scope.kind {
             ScopeKind::Function => {
-                let func_data =
-                    ctx.item_tree.functions.values().find(|fd| {
-                        fd.span == scope.range && scope.name.as_ref() == Some(&fd.name)
-                    })?;
-                return Some(generic_env_for_function_data(ctx, scope, func_data));
+                let owner = baml_compiler2_ppir::item_data::scope_owner(
+                    ctx.db,
+                    ctx.index.scope_ids[fsi.index() as usize],
+                )?;
+                let baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc) = owner else {
+                    return None;
+                };
+                return Some(generic_env_for_function_data(ctx, scope, func_loc));
             }
             ScopeKind::Let => current = scope.parent,
             _ => current = scope.parent,
@@ -1093,6 +1099,14 @@ pub struct ScopeInference<'db> {
     /// these up (via this owning Function/Let scope) to seed params that have no
     /// HIR binding — see the `ScopeKind::Lambda` arm of `infer_scope_types`.
     template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Nested lambda scope → the full inference tables captured during this
+    /// (owning) scope's inline pass over the lambda's body. The standalone
+    /// `ScopeKind::Lambda` query projects its `ScopeInference` out of this map
+    /// instead of re-inferring the body — which previously inferred every lambda
+    /// body a second time and (because both passes emit diagnostics) reported
+    /// diagnostics inside lambdas twice. Populated only on Function/Let owner
+    /// scopes; contains entries for lambdas at every nesting depth.
+    nested_lambda_inference: FxHashMap<FileScopeId, NestedLambdaInference<'db>>,
     /// Lambda/function parameter types by index (name, inferred type).
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
@@ -1120,6 +1134,32 @@ pub struct ScopeInference<'db> {
     parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
+}
+
+/// The complete inference tables of one nested lambda body, captured during
+/// the owning Function/Let scope's inline pass (`infer_lambda_body`).
+///
+/// Before this existed, every lambda body was type-inferred twice: once inline
+/// while inferring the enclosing function (needed to type the lambda expression
+/// itself) and a second time from scratch by the standalone `ScopeKind::Lambda`
+/// arm of `infer_scope_types` (needed by MIR/LSP for the lambda scope's own
+/// tables). Recording the inline results here lets the Lambda arm project them
+/// out instead of re-inferring — and stops the lambda's diagnostics from being
+/// reported twice (they stay with the owner scope's inference).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NestedLambdaInference<'db> {
+    pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub(crate) param_types: Vec<(Name, Ty)>,
+    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1264,6 +1304,17 @@ impl<'db> ScopeInference<'db> {
     /// standalone scope inference to seed params that have no HIR binding.
     pub fn template_body_params(&self, fsi: FileScopeId) -> Option<&[FunctionParamTy]> {
         self.template_body_params.get(&fsi).map(Vec::as_slice)
+    }
+
+    /// The captured inline-inference tables for a nested lambda scope, if this
+    /// scope owns (transitively) that lambda's body. Present only on the owning
+    /// Function/Let scope's inference; the standalone `ScopeKind::Lambda` query
+    /// uses it to avoid re-inferring the body.
+    pub(crate) fn nested_lambda_inference(
+        &self,
+        fsi: FileScopeId,
+    ) -> Option<&NestedLambdaInference<'db>> {
+        self.nested_lambda_inference.get(&fsi)
     }
 
     /// Look up the binding type for a pattern (the type the variable is bound to,
@@ -1615,6 +1666,7 @@ fn infer_scope_types_cycle_initial<'db>(
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         template_body_params: FxHashMap::default(),
+        nested_lambda_inference: FxHashMap::default(),
         param_types: Vec::new(),
         call_plans: FxHashMap::default(),
         call_type_instantiations: FxHashMap::default(),
@@ -1644,7 +1696,9 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
 
-    let aliases = package_alias_map(db, res_ctx);
+    // Salsa-cached per package (with cycle handling) — previously rebuilt from
+    // scratch on every scope inference.
+    let aliases = package_resolved_aliases(db, pkg_id);
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
@@ -1655,468 +1709,460 @@ pub fn infer_scope_types<'db>(
             // Both checks are required to disambiguate companion functions that
             // share the parent's span.
             let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            let mut found = false;
-            for (local_id, func_data) in &item_tree.functions {
-                if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
-                    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-                    let body = baml_compiler2_ppir::function_body(db, func_loc);
-                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+            // The HIR builder records which item opened each scope, so the owner is
+            // read directly rather than recovered by matching `item.span == scope.range`
+            // — a join that could not tell a function from its companions, which share
+            // one span. Template strings also open `ScopeKind::Function` scopes; those
+            // have a non-Function owner and fall through to the `else`.
+            if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+                baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+            {
+                let local_id = &func_loc.id(db);
+                let func_data = &item_tree[func_loc.id(db)];
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+                let body = baml_compiler2_ppir::function_body(db, func_loc);
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
 
-                    let enclosing_impl = item_tree.free_impls.iter().find_map(|impl_id| {
-                        let block = item_tree.impls.get(impl_id)?;
-                        block.methods.contains(local_id).then_some(block)
-                    });
+                let enclosing_impl = match item_tree.method_owners.get(local_id) {
+                    Some(baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id)) => {
+                        item_tree.impls.get(impl_id)
+                    }
+                    _ => None,
+                };
 
-                    let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
-                    env.params
-                        .extend(sig.synthetic_effect_params.iter().cloned());
-                    report_duplicate_generic_params(
-                        &builder,
-                        &sig.user_generic_params,
-                        func_data.span,
-                    );
-                    if let Some(imp) = enclosing_impl {
-                        let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
-                        for mp in &sig.user_generic_params {
-                            if impl_generic_params.iter().any(|cp| cp == mp) {
-                                builder.report_at_span(
-                                    crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
-                                        param_name: mp.clone(),
-                                    },
-                                    func_data.span,
-                                );
-                            }
-                        }
-                        env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
-                    } else if let Some(parent) = parent_type_generic_env(
-                        GenericLookupContext {
-                            index,
-                            item_tree: &item_tree,
-                        },
-                        scope.parent,
-                    ) {
-                        for mp in &sig.user_generic_params {
-                            if parent.params.iter().any(|cp| cp == mp) {
-                                builder.report_at_span(
-                                    crate::infer_context::TirTypeError::TypeParamShadowed {
-                                        param_name: mp.clone(),
-                                        type_name: parent.type_name.clone(),
-                                        owner: parent.owner,
-                                    },
-                                    func_data.span,
-                                );
-                            }
-                        }
-                        env.prepend_declared(&parent.params, &parent.bounds);
-                    }
-                    // BEP-044 (Self-as-type-variable): inside an interface's own
-                    // method, `self` is a `Self` type variable bound by the
-                    // interface instead of the interface existential. Register it
-                    // in the shared generic env so the normal bound-aware member
-                    // resolution path handles `Self`.
-                    let interface_self_bound: Option<baml_type::Interface> = if enclosing_impl
-                        .is_none()
-                    {
-                        scope.parent.and_then(|parent_idx| {
-                            let parent = &index.scopes[parent_idx.index() as usize];
-                            if !matches!(parent.kind, ScopeKind::Class) {
-                                return None;
-                            }
-                            let cn = parent.name.as_ref()?;
-                            let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
-                            if !matches!(
-                                def,
-                                baml_compiler2_hir::contributions::Definition::Interface(_)
-                            ) {
-                                return None;
-                            }
-                            let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
-                            let iface = item_tree.interfaces.values().find(|i| &i.name == cn)?;
-                            let args = iface
-                                .generic_params
-                                .iter()
-                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                                .collect();
-                            // `Self`'s bound is the interface as a *constraint* (a
-                            // `baml_type::Interface`, not a `Ty::Interface` existential): it pins
-                            // none of its associated types — they are `Self`'s own, abstract in a
-                            // default body, so `Self.Item` stays symbolic. Empty bindings, never
-                            // `Ty::Error` placeholders which would wrongly pin `Item = Error`.
-                            Some(baml_type::Interface::new(qtn, args, Vec::new()))
-                        })
-                    } else {
-                        None
-                    };
-                    if let Some(bound) = interface_self_bound.clone() {
-                        let self_param = Name::new("Self");
-                        if !env.params.iter().any(|p| p == &self_param) {
-                            env.params.push(self_param.clone());
-                        }
-                        env.add_concrete_bound(self_param, bound);
-                    }
-                    env.add_bounds_for_declared_params(
-                        &func_data.generic_params,
-                        &func_data.generic_param_bounds,
-                    );
-                    apply_generic_env(
-                        db,
-                        &mut builder,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &env,
-                        func_data.span,
-                    );
-                    if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
-                        builder.set_body_source_map(sm);
-                    }
-                    builder.set_auto_derived(matches!(
-                        func_data.origin,
-                        ast::FunctionOrigin::AutoDerive
-                    ));
-                    // BEP-044: if this function lives inside an
-                    // `implements I { ... }` block, attach `I`'s QTN so
-                    // `default.<method>(...)` resolves against I's
-                    // contract.
-                    if let Some(target) = item_tree.method_to_iface_target.get(local_id)
-                        && let baml_compiler2_ast::TypeExprKind::Path { segments, .. } =
-                            &target.kind
-                        && let Some((head, name)) = segments
-                            .split_last()
-                            .map(|(last, head)| (head, last.clone()))
-                    {
-                        let lookup_ns: &[Name] = if head.is_empty() {
-                            &pkg_info.namespace_path
-                        } else {
-                            head
-                        };
-                        if let Some(def) = pkg_items.lookup_type(lookup_ns, &name)
-                            && let baml_compiler2_hir::contributions::Definition::Interface(_) = def
-                        {
-                            let qtn = crate::lower_type_expr::qualify_def(db, def, &name);
-                            builder.set_implements_block_interface(Some(qtn));
-                        }
-                    }
-
-                    if let FunctionBody::Expr(expr_body) = body.as_ref() {
-                        // The method's in-scope interface bounds (its own params, the
-                        // enclosing class/interface's, and `Self`'s constraint) so a
-                        // `T.member` / `Self.member` projection in the receiver pattern,
-                        // interface arguments, or a binding value resolves nominally.
-                        let env_bounds =
-                            env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &env);
-                        // Determine enclosing class name for `self` parameter
-                        // resolution and BEP-044 `Self`-type substitution.
-                        let enclosing_class_name: Option<Name> =
-                            scope.parent.and_then(|parent_idx| {
-                                let parent = &index.scopes[parent_idx.index() as usize];
-                                if matches!(parent.kind, ScopeKind::Class) {
-                                    parent.name.clone()
-                                } else {
-                                    None
-                                }
-                            });
-                        // `Self`'s type for this body — resolved through the lowering context
-                        // below, never a bare-name substitution: the rigid `Self` type variable
-                        // (interface's own default method), the impl's receiver pattern, or the
-                        // enclosing class's full receiver type (`Foo<T>`, carrying its generics).
-                        let self_ty: Option<Ty> = if interface_self_bound.is_some() {
-                            Some(crate::self_type::self_type_for_interface_default())
-                        } else if let Some(imp) = enclosing_impl
-                            && let baml_compiler2_hir::item_tree::ImplSubject::Free {
-                                for_target,
-                                ..
-                            } = &imp.subject
-                        {
-                            let mut diags = Vec::new();
-                            Some(crate::lower_type_expr::lower_type_expr(
-                                for_target,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: pkg_items,
-                                    ns_context: &pkg_info.namespace_path,
-                                    generic_params: &env.params,
-                                    bounds: &env_bounds,
-                                    self_ty: None,
+                let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
+                env.params
+                    .extend(sig.synthetic_effect_params.iter().cloned());
+                report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
+                if let Some(imp) = enclosing_impl {
+                    let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
+                    for mp in &sig.user_generic_params {
+                        if impl_generic_params.iter().any(|cp| cp == mp) {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
+                                    param_name: mp.clone(),
                                 },
-                                &mut diags,
-                            ))
-                        } else {
-                            enclosing_class_name.as_ref().and_then(|cn| {
-                                let baml_compiler2_hir::contributions::Definition::Class(class_loc) =
-                                    pkg_items.lookup_type(&pkg_info.namespace_path, cn)?
-                                else {
-                                    return None;
-                                };
-                                let class_file = class_loc.file(db);
-                                let class_pkg =
-                                    baml_compiler2_hir::file_package::file_package(db, class_file);
-                                let class_tree = baml_compiler2_hir::file_item_tree(db, class_file);
-                                let class_data = class_tree.classes.get(&class_loc.id(db))?;
-                                Some(crate::self_type::self_type_for_class(
-                                    class_data,
-                                    &class_pkg.namespace_path,
-                                    class_pkg.package.clone(),
-                                ))
-                            })
-                        };
-                        // The interface bound `Self.Assoc` projects through, as a constraint
-                        // (interface's own default method); `None` when `Self` is concrete.
-                        let self_bound: Option<baml_type::Interface> = interface_self_bound;
-
-                        let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
-                            db, func_loc,
-                        );
-                        let mut type_bindings: FxHashMap<Name, Ty> =
-                            type_bindings_for_params(&env.params);
-                        if let Some(target) = item_tree.method_to_iface_target.get(local_id)
-                            && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
-                                db,
-                                target,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                            )
-                        {
-                            let iface_file = iface_loc.file(db);
-                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
-                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let mut iface_type_bindings = type_bindings.clone();
-                                if let baml_compiler2_ast::TypeExprKind::Path {
-                                    generic_args, ..
-                                } = &target.kind
-                                {
-                                    for (param, arg) in
-                                        iface_data.generic_params.iter().zip(generic_args)
-                                    {
-                                        let mut arg_diags = Vec::new();
-                                        let ty = {
-                                            let generic_params: Vec<_> =
-                                                type_bindings.keys().cloned().collect();
-                                            crate::generics::substitute_ty(
-                                                &crate::lower_type_expr::lower_type_expr(
-                                                    arg,
-                                                    &crate::lower_type_expr::ScopeCtx {
-                                                        db,
-                                                        package_items: pkg_items,
-                                                        ns_context: &pkg_info.namespace_path,
-                                                        generic_params: &generic_params,
-                                                        bounds: &env_bounds,
-                                                        self_ty: None,
-                                                    },
-                                                    &mut arg_diags,
-                                                ),
-                                                &type_bindings,
-                                            )
-                                        };
-                                        for diag in arg_diags {
-                                            builder.report_at_span(diag, target.span);
-                                        }
-                                        iface_type_bindings.insert(param.clone(), ty.clone());
-                                        type_bindings.entry(param.clone()).or_insert(ty);
-                                    }
-                                }
-                                let explicit_bindings = item_tree
-                                    .method_to_iface_associated_type_bindings
-                                    .get(local_id)
-                                    .cloned()
-                                    .unwrap_or_default();
-                                for assoc in &iface_data.associated_types {
-                                    if let Some(binding) =
-                                        explicit_bindings.iter().find(|b| b.name == assoc.name)
-                                        && let Some(te) = &binding.type_expr
-                                    {
-                                        // Lower the binding's type through a context that resolves
-                                        // `Self`, then substitute the in-scope generics /
-                                        // associated types accumulated so far.
-                                        let binding_generic_params: Vec<Name> =
-                                            type_bindings.keys().cloned().collect();
-                                        let binding_ctx = crate::lower_type_expr::ScopeCtx {
-                                            db,
-                                            package_items: pkg_items,
-                                            ns_context: &pkg_info.namespace_path,
-                                            generic_params: &binding_generic_params,
-                                            bounds: &env_bounds,
-                                            self_ty: self_ty.clone(),
-                                        };
-                                        let mut binding_diags = Vec::new();
-                                        let ty = crate::generics::substitute_ty(
-                                            &crate::lower_type_expr::lower_type_expr(
-                                                te,
-                                                &binding_ctx,
-                                                &mut binding_diags,
-                                            ),
-                                            &type_bindings,
-                                        );
-                                        for diag in binding_diags {
-                                            builder.report_at_span(diag, te.span);
-                                        }
-                                        // Into `iface_type_bindings` only — the binding realizes
-                                        // later defaults, but the bare name is NOT in scope
-                                        // (banned: the method must write `Self.Item`).
-                                        iface_type_bindings.insert(assoc.name.clone(), ty);
-                                        continue;
-                                    }
-                                    if let Some((default_ty, _diags)) =
-                                        crate::interfaces::interface_associated_type_default(
-                                            db,
-                                            iface_loc,
-                                            assoc.name.clone(),
-                                        )
-                                    {
-                                        // The default is lowered once (symbolic `Self`) by the
-                                        // shared query; substitute the generics / associated
-                                        // types accumulated so far. `Self` stays symbolic here
-                                        // (an interface method body's receiver is rigid), so a
-                                        // Self-referencing default resolves to `(Self as I).X`.
-                                        // Diagnostics surface at the interface declaration.
-                                        // Into `iface_type_bindings` only (see the explicit-
-                                        // binding arm above): bare names are banned.
-                                        let ty = crate::generics::substitute_ty(
-                                            &default_ty,
-                                            &iface_type_bindings,
-                                        );
-                                        iface_type_bindings.insert(assoc.name.clone(), ty);
-                                    }
-                                }
-                            }
-                        }
-                        // Inside an interface's own default body, associated types are
-                        // deliberately NOT registered as bare names: a bare `Item` is
-                        // banned everywhere — the body writes `Self.Item`, which lowers
-                        // through the `Self` bound installed below.
-                        builder.set_type_bindings(type_bindings.clone());
-                        // Lower body type annotations through the shared context: `Self` and
-                        // `Self.Assoc` resolve via `self_ty` and the `Self` bound; interface /
-                        // method generics and associated types then substitute in. A bare
-                        // associated name is an in-scope type variable (it is a `type_bindings`
-                        // key) substituted to its symbolic projection, matching `Self.Assoc`.
-                        let body_generic_params: Vec<Name> =
-                            type_bindings.keys().cloned().collect();
-                        let mut body_bounds =
-                            crate::lower_type_expr::function_in_scope_generic_param_bounds(
-                                db, func_loc,
-                            )
-                            .clone();
-                        if let Some(bound) = &self_bound {
-                            body_bounds.insert(Name::new("Self"), vec![bound.clone()]);
-                        }
-                        let ctx = crate::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: pkg_items,
-                            ns_context: &pkg_info.namespace_path,
-                            generic_params: &body_generic_params,
-                            bounds: &body_bounds,
-                            self_ty: self_ty.clone(),
-                        };
-                        let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
-                                               diags: &mut Vec<
-                            crate::infer_context::TirTypeError,
-                        >| {
-                            crate::generics::substitute_ty(
-                                &crate::lower_type_expr::lower_type_expr(te, &ctx, diags),
-                                &type_bindings,
-                            )
-                        };
-
-                        // Get declared return type
-                        let return_ty = sig
-                            .return_type
-                            .as_ref()
-                            .map(|te| {
-                                let span = sig_sm.return_type_span.unwrap_or(func_data.span);
-                                let mut diags = Vec::new();
-                                let ty = lower_with_self(te, &mut diags);
-                                for diag in diags {
-                                    builder.report_at_span(diag, span);
-                                }
-                                builder.validate_type_generic_bounds_at_span(span, &ty);
-                                ty
-                            })
-                            .unwrap_or(Ty::Unknown {
-                                attr: TyAttr::default(),
-                            });
-
-                        // Set declared return type for return statement checking
-                        builder.set_return_type(return_ty.clone());
-
-                        // Add parameter bindings as locals
-                        for (i, param) in sig.params.iter().enumerate() {
-                            let param_type_span = sig_sm
-                                .param_type_spans
-                                .get(i)
-                                .copied()
-                                .flatten()
-                                .or_else(|| sig_sm.param_spans.get(i).copied())
-                                .unwrap_or_default();
-                            let mut param_ty_validated = false;
-                            let param_ty = if param.name.as_str() == "self"
-                                && matches!(
-                                    param.ty.kind,
-                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                                ) {
-                                // `self`'s type is the method's `Self` receiver, resolved once
-                                // above (rigid `Self` var for an interface's own default method,
-                                // the impl's receiver pattern, or the enclosing class's `Foo<T>`).
-                                self_ty.clone().unwrap_or(Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                })
-                            } else {
-                                param_ty_validated = true;
-                                let mut param_diags = Vec::new();
-                                let ty = lower_with_self(&param.ty, &mut param_diags);
-                                for diag in param_diags {
-                                    builder.report_at_span(diag, param_type_span);
-                                }
-                                builder.validate_type_generic_bounds_at_span(param_type_span, &ty);
-                                ty
-                            };
-                            if !param_ty_validated {
-                                builder.validate_type_generic_bounds_at_span(
-                                    param_type_span,
-                                    &param_ty,
-                                );
-                            }
-                            builder.add_local(param.name.clone(), param_ty.clone());
-                            builder.param_types.push((param.name.clone(), param_ty));
-                        }
-
-                        let param_types = builder.param_types.clone();
-                        let parameter_defaults =
-                            baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-                        builder.check_function_parameter_defaults(
-                            &func_data.params,
-                            &parameter_defaults,
-                            &param_types,
-                        );
-
-                        // Check root expression against declared return type
-                        if let Some(root_expr) = expr_body.root_expr {
-                            builder.check_expr(root_expr, expr_body, &return_ty);
-                        }
-
-                        // Validate declared `throws` against effective escaping throws.
-                        // Auto-derived methods (synthesized `to_json` /
-                        // `from_json`) use a conservative pre-baked throws
-                        // clause; the body's actual escaping throws can be
-                        // wider when fields have malformed/unknown types.
-                        // The user can't fix the synthesized contract, so
-                        // skip the entire check for auto-derive bodies.
-                        let is_auto_derive =
-                            matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
-                        if !is_auto_derive {
-                            builder.check_throws_contract(
-                                expr_body,
-                                sig.throws.as_ref(),
-                                sig_sm.throws_type_span,
-                                func_data.span,
-                                true,
+                                func_span,
                             );
                         }
                     }
-                    found = true;
-                    break;
+                    env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
+                } else if let Some(parent) = parent_type_generic_env(
+                    GenericLookupContext {
+                        db,
+                        index,
+                        item_tree: &item_tree,
+                    },
+                    scope.parent,
+                ) {
+                    for mp in &sig.user_generic_params {
+                        if parent.params.iter().any(|cp| cp == mp) {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::TypeParamShadowed {
+                                    param_name: mp.clone(),
+                                    type_name: parent.type_name.clone(),
+                                    owner: parent.owner,
+                                },
+                                func_span,
+                            );
+                        }
+                    }
+                    env.prepend_declared(&parent.params, &parent.bounds);
                 }
-            }
-            if !found {
+                // BEP-044 (Self-as-type-variable): inside an interface's own
+                // method, `self` is a `Self` type variable bound by the
+                // interface instead of the interface existential. Register it
+                // in the shared generic env so the normal bound-aware member
+                // resolution path handles `Self`.
+                let interface_self_bound: Option<baml_type::Interface> = if enclosing_impl.is_none()
+                {
+                    scope.parent.and_then(|parent_idx| {
+                        let parent = &index.scopes[parent_idx.index() as usize];
+                        if !matches!(parent.kind, ScopeKind::Class) {
+                            return None;
+                        }
+                        let cn = parent.name.as_ref()?;
+                        let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
+                        if !matches!(
+                            def,
+                            baml_compiler2_hir::contributions::Definition::Interface(_)
+                        ) {
+                            return None;
+                        }
+                        let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
+                        let iface = item_tree.interfaces.values().find(|i| &i.name == cn)?;
+                        let args = iface
+                            .generic_params
+                            .iter()
+                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                            .collect();
+                        // `Self`'s bound is the interface as a *constraint* (a
+                        // `baml_type::Interface`, not a `Ty::Interface` existential): it pins
+                        // none of its associated types — they are `Self`'s own, abstract in a
+                        // default body, so `Self.Item` stays symbolic. Empty bindings, never
+                        // `Ty::Error` placeholders which would wrongly pin `Item = Error`.
+                        Some(baml_type::Interface::new(qtn, args, Vec::new()))
+                    })
+                } else {
+                    None
+                };
+                if let Some(bound) = interface_self_bound.clone() {
+                    let self_param = Name::new("Self");
+                    if !env.params.iter().any(|p| p == &self_param) {
+                        env.params.push(self_param.clone());
+                    }
+                    env.add_concrete_bound(self_param, bound);
+                }
+                env.add_bounds_for_declared_params(
+                    &func_data.generic_params,
+                    &func_data.generic_param_bounds,
+                );
+                apply_generic_env(
+                    db,
+                    &mut builder,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &env,
+                    func_span,
+                );
+                if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
+                    builder.set_body_source_map(sm);
+                }
+                builder
+                    .set_auto_derived(matches!(func_data.origin, ast::FunctionOrigin::AutoDerive));
+                // BEP-044: if this function lives inside an
+                // `implements I { ... }` block, attach `I`'s QTN so
+                // `default.<method>(...)` resolves against I's
+                // contract.
+                if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                    && let baml_compiler2_ast::TypeExprKind::Path { segments, .. } = &target.kind
+                    && let Some((head, name)) = segments
+                        .split_last()
+                        .map(|(last, head)| (head, last.clone()))
+                {
+                    let lookup_ns: &[Name] = if head.is_empty() {
+                        &pkg_info.namespace_path
+                    } else {
+                        head
+                    };
+                    if let Some(def) = pkg_items.lookup_type(lookup_ns, &name)
+                        && let baml_compiler2_hir::contributions::Definition::Interface(_) = def
+                    {
+                        let qtn = crate::lower_type_expr::qualify_def(db, def, &name);
+                        builder.set_implements_block_interface(Some(qtn));
+                    }
+                }
+
+                if let FunctionBody::Expr(expr_body) = body.as_ref() {
+                    // The method's in-scope interface bounds (its own params, the
+                    // enclosing class/interface's, and `Self`'s constraint) so a
+                    // `T.member` / `Self.member` projection in the receiver pattern,
+                    // interface arguments, or a binding value resolves nominally.
+                    let env_bounds =
+                        env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &env);
+                    // Determine enclosing class name for `self` parameter
+                    // resolution and BEP-044 `Self`-type substitution.
+                    let enclosing_class_name: Option<Name> = scope.parent.and_then(|parent_idx| {
+                        let parent = &index.scopes[parent_idx.index() as usize];
+                        if matches!(parent.kind, ScopeKind::Class) {
+                            parent.name.clone()
+                        } else {
+                            None
+                        }
+                    });
+                    // `Self`'s type for this body — resolved through the lowering context
+                    // below, never a bare-name substitution: the rigid `Self` type variable
+                    // (interface's own default method), the impl's receiver pattern, or the
+                    // enclosing class's full receiver type (`Foo<T>`, carrying its generics).
+                    let self_ty: Option<Ty> = if interface_self_bound.is_some() {
+                        Some(crate::self_type::self_type_for_interface_default())
+                    } else if let Some(imp) = enclosing_impl
+                        && let baml_compiler2_hir::item_tree::ImplSubject::Free {
+                            for_target, ..
+                        } = &imp.subject
+                    {
+                        let mut diags = Vec::new();
+                        Some(crate::lower_type_expr::lower_type_expr(
+                            for_target,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: &pkg_info.namespace_path,
+                                generic_params: &env.params,
+                                bounds: &env_bounds,
+                                self_ty: None,
+                            },
+                            &mut diags,
+                        ))
+                    } else {
+                        enclosing_class_name.as_ref().and_then(|cn| {
+                            let baml_compiler2_hir::contributions::Definition::Class(class_loc) =
+                                pkg_items.lookup_type(&pkg_info.namespace_path, cn)?
+                            else {
+                                return None;
+                            };
+                            let class_file = class_loc.file(db);
+                            let class_pkg =
+                                baml_compiler2_hir::file_package::file_package(db, class_file);
+                            let class_tree = baml_compiler2_hir::file_item_tree(db, class_file);
+                            let class_data = class_tree.classes.get(&class_loc.id(db))?;
+                            Some(crate::self_type::self_type_for_class(
+                                class_data,
+                                &class_pkg.namespace_path,
+                                class_pkg.package.clone(),
+                            ))
+                        })
+                    };
+                    // The interface bound `Self.Assoc` projects through, as a constraint
+                    // (interface's own default method); `None` when `Self` is concrete.
+                    let self_bound: Option<baml_type::Interface> = interface_self_bound;
+
+                    let sig_sm =
+                        baml_compiler2_ppir::elaborated_function_signature_source_map(db, func_loc);
+                    let mut type_bindings: FxHashMap<Name, Ty> =
+                        type_bindings_for_params(&env.params);
+                    if let Some(target) = item_tree.method_to_iface_target.get(local_id)
+                        && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
+                            db,
+                            target,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                        )
+                    {
+                        let iface_file = iface_loc.file(db);
+                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
+                        if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
+                            let mut iface_type_bindings = type_bindings.clone();
+                            if let baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } =
+                                &target.kind
+                            {
+                                for (param, arg) in
+                                    iface_data.generic_params.iter().zip(generic_args)
+                                {
+                                    let mut arg_diags = Vec::new();
+                                    let ty = {
+                                        let generic_params: Vec<_> =
+                                            type_bindings.keys().cloned().collect();
+                                        crate::generics::substitute_ty(
+                                            &crate::lower_type_expr::lower_type_expr(
+                                                arg,
+                                                &crate::lower_type_expr::ScopeCtx {
+                                                    db,
+                                                    package_items: pkg_items,
+                                                    ns_context: &pkg_info.namespace_path,
+                                                    generic_params: &generic_params,
+                                                    bounds: &env_bounds,
+                                                    self_ty: None,
+                                                },
+                                                &mut arg_diags,
+                                            ),
+                                            &type_bindings,
+                                        )
+                                    };
+                                    for diag in arg_diags {
+                                        builder.report_at_span(diag, target.span);
+                                    }
+                                    iface_type_bindings.insert(param.clone(), ty.clone());
+                                    type_bindings.entry(param.clone()).or_insert(ty);
+                                }
+                            }
+                            let explicit_bindings = item_tree
+                                .method_to_iface_associated_type_bindings
+                                .get(local_id)
+                                .cloned()
+                                .unwrap_or_default();
+                            for assoc in &iface_data.associated_types {
+                                if let Some(binding) =
+                                    explicit_bindings.iter().find(|b| b.name == assoc.name)
+                                    && let Some(te) = &binding.type_expr
+                                {
+                                    // Lower the binding's type through a context that resolves
+                                    // `Self`, then substitute the in-scope generics /
+                                    // associated types accumulated so far.
+                                    let binding_generic_params: Vec<Name> =
+                                        type_bindings.keys().cloned().collect();
+                                    let binding_ctx = crate::lower_type_expr::ScopeCtx {
+                                        db,
+                                        package_items: pkg_items,
+                                        ns_context: &pkg_info.namespace_path,
+                                        generic_params: &binding_generic_params,
+                                        bounds: &env_bounds,
+                                        self_ty: self_ty.clone(),
+                                    };
+                                    let mut binding_diags = Vec::new();
+                                    let ty = crate::generics::substitute_ty(
+                                        &crate::lower_type_expr::lower_type_expr(
+                                            te,
+                                            &binding_ctx,
+                                            &mut binding_diags,
+                                        ),
+                                        &type_bindings,
+                                    );
+                                    for diag in binding_diags {
+                                        builder.report_at_span(diag, te.span);
+                                    }
+                                    // Into `iface_type_bindings` only — the binding realizes
+                                    // later defaults, but the bare name is NOT in scope
+                                    // (banned: the method must write `Self.Item`).
+                                    iface_type_bindings.insert(assoc.name.clone(), ty);
+                                    continue;
+                                }
+                                if let Some((default_ty, _diags)) =
+                                    crate::interfaces::interface_associated_type_default(
+                                        db,
+                                        iface_loc,
+                                        assoc.name.clone(),
+                                    )
+                                {
+                                    // The default is lowered once (symbolic `Self`) by the
+                                    // shared query; substitute the generics / associated
+                                    // types accumulated so far. `Self` stays symbolic here
+                                    // (an interface method body's receiver is rigid), so a
+                                    // Self-referencing default resolves to `(Self as I).X`.
+                                    // Diagnostics surface at the interface declaration.
+                                    // Into `iface_type_bindings` only (see the explicit-
+                                    // binding arm above): bare names are banned.
+                                    let ty = crate::generics::substitute_ty(
+                                        &default_ty,
+                                        &iface_type_bindings,
+                                    );
+                                    iface_type_bindings.insert(assoc.name.clone(), ty);
+                                }
+                            }
+                        }
+                    }
+                    // Inside an interface's own default body, associated types are
+                    // deliberately NOT registered as bare names: a bare `Item` is
+                    // banned everywhere — the body writes `Self.Item`, which lowers
+                    // through the `Self` bound installed below.
+                    builder.set_type_bindings(type_bindings.clone());
+                    // Lower body type annotations through the shared context: `Self` and
+                    // `Self.Assoc` resolve via `self_ty` and the `Self` bound; interface /
+                    // method generics and associated types then substitute in. A bare
+                    // associated name is an in-scope type variable (it is a `type_bindings`
+                    // key) substituted to its symbolic projection, matching `Self.Assoc`.
+                    let body_generic_params: Vec<Name> = type_bindings.keys().cloned().collect();
+                    let mut body_bounds =
+                        crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, func_loc,
+                        )
+                        .clone();
+                    if let Some(bound) = &self_bound {
+                        body_bounds.insert(Name::new("Self"), vec![bound.clone()]);
+                    }
+                    let ctx = crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context: &pkg_info.namespace_path,
+                        generic_params: &body_generic_params,
+                        bounds: &body_bounds,
+                        self_ty: self_ty.clone(),
+                    };
+                    let lower_with_self = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                                           diags: &mut Vec<
+                        crate::infer_context::TirTypeError,
+                    >| {
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags),
+                            &type_bindings,
+                        )
+                    };
+
+                    // Get declared return type
+                    let return_ty = sig
+                        .return_type
+                        .map(|id| {
+                            let span = sig_sm.return_type_span.unwrap_or(func_span);
+                            let mut diags = Vec::new();
+                            let ty = lower_with_self(id, &mut diags);
+                            for diag in diags {
+                                builder.report_at_span(diag, span);
+                            }
+                            builder.validate_type_generic_bounds_at_span(span, &ty);
+                            ty
+                        })
+                        .unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
+
+                    // Set declared return type for return statement checking
+                    builder.set_return_type(return_ty.clone());
+
+                    // Add parameter bindings as locals
+                    for (i, param) in sig.params.iter().enumerate() {
+                        let param_type_span = sig_sm
+                            .param_type_spans
+                            .get(i)
+                            .copied()
+                            .flatten()
+                            .or_else(|| sig_sm.param_spans.get(i).copied())
+                            .unwrap_or_default();
+                        let mut param_ty_validated = false;
+                        let param_ty = if param.name.as_str() == "self"
+                            && matches!(
+                                sig.type_refs[param.type_ref].kind,
+                                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                            ) {
+                            // `self`'s type is the method's `Self` receiver, resolved once
+                            // above (rigid `Self` var for an interface's own default method,
+                            // the impl's receiver pattern, or the enclosing class's `Foo<T>`).
+                            self_ty.clone().unwrap_or(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            })
+                        } else {
+                            param_ty_validated = true;
+                            let mut param_diags = Vec::new();
+                            let ty = lower_with_self(param.type_ref, &mut param_diags);
+                            for diag in param_diags {
+                                builder.report_at_span(diag, param_type_span);
+                            }
+                            builder.validate_type_generic_bounds_at_span(param_type_span, &ty);
+                            ty
+                        };
+                        if !param_ty_validated {
+                            builder
+                                .validate_type_generic_bounds_at_span(param_type_span, &param_ty);
+                        }
+                        builder.add_local(param.name.clone(), param_ty.clone());
+                        builder.param_types.push((param.name.clone(), param_ty));
+                    }
+
+                    let param_types = builder.param_types.clone();
+                    let parameter_defaults =
+                        baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                    builder.check_function_parameter_defaults(
+                        &func_data.params,
+                        &parameter_defaults,
+                        &param_types,
+                    );
+
+                    // Check root expression against declared return type
+                    if let Some(root_expr) = expr_body.root_expr {
+                        builder.check_expr(root_expr, expr_body, &return_ty);
+                    }
+
+                    // Validate declared `throws` against effective escaping throws.
+                    // Auto-derived methods (synthesized `to_json` /
+                    // `from_json`) use a conservative pre-baked throws
+                    // clause; the body's actual escaping throws can be
+                    // wider when fields have malformed/unknown types.
+                    // The user can't fix the synthesized contract, so
+                    // skip the entire check for auto-derive bodies.
+                    let is_auto_derive =
+                        matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
+                    if !is_auto_derive {
+                        builder.check_throws_contract(
+                            expr_body,
+                            &sig.type_refs,
+                            sig.throws,
+                            sig_sm.throws_type_span,
+                            func_span,
+                            true,
+                        );
+                    }
+                }
+            } else {
                 // Template strings create ScopeKind::Function scopes but are
                 // stored in item_tree.template_strings, not item_tree.functions.
                 // They have no expression body to type-check, so skip silently.
@@ -2132,6 +2178,60 @@ pub fn infer_scope_types<'db>(
             }
         }
         ScopeKind::Lambda => {
+            // Fast path: the owning Function/Let scope's inline pass already
+            // inferred this lambda's body and captured its full tables (see
+            // `NestedLambdaInference`). Project them out instead of re-inferring
+            // the body here. This is what makes lambda-body inference happen
+            // exactly once — the standalone Lambda query used to re-walk the
+            // body from scratch, duplicating both the work AND every diagnostic
+            // reported inside the lambda. The projected `ScopeInference` carries
+            // no `extra`/diagnostics, so the lambda's diagnostics stay with the
+            // owner scope and are reported once.
+            //
+            // Synthetic tagged-template bodies (`is_template_body`) have no
+            // backing `Expr::Lambda` and are never captured, so they fall
+            // through to the standalone inference below; likewise any miss
+            // (e.g. the empty owner inference produced during a Salsa cycle
+            // iteration).
+            if !scope.is_template_body {
+                let owner_fsi =
+                    index
+                        .ancestor_scopes(file_scope)
+                        .into_iter()
+                        .find(|fsi: &FileScopeId| {
+                            matches!(
+                                index.scopes[fsi.index() as usize].kind,
+                                ScopeKind::Function | ScopeKind::Let
+                            )
+                        });
+                if let Some(owner_fsi) = owner_fsi {
+                    let owner_scope_id = index.scope_ids[owner_fsi.index() as usize];
+                    let owner_inference = infer_scope_types(db, owner_scope_id);
+                    if let Some(tables) = owner_inference.nested_lambda_inference(file_scope) {
+                        let tables = tables.clone();
+                        return ScopeInference {
+                            expressions: tables.expressions,
+                            pattern_types: tables.pattern_types,
+                            resolutions: tables.resolutions,
+                            catch_residual_throws: tables.catch_residual_throws,
+                            exhaustive_matches: tables.exhaustive_matches,
+                            path_root_types: tables.path_root_types,
+                            path_segment_types: tables.path_segment_types,
+                            path_member_resolutions: tables.path_member_resolutions,
+                            nested_lambda_types: FxHashMap::default(),
+                            template_body_params: FxHashMap::default(),
+                            nested_lambda_inference: FxHashMap::default(),
+                            param_types: tables.param_types,
+                            call_plans: tables.call_plans,
+                            call_type_instantiations: tables.call_type_instantiations,
+                            function_coercions: tables.function_coercions,
+                            parameter_defaults: DefaultParameterInference::empty(),
+                            extra: None,
+                        };
+                    }
+                }
+            }
+
             // Find the enclosing Function (or Let) scope by walking ancestors.
             // The Lambda scope does not directly store its body — we must find
             // the top-level body (Function or Let) and then locate the lambda
@@ -2225,16 +2325,17 @@ pub fn infer_scope_types<'db>(
             // Walk ancestors to find a Function or Let scope that has a body.
             'ancestor_walk: for ancestor_fsi in index.ancestor_scopes(file_scope) {
                 let ancestor_scope = &index.scopes[ancestor_fsi.index() as usize];
+                let ancestor_owner = baml_compiler2_ppir::item_data::scope_owner(
+                    db,
+                    index.scope_ids[ancestor_fsi.index() as usize],
+                );
                 match &ancestor_scope.kind {
                     ScopeKind::Function => {
-                        // Find the function by span + name in the item tree
-                        for func_data in item_tree.functions.values() {
-                            if func_data.span != ancestor_scope.range {
-                                continue;
-                            }
-                            if ancestor_scope.name.as_ref() != Some(&func_data.name) {
-                                continue;
-                            }
+                        if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(
+                            ancestor_func,
+                        )) = ancestor_owner
+                        {
+                            let func_data = &item_tree[ancestor_func.id(db)];
                             // Get the function body from item_tree (includes source map)
                             if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
                                 ref func_body,
@@ -2265,11 +2366,12 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         generic_env_for_function_data(
                                             GenericLookupContext {
+                                                db,
                                                 index,
                                                 item_tree: &item_tree,
                                             },
                                             ancestor_scope,
-                                            func_data,
+                                            ancestor_func,
                                         ),
                                         func_def,
                                     );
@@ -2306,15 +2408,9 @@ pub fn infer_scope_types<'db>(
                         }
                     }
                     ScopeKind::Let => {
-                        // Find the let binding by span + name in the item tree
-                        for (local_id, let_data) in &item_tree.lets {
-                            if let_data.span != ancestor_scope.range {
-                                continue;
-                            }
-                            if ancestor_scope.name.as_ref() != Some(&let_data.name) {
-                                continue;
-                            }
-                            let let_loc = LetLoc::new(db, file, *local_id);
+                        if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc)) =
+                            ancestor_owner
+                        {
                             let body = baml_compiler2_hir::body::let_body(db, let_loc);
                             let source_map_opt =
                                 baml_compiler2_hir::body::let_body_source_map(db, let_loc);
@@ -2341,6 +2437,7 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         enclosing_function_generic_env_from_let(
                                             GenericLookupContext {
+                                                db,
                                                 index,
                                                 item_tree: &item_tree,
                                             },
@@ -2388,15 +2485,12 @@ pub fn infer_scope_types<'db>(
         }
         ScopeKind::Class => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            for (local_id, class_data) in &item_tree.classes {
-                if class_data.span != scope.range || scope.name.as_ref() != Some(&class_data.name) {
-                    continue;
-                }
-                report_duplicate_generic_params(
-                    &builder,
-                    &class_data.generic_params,
-                    class_data.span,
-                );
+            let scope_item = baml_compiler2_ppir::item_data::scope_owner(db, scope_id);
+            if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Class(class_loc)) = scope_item {
+                let class_data = &item_tree[class_loc.id(db)];
+                let class_span =
+                    baml_compiler2_ppir::item_data::class_source_map(db, class_loc).span;
+                report_duplicate_generic_params(&builder, &class_data.generic_params, class_span);
                 let mut env = GenericEnv::from_params(class_data.generic_params.clone());
                 env.add_bounds_for_declared_params(
                     &class_data.generic_params,
@@ -2408,27 +2502,22 @@ pub fn infer_scope_types<'db>(
                     pkg_items,
                     &pkg_info.namespace_path,
                     &env,
-                    class_data.span,
+                    class_span,
                 );
-                let class_loc = ClassLoc::new(db, file, *local_id);
                 let resolved = resolve_class_fields(db, class_loc);
                 for (field, (_, ty, _)) in class_data.fields.iter().zip(resolved.fields.iter()) {
                     if let Some(type_expr) = &field.type_expr {
                         builder.validate_type_generic_bounds_at_span(type_expr.span, ty);
                     }
                 }
-                break;
             }
-            for (local_id, iface_data) in &item_tree.interfaces {
-                if iface_data.span != scope.range || scope.name.as_ref() != Some(&iface_data.name) {
-                    continue;
-                }
-                let iface_loc = InterfaceLoc::new(db, file, *local_id);
-                report_duplicate_generic_params(
-                    &builder,
-                    &iface_data.generic_params,
-                    iface_data.span,
-                );
+            if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Interface(iface_loc)) =
+                scope_item
+            {
+                let iface_data = &item_tree[iface_loc.id(db)];
+                let iface_span =
+                    baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc).span;
+                report_duplicate_generic_params(&builder, &iface_data.generic_params, iface_span);
                 // Associated types share the interface's type-level namespace with its
                 // generic parameters (a bare `Assoc` reference lowers as a type variable),
                 // so a name collision — with a parameter or another associated type —
@@ -2465,7 +2554,7 @@ pub fn infer_scope_types<'db>(
                 if let Some(chain) = crate::interfaces::interface_requires_cycle(db, iface_loc) {
                     builder.report_at_span(
                         crate::infer_context::TirTypeError::InterfaceRequiresCycle { chain },
-                        iface_data.span,
+                        iface_span,
                     );
                 }
                 // E0136: a field type may not name the *bare* `Self` type (a recursive field
@@ -2599,7 +2688,7 @@ pub fn infer_scope_types<'db>(
                     pkg_items,
                     &pkg_info.namespace_path,
                     &iface_env,
-                    iface_data.span,
+                    iface_span,
                 );
                 // Computed once per env — every signature type expr below shares it.
                 let iface_env_bounds =
@@ -2787,16 +2876,15 @@ pub fn infer_scope_types<'db>(
                 // the impl site when one class field is forced to satisfy two of them (E0116), and
                 // ambiguous unqualified access is a use-site check. There is deliberately no
                 // declaration-level inherited-field-conflict check.
-                break;
             }
         }
         ScopeKind::Let => {
             // Top-level let binding — find the matching let in the item tree
             // and type-infer its initializer expression.
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            for (local_id, let_data) in &item_tree.lets {
-                if let_data.span == scope.range && scope.name.as_ref() == Some(&let_data.name) {
-                    let let_loc = LetLoc::new(db, file, *local_id);
+            if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc)) =
+                baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+            {
+                {
                     let body = baml_compiler2_hir::body::let_body(db, let_loc);
 
                     if let LetBody::Expr(expr_body) = body.as_ref() {
@@ -2805,22 +2893,19 @@ pub fn infer_scope_types<'db>(
                             builder.infer_expr(root_expr, expr_body);
                         }
                     }
-                    break;
                 }
             }
         }
         ScopeKind::TypeAlias => {
             let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            for (local_id, alias_data) in &item_tree.type_aliases {
-                if alias_data.span != scope.range || scope.name.as_ref() != Some(&alias_data.name) {
-                    continue;
-                }
-                let alias_loc = TypeAliasLoc::new(db, file, *local_id);
+            if let Some(baml_compiler2_ppir::item_data::ScopeOwner::TypeAlias(alias_loc)) =
+                baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+            {
+                let alias_data = &item_tree[alias_loc.id(db)];
                 let resolved = resolve_type_alias(db, alias_loc);
                 if let Some(type_expr) = &alias_data.type_expr {
                     builder.validate_type_generic_bounds_at_span(type_expr.span, &resolved.ty);
                 }
-                break;
             }
         }
         _ => {
@@ -2846,6 +2931,7 @@ pub fn infer_scope_types<'db>(
         nested_lambda_types,
         template_body_params,
         parameter_defaults,
+        nested_lambda_inference,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -2865,6 +2951,7 @@ pub fn infer_scope_types<'db>(
         path_member_resolutions,
         nested_lambda_types,
         template_body_params,
+        nested_lambda_inference,
         param_types,
         call_plans,
         call_type_instantiations,
@@ -2937,13 +3024,41 @@ pub fn enum_variants<'db>(
     Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
 }
 
-/// Build the type-alias map visible from a package: its own aliases plus those
-/// re-exported by its dependencies. Shared by per-scope inference and throws
-/// analysis so both expand the same aliases (e.g. `testing.TestSetBody`).
-pub(crate) fn package_alias_map<'db>(
-    db: &'db dyn crate::Db,
-    res_ctx: &crate::package_interface::PackageResolutionContext<'db>,
+/// Cycle seed for [`package_resolved_aliases`]: the empty alias environment.
+///
+/// An alias whose RHS contains an associated-type projection (`type A = T.Member`)
+/// resolves through impl resolution and inference, which in turn read this very
+/// alias map — a legitimate Salsa dependency cycle. Salsa resolves it by fixpoint
+/// iteration seeded here with an empty environment (mirroring
+/// [`infer_scope_types`]'s empty [`ScopeInference`] seed and
+/// [`resolve_type_alias`]'s "still inferring" sentinel): the first iteration
+/// resolves every alias it can without the map, and iteration re-runs until the
+/// environment stops changing.
+fn package_resolved_aliases_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _pkg_id: PackageId<'db>,
 ) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
+    HashMap::new()
+}
+
+/// The type-alias map visible from a package: its own aliases plus those
+/// re-exported by its dependencies. Shared by per-scope inference, throws
+/// analysis, and impl checking so all expand the same aliases (e.g.
+/// `testing.TestSetBody`).
+///
+/// Salsa-tracked and keyed by package: before this was a query, the map was
+/// rebuilt — a full clone of every alias `Ty` plus a project walk — inside
+/// every `infer_scope_types` execution (~15.6k executions on the test corpus).
+/// Hoisting is safe because the map is a pure function of the package's
+/// declarations (never of any per-scope inference state); the alias-resolution
+/// cycle it sits in is handled by `cycle_initial` above.
+#[salsa::tracked(returns(ref), cycle_initial = package_resolved_aliases_cycle_initial)]
+pub fn package_resolved_aliases<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let mut aliases = collect_type_aliases(db, &res_ctx.own_items);
     for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
         for types_in_ns in dep_iface.types.values() {
@@ -3240,72 +3355,47 @@ pub fn render_scope_diagnostics<'db>(
             // then use find_lambda_by_span to get the lambda's own source map.
             let lambda_span = scope.range;
             let mut found_sm = None;
-            'ancestor: for ancestor_fsi in index.ancestor_scopes(file_scope) {
-                let ancestor = &index.scopes[ancestor_fsi.index() as usize];
-                match &ancestor.kind {
-                    ScopeKind::Function => {
-                        for func_data in item_tree.functions.values() {
-                            if func_data.span == ancestor.range
-                                && ancestor.name.as_ref() == Some(&func_data.name)
-                            {
-                                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                                    ref body,
-                                    ref sm,
-                                )) = func_data.body
-                                {
-                                    if let Some((_, _, lambda_sm, _)) =
-                                        find_lambda_by_span(body, sm, lambda_span)
-                                    {
-                                        found_sm = Some(lambda_sm.clone());
-                                    }
-                                }
-                                break 'ancestor;
+            for ancestor_fsi in index.ancestor_scopes(file_scope) {
+                let ancestor_scope = index.scope_ids[ancestor_fsi.index() as usize];
+                let Some(owner) = baml_compiler2_ppir::item_data::scope_owner(db, ancestor_scope)
+                else {
+                    continue;
+                };
+                // The first Function/Let ancestor owns the body the lambda lives in.
+                let body_and_map = match owner {
+                    baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc) => {
+                        match &item_tree[func_loc.id(db)].body {
+                            Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, sm)) => {
+                                Some((body.clone(), sm.clone()))
                             }
+                            _ => None,
                         }
                     }
-                    ScopeKind::Let => {
-                        for let_data in item_tree.lets.values() {
-                            if let_data.span == ancestor.range
-                                && ancestor.name.as_ref() == Some(&let_data.name)
-                            {
-                                if let Some((ref body, ref sm)) = let_data.initializer {
-                                    if let Some((_, _, lambda_sm, _)) =
-                                        find_lambda_by_span(body, sm, lambda_span)
-                                    {
-                                        found_sm = Some(lambda_sm.clone());
-                                    }
-                                }
-                                break 'ancestor;
-                            }
-                        }
+                    baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc) => {
+                        item_tree[let_loc.id(db)].initializer.clone()
                     }
-                    _ => {}
+                    _ => continue,
+                };
+                if let Some((body, sm)) = body_and_map
+                    && let Some((_, _, lambda_sm, _)) = find_lambda_by_span(&body, &sm, lambda_span)
+                {
+                    found_sm = Some(lambda_sm.clone());
                 }
+                break;
             }
             found_sm
         }
         _ => {
-            // For Function/Let scopes, find the source map directly.
-            // Use PPIR's canonical version so PPIR-synthesized functions are found.
-            item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
-                .and_then(|(local_id, _)| {
-                    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+            // Function/Let scopes: the owner is recorded, so no scan is needed.
+            match baml_compiler2_ppir::item_data::scope_owner(db, scope_id) {
+                Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) => {
                     baml_compiler2_ppir::function_body_source_map(db, func_loc)
-                })
-                .or_else(|| {
-                    // Also search let bindings.
-                    item_tree
-                        .lets
-                        .iter()
-                        .find(|(_, l)| l.span == scope.range)
-                        .and_then(|(local_id, _)| {
-                            let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
-                            baml_compiler2_hir::body::let_body_source_map(db, let_loc)
-                        })
-                })
+                }
+                Some(baml_compiler2_ppir::item_data::ScopeOwner::Let(let_loc)) => {
+                    baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                }
+                _ => None,
+            }
         }
     };
 

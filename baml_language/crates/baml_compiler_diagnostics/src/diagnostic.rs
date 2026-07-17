@@ -341,6 +341,13 @@ pub enum DiagnosticId {
     /// never matched, so `ctx.output_format` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
+
+    // Numeric literal validation (E0152)
+    /// A numeric literal token failed validation in `baml_base::num_lit`:
+    /// uppercase base prefix (`0X1F`), no digits after the prefix (`0x`),
+    /// a digit invalid for the base (`0b12`), or an integer literal whose
+    /// magnitude exceeds `i64::MAX`.
+    InvalidNumericLiteral,
 }
 
 impl DiagnosticId {
@@ -550,6 +557,9 @@ impl DiagnosticId {
 
             // Function-type throws requirement
             DiagnosticId::FunctionTypeMissingThrows => "E0151",
+
+            // Numeric literal validation
+            DiagnosticId::InvalidNumericLiteral => "E0152",
         }
     }
 }

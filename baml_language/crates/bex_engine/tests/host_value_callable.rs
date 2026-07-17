@@ -873,7 +873,7 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
 //         `baml.panics.HostContractViolation` (which would falsely accuse
 //         the user's callable of returning the wrong shape).
 //
-//         The host SDKs (bridge_python / bridge_nodejs) then render this
+//         The host SDKs (bridge_python / bridge_typescript) then render this
 //         internal error as `baml.panics.SdkPanic` on their side, but that
 //         translation is the bridge SDK's responsibility; the engine's
 //         contract is only to surface it as an internal error.

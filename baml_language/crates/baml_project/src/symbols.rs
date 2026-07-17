@@ -5,9 +5,9 @@
 
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    file_item_tree,
     package::{PackageId, package_items},
 };
+use baml_compiler2_ppir::item_data::{function_data, function_llm_meta, test_data};
 use baml_compiler2_tir::package_interface::package_interface;
 use baml_db::Name;
 
@@ -138,26 +138,17 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
     for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
             if let Definition::Function(func_loc) = defn {
-                let item_tree = file_item_tree(db, func_loc.file(db));
-                let func = &item_tree[func_loc.id(db)];
-
-                let is_llm = matches!(
-                    func.declarative_meta,
-                    Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
-                );
-                let client_name =
-                    if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
-                        func.declarative_meta
-                    {
-                        llm.client.as_ref().map(std::string::ToString::to_string)
-                    } else {
-                        None
-                    };
+                let llm_meta = function_llm_meta(db, *func_loc);
+                let is_llm = llm_meta.is_some();
+                let client_name = llm_meta
+                    .as_ref()
+                    .and_then(|meta| meta.client_name.as_ref())
+                    .map(std::string::ToString::to_string);
 
                 // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
                 let is_sub_function = name.as_str().contains('$');
 
-                let origin: FunctionOrigin = func.origin.into();
+                let origin: FunctionOrigin = function_data(db, *func_loc).origin.into();
                 // Companions clone parent params verbatim and non-userDefined
                 // functions are hidden by default — extracting schemas for
                 // them only duplicates payload. The UI degrades to raw mode.
@@ -210,8 +201,7 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
             if let Definition::Test(test_loc) = defn {
-                let item_tree = file_item_tree(db, test_loc.file(db));
-                let test = &item_tree[test_loc.id(db)];
+                let test = test_data(db, *test_loc);
 
                 let args_json = serialize_test_args(&test.args);
                 result.extend(test.function_refs.iter().map(|function_name| {

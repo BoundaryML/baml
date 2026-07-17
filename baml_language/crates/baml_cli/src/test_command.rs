@@ -470,7 +470,21 @@ fn render_test_list(
     );
     // Indented list under the cargo-style status line. These are content (the
     // actual list), not status updates, so they go to stdout as plain prints.
-    for t in legacy_selected {
+    //
+    // Canonicalize the order at this single render point — both the fresh-compile
+    // and bytecode-cache paths flow through here — so `--list` output is
+    // byte-identical between them regardless of upstream map/enumeration order.
+    // Sort by (function, test) so each function's tests group together (a legacy
+    // `test` is function-attached), with the path as a final deterministic tiebreak.
+    let mut legacy_sorted: Vec<&crate::bytecode_cache::CachedLegacyTest> =
+        legacy_selected.iter().collect();
+    legacy_sorted.sort_by(|a, b| {
+        a.function_name
+            .cmp(&b.function_name)
+            .then_with(|| a.test_name.cmp(&b.test_name))
+            .then_with(|| a.file_path.cmp(&b.file_path))
+    });
+    for t in legacy_sorted {
         println!("  {}::{}  ({})", t.function_name, t.test_name, t.file_path);
     }
     for name in testset_names {
@@ -499,20 +513,20 @@ fn discover_legacy_tests(
     db: &ProjectDatabase,
     project: baml_workspace::Project,
 ) -> Vec<LegacyTest> {
-    use baml_db::baml_compiler2_hir;
+    use baml_db::baml_compiler2_ppir::item_data::{file_tests, test_data};
 
     let mut tests = Vec::new();
     let root = project.root(db);
 
     for source_file in db.get_source_files() {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
         // Root-relative for display, matching how emit records source paths —
         // keeps `--list` output identical between compiled and
         // bytecode-cache-served runs.
         let file_path = source_file.path(db);
         let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
 
-        for test in item_tree.tests.values() {
+        for test_loc in file_tests(db, source_file) {
+            let test = test_data(db, *test_loc);
             for func_ref in &test.function_refs {
                 tests.push(LegacyTest {
                     function_name: func_ref.to_string(),

@@ -40,7 +40,7 @@ importers:
 
   baml_language/crates/baml_cli: {}
 
-  baml_language/sdks/nodejs/bridge_nodejs:
+  baml_language/sdks/typescript/bridge_typescript:
     dependencies:
       protobufjs:
         specifier: ^7.6.2

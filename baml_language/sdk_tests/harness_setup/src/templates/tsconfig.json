@@ -10,9 +10,9 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "preserveSymlinks": true,
-    "rootDir": ".",
+    "rootDir": "node",
     "types": ["node", "vitest"]
   },
-  "include": ["**/*.ts"],
+  "include": ["node/**/*.ts"],
   "exclude": ["node_modules"]
 }

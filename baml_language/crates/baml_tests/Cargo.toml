@@ -51,6 +51,7 @@ darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
 libc = { workspace = true }
 num-bigint = { workspace = true }
+rayon = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }

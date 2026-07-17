@@ -186,8 +186,8 @@ fn package_impls_with_spans<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<(&'db ImplData<'db>, Span)> {
     package_impl_locs(db, pkg_id)
-        .into_iter()
-        .filter_map(|loc| {
+        .iter()
+        .filter_map(|&loc| {
             let data = impl_data(db, loc).as_ref().ok()?;
             let span = impl_data_source_map(db, loc)
                 .as_ref()

@@ -1030,3 +1030,24 @@ test "float_nan_ge_method_is_false" {
 test "float_floor_bare_literal" {
     assert.is_true(baml.deep_equals(2.5.floor(), 2.0))
 }
+
+// ─── underscore separators ────────────────────────────────────────────────────
+// `_` digit separators are allowed in the mantissa, fraction, and exponent
+// (the exponent must start with a digit). Underscores are stripped during
+// AST lowering, so downstream f64 parsing never sees them.
+
+test "float_underscore_mantissa" {
+    assert.is_true(baml.deep_equals(1_000.5, 1000.5))
+}
+
+test "float_underscore_fraction" {
+    assert.is_true(baml.deep_equals(1.000_1, 1.0001))
+}
+
+test "float_underscore_exponent" {
+    assert.is_true(baml.deep_equals(1e1_0, 1e10))
+}
+
+test "float_underscore_everywhere" {
+    assert.is_true(baml.deep_equals(1_234.567_8e1_0, 1234.5678e10))
+}
