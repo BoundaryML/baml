@@ -258,6 +258,16 @@ jobs:
     runs-on: blacksmith-8vcpu-windows-2025
     env:
       CARGO_BUILD_JOBS: "16"
+      # Windows debug builds emit very large PDBs; full debuginfo across the
+      # whole `--all-features` test build overruns the runner's ~130 GB disk
+      # ("no space on device" during codegen, before any test runs).
+      # `line-tables-only` keeps file:line backtraces for test failures while
+      # dropping the bulk of the debug-info size (variable/type DIEs). Pinned on
+      # both `dev` (dependencies) and `test` (the `--test` binaries, which
+      # inherit `dev` but are pinned explicitly so the reduction is unambiguous).
+      # Drop to "0" if this is still too tight.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
