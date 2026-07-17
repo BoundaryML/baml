@@ -51,7 +51,7 @@ static void TestArgTwoState() {
   baml::Arg<int64_t> unset_arg;
   assert(unset_arg.is_unset() && !unset_arg.is_set());
 
-  baml::Arg<int64_t> explicit_unset = baml::unset;
+  baml::Arg<int64_t> explicit_unset = baml::kUnset;
   assert(explicit_unset.is_unset());
 
   baml::Arg<int64_t> value_arg = int64_t{42};

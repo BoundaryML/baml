@@ -13,6 +13,6 @@
 #include <baml/detail/registry.h>
 #include <baml/errors.h>
 #include <baml/runtime.h>
-#include <baml/variant.h>
+#include <baml/union.h>
 
 #endif  // BAML_BAML_H_

@@ -4,7 +4,7 @@
 #include <baml_test.h>
 
 using baml_sdk::lists::ListContainer;
-using IntOrString = baml::variant<int64_t, std::string>;
+using IntOrString = baml::Union<int64_t, std::string>;
 
 BAML_TEST(round_trip_ints) {
   const std::vector<int64_t> xs{1, 2, 3};

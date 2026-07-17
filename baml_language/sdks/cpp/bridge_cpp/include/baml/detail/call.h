@@ -17,7 +17,7 @@
 namespace baml {
 namespace detail {
 
-// ThrownU is the function's declared `throws` set as a baml::variant (void
+// ThrownU is the function's declared `throws` set as a baml::Union (void
 // when the function declares none): the error arm then surfaces as
 // BamlThrown<ThrownU> instead of an untyped BamlError.
 template <typename Ret, typename ThrownU = void>

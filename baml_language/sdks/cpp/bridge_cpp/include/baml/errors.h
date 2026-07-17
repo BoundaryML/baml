@@ -56,11 +56,11 @@ class BamlPanic : public BamlError {
 };
 
 // A thrown BAML value decoded into the function's declared `throws` set:
-// generated bindings throw BamlThrown<baml::variant<A, B>> when the error
+// generated bindings throw BamlThrown<baml::Union<A, B>> when the error
 // arm decodes into that set, so a catch site reads the typed payload with
-// baml::match instead of probing is<T>()/get<T>(). The template argument
-// is order-canonical (baml::variant), so BamlThrown<variant<A, B>>
-// and BamlThrown<variant<B, A>> are the same catchable type. Derives BamlError:
+// baml::Match instead of probing is<T>()/get<T>(). The template argument
+// is order-canonical (baml::Union), so BamlThrown<Union<A, B>> and
+// BamlThrown<Union<B, A>> are the same catchable type. Derives BamlError:
 // untyped catch sites keep working, and an undeclared thrown value (one
 // outside the declared set) still surfaces as a plain BamlError.
 template <class U>

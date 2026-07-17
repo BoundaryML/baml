@@ -16,10 +16,10 @@ namespace baml {
 
 // Explicit spelling for the unset state of an optional argument (Python's
 // UNSET analog). Omitting the setter is equivalent.
-struct unset_t {
-  explicit constexpr unset_t() = default;
+struct Unset {
+  explicit constexpr Unset() = default;
 };
-inline constexpr unset_t unset{};
+inline constexpr Unset kUnset{};
 
 namespace detail {
 
@@ -40,7 +40,7 @@ template <typename T>
 class Arg {
  public:
   Arg() = default;
-  Arg(unset_t) {}
+  Arg(Unset) {}
 
   // Converting constructor so e.g. a string literal reaches
   // Arg<std::optional<std::string>> in one user-defined conversion
@@ -49,7 +49,7 @@ class Arg {
             typename = std::enable_if_t<
                 std::is_constructible<T, U&&>::value &&
                 !std::is_same<std::decay_t<U>, Arg>::value &&
-                !std::is_same<std::decay_t<U>, unset_t>::value &&
+                !std::is_same<std::decay_t<U>, Unset>::value &&
                 !(std::is_same<std::decay_t<U>, std::monostate>::value &&
                   detail::is_std_optional<T>::value)>>
   Arg(U&& value) : value_(std::in_place, std::forward<U>(value)) {}

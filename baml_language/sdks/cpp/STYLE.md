@@ -15,10 +15,10 @@ guide itself:
 2. std-mimicking vocabulary API keeps std spelling: `Arg` (`is_set`,
    `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
    `operator->`), `OwnedBuffer` (`data`, `size`, `empty`, `to_string`),
-   `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`, and
-   `baml::variant`/`baml::match` (the union surface deliberately mirrors
-   `std::variant`/`std::visit` vocabulary; it cannot be `baml::union`
-   because `union` is a C++ keyword).
+   `BamlError` (`is<T>`, `get<T>`, `what`).
+   (The union surface is regular Google style: `baml::Union` type alias,
+   `baml::Match` function, `baml::Unset`/`baml::kUnset` sentinel;
+   lowercase `union` is a C++ keyword regardless.)
 3. Type traits keep std spelling: `is_std_optional`, `has_set_opt1`,
    `has_set_opt3`.
 4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.

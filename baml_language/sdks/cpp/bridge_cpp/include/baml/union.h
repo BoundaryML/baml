@@ -1,19 +1,20 @@
-#ifndef BAML_VARIANT_H_
-#define BAML_VARIANT_H_
+#ifndef BAML_UNION_H_
+#define BAML_UNION_H_
 
-// baml::variant<Ts...>: BAML's union type as an order-canonical
+// baml::Union<Ts...>: BAML's union type as an order-canonical
 // std::variant.
 //
 // BAML unions are sets (`string | int` == `int | string`), but
 // std::variant<A, B> and std::variant<B, A> are distinct C++ types.
-// baml::variant sorts its alternatives at compile time (by a per-type
+// baml::Union sorts its alternatives at compile time (by a per-type
 // constexpr name), so every spelling of the same alternative set resolves
 // to the SAME std::variant instantiation. It is an alias, not a wrapper
-// class: a baml::variant value is a plain std::variant and works with
+// class: a baml::Union value is a plain std::variant and works with
 // std::get, std::holds_alternative, std::visit, and every other variant
-// API. (It would be spelled baml::union, but `union` is a C++ keyword.)
+// API. (Lowercase `union` is a C++ keyword; Union is also the regular
+// Google spelling for a type alias.)
 //
-// baml::match(u, arms...) is the reading companion: one callable per
+// baml::Match(u, arms...) is the reading companion: one callable per
 // alternative, dispatched by TYPE (never by index, which is meaningless
 // under canonical ordering). std::visit enforces exhaustiveness at compile
 // time; a `[](const auto&) { ... }` arm is the explicit catch-all.
@@ -75,7 +76,7 @@ struct CanonSort {
 // Alias, not a class: every alternative-set spelling resolves to the same
 // std::variant instantiation.
 template <class... Ts>
-using variant = typename detail::CanonSort<Ts...>::type;
+using Union = typename detail::CanonSort<Ts...>::type;
 
 namespace detail {
 
@@ -88,16 +89,16 @@ Overloaded(Fs...) -> Overloaded<Fs...>;
 
 }  // namespace detail
 
-// Pattern matching over a baml::variant (or any std::variant): one callable per
+// Pattern matching over a baml::Union (or any std::variant): one callable per
 // alternative, dispatched by type. A missing arm is a compile error;
 // `[](const auto&) { ... }` is the explicit catch-all (spell the parameter
 // `const auto&`, not `auto&&`, or it out-competes the exact arms).
 template <class V, class... Fs>
-decltype(auto) match(V&& v, Fs&&... fs) {
+decltype(auto) Match(V&& v, Fs&&... fs) {
   return std::visit(detail::Overloaded{std::forward<Fs>(fs)...},
                     std::forward<V>(v));
 }
 
 }  // namespace baml
 
-#endif  // BAML_VARIANT_H_
+#endif  // BAML_UNION_H_
