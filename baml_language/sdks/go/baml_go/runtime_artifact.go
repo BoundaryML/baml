@@ -63,8 +63,10 @@ var artifactLocks sync.Map
 // ConfigureRuntime sets process-wide native-runtime resolution. It may be
 // called repeatedly until a runtime has been loaded.
 func ConfigureRuntime(config RuntimeConfig) error {
-	nativeRuntime.Lock()
-	defer nativeRuntime.Unlock()
+	if err := nativeRuntime.acquire(context.Background()); err != nil {
+		return err
+	}
+	defer nativeRuntime.release()
 	if nativeRuntime.loaded {
 		return errors.New("configure BAML runtime: native runtime is already loaded")
 	}
@@ -247,6 +249,9 @@ type releaseRuntimeArtifact struct {
 }
 
 func resolveManifestArtifact(ctx context.Context, config RuntimeConfig) (RuntimeArtifact, error) {
+	if !safePathSegment(config.Version) {
+		return RuntimeArtifact{}, fmt.Errorf("BAML runtime version %q is not a safe path segment", config.Version)
+	}
 	manifestPath := filepath.Join(config.CacheDir, "manifests", config.Version+".json")
 	contents, err := os.ReadFile(manifestPath)
 	if err != nil && !os.IsNotExist(err) {

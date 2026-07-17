@@ -745,7 +745,12 @@ jobs:
 
       - name: "Build for WASM"
         run: |
+          set -euo pipefail
           readarray -t wasm_packages < <(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
+          if [[ ${#wasm_packages[@]} -eq 0 ]]; then
+            echo "Error: no WASM packages discovered; cargo metadata or jq may have failed" >&2
+            exit 1
+          fi
           package_args=()
           for package in "${wasm_packages[@]}"; do
             package_args+=(-p "$package")

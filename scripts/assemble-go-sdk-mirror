@@ -27,6 +27,7 @@ def main() -> None:
     shutil.copytree(
         source,
         destination,
+        symlinks=True,
         ignore=shutil.ignore_patterns(".DS_Store", "__pycache__", "*.pyc"),
     )
     shutil.copy2(repository / "LICENSE", destination / "LICENSE")

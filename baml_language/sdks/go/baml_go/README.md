@@ -16,11 +16,23 @@ and retains the bridge identity for consistent diagnostics and telemetry.
 
 ## Local development
 
-Build the runtime and point generated Go tests at it:
+Build the runtime and point generated Go tests at the platform library.
+
+macOS or Linux:
 
 ```bash
 cargo build -p bridge_cffi
-export BAML_RUNTIME_PATH="$PWD/target/debug/libbridge_cffi.dylib"
+case "$(uname -s)" in
+  Darwin) export BAML_RUNTIME_PATH="$PWD/target/debug/libbridge_cffi.dylib" ;;
+  Linux)  export BAML_RUNTIME_PATH="$PWD/target/debug/libbridge_cffi.so" ;;
+esac
+```
+
+Windows PowerShell:
+
+```powershell
+cargo build -p bridge_cffi
+$env:BAML_RUNTIME_PATH = "$PWD\target\debug\bridge_cffi.dll"
 ```
 
 `BAML_RUNTIME_PATH` is the highest-priority local override and never performs

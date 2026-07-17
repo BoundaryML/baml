@@ -1,11 +1,53 @@
 package baml_go
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestCallRejectsNULInFunctionNameBeforeRuntimeInitialization(t *testing.T) {
+	_, err := Call(context.Background(), "user.foo\x00bar", nil)
+	if err == nil || err.Error() != "baml_go.Call: function name contains a NUL byte" {
+		t.Fatalf("got error %v, want embedded-NUL diagnostic", err)
+	}
+}
+
+func TestRuntimeInitializationWaitHonorsCancellation(t *testing.T) {
+	state := newNativeRuntimeState()
+	if err := state.acquire(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := state.acquire(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got error %v, want context cancellation", err)
+	}
+	state.release()
+}
+
+func TestReservePendingCallSkipsOccupiedIDAfterWraparound(t *testing.T) {
+	previous := nextCallbackID.Load()
+	nextCallbackID.Store(^uint32(0))
+	occupied := &pendingCall{result: make(chan []byte, 1)}
+	pendingCalls.Store(uint32(1), occupied)
+	t.Cleanup(func() {
+		pendingCalls.Delete(uint32(1))
+		pendingCalls.Delete(uint32(2))
+		nextCallbackID.Store(previous)
+	})
+
+	call := &pendingCall{result: make(chan []byte, 1)}
+	if id := reservePendingCall(call); id != 2 {
+		t.Fatalf("reserved callback ID %d, want 2", id)
+	}
+	if got, _ := pendingCalls.Load(uint32(1)); got != occupied {
+		t.Fatal("occupied callback ID was overwritten")
+	}
+}
 
 func TestEncodeCallUsesNamedKwargs(t *testing.T) {
 	payload, err := encodeCall(42, map[string]Input{
@@ -30,6 +72,35 @@ func TestScalarValueAccessors(t *testing.T) {
 	}
 	if got != "hello" {
 		t.Fatalf("got %q, want hello", got)
+	}
+}
+
+func TestScalarValueAccessorsRejectNilLiteralPayloads(t *testing.T) {
+	value := Value{value: &cffi.BamlOutboundValue{
+		Value: &cffi.BamlOutboundValue_LiteralValue{},
+	}}
+	for name, decode := range map[string]func() error{
+		"string": func() error { _, err := value.String(); return err },
+		"int":    func() error { _, err := value.Int64(); return err },
+		"bigint": func() error { _, err := value.BigInt(); return err },
+		"float":  func() error { _, err := value.Float64(); return err },
+		"bool":   func() error { _, err := value.Bool(); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := decode(); err == nil {
+				t.Fatal("nil literal payload unexpectedly decoded")
+			}
+		})
+	}
+}
+
+func TestAbsentOutboundOneofIsNull(t *testing.T) {
+	value := Value{value: &cffi.BamlOutboundValue{}}
+	if isNull, err := value.isNull(); err != nil || !isNull {
+		t.Fatalf("isNull returned (%v, %v), want (true, nil)", isNull, err)
+	}
+	if _, err := value.Null(); err != nil {
+		t.Fatalf("absent outbound oneof did not decode as null: %v", err)
 	}
 }
 

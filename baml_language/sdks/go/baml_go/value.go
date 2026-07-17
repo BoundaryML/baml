@@ -12,6 +12,8 @@ func (value Value) isNull() (bool, error) {
 	if value.value == nil {
 		return false, fmt.Errorf("BAML value is uninitialized")
 	}
+	// The CFFI ABI encodes BAML null as an absent oneof. The explicit
+	// null_value arm is also accepted for forward compatibility.
 	if value.value.Value == nil {
 		return true, nil
 	}
@@ -27,6 +29,9 @@ func (value Value) String() (string, error) {
 	case *cffi.BamlOutboundValue_StringValue:
 		return item.StringValue, nil
 	case *cffi.BamlOutboundValue_LiteralValue:
+		if item.LiteralValue == nil {
+			break
+		}
 		if literal, ok := item.LiteralValue.Literal.(*cffi.BamlLiteralValue_StringValue); ok {
 			return literal.StringValue, nil
 		}
@@ -42,6 +47,9 @@ func (value Value) Int64() (int64, error) {
 	case *cffi.BamlOutboundValue_IntValue:
 		return item.IntValue, nil
 	case *cffi.BamlOutboundValue_LiteralValue:
+		if item.LiteralValue == nil {
+			break
+		}
 		if literal, ok := item.LiteralValue.Literal.(*cffi.BamlLiteralValue_IntValue); ok {
 			return literal.IntValue, nil
 		}
@@ -58,6 +66,9 @@ func (value Value) BigInt() (*big.Int, error) {
 	case *cffi.BamlOutboundValue_BigintValue:
 		encoded = item.BigintValue
 	case *cffi.BamlOutboundValue_LiteralValue:
+		if item.LiteralValue == nil {
+			break
+		}
 		if literal, ok := item.LiteralValue.Literal.(*cffi.BamlLiteralValue_BigintValue); ok {
 			encoded = literal.BigintValue
 		}
@@ -104,6 +115,9 @@ func (value Value) Bool() (bool, error) {
 	case *cffi.BamlOutboundValue_BoolValue:
 		return item.BoolValue, nil
 	case *cffi.BamlOutboundValue_LiteralValue:
+		if item.LiteralValue == nil {
+			break
+		}
 		if literal, ok := item.LiteralValue.Literal.(*cffi.BamlLiteralValue_BoolValue); ok {
 			return literal.BoolValue, nil
 		}

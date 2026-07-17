@@ -81,6 +81,8 @@ jobs:
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
@@ -225,11 +227,14 @@ jobs:
       - name: Smoke test the public C and C++ ABI (Unix)
         if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}
         working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
         run: |
           set -euo pipefail
           expected="$(jq -r .canonical_version ../release-plan.json)"
           python3 crates/bridge_cffi/tests/run_abi_smoke.py \
-            "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}" \
+            "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
             "$expected"
 
       - name: Smoke test the public C and C++ ABI (Windows)
@@ -238,6 +243,8 @@ jobs:
         working-directory: baml_language
         env:
           MSVC_ARCH: ${{ startsWith(matrix._.target, 'aarch64-') && 'arm64' || 'x64' }}
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
         run: |
           $ErrorActionPreference = "Stop"
           $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -247,7 +254,7 @@ jobs:
           }
           $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
           $expected = jq -r .canonical_version ..\release-plan.json
-          $library = "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}"
+          $library = "$env:ARTIFACT_DIR/$env:ARTIFACT_ASSET"
           & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE

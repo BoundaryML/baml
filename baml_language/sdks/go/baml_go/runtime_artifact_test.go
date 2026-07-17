@@ -137,6 +137,31 @@ func TestDisableDownloadPreventsManifestAndArtifactRequests(t *testing.T) {
 	}
 }
 
+func TestManifestVersionCannotEscapeCacheDirectory(t *testing.T) {
+	cache := t.TempDir()
+	escapePath := filepath.Join(cache, "escape.json")
+	if err := os.WriteFile(escapePath, []byte(`{"schema":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := RuntimeConfig{
+		CacheDir:        filepath.Join(cache, "manifests-root"),
+		Version:         "../../escape",
+		Target:          "aarch64-apple-darwin",
+		ManifestBaseURL: "https://example.invalid",
+		DisableDownload: true,
+	}
+	if _, err := resolveManifestArtifact(context.Background(), config); err == nil || !strings.Contains(err.Error(), "safe path segment") {
+		t.Fatalf("got error %v, want unsafe-version diagnostic", err)
+	}
+	contents, err := os.ReadFile(escapePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != `{"schema":1}` {
+		t.Fatalf("outside-cache file was modified: %q", contents)
+	}
+}
+
 func TestDisableDownloadEnvironmentCannotBeOverridden(t *testing.T) {
 	t.Setenv("BAML_DISABLE_DOWNLOAD", "true")
 	t.Setenv("BAML_RUNTIME_TARGET", "aarch64-apple-darwin")

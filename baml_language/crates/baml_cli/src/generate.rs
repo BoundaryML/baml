@@ -420,10 +420,7 @@ fn parse_required_go_import_path(
     };
 
     let import_path = value.get_ref();
-    let valid = !import_path.is_empty()
-        && !import_path.chars().any(char::is_whitespace)
-        && !import_path.starts_with('/')
-        && !import_path.ends_with('/');
+    let valid = is_valid_go_import_path(import_path);
     if valid {
         return Some(import_path.clone());
     }
@@ -438,11 +435,20 @@ fn parse_required_go_import_path(
                 file_id: manifest_file_id(),
                 range: to_text_range(value.span()),
             },
-            "expected a non-empty Go import path without whitespace or surrounding slashes",
+            "expected slash-delimited non-empty segments without whitespace, backslashes, `.` or `..`",
         )
         .with_phase(DiagnosticPhase::Validation),
     );
     None
+}
+
+fn is_valid_go_import_path(import_path: &str) -> bool {
+    !import_path.is_empty()
+        && !import_path.chars().any(char::is_whitespace)
+        && !import_path.contains('\\')
+        && import_path
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Parse a required `[generator.<name>]` property as `T` via strum. Pushes a
@@ -514,4 +520,28 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
         TextSize::new(span.start as u32),
         TextSize::new(span.end as u32),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_go_import_path;
+
+    #[test]
+    fn go_import_paths_reject_relative_empty_and_platform_specific_segments() {
+        for invalid in [
+            "",
+            "/example.com/sdk",
+            "example.com/sdk/",
+            "example.com//sdk",
+            "./sdk",
+            "../sdk",
+            "example.com/./sdk",
+            "example.com/../sdk",
+            "example.com\\project\\sdk",
+            "example.com/project sdk",
+        ] {
+            assert!(!is_valid_go_import_path(invalid), "accepted {invalid:?}");
+        }
+        assert!(is_valid_go_import_path("example.com/project/baml_sdk"));
+    }
 }

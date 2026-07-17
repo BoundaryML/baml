@@ -10,7 +10,6 @@ import (
 )
 
 func TestVendoredCFFIHeaderMatchesCanonicalHeader(t *testing.T) {
-	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("locate ABI header test source")

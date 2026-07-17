@@ -20,11 +20,32 @@ var (
 	pendingCalls         sync.Map
 )
 
-var nativeRuntime struct {
-	sync.Mutex
-	loaded  bool
-	path    string
-	version string
+var nativeRuntime = newNativeRuntimeState()
+
+type nativeRuntimeState struct {
+	initialization chan struct{}
+	loaded         bool
+	path           string
+	version        string
+}
+
+func newNativeRuntimeState() *nativeRuntimeState {
+	state := &nativeRuntimeState{initialization: make(chan struct{}, 1)}
+	state.initialization <- struct{}{}
+	return state
+}
+
+func (state *nativeRuntimeState) acquire(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-state.initialization:
+		return nil
+	}
+}
+
+func (state *nativeRuntimeState) release() {
+	state.initialization <- struct{}{}
 }
 
 type pendingCall struct {
@@ -35,15 +56,17 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
-	if err := ensureNativeRuntime(); err != nil {
+	if err := ensureNativeRuntime(context.Background()); err != nil {
 		return err
 	}
 	return nativeInitialize(bytecode)
 }
 
-func ensureNativeRuntime() error {
-	nativeRuntime.Lock()
-	defer nativeRuntime.Unlock()
+func ensureNativeRuntime(ctx context.Context) error {
+	if err := nativeRuntime.acquire(ctx); err != nil {
+		return err
+	}
+	defer nativeRuntime.release()
 	if nativeRuntime.loaded {
 		return nil
 	}
@@ -51,7 +74,7 @@ func ensureNativeRuntime() error {
 	if err != nil {
 		return err
 	}
-	path, expectedVersion, err := resolveRuntime(context.Background(), config)
+	path, expectedVersion, err := resolveRuntime(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -131,8 +154,11 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	if err := ctx.Err(); err != nil {
 		return Value{}, err
 	}
+	if strings.IndexByte(function, 0) >= 0 {
+		return Value{}, errors.New("baml_go.Call: function name contains a NUL byte")
+	}
 
-	if err := ensureNativeRuntime(); err != nil {
+	if err := ensureNativeRuntime(ctx); err != nil {
 		return Value{}, err
 	}
 	registerCallbackOnce.Do(nativeRegisterCallback)
@@ -141,9 +167,8 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
-	callbackID := nextNonzeroCallbackID()
 	call := &pendingCall{result: make(chan []byte, 1)}
-	pendingCalls.Store(callbackID, call)
+	callbackID := reservePendingCall(call)
 
 	encoded, err := encodeCall(engineCallID, args)
 	if err != nil {
@@ -166,6 +191,15 @@ func nextNonzeroCallbackID() uint32 {
 	for {
 		id := nextCallbackID.Add(1)
 		if id != 0 {
+			return id
+		}
+	}
+}
+
+func reservePendingCall(call *pendingCall) uint32 {
+	for {
+		id := nextNonzeroCallbackID()
+		if _, loaded := pendingCalls.LoadOrStore(id, call); !loaded {
 			return id
 		}
 	}

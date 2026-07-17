@@ -273,6 +273,7 @@ impl GoNames {
     /// reserve names even when their codegen feature has not been implemented.
     pub(crate) fn for_pool(pool: &SymbolPool, packages: &GoPackages) -> Self {
         let mut requests = Vec::new();
+        let mut wire_overrides = HashMap::new();
         for (name, symbol) in pool {
             let fqn = BamlFqn::symbol(name);
             let kind = match symbol {
@@ -326,13 +327,18 @@ impl GoNames {
                 }));
             }
             if let Symbol::Enum(enum_) = symbol {
-                requests.extend(enum_.variants.iter().map(|variant| {
-                    NameRequest::new(
+                for variant in &enum_.variants {
+                    let request = NameRequest::new(
                         fqn.member(&variant.name),
                         GoNameKind::EnumVariant,
                         GoVisibility::Exported,
-                    )
-                }));
+                    );
+                    wire_overrides.insert(
+                        request.clone(),
+                        BamlWireName::Key(baml_base::Name::new(&variant.value)),
+                    );
+                    requests.push(request);
+                }
             }
         }
         let generated_package_aliases = packages
@@ -343,6 +349,7 @@ impl GoNames {
             requests,
             |request| packages.get(request.fqn.symbol.package()).go_name().clone(),
             &generated_package_aliases,
+            &wire_overrides,
         )
     }
 
@@ -361,13 +368,33 @@ impl GoNames {
 
     #[cfg(test)]
     fn new(package: &GoPackageName, requests: Vec<NameRequest>) -> Self {
-        Self::allocate(requests, |_| package.clone(), &BTreeSet::default())
+        Self::allocate(
+            requests,
+            |_| package.clone(),
+            &BTreeSet::default(),
+            &HashMap::new(),
+        )
+    }
+
+    #[cfg(test)]
+    fn new_with_wire_overrides(
+        package: &GoPackageName,
+        requests: Vec<NameRequest>,
+        wire_overrides: &HashMap<NameRequest, BamlWireName>,
+    ) -> Self {
+        Self::allocate(
+            requests,
+            |_| package.clone(),
+            &BTreeSet::default(),
+            wire_overrides,
+        )
     }
 
     fn allocate(
         requests: Vec<NameRequest>,
         package_for: impl Fn(&NameRequest) -> GoPackageName,
         generated_package_aliases: &BTreeSet<String>,
+        wire_overrides: &HashMap<NameRequest, BamlWireName>,
     ) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
@@ -401,7 +428,10 @@ impl GoNames {
                         request.clone(),
                         GoName {
                             canonical,
-                            wire: wire_name(request),
+                            wire: wire_overrides
+                                .get(request)
+                                .cloned()
+                                .unwrap_or_else(|| wire_name(request)),
                         },
                     );
                 }
@@ -740,21 +770,26 @@ mod tests {
         let enum_ = symbol(&["review_queue"], "response_state");
         let variant = enum_.member(&BaseName::new("pending_review"));
         let colliding_function = symbol(&[], "review_queue_response_state_pending_review");
-        let names = GoNames::new(
+        let enum_request = request(
+            variant.clone(),
+            GoNameKind::EnumVariant,
+            GoVisibility::Exported,
+        );
+        let names = GoNames::new_with_wire_overrides(
             &generated_package(),
             vec![
                 request(enum_.clone(), GoNameKind::Enum, GoVisibility::Exported),
-                request(
-                    variant.clone(),
-                    GoNameKind::EnumVariant,
-                    GoVisibility::Exported,
-                ),
+                enum_request.clone(),
                 request(
                     colliding_function.clone(),
                     GoNameKind::Function,
                     GoVisibility::Exported,
                 ),
             ],
+            &HashMap::from([(
+                enum_request,
+                BamlWireName::Key(BaseName::new("pending-review")),
+            )]),
         );
 
         assert_eq!(
@@ -765,7 +800,7 @@ mod tests {
         assert!(identifier(projected).starts_with("ReviewQueueResponseStatePendingReview_"));
         assert_eq!(
             projected.wire(),
-            &BamlWireName::Key(BaseName::new("pending_review"))
+            &BamlWireName::Key(BaseName::new("pending-review"))
         );
         assert!(
             identifier(names.project(

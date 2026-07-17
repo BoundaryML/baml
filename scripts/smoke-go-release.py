@@ -110,9 +110,41 @@ def extract_archive(archive: Path, destination: Path) -> None:
     fail(f"unsupported release archive: {archive}")
 
 
-def run(command: list[str], *, cwd: Path, env: dict[str, str], attempts: int = 1) -> str:
+def run(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    attempts: int = 1,
+    timeout_seconds: int = 300,
+) -> str:
     for attempt in range(1, attempts + 1):
-        result = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True)
+        try:
+            result = subprocess.run(
+                command,
+                cwd=cwd,
+                env=env,
+                text=True,
+                capture_output=True,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = (
+                exc.stdout.decode(errors="replace")
+                if isinstance(exc.stdout, bytes)
+                else (exc.stdout or "")
+            )
+            stderr = (
+                exc.stderr.decode(errors="replace")
+                if isinstance(exc.stderr, bytes)
+                else (exc.stderr or "")
+            )
+            if attempt == attempts:
+                print(stdout, end="")
+                print(stderr, end="", file=sys.stderr)
+                fail(f"command timed out after {timeout_seconds}s: {' '.join(command)}")
+            time.sleep(2 ** attempt)
+            continue
         if result.returncode == 0:
             if result.stdout:
                 print(result.stdout, end="")

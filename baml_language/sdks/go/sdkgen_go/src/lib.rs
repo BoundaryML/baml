@@ -1500,7 +1500,19 @@ fn render_enum_codecs(
         let wire_variants = enum_
             .variants
             .iter()
-            .map(|variant| format!("{:?}", variant.name.as_str()))
+            .map(|variant| {
+                format!(
+                    "{:?}",
+                    names
+                        .project(
+                            &enum_fqn.member(&variant.name),
+                            GoNameKind::EnumVariant,
+                            GoVisibility::Exported,
+                        )
+                        .wire()
+                        .to_string()
+                )
+            })
             .collect::<Vec<_>>();
         let variant_arguments = if wire_variants.is_empty() {
             String::new()
@@ -2082,16 +2094,16 @@ mod tests {
         (name, Symbol::Class(class))
     }
 
-    fn enum_(name: Name, variants: &[&str]) -> (Name, Symbol) {
+    fn enum_values(name: Name, variants: &[(&str, &str)]) -> (Name, Symbol) {
         let enum_ = Enum {
             name: name.clone(),
             docstring: None,
             variants: variants
                 .iter()
-                .map(|variant| EnumVariant {
+                .map(|(variant, value)| EnumVariant {
                     name: BaseName::new(*variant),
                     docstring: None,
-                    value: (*variant).to_string(),
+                    value: (*value).to_string(),
                 })
                 .collect(),
             origin: origin(),
@@ -2276,7 +2288,13 @@ mod tests {
             BaseName::new("round_trip_envelope"),
         );
         let pool = SymbolPool::from([
-            enum_(status.clone(), &["pending_review", "accepted"]),
+            enum_values(
+                status.clone(),
+                &[
+                    ("pending_review", "pending-review"),
+                    ("accepted", "accepted"),
+                ],
+            ),
             class(
                 envelope.clone(),
                 vec![
@@ -2300,7 +2318,7 @@ mod tests {
         let types = &files[&PathBuf::from("types.go")];
         assert!(types.contains("type ReviewQueueResponseState string"));
         assert!(types.contains(
-            "ReviewQueueResponseStatePendingReview ReviewQueueResponseState = \"pending_review\""
+            "ReviewQueueResponseStatePendingReview ReviewQueueResponseState = \"pending-review\""
         ));
         assert!(
             types.contains(
@@ -2313,10 +2331,10 @@ mod tests {
 
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "baml_go.Enum(\"user.review_queue.response_state\", string(value_), \"pending_review\", \"accepted\")"
+            "baml_go.Enum(\"user.review_queue.response_state\", string(value_), \"pending-review\", \"accepted\")"
         ));
         assert!(functions.contains(
-            "value_.Enum(\"user.review_queue.response_state\", \"pending_review\", \"accepted\")"
+            "value_.Enum(\"user.review_queue.response_state\", \"pending-review\", \"accepted\")"
         ));
         assert!(functions.contains("\"state\": _bamlEncodeEnum0(value_.State)"));
         assert!(functions.contains("baml_go.Optional(value_.Optional, _bamlEncodeEnum0)"));

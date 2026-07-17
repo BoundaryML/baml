@@ -23,7 +23,9 @@ func TestOptionalEncodesNilAsExplicitNull(t *testing.T) {
 }
 
 func TestDecodeOptionalDistinguishesNullAndValue(t *testing.T) {
-	null := Value{value: &cffi.BamlOutboundValue{}}
+	null := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_NullValue{
+		NullValue: &cffi.BamlValueNull{},
+	}}}
 	decoded, err := DecodeOptional(null, Value.String)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +52,9 @@ func TestOptionalClassFieldMustStillBePresent(t *testing.T) {
 		t.Fatal("missing optional field unexpectedly succeeded")
 	}
 
-	class.fields["value"] = Value{value: &cffi.BamlOutboundValue{}}
+	class.fields["value"] = Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_NullValue{
+		NullValue: &cffi.BamlValueNull{},
+	}}}
 	decoded, err := DecodeOptionalField(class, "value", Value.String)
 	if err != nil {
 		t.Fatal(err)
