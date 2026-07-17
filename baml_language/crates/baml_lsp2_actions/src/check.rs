@@ -25,7 +25,7 @@ use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
 };
-use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
+use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
@@ -222,11 +222,15 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        let body = baml_compiler2_hir::body::function_body(db, func_loc);
-
         // Expression-body functions already have their signatures checked
         // during scope inference (step 3). Only check non-expr bodies here.
-        if matches!(body.as_ref(), FunctionBody::Expr(_)) {
+        // Read the body discriminant straight off the item tree already in
+        // hand — the `function_body` query clones the whole `ExprBody` arena
+        // on execution, far too expensive for a body-kind test.
+        if matches!(
+            func_data.body,
+            Some(baml_compiler2_ast::FunctionBodyDef::Expr(..))
+        ) {
             continue;
         }
 
