@@ -557,6 +557,32 @@ mod tests {
         function
     }
 
+    fn class_symbol(
+        n: &Name,
+        properties: Vec<baml_codegen_types::ClassProperty>,
+        static_methods: Vec<Function>,
+        instance_methods: Vec<Function>,
+    ) -> Symbol {
+        Symbol::Class(baml_codegen_types::Class {
+            name: n.clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties,
+            static_methods,
+            instance_methods,
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    /// `src` with every whitespace character removed — signature
+    /// assertions stay stable against the pretty-printer's line wrapping.
+    fn flat(src: &str) -> String {
+        src.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+
     #[test]
     fn multi_arm_unions_synthesize_an_enum_with_from_and_into_params() {
         let n = name("user", &[], "f");
@@ -793,6 +819,200 @@ mod tests {
         // `takes_none` has no arguments to mutate, so a count of 2 also
         // proves its absence there.
         assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
+    }
+
+    #[test]
+    fn methods_emit_static_and_instance_bindings() {
+        let g = name("user", &[], "Greeter");
+        let mut create = nullary_string_fn(&name("user", &[], "create"));
+        create.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("name"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        });
+        create.return_type = Ty::Class(g.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let who = nullary_string_fn(&name("user", &[], "who"));
+        let mut greet = nullary_string_fn(&name("user", &[], "greet"));
+        greet.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("greeting"),
+            docstring: None,
+            ty: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            default: None,
+        });
+        let pool = SymbolPool::from([(
+            g.clone(),
+            class_symbol(
+                &g,
+                vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("name"),
+                    docstring: None,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                }],
+                vec![create],
+                vec![who, greet],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("impl Greeter {"), "{lib}");
+        // Wire FQNs are `<class fqn>.<method>` — the engine resolves a
+        // method like any other function.
+        assert!(lib.contains(r#""user.Greeter.create""#), "{lib}");
+        assert!(lib.contains(r#""user.Greeter.who""#), "{lib}");
+        assert!(lib.contains(r#""user.Greeter.greet""#), "{lib}");
+        let flat = flat(lib);
+        // Static: plain associated fn. Instance: `&self` receiver.
+        assert!(
+            flat.contains("pubfncreate(name:::std::string::String"),
+            "{lib}"
+        );
+        assert!(flat.contains("pubasyncfncreate_async("), "{lib}");
+        assert!(flat.contains("pubfnwho(&self"), "{lib}");
+        assert!(flat.contains("pubasyncfnwho_async(&self"), "{lib}");
+        assert!(
+            flat.contains("pubfngreet(&self,greeting:::std::string::String"),
+            "{lib}"
+        );
+        // The receiver rides the wire as the `"self"` kwarg, encoded by
+        // value like every other argument.
+        assert!(
+            flat.contains(r#"("self",::std::option::Option::Some"#),
+            "{lib}"
+        );
+        assert!(flat.contains("to_baml(self)"), "{lib}");
+        // Instance methods carry the receiver-aware by-value note (even
+        // with no non-receiver arguments); the static factory gets the
+        // arguments wording.
+        assert!(
+            lib.contains("/// The receiver and any arguments are passed to the BAML runtime by"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("/// Arguments are passed to the BAML runtime by value:"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn unsupported_methods_skip_individually_without_poisoning_the_class() {
+        let w = name("user", &[], "Widget");
+        let ok = nullary_string_fn(&name("user", &[], "ok"));
+        let mut snap = nullary_string_fn(&name("user", &[], "snap"));
+        snap.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        let mut pick = nullary_string_fn(&name("user", &[], "pick"));
+        pick.generic_params.push(baml_base::Name::new("T"));
+        let pool = SymbolPool::from([(
+            w.clone(),
+            class_symbol(&w, Vec::new(), Vec::new(), vec![ok, snap, pick]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub struct Widget"), "{lib}");
+        let flat = flat(lib);
+        assert!(flat.contains("pubfnok(&self"), "{lib}");
+        assert!(!flat.contains("pubfnsnap"), "{lib}");
+        assert!(!flat.contains("pubfnpick"), "{lib}");
+        assert_eq!(generated.warnings.len(), 2);
+        assert_eq!(generated.warnings[0].fqn, "user.Widget.snap");
+        assert!(
+            generated.warnings[0].reason.contains("media"),
+            "{}",
+            generated.warnings[0].reason
+        );
+        assert_eq!(generated.warnings[1].fqn, "user.Widget.pick");
+        assert!(
+            generated.warnings[1].reason.contains("generic methods"),
+            "{}",
+            generated.warnings[1].reason
+        );
+    }
+
+    #[test]
+    fn method_signatures_do_not_box_recursive_class_references() {
+        let node = name("user", &[], "Node");
+        let next_field = Ty::Union(
+            vec![
+                Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut next_or_self = nullary_string_fn(&name("user", &[], "next_or_self"));
+        next_or_self.return_type = Ty::Class(node.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("next"),
+                    docstring: None,
+                    ty: next_field,
+                }],
+                Vec::new(),
+                vec![next_or_self],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        // The recursive field boxes…
+        assert!(
+            lib.contains("::std::option::Option<::std::boxed::Box<crate::Node>>"),
+            "{lib}"
+        );
+        // …but a method signature is not a containment site: the field is
+        // the only `Box` in the module, so the method's `crate::Node`
+        // return stays plain.
+        assert_eq!(lib.matches("Box<").count(), 1, "{lib}");
+    }
+
+    #[test]
+    fn method_union_signatures_register_in_the_leaf_registry() {
+        let h = name("user", &[], "Holder");
+        let union = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let mut pick = nullary_string_fn(&name("user", &[], "pick"));
+        pick.arguments.push(baml_codegen_types::FunctionArgument {
+            name: baml_base::Name::new("u"),
+            docstring: None,
+            ty: union,
+            default: None,
+        });
+        let pool = SymbolPool::from([(
+            h.clone(),
+            class_symbol(&h, Vec::new(), Vec::new(), vec![pick]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("u: impl ::std::convert::Into<crate::IntOrString>"),
+            "{lib}"
+        );
     }
 
     #[test]

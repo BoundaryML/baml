@@ -119,11 +119,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_host_callables.rs",
         Gate::Later("needs host callables"),
     ),
-    (
-        "function_calls",
-        "test_methods_on_classes.rs",
-        Gate::Later("needs methods on classes"),
-    ),
+    ("function_calls", "test_methods_on_classes.rs", Gate::Now),
     (
         "function_calls",
         "test_optional_args.rs",

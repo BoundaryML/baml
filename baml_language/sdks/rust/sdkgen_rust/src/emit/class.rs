@@ -9,19 +9,21 @@ use baml_codegen_types::{Class, Name};
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use super::function::doc_attrs;
+use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
     SkipWarning, idents,
     translate_ty::{self, TyCtx},
 };
 
 /// Emit the struct + conversion impls for a class the analysis marked
-/// emitted. Also returns non-fatal warnings (methods are not emitted
-/// yet).
+/// emitted, plus an `impl` block with its method bindings. Also returns
+/// non-fatal warnings: a method whose signature is not representable
+/// skips individually — it never poisons the class or its sibling
+/// methods (methods play no part in the analysis fixpoint).
 ///
-/// A translation failure here means the analysis and the translator
-/// disagree on the supported subset — a generator bug; the caller
-/// escalates rather than skipping.
+/// A field-translation failure here means the analysis and the
+/// translator disagree on the supported subset — a generator bug; the
+/// caller escalates rather than skipping.
 pub(crate) fn emit(
     name: &Name,
     class: &Class,
@@ -29,12 +31,28 @@ pub(crate) fn emit(
 ) -> Result<(TokenStream, Vec<SkipWarning>), SkipWarning> {
     let fqn = name.to_string();
     let mut warnings = Vec::new();
-    let method_count = class.static_methods.len() + class.instance_methods.len();
-    if method_count > 0 {
-        warnings.push(SkipWarning {
-            fqn: fqn.clone(),
-            reason: format!("methods are not emitted yet ({method_count} skipped)"),
-        });
+
+    // Field-site boxing does not apply to method signatures: a method
+    // mentioning a same-SCC class (e.g. a static factory returning the
+    // class itself) is not a containment edge, so its types translate
+    // without a boxing owner.
+    let method_ctx = TyCtx {
+        analysis: ctx.analysis,
+        unions: ctx.unions,
+        leaf: ctx.leaf,
+        boxing_for: None,
+    };
+    let mut method_tokens: Vec<TokenStream> = Vec::new();
+    for (methods, receiver) in [
+        (&class.static_methods, Receiver::None),
+        (&class.instance_methods, Receiver::RefSelf),
+    ] {
+        for method in methods {
+            match emit_method(name, method, receiver, &method_ctx) {
+                Ok(tokens) => method_tokens.push(tokens),
+                Err(warning) => warnings.push(warning),
+            }
+        }
     }
 
     let ident = idents::ident(name.name().as_str());
@@ -85,12 +103,24 @@ pub(crate) fn emit(
         }
     };
 
+    let methods_impl = if method_tokens.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! {
+            impl #ident {
+                #(#method_tokens)*
+            }
+        }
+    };
+
     let tokens = quote! {
         #(#docs)*
         #[derive(Debug, Clone, PartialEq)]
         pub struct #ident {
             #(#field_defs,)*
         }
+
+        #methods_impl
 
         impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
             fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {

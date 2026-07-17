@@ -114,6 +114,16 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                     continue;
                 }
                 tys.extend(class.properties.iter().map(|p| &p.ty));
+                // Method signatures surface unions too: the bindings in
+                // the class's `impl` block translate against this same
+                // leaf's registry.
+                for method in class.static_methods.iter().chain(&class.instance_methods) {
+                    tys.extend(method.arguments.iter().map(|a| &a.ty));
+                    tys.push(&method.return_type);
+                    if let Some(throws) = &method.throws {
+                        tys.push(throws);
+                    }
+                }
             }
             Symbol::Enum(_) => {}
             Symbol::TypeAlias(alias) => {
