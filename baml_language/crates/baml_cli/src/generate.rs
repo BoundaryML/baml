@@ -249,7 +249,10 @@ impl GenerateArgs {
                     &pool,
                     &baml_bytecode,
                     generator.naming_convention,
-                ),
+                )
+                .into_iter()
+                .map(|(path, content)| (path, content.into_bytes()))
+                .collect(),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {

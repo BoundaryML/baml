@@ -7,7 +7,7 @@
 //! `catch_unwind`): the emitter has landed, so a panic is a real bug
 //! and aborts the build loudly. `build_diagnostics` and `setup_guard`
 //! run for real; the per-fixture `javac` / `junit` tests remain
-//! `#[ignore]`d with [`IGNORE_REASON`] and are un-ignored capability
+//! `#[ignore]`d with `IGNORE_REASON` and are un-ignored capability
 //! by capability as the generated API fills in enough for
 //! `compileTestJava` to pass.
 //!
