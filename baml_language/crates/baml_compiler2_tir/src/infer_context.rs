@@ -549,6 +549,17 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         method: Name,
     },
+    /// A `$rust_io_function` (sys-op) method inside an `implements` block has
+    /// method-level generic parameters. An impl-block method is reached only
+    /// through interface (virtual) dispatch, which does not reconstruct the
+    /// synthetic type-argument slots a generic sys-op's glue reads off the
+    /// stack — so such a call would fail at runtime. (A generic sys-op declared
+    /// directly on a class is fine: it lowers to a direct `SysOp` instruction,
+    /// which does supply those slots.) Impl conformance.
+    GenericSysOpMethodInInterfaceImpl {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
     /// An interface that declares fields is implemented out-of-body
     /// (`implement I for T`). A field-bearing interface can only be implemented in the
     /// class body, where its fields are satisfied by the class's own fields (E0126).
@@ -1431,6 +1442,15 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "missing implementation of method `{method}` required by interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::GenericSysOpMethodInInterfaceImpl { interface, method } => {
+                write!(
+                    f,
+                    "`$rust_io_function` method `{method}` implementing interface `{}` may not \
+                     declare its own generic parameters: a sys-op reached through interface \
+                     dispatch cannot carry method-level type arguments",
                     interface.render_user_facing()
                 )
             }

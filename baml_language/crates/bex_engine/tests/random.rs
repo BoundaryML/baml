@@ -119,12 +119,6 @@ function main() -> int {
     .unwrap();
 }
 
-// IGNORED: a concrete generator in the user package can't be upcast to the
-// stdlib interface `baml.random.Rng` — `package_implements_registry` is
-// per-package, so the user package doesn't see the `baml` package's
-// `Xoshiro256PlusPlus implements Rng` entry. Re-enable once class→interface
-// upcast resolves implementors across packages.
-#[ignore = "cross-package class->interface upcast not yet supported"]
 #[tokio::test]
 async fn rng_dispatches_through_interface() {
     // A concrete generator assigned to a `Rng`-typed parameter dispatches to
@@ -144,6 +138,51 @@ function main(seed: uint8array) -> bool {
         entry: "main",
         inputs: seed_input(),
         expected: Ok(BexExternalValue::Bool(true)),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn sysop_dispatches_through_interface_typed_param() {
+    // A `$rust_io_function` impl method reached through an `Rng`-typed
+    // parameter: the `VirtualCall` resolves `SystemRandom`'s impl at runtime
+    // and the call funnel yields the sys-op to the engine — the analogue of
+    // `rng_dispatches_through_interface` for the IO (sys-op) dispatch kind.
+    let source = r#"
+function draw(rng: baml.random.Rng) -> int {
+    rng.random(24).length()
+}
+function main() -> int {
+    draw(baml.random.SystemRandom.get().as<baml.random.Rng>)
+}
+"#;
+    assert_engine_executes(EngineProgram {
+        source,
+        entry: "main",
+        expected: Ok(BexExternalValue::Int(24)),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn sysop_bound_method_value_invokes() {
+    // Tearing a `$rust_io_function` impl method off its receiver as a value
+    // and calling it indirectly routes the same call funnel into the sys-op
+    // yield — the value analogue of the virtual call above.
+    let source = r#"
+function main() -> int {
+    let f = baml.random.SystemRandom.get().random;
+    f(16).length()
+}
+"#;
+    assert_engine_executes(EngineProgram {
+        source,
+        entry: "main",
+        expected: Ok(BexExternalValue::Int(16)),
         ..Default::default()
     })
     .await

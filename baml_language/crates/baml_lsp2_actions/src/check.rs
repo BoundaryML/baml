@@ -1979,6 +1979,9 @@ fn tir_type_error_to_diagnostic_id(
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
+        TirTypeError::GenericSysOpMethodInInterfaceImpl { .. } => {
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl
+        }
         TirTypeError::OutOfBodyImplementsFieldInterface { .. } => {
             DiagnosticId::OutOfBodyImplementsFieldInterface
         }

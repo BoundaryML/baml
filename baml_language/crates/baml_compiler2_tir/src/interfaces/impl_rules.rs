@@ -1204,6 +1204,31 @@ pub fn validate_impl_signatures<'db>(
     for &method_loc in &data.methods {
         let method_name = function_data(db, method_loc).name.clone();
 
+        // A `$rust_io_function` (sys-op) override with method-level generics can't
+        // be dispatched through interface (virtual) dispatch — the only way an
+        // impl-block method is reached. Virtual dispatch does not reconstruct the
+        // synthetic type-argument slots a generic sys-op's glue reads off the
+        // stack, so such a call would fail at runtime; reject it at declaration.
+        // (A generic sys-op declared directly on a class lowers to a direct
+        // `SysOp` instruction, which supplies those slots, so it is fine.)
+        if !function_data(db, method_loc).generic_params.is_empty()
+            && matches!(
+                baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(
+                    baml_compiler2_ast::BuiltinKind::Io
+                )
+            )
+        {
+            diags.push((
+                crate::infer_context::TirTypeError::GenericSysOpMethodInInterfaceImpl {
+                    interface: iface_qtn.clone(),
+                    method: method_name.clone(),
+                },
+                ImplDiagnosticLocation::Method(method_name.clone()),
+            ));
+            continue;
+        }
+
         // The interface method this override targets: a required sig or a default's function.
         let iface_spec = if let Some(sig) = iface_data
             .required_methods
