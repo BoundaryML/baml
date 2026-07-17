@@ -8,6 +8,7 @@ import baml_bridge.internal.ProtoWriter;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -71,6 +72,21 @@ public final class BamlFfi {
      */
     private static final AtomicLong FALLBACK_CALL_ID = new AtomicLong(1);
 
+    /**
+     * Best-effort telemetry-flush hooks, run immediately before an {@code os-exit}
+     * panic hard-halts the process. A clean {@code baml.sys.exit} surfaces as an
+     * exit panic that terminates the JVM via {@link Runtime#halt(int)} — bypassing
+     * JVM shutdown hooks (the analog of Python's {@code os._exit}) — so any
+     * buffered telemetry would otherwise be dropped. This is the flush socket the
+     * spec calls for: registered hooks run just before the halt (see
+     * {@link #runExitFlushHooks()}, invoked from the outbound decoder). No
+     * telemetry ships in this slice, so the list is empty by default and the halt
+     * behavior is unchanged. {@link CopyOnWriteArrayList} so registration and the
+     * exit-time drain are safe under concurrency.
+     */
+    private static final CopyOnWriteArrayList<Runnable> EXIT_FLUSH_HOOKS =
+            new CopyOnWriteArrayList<>();
+
     static {
         // First-hit-wins ladder: system property → env var → bundled classpath
         // resource. See NativeLibraryLoader for the resolution + extraction logic.
@@ -78,6 +94,38 @@ public final class BamlFfi {
     }
 
     private BamlFfi() {}
+
+    // ---- os-exit telemetry-flush hooks --------------------------------------
+
+    /**
+     * Register a best-effort hook to run just before an {@code os-exit} panic
+     * hard-halts the process — the place to flush a telemetry buffer that JVM
+     * shutdown hooks would otherwise miss (the halt bypasses them, mirroring
+     * Python's {@code os._exit}). Hooks run in registration order; a hook's
+     * exception is swallowed, because nothing may prevent (or delay) the halt.
+     * Registering the same {@link Runnable} twice runs it twice. Thread-safe.
+     */
+    public static void registerExitFlushHooks(Runnable hook) {
+        EXIT_FLUSH_HOOKS.add(java.util.Objects.requireNonNull(hook, "hook"));
+    }
+
+    /**
+     * Run every registered {@linkplain #registerExitFlushHooks exit-flush hook},
+     * best-effort: each hook's {@link Throwable} is caught and swallowed so a
+     * misbehaving hook can neither prevent nor reorder the process halt. The
+     * outbound decoder calls this on an {@code os-exit} panic immediately before
+     * {@link Runtime#halt(int)}. Factored out of the halt itself so the hook
+     * mechanics stay unit-testable without terminating the test JVM.
+     */
+    public static void runExitFlushHooks() {
+        for (Runnable hook : EXIT_FLUSH_HOOKS) {
+            try {
+                hook.run();
+            } catch (Throwable ignored) {
+                // Best-effort: nothing a hook does may hold up the halt.
+            }
+        }
+    }
 
     // ---- Native methods (implemented in sdks/java/bridge_java) --------------
 

@@ -324,9 +324,43 @@ class WireCodecTest {
 
     @Test
     void inbound_unsupported_type_throws() {
-        assertThrows(
-                UnsupportedOperationException.class,
+        // A direct encodeInboundValue call has no owning argument to name, so it
+        // surfaces the bare "unsupported Java type <class>" IllegalArgumentException.
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
                 () -> ProtoWriter.encodeInboundValue(new Object()));
+        assertTrue(
+                ex.getMessage().contains("unsupported Java type java.lang.Object"),
+                ex.getMessage());
+    }
+
+    @Test
+    void inbound_unsupported_argument_names_the_argument() {
+        // The top-level kwarg loop rewraps a deep rejection to name the offending
+        // *argument* plus its unsupported Java type (mirrors Python's TypeError
+        // naming the kwarg).
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"tool"},
+                        new Object[] {new java.util.Date()},
+                        123L));
+        assertEquals(
+                "argument 'tool' has unsupported Java type java.util.Date", ex.getMessage());
+    }
+
+    @Test
+    void inbound_unsupported_nested_element_names_top_level_argument() {
+        // An unsupported value nested inside argument `x` (here a list element)
+        // still reports the top-level argument name, not the nested position.
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"items"},
+                        new Object[] {java.util.List.of(1L, new java.util.Date())},
+                        123L));
+        assertEquals(
+                "argument 'items' has unsupported Java type java.util.Date", ex.getMessage());
     }
 
     // -- class / enum wire codec (TypeRegistry) ------------------------------
@@ -486,7 +520,7 @@ class WireCodecTest {
     @Test
     void inbound_unregistered_enum_throws() {
         assertThrows(
-                UnsupportedOperationException.class,
+                IllegalArgumentException.class,
                 () -> ProtoWriter.encodeInboundValue(UnregisteredEnum.A));
     }
 

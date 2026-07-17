@@ -224,23 +224,32 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 | `List<?>` | `list_value` (6) | Recursively encodes items; a `null` item still emits an entry to preserve length. Empty list still sets the arm (see presence note). (`:182-183`, `encodeList:305-312`). |
 | `Map<?,?>` | `map_value` (7) | Recursively encodes values; keys stringified via `String.valueOf` (`:184-185`, `encodeMap:314-321`). |
 | `Enum<?>` (registered) | `enum_value` (9) | `name` = BAML enum FQN, `value` = wire variant from the enum's serializer map (`:186-193`, `encodeEnum:282-287`, `TypeRegistry.enumWire:280-289`). |
-| `Enum<?>` (unregistered) | `UnsupportedOperationException` | An unregistered enum type is not a BAML value (`:189-192`; pinned by `WireCodecTest.inbound_unregistered_enum_throws:392-397`). |
+| `Enum<?>` (unregistered) | `IllegalArgumentException` | An unregistered enum type is not a BAML value. Rejected via `unsupported()` (an `IllegalArgumentException` subclass), named to the owning argument at the top-level kwarg loop (`:189-192`; pinned by `WireCodecTest.inbound_unregistered_enum_throws`). |
 | `BamlMedia` (Image/Audio/Video/Pdf) | `class_value` (8) | Single `_data` field = `handle{cloneKeyForWire, handleType}`, stdlib FQN on `class_ty.name` (`:194-199`, `encodeMediaClass:258-279`). |
 | bare `BamlHandle` | `handle` (10) | `BamlHandle{key = cloneKeyForWire, handle_type}` (`:200-210`). |
 | `BamlUnion` (Union2…Union10 arm record) | *(unwrapped)* | Unwrapped to its `value()` component and re-encoded bare — no union envelope inbound (`:211-214`, `unwrapGenericUnion:296-303`). |
 | nominal union wrapper record | *(unwrapped)* | `TypeRegistry.isUnionRecord` → unwrap to inner value, encode bare (`:215-219`, `TypeRegistry.unionRecordInner:259-265`). |
 | registered generated class | `class_value` (8) | One `fields` entry per registry field (declaration order), value read via the public accessor method; FQN on `class_ty.name` (`:220-228`, `encodeClass:239-248`, `ClassEntry.encode:516-528`). |
 | non-class callable (`Function`/lambda/…) | **NOT YET IMPLEMENTED IN JAVA** | Python emits `handle` with `HOST_VALUE_CALLABLE`. Java has no callable arm — such an arg falls through to the class lookup, resolves `null`, and is rejected (`:220-228`). See "Not yet encoded" below. |
-| unsupported object | `UnsupportedOperationException` | `:220-229, 289-293`; pinned by `WireCodecTest.inbound_unsupported_type_throws:252-256`. |
+| unsupported object | `IllegalArgumentException` | Names the offending *argument* and its unsupported Java type, e.g. `"argument 'tool' has unsupported Java type java.util.Date"` (`:220-229`, `unsupported`); pinned by `WireCodecTest.inbound_unsupported_type_throws` / `inbound_unsupported_argument_names_the_argument` / `inbound_unsupported_nested_element_names_top_level_argument`. |
 
-> ⚠ **Deviation from Python (unsupported object).** Python raises `TypeError`
-> whose message names the *top-level kwarg* being encoded. Java raises
-> `UnsupportedOperationException` (`ProtoWriter.unsupported:289-293`) whose
-> message names the *value's Java class*
+> ✅ **Implemented per spec (unsupported object).** Matches Python: an
+> unsupported value throws an `IllegalArgumentException` (the analog of Python's
+> `TypeError`) whose message names the *top-level kwarg* being encoded plus the
+> unsupported Java type — `"argument '<name>' has unsupported Java type
+> <class>"`. The value encoder still recurses on values (not entries), so the
+> deep rejection is a private `UnsupportedInboundTypeException` (an
+> `IllegalArgumentException` subclass carrying the Java type name); the top-level
+> kwarg loop in `encodeCallFunctionArgs` catches it and rewraps it to prepend the
+> argument name. A value nested inside argument `x` (a list element, a class
+> field) still reports `x`, mirroring Python. A *direct* `encodeInboundValue`
+> call (no owning argument) surfaces the bare `"unsupported Java type <class>"`
+> message.
+>
+> *History:* previously Java threw `UnsupportedOperationException`
 > (`"capability not yet implemented: cannot encode argument of type <class>"`)
-> — not the parameter name, and a different exception type. The value encoder
-> has no access to the owning parameter name (it recurses on values, not
-> entries).
+> naming only the value's Java class — a different exception type that could not
+> reach the owning parameter name. Flipped to the spec'd behavior 2026-07-17.
 
 > ⚠ **Deviation from Python (boxed integer/float widening).** Python has exactly
 > one `int` and one `float` type. Java's encoder must fan several boxed types
@@ -336,7 +345,7 @@ collection still round-trips as an empty container, not null
   host-value registry and emits `Handle{key, HOST_VALUE_CALLABLE}`. Java's
   encoder has no callable branch — a `Function`/lambda arg falls into the "registered
   class?" lookup, resolves `null`, and is rejected with
-  `UnsupportedOperationException` (`ProtoWriter.java:220-229`). **Status: design
+  `IllegalArgumentException` naming the argument (`ProtoWriter.java:220-229`). **Status: design
   scouted, decisions recommended, not built** — the whole host-callable slice
   (Rust JNI dispatch/release trampolines, a Java-side
   `ConcurrentHashMap<Long,Object>` registry + `AtomicLong`, the `ProtoWriter`
@@ -476,6 +485,6 @@ encoder error.
   (`BamlHandle.java:16-33, 115-122`).
 - **Java explicitly rejects everything it cannot encode** — there is no silent
   drop on the inbound value path. Host callables and inbound `BamlStream` args
-  both raise `UnsupportedOperationException` rather than being silently omitted
-  (`ProtoWriter.java:220-229`). The only intentionally "silent" behaviors are the
+  both raise `IllegalArgumentException` (naming the argument) rather than being
+  silently omitted (`ProtoWriter.java:220-229`). The only intentionally "silent" behaviors are the
   designed ones: `null` → absent oneof, and an untouched optional → omitted kwarg.

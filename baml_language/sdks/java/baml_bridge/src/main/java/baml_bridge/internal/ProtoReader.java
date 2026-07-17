@@ -178,8 +178,9 @@ public final class ProtoReader {
      * Decode a {@code BamlOutboundResult} envelope. Returns the decoded value on
      * the {@code ok} arm; throws {@link BamlError} on {@code error}; throws
      * {@link BamlPanic} on a non-exit {@code panic}; and for an exit panic
-     * ({@code is_exit_panic}) terminates the process via
-     * {@code Runtime.getRuntime().halt(exit_code)}.
+     * ({@code is_exit_panic}) runs the registered
+     * {@link baml_bridge.BamlFfi#runExitFlushHooks() exit-flush hooks} and then
+     * terminates the process via {@code Runtime.getRuntime().halt(exit_code)}.
      *
      * <p>{@code returnDesc} is the type-directed decode descriptor for the
      * declared return type (see {@code ref-java-codegen-conventions.md}); when
@@ -314,8 +315,11 @@ public final class ProtoReader {
             }
         }
         if (isExit) {
-            // Clean baml.sys.exit: hard-terminate the process, bypassing JVM
-            // shutdown hooks (the analog of Python's os._exit).
+            // Clean baml.sys.exit: run the best-effort telemetry-flush hooks (the
+            // spec'd flush step — exceptions swallowed, nothing may prevent the
+            // halt), then hard-terminate the process, bypassing JVM shutdown hooks
+            // (the analog of Python's os._exit, which flushes then _exits).
+            baml_bridge.BamlFfi.runExitFlushHooks();
             Runtime.getRuntime().halt((int) exitCode);
             // Unreachable: halt() never returns. Satisfy the compiler with an
             // Error (BamlPanic is now an Error, so this method returns Error).

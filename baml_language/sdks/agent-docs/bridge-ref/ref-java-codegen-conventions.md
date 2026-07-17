@@ -39,14 +39,22 @@ rules digest, not the rationale log).
   identifiers, so `$`-companions keep the BAML name verbatim:
   `extract_resume$build_request`, `extract_resume$stream_async`. (Same
   as TS; no `__` mangling.)
-- **Classes**: generated as immutable value classes with a canonical
-  all-args constructor (field declaration order) and PreserveCase
-  accessor methods (`p.int_field()`). Value equality is deep:
-  `equals`/`hashCode` must handle `byte[]` fields via `Arrays.equals`
-  (tests assert whole-object equality on round trips). Whether these
-  are `record`s or emitted classes is an emitter detail — records
-  can't hold hidden handle/type-args fields, so handle-backed and
-  generic classes at least will be ordinary final classes.
+- **Classes** **[decided]**: generated as `public final` immutable value
+  classes with a canonical all-args constructor (field declaration order)
+  and PreserveCase accessor methods (`p.int_field()`). `final` because the
+  encoder keys its typemap on the *exact* runtime class — a user subclass
+  would silently break inbound-encode (exact-class value semantics). Covers
+  plain value classes, generic classes, and `$stream` companions; sealed
+  union interfaces and their permitted records are the exception (records are
+  already final). Value equality is deep: `equals`/`hashCode` are generated
+  and handle `byte[]` fields via `Arrays.equals` (tests assert whole-object
+  equality on round trips). **POJOs, not `record`s** (owner 2026-07-17): a
+  record's auto-generated `equals` compares `byte[]` components by reference,
+  so the deep `byte[]` equality has to be hand-generated regardless; the
+  reified generic type-args live in a **weak-identity side-table** (below),
+  not a hidden instance field, so that is not the deciding factor; and a
+  future mutability wishlist would foreclose records anyway. Staying with
+  generated final POJOs + generated deep equals.
 - **Enums**: generated Java `enum` with PreserveCase constants plus a
   wire-name serializer map for non-identifier spellings.
 - **Type mappings** (test-visible): BAML `int` → `long`, `float` →

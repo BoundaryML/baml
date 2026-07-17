@@ -115,7 +115,19 @@ public final class ProtoWriter {
         }
         WireWriter w = new WireWriter();
         for (int i = 0; i < names.length; i++) {
-            w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], args[i]));
+            try {
+                w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], args[i]));
+            } catch (UnsupportedInboundTypeException e) {
+                // Rewrap the deep rejection so it names the *top-level* argument
+                // (the parameter from names[]), not the nested position — an
+                // unsupported list element or class field inside argument `x`
+                // still reports `x`, mirroring bridge_python's TypeError naming
+                // the kwarg (proto.py). The offending Java type carries through
+                // in the message (and the original as the cause).
+                throw new IllegalArgumentException(
+                        "argument '" + names[i] + "' has unsupported Java type " + e.typeName(),
+                        e);
+            }
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
         if (typeArgs != null && !typeArgs.isEmpty()) {
@@ -286,10 +298,33 @@ public final class ProtoWriter {
         return w.toByteArray();
     }
 
-    private static UnsupportedOperationException unsupported(Object value) {
-        return new UnsupportedOperationException(
-                "capability not yet implemented: cannot encode argument of type "
-                        + value.getClass().getName());
+    /**
+     * The encoder cannot map a Java value to any inbound arm. Carries the
+     * offending Java type name so the top-level kwarg loop
+     * ({@link #encodeCallFunctionArgs}) can rewrap it into an
+     * {@link IllegalArgumentException} that also names the owning argument
+     * (mirroring bridge_python's {@code TypeError} naming the kwarg). Extends
+     * {@link IllegalArgumentException} so a direct {@link #encodeInboundValue}
+     * call — with no owning argument to name — still surfaces the documented
+     * "unsupported argument" exception type, just without the argument prefix.
+     */
+    static final class UnsupportedInboundTypeException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+
+        private final String typeName;
+
+        UnsupportedInboundTypeException(String typeName) {
+            super("unsupported Java type " + typeName);
+            this.typeName = typeName;
+        }
+
+        String typeName() {
+            return typeName;
+        }
+    }
+
+    private static UnsupportedInboundTypeException unsupported(Object value) {
+        return new UnsupportedInboundTypeException(value.getClass().getName());
     }
 
 

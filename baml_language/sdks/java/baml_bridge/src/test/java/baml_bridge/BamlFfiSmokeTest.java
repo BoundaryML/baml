@@ -103,6 +103,35 @@ class BamlFfiSmokeTest {
         BamlFfi.completeCall(unusedId, new byte[0]);
     }
 
+    // -- os-exit telemetry-flush hooks ---------------------------------------
+
+    /**
+     * The flush drain {@code decodePanic} runs just before {@code Runtime.halt} on
+     * an os-exit panic, exercised in isolation (no halt): registered hooks run in
+     * order, and a throwing hook is swallowed without aborting the drain. Lives
+     * here (not in an offline test) only because touching any {@link BamlFfi}
+     * member triggers its native-loading static initializer — the same
+     * {@code @BeforeAll} assumption guard covers it. The halt itself stays covered
+     * by the {@code function_calls TestErrors} subprocess exit-code tests.
+     */
+    @Test
+    void exit_flush_hooks_run_best_effort_and_swallow_exceptions() {
+        java.util.List<String> order = new java.util.ArrayList<>();
+        BamlFfi.registerExitFlushHooks(() -> order.add("a"));
+        BamlFfi.registerExitFlushHooks(() -> {
+            throw new RuntimeException("boom"); // must be swallowed, not propagate
+        });
+        BamlFfi.registerExitFlushHooks(() -> order.add("b"));
+
+        // The factored-out flush step — driven directly, deliberately without any
+        // Runtime.halt so the test JVM survives.
+        BamlFfi.runExitFlushHooks();
+
+        // Both non-throwing hooks ran, in registration order; the throwing hook
+        // neither aborted the drain nor propagated.
+        assertEquals(java.util.List.of("a", "b"), order);
+    }
+
     // -- media (baml.media.*) native round-trip ------------------------------
 
     /** A URL-backed Image exposes its source URL / mime via the native accessors. */

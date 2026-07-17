@@ -317,11 +317,15 @@ Params and return are boxed. Verified `Function<java.lang.Long, java.lang.String
 > (signature_token lib.rs:397).
 
 Notes:
-- Generated classes are **immutable value classes**: a canonical all-args constructor in field
-  declaration order, PreserveCase accessor methods (`p.int_field()`), and deep value equality —
-  `equals` / `hashCode` handle `byte[]` fields via `Arrays.equals`. `record` vs plain final class is
-  an emitter detail; handle-backed and generic classes are ordinary final classes because records
-  can't carry the hidden `_handle` / type-args fields (conventions doc:34–41).
+- Generated classes are **immutable `public final` value classes**: a canonical all-args constructor
+  in field declaration order, PreserveCase accessor methods (`p.int_field()`), and deep value equality —
+  `equals` / `hashCode` handle `byte[]` fields via `Arrays.equals`. `final` is load-bearing: the encoder
+  keys its typemap on the exact runtime class, so a user subclass would silently break inbound-encode.
+  All generated value classes — plain, generic, handle-backed, and `$stream` companions — are final
+  (sealed union interfaces and their already-final permitted records are the exception). **POJOs, not
+  `record`s** (decided 2026-07-17): deep `byte[]` equality has to be hand-generated regardless, and the
+  reified type-args ride a weak-identity side-table rather than a hidden instance field
+  (conventions doc:42–49).
 - Class fields are plain `(name, type)` pairs. An optional field renders as the **boxed nullable
   type** (`java.lang.Long field`), never `Optional<T>` and never with a default — required-but-nullable,
   mirroring Pydantic's stance. `registerClass` carries a parallel `String[] fieldDescs` of descriptor

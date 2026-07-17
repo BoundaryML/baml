@@ -710,7 +710,7 @@ mod tests {
         );
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("generics/Wrapper.java")];
-        assert!(file.contains("public class Wrapper<T> {"));
+        assert!(file.contains("public final class Wrapper<T> {"));
         assert!(file.contains("private final T value;"));
         assert!(file.contains("Wrapper<?> other = (Wrapper<?>) o;"));
     }
@@ -1181,7 +1181,7 @@ mod tests {
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("Foo.java")];
         assert!(file.contains("package baml_sdk;"));
-        assert!(file.contains("public class Foo {"));
+        assert!(file.contains("public final class Foo {"));
     }
 
     #[test]
@@ -1191,7 +1191,7 @@ mod tests {
         pool.insert(n.clone(), class_sym(&n, &[], 0));
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("lorem/Resume$stream.java")];
-        assert!(file.contains("public class Resume$stream {"));
+        assert!(file.contains("public final class Resume$stream {"));
     }
 
     #[test]

@@ -122,7 +122,7 @@ message BamlOutboundPanic {
 | absent oneof | Returns `null` (an all-default envelope is a null `ok`; `ProtoReader.java:219`). Pinned by `WireCodecTest.decode_ok_absent_oneof_is_null`. |
 | `error` (`baml.errors.TypeMismatch`) | Throws a native `IllegalArgumentException` (message from the decoded value, BAML trace spliced in), **not** a `BamlError` (`ProtoReader.java:248-251`). |
 | `error` (other) | Decodes `error.value` and throws `BamlError(value, trace, className)`, with BAML frames spliced onto the stack (`ProtoReader.java:252`). |
-| `panic` with `is_exit_panic` | `Runtime.getRuntime().halt(exit_code)` — hard process termination, bypassing JVM shutdown hooks (`ProtoReader.java:313-319`). |
+| `panic` with `is_exit_panic` | run registered flush hooks (`BamlFfi.runExitFlushHooks`), then `Runtime.getRuntime().halt(exit_code)` — hard process termination, bypassing JVM shutdown hooks (`ProtoReader.java:313-319`). |
 | other `panic` | Decodes `panic.value` and throws `BamlPanic(value, trace, className)`, frames spliced (`ProtoReader.java:321-323`). |
 
 > ⚠ **Deviation from Python:** `baml.errors.TypeMismatch` remaps to
@@ -743,29 +743,37 @@ string so the runtime library never references a generated class.
 
 ### OS-exit
 
-`is_exit_panic` terminates the process via `Runtime.getRuntime().halt`
-(`ProtoReader.java:313-319`):
+`is_exit_panic` runs the registered telemetry-flush hooks and then terminates the
+process via `Runtime.getRuntime().halt` (`ProtoReader.java:313-319`):
 
 ```java
 if (isExit) {
-    // Clean baml.sys.exit: hard-terminate the process, bypassing JVM
-    // shutdown hooks (the analog of Python's os._exit).
+    // Clean baml.sys.exit: run the best-effort telemetry-flush hooks (the
+    // spec'd flush step — exceptions swallowed, nothing may prevent the
+    // halt), then hard-terminate the process, bypassing JVM shutdown hooks
+    // (the analog of Python's os._exit, which flushes then _exits).
+    baml_bridge.BamlFfi.runExitFlushHooks();
     Runtime.getRuntime().halt((int) exitCode);
     return new AssertionError("halt returned");   // unreachable
 }
 ```
 
-> ⚠ **Deviation from Python — no explicit telemetry flush yet.** Python "flushes
-> telemetry and calls `os._exit(exit_code)`." The Java code calls
-> `Runtime.getRuntime().halt(exitCode)` **directly** — `halt` bypasses JVM
-> shutdown hooks (the correct `os._exit` analog), but there is no explicit
-> telemetry-flush step in `decodePanic` today. The design intent
-> (`java-function-calls-decisions.md` §5, and the state-of-completeness row)
-> is "flush telemetry then `halt`"; the flush is unwired. The exit path is
-> verified via a `ProcessBuilder` subprocess in `TestErrors` (per the decisions
-> doc). `halt` never returns, so the returned `AssertionError` is unreachable and
-> exists only to satisfy the `Error`-returning signature (`BamlPanic` is now an
-> `Error`).
+> ✅ **Implemented per spec — telemetry-flush hook wired.** Python "flushes
+> telemetry and calls `os._exit(exit_code)`." Java now mirrors that:
+> `decodePanic` calls `BamlFfi.runExitFlushHooks()` (which runs every hook
+> registered via `BamlFfi.registerExitFlushHooks(Runnable)`, best-effort —
+> exceptions are swallowed so nothing may prevent or delay the halt) **before**
+> `Runtime.getRuntime().halt(exitCode)`, which bypasses JVM shutdown hooks (the
+> correct `os._exit` analog). The hooks are a socket: no telemetry ships in this
+> slice, so the registry is empty by default and the halt behavior is unchanged.
+> The design intent (`java-function-calls-decisions.md` §5, and the
+> state-of-completeness row) is "flush telemetry then `halt`" — the flush step is
+> now present. The hook drain is factored into `runExitFlushHooks()` so its
+> mechanics are unit-tested (`BamlFfiSmokeTest.exit_flush_hooks_run_best_effort_and_swallow_exceptions`)
+> without halting; the halt itself is verified via a `ProcessBuilder` subprocess
+> in `TestErrors` (per the decisions doc). `halt` never returns, so the returned
+> `AssertionError` is unreachable and exists only to satisfy the `Error`-returning
+> signature (`BamlPanic` is now an `Error`).
 
 ## Concrete Type-Shape Examples
 

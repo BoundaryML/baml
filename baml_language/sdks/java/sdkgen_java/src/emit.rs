@@ -187,7 +187,13 @@ pub(crate) fn render_class(
         })
         .collect();
 
-    out.push_str(&format!("public class {ident}{generics} {{\n"));
+    // `final`: generated value classes carry exact-class value semantics — the
+    // encoder keys its typemap on the concrete class, so a user subclass would
+    // silently break inbound encode. This covers plain value classes, generic
+    // classes, and `$stream` companions (all routed through here). Sealed-union
+    // interfaces and their permitted records are emitted elsewhere (records are
+    // already final).
+    out.push_str(&format!("public final class {ident}{generics} {{\n"));
 
     for ((f_ident, f_ty), prop) in fields.iter().zip(&class.properties) {
         out.push_str(&render_javadoc(prop.docstring.as_deref(), "    "));
