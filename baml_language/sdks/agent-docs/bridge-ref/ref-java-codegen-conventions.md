@@ -198,16 +198,24 @@ rules digest, not the rationale log).
   `baml_version::CANONICAL_VERSION`, mirroring `bridge_python`
   (`bridge_java/src/lib.rs:118`); a canonical-version mismatch surfaces as
   a Java exception.
-- **Streams** **[open]**: `BamlStream<TPartial, TFinal>` runtime wrapper
-  with `next()` / `next_async()` / `get_final()` / `get_final_async()`.
-  Python spells the last pair `final()` / `final_async()`, but `final`
-  is a Java reserved word — `get_final` is the provisional escape
-  (alternative: `final$()`, matching the `$`-escape used elsewhere;
-  decide before the stream capability lands). `next()` returning
-  "partial or finished-sentinel" wants a sealed `StreamItem<T>` rather
-  than `Object` + `instanceof StreamFinished` — also to be decided;
-  the sentinel's home (`baml_bridge` vs `baml_sdk.baml.stream`) is
-  open too.
+- **Streams** **[decided]** (OWNER, 2026-07-18; landed): `BamlStream<TPartial,
+  TFinal>` runtime wrapper (`baml_bridge`) with `next()` / `next_async()` /
+  `get_final()` / `get_final_async()`. Python spells the last pair `final()` /
+  `final_async()`, but `final` is a Java reserved word — the getter is
+  **`get_final`** (an explicit OWNER override of the `$`-escape default, i.e.
+  NOT `final$()`). `next()` returns "partial or finished-sentinel" as
+  `Object` + `instanceof StreamFinished` (Python's `isinstance` duck-typing;
+  a sealed `StreamItem<T>` stays a possible future refinement — deferred, not
+  blocking). The finished sentinel is **`baml_sdk.baml.stream.StreamFinished`**,
+  **runtime-owned like the media classes** (its body ships in `baml-bridge`; the
+  emitter's `RUNTIME_OWNED_FQNS` skips generating a base `StreamFinished.java`)
+  and **registered in the typemap under its BAML FQN** (`baml.stream.StreamFinished`)
+  by a `TypeRegistry` static block, so a `class_value(baml.stream.StreamFinished,
+  {})` decodes to it. Exhaustion follows Python: `next()` returns partial values
+  until it returns a `StreamFinished` VALUE — no `null`, no exception. On the
+  wire a `BamlStream` is a bare `handle_value(ADT_TAGGED_HEAP_HANDLE)` (encode
+  clones the receiver key per the drain contract; decode reifies via
+  `BamlStream.fromHandle`).
 - **`$stream` partial-model packaging** **[decided]** (owner, 2026-07-17;
   `BamlStream` itself untouched — this is only where host-constructible
   partial-model classes live): in-package `$`-preserved companions —
@@ -222,12 +230,16 @@ rules digest, not the rationale log).
   engine ACCEPTS a host-constructed partial through a
   `$stream`-typed param — a red there is a bridge-surface limitation, not
   a test bug.
-- **Native env hook**: the replay-harness tests need the *engine's*
-  view of the environment mutated at runtime (Python uses
-  `os.environ`, which the in-process engine reads). JVM-side env
-  patching (junit-pioneer) does not reach native `getenv`, so
-  `bridge_java` must expose a real native setenv shim — placeholder
-  spelled `baml_bridge.BridgeEnv.set/unset` in the ported tests.
+- **Native env hook** **[landed]**: the replay-harness (and the
+  `$build_request` api-key) tests need the *engine's* view of the
+  environment mutated at runtime (Python uses `os.environ`, which the
+  in-process engine reads). JVM-side env patching (junit-pioneer's
+  `@SetEnvironmentVariable`) does not reach native `getenv` — and throws
+  `InaccessibleObjectException` on JDK 17+ — so `bridge_java` exposes a real
+  native setenv shim via `baml_bridge.BridgeEnv.set/unset` (JNI →
+  `std::env::set_var`/`remove_var`, the same process `environ` the engine's
+  `std::env::var` reads). The ported tests call it directly (bracketed with
+  `try/finally` to restore).
 - **Errors** **[decided]** (D2 — shipped, 1:1 with Python's reference
   bridge; full mapping also in the state-of-completeness doc):
   - `baml.errors.TypeMismatch` is the **only** class→native remap:

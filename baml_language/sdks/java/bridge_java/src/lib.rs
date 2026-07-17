@@ -888,6 +888,49 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
     let _ = HANDLE_TABLE.release(key as u64);
 }
 
+/// `nativeEnvSet(String name, String value)`. Mutate the **process**
+/// environment so the in-process engine observes the change: the engine reads
+/// env via Rust `std::env::var`, which is backed by the same process `environ`
+/// this writes. This is the JVM analog of `bridge_python` relying on Python's
+/// `os.environ[...] = ...` (which calls `setenv(3)`) being visible to the
+/// pyo3-linked engine — JVM-side `System.getenv` caching / junit-pioneer patch
+/// the JVM's cached view only, never native `getenv`. Used by the replay-harness
+/// tests to point the env-driven `StreamStub` client at the local server.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeEnvSet<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    name: JString<'local>,
+    value: JString<'local>,
+) {
+    let Some(name) = read_required_string(&mut env, &name, "nativeEnvSet") else {
+        return;
+    };
+    let Some(value) = read_required_string(&mut env, &value, "nativeEnvSet") else {
+        return;
+    };
+    // SAFETY: not thread-safe against concurrent getenv (why it is `unsafe` on
+    // edition 2024), but a test-harness env mutation — the exact parity of
+    // Python's `os.environ[...] = ...`. The replay tests serialize their env
+    // set/unset around the call they drive.
+    unsafe { std::env::set_var(name, value) };
+}
+
+/// `nativeEnvUnset(String name)`. Remove a process environment variable — the
+/// teardown half of [`Java_baml_1bridge_BamlFfi_nativeEnvSet`].
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeEnvUnset<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    name: JString<'local>,
+) {
+    let Some(name) = read_required_string(&mut env, &name, "nativeEnvUnset") else {
+        return;
+    };
+    // SAFETY: see `nativeEnvSet`.
+    unsafe { std::env::remove_var(name) };
+}
+
 /// Throw an unchecked `java.lang.RuntimeException`, ignoring a failure to
 /// throw (nothing more can be done at that point). All messages are prefixed
 /// so they are attributable to this bridge.

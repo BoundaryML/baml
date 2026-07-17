@@ -223,6 +223,16 @@ public final class ProtoWriter {
             // with the stdlib FQN on class_ty.name. Mirrors bridge_python's
             // media encode branch (proto.py: class_value(name, {_data: handle})).
             w.writeMessage(IV_CLASS, encodeMediaClass(media));
+        } else if (value instanceof baml_bridge.BamlStream stream) {
+            // BamlStream (baml.llm.Stream receiver): lifted to a bare
+            // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine
+            // reconstructs the heap pointer from the receiver's HANDLE_TABLE row
+            // (Adt(TaggedHeapHandle)). Mirrors bridge_python's
+            // `isinstance(value, BamlStream)` branch, which recurses on the inner
+            // handle (proto.py). Delegate to the BamlHandle arm below, which
+            // clones the key per the drain contract; the inner handle already
+            // carries handle_type = ADT_TAGGED_HEAP_HANDLE.
+            return encodeInboundValue(stream.bamlHandle());
         } else if (value instanceof baml_bridge.BamlHandle handle) {
             // A bare engine handle (a $rust_type shell's private field, e.g.
             // baml.fs.File `_handle` / baml.http.Response `_body`): an

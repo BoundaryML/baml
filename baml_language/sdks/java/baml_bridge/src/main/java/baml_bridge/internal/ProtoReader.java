@@ -125,6 +125,10 @@ public final class ProtoReader {
     private static final int ADT_MEDIA_AUDIO = 7;
     private static final int ADT_MEDIA_VIDEO = 8;
     private static final int ADT_MEDIA_PDF = 9;
+    // Adt(TaggedHeapHandle{ty, heap_handle}) — a streaming call's result. Reifies
+    // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
+    // today; the typed generics are erased, exactly as in bridge_python).
+    private static final int ADT_TAGGED_HEAP_HANDLE = 14;
 
     // The single field name a handle-backed media class carries on the wire.
     private static final String MEDIA_DATA_FIELD = "_data";
@@ -1166,6 +1170,12 @@ public final class ProtoReader {
             case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
             case ADT_MEDIA_VIDEO -> Video.fromHandle(handle);
             case ADT_MEDIA_PDF -> Pdf.fromHandle(handle);
+            // A tagged heap handle reifies the runtime-owned BamlStream wrapper.
+            // Python dispatches on `handle.ty.class_ty.name` (== "baml.llm.Stream")
+            // via its typemap; BamlStream is the only tagged-heap-handle wrapper, so
+            // the handle_type tag alone picks it (the ty carries the erased
+            // TPartial/TFinal, which Java also erases). Mirrors _decode_handle.
+            case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
             default -> handle;
         };
     }

@@ -19,24 +19,28 @@
 // before StreamFinished (asserted below).
 //
 // ===========================================================================
-// java-port notes on the streaming surface (INVENTED shapes — need review):
+// java-port notes on the streaming surface:
 //   * `BamlStream<TPartial, TFinal>` is the runtime wrapper (baml_bridge). Its
-//     `next()` returns `Object` — either a `TPartial` partial (nullable) or a
-//     `StreamFinished` sentinel — because Java generics can't express the
-//     `TPartial | StreamFinished` union and the `if (v instanceof
-//     StreamFinished)` control flow must compile. A sealed `StreamItem<T>`
-//     return type is the better long-term shape; `Object` is the faithful port
-//     of Python's `isinstance(v, StreamFinished)` duck-typing.
+//     `next()` is declared `TPartial` but callers bind the result to `Object`:
+//     it is either a `TPartial` partial (nullable) or a `StreamFinished`
+//     sentinel — Java generics can't express the `TPartial | StreamFinished`
+//     union, and the `if (v instanceof StreamFinished)` control flow must
+//     compile. This is the faithful port of Python's `isinstance(v,
+//     StreamFinished)` duck-typing (a sealed `StreamItem<T>` is a possible
+//     future shape).
 //   * Method names follow the codegen-conventions doc: next()/next_async() and
-//     get_final()/get_final_async(). The Python source spells the final
-//     accessor `final()`/`final_async()`; the rename is provisional.
+//     get_final()/get_final_async() (get_final escapes Python's `final`, a Java
+//     reserved word — OWNER decision 2026-07-18).
 //   * `await x_async()` ports to `x_async().join()` per the conventions doc.
+//   * `$stream` companions keep the BAML name verbatim ($ is legal in Java):
+//     the streaming factory is `stream_e2e_extract$stream(...)` (not Python's
+//     `_stream`), and a class partial is the in-package companion
+//     `baml_sdk.lorem.StreamingDoc$stream` (not Python's `stream_types.lorem.*`
+//     legacy layout) — the same retarget TestStreams got (GAP B, 2026-07-17).
 //   * `hasattr(v, "title")` ports to a reflective accessor-presence check
-//     (`hasAccessor`) so the partial's duck-typed shape is pinned without
-//     importing the name-clashing `stream_types.lorem.StreamingDoc`.
-//   * The replay env-var plumbing is only a structural port — see the
-//     `java-port TODO` in ReplayHarness.java (needs a native setenv reachable
-//     by the JNI engine).
+//     (`hasAccessor`), matching Python's duck-typed shape probe.
+//   * The replay env-var plumbing routes through the native `BridgeEnv` setenv
+//     shim (see ReplayHarness.java) so the JNI-linked engine observes it.
 // ===========================================================================
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -79,7 +83,7 @@ class TestStreamingE2e {
         // Sync `next()` yields a stream of partials and drains to `StreamFinished`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
-                    Fns.stream_e2e_extract_stream("ignored-by-replay-server");
+                    Fns.stream_e2e_extract$stream("ignored-by-replay-server");
             int results = 0;
             while (true) {
                 Object v = stream.next();
@@ -100,7 +104,7 @@ class TestStreamingE2e {
         // Async sibling over the CompletableFuture path: next_async() / get_final_async().
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
-                    Fns.stream_e2e_extract_stream_async("ignored-by-replay-server").join();
+                    Fns.stream_e2e_extract$stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();
@@ -142,8 +146,8 @@ class TestStreamingE2e {
     void test_stream_doc() throws Exception {
         // Sync `next()` yields >= 10 doc partials; `get_final()` is a typed `StreamingDoc`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
-            BamlStream<baml_sdk.stream_types.lorem.StreamingDoc, StreamingDoc> stream =
-                    Fns.stream_e2e_extract_doc_stream("ignored-by-replay-server");
+            BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
+                    Fns.stream_e2e_extract_doc$stream("ignored-by-replay-server");
             int results = 0;
             while (true) {
                 Object v = stream.next();
@@ -165,8 +169,8 @@ class TestStreamingE2e {
     void test_stream_doc_async() throws Exception {
         // Async sibling over the CompletableFuture path for a class `T`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
-            BamlStream<baml_sdk.stream_types.lorem.StreamingDoc, StreamingDoc> stream =
-                    Fns.stream_e2e_extract_doc_stream_async("ignored-by-replay-server").join();
+            BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
+                    Fns.stream_e2e_extract_doc$stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {
                 Object v = stream.next_async().join();
@@ -192,7 +196,7 @@ class TestStreamingE2e {
             Object result = Fns.stream_e2e_collect_doc("ignored-by-replay-server");
             assertTrue(
                     result instanceof StreamingDoc
-                            || result instanceof baml_sdk.stream_types.lorem.StreamingDoc,
+                            || result instanceof baml_sdk.lorem.StreamingDoc$stream,
                     "expected a StreamingDoc (final or partial)");
             assertTrue(hasAccessor(result, "title"));
         }

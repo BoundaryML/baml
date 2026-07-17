@@ -72,6 +72,11 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
     "baml.media.Video",
     "baml.media.Pdf",
     "baml.llm.Stream",
+    // The stream-finished sentinel is runtime-owned (OWNER, 2026-07-18): its
+    // body ships in `baml-bridge` as `baml_sdk.baml.stream.StreamFinished` and
+    // is registered in the typemap by the runtime (TypeRegistry static block),
+    // so the emitter must not also generate a split-package `StreamFinished.java`.
+    "baml.stream.StreamFinished",
 ];
 
 /// One enum typemap entry: (BAML FQN, Java binary name, per-variant

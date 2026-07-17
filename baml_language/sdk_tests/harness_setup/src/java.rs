@@ -78,16 +78,20 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_JAVA_SETUP";
 /// Fixtures whose generated + test sources compile green — their
 /// `javac` gate runs for real (CI enforcement); everything else stays
 /// `#[ignore]`d until its API surface lands.
-const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
+const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls", "llm_functions"];
 
 /// Fixtures whose JUnit runtime suite (`gradle test`) runs green against the
 /// built `bridge_java` cdylib — their `junit` gate runs for real (CI
 /// enforcement, mirroring [`GREEN_JAVAC_FIXTURES`]); everything else stays
 /// `#[ignore]`d until its runtime surface lands. A green-junit fixture must
 /// also be a green-javac fixture (the `test` task compiles the test sources
-/// first). Kept a subset of `GREEN_JAVAC_FIXTURES` — the `llm_functions`
-/// fixture is deliberately excluded (its suite makes live LLM calls).
-const GREEN_JUNIT_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
+/// first). `llm_functions` qualifies: its suite is fully deterministic offline
+/// with no live keys — the streaming tests run against the in-process replay
+/// server (keyless SSE recordings) and the `$build_request` tests set their
+/// api-key env vars through the native `BridgeEnv` setenv shim, so nothing hits
+/// the network. (Serialize its javac+junit gates via a nextest test-group; see
+/// `.config/nextest.toml`.)
+const GREEN_JUNIT_FIXTURES: &[&str] = &["type_shapes", "function_calls", "llm_functions"];
 
 const IGNORE_REASON: &str =
     "generated Java API not complete enough for this fixture yet — un-ignore as capabilities land";

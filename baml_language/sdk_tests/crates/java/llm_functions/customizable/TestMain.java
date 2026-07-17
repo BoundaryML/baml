@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import baml_bridge.BridgeEnv;
 import baml_sdk.baml.http.Request;
 import baml_sdk.ipsum.Sentiment;
 import baml_sdk.lorem.Resume;
@@ -43,7 +44,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
-import org.junitpioneer.jupiter.SetEnvironmentVariable;
 
 class TestMain {
 
@@ -97,9 +97,11 @@ class TestMain {
         // a class in Java, so `Class.forName(name, /*initialize=*/true, cl)` is
         // what actually performs the (idempotent) runtime bootstrap. [INVENTED:
         // `baml_sdk.Fns` as the root free-function / runtime-init holder — needs
-        // review; a root namespace with no free functions may not emit an `Fns`
-        // holder.]
-        assertNotNull(Class.forName("baml_sdk.Fns", true, TestMain.class.getClassLoader()));
+        // review.] Resolved: a root namespace with no free functions emits NO
+        // `Fns` holder; the runtime-init anchor is the root `Baml` class (its
+        // static initializer performs the idempotent bootstrap), so that is what
+        // `Class.forName(..., initialize=true, ...)` must touch.
+        assertNotNull(Class.forName("baml_sdk.Baml", true, TestMain.class.getClassLoader()));
     }
 
     @Test
@@ -187,13 +189,16 @@ class TestMain {
     void test_stream_types_lorem_leaf_present() {
         // PPIR synthesizes Class$stream companions for any class referenced by
         // an LLM function's return type. Both Resume and StreamingDoc are LLM
-        // return types, so `stream_types.lorem` must exist with at least one.
-        // StreamingDoc's conditional-emit outcome is pinned to "emitted";
-        // Resume's is left to the conditional-emit rule.
+        // return types, so at least one in-package `$stream` companion must exist.
+        // java-port note: GAP B (2026-07-17, TS-aligned) — companions keep the
+        // in-package `$`-preserved naming (`baml_sdk.lorem.StreamingDoc$stream`),
+        // NOT Python's `stream_types.lorem.*` legacy layout. StreamingDoc's
+        // conditional-emit outcome is pinned to "emitted"; Resume's is left to
+        // the conditional-emit rule.
         boolean hasAny =
-                classExists("baml_sdk.stream_types.lorem.Resume")
-                        || classExists("baml_sdk.stream_types.lorem.StreamingDoc");
-        assertTrue(hasAny, "expected at least one $stream companion class in stream_types/lorem");
+                classExists("baml_sdk.lorem.Resume$stream")
+                        || classExists("baml_sdk.lorem.StreamingDoc$stream");
+        assertTrue(hasAny, "expected at least one in-package $stream companion class in lorem");
     }
 
     @Test
@@ -232,50 +237,65 @@ class TestMain {
     // var (OPENAI_API_KEY / ANTHROPIC_API_KEY). These pin that contract by
     // inspecting the auth header on the `Request` returned by `*$build_request`.
     //
-    // java-port TODO: `@SetEnvironmentVariable` (junit-pioneer) is the
-    // idiomatic JUnit analog of pytest `monkeypatch.setenv`, but it patches
-    // only the JVM's cached env view — the JNI-linked engine reads the process
-    // env via native `getenv`, so a native setenv (exposed by bridge_java) is
-    // still required for the engine to observe the key. Structure is ported;
-    // the effective env plumbing lands with the bridge.
+    // java-port note: pytest `monkeypatch.setenv` ports to the native
+    // `BridgeEnv.set/unset` shim (bridge_java), NOT junit-pioneer's
+    // `@SetEnvironmentVariable`: the JNI-linked engine reads the process env via
+    // native `getenv`, which junit-pioneer's reflective JVM-cache patch does not
+    // reach (and which throws `InaccessibleObjectException` on JDK 17+ anyway).
+    // Each test brackets the engine call with set/unset in a try/finally so the
+    // process env is restored regardless of outcome.
     // -----------------------------------------------------------------------
 
     @Test
-    @SetEnvironmentVariable(key = "OPENAI_API_KEY", value = "sk-openai-shorthand-test")
     void test_extract_resume_build_request_includes_openai_api_key() {
-        Request request = baml_sdk.lorem.Fns.ExtractResume$build_request("Some resume text");
-        // Authorization header is added by `auth_openai`; compared
-        // case-insensitively because the wire may normalize the casing.
-        Map<String, String> headersLower = lowerKeys(request.headers());
-        assertTrue(
-                headersLower.containsKey("authorization"),
-                "shorthand openai client did not set authorization header: " + request.headers());
-        assertEquals("Bearer sk-openai-shorthand-test", headersLower.get("authorization"));
+        BridgeEnv.set("OPENAI_API_KEY", "sk-openai-shorthand-test");
+        try {
+            Request request = baml_sdk.lorem.Fns.ExtractResume$build_request("Some resume text");
+            // Authorization header is added by `auth_openai`; compared
+            // case-insensitively because the wire may normalize the casing.
+            Map<String, String> headersLower = lowerKeys(request.headers());
+            assertTrue(
+                    headersLower.containsKey("authorization"),
+                    "shorthand openai client did not set authorization header: "
+                            + request.headers());
+            assertEquals("Bearer sk-openai-shorthand-test", headersLower.get("authorization"));
+        } finally {
+            BridgeEnv.unset("OPENAI_API_KEY");
+        }
     }
 
     @Test
-    @SetEnvironmentVariable(key = "OPENAI_API_KEY", value = "sk-openai-responses-test")
     void test_streaming_extract_build_request_includes_openai_api_key() {
         // `openai-responses` shares the OPENAI_API_KEY convention with `openai`,
         // and auth_openai routes both through the same Bearer header.
-        Request request =
-                baml_sdk.lorem.Fns.StreamingExtract$build_request("Some text to summarize");
-        Map<String, String> headersLower = lowerKeys(request.headers());
-        assertTrue(
-                headersLower.containsKey("authorization"),
-                "shorthand openai-responses client did not set authorization header: "
-                        + request.headers());
-        assertEquals("Bearer sk-openai-responses-test", headersLower.get("authorization"));
+        BridgeEnv.set("OPENAI_API_KEY", "sk-openai-responses-test");
+        try {
+            Request request =
+                    baml_sdk.lorem.Fns.StreamingExtract$build_request("Some text to summarize");
+            Map<String, String> headersLower = lowerKeys(request.headers());
+            assertTrue(
+                    headersLower.containsKey("authorization"),
+                    "shorthand openai-responses client did not set authorization header: "
+                            + request.headers());
+            assertEquals("Bearer sk-openai-responses-test", headersLower.get("authorization"));
+        } finally {
+            BridgeEnv.unset("OPENAI_API_KEY");
+        }
     }
 
     @Test
-    @SetEnvironmentVariable(key = "ANTHROPIC_API_KEY", value = "sk-ant-shorthand-test")
     void test_classify_sentiment_build_request_includes_anthropic_api_key() {
-        Request request = baml_sdk.ipsum.Fns.ClassifySentiment$build_request("I love this!");
-        Map<String, String> headersLower = lowerKeys(request.headers());
-        assertTrue(
-                headersLower.containsKey("x-api-key"),
-                "shorthand anthropic client did not set x-api-key header: " + request.headers());
-        assertEquals("sk-ant-shorthand-test", headersLower.get("x-api-key"));
+        BridgeEnv.set("ANTHROPIC_API_KEY", "sk-ant-shorthand-test");
+        try {
+            Request request = baml_sdk.ipsum.Fns.ClassifySentiment$build_request("I love this!");
+            Map<String, String> headersLower = lowerKeys(request.headers());
+            assertTrue(
+                    headersLower.containsKey("x-api-key"),
+                    "shorthand anthropic client did not set x-api-key header: "
+                            + request.headers());
+            assertEquals("sk-ant-shorthand-test", headersLower.get("x-api-key"));
+        } finally {
+            BridgeEnv.unset("ANTHROPIC_API_KEY");
+        }
     }
 }

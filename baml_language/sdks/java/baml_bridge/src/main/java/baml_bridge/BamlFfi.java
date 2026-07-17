@@ -254,6 +254,12 @@ public final class BamlFfi {
     /** Release one owned handle key (best-effort; a stale key is ignored). */
     static native void nativeHandleRelease(long key);
 
+    /** Set a process env var so the in-process engine (native getenv) observes it. */
+    static native void nativeEnvSet(String name, String value);
+
+    /** Remove a process env var (teardown half of {@link #nativeEnvSet}). */
+    static native void nativeEnvUnset(String name);
+
     // ---- Public surface the generated SDK targets --------------------------
 
     /** Initialize the runtime from embedded bytecode (idempotent; replaces). */

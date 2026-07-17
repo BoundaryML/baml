@@ -296,6 +296,51 @@ class TestHostCallables {
     }
 
     @Test
+    void test_async_callable_returning_future_is_awaited_by_bridge() {
+        // The FAITHFUL Java spelling of Python's `async def` host callable: the
+        // callback RETURNS a CompletableFuture<String> rather than a String, and
+        // the bridge (BamlFfi.runHostDispatch, design point C — value-level async
+        // detection) awaits it via `whenComplete` before encoding the resolved
+        // value back to BAML. This is the counterpart of Python's dispatcher
+        // running a returned coroutine to completion.
+        //
+        // The generated slot types the return as the VALUE (`Function<Long,
+        // String>`), so returning a future needs the raw/unchecked idiom:
+        // build the callable as `Function<Long, CompletableFuture<String>>`, then
+        // launder it to the declared `Function<Long, String>` through a wildcard
+        // cast (documented @SuppressWarnings). At runtime `Function` is `Function`
+        // — the erased `apply` returns the CompletableFuture the dispatcher then
+        // awaits — so there is no ClassCastException.
+        Function<Long, CompletableFuture<String>> asyncCb =
+                x -> CompletableFuture.supplyAsync(() -> "async-future-" + x);
+        @SuppressWarnings("unchecked")
+        Function<Long, String> cb = (Function<Long, String>) (Function<Long, ?>) asyncCb;
+
+        String result = Fns.call_with_callback(cb, 7L);
+        assertEquals("async-future-7", result);
+    }
+
+    @Test
+    void test_async_callable_future_completing_exceptionally_round_trips_original() {
+        // Failure half of the value-level async path: when the returned future
+        // completes EXCEPTIONALLY, the bridge's `whenComplete` error branch drives
+        // the same design-point-D exception path as a synchronous throw — the
+        // ORIGINAL Throwable is registered as a host-opaque value and rehydrated
+        // back to the caller by identity (`assertSame`), never flattened. Same
+        // raw/unchecked laundering as the success case above.
+        RuntimeException raised = new RuntimeException("async-future-boom");
+        Function<Long, CompletableFuture<String>> asyncCb =
+                x -> CompletableFuture.failedFuture(raised);
+        @SuppressWarnings("unchecked")
+        Function<Long, String> cb = (Function<Long, String>) (Function<Long, ?>) asyncCb;
+
+        RuntimeException caught =
+                assertThrows(RuntimeException.class, () -> Fns.call_with_callback(cb, 1L));
+        assertSame(raised, caught);
+        assertEquals("async-future-boom", caught.getMessage());
+    }
+
+    @Test
     void test_multiple_callable_keys_are_distinct() {
         long[] counterA = {0};
         long[] counterB = {0};

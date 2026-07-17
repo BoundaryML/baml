@@ -69,6 +69,20 @@ public final class TypeRegistry {
     private static final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
             new ConcurrentHashMap<>();
 
+    static {
+        // Runtime-owned stdlib types the emitter deliberately does NOT generate
+        // (RUNTIME_OWNED_FQNS in sdkgen_java) — their bodies ship in this runtime
+        // library, so they must be registered here rather than by generated
+        // Baml.java. StreamFinished is the "finished" sentinel decoded from a
+        // `class_value(baml.stream.StreamFinished, {})` in BamlStream.next().
+        // (Media round-trips as a handle, so it needs no class registration; the
+        // Stream wrapper likewise decodes via the ADT_TAGGED_HEAP_HANDLE arm.)
+        registerClass(
+                baml_sdk.baml.stream.StreamFinished.FQN,
+                "baml_sdk.baml.stream.StreamFinished",
+                new String[0]);
+    }
+
     private TypeRegistry() {}
 
     // -- registration --------------------------------------------------------
