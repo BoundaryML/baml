@@ -170,6 +170,36 @@ function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(regist
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "optional_index_with_null_index_returns_null"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "optional_index_with_valid_index_returns_element"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "negated_int_min_literal_is_valid"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "map_with_string_alias_key_is_accepted"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "map_with_repeated_string_alias_union_key_is_accepted"
+    make_closure .<lambda($init_test_ns_type_error_repro_type_error_repro, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -942,6 +972,70 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
     return
 }
 
+function type_error_repro.map_with_repeated_string_alias_union_key_body() -> int {
+    load_type string | string
+    load_type int
+    alloc_map 0
+    store_var counts
+    load_type string | string
+    load_type int
+    load_var counts
+    load_const "x"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string | string
+    load_type int
+    load_var counts
+    load_const "x"
+    call baml.Map.get
+    store_var _5
+    load_var _5
+    store_var _0
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function type_error_repro.map_with_string_alias_key_body() -> int {
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var counts
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    load_const 1
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type int
+    load_var counts
+    load_const "x"
+    call baml.Map.get
+    store_var _5
+    load_var _5
+    store_var _0
+    load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
 function type_error_repro.map_write_local_variable_body() -> int {
     load_type string
     load_type int
@@ -954,6 +1048,11 @@ function type_error_repro.map_write_local_variable_body() -> int {
     load_var scores
     load_const "alice"
     load_map_element
+    return
+}
+
+function type_error_repro.negated_int_min_literal_body() -> int {
+    load_const -4611686018427387904
     return
 }
 
@@ -1055,6 +1154,70 @@ function type_error_repro.non_self_param_array_write_body() -> string {
     load_field .items
     load_const 1
     load_array_element
+    return
+}
+
+function type_error_repro.optional_index_with_null_index_body() -> int | null {
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    store_var_load_var arr
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const null
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 2
+    load_array_element
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
+    return
+}
+
+function type_error_repro.optional_index_with_valid_index_body() -> int | null {
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    store_var_load_var arr
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const 1
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 1 2
+    load_array_element
+    jump L3
+
+  L2:
+    load_const null
+
+  L3:
     return
 }
 

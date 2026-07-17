@@ -1,8 +1,6 @@
 // Tests for exception handling: catch/throw/panic semantics.
 //
-// Converted from crates/baml_tests/tests/exceptions.rs.
-//
-// Left in Rust (cannot be expressed as a BAML test block):
+// Tests not expressible in BAML (require host-side Rust inspection):
 //   - exception_stack_trace_through_closures — asserts on the exact text of the
 //     traceback via insta::assert_snapshot!(err, ...). No BAML way to inspect
 //     the error message string.
@@ -10,9 +8,21 @@
 //   - catch_with_stack_trace_binding — inspects st.to_string() and asserts the
 //     exact traceback text including file names and line numbers.
 //   - catch_stack_trace_on_panic — same reason (traceback string + insta snapshot).
-//
-// Note: `baml_test_optimized!` tests (§15) test the MIR optimization pass;
-// the behavioral assertions are identical so they convert directly as regular tests.
+//   - catch_stale_field_slot_invalid_field_access — hand-patches the compiled
+//     bytecode (rewrites `user.oob`'s Instruction list) before running; needs
+//     Rust-side access to the program object table.
+//   - uncaught_throw_renders_readable_error_not_debug — asserts on the host-side
+//     rendering of an UNCAUGHT throw (EngineError display); catching it in BAML
+//     would not exercise the escape-to-host path.
+//   - union_throws_panic_escapes_as_clean_panic — asserts the host-boundary
+//     EngineError::UnhandledThrow shape (clean panic Instance, no union
+//     wrapping) for a panic that escapes to the host uncaught.
+//   - panic_escapes_all_throws_shapes_identically — same host-boundary
+//     assertion across four `throws` shapes.
+//   - exit_panic_escapes_union_throws_as_clean_exit — asserts
+//     EngineError::Exit { code } surfaces at the host.
+//   - genuine_in_contract_throw_still_wrapped_through_union — asserts the FFI
+//     BexExternalValue::Union wire wrapping of an uncaught in-contract throw.
 
 // ============================================================================
 // §1 — Catch by literal value
@@ -1472,10 +1482,6 @@ test "catch_mixed_literal_and_typed_no_switch" {
 // ============================================================================
 // §17 — Stack trace tests (behavioral subset only)
 // ============================================================================
-// exception_stack_trace_through_closures — LEFT IN RUST (asserts exact traceback text)
-// exception_stack_trace_on_panic — LEFT IN RUST (asserts exact traceback text)
-// catch_with_stack_trace_binding — LEFT IN RUST (asserts exact traceback text)
-// catch_stack_trace_on_panic — LEFT IN RUST (asserts exact traceback text)
 
 // catch_without_stack_trace_still_works: only checks the value, not the trace.
 function s17_inner_st() -> string { throw "oops" }
@@ -1537,4 +1543,24 @@ test "catch_four_typed_arms_plus_bind_chain_rethrows_panic" {
     } catch (e) {
         baml.panics.DivisionByZero => null
     }
+}
+
+// ============================================================================
+// §19 — Regression: nested catch routing for cross-frame throws
+// ============================================================================
+
+// A throw propagating out of a CALLED function must be caught by the INNERMOST
+// enclosing `catch`, not the outermost. Inline `throw`s are lowered as a direct
+// jump to the handler, but a throw that escapes a callee — or a runtime panic —
+// reaches the caller's exception table, and the VM must select the innermost
+// covering entry (largest `start_pc`), not the first. Here `s19_boom()` throws
+// inside the callee; the inner `catch (e) { _ => 1 }` handles it.
+function s19_boom() -> void { throw "x" }
+
+function nested_catch_inner_catches_callee_throw_fn() -> int {
+    ({ s19_boom(); 0 } catch (e) { _ => 1 }) catch (e2) { _ => 2 }
+}
+
+test "nested_catch_inner_catches_callee_throw" {
+    assert.is_true(baml.deep_equals(nested_catch_inner_catches_callee_throw_fn(), 1))
 }

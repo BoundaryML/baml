@@ -1,22 +1,8 @@
 // Tests for auto-derived to_json / from_json on user classes.
 //
-// Converted from crates/baml_tests/tests/json_auto_derive.rs.
-//
 // Tests that read fields from `let` locals are moved into helper functions
 // (test-block local-boxing VM bug: field access on a stored local throws
 // `expected Instance, got Any`).
-//
-// KEPT IN RUST (tests/json_auto_derive.rs) — bytecode/harness inspection not
-// available in BAML test blocks:
-//   auto_derive_filtered_from_bytecode_by_default — asserts output.bytecode
-//     does NOT contain "to_json".
-//   auto_derive_visible_with_show_auto_derive_flag — uses the Rust-only
-//     `show_auto_derive: true` harness option.
-//
-// CONVERTED + STRENGTHENED — these originals used weak format!("{v:?}") debug
-// substring checks; here they assert exact `stringify` equality instead:
-//   array_of_int_to_json_returns_json_array, map_of_int_to_json_returns_json_map,
-//   array_of_class_to_json_honors_override, nested_class_override_honored_in_map.
 
 // ─── shared top-level class declarations ─────────────────────────────────────
 
@@ -34,12 +20,6 @@ function simple_class_to_json_roundtrip_name() -> string {
 test "simple_class_to_json_roundtrip" {
     assert.is_true(baml.deep_equals(simple_class_to_json_roundtrip_name(), "Ada"))
 }
-
-// SKIPPED: auto_derive_filtered_from_bytecode_by_default
-//   Checks output.bytecode, not expressible in BAML.
-
-// SKIPPED: auto_derive_visible_with_show_auto_derive_flag
-//   Uses show_auto_derive: true in Rust harness, not expressible in BAML.
 
 // ─── user_to_json_override_suppresses_auto_derive ────────────────────────────
 

@@ -1,4 +1,10 @@
 //! Unified tests for environment variable operations.
+//!
+//! Every test in this file requires `std::env::set_var` on the host before
+//! execution. BAML's stdlib is read-only over the environment
+//! (`baml.env.get` / `baml.env.get_or_panic` only), so tests that establish
+//! sentinel values must run in Rust. The first three tests additionally pin
+//! bytecode with insta snapshots, which requires a compiled artifact.
 
 #![allow(unsafe_code)]
 

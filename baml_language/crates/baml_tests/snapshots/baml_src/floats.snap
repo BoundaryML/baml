@@ -1220,6 +1220,12 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "float_abs_negative_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 203)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }

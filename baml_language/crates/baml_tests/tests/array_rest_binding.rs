@@ -1,8 +1,5 @@
-//! Runtime semantics of array rest-pattern bindings (B-531): `..let r`
+//! Runtime semantics of array rest-pattern bindings: `..let r`
 //! binds a copy of the unmatched middle of the scrutinee, typed `elem[]`.
-//!
-//! Written test-first: these fail while the TIR gate
-//! (`RestSubPatternNotSupported`) is still in place.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

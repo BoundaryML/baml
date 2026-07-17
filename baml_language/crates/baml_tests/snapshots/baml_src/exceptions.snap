@@ -572,6 +572,12 @@ function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCo
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "nested_catch_inner_catches_callee_throw"
+    make_closure .<lambda($init_test_ns_exceptions_exceptions, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -2191,6 +2197,26 @@ function exceptions.named_wrapper_value_catches_callback_throw_fn() -> string {
     return
 }
 
+function exceptions.nested_catch_inner_catches_callee_throw_fn() -> int {
+    call user.exceptions.s19_boom
+    pop 1
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    jump L1
+
+  L0:
+    load_const 0
+
+  L1:
+    return
+    load_var e2
+    throw_if_panic
+    load_const 2
+    jump L1
+}
+
 function exceptions.panic_alias_catches_any_panic_fn() -> int {
     call user.exceptions.s12_divides_panic
     jump L2
@@ -2895,6 +2921,11 @@ function exceptions.s17_inner_st() -> string {
 
 function exceptions.s17_risky_cb(value: int) -> string {
     load_const "boom"
+    throw
+}
+
+function exceptions.s19_boom() -> void {
+    load_const "x"
     throw
 }
 
