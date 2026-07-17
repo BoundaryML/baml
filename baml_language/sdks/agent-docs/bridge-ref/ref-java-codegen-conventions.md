@@ -188,20 +188,18 @@ rules digest, not the rationale log).
   than `Object` + `instanceof StreamFinished` — also to be decided;
   the sentinel's home (`baml_bridge` vs `baml_sdk.baml.stream`) is
   open too.
-- **`$stream` partial-model packaging** **[open]** (the addendum
-  decision; `BamlStream` itself untouched — this is only where
-  host-constructible partial-model classes live): Python emits a parallel
-  package `baml_sdk.stream_types.<ns>.<Name>`; the Java emitter today
-  mints in-package `$`-companions `<ns>.<Name>$stream` (fully emitted,
-  registered, relied on by the green type_shapes typemap). Exactly one
-  side must move. **Option A** — emit `stream_types.*` parallel packages
-  (full Python-layout parity; larger emitter change touching every
-  namespace's companions + registrations). **Option B** — keep
-  `<Name>$stream` and rewrite the two ported test files' references (zero
-  emitter change; consistent with the "`$`-companions keep the BAML name
-  verbatim" house rule and the TS `$stream` style; diverges from Python's
-  layout). Independent open question flagged by the test authors: whether
-  the engine ACCEPTS a host-constructed partial through a
+- **`$stream` partial-model packaging** **[decided]** (owner, 2026-07-17;
+  `BamlStream` itself untouched — this is only where host-constructible
+  partial-model classes live): in-package `$`-preserved companions —
+  `<ns>.<Name>$stream` beside its base type, exactly as emitted and
+  registered today. This matches TS (`Resume$stream` beside `Resume`, no
+  `stream_types/` tree; the compiler no longer reserves `stream_types` —
+  ref-ts-type-mappings.md:8,51,61) and the "`$`-companions keep the BAML
+  name verbatim" house rule. Python's parallel `stream_types.*` package
+  is a workaround for `$` being illegal in Python identifiers and is NOT
+  mirrored; the ported stream tests retarget to the generated layout.
+  Independent open question flagged by the test authors: whether the
+  engine ACCEPTS a host-constructed partial through a
   `$stream`-typed param — a red there is a bridge-surface limitation, not
   a test bug.
 - **Native env hook**: the replay-harness tests need the *engine's*
