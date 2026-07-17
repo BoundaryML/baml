@@ -856,6 +856,37 @@ mod tests {
         Ty::TypeVar(baml_base::Name::new(name), baml_base::TyAttr::EMPTY)
     }
 
+    #[test]
+    fn throwing_functions_carry_an_errors_doc_section() {
+        let e = name("user", &[], "ParseError");
+        let f = name("user", &[], "load");
+        let mut function = nullary_string_fn(&f);
+        function.docstring = Some("Load a document.".to_string());
+        function.arguments = vec![arg(
+            "path",
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+        )];
+        function.throws = Some(Ty::Class(e.clone(), Vec::new(), baml_base::TyAttr::EMPTY));
+        let pool = SymbolPool::from([
+            (e.clone(), generic_class(&e, &[], vec![])),
+            (f, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        // The section comes LAST (after the by-value note — rustdoc folds
+        // everything after a heading into that section), on both bindings.
+        let section = "/// # Errors\n///\n/// Throws `ParseError`.\npub";
+        assert_eq!(lib.matches(section).count(), 2, "{lib}");
+        assert!(
+            lib.contains("/// are never written back to the caller's values.\n///\n/// # Errors"),
+            "{lib}"
+        );
+    }
+
     fn arg(name: &str, ty: Ty) -> baml_codegen_types::FunctionArgument {
         baml_codegen_types::FunctionArgument {
             name: baml_base::Name::new(name),

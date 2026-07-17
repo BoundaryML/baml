@@ -119,11 +119,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_optional_args.rs",
         Gate::Later("needs the optional-arg matrix and methods on classes"),
     ),
-    (
-        "function_calls",
-        "test_raises.rs",
-        Gate::Later("needs throws docs; asserts on generated source text"),
-    ),
+    ("function_calls", "test_raises.rs", Gate::Now),
     (
         "function_calls",
         "test_stdlib_entrypoints.rs",

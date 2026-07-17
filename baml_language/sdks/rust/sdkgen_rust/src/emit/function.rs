@@ -196,6 +196,9 @@ fn emit_binding(
         }
         Receiver::None => {}
     }
+    // The `# Errors` section goes LAST: rustdoc folds everything after a
+    // heading into that section, so the prose notes must precede it.
+    append_errors_section(&mut doc_attrs, &raises_names(function.throws.as_ref()));
 
     let self_param = match receiver {
         Receiver::None => TokenStream::new(),
@@ -322,6 +325,58 @@ fn append_by_value_note(attrs: &mut Vec<TokenStream>, subject: ByValueSubject) {
     for line in lines {
         attrs.push(quote! { #[doc = #line] });
     }
+}
+
+/// Collect the unqualified leaf names of the thrown types in a `throws`
+/// `Ty`, in source order, de-duping exact-equal names. Class/Enum/TypeAlias
+/// contribute their unqualified leaf name; a union contributes each
+/// member's; anything else (primitives) contributes nothing. Mirrors the
+/// python emitter's `collect_raises_names` so both SDKs document the same
+/// name set.
+fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
+    use baml_codegen_types::Ty;
+
+    fn walk(ty: &Ty, out: &mut Vec<String>) {
+        match ty {
+            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+                let n = name.name().as_str().to_string();
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            _ => {}
+        }
+    }
+
+    let mut out = Vec::new();
+    if let Some(ty) = throws {
+        walk(ty, &mut out);
+    }
+    out
+}
+
+/// Append the `# Errors` rustdoc section naming the BAML `throws`
+/// contract's types — the section `clippy::missing_errors_doc` asks for,
+/// and the Rust rendering of the same names python puts in a Google-style
+/// `Raises:` docstring block. No-op when the contract names no nominal
+/// types (including `throws: None`).
+fn append_errors_section(attrs: &mut Vec<TokenStream>, names: &[String]) {
+    if names.is_empty() {
+        return;
+    }
+    if !attrs.is_empty() {
+        attrs.push(quote! { #[doc = ""] });
+    }
+    attrs.push(quote! { #[doc = " # Errors"] });
+    attrs.push(quote! { #[doc = ""] });
+    let listed = names
+        .iter()
+        .map(|n| format!("`{n}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let line = format!(" Throws {listed}.");
+    attrs.push(quote! { #[doc = #line] });
 }
 
 /// BAML docstring → `#[doc = "…"]` attributes (rendered as `///` by the
