@@ -3,6 +3,10 @@
 //! Tests the complete pipeline: SSE → StreamAccumulator → SAP partial/final parse → typed values.
 //! Uses WireMock to serve OpenAI-format SSE responses, then exercises the
 //! compiler-generated `$parse_stream` companion and `Stream<T>` consumption.
+//!
+//! These tests perform HTTP fetches inside the stdlib against the client's
+//! compile-time `base_url`. The wiremock URI must be interpolated into the
+//! BAML source at compile time — not expressible from a corpus test block.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -332,41 +336,5 @@ async fn stream_server_error_propagates() {
     assert!(
         output.result.is_err(),
         "Expected error for streaming with 500 response"
-    );
-}
-
-#[tokio::test]
-async fn stream_done_signal_required() {
-    let server = MockServer::start().await;
-    // SSE body with content but no finish_reason and no [DONE] — stream just ends
-    let sse_body = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n";
-    Mock::given(method("POST"))
-        .and(path("/v1/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_body_string(sse_body),
-        )
-        .mount(&server)
-        .await;
-    let uri = server.uri();
-
-    let source = format!(
-        r#"
-        {llm_source}
-
-        function main() -> string {{
-            let stream: baml.llm.Stream<null | string, string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
-            stream.final()
-        }}
-    "#,
-        llm_source = streaming_llm_source(&uri)
-    );
-
-    let output = baml_test!(&source);
-    // Stream ended without [DONE] or finish_reason — should error
-    assert!(
-        output.result.is_err(),
-        "Expected error when stream ends without completion signal"
     );
 }

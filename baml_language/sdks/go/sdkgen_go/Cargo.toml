@@ -11,7 +11,9 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
+baml_type = { workspace = true }
 
 [lib]
 doctest = false

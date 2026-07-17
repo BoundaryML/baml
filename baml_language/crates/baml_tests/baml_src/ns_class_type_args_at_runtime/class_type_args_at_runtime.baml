@@ -122,7 +122,7 @@ test "is_type_bare_class_still_matches" {
 // ─── Closure inside method captures class T ──────────────────────────────────
 
 function closure_inside_method_captures_class_type_arg_fn() -> string {
-    let b: Box2<int> = Box2 { };
+    let b: Box2<int> = Box2<int> { };
     let describe = b.make_describer();
     describe()
 }
@@ -132,7 +132,7 @@ test "closure_inside_method_captures_class_type_arg" {
 }
 
 function closure_inside_method_survives_gc_fn() -> string {
-    let b: Box2<int> = Box2 { };
+    let b: Box2<int> = Box2<int> { };
     let describe = b.make_describer();
 
     // Trigger allocation pressure with many short-lived arrays so the

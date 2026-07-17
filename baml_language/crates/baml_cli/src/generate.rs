@@ -39,6 +39,9 @@ struct GeneratorDef {
     /// Required `naming_convention` from the generator section. No default
     /// is permitted — generators must spell out the policy explicitly.
     naming_convention: NamingConvention,
+    /// Required for Go so generated packages can import the SDK root and one
+    /// another. Other generators leave this unset.
+    sdk_import_path: Option<String>,
 }
 
 impl GenerateArgs {
@@ -158,13 +161,19 @@ impl GenerateArgs {
                 .clone()
                 .unwrap_or_else(|| generator.output_dir.clone());
 
-            let generated = match generator.output_type {
+            // Unified to bytes at the write boundary: python/TS emit text
+            // only; the rust generator also ships the embedded bytecode as
+            // a binary file.
+            let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
                     sdkgen_python_pydantic2::to_source_code_with_bytecode(
                         &pool,
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
                 }
                 OutputType::TypescriptNode => {
                     sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
@@ -172,6 +181,9 @@ impl GenerateArgs {
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
                 }
                 OutputType::TypescriptWeb => {
                     sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
@@ -179,6 +191,59 @@ impl GenerateArgs {
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
+                }
+                OutputType::Rust => {
+                    let generated = sdkgen_rust::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        &sdkgen_rust::RustGenOptions {
+                            naming_convention: generator.naming_convention,
+                            package_name: "baml_sdk".to_string(),
+                            // The runtime crate is not published yet; pin the
+                            // matching version for when it is.
+                            runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
+                            manifest_extra: None,
+                            edition: "2024".to_string(),
+                        },
+                    );
+                    for warning in &generated.warnings {
+                        reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
+                    }
+                    generated
+                        .files
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
+                }
+                OutputType::Go => sdkgen_go::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                    generator
+                        .sdk_import_path
+                        .as_deref()
+                        .expect("validated Go generator must have sdk_import_path"),
+                )
+                .into_iter()
+                .map(|(path, content)| (path, content.into_bytes()))
+                .collect(),
+                OutputType::Cpp => {
+                    // The C++ emitter embeds source paths (reference
+                    // comments only); the runtime payload is the bytecode.
+                    let source_paths: Vec<PathBuf> = source_files
+                        .iter()
+                        .map(|sf| {
+                            let path = sf.path(&db);
+                            path.strip_prefix(&from).unwrap_or(&path).to_path_buf()
+                        })
+                        .collect();
+                    sdkgen_cpp::to_source_code_with_bytecode(&pool, &source_paths, &baml_bytecode)
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
                 }
             };
 
@@ -266,7 +331,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "go", "rust", "cpp""#,
             table_range,
             &mut diags,
         );
@@ -278,6 +343,16 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             table_range,
             &mut diags,
         );
+        let sdk_import_path = if matches!(output_type, Some(OutputType::Go)) {
+            parse_required_go_import_path(
+                name,
+                generator.sdk_import_path.as_ref(),
+                table_range,
+                &mut diags,
+            )
+        } else {
+            None
+        };
 
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with `baml_sdk` appended (matching the historic
@@ -290,16 +365,105 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
         };
+        if output_type == OutputType::Go {
+            if naming_convention != NamingConvention::Language {
+                let range = generator
+                    .naming_convention
+                    .as_ref()
+                    .map(|value| to_text_range(value.span()))
+                    .unwrap_or(table_range);
+                diags.push(
+                    Diagnostic::error(
+                        DiagnosticId::InvalidGeneratorPropertyValue,
+                        format!(
+                            "Go generator `{name}` requires `naming_convention = \"language\"`"
+                        ),
+                    )
+                    .with_primary(
+                        Span {
+                            file_id: manifest_file_id(),
+                            range,
+                        },
+                        "Go identifiers use the canonical language projection",
+                    )
+                    .with_phase(DiagnosticPhase::Validation),
+                );
+                continue;
+            }
+            if sdk_import_path.is_none() {
+                continue;
+            }
+        }
 
         generators.push(GeneratorDef {
             name: name.clone(),
             output_type,
             output_dir,
             naming_convention,
+            sdk_import_path,
         });
     }
 
     (generators, diags)
+}
+
+fn parse_required_go_import_path(
+    generator_name: &str,
+    value: Option<&Spanned<String>>,
+    table_range: TextRange,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let Some(value) = value else {
+        diags.push(
+            Diagnostic::error(
+                DiagnosticId::MissingGeneratorProperty,
+                format!(
+                    "Go generator `{generator_name}` is missing required property \
+                     `sdk_import_path` (for example `example.com/project/baml_sdk`)"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id: manifest_file_id(),
+                    range: table_range,
+                },
+                "missing Go SDK import path",
+            )
+            .with_phase(DiagnosticPhase::Validation),
+        );
+        return None;
+    };
+
+    let import_path = value.get_ref();
+    let valid = is_valid_go_import_path(import_path);
+    if valid {
+        return Some(import_path.clone());
+    }
+
+    diags.push(
+        Diagnostic::error(
+            DiagnosticId::InvalidGeneratorPropertyValue,
+            format!("invalid `sdk_import_path` `{import_path}` on Go generator `{generator_name}`"),
+        )
+        .with_primary(
+            Span {
+                file_id: manifest_file_id(),
+                range: to_text_range(value.span()),
+            },
+            "expected slash-delimited non-empty segments without whitespace, backslashes, `.` or `..`",
+        )
+        .with_phase(DiagnosticPhase::Validation),
+    );
+    None
+}
+
+fn is_valid_go_import_path(import_path: &str) -> bool {
+    !import_path.is_empty()
+        && !import_path.chars().any(char::is_whitespace)
+        && !import_path.contains('\\')
+        && import_path
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Parse a required `[generator.<name>]` property as `T` via strum. Pushes a
@@ -371,4 +535,28 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
         TextSize::new(span.start as u32),
         TextSize::new(span.end as u32),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_go_import_path;
+
+    #[test]
+    fn go_import_paths_reject_relative_empty_and_platform_specific_segments() {
+        for invalid in [
+            "",
+            "/example.com/sdk",
+            "example.com/sdk/",
+            "example.com//sdk",
+            "./sdk",
+            "../sdk",
+            "example.com/./sdk",
+            "example.com/../sdk",
+            "example.com\\project\\sdk",
+            "example.com/project sdk",
+        ] {
+            assert!(!is_valid_go_import_path(invalid), "accepted {invalid:?}");
+        }
+        assert!(is_valid_go_import_path("example.com/project/baml_sdk"));
+    }
 }

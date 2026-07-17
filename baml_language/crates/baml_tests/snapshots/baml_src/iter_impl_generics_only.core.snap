@@ -208,163 +208,163 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     load_var self
     load_field .inner
     store_var_load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L3
     jump L38
 
   L3:
     load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L4
     jump L38
 
   L4:
     load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L5
     jump L38
 
   L5:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L6
     jump L38
 
   L6:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L7
     jump L38
 
   L7:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L8
     jump L38
 
   L8:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L9
     jump L38
 
   L9:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L10
     jump L38
 
   L10:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L11
     jump L38
 
   L11:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L12
     jump L38
 
   L12:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L13
     jump L38
 
   L13:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L14
     jump L38
 
   L14:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L15
     jump L38
 
   L15:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L16
     jump L38
 
   L16:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L17
     jump L38
 
   L17:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L18
     jump L38
 
   L18:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L19
     jump L38
 
   L19:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L20
     jump L38
 
   L20:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L21
     jump L38
 
   L21:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L22
     jump L38
 
   L22:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L24
     jump L38
 
   L24:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L25
     jump L38
 
   L25:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L26
     jump L38
 
   L26:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L27
     jump L38
 
   L27:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L28
     jump L38
 
   L28:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L29
     jump L38
 
@@ -481,163 +481,163 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     load_var self
     load_field .inner
     store_var_load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L3
     jump L38
 
   L3:
     load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L4
     jump L38
 
   L4:
     load_var _2
-    is_type iter_impl_generics_only.core.StepBy<...>
+    is_type iter_impl_generics_only.core.Flatten<...>
     pop_jump_if_false L5
     jump L38
 
   L5:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L6
     jump L38
 
   L6:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L7
     jump L38
 
   L7:
     load_var _2
-    is_type iter_impl_generics_only.core.FlatMap<...>
+    is_type iter_impl_generics_only.core.StepBy<...>
     pop_jump_if_false L8
     jump L38
 
   L8:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L9
     jump L38
 
   L9:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L10
     jump L38
 
   L10:
     load_var _2
-    is_type iter_impl_generics_only.core.FilterMap<...>
+    is_type iter_impl_generics_only.core.Repeat<...>
     pop_jump_if_false L11
     jump L38
 
   L11:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L12
     jump L38
 
   L12:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L13
     jump L38
 
   L13:
     load_var _2
-    is_type iter_impl_generics_only.core.Range
+    is_type iter_impl_generics_only.core.FlatMap<...>
     pop_jump_if_false L14
     jump L38
 
   L14:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L15
     jump L38
 
   L15:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L16
     jump L38
 
   L16:
     load_var _2
-    is_type iter_impl_generics_only.core.Chain<...>
+    is_type iter_impl_generics_only.core.FilterMap<...>
     pop_jump_if_false L17
     jump L38
 
   L17:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L18
     jump L38
 
   L18:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L19
     jump L38
 
   L19:
     load_var _2
-    is_type iter_impl_generics_only.core.Flatten<...>
+    is_type iter_impl_generics_only.core.Range
     pop_jump_if_false L20
     jump L38
 
   L20:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L21
     jump L38
 
   L21:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L22
     jump L38
 
   L22:
     load_var _2
-    is_type iter_impl_generics_only.core.Repeat<...>
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L24
     jump L38
 
   L24:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L25
     jump L38
 
   L25:
     load_var _2
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    is_type iter_impl_generics_only.core.Map<...>
     pop_jump_if_false L26
     jump L38
 
   L26:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L27
     jump L38
 
   L27:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L28
     jump L38
 
   L28:
     load_var _2
-    is_type iter_impl_generics_only.core.Map<...>
+    is_type iter_impl_generics_only.core.Chain<...>
     pop_jump_if_false L29
     jump L38
 

@@ -56,13 +56,24 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
+  # CI executes the compiler thousands of times per job — in-process in
+  # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+  # test runtime dwarfs compile time here (opt-level 0 test execution was
+  # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+  # debug-assertions on and costs one sccache-cold rebuild after this change
+  # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+  # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+  # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+  # windows job.
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
 
   cargo-test-linux:
     name: "cargo test (linux)"
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
       - uses: useblacksmith/checkout@v1
@@ -103,29 +114,19 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
+      # `baml_tests`, `baml_cli`, and `baml_lsp2_actions` already run on linux
+      # with `--all-features` in the dedicated `snapshot-tests` job, so this
+      # job neither builds nor runs them — their test binaries are also the
+      # heaviest links in the workspace. (A nextest `-E` filter would only
+      # skip *running* them; the cargo-level `--exclude` skips building them
+      # too.) The `sdk_test_*` crates need uv and run in the dedicated
+      # `sdk-tests` matrix below.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
-      # `pack_e2e` is excluded here and run as its own step below: its harness
-      # builds `baml-pack-host` once and shares it across the suite via a
-      # process-global OnceLock, which nextest's process-per-test model would
-      # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e)'
-        working-directory: baml_language
-
-      # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
-      # team develops on macOS, where libsui takes the Mach-O path, so an ELF
-      # writer bug (see crates/baml_cli/src/pack_elf.rs) shipped uncaught. The
-      # bug lives in ELF layout, not codegen, so it reproduces in debug too —
-      # running here (reusing the build above) keeps the gate cheap. `cargo
-      # test`, not nextest, lets the harness build the host once.
-      - name: "Run pack e2e tests (linux)"
-        run: cargo test -p baml_cli --test pack_e2e --all-features
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -209,15 +210,17 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
-        working-directory: baml_language
-
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here —
+      # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
+      # test binaries (the heaviest links in the workspace) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -258,6 +261,16 @@ jobs:
     runs-on: blacksmith-8vcpu-windows-2025
     env:
       CARGO_BUILD_JOBS: "16"
+      # Windows debug builds emit very large PDBs; full debuginfo across the
+      # whole `--all-features` test build overruns the runner's ~130 GB disk
+      # ("no space on device" during codegen, before any test runs).
+      # `line-tables-only` keeps file:line backtraces for test failures while
+      # dropping the bulk of the debug-info size (variable/type DIEs). Pinned on
+      # both `dev` (dependencies) and `test` (the `--test` binaries, which
+      # inherit `dev` but are pinned explicitly so the reduction is unambiguous).
+      # Drop to "0" if this is still too tight.
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
@@ -313,20 +326,22 @@ jobs:
           echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
         working-directory: baml_language
 
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
-        working-directory: baml_language
-
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here. Profiling-specific
-      # test binaries opt in explicitly; keeping it off for the general suite
-      # avoids filling the Windows runner with incidental `.bamlprof` files.
-      # Run the two binaries that need `baml-pack-host` separately so their
-      # process-global OnceLocks build and share it instead of relinking it for
-      # every nextest case.
+      # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
+      # level (`--exclude`), not a nextest `-E` filter, so their test binaries
+      # (the heaviest links, and on Windows the largest PDBs) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      # Profiling-specific test binaries opt in explicitly; keeping
+      # BAML_PROFILE off for the general suite avoids filling the Windows
+      # runner with incidental `.bamlprof` files. Run the two binaries that
+      # need `baml-pack-host` separately so their process-global OnceLocks
+      # build and share it instead of relinking it for every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
@@ -383,6 +398,16 @@ jobs:
           script: |
             const baseMatrix = [
               {
+                "sdk-label": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
@@ -396,11 +421,56 @@ jobs:
                 "sdk-label": "typescript",
                 "package-name": "sdk_test_typescript",
                 "sdk-path": "typescript",
-                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest cargo:wasm-pack",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                // The C++ sdk-test crate needs the host C++ toolchain and
+                // CMake (preinstalled on the runners) plus nextest; its
+                // setup.sh builds the bridge_cffi cdylib with cargo and
+                // pre-clones the pinned protobuf sources. Windows joins
+                // once the MSVC test driver lands (test.sh is bash).
+                "sdk-label": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                "sdk-label": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
               },
               {
                 "sdk-label": "python-pydantic2",
@@ -413,14 +483,54 @@ jobs:
                 "timeout": 40,
               },
               {
-                "sdk-label": "typescript",
-                "package-name": "sdk_test_typescript",
-                "sdk-path": "typescript",
-                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest cargo:wasm-pack",
+                "sdk-label": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
                 "timeout": 40,
+              },
+              {
+                "sdk-label": "typescript",
+                "package-name": "sdk_test_typescript",
+                "sdk-path": "typescript",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "go",
+                "package-name": "sdk_test_go",
+                "sdk-path": "go",
+                "install-args": "sccache direnv go cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
               },
               {
                 "sdk-label": "python-pydantic2",
@@ -436,7 +546,27 @@ jobs:
                 "sdk-label": "typescript",
                 "package-name": "sdk_test_typescript",
                 "sdk-path": "typescript",
-                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest cargo:wasm-pack",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "typescript-web",
+                "package-name": "sdk_test_typescript_web",
+                "sdk-path": "typescript_web",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "rust",
+                "package-name": "sdk_test_rust",
+                "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
@@ -451,13 +581,14 @@ jobs:
             core.setOutput("matrix", JSON.stringify(matrix, null, 2));
 
   # SDK tests (codegen end-to-end). The `sdk_test_*` generator crates emit
-  # generated Python/TypeScript projects from `.baml` sources via build.rs,
+  # generated Go/Python/TypeScript projects from `.baml` sources via build.rs,
   # then run their language-specific checks under nextest. Their setup scripts
   # do the expensive package-manager/native-build work (`uv sync` + `maturin`
-  # for Python, `pnpm install` + NAPI build for TypeScript). Run the generated
+  # for Python, a NAPI build for Node TypeScript, and a Web/Wasm build plus
+  # Chromium for Web TypeScript). Run the generated
   # setup guards first so CI exposes setup cost/failures as a separate step; the
   # full test step re-runs the setup scripts, but the warm path should be cheap.
-  # Keep Python and TypeScript as separate matrix entries so setup/test timing
+  # Keep each SDK as a separate matrix entry so setup/test timing
   # and failures are attributed to the specific SDK generator.
   sdk-tests:
     name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
@@ -543,6 +674,18 @@ jobs:
 
       - name: "Run sdk tests"
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+
+      # The Rust bridge runtime crate (baml_bridge). Its tests load the engine
+      # cdylib at run time, and its lib test binary mixes pure (loader/encode)
+      # with engine-dependent (completion, live-engine) tests, so the whole
+      # package runs here — where sdk_test_rust's setup already built the engine
+      # into the main target dir — instead of in the general cargo-test lane
+      # (where the non-cacheable cdylib build ran as a silent nextest setup
+      # script and stalled the Windows job).
+      - name: "Run rust bridge tests"
+        if: matrix.sdk-label == 'rust'
+        run: cargo nextest run -p baml_bridge --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -642,8 +785,17 @@ jobs:
 
       - name: "Build for WASM"
         run: |
-          WASM_PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \(.name)"' | xargs)
-          cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release --timings
+          set -euo pipefail
+          readarray -t wasm_packages < <(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | .name')
+          if [[ ${#wasm_packages[@]} -eq 0 ]]; then
+            echo "Error: no WASM packages discovered; cargo metadata or jq may have failed" >&2
+            exit 1
+          fi
+          package_args=()
+          for package in "${wasm_packages[@]}"; do
+            package_args+=(-p "$package")
+          done
+          cargo build "${package_args[@]}" --target wasm32-unknown-unknown --no-default-features --release --timings
         working-directory: baml_language
 
       - name: "List WASM artifacts"
@@ -848,7 +1000,7 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: useblacksmith/checkout@v1
@@ -891,6 +1043,13 @@ jobs:
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
         working-directory: baml_language
 
+      # This job is the only linux coverage of `baml_tests`, `baml_cli`, and
+      # `baml_lsp2_actions` — `cargo test (linux)` excludes all three to avoid
+      # running them twice; keep its `--exclude` list in sync with the package
+      # list here. That includes `pack_e2e`, the only linux exercise of `baml
+      # pack`'s ELF embed/extract path (the team develops on macOS, where
+      # libsui takes the Mach-O path, so an ELF writer bug — see
+      # crates/baml_cli/src/pack_elf.rs — once shipped uncaught).
       - name: "Run snapshot tests"
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language

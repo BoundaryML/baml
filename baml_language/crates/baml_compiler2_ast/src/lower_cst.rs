@@ -8,7 +8,7 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::{Name, TypePath};
+use baml_base::{ClientOptionsPresence, Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
@@ -268,7 +268,7 @@ fn lower_function(
         diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
     }
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -298,7 +298,7 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
@@ -317,7 +317,7 @@ fn lower_function(
         .throws_clause()
         .and_then(|tc| tc.type_expr())
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
             expr.with_span(te_span)
@@ -587,7 +587,7 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -1088,7 +1088,7 @@ fn lower_class(
         return None;
     };
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1116,7 +1116,7 @@ fn lower_class(
             let field_name_str = fname.text().to_string();
             let mut hoisted_field_attrs = Vec::new();
             let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                 let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
@@ -1215,6 +1215,7 @@ fn lower_class(
 /// `Container<int>` round-trip.
 pub(crate) fn extract_generic_params_with_bounds(
     node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
     use baml_compiler_syntax::SyntaxKind;
 
@@ -1251,7 +1252,7 @@ pub(crate) fn extract_generic_params_with_bounds(
                 })
                 .and_then(|n| {
                     let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                    Some(lower_type_expr::lower_type_expr_node(&te))
+                    Some(lower_type_expr::lower_type_expr_node(&te, diags))
                 });
             if let Some(n) = name {
                 out.push((n, bound));
@@ -1269,6 +1270,7 @@ pub(crate) fn extract_generic_params_with_bounds(
 /// yet carry multiple bounds.
 pub(crate) fn extract_generic_params_with_all_bounds(
     node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
     use baml_compiler_syntax::SyntaxKind;
 
@@ -1298,7 +1300,7 @@ pub(crate) fn extract_generic_params_with_all_bounds(
                         .children()
                         .filter_map(|n| {
                             let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            Some(lower_type_expr::lower_type_expr_node(&te))
+                            Some(lower_type_expr::lower_type_expr_node(&te, diags))
                         })
                         .collect()
                 })
@@ -1367,7 +1369,7 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1390,7 +1392,7 @@ fn lower_interface(
     let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -1420,7 +1422,7 @@ fn lower_interface(
             };
             let field_name_str = fname.text().to_string();
             let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                 let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
@@ -1498,7 +1500,7 @@ fn lower_associated_type_def(
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1509,7 +1511,7 @@ fn lower_associated_type_def(
         expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1541,7 +1543,7 @@ fn lower_associated_type_binding_def(
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1572,7 +1574,7 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax());
+    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax(), diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1594,7 +1596,7 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
@@ -1609,7 +1611,7 @@ fn lower_method_sig(
     });
 
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         // A bodyless method signature (interface required method) has nothing to
         // infer an open `throws … | _` from, and its declared throws is compared
@@ -1647,7 +1649,7 @@ fn lower_implements_block(
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &target,
         "interface name in `implements`".to_string(),
@@ -1709,13 +1711,14 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_all_bounds(node);
+    let generic_params = extract_generic_params_with_all_bounds(node, diags);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let interface_target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let interface_target =
+        lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &interface_target,
         "interface name in `implements ... for`".to_string(),
@@ -1727,7 +1730,7 @@ fn lower_implements_for(
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
-    let for_target = lower_type_expr::lower_type_expr_node(&for_te).with_span(for_span);
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
     check_unknown_type(
         &for_target,
         "target type in `implements ... for`".to_string(),
@@ -1827,7 +1830,7 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
@@ -1952,10 +1955,27 @@ fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
         _ => {}
     }
 
-    if let Ok(value) = text.parse::<i64>() {
-        return TestArgValue::Int(value);
+    // Duck-typed scalar: number-shaped text becomes a number, everything
+    // else stays a string, so no diagnostics here. `num_lit` handles base
+    // prefixes and underscores; a leading `-` is handled by hand since the
+    // helper only accepts unsigned magnitudes.
+    let (negated, magnitude) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.as_str()),
+    };
+    if let Ok(value) = baml_base::num_lit::parse_int_literal(magnitude) {
+        return TestArgValue::Int(if negated { -value } else { value });
     }
     if let Ok(value) = text.parse::<f64>() {
+        return TestArgValue::float(value);
+    }
+    // Underscored floats (`1_000.5`) fail the plain parse; retry with
+    // separators stripped, but only for digit-led text so words containing
+    // underscores (`in_f`) can't be misread as `inf`.
+    if magnitude.starts_with(|c: char| c.is_ascii_digit())
+        && text.contains('_')
+        && let Ok(value) = baml_base::num_lit::normalize_float_literal(&text).parse::<f64>()
+    {
         return TestArgValue::float(value);
     }
 
@@ -2840,9 +2860,6 @@ fn synthesize_client_new_companion(
         .unwrap_or(span);
 
     let mut has_base_url = false;
-    // Whether the user wrote an `api_key` option (even `api_key null`). If so,
-    // the provider env-var default below is suppressed so user config wins.
-    let mut api_key_set_by_user = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
     // Track which provider fields have been set to non-null values by the user.
     // No compile-time defaults, so this starts empty.
@@ -2867,10 +2884,6 @@ fn synthesize_client_new_companion(
                 );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
 
-                if k == "api_key" {
-                    api_key_set_by_user = true;
-                }
-
                 if values.contains_key(k) || provider_field_set.contains(k) {
                     // Known field. Provider fields skip null to preserve defaults.
                     if !provider_field_set.contains(k) || !is_null {
@@ -2891,49 +2904,10 @@ fn synthesize_client_new_companion(
         }
     }
 
-    // ── 2b. Default api_key from the provider env var (B-489) ───
-    //
-    // A named `client<llm>` with no explicit `api_key` mirrors the inline
-    // `"openai/model"` shorthand (see `from_shorthand` in the `sys_ops` crate):
-    // default the key to the provider's conventional env var. The read is soft
-    // — `baml.env.get` yields `null` when the var is unset rather than panicking
-    // — exactly like the shorthand, which leaves `api_key` unset when the var is
-    // absent (the request then goes out unauthenticated, as before). This keeps
-    // the offline `render_prompt` path working without the var set (B-626) and
-    // never eagerly *requires* the key. An explicit `api_key` (including
-    // `api_key null`) suppresses this default so user config always wins.
-    if !api_key_set_by_user
-        && let Some(env_var) = provider
-            .map(String::as_str)
-            .and_then(default_api_key_env_var)
-    {
-        let arg = alloc(Expr::Literal(Literal::String(env_var.to_string())));
-        let callee = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("env"),
-            Name::new("get"),
-        ]));
-        let call = alloc(Expr::Call {
-            callee,
-            type_args: vec![],
-            args: vec![CallArg::positional(arg)],
-        });
-        values.insert("api_key".to_string(), call);
-        // Surface the synthesized dependency to LSP env-var tooling
-        // (`file_env_var_refs`, which feeds the playground's env panel), the
-        // same as an explicit `env.X` read. There is no user-written token to
-        // point at, so anchor the reference at the `options` block where an
-        // explicit `api_key` would otherwise go.
-        env_var_refs.push(crate::EnvVarRef {
-            name: env_var.to_string(),
-            range: options_span,
-        });
-    }
-
     // ── 3. Validate ─────────────────────────────────────────────
 
     if let Some(provider_str) = provider.map(String::as_str) {
-        validate_client_options(
+        report_client_options_validation(
             provider_str,
             client_name,
             has_base_url,
@@ -3102,22 +3076,8 @@ fn is_valid_provider(provider: &str) -> bool {
         .any(|c| c.providers.contains(&provider))
 }
 
-/// Conventional `api_key` env var for a provider, or `None` if the provider
-/// needs explicit credentials.
-///
-/// Mirrors the mapping the inline `"openai/model"` shorthand applies in
-/// `sys_ops` (`from_shorthand`): only the two providers whose env-var
-/// convention is ubiquitous enough to assume default their key here.
-fn default_api_key_env_var(provider: &str) -> Option<&'static str> {
-    match provider {
-        "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
-        "anthropic" => Some("ANTHROPIC_API_KEY"),
-        _ => None,
-    }
-}
-
-/// Validate provider-specific option constraints at compile time.
-fn validate_client_options(
+/// Attach compile-time source context to shared client option validation errors.
+fn report_client_options_validation(
     provider: &str,
     client_name: &str,
     has_base_url: bool,
@@ -3125,23 +3085,16 @@ fn validate_client_options(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let has_prov = |name: &str| -> bool { provider_fields_set.contains(name) };
-
-    if provider == "azure-openai"
-        && !has_base_url
-        && !(has_prov("resource_name") && has_prov("deployment_id"))
-    {
-        let missing = match (has_prov("resource_name"), has_prov("deployment_id")) {
-            (false, false) => "resource_name and deployment_id",
-            (false, true) => "resource_name",
-            (true, false) => "deployment_id",
-            (true, true) => unreachable!(),
-        };
+    let options = ClientOptionsPresence {
+        provider,
+        base_url: has_base_url,
+        resource_name: provider_fields_set.contains("resource_name"),
+        deployment_id: provider_fields_set.contains("deployment_id"),
+    };
+    if let Err(error) = baml_base::validate_client_options(options) {
         diags.push(LoweringDiagnostic::MissingClientOptions {
             client_name: client_name.to_string(),
-            message: format!(
-                "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
-            ),
+            error,
             span,
         });
     }

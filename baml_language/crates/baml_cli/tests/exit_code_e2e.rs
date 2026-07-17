@@ -12,8 +12,6 @@ use std::{
     process::{Command, Output},
 };
 
-use common::BuiltPaths;
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -23,17 +21,25 @@ use common::BuiltPaths;
 /// `BAML_HOME` is pointed at an empty directory inside the project (with the
 /// freshness auto-check disabled) so the passive skill check never reads the
 /// developer's real `~/.baml` state or touches the network.
-fn run_baml_cli(built: &BuiltPaths, dir: &Path, args: &[&str]) -> Output {
+///
+/// Tests here take the CLI from `common::baml_cli()`, never `ensure_built()`:
+/// nothing in this suite runs `baml pack`, and `ensure_built`'s in-test
+/// `cargo build -p baml_pack_host` freshness check costs ~10s per test
+/// process under nextest even when fully fresh.
+fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let mut cmd = Command::new(&built.baml_cli);
+    let mut cmd = Command::new(built);
     for arg in args {
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     cmd.env("BAML_HOME", &home);
+    // Share the bytecode cache across the suite so only the first invocation
+    // pays the stdlib compile; see `common::shared_cache_dir`.
+    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -64,6 +70,20 @@ fn create_project_with_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_go_generator(dir: &Path, source: &str) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.go_client]\n\
+         output_type = \"go\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n\
+         sdk_import_path = \"example.com/test-project/baml_sdk\"\n",
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -71,7 +91,7 @@ fn create_project_with_generator(dir: &Path, source: &str) {
 /// A valid project should return exit code 0 from `baml check`.
 #[test]
 fn check_valid_project_returns_zero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -93,7 +113,7 @@ fn check_valid_project_returns_zero_exit_code() {
 /// `baml check` with no `--from` is sugar for `baml check --from .`.
 #[test]
 fn check_defaults_from_to_current_directory() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -115,7 +135,7 @@ fn check_defaults_from_to_current_directory() {
 /// Compilation errors must result in a non-zero exit code for `baml check`.
 #[test]
 fn check_compilation_error_returns_nonzero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -150,7 +170,7 @@ fn check_compilation_error_returns_nonzero_exit_code() {
 /// This is critical for CI/CD pipelines that use exit codes to gate deployments.
 #[test]
 fn generate_compilation_error_returns_nonzero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     // Create a project with an unresolved type error
@@ -188,7 +208,7 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
 /// Multiple compilation errors should still result in a non-zero exit code.
 #[test]
 fn generate_multiple_compilation_errors_returns_nonzero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     // Create a project with multiple errors
@@ -220,7 +240,7 @@ function bad_func2() -> UnknownType2 {
 /// A valid project should return exit code 0 from `baml generate`.
 #[test]
 fn generate_valid_project_returns_zero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     // Create a valid project
@@ -253,6 +273,36 @@ fn generate_valid_project_returns_zero_exit_code() {
     );
 }
 
+#[test]
+fn generate_go_writes_sdk_through_cli() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_go_generator(
+        tmp.path(),
+        "function echo(value: string) -> string { value }\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let functions = std::fs::read_to_string(tmp.path().join("baml_sdk/functions.go"))
+        .expect("Go functions.go should be generated");
+    assert!(
+        functions.contains("func Echo("),
+        "generated Go:\n{functions}"
+    );
+    let bootstrap =
+        std::fs::read_to_string(tmp.path().join("baml_sdk/internal/bootstrap/bootstrap.go"))
+            .expect("Go bootstrap should be generated");
+    assert!(bootstrap.contains("func Ensure() error"));
+}
+
 // ============================================================================
 // Tests for `baml run` exit codes
 // ============================================================================
@@ -260,7 +310,7 @@ fn generate_valid_project_returns_zero_exit_code() {
 /// Compilation errors must result in a non-zero exit code for `baml run --list`.
 #[test]
 fn run_list_compilation_error_returns_nonzero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -285,7 +335,7 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
 /// Compile progress remains reserved for `baml check` and `baml generate`.
 #[test]
 fn run_valid_project_outputs_only_program_output() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
@@ -316,7 +366,7 @@ fn run_valid_project_outputs_only_program_output() {
 /// The formatter advisory is the allowed `baml run` stderr exception.
 #[test]
 fn run_unformatted_project_keeps_format_warning() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(tmp.path(), "function answer()->int {\n42\n}\n");
@@ -347,7 +397,7 @@ fn run_unformatted_project_keeps_format_warning() {
 /// Compilation errors must result in a non-zero exit code for `baml test`.
 #[test]
 fn test_compilation_error_returns_nonzero_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -371,7 +421,7 @@ fn test_compilation_error_returns_nonzero_exit_code() {
 /// `baml test` with no tests should return exit code 5 (`NoTestsRun`), not 0.
 #[test]
 fn test_no_tests_returns_specific_exit_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     // Valid project with no tests
@@ -398,7 +448,7 @@ fn test_no_tests_returns_specific_exit_code() {
 /// Regression for B-628.
 #[test]
 fn test_no_match_selector_does_not_print_pass() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     // A project that DOES have tests, so discovery yields a registry — the
@@ -445,7 +495,7 @@ testset "suite" {
 /// `baml test` should not emit the compile file-count status pair.
 #[test]
 fn test_valid_project_omits_compile_file_status() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -524,7 +574,7 @@ test "logs" {
 /// traces user-facing (no internal `Span`/`FileId` debug structs).
 #[test]
 fn test_assert_equal_failure_shows_values_without_internal_span_debug() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -623,7 +673,7 @@ test "shows-traceback" {
 /// - Panics if `baml test` fails or does not report the passing test case.
 #[test]
 fn test_assert_approx_equal_accepts_float_tolerance() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -656,7 +706,7 @@ test "assert-approx-equal-passes" {
 
 #[test]
 fn test_unfiltered_testset_run_honors_pass_rate_runner() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -694,7 +744,7 @@ testset "suite" with testing.PassRate(0.6) {
 
 #[test]
 fn test_filtered_testset_run_honors_pass_rate_runner_for_selected_set() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -732,7 +782,7 @@ testset "suite" with testing.PassRate(0.6) {
 
 #[test]
 fn test_filtered_testset_leaf_runs_under_parent_runner() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -772,7 +822,7 @@ testset "suite" with testing.PassRate(0.0) {
 
 #[test]
 fn test_mixed_testset_run_keeps_tolerated_failures_out_of_failed_total() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -810,7 +860,7 @@ testset "hard" {
 
 #[test]
 fn test_unfiltered_testset_run_reports_failed_child_name() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -843,7 +893,7 @@ testset "suite" {
 
 #[test]
 fn test_unfiltered_testset_run_fails_when_aggregate_outcome_fails() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -891,7 +941,7 @@ testset "suite" with AlwaysFail {
 /// state. Regression for the old "doesn't look like a BAML project" bail.
 #[test]
 fn describe_stdlib_without_baml_toml_succeeds() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     let output = run_baml_cli(
@@ -924,7 +974,7 @@ fn describe_stdlib_without_baml_toml_succeeds() {
 /// from a project subdirectory resolves a user-defined symbol.
 #[test]
 fn describe_walks_up_to_ancestor_project() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
         tmp.path(),
@@ -954,7 +1004,7 @@ fn describe_walks_up_to_ancestor_project() {
 /// error — nothing to format is not a failure.
 #[test]
 fn fmt_without_project_is_noop_success() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["fmt", "--from", "."]);
@@ -974,7 +1024,7 @@ fn fmt_without_project_is_noop_success() {
 /// is gone and the process doesn't crash.
 #[test]
 fn grep_without_baml_toml_does_not_fail_on_missing_manifest() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["grep", "Foo", "--from", "."]);
@@ -996,7 +1046,7 @@ fn grep_without_baml_toml_does_not_fail_on_missing_manifest() {
 /// manifest, unlike the strict build/execute path.
 #[test]
 fn describe_walks_up_to_ancestor_with_invalid_manifest() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     // Malformed manifest: no [package] table.
     std::fs::write(tmp.path().join("baml.toml"), "# no package table\n").unwrap();
@@ -1022,7 +1072,7 @@ fn describe_walks_up_to_ancestor_with_invalid_manifest() {
 /// `baml run --list` works on a `baml_src/`-only project (no `baml.toml`).
 #[test]
 fn run_list_without_baml_toml_using_baml_src_succeeds() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     // No baml.toml — just a baml_src/ directory with a function.
     let src = tmp.path().join("baml_src");
@@ -1054,7 +1104,7 @@ fn run_list_without_baml_toml_using_baml_src_succeeds() {
 /// `--file`, not just "missing baml.toml".
 #[test]
 fn run_without_any_project_marker_errors_with_hint() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     // A loose .baml at the root, but no baml.toml and no baml_src/.
     std::fs::write(
@@ -1084,7 +1134,7 @@ fn run_without_any_project_marker_errors_with_hint() {
 /// (not just `--list`). `answer` is pure (no LLM), so it runs hermetically.
 #[test]
 fn run_execute_function_without_baml_toml_succeeds() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
@@ -1115,7 +1165,7 @@ fn run_execute_function_without_baml_toml_succeeds() {
 /// projects created without a `baml.toml`.
 #[test]
 fn describe_from_baml_src_only_project_finds_user_symbols() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
@@ -1170,7 +1220,7 @@ class Ticket {
 /// output.
 #[test]
 fn run_prints_concrete_associated_type_projection_return() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
         tmp.path(),
@@ -1221,7 +1271,7 @@ function get_public_key() -> (AccountRecord as PublicIdentity).Key {
 /// agents instead of inheriting runtime erasure.
 #[test]
 fn run_list_prints_resolved_associated_projection_metadata() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
         tmp.path(),
@@ -1386,7 +1436,7 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
 /// definitions (the `has_explicit_project` marker now accepts `baml_src/`).
 #[test]
 fn run_expr_without_baml_toml_picks_up_baml_src_context() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
@@ -1417,7 +1467,7 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
 /// proving the loader accepted it rather than bailing on the missing manifest.
 #[test]
 fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
@@ -1451,8 +1501,8 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
 fn run_file_script_mode_passes_args_after_separator_as_argv() {
     use std::os::unix::fs::PermissionsExt;
 
-    let built = common::ensure_built();
-    let cli = built.baml_cli.display();
+    let built = &common::baml_cli();
+    let cli = built.display();
 
     let tmp = tempfile::tempdir().unwrap();
     let script = tmp.path().join("script.baml");
@@ -1473,6 +1523,7 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
     let output = Command::new(&script)
         .args(["--", "alpha", "--beta", "gamma"])
         .current_dir(tmp.path())
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
 
@@ -1503,8 +1554,8 @@ fn run_file_script_mode_passes_args_after_separator_as_argv() {
 fn shebang_can_name_a_specific_function() {
     use std::os::unix::fs::PermissionsExt;
 
-    let built = common::ensure_built();
-    let cli = built.baml_cli.display();
+    let built = &common::baml_cli();
+    let cli = built.display();
 
     let tmp = tempfile::tempdir().unwrap();
     let script = tmp.path().join("multi.baml");
@@ -1525,6 +1576,7 @@ fn shebang_can_name_a_specific_function() {
 
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
 
@@ -1556,8 +1608,8 @@ fn shebang_can_name_a_specific_function() {
 fn executable_baml_script_runs_via_kernel_shebang() {
     use std::os::unix::fs::PermissionsExt;
 
-    let built = common::ensure_built();
-    let cli = built.baml_cli.display();
+    let built = &common::baml_cli();
+    let cli = built.display();
 
     let tmp = tempfile::tempdir().unwrap();
     let script = tmp.path().join("greet.baml");
@@ -1577,6 +1629,7 @@ fn executable_baml_script_runs_via_kernel_shebang() {
     // takes none. The kernel drives `#! … run --file <this script>`.
     let output = Command::new(&script)
         .current_dir(tmp.path())
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .output()
         .expect("execute the shebang script directly");
 
@@ -1600,7 +1653,7 @@ fn executable_baml_script_runs_via_kernel_shebang() {
 /// output.
 #[test]
 fn generate_without_baml_toml_reports_no_generators() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();

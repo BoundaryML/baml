@@ -28,14 +28,14 @@ pub(crate) async fn auth_request(
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
     match provider {
-        LlmProvider::Anthropic => auth_anthropic(request, client),
+        LlmProvider::Anthropic => auth_anthropic(request, client, &*io).await,
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
         | LlmProvider::OpenAiResponses
-        | LlmProvider::AiGatewayImages => auth_openai(request, client, provider),
+        | LlmProvider::AiGatewayImages => auth_openai(request, client, provider, &*io).await,
         LlmProvider::AwsBedrock => {
             return bedrock::auth_bedrock(request, client, io).await;
         }
@@ -76,11 +76,13 @@ fn auth_google_ai(
 // Anthropic
 // ---------------------------------------------------------------------------
 
-fn auth_anthropic(request: &mut HttpRequest, client: &PrimitiveClient) {
-    if let Some(api_key) = &client.options.api_key {
-        request
-            .headers
-            .insert("x-api-key".to_string(), api_key.clone());
+async fn auth_anthropic(
+    request: &mut HttpRequest,
+    client: &PrimitiveClient,
+    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+) {
+    if let Some(api_key) = resolve_api_key(client, LlmProvider::Anthropic, io).await {
+        request.headers.insert("x-api-key".to_string(), api_key);
     }
 }
 
@@ -88,12 +90,15 @@ fn auth_anthropic(request: &mut HttpRequest, client: &PrimitiveClient) {
 // OpenAI (Chat Completions + Responses, including Azure)
 // ---------------------------------------------------------------------------
 
-fn auth_openai(request: &mut HttpRequest, client: &PrimitiveClient, provider: LlmProvider) {
-    if let Some(api_key) = &client.options.api_key {
+async fn auth_openai(
+    request: &mut HttpRequest,
+    client: &PrimitiveClient,
+    provider: LlmProvider,
+    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+) {
+    if let Some(api_key) = resolve_api_key(client, provider, io).await {
         if provider == LlmProvider::AzureOpenAi {
-            request
-                .headers
-                .insert("api-key".to_string(), api_key.clone());
+            request.headers.insert("api-key".to_string(), api_key);
         } else {
             request
                 .headers
@@ -105,6 +110,22 @@ fn auth_openai(request: &mut HttpRequest, client: &PrimitiveClient, provider: Ll
             }
         }
     }
+}
+
+/// Resolve an explicit API key or the provider's conventional environment default.
+///
+/// B-868: this belongs at the shared runtime authentication boundary so declared,
+/// shorthand, and dynamically constructed clients all behave identically.
+async fn resolve_api_key(
+    client: &PrimitiveClient,
+    provider: LlmProvider,
+    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+) -> Option<String> {
+    if let Some(api_key) = &client.options.api_key {
+        return Some(api_key.clone());
+    }
+    let env_var = provider.default_api_key_env_var()?;
+    io.env_get(env_var.to_string()).await.ok().flatten()
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +236,66 @@ mod tests {
         .await
         .unwrap();
         assert!(!req.headers.contains_key("authorization"));
+    }
+
+    struct ApiKeyEnvIo;
+
+    impl ::sys_types::runtime_io::RuntimeIo for ApiKeyEnvIo {
+        fn env_get(
+            &self,
+            key: String,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<Option<String>, ::sys_types::runtime_io::RuntimeIoError>,
+                    > + Send
+                    + '_,
+            >,
+        > {
+            Box::pin(async move {
+                Ok(match key.as_str() {
+                    "OPENAI_API_KEY" => Some("sk-openai-from-env".to_string()),
+                    "ANTHROPIC_API_KEY" => Some("sk-anthropic-from-env".to_string()),
+                    _ => None,
+                })
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn openai_defaults_api_key_from_env() {
+        let client = make_client("openai", PrimitiveClientOptions::default());
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::OpenAi,
+            &mut req,
+            &client,
+            Arc::new(ApiKeyEnvIo),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            req.headers.get("authorization").unwrap(),
+            "Bearer sk-openai-from-env",
+        );
+    }
+
+    #[tokio::test]
+    async fn anthropic_defaults_api_key_from_env() {
+        let client = make_client("anthropic", PrimitiveClientOptions::default());
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::Anthropic,
+            &mut req,
+            &client,
+            Arc::new(ApiKeyEnvIo),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            req.headers.get("x-api-key").unwrap(),
+            "sk-anthropic-from-env",
+        );
     }
 
     #[tokio::test]

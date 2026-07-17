@@ -60,6 +60,11 @@ run = "cargo run -p cargo-size-gate -- size-gate bake --branch canary"
 description = "Record a new size baseline by building locally (bootstrap a brand-new platform)"
 run = "cargo run -p cargo-size-gate -- size-gate record"
 
+[tasks.fmt-cpp]
+description = "Run clang-format over the hand-written C++ SDK sources"
+run = "scripts/fmt_cpp.sh"
+sources = ["sdks/cpp/**/*.h", "sdks/cpp/**/*.cc", "sdk_tests/crates/cpp/**/*.h", "sdk_tests/crates/cpp/**/*.cc"]
+
 [tasks.insta-update]
 description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }

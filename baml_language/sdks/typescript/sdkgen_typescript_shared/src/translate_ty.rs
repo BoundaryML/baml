@@ -171,8 +171,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // per-param metadata `leaf::callback_params_arg` emits) translates
             // those positional args back into this `$opts` calling convention
             // before the user's callback runs.
-            let mut positional: Vec<String> = Vec::new();
-            let mut opt_fields: Vec<String> = Vec::new();
+            let mut translated_params = Vec::new();
             for (idx, p) in params.iter().enumerate() {
                 let t = translate_ty(&p.ty, ctx);
                 imports.extend(t.imports);
@@ -181,18 +180,31 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                     .as_ref()
                     .map(|n| n.as_str().to_string())
                     .unwrap_or_else(|| format!("arg{idx}"));
-                if p.mode == CodegenFunctionParamMode::Optional {
+                translated_params.push((p.mode, arg_name, t.expr));
+            }
+            let required_names: Vec<&str> = translated_params
+                .iter()
+                .filter(|(mode, _, _)| *mode != CodegenFunctionParamMode::Optional)
+                .map(|(_, name, _)| name.as_str())
+                .collect();
+            let has_optional = required_names.len() != translated_params.len();
+            let projected_required =
+                crate::leaf::safe_required_param_names(&required_names, has_optional);
+            let mut projected_required = projected_required.into_iter();
+            let mut positional: Vec<String> = Vec::new();
+            let mut opt_fields: Vec<String> = Vec::new();
+            for (mode, arg_name, expr) in translated_params {
+                if mode == CodegenFunctionParamMode::Optional {
                     opt_fields.push(format!(
                         "{}?: {} | undefined",
                         crate::leaf::option_field_name(&arg_name),
-                        t.expr
+                        expr
                     ));
                 } else {
-                    positional.push(format!(
-                        "{}: {}",
-                        crate::leaf::safe_param_name(&arg_name),
-                        t.expr
-                    ));
+                    let projected = projected_required
+                        .next()
+                        .expect("every required callback parameter has a projected name");
+                    positional.push(format!("{projected}: {expr}"));
                 }
             }
             if !opt_fields.is_empty() {

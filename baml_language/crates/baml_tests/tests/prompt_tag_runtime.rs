@@ -101,13 +101,10 @@ function main() -> baml.llm.PromptAst {
 
 #[tokio::test]
 async fn prompt_interpolates_class_and_array_like_ordinary_string() {
-    // B-563: `${class_value}` / `${array_value}` inside a `prompt` backtick string
-    // used to silently render an EMPTY string — the assembler only stringified
-    // scalars (string/int/float/bool) and dropped every composite. They must now
-    // render via the same implicit `to_string` (`string.from`) an ordinary
-    // backtick string applies, so the `prompt` form is byte-identical to the
-    // ordinary-string form (which was never broken). `main` renders both and
-    // returns them joined by a sentinel so the test can compare them directly.
+    // `${class_value}` / `${array_value}` in a `prompt` backtick string must
+    // render via the same implicit `to_string` (`string.from`) as an ordinary
+    // backtick string — the `prompt` form must be byte-identical. `main` renders
+    // both and returns them joined by a sentinel for direct comparison.
     let output = baml_test!(
         r#"
 class Point {
@@ -134,8 +131,8 @@ function main() -> string {
     let (from_prompt, from_string) = rendered
         .split_once(" <=> ")
         .expect("main should return the two renderings joined by ` <=> `");
-    // The composite renders (not empty — the B-563 bug produced empty here) and
-    // is exactly what the same values yield in an ordinary backtick string.
+    // The composite must render and match exactly what the same values yield in
+    // an ordinary backtick string.
     assert_eq!(
         from_prompt, from_string,
         "prompt interpolation of a class/array must match ordinary string interpolation"
@@ -148,10 +145,9 @@ function main() -> string {
 
 #[tokio::test]
 async fn prompt_interpolation_honors_to_string_override() {
-    // B-563 follow-through: because composites route through `string.from` (the
-    // real implicit `to_string`), a user `baml.ToString` override is honored in a
-    // `prompt` exactly as it is in an ordinary backtick string — a sys-op-level
-    // structural renderer could not do this. `${role(...)}` still splits messages.
+    // Composites route through `string.from` (the real implicit `to_string`), so
+    // a user `baml.ToString` override is honored in `prompt` exactly as in an
+    // ordinary backtick string. `${role(...)}` still splits messages.
     let output = baml_test!(
         r#"
 class Labeled {

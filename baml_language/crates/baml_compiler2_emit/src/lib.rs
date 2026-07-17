@@ -331,9 +331,9 @@ fn build_packages(
         idx.map(ObjectIndex::from_raw)
     };
 
-    // Per interface, every declared method name. Direct class methods with one
-    // of these names can satisfy an in-body `implements I {}` block; the TIR
-    // conformance pass has already checked their signatures.
+    // Per interface, every declared method name. The magic direct `cleanup`
+    // method can satisfy an in-body `implements I {}` block when that interface
+    // declares it; the TIR conformance pass has already checked its signature.
     let mut iface_method_names: indexmap::IndexMap<baml_type::TypeName, indexmap::IndexSet<Name>> =
         indexmap::IndexMap::new();
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
@@ -672,6 +672,10 @@ fn build_packages(
                 .methods
                 .iter()
                 .filter(|m| !item_tree.method_to_iface_target.contains_key(m))
+                .filter(|m| {
+                    item_tree[**m].name.as_str()
+                        == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                })
                 .map(|&m| {
                     (
                         item_tree[m].name.clone(),
@@ -748,8 +752,8 @@ fn build_packages(
                         ))
                     })
                     .collect();
-                // Explicit implements-block methods win, then matching direct
-                // class methods, then interface defaults. Out-of-body impls must
+                // Explicit implements-block methods win, then the magic direct
+                // cleanup method, then interface defaults. Out-of-body impls
                 // remain self-contained and cannot borrow direct class methods.
                 if !block.is_out_of_body
                     && let Some(declared_names) = iface_method_names.get(&iface_tn)
@@ -842,6 +846,14 @@ fn emitted_function_origin(
     }
 }
 
+/// Read-only snapshot of pooled class field metadata: every name registered in
+/// `class_object_indices` → the class's fields (name + type, in field order).
+/// Built once from the `Object::Class` entries before function bodies are
+/// compiled, so codegen resolves field names/types without reading the object
+/// pool (a hard requirement for parallel emit, whose workers compile against
+/// fragment pools that don't contain the pre-existing objects).
+pub(crate) type ClassFieldSnapshot = HashMap<String, Vec<(String, RuntimeTy)>>;
+
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub globals: &'ctx HashMap<String, usize>,
@@ -849,7 +861,12 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub class_object_indices: &'ctx HashMap<String, usize>,
     pub enum_object_indices: &'ctx HashMap<String, usize>,
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+    pub class_fields: &'ctx ClassFieldSnapshot,
     pub objects: &'obj mut ObjectPool,
+    /// Program-absolute index of `objects[0]`: 0 when `objects` is the whole
+    /// program pool (serial emit), the Stage-B watermark when it is a
+    /// worker-local fragment pool (parallel emit).
+    pub objects_base: usize,
     /// Maps MIR lambda index → `ObjectPool` index of the compiled lambda `Function`.
     /// Parallel to `lambda_names`. Empty for non-lambda functions.
     pub lambda_object_indices: &'ctx [usize],
@@ -863,7 +880,23 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 /// Database trait for compiler2 emit queries.
 #[salsa::db]
-pub trait Db: baml_compiler2_mir::Db {}
+pub trait Db: baml_compiler2_mir::Db {
+    /// Mint an owned database handle that shares this database's storage, for
+    /// MOVING into a worker thread.
+    ///
+    /// Parallel MIR lowering (Stage A of `emit_functions_parallel`) clones one
+    /// handle per work chunk on the calling thread — the database type is
+    /// expected to be `Send` but not `Sync`, so workers can never share `&db`.
+    /// All clones share one salsa memo table (the rust-analyzer concurrency
+    /// model), so a query computed by one worker is a cache hit for the rest.
+    ///
+    /// The default returns `None`, which keeps every salsa read on the calling
+    /// thread (Stage A stays serial). `ProjectDatabase` overrides this with
+    /// `Clone` (an `Arc` bump).
+    fn parallel_db_handle(&self) -> Option<Box<dyn baml_compiler2_mir::Db + Send>> {
+        None
+    }
+}
 
 /// Compile options.
 pub struct CompileOptions {
@@ -988,7 +1021,7 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
     generate_project_bytecode_with_opt(db, options, OptLevel::Two)
@@ -996,7 +1029,7 @@ pub fn generate_project_bytecode(
 
 /// Generate bytecode for the entire project with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
@@ -1012,7 +1045,7 @@ pub fn generate_project_bytecode_with_opt(
 /// compiler build + opt level) that `generate_project_bytecode_with_stdlib`
 /// splices into project compiles.
 pub fn generate_stdlib_program(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
     generate_impl(
@@ -1036,7 +1069,7 @@ pub fn generate_stdlib_program(
 /// a full [`generate_project_bytecode_with_opt`] run (asserted by the
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1067,7 +1100,7 @@ pub fn generate_project_bytecode_with_stdlib(
 /// incompatible previous units) and propagates any [`LoweringError`] from the
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1082,7 +1115,7 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// units. Cache-aware callers can persist these directly instead of decomposing
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1241,7 +1274,7 @@ pub fn reuse_throws_mismatches(
 /// the Stage 2 decomposition does not yet handle (a `$init`/generic-function
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
@@ -2274,7 +2307,7 @@ fn inject_clean_object_placeholders(
 /// whole-project (Pass-1) global slots so the decomposition reverses their
 /// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
@@ -2569,7 +2602,7 @@ fn spliced_throws_match(
 /// only by the compiler build) spliceable into any project's compile.
 #[allow(clippy::too_many_arguments)]
 fn emit_file_group(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
@@ -2967,218 +3000,61 @@ fn emit_file_group(
         }
     }
 
+    // Read-only snapshot of pooled class field metadata for function-body
+    // codegen, built after Pass 3b so it covers every alias registered in
+    // `class_object_indices` (including classes minted by earlier file
+    // groups). See [`ClassFieldSnapshot`].
+    let class_fields: ClassFieldSnapshot = class_object_indices
+        .iter()
+        .filter_map(|(name, &idx)| match program.objects.get(idx) {
+            Some(Object::Class(class)) => Some((
+                name.clone(),
+                class
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.field_type.clone()))
+                    .collect(),
+            )),
+            _ => None,
+        })
+        .collect();
+
     // --- Pass 4: Compile each function ---
-    for file in files {
-        let rel_path = relative_source_path(db, *file);
-        // A clean file (incremental compile) is not emitted here at all — its
-        // compiled unit is taken verbatim from the cached image by the caller. We
-        // never lower a clean file's bodies (the core B-693 Stage 6 invariant).
-        if let Some(clean) = skip_clean {
-            if clean.contains(&rel_path) {
-                continue;
-            }
-        }
-        // This file's bodies are about to be MIR/bytecode-lowered — record it for
-        // the Stage 6 "only dirty files are lowered" evidence counter.
-        record_lowered_file(&rel_path);
-        let line_starts = build_line_starts(file.text(db));
-        let item_tree = file_item_tree(db, *file);
-        let pkg_info_pass4 = file_package(db, *file);
-        let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
-        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
-        for (local_id, func_data) in &item_tree.functions {
-            let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
-            let fq_name = mir.item_ref.to_string();
-
-            let mut compiled_fn = match &mir.kind {
-                MirFunctionKind::Bytecode(body) => {
-                    // Compile lambda children first, collecting their ObjectPool indices.
-                    let source_file = relative_source_path(db, *file);
-                    let empty_capture_types = Vec::new();
-                    let empty_spawn_capture_indices = HashSet::new();
-                    let lambda_info = compile_lambdas_flat(
-                        &mir.lambdas,
-                        Some(body),
-                        &empty_capture_types,
-                        &empty_spawn_capture_indices,
-                        &line_starts,
-                        &source_file,
-                        globals,
-                        classes,
-                        class_object_indices,
-                        enum_object_indices,
-                        enum_variants,
-                        &mut program.objects,
-                        opt,
-                    );
-                    let lambda_obj_indices: Vec<usize> =
-                        lambda_info.iter().map(|(idx, _)| *idx).collect();
-                    let lambda_names_vec: Vec<String> =
-                        lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                    let ctx = MirCodegenContext {
-                        globals,
-                        classes,
-                        class_object_indices,
-                        enum_object_indices,
-                        enum_variants,
-                        objects: &mut program.objects,
-                        lambda_object_indices: &lambda_obj_indices,
-                        lambda_names: &lambda_names_vec,
-                        capture_types: &empty_capture_types,
-                        spawn_capture_indices: &empty_spawn_capture_indices,
-                    };
-                    let mut f =
-                        compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
-                    f.name.clone_from(&fq_name);
-                    f.source_file.clone_from(&source_file);
-                    f
-                }
-                MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
-                    // Intrinsic functions have no callable body — call sites use
-                    // StatementKind::Intrinsic directly. Skip compilation entirely.
-                    continue;
-                }
-                MirFunctionKind::Builtin(BuiltinKind::AwaitAny) => {
-                    // BEP-034 `__await_any` has no callable body — call sites
-                    // lower to a `Terminator::AwaitAny` suspend point directly.
-                    // Skip compilation entirely (like an intrinsic).
-                    continue;
-                }
-                MirFunctionKind::Builtin(BuiltinKind::Io) => {
-                    let sys_op = bex_vm_types::sys_op_for_path(&fq_name)
-                        .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
-                    Function {
-                        name: fq_name.clone(),
-                        source_file: String::new(), // builtins have no source file
-                        arity: mir.arity,
-                        real_local_count: 0,
-                        bytecode: Bytecode::default(),
-                        kind: FunctionKind::SysOp(sys_op),
-                        local_names: Vec::new(),
-                        debug_locals: Vec::new(),
-                        span: Span::fake(),
-                        return_type: baml_type::RuntimeTy::Null {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        param_names: Vec::new(),
-                        param_types: Vec::new(),
-                        param_has_default: Vec::new(),
-                        display_type_params: Vec::new(),
-                        display_param_types: Vec::new(),
-                        display_return_type: "null".to_string(),
-                        throws_type: None,
-                        origin: FunctionOrigin::Builtin,
-                        body_meta: None,
-                        capture: FunctionCaptureProps::disabled(),
-                        function_id: 0, // assigned at engine init (interim provider)
-                    }
-                }
-                MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
-                    name: fq_name.clone(),
-                    source_file: String::new(), // builtins have no source file
-                    arity: mir.arity,
-                    real_local_count: 0,
-                    bytecode: Bytecode::default(),
-                    kind: FunctionKind::NativeUnresolved,
-                    local_names: Vec::new(),
-                    debug_locals: Vec::new(),
-                    span: Span::fake(),
-                    return_type: baml_type::RuntimeTy::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    param_names: Vec::new(),
-                    param_types: Vec::new(),
-                    param_has_default: Vec::new(),
-                    display_type_params: Vec::new(),
-                    display_param_types: Vec::new(),
-                    display_return_type: "null".to_string(),
-                    throws_type: None,
-                    origin: FunctionOrigin::Builtin,
-                    body_meta: None,
-                    capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
-                },
-            };
-
-            // Set function metadata from signature
-            let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            let signature_metadata = compute_function_metadata_from_item_tree(
-                db,
-                *file,
-                *local_id,
-                func_data,
-                &parameter_defaults,
-                cache_pass4,
-            );
-            compiled_fn.return_type = signature_metadata.return_type;
-            compiled_fn.param_names = signature_metadata.param_names;
-            compiled_fn.param_types = signature_metadata.param_types;
-            compiled_fn.param_has_default = signature_metadata.param_has_default;
-            compiled_fn.display_type_params = signature_metadata.display_type_params;
-            compiled_fn.display_param_types = signature_metadata.display_param_types;
-            compiled_fn.display_return_type = signature_metadata.display_return_type;
-
-            // Set inferred throws type from TIR throw inference
-            compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
-            compiled_fn.origin =
-                emitted_function_origin(&fq_name, is_builtin_file, func_data.origin);
-
-            // Set LLM-specific body_meta if this is an LLM function
-            if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
-                &func_data.declarative_meta
-            {
-                // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
-                // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
-                // The stream return type is now carried by the synthesized `$stream` companion's
-                // own `return_type` (see ppir's `companion_stream_return_type`), so the old
-                // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
-                // of `ctx.output_format` should be re-verified against canary's streaming.
-                if let Some(client) = &llm_meta.client {
-                    // New-mode (BEP-049 M5) functions have no Jinja `prompt`
-                    // text — the compiled closure renders it — but they still
-                    // need a registry entry so `get_return_type` /
-                    // `get_stream_return_type` (used by `__make_stream` and the
-                    // streaming `Context`) resolve by name. The empty template
-                    // is never read for them (their `prompt_closure` is non-null,
-                    // so the Jinja `get_jinja_template` branch is skipped).
-                    let prompt_template = llm_meta
-                        .prompt
-                        .as_ref()
-                        .map(|p| p.text.clone())
-                        .unwrap_or_default();
-                    compiled_fn.body_meta = Some(FunctionMeta::Llm {
-                        prompt_template,
-                        client: client.to_string(),
-                    });
-                    compiled_fn.capture = FunctionCaptureProps::disabled()
-                        .with_auto(CaptureCategory::Input)
-                        .with_auto(CaptureCategory::Output)
-                        .with_auto(CaptureCategory::Error);
-                }
-            }
-
-            let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
-            program.function_indices.insert(fq_name.clone(), fn_obj_idx);
-            let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
-            if skip_clean.is_some() {
-                // Dirty-only emit: write the function value at its whole-project
-                // (Pass-1) slot rather than appending, so clean-file slot holes are
-                // preserved and every operand slot reverses to the right name.
-                let slot = globals[&fq_name];
-                program.function_global_indices.insert(fq_name, slot);
-                program.globals[slot] = val;
-            } else {
-                let slot = program.globals.len();
-                debug_assert_eq!(
-                    globals.get(&fq_name).copied(),
-                    Some(slot),
-                    "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
-                );
-                program.function_global_indices.insert(fq_name, slot);
-                program.add_global(val);
-            }
-        }
+    if rayon::current_num_threads() > 1 {
+        // Default: compile function bodies across rayon workers. Byte-identical
+        // to the serial pass — see `emit_functions_parallel` for the
+        // fragment/watermark design. A single-threaded pool (RAYON_NUM_THREADS=1,
+        // or a 1-thread `ThreadPool::install`, as the emit-determinism test uses)
+        // takes the serial path, which is also the reference implementation.
+        emit_functions_parallel(
+            db,
+            files,
+            skip_clean,
+            globals,
+            classes,
+            class_object_indices,
+            enum_object_indices,
+            enum_variants,
+            &class_fields,
+            alias_caches,
+            program,
+            opt,
+        );
+    } else {
+        emit_functions_serial(
+            db,
+            files,
+            skip_clean,
+            globals,
+            classes,
+            class_object_indices,
+            enum_object_indices,
+            enum_variants,
+            &class_fields,
+            alias_caches,
+            program,
+            opt,
+        );
     }
 
     // Stage 6 (`SkipClean`) / design §9 R2: the `$init` / `$init_test` tail is a
@@ -3249,6 +3125,7 @@ fn emit_file_group(
                 class_object_indices,
                 enum_object_indices,
                 enum_variants,
+                &class_fields,
                 &mut *program,
                 opt,
             )?;
@@ -3522,6 +3399,8 @@ fn compute_function_metadata_from_item_tree(
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
 ) -> FunctionSignatureMetadata {
+    use baml_compiler2_hir::item_tree::MethodOwner;
+
     let param_names: Vec<String> = func_data
         .params
         .iter()
@@ -3546,26 +3425,24 @@ fn compute_function_metadata_from_item_tree(
     // both its `for_target` (for `Self` substitution) and its declared
     // generics/bounds are recoverable — replacing the removed
     // `item_tree.implements_for`, which exposed those as flat fields.
-    let enclosing_free_impl = item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block
-            .methods
-            .contains(&func_id)
-            .then_some((*impl_id, block))
-    });
+    let owner = item_tree.method_owners.get(&func_id);
+    let enclosing_free_impl = match owner {
+        Some(MethodOwner::FreeImpl(impl_id)) => Some((*impl_id, &item_tree.impls[impl_id])),
+        Some(MethodOwner::Class(_) | MethodOwner::Interface(_)) | None => None,
+    };
     let enclosing_impl_for_target =
         enclosing_free_impl.and_then(|(_, block)| match &block.subject {
             baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
             baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
         });
-    let enclosing_class = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&func_id));
-    let enclosing_interface = item_tree
-        .interfaces
-        .values()
-        .find(|iface_data| iface_data.default_methods.contains(&func_id));
+    let enclosing_class = match owner {
+        Some(MethodOwner::Class(class_id)) => Some(&item_tree[*class_id]),
+        Some(MethodOwner::FreeImpl(_) | MethodOwner::Interface(_)) | None => None,
+    };
+    let enclosing_interface = match owner {
+        Some(MethodOwner::Interface(iface_id)) => Some(&item_tree[*iface_id]),
+        Some(MethodOwner::Class(_) | MethodOwner::FreeImpl(_)) | None => None,
+    };
     let self_replacement = enclosing_impl_for_target
         .cloned()
         .or_else(|| {
@@ -3722,14 +3599,39 @@ fn compute_function_metadata_from_item_tree(
             None => rustc_hash::FxHashMap::default(),
         };
 
+    // The concrete receiver (`ClassName<T,…>` or a free-impl `for` target), lowered
+    // once. A non-interface method's `Self` / `Self.Assoc` then root at it through the
+    // `self_ty` channel — the same projection path the interface branch drives with its
+    // rigid `Self` type variable. `None` for a free function (no receiver in scope) and
+    // unused for interface methods (which bind `Self` via `interface_signature_bindings`).
+    let receiver_ty: Option<baml_compiler2_tir::ty::Ty> = if enclosing_interface.is_none() {
+        self_replacement.as_ref().map(|replacement| {
+            let mut receiver_diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                replacement,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &enclosing_generics,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                &mut receiver_diags,
+            )
+        })
+    } else {
+        None
+    };
+
     // Lower a signature type expression against this method's scope, recording any
     // diagnostics into `diags`. For an interface method the associated-type / `Self`
     // bindings are applied by lowering with their names in scope (so `Item` lowers
     // to `TypeVar(Item)`) and then substituting; for every other method `Self` is
-    // first replaced by the concrete receiver type. In both cases `scope_bounds`
-    // drives projection resolution. Namespace-relative resolution (e.g. `MyLorem`
-    // in a signature under `ns_lorem/`) uses the file's namespace so a non-root-ns
-    // class does not erase to `unknown`.
+    // bound to the concrete `receiver_ty` via the `self_ty` channel. In both cases
+    // `scope_bounds` drives projection resolution. Namespace-relative resolution
+    // (e.g. `MyLorem` in a signature under `ns_lorem/`) uses the file's namespace so
+    // a non-root-ns class does not erase to `unknown`.
     let lower_scoped = |te: &TypeExpr,
                         diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
      -> baml_compiler2_tir::ty::Ty {
@@ -3752,22 +3654,15 @@ fn compute_function_metadata_from_item_tree(
                 &interface_signature_bindings,
             );
         }
-        let resolved_te = match &self_replacement {
-            Some(replacement) => baml_compiler2_tir::lower_type_expr::substitute_paths_in(
-                te,
-                &std::collections::HashMap::from([(Name::new("Self"), replacement.clone())]),
-            ),
-            None => te.clone(),
-        };
         baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &resolved_te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db,
                 package_items: pkg_items,
                 ns_context: &pkg_info.namespace_path,
                 generic_params: &enclosing_generics,
                 bounds: &scope_bounds,
-                self_ty: None,
+                self_ty: receiver_ty.clone(),
             },
             diags,
         )
@@ -4230,6 +4125,693 @@ fn collect_lambda_capture_infos(
     infos
 }
 
+/// Pass 4, serial (the reference implementation, used on 1-thread pools):
+/// lower and compile every function body,
+/// file by file, straight into the program pool.
+#[allow(clippy::too_many_arguments)]
+fn emit_functions_serial(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    skip_clean: Option<&HashSet<String>>,
+    globals: &HashMap<String, usize>,
+    classes: &HashMap<String, HashMap<String, usize>>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    enum_variants: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &ClassFieldSnapshot,
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+    program: &mut Program,
+    opt: OptLevel,
+) {
+    for file in files {
+        let rel_path = relative_source_path(db, *file);
+        // A clean file (incremental compile) is not emitted here at all — its
+        // compiled unit is taken verbatim from the cached image by the caller. We
+        // never lower a clean file's bodies (the core B-693 Stage 6 invariant).
+        if let Some(clean) = skip_clean {
+            if clean.contains(&rel_path) {
+                continue;
+            }
+        }
+        // This file's bodies are about to be MIR/bytecode-lowered — record it for
+        // the Stage 6 "only dirty files are lowered" evidence counter.
+        record_lowered_file(&rel_path);
+        let line_starts = build_line_starts(file.text(db));
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info_pass4 = file_package(db, *file);
+        let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
+        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
+        for (local_id, func_data) in &item_tree.functions {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let mir = lower_function(db, func_loc, opt);
+            let fq_name = mir.item_ref.to_string();
+
+            let mut compiled_fn = match &mir.kind {
+                MirFunctionKind::Bytecode(body) => {
+                    // Compile lambda children first, collecting their ObjectPool indices.
+                    let source_file = relative_source_path(db, *file);
+                    let empty_capture_types = Vec::new();
+                    let empty_spawn_capture_indices = HashSet::new();
+                    let lambda_info = compile_lambdas_flat(
+                        &mir.lambdas,
+                        Some(body),
+                        &empty_capture_types,
+                        &empty_spawn_capture_indices,
+                        &line_starts,
+                        &source_file,
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
+                        class_fields,
+                        &mut program.objects,
+                        0,
+                        opt,
+                    );
+                    let lambda_obj_indices: Vec<usize> =
+                        lambda_info.iter().map(|(idx, _)| *idx).collect();
+                    let lambda_names_vec: Vec<String> =
+                        lambda_info.iter().map(|(_, name)| name.clone()).collect();
+                    let ctx = MirCodegenContext {
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
+                        class_fields,
+                        objects: &mut program.objects,
+                        objects_base: 0,
+                        lambda_object_indices: &lambda_obj_indices,
+                        lambda_names: &lambda_names_vec,
+                        capture_types: &empty_capture_types,
+                        spawn_capture_indices: &empty_spawn_capture_indices,
+                    };
+                    let mut f =
+                        compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
+                    f.name.clone_from(&fq_name);
+                    f.source_file.clone_from(&source_file);
+                    f
+                }
+                MirFunctionKind::Builtin(kind) => {
+                    match builtin_emit_function(*kind, &fq_name, mir.arity) {
+                        Some(f) => f,
+                        // Intrinsics and `__await_any` have no callable body —
+                        // call sites lower to `StatementKind::Intrinsic` /
+                        // `Terminator::AwaitAny` directly. Skip entirely.
+                        None => continue,
+                    }
+                }
+            };
+
+            attach_function_metadata(
+                db,
+                *file,
+                *local_id,
+                func_data,
+                cache_pass4,
+                is_builtin_file,
+                &fq_name,
+                &mut compiled_fn,
+            );
+            register_compiled_function(
+                program,
+                globals,
+                skip_clean.is_some(),
+                fq_name,
+                compiled_fn,
+            );
+        }
+    }
+}
+
+/// One function's Pass-4 state carried from the lowering stage to the
+/// parallel codegen stage and the serial merge stage.
+struct FnWorkItem {
+    file: baml_base::SourceFile,
+    local_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    mir: baml_compiler2_mir::MirFunction,
+    fq_name: String,
+    /// Project-relative source path (`relative_source_path`).
+    source_file: String,
+    /// Line index of the item's file, shared by every function in the file.
+    line_starts: std::sync::Arc<[u32]>,
+    is_builtin_file: bool,
+}
+
+/// Identity of one Pass-4 function before MIR lowering: the [`FnWorkItem`]
+/// fields known from enumeration alone (Stage A's input).
+struct FnSeed {
+    file: baml_base::SourceFile,
+    local_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    /// Project-relative source path (`relative_source_path`).
+    source_file: String,
+    /// Line index of the item's file, shared by every function in the file.
+    line_starts: std::sync::Arc<[u32]>,
+    is_builtin_file: bool,
+}
+
+/// Lower one seed's function to MIR on the given database handle.
+///
+/// `FunctionLoc` is minted on the SAME handle the lowering reads from — it is
+/// a `'db`-interned key, and interning is shared storage, so every handle
+/// mints the identical id.
+fn lower_seed(
+    db: &dyn baml_compiler2_mir::Db,
+    seed: &FnSeed,
+    opt: OptLevel,
+) -> baml_compiler2_mir::MirFunction {
+    lower_function(db, FunctionLoc::new(db, seed.file, seed.local_id), opt)
+}
+
+/// Stage A driver: lower every seed's function to MIR, returned in seed order.
+///
+/// `lower_function` reads salsa (PPIR bodies, scope type inference) and
+/// returns an owned [`baml_compiler2_mir::MirFunction`] that is a pure
+/// function of the frozen inputs, and every call is independent — so when the
+/// database mints worker handles ([`Db::parallel_db_handle`]) the seeds are
+/// lowered across rayon workers and the reassembled output is exactly the
+/// serial loop's.
+///
+/// The database type is `Send` but deliberately not `Sync` (each salsa handle
+/// carries thread-confined query-stack state), so — exactly like
+/// `baml_project`'s parallel check — one handle per chunk is cloned on THIS
+/// thread and MOVED into its task; all clones share one memo table, so a
+/// scope inferred by one worker is a cache hit for every other. The first
+/// seed is lowered serially before fanning out to warm the file/package-level
+/// memos every body read reaches. Tiny batches, single-threaded pools, and
+/// databases without handles take the serial loop directly.
+fn lower_seed_mirs(
+    db: &dyn crate::Db,
+    seeds: &[FnSeed],
+    opt: OptLevel,
+) -> Vec<baml_compiler2_mir::MirFunction> {
+    // Small chunks keep rayon's work-stealing effective — bodies vary a lot
+    // in inference cost — while amortizing the per-task handle clone.
+    const CHUNK: usize = 4;
+    // Fan-out pays for itself only past a handful of bodies (mirrors the
+    // parallel-check threshold in `baml_project`).
+    const MIN_PARALLEL: usize = 9;
+
+    if seeds.len() < MIN_PARALLEL || rayon::current_num_threads() <= 1 {
+        return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+    }
+    let (first, rest) = seeds.split_first().expect("seeds checked non-empty above");
+
+    // Handles are cloned OUTSIDE the rayon scope — a `!Sync` database cannot
+    // be borrowed by the (Send) scope closure — and each chunk's handle is
+    // MOVED into its task. A database that mints no handles keeps Stage A
+    // serial.
+    let chunks: Vec<&[FnSeed]> = rest.chunks(CHUNK).collect();
+    let mut handles: Vec<Box<dyn baml_compiler2_mir::Db + Send>> = Vec::with_capacity(chunks.len());
+    for _ in &chunks {
+        match db.parallel_db_handle() {
+            Some(handle) => handles.push(handle),
+            None => return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect(),
+        }
+    }
+
+    // Warm the shared file/package-level memos before fanning out, so cold
+    // workers don't all block on the same shared memo slots.
+    let first_mir = lower_seed(db, first, opt);
+
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<baml_compiler2_mir::MirFunction>)>();
+    rayon::scope(move |s| {
+        // Seed index of the current chunk's first element (`first` is 0).
+        let mut next_start = 1usize;
+        for (chunk, handle) in chunks.into_iter().zip(handles) {
+            let tx = tx.clone();
+            let chunk_start = next_start;
+            next_start += chunk.len();
+            s.spawn(move |_| {
+                let db: &dyn baml_compiler2_mir::Db = &*handle;
+                let out: Vec<baml_compiler2_mir::MirFunction> =
+                    chunk.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+                // Receiver outlives the scope; a send only fails if it
+                // dropped early, which would mean a panic elsewhere.
+                let _ = tx.send((chunk_start, out));
+            });
+        }
+    });
+
+    let mut mirs: Vec<Option<baml_compiler2_mir::MirFunction>> = Vec::with_capacity(seeds.len());
+    mirs.resize_with(seeds.len(), || None);
+    mirs[0] = Some(first_mir);
+    for (chunk_start, out) in rx {
+        for (offset, mir) in out.into_iter().enumerate() {
+            mirs[chunk_start + offset] = Some(mir);
+        }
+    }
+    mirs.into_iter()
+        .map(|mir| mir.expect("every chunk reports exactly its seeds"))
+        .collect()
+}
+
+/// Pass 4, parallel (multi-threaded rayon pools): compile function bodies
+/// across rayon workers, byte-identically to [`emit_functions_serial`].
+///
+/// Three stages:
+///
+/// - **Stage A (parallel, salsa)**: lower every function to MIR across
+///   worker-owned database handles ([`lower_seed_mirs`]), collecting owned
+///   work items in exactly the serial pass's iteration order. Falls back to
+///   the serial loop when the database mints no handles.
+/// - **Stage B (parallel, no salsa)**: pure codegen of every bytecode body.
+///   Each worker mints into a fresh fragment pool based at the shared
+///   watermark `W = program.objects.len()`, so pre-existing absolute indices
+///   (< W: classes/enums/interfaces from Passes 1–3, resolved through frozen
+///   maps and the [`ClassFieldSnapshot`]) stay valid and every worker mint is
+///   fragment-relative (>= W). Workers never touch `program.globals` — every
+///   `GlobalIndex` they embed is a Pass-1 slot read from the frozen `globals`
+///   map — so global operands are absolute in every worker and are never
+///   rewritten at merge time.
+/// - **Stage C (serial merge, original order)**: splice each fragment into
+///   the program pool (replaying cross-function `GenericFunction` interning —
+///   see [`merge_function_fragment`]), then run the unchanged serial tail
+///   (metadata attachment and registration).
+///
+/// Because the serial pool is append-only within Pass 4 and the only
+/// cross-function coupling is the `GenericFunction` interning scan (replayed
+/// exactly by the merge), concatenating fragments in original function order
+/// reproduces the serial pool layout byte for byte.
+#[allow(clippy::too_many_arguments)]
+fn emit_functions_parallel(
+    db: &dyn crate::Db,
+    files: &[baml_base::SourceFile],
+    skip_clean: Option<&HashSet<String>>,
+    globals: &HashMap<String, usize>,
+    classes: &HashMap<String, HashMap<String, usize>>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    enum_variants: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &ClassFieldSnapshot,
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+    program: &mut Program,
+    opt: OptLevel,
+) {
+    use rayon::prelude::*;
+
+    // --- Stage A: lower every function to MIR (parallel: salsa queries on
+    // pre-cloned handles) ---
+    // Enumeration (clean-file skip, item trees, line indexes) is cheap and
+    // stays serial on `db`; the lowering itself — the expensive half of
+    // Pass 4 — fans out across worker-owned database handles (see
+    // [`lower_seed_mirs`]), reassembled into this exact enumeration order.
+    let mut seeds: Vec<FnSeed> = Vec::new();
+    for file in files {
+        let rel_path = relative_source_path(db, *file);
+        // Clean files are never lowered (see the serial pass).
+        if let Some(clean) = skip_clean {
+            if clean.contains(&rel_path) {
+                continue;
+            }
+        }
+        record_lowered_file(&rel_path);
+        let line_starts: std::sync::Arc<[u32]> = build_line_starts(file.text(db)).into();
+        let item_tree = file_item_tree(db, *file);
+        let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
+        for local_id in item_tree.functions.keys() {
+            seeds.push(FnSeed {
+                file: *file,
+                local_id: *local_id,
+                source_file: rel_path.clone(),
+                line_starts: line_starts.clone(),
+                is_builtin_file,
+            });
+        }
+    }
+    let mirs = lower_seed_mirs(db, &seeds, opt);
+    let work: Vec<FnWorkItem> = seeds
+        .into_iter()
+        .zip(mirs)
+        .map(|(seed, mir)| FnWorkItem {
+            file: seed.file,
+            local_id: seed.local_id,
+            fq_name: mir.item_ref.to_string(),
+            mir,
+            source_file: seed.source_file,
+            line_starts: seed.line_starts,
+            is_builtin_file: seed.is_builtin_file,
+        })
+        .collect();
+
+    // --- Stage B: compile bytecode bodies (parallel: pure codegen) ---
+    let watermark = program.objects.len();
+    let compiled: Vec<Option<(Function, ObjectPool)>> = work
+        .par_iter()
+        .map(|item| {
+            let MirFunctionKind::Bytecode(body) = &item.mir.kind else {
+                // Builtins mint nothing; Stage C constructs them serially.
+                return None;
+            };
+            let mut fragment = ObjectPool::default();
+            let empty_capture_types = Vec::new();
+            let empty_spawn_capture_indices = HashSet::new();
+            let lambda_info = compile_lambdas_flat(
+                &item.mir.lambdas,
+                Some(body),
+                &empty_capture_types,
+                &empty_spawn_capture_indices,
+                &item.line_starts,
+                &item.source_file,
+                globals,
+                classes,
+                class_object_indices,
+                enum_object_indices,
+                enum_variants,
+                class_fields,
+                &mut fragment,
+                watermark,
+                opt,
+            );
+            let lambda_obj_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
+            let lambda_names_vec: Vec<String> =
+                lambda_info.iter().map(|(_, name)| name.clone()).collect();
+            let ctx = MirCodegenContext {
+                globals,
+                classes,
+                class_object_indices,
+                enum_object_indices,
+                enum_variants,
+                class_fields,
+                objects: &mut fragment,
+                objects_base: watermark,
+                lambda_object_indices: &lambda_obj_indices,
+                lambda_names: &lambda_names_vec,
+                capture_types: &empty_capture_types,
+                spawn_capture_indices: &empty_spawn_capture_indices,
+            };
+            let mut f = compile_mir_function(
+                body,
+                item.mir.arity,
+                item.mir.span,
+                &item.line_starts,
+                ctx,
+                opt,
+            );
+            f.name.clone_from(&item.fq_name);
+            f.source_file.clone_from(&item.source_file);
+            Some((f, fragment))
+        })
+        .collect();
+
+    // --- Stage C: merge fragments + serial tail (original function order) ---
+    // Seed the GenericFunction interning table with anything already pooled
+    // below the watermark: the serial scan's candidate set when compiling
+    // function N is {pre-Pass-4 pool} ∪ {mints of functions 1..N-1} ∪ {own
+    // earlier mints}, and the in-order merge replays exactly that set.
+    let mut intern = GenericFunctionInterner::default();
+    for (idx, obj) in program.objects.iter().enumerate() {
+        if let Object::GenericFunction(gf) = obj {
+            intern.insert_if_absent(gf, idx);
+        }
+    }
+    for (item, slot) in work.into_iter().zip(compiled) {
+        let mut compiled_fn = match slot {
+            Some((function, fragment)) => {
+                merge_function_fragment(program, watermark, fragment, function, &mut intern)
+            }
+            None => {
+                let MirFunctionKind::Builtin(kind) = &item.mir.kind else {
+                    unreachable!("Stage B compiles every bytecode function")
+                };
+                match builtin_emit_function(*kind, &item.fq_name, item.mir.arity) {
+                    Some(f) => f,
+                    // Intrinsics and `__await_any` never become callable
+                    // objects (mirrors the serial pass).
+                    None => continue,
+                }
+            }
+        };
+
+        let item_tree = file_item_tree(db, item.file);
+        let func_data = &item_tree.functions[&item.local_id];
+        let pkg_info = file_package(db, item.file);
+        let cache = &alias_caches[&pkg_info.package];
+        attach_function_metadata(
+            db,
+            item.file,
+            item.local_id,
+            func_data,
+            cache,
+            item.is_builtin_file,
+            &item.fq_name,
+            &mut compiled_fn,
+        );
+        register_compiled_function(
+            program,
+            globals,
+            skip_clean.is_some(),
+            item.fq_name,
+            compiled_fn,
+        );
+    }
+}
+
+/// Interning table for pooled `Object::GenericFunction`s, bucketed by target
+/// global slot. Mirrors the serial `emit_constant` scan's equality exactly:
+/// same `function` slot and `==` on the `type_args` slice, first pooled match
+/// wins.
+#[derive(Default)]
+struct GenericFunctionInterner {
+    by_function: HashMap<usize, Vec<InternedGenericFunction>>,
+}
+
+/// One interned instantiation: its type arguments and its final pool index.
+type InternedGenericFunction = (Box<[baml_type::RealizedTy]>, usize);
+
+impl GenericFunctionInterner {
+    fn get(&self, gf: &bex_vm_types::GenericFunction) -> Option<usize> {
+        self.by_function
+            .get(&gf.function.raw())?
+            .iter()
+            .find(|(args, _)| args.as_ref() == gf.type_args.as_ref())
+            .map(|(_, idx)| *idx)
+    }
+
+    fn insert_if_absent(&mut self, gf: &bex_vm_types::GenericFunction, idx: usize) {
+        let bucket = self.by_function.entry(gf.function.raw()).or_default();
+        if !bucket
+            .iter()
+            .any(|(args, _)| args.as_ref() == gf.type_args.as_ref())
+        {
+            bucket.push((gf.type_args.clone(), idx));
+        }
+    }
+}
+
+/// Splice one worker's fragment pool into the program pool and rebase every
+/// fragment-relative object operand (>= `watermark`) in both the fragment's
+/// own objects and the compiled function.
+///
+/// A fragment `Object::GenericFunction` equal to one already pooled (below
+/// the watermark or by an earlier-merged fragment) is dropped and its minted
+/// index mapped to the existing object — exactly the reuse the serial
+/// whole-pool interning scan would have produced. Everything else appends in
+/// mint order, so the merged pool layout is byte-identical to the serial
+/// pass's. `GlobalIndex` operands are Pass-1 slots, absolute in every worker,
+/// and are never rewritten; a `GenericFunction`'s identity (global slot +
+/// type args) is therefore stable across the rewrite.
+fn merge_function_fragment(
+    program: &mut Program,
+    watermark: usize,
+    fragment: ObjectPool,
+    mut compiled_fn: Function,
+    intern: &mut GenericFunctionInterner,
+) -> Function {
+    // Pass 1: append in mint order, building the minted-index → final-index
+    // map. Completed before any operand rewrite so references to later mints
+    // (e.g. a constant pooled after the lambda that uses it) resolve too.
+    let mut index_map: Vec<usize> = Vec::with_capacity(fragment.len());
+    let mut appended: Vec<usize> = Vec::with_capacity(fragment.len());
+    for obj in fragment {
+        let is_generic_function = match &obj {
+            Object::GenericFunction(gf) => {
+                if let Some(existing) = intern.get(gf) {
+                    index_map.push(existing);
+                    continue;
+                }
+                true
+            }
+            _ => false,
+        };
+        let idx = program.add_object(obj);
+        if is_generic_function {
+            if let Object::GenericFunction(gf) = &program.objects[ObjectIndex::from_raw(idx)] {
+                intern.insert_if_absent(gf, idx);
+            }
+        }
+        index_map.push(idx);
+        appended.push(idx);
+    }
+
+    // Pass 2: rewrite fragment-relative operands to their final indices.
+    // Object indices below the watermark (classes/enums/strings from Passes
+    // 1–3) and all global slots are already absolute — left untouched.
+    let rewrite = |operand: bex_vm_types::relink::IndexOperand<'_>| {
+        if let bex_vm_types::relink::IndexOperand::Object(idx) = operand {
+            let raw = idx.raw();
+            if raw >= watermark {
+                let final_idx = *index_map
+                    .get(raw - watermark)
+                    .expect("fragment operand must map to a merged pool index");
+                *idx = ObjectIndex::from_raw(final_idx);
+            }
+        }
+    };
+    for &idx in &appended {
+        bex_vm_types::relink::visit_object_operands(
+            &mut program.objects[ObjectIndex::from_raw(idx)],
+            rewrite,
+        );
+    }
+    bex_vm_types::relink::visit_index_operands(&mut compiled_fn, rewrite);
+    compiled_fn
+}
+
+/// Build the callable `Function` object for a builtin, or `None` for the
+/// kinds that never become callable objects: intrinsics (call sites lower to
+/// `StatementKind::Intrinsic`) and BEP-034 `__await_any` (call sites lower to
+/// a `Terminator::AwaitAny` suspend point).
+fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Option<Function> {
+    let kind = match kind {
+        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny => return None,
+        BuiltinKind::Io => {
+            let sys_op = bex_vm_types::sys_op_for_path(fq_name)
+                .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
+            FunctionKind::SysOp(sys_op)
+        }
+        BuiltinKind::Vm => FunctionKind::NativeUnresolved,
+    };
+    Some(Function {
+        name: fq_name.to_string(),
+        source_file: String::new(), // builtins have no source file
+        arity,
+        real_local_count: 0,
+        bytecode: Bytecode::default(),
+        kind,
+        local_names: Vec::new(),
+        debug_locals: Vec::new(),
+        span: Span::fake(),
+        return_type: baml_type::RuntimeTy::Null {
+            attr: baml_type::TyAttr::default(),
+        },
+        param_names: Vec::new(),
+        param_types: Vec::new(),
+        param_has_default: Vec::new(),
+        display_type_params: Vec::new(),
+        display_param_types: Vec::new(),
+        display_return_type: "null".to_string(),
+        throws_type: None,
+        origin: FunctionOrigin::Builtin,
+        body_meta: None,
+        capture: FunctionCaptureProps::disabled(),
+        function_id: 0, // assigned at engine init (interim provider)
+    })
+}
+
+/// Fill a compiled function's signature, throws, origin, and LLM metadata
+/// from the item tree — the Pass-4 tail shared by the serial and parallel
+/// passes. Every lookup here is a salsa query, so this always runs on the
+/// serial control thread.
+#[allow(clippy::too_many_arguments)]
+fn attach_function_metadata(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    local_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+    cache: &ResolvedAliases,
+    is_builtin_file: bool,
+    fq_name: &str,
+    compiled_fn: &mut Function,
+) {
+    // Set function metadata from signature
+    let func_loc = FunctionLoc::new(db, file, local_id);
+    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    let signature_metadata = compute_function_metadata_from_item_tree(
+        db,
+        file,
+        local_id,
+        func_data,
+        &parameter_defaults,
+        cache,
+    );
+    compiled_fn.return_type = signature_metadata.return_type;
+    compiled_fn.param_names = signature_metadata.param_names;
+    compiled_fn.param_types = signature_metadata.param_types;
+    compiled_fn.param_has_default = signature_metadata.param_has_default;
+    compiled_fn.display_type_params = signature_metadata.display_type_params;
+    compiled_fn.display_param_types = signature_metadata.display_param_types;
+    compiled_fn.display_return_type = signature_metadata.display_return_type;
+
+    // Set inferred throws type from TIR throw inference
+    compiled_fn.throws_type = compute_throws_type(db, file, &func_data.name, cache);
+    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func_data.origin);
+
+    // Set LLM-specific body_meta if this is an LLM function
+    if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) = &func_data.declarative_meta {
+        // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
+        // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
+        // The stream return type is now carried by the synthesized `$stream` companion's
+        // own `return_type` (see ppir's `companion_stream_return_type`), so the old
+        // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+        // of `ctx.output_format` should be re-verified against canary's streaming.
+        if let Some(client) = &llm_meta.client {
+            // New-mode (BEP-049 M5) functions have no Jinja `prompt`
+            // text — the compiled closure renders it — but they still
+            // need a registry entry so `get_return_type` /
+            // `get_stream_return_type` (used by `__make_stream` and the
+            // streaming `Context`) resolve by name. The empty template
+            // is never read for them (their `prompt_closure` is non-null,
+            // so the Jinja `get_jinja_template` branch is skipped).
+            let prompt_template = llm_meta
+                .prompt
+                .as_ref()
+                .map(|p| p.text.clone())
+                .unwrap_or_default();
+            compiled_fn.body_meta = Some(FunctionMeta::Llm {
+                prompt_template,
+                client: client.to_string(),
+            });
+            compiled_fn.capture = FunctionCaptureProps::disabled()
+                .with_auto(CaptureCategory::Input)
+                .with_auto(CaptureCategory::Output)
+                .with_auto(CaptureCategory::Error);
+        }
+    }
+}
+
+/// Pool the compiled function object and register its global slot — the
+/// final Pass-4 tail shared by the serial and parallel passes.
+fn register_compiled_function(
+    program: &mut Program,
+    globals: &HashMap<String, usize>,
+    dirty_only: bool,
+    fq_name: String,
+    compiled_fn: Function,
+) {
+    let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
+    program.function_indices.insert(fq_name.clone(), fn_obj_idx);
+    let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
+    if dirty_only {
+        // Dirty-only emit: write the function value at its whole-project
+        // (Pass-1) slot rather than appending, so clean-file slot holes are
+        // preserved and every operand slot reverses to the right name.
+        let slot = globals[&fq_name];
+        program.function_global_indices.insert(fq_name, slot);
+        program.globals[slot] = val;
+    } else {
+        let slot = program.globals.len();
+        debug_assert_eq!(
+            globals.get(&fq_name).copied(),
+            Some(slot),
+            "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
+        );
+        program.function_global_indices.insert(fq_name, slot);
+        program.add_global(val);
+    }
+}
+
 /// Compile a flat list of lambda `MirFunction`s into bytecode `Function` objects
 /// and register them in `objects`.  Returns a parallel `Vec<(obj_idx, name)>`
 /// that can be used to build `lambda_object_indices` and `lambda_names` for the
@@ -4251,7 +4833,9 @@ fn compile_lambdas_flat(
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
+    objects_base: usize,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let capture_infos = parent_body.map_or_else(
@@ -4284,7 +4868,9 @@ fn compile_lambdas_flat(
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
+                    class_fields,
                     objects,
+                    objects_base,
                     opt,
                 );
                 let nested_obj_indices: Vec<usize> =
@@ -4297,7 +4883,9 @@ fn compile_lambdas_flat(
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
+                    class_fields,
                     objects,
+                    objects_base,
                     lambda_object_indices: &nested_obj_indices,
                     lambda_names: &nested_names,
                     capture_types: &capture_info.capture_types,
@@ -4307,7 +4895,7 @@ fn compile_lambdas_flat(
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
                 f.source_file = source_file.to_string();
-                let idx = objects.len();
+                let idx = objects_base + objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
             }
@@ -4337,6 +4925,7 @@ fn compile_init_function<'db>(
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &ClassFieldSnapshot,
     program: &mut Program,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
@@ -4375,7 +4964,9 @@ fn compile_init_function<'db>(
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
+                    class_fields,
                     &mut program.objects,
+                    0,
                     opt,
                 );
                 let lambda_let_obj_indices: Vec<usize> =
@@ -4388,7 +4979,9 @@ fn compile_init_function<'db>(
                     class_object_indices,
                     enum_object_indices,
                     enum_variants,
+                    class_fields,
                     objects: &mut program.objects,
+                    objects_base: 0,
                     lambda_object_indices: &lambda_let_obj_indices,
                     lambda_names: &lambda_let_names,
                     capture_types: &empty_capture_types,

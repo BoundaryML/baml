@@ -487,10 +487,10 @@ pub fn impl_data<'db>(
         .get(&iface_loc.id(db))
         .ok_or(ImplDataError::Malformed)?;
 
-    // A direct class method may implement a same-named interface method. This
-    // matters in particular for magic methods such as `cleanup`: the VM only
-    // registers a direct `cleanup(self) -> void` as a finalizer, while callers
-    // still need `Resource.cleanup()` virtual dispatch to reach that one body.
+    // The magic direct `cleanup` method may implement a same-named interface
+    // method. The VM only registers a direct `cleanup(self) -> void` as a
+    // finalizer, while callers still need `Resource.cleanup()` virtual dispatch
+    // to reach that one body.
     //
     // Explicit methods inside `implements I { ... }` remain higher priority.
     // Only in-body class impls inherit direct methods; a free/out-of-body impl
@@ -517,7 +517,8 @@ pub fn impl_data<'db>(
                 .filter(|id| !item_tree.method_to_iface_target.contains_key(id))
                 .filter(|id| {
                     let name = &item_tree[**id].name;
-                    !explicit_names.contains(&name)
+                    name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                        && !explicit_names.contains(&name)
                         && (iface_data.required_methods.iter().any(|m| m.name == *name)
                             || iface_data
                                 .default_methods

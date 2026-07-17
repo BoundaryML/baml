@@ -1196,6 +1196,36 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "float_underscore_mantissa"
+    make_closure .<lambda($init_test_ns_floats_floats, 199)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_underscore_fraction"
+    make_closure .<lambda($init_test_ns_floats_floats, 200)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_underscore_exponent"
+    make_closure .<lambda($init_test_ns_floats_floats, 201)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_underscore_everywhere"
+    make_closure .<lambda($init_test_ns_floats_floats, 202)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_abs_negative_zero"
+    make_closure .<lambda($init_test_ns_floats_floats, 203)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }

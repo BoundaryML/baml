@@ -9,8 +9,8 @@
 # script and can't pass `setup_guard::ran` (see ../../README.md).
 #
 # This script turns those generated/ dirs into a real `node_modules/`
-# tree, builds both TypeScript bridges, and installs the Chromium used by
-# the browser runner. Idempotent — re-runs are no-ops in steady state.
+# tree and builds only the native TypeScript bridge. Web/Wasm setup lives in
+# the sibling `typescript_web` crate.
 
 set -euo pipefail
 
@@ -19,7 +19,6 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/typescript
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 REPO_ROOT="$(cd "$WORKSPACE_ROOT/.." && pwd)"
 BRIDGE_TYPESCRIPT="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript"
-BRIDGE_TYPESCRIPT_WEB="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript_web"
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
@@ -46,13 +45,7 @@ echo "==> pnpm install in sdks/typescript/bridge_typescript"
 echo "==> pnpm build:debug in sdks/typescript/bridge_typescript"
 (cd "$BRIDGE_TYPESCRIPT" && pnpm build:debug)
 
-# 4. Web/Wasm bridge used by both the browser and workerd runners.
-echo "==> pnpm install in sdks/typescript/bridge_typescript_web"
-(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm install --ignore-workspace --ignore-scripts)
-echo "==> pnpm build:debug in sdks/typescript/bridge_typescript_web"
-(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm build:debug)
-
-# 5. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
+# 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    The per-fixture `package.json` `file:`-points at bridge_typescript, so
 #    the install resolves the dev toolchain (vitest, typescript)
@@ -69,15 +62,7 @@ for fixture_dir in */generated; do
     # runtime). Without this flag pnpm 9+ exits non-zero with
     # ERR_PNPM_IGNORED_BUILDS, which `set -e` would treat as a fatal abort.
     (cd "$fixture_dir" && pnpm install --force --ignore-workspace --ignore-scripts)
-    (cd "$fixture_dir" && pnpm update @boundaryml/baml-bridge @boundaryml/baml-bridge-web --force --ignore-workspace --ignore-scripts)
-done
-
-# 6. Install the browser once from any generated fixture package.
-for fixture_dir in */generated; do
-    [[ -d "$fixture_dir" ]] || continue
-    echo "==> playwright install chromium"
-    (cd "$fixture_dir" && pnpm exec playwright install chromium)
-    break
+    (cd "$fixture_dir" && pnpm update @boundaryml/baml-bridge --force --ignore-workspace --ignore-scripts)
 done
 
 # Per-run breadcrumb for the `setup_guard::ran` test. See the

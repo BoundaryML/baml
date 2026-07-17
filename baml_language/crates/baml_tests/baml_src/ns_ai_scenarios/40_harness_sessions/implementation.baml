@@ -264,7 +264,10 @@ class s40_ScriptedCatalog {
         throws s40_SessionError | baml.errors.UnknownError { self.store.require(id, self.cwd, self.cwd_keyed).turns }
     function rename_session(self, id: string, title: string) -> null
         throws s40_SessionError | baml.errors.UnknownError {
-      self.store.require(id, self.cwd, self.cwd_keyed).info.title = title;
+      // Keep the concrete record in a local before mutating nested state. The
+      // interface call result is otherwise erased while lowering the lvalue.
+      let record: s40_SessionRecord = self.store.require(id, self.cwd, self.cwd_keyed);
+      record.info.title = title;
       null
     }
     function tag_session(self, id: string, tag: string) -> null
@@ -314,7 +317,8 @@ class s40_LiveCatalog {
         throws s40_SessionError | baml.errors.UnknownError { self.store.require(id, self.cwd, true).turns }
     function rename_session(self, id: string, title: string) -> null
         throws s40_SessionError | baml.errors.UnknownError {
-      self.store.require(id, self.cwd, true).info.title = title;
+      let record: s40_SessionRecord = self.store.require(id, self.cwd, true);
+      record.info.title = title;
       null
     }
     function tag_session(self, id: string, tag: string) -> null

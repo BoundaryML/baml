@@ -11,7 +11,7 @@
     "noEmit": true,
     "preserveSymlinks": true,
     "rootDir": "web",
-    "types": ["vitest"]
+    "types": ["node", "vitest"]
   },
   "include": ["web/**/*.ts"],
   "exclude": ["node_modules"]

@@ -681,10 +681,13 @@ fn enclosing_free_impl(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Option<&baml_compiler2_hir::item_tree::ImplBlock> {
-    item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block.methods.contains(&func_id).then_some(block)
-    })
+    match item_tree.method_owners.get(&func_id)? {
+        baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id) => {
+            item_tree.impls.get(impl_id)
+        }
+        baml_compiler2_hir::item_tree::MethodOwner::Class(_)
+        | baml_compiler2_hir::item_tree::MethodOwner::Interface(_) => None,
+    }
 }
 
 /// An out-of-body impl block's declared generics as `(param names, each's single optional
@@ -1335,45 +1338,38 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::Let(loc) => item_tree[loc.id(db)].name.clone(),
     };
 
-    // For function definitions, check if this is a class method by searching
-    // the item tree's class methods lists.
+    // Function definitions: a method needs a Method-shaped ItemRef so it gets a
+    // distinct global slot keyed on its owner's name (instead of colliding with
+    // same-named free functions in the package).
     if let Definition::Function(func_loc) = def {
-        let func_local_id = func_loc.id(db);
-        for (class_id, class_data) in &item_tree.classes {
-            if class_data.methods.contains(&func_local_id) {
+        use baml_compiler2_hir::item_tree::MethodOwner;
+        match item_tree.method_owners.get(&func_loc.id(db)) {
+            Some(MethodOwner::Class(class_id)) => {
                 let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_id);
                 return method_item_ref(db, class_loc, func_loc);
             }
-        }
-        // BEP-044: interface default methods are also stored in
-        // `item_tree.functions` and need a Method-shaped ItemRef so they
-        // get a distinct global slot keyed on the interface name (instead
-        // of colliding with same-named free functions in the package).
-        for iface_data in item_tree.interfaces.values() {
-            if iface_data.default_methods.contains(&func_local_id) {
+            Some(MethodOwner::Interface(iface_id)) => {
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: iface_data.name.clone(),
+                    class: item_tree[*iface_id].name.clone(),
                     name,
                 };
             }
-        }
-        for impl_id in &item_tree.free_impls {
-            let Some(block) = item_tree.impls.get(impl_id) else {
-                continue;
-            };
-            if block.methods.contains(&func_local_id)
-                && let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } =
+            Some(MethodOwner::FreeImpl(impl_id)) => {
+                let block = &item_tree.impls[impl_id];
+                if let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } =
                     &block.subject
-            {
-                return ItemRef::Method {
-                    package: pkg_info.package.clone(),
-                    namespace: pkg_info.namespace_path,
-                    class: Name::new(format!("{}$for${}", block.interface_target, for_target)),
-                    name,
-                };
+                {
+                    return ItemRef::Method {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path,
+                        class: Name::new(format!("{}$for${}", block.interface_target, for_target)),
+                        name,
+                    };
+                }
             }
+            None => {}
         }
     }
 
@@ -2630,34 +2626,15 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = func_loc.file(db);
 
-        // --- Resolve FunctionLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let func_data = &item_tree[func_loc.id(db)];
-        let func_span = func_data.span;
-
         let index = file_semantic_index(db, file);
-        // For synthesized functions whose span is `0..0` (e.g. `$init_test_N`),
-        // `scope_at_offset` may return a descendant Lambda scope instead of the
-        // Function scope itself, because all synthesized expressions share span
-        // `0..0` and the descendant search finds a matching lambda first.
-        // Avoid this by searching explicitly for a `ScopeKind::Function` scope
-        // with the correct name and span before falling back to `scope_at_offset`.
-        let func_scope_id: FileScopeId = index
-            .scopes
-            .iter()
-            .enumerate()
-            .find_map(|(i, scope)| {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
-                    && scope.range == func_span
-                    && scope.name.as_ref() == Some(&func_data.name)
-                {
-                    #[allow(clippy::cast_possible_truncation)]
-                    Some(FileScopeId::new(i as u32))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
+        // The scope this function opened, from the recorded item↔scope index.
+        // Exact — no span match, so companion functions and synthesized `0..0`
+        // functions (which the old scan special-cased) resolve correctly.
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (func + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -2756,10 +2733,12 @@ impl<'db> LoweringContext<'db> {
         // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
         // already follows type-var bounds — so default methods keep dispatching
         // through the concrete implementor.
-        for iface in item_tree.interfaces.values() {
-            if iface.default_methods.contains(&func_loc.id(db))
-                && let Some(def) =
-                    pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id)) =
+            item_tree.method_owners.get(&func_loc.id(db))
+        {
+            let iface = &item_tree[*iface_id];
+            if let Some(def) =
+                pkg_items_for_bounds.lookup_type(&pkg_info.namespace_path, &iface.name)
             {
                 let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface.name);
                 let args = iface
@@ -2789,7 +2768,6 @@ impl<'db> LoweringContext<'db> {
                         baml_compiler2_tir::ty::TyAttr::default(),
                     ),
                 );
-                break;
             }
         }
 
@@ -2881,14 +2859,13 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = let_loc.file(db);
 
-        // --- Resolve LetLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let let_data = &item_tree[let_loc.id(db)];
-        let let_span = let_data.span;
         let let_name = let_data.name.clone();
-
         let index = file_semantic_index(db, file);
-        let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
+        let let_scope_id = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
+            .expect("every item-tree let has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (let + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -3406,34 +3383,33 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower a method-signature type expression (a parameter or return type) to
     /// a runtime type. In a method signature `Self` is the receiver type
-    /// variable and `Self.Assoc` is an associated-type projection onto it.
-    /// A bare `lower_type_expr_in_ns` has neither in scope and would erase both
-    /// to `Ty::Unknown`, tripping the runtime lowering boundary — so rewrite
-    /// `Self.Assoc` paths into projections and bind `Self` as a type variable.
+    /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
+    /// `lower_type_expr_in_ns` has neither in scope and would erase both to
+    /// `Ty::Unknown`, tripping the runtime lowering boundary — so bind `Self` to
+    /// its rigid type variable through the `self_ty` channel, which roots both a
+    /// bare `Self` and each `Self.Assoc` projection at it.
     fn lower_signature_runtime_ty(
         &self,
         te: &baml_compiler2_ast::TypeExpr,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
         ns_context: &[baml_base::Name],
     ) -> RuntimeTy {
-        let self_subst = std::collections::HashMap::from([(
-            baml_base::Name::new("Self"),
-            baml_compiler2_tir::lower_type_expr::type_expr_for_name(baml_base::Name::new("Self")),
-        )]);
-        let te = baml_compiler2_tir::lower_type_expr::substitute_paths_in(te, &self_subst);
         let mut generic_params = self.enclosing_generic_params();
         generic_params.push(baml_base::Name::new("Self"));
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let mut diags = Vec::new();
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db: self.db,
                 package_items: pkg_items,
                 ns_context,
                 generic_params: &generic_params,
                 bounds: &generic_param_bounds,
-                self_ty: None,
+                self_ty: Some(Tir2Ty::TypeVar(
+                    baml_base::Name::new("Self"),
+                    TyAttr::default(),
+                )),
             },
             &mut diags,
         );
@@ -3994,17 +3970,18 @@ impl<'db> LoweringContext<'db> {
         let fl = self.func_loc?;
         let item_tree = file_item_tree(self.db, fl.file(self.db));
         let func_id = fl.id(self.db);
-        item_tree
-            .interfaces
-            .values()
-            .find(|iface_data| iface_data.default_methods.contains(&func_id))
-            .map(|iface_data| {
-                iface_data
-                    .associated_types
-                    .iter()
-                    .map(|assoc| assoc.name.clone())
-                    .collect()
-            })
+        let baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id) =
+            item_tree.method_owners.get(&func_id)?
+        else {
+            return None;
+        };
+        Some(&item_tree[*iface_id]).map(|iface_data| {
+            iface_data
+                .associated_types
+                .iter()
+                .map(|assoc| assoc.name.clone())
+                .collect()
+        })
     }
 
     /// Rewrite every `Self.X` path (where `X` is one of `assoc_names`) to the bare `X`
@@ -4136,13 +4113,13 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
         let func_data = &item_tree[func_loc.id(self.db)];
+        let func_span = baml_compiler2_ppir::item_data::function_source_map(self.db, func_loc).span;
         // Set the function-level span on the builder so MirFunction::span is populated.
-        self.builder.set_span(baml_base::Span::new(
-            self.file.file_id(self.db),
-            func_data.span,
-        ));
-        let func_scope_id: FileScopeId =
-            index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
+        self.builder
+            .set_span(baml_base::Span::new(self.file.file_id(self.db), func_span));
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(self.db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
             let parent = &index.scopes[parent_idx.index() as usize];
@@ -9191,11 +9168,10 @@ impl LoweringContext<'_> {
         // class-method convention — interface params first, then fn params — so
         // `TypeVar(T)` lowers to `TypeArgRef(N)` against the frame type args the
         // interface-dispatch switch seeds (see `emit_method_candidate_switch`).
-        if let Some(iface_data) = item_tree
-            .interfaces
-            .values()
-            .find(|iface_data| iface_data.default_methods.contains(&func_id))
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::Interface(iface_id)) =
+            item_tree.method_owners.get(&func_id)
         {
+            let iface_data = &item_tree[*iface_id];
             let mut params = iface_data.generic_params.clone();
             params.extend(
                 iface_data
@@ -9206,12 +9182,18 @@ impl LoweringContext<'_> {
             params.extend(item_tree[func_id].generic_params.iter().cloned());
             return params;
         }
-        let mut params: Vec<baml_base::Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_id))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        let mut params: Vec<baml_base::Name> = match item_tree.method_owners.get(&func_id) {
+            Some(baml_compiler2_hir::item_tree::MethodOwner::Class(class_id)) => {
+                item_tree[*class_id].generic_params.clone()
+            }
+            // `Interface` owners are handled by the early return above; a free
+            // impl's own generics are not enclosing-type parameters.
+            Some(
+                baml_compiler2_hir::item_tree::MethodOwner::Interface(_)
+                | baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(_),
+            )
+            | None => Vec::new(),
+        };
         params.extend(item_tree[func_id].generic_params.iter().cloned());
         // Inside a (possibly nested) generic lambda body, the lambda's own
         // type params follow the enclosing function's, matching the runtime
@@ -9239,14 +9221,11 @@ impl LoweringContext<'_> {
             .clone();
         let item_tree = file_item_tree(self.db, fl.file(self.db));
         let func_id = fl.id(self.db);
-        if let Some(impl_id) = item_tree.free_impls.iter().copied().find(|impl_id| {
-            item_tree
-                .impls
-                .get(impl_id)
-                .is_some_and(|block| block.methods.contains(&func_id))
-        }) {
+        if let Some(baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id)) =
+            item_tree.method_owners.get(&func_id)
+        {
             let impl_loc =
-                baml_compiler2_hir::loc::ImplLoc::new(self.db, fl.file(self.db), impl_id);
+                baml_compiler2_hir::loc::ImplLoc::new(self.db, fl.file(self.db), *impl_id);
             for (name, conjunction) in
                 baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(self.db, impl_loc)
             {

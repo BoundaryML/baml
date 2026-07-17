@@ -2,9 +2,9 @@
 //!
 //! `cleanup` is recognized by name — a class that defines
 //! `function cleanup(self) -> void { ... }` gets a finalizer whose body runs at
-//! most once per instance, whether invoked explicitly or via `defer`. Commit 1
-//! covers those two trigger paths (the GC finalizer path is Commit 2). The
-//! run-once guarantee is the per-instance latch flipped by `root._cleanup_begin`.
+//! most once per instance, whether invoked explicitly or via `defer`. The
+//! reserved-name shape-enforcement tests assert the [E0144] compile error via
+//! `should_panic`, which is not expressible in BAML test blocks.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

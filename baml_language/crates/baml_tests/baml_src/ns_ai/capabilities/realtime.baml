@@ -54,7 +54,9 @@ class BufferedLive {
 
 function collect_live_text(live: Live) -> string throws never {
   let text = "";
-  for (let event in live.events()) {
+  // Materialize the virtual return at its declared alias before iterating.
+  let events: LiveEventStream = live.events();
+  for (let event in events) {
     match (event) {
       let delta: TranscriptDelta => { text = text + delta.text; },
       _ => {},

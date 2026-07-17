@@ -149,18 +149,14 @@ function sap_nullable_container_types_are_preserved() -> bool throws unknown {
       "children": [{"name": "first"}]
     }`
   );
-  let empty_ok = match (parsed.empty_json) {
-    let values: json[] => values.length() == 0,
-    null => false,
-  };
-  let map_ok = match (parsed.metadata) {
-    let values: map<string, json> => baml.json.path_or(values, ".attempt", 0) == 1,
-    null => false,
-  };
-  let children_ok = match (parsed.children) {
-    let values: ParsedChild[] => values.at(0)?.name == "first",
-    null => false,
-  };
+  // These annotations are the static regression: SAP must preserve each
+  // declared container type through the nullable wrapper.
+  let empty_json: json[]? = parsed.empty_json;
+  let metadata: map<string, json>? = parsed.metadata;
+  let children: ParsedChild[]? = parsed.children;
+  let empty_ok = (empty_json?.length() ?? -1) == 0;
+  let map_ok = baml.json.path_or<int>(metadata, ".attempt", 0) == 1;
+  let children_ok = children?.at(0)?.name == "first";
   empty_ok && map_ok && children_ok
 }
 

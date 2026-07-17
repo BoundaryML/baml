@@ -25,5 +25,6 @@ bex_vm_types = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+rayon = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }

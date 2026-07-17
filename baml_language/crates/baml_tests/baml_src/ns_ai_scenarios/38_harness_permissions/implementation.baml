@@ -115,7 +115,7 @@ function s38_gate(
     }
     if (mode == "ask") {
       let decision = match (approve) {
-        let callback: (root.ai.ToolCall) -> s38_ApprovalDecision => callback(call),
+        let callback: (root.ai.ToolCall) -> s38_ApprovalDecision throws never => callback(call),
         null => s38_ApprovalDecision {
           behavior: s38_ApprovalBehavior.Deny,
           updated_args: null,
@@ -174,7 +174,7 @@ class s38_PermissionMiddleware {
       }
       if (self.mode == "ask") {
         let decision = match (self.approve) {
-          let callback: (root.ai.ToolCall) -> s38_ApprovalDecision => callback(call),
+          let callback: (root.ai.ToolCall) -> s38_ApprovalDecision throws never => callback(call),
           null => s38_ApprovalDecision {
             behavior: s38_ApprovalBehavior.Deny,
             updated_args: null,

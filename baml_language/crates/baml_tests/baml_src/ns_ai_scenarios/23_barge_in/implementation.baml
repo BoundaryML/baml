@@ -56,7 +56,8 @@ class s23_BargeInResult {
 function s23_drive_live(live: root.ai.Live) -> s23_BargeInResult throws baml.errors.UnknownError {
   let transcript = "";
   let interrupted = false;
-  for (let event in live.events()) {
+  let events: root.ai.LiveEventStream = live.events();
+  for (let event in events) {
     match (event) {
       let delta: root.ai.TranscriptDelta => { transcript = transcript + delta.text; },
       let speech: root.ai.UserSpeechStarted => {

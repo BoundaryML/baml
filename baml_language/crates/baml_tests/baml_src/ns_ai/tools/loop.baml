@@ -47,7 +47,7 @@ function _budget_hit(budget: Budget?, info: StepInfo) -> bool throws never {
         null => {},
       }
       match (policy.stop_when) {
-        let stop: (StepInfo) -> bool => stop(info),
+        let stop: (StepInfo) -> bool throws never => stop(info),
         null => false,
       }
     },
@@ -66,7 +66,7 @@ function run_agent<T>(
     },
   };
   let dispatch = match (request.options.dispatch) {
-    let handler: (ToolCall[]) -> ToolResult[] => handler,
+    let handler: (ToolCall[]) -> ToolResult[] throws never => handler,
     null => throw baml.errors.Unsupported {
       message: "run_agent requires RequestOptions.dispatch",
     },
@@ -142,7 +142,7 @@ function run_agent_detailed<T>(
     },
   };
   let dispatch = match (request.options.dispatch) {
-    let handler: (ToolCall[]) -> ToolResult[] => handler,
+    let handler: (ToolCall[]) -> ToolResult[] throws never => handler,
     null => throw baml.errors.Unsupported {
       message: "run_agent requires RequestOptions.dispatch",
     },

@@ -120,7 +120,7 @@ fn resolve_url(client: &crate::baml_std::PrimitiveClient) -> String {
             (None, Some(rn), Some(did)) => {
                 format!("https://{rn}.openai.azure.com/openai/deployments/{did}")
             }
-            // Validated at compile time in lower_cst.rs
+            // Validated whenever PrimitiveClient is constructed.
             _ => unreachable!("azure-openai requires base_url or resource_name + deployment_id"),
         };
         return format!("{base}/chat/completions?api-version={}", azure.api_version);

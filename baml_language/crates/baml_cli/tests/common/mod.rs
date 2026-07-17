@@ -60,6 +60,22 @@ pub fn baml_cli() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_baml-cli"))
 }
 
+/// Shared on-disk bytecode-cache directory for spawned `baml-cli` invocations.
+///
+/// Each e2e test drives the CLI against a fresh temp project, so the default
+/// cache location (`<project>/.baml/cache`) is always cold and every
+/// invocation recompiles the stdlib from scratch — the dominant cost of these
+/// suites. The cache is content-addressed and keyed by the compiler
+/// fingerprint, so one directory shared across tests, processes, and `cargo
+/// test` runs (it lives under `target/tmp`) is safe: the first invocation
+/// warms the stdlib entries, every later one serves them, and a rebuilt
+/// `baml-cli` invalidates itself via its fingerprint. Tests that assert on
+/// cold/warm cache behavior (e.g. `test_list_discovery_cache_e2e`) must keep
+/// setting their own isolated `BAML_CACHE_DIR` instead of this one.
+pub fn shared_cache_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("baml-cli-e2e-cache")
+}
+
 /// Ensure `baml-pack-host` is built next to `baml-cli` and return both paths.
 /// Subsequent calls reuse the cached result — cargo's own incremental cache
 /// handles rebuilds when source files change.

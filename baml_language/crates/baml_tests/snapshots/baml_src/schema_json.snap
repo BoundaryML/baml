@@ -51,8 +51,32 @@ function schema_json.$init_test_ns_schema_json_schema_json(registry: testing.Tes
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "OpenAI transformation rejects standard map schemas instead of weakening them"
+    load_const "OpenAI strict output tool wraps primitive root types"
     make_closure .<lambda($init_test_ns_schema_json_schema_json, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI strict output tool preserves a root enum"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI strict output tool preserves enum fields in recursive classes"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI strict output tool keeps a list of unions in one value array"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI transformation rejects standard map schemas instead of weakening them"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -64,7 +88,7 @@ function schema_json.schema_json_customized() -> baml.json.json {
     call user.schema_json.schema_json_standard
     store_var schema
     load_var schema
-    is_type map<string, baml.json.json>
+    is_type map<_, _>
     pop_jump_if_false L0
     jump L1
 

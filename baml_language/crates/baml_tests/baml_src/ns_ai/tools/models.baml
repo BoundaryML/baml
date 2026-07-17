@@ -57,7 +57,7 @@ class Tool {
 
   function validate_args(self, call: ToolCall) -> bool throws never {
     match (self._strict_validator) {
-      let validate: (string) -> bool => return validate(call.args),
+      let validate: (string) -> bool throws never => return validate(call.args),
       null => {},
     }
     if (self.input_schema != null) {

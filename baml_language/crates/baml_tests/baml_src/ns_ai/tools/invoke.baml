@@ -40,7 +40,7 @@ function compose_tool_dispatch(
     };
     let task_results: ToolResult[] = if (task_calls.length() == 0) { [] } else {
       match (task_dispatch) {
-        let dispatch: (ToolCall[]) -> ToolResult[] => dispatch(task_calls),
+        let dispatch: (ToolCall[]) -> ToolResult[] throws never => dispatch(task_calls),
         null => [],
       }
     };
