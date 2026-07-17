@@ -765,7 +765,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let Ty::Interface(qtn, _, _, _) = crate::lower_type_expr::lower_type_expr(
+    let ty = crate::lower_type_expr::lower_type_expr(
         target,
         &crate::lower_type_expr::ScopeCtx {
             db,
@@ -776,7 +776,44 @@ pub fn resolve_path_to_interface_identity<'db>(
             self_ty: None,
         },
         &mut diagnostics,
-    ) else {
+    );
+    resolved_interface_from_ty(db, ty)
+}
+
+/// The `TypeRef`-arena twin of [`resolve_path_to_interface_identity`], for
+/// callers holding firewall data (`class_data(…).type_refs` + a `TypeRefId`)
+/// rather than an AST node. Identical resolution — it lowers through
+/// [`lower_type_ref`](crate::lower_type_expr::lower_type_ref) instead of
+/// `lower_type_expr`.
+pub fn resolve_ref_to_interface_identity<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Option<ResolvedInterface<'db>> {
+    let mut diagnostics = Vec::new();
+    let ty = crate::lower_type_expr::lower_type_ref(
+        store,
+        target,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context: current_ns,
+            generic_params: &[],
+            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
+        &mut diagnostics,
+    );
+    resolved_interface_from_ty(db, ty)
+}
+
+/// Shared tail of the two `resolve_*_to_interface_identity` functions: a lowered
+/// type is an interface reference iff it lowered to `Ty::Interface`, whose `qtn`
+/// then resolves to a declaration.
+fn resolved_interface_from_ty(db: &dyn crate::Db, ty: Ty) -> Option<ResolvedInterface<'_>> {
+    let Ty::Interface(qtn, _, _, _) = ty else {
         return None;
     };
     let pkg_id = PackageId::new(db, qtn.package().clone());
@@ -797,6 +834,18 @@ pub fn resolve_path_to_interface<'db>(
     current_ns: &[Name],
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     resolve_path_to_interface_identity(db, target, pkg_items, current_ns)
+        .map(|resolved| resolved.loc)
+}
+
+/// The `TypeRef`-arena twin of [`resolve_path_to_interface`].
+pub fn resolve_ref_to_interface<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    resolve_ref_to_interface_identity(db, store, target, pkg_items, current_ns)
         .map(|resolved| resolved.loc)
 }
 
