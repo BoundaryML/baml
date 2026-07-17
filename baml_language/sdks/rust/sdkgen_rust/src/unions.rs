@@ -176,6 +176,13 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         }
         Ty::List(inner, _) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
+        // A union nested inside a generic instantiation (`GenericBox<int |
+        // string>`) is registered in the same leaf as its enclosing symbol.
+        Ty::Class(_, args, _) => {
+            for arg in args {
+                register_unions_in(arg, leaf, analysis, registry);
+            }
+        }
         _ => {}
     }
 }

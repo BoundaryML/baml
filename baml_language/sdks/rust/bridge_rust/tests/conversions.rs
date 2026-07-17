@@ -36,6 +36,10 @@ class TreeNode {
   next TreeNode?
 }
 
+class Wrapper<T> {
+  inner T
+}
+
 function rt_color(c: Color) -> Color { c }
 function rt_point(p: Point) -> Point { p }
 function make_point(x: int, y: int) -> Point { Point { x: x, y: y, tag: null } }
@@ -47,6 +51,7 @@ function rt_int_or_string(u: int | string) -> int | string { u }
 function rt_point_or_string(u: Point | string) -> Point | string { u }
 function rt_opt_union(u: int | string | null) -> int | string | null { u }
 function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
+function rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T> { w }
 "#;
 
 fn ensure_runtime() {
@@ -117,6 +122,7 @@ impl __BamlValuePrivate for Point {
     fn to_baml(&self) -> wire::InboundValue {
         encode::class(
             "user.Point",
+            vec![],
             vec![
                 ("x", self.x.to_baml()),
                 ("y", self.y.to_baml()),
@@ -135,7 +141,7 @@ impl __BamlValuePrivate for Point {
     }
 
     fn baml_ty() -> wire::BamlTy {
-        class_ty("user.Point")
+        class_ty("user.Point", vec![])
     }
 }
 
@@ -149,6 +155,7 @@ impl __BamlValuePrivate for TreeNode {
     fn to_baml(&self) -> wire::InboundValue {
         encode::class(
             "user.TreeNode",
+            vec![],
             vec![
                 ("value", self.value.to_baml()),
                 ("next", self.next.to_baml()),
@@ -165,8 +172,43 @@ impl __BamlValuePrivate for TreeNode {
     }
 
     fn baml_ty() -> wire::BamlTy {
-        class_ty("user.TreeNode")
+        class_ty("user.TreeNode", vec![])
     }
+}
+
+/// Generic class shape: a `<T: BamlValue>` struct whose instance carries
+/// its concrete type argument on the wire (`class_ty.type_args`), exactly
+/// as the Rust SDK generator emits it.
+#[derive(Debug, Clone, PartialEq)]
+struct Wrapper<T: BamlValue> {
+    inner: T,
+}
+
+impl<T: BamlValue> __BamlValuePrivate for Wrapper<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        encode::class(
+            "user.Wrapper",
+            vec![T::baml_ty()],
+            vec![("inner", self.inner.to_baml())],
+        )
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut fields = decode::ClassFields::new(v, "user.Wrapper")?;
+        Ok(Wrapper {
+            inner: fields.take("inner")?,
+        })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Wrapper", vec![T::baml_ty()])
+    }
+}
+
+/// The wire `BamlTy` for a concrete `T` — a generated SDK reaches it via
+/// this same private trait.
+fn ty_of<T: BamlValue>() -> wire::BamlTy {
+    <T as __BamlValuePrivate>::baml_ty()
 }
 
 /// Synthesized union enum shape: one variant per (null-stripped) arm,
@@ -459,6 +501,37 @@ fn round_trips_recursive_class_through_box() {
         call::<TreeNode>("user.rt_tree", vec![("t", tree.to_baml())]),
         tree
     );
+}
+
+#[test]
+fn round_trips_generic_class_carrying_its_type_arg() {
+    ensure_runtime();
+    // `rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T>`: the instance carries its
+    // concrete `T` in `class_ty.type_args`, and the generic call binds `T`
+    // explicitly — the full generic-class-through-generic-function path.
+    let int_wrapped = Wrapper { inner: 5i64 };
+    let out = runtime::invoke_sync::<Wrapper<i64>, Infallible>(
+        "user.rt_wrapper",
+        encode::kwargs(vec![("w", Some(int_wrapped.to_baml()))]),
+        encode::type_args(vec![("T", ty_of::<i64>())]),
+    )
+    .expect("rt_wrapper<int> succeeds");
+    assert_eq!(out, int_wrapped);
+
+    // A nested generic instance (`Wrapper<Wrapper<string>>`) exercises the
+    // recursive `class_ty.type_args` construction.
+    let nested = Wrapper {
+        inner: Wrapper {
+            inner: "hi".to_string(),
+        },
+    };
+    let out = runtime::invoke_sync::<Wrapper<Wrapper<String>>, Infallible>(
+        "user.rt_wrapper",
+        encode::kwargs(vec![("w", Some(nested.to_baml()))]),
+        encode::type_args(vec![("T", ty_of::<Wrapper<String>>())]),
+    )
+    .expect("rt_wrapper<Wrapper<string>> succeeds");
+    assert_eq!(out, nested);
 }
 
 #[test]

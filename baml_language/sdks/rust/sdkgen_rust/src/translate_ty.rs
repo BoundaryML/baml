@@ -145,15 +145,22 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::Class(name, args, _) => {
-            if !args.is_empty() {
-                return Err(unsupported("generic class"));
-            }
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),
                 });
             }
-            let path = type_path(name, ctx.analysis);
+            let mut path = type_path(name, ctx.analysis);
+            // A generic instantiation carries its concrete type arguments as
+            // `<A, B, …>`. They are stored inline in the class (not behind a
+            // heap-indirected container), so a same-SCC argument still boxes.
+            if !args.is_empty() {
+                let translated = args
+                    .iter()
+                    .map(|arg| translate_inner(arg, ctx, false))
+                    .collect::<Result<Vec<_>, _>>()?;
+                path = quote! { #path<#(#translated),*> };
+            }
             let boxed = !under_heap
                 && ctx
                     .boxing_for

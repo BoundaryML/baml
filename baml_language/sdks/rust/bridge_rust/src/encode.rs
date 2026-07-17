@@ -39,7 +39,14 @@ pub fn type_args(entries: Vec<(&str, wire::BamlTy)>) -> Vec<wire::BamlTyArg> {
 
 /// Encode a class instance. `fqn` is the BAML class FQN the generated
 /// impl bakes in; the engine binds the instance nominally through it.
-pub fn class(fqn: &str, fields: Vec<(&str, wire::InboundValue)>) -> wire::InboundValue {
+/// `type_args` carries a generic instance's concrete type arguments in
+/// declaration order (the value-level type channel), empty for a
+/// non-generic class.
+pub fn class(
+    fqn: &str,
+    type_args: Vec<wire::BamlTy>,
+    fields: Vec<(&str, wire::InboundValue)>,
+) -> wire::InboundValue {
     wire::InboundValue {
         value: Some(In::ClassValue(wire::InboundClassValue {
             fields: fields
@@ -51,11 +58,7 @@ pub fn class(fqn: &str, fields: Vec<(&str, wire::InboundValue)>) -> wire::Inboun
                 .collect(),
             class_ty: Some(wire::BamlTyClass {
                 name: fqn.to_string(),
-                // Empty is correct for the current scope: sdkgen skips generic
-                // classes (`analyze.rs`), so every class routed here is
-                // non-parameterized. When generic classes land, their concrete
-                // type args must be threaded through this helper.
-                type_args: Vec::new(),
+                type_args,
             }),
         })),
     }

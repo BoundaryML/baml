@@ -57,13 +57,13 @@ pub mod internal {
     }
 
     /// Wire `BamlTy` for a user class instantiation. Generated class impls
-    /// call this from [`__BamlValuePrivate::baml_ty`]; the SDK skips
-    /// generic classes, so every class routed here is non-parameterized
-    /// (empty `type_args`).
-    pub fn class_ty(fqn: &str) -> wire::BamlTy {
+    /// call this from [`__BamlValuePrivate::baml_ty`]. `type_args` holds the
+    /// class's concrete generic arguments in declaration order (empty for a
+    /// non-generic class).
+    pub fn class_ty(fqn: &str, type_args: Vec<wire::BamlTy>) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
             name: fqn.to_string(),
-            type_args: Vec::new(),
+            type_args,
         }))
     }
 

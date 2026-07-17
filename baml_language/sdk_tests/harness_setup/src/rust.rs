@@ -107,10 +107,11 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     (
         "function_calls",
         "test_generic_calls.rs",
-        // Generic *functions* emit (unbounded `<T: BamlValue>` params); this
-        // file also constructs generic *classes* (`GenericBox<T>`, …) as type
-        // arguments, which are still skipped.
-        Gate::Later("needs generic classes"),
+        // Generic functions and generic class *shapes* emit; still missing
+        // for this file: methods on generic classes (`GenericBox.get`,
+        // `.pair_with`, `.new`, `NamedStatic.make`) and the generic union
+        // enum for `ContainerShapes.mixed` (`T | string | null`).
+        Gate::Later("needs generic-class methods + generic union enums"),
     ),
     (
         "function_calls",

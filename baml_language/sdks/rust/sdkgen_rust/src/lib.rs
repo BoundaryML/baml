@@ -66,6 +66,7 @@ pub struct RustGenOptions {
 
 /// A symbol the emitter skipped because it references a BAML type the Rust
 /// SDK cannot represent yet (media, non-null unions, generics, …).
+#[derive(Debug)]
 pub struct SkipWarning {
     /// Fully qualified BAML name of the skipped symbol.
     pub fqn: String,
@@ -581,6 +582,30 @@ mod tests {
         })
     }
 
+    /// A generic class with the given `<...>` params and properties (no
+    /// methods).
+    fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
+        Symbol::Class(baml_codegen_types::Class {
+            name: n.clone(),
+            generic_params: params.iter().map(|p| baml_base::Name::new(*p)).collect(),
+            docstring: None,
+            properties: properties
+                .into_iter()
+                .map(|(field, ty)| baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new(field),
+                    docstring: None,
+                    ty,
+                })
+                .collect(),
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
     /// `src` with every whitespace character removed — signature
     /// assertions stay stable against the pretty-printer's line wrapping.
     fn flat(src: &str) -> String {
@@ -943,6 +968,236 @@ mod tests {
         assert!(
             !flat(text(&generated, "src/lib.rs")).contains("fntag_or_value"),
             "the function must not emit"
+        );
+    }
+
+    #[test]
+    fn generic_class_emits_bounded_struct_and_wire_type_args() {
+        // GenericBox<T> { value: T }
+        let b = name("user", &[], "GenericBox");
+        let pool = SymbolPool::from([(
+            b.clone(),
+            generic_class(&b, &["T"], vec![("value", typevar("T"))]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // Struct + impl carry the `BamlValue`-bounded param; the field
+        // resolves to it.
+        assert!(
+            flat.contains("pubstructGenericBox<T:::baml_bridge::BamlValue>{pubvalue:T,}"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(
+                "impl<T:::baml_bridge::BamlValue>::baml_bridge::baml_value::internal::__BamlValuePrivateforGenericBox<T>"
+            ),
+            "{lib}"
+        );
+        // The instance carries its concrete type arg on the wire, in both
+        // the value encoding and the type descriptor.
+        let type_args = concat!(
+            "::std::vec![<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>",
+            "::baml_ty()]"
+        );
+        // once in encode::class (to_baml) and once in class_ty (baml_ty).
+        assert_eq!(flat.matches(type_args).count(), 2, "{lib}");
+    }
+
+    #[test]
+    fn recursive_generic_class_boxes_the_self_reference() {
+        // GenericRecursive<T> { value: T, next: GenericRecursive<T>? }
+        let r = name("user", &[], "GenericRecursive");
+        let next_ty = Ty::Union(
+            vec![
+                Ty::Class(r.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([(
+            r.clone(),
+            generic_class(&r, &["T"], vec![("value", typevar("T")), ("next", next_ty)]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        // The self-referential field boxes, and the box wraps the fully
+        // parameterized `GenericRecursive<T>`.
+        assert!(
+            flat(lib).contains(
+                "pubnext:::std::option::Option<::std::boxed::Box<crate::GenericRecursive<T>>>"
+            ),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn generic_class_resolves_in_function_signatures() {
+        // GenericBox<T>; wrap<T>(x: T) -> GenericBox<T>; consume(x: GenericBox<int>) -> int
+        let b = name("user", &[], "GenericBox");
+        let mut wrap = nullary_string_fn(&name("user", &[], "wrap"));
+        wrap.generic_params = vec![baml_base::Name::new("T")];
+        wrap.arguments = vec![arg("x", typevar("T"))];
+        wrap.return_type = Ty::Class(b.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY);
+        let mut consume = nullary_string_fn(&name("user", &[], "consume"));
+        consume.arguments = vec![arg(
+            "x",
+            Ty::Class(
+                b.clone(),
+                vec![Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                }],
+                baml_base::TyAttr::EMPTY,
+            ),
+        )];
+        consume.return_type = Ty::Int {
+            attr: baml_base::TyAttr::EMPTY,
+        };
+        let pool = SymbolPool::from([
+            (
+                b.clone(),
+                generic_class(&b, &["T"], vec![("value", typevar("T"))]),
+            ),
+            (name("user", &[], "wrap"), Symbol::Function(wrap)),
+            (name("user", &[], "consume"), Symbol::Function(consume)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let flat = flat(text(&generated, "src/lib.rs"));
+        // A generic instantiation over the fn's own param, and a concrete one.
+        assert!(
+            flat.contains("->::std::result::Result<crate::GenericBox<T>,"),
+            "{flat}"
+        );
+        assert!(
+            flat.contains("x:crate::GenericBox<::core::primitive::i64>"),
+            "{flat}"
+        );
+    }
+
+    #[test]
+    fn methods_on_generic_classes_skip_but_the_struct_emits() {
+        // A generic class with a method: struct emits, method is skipped.
+        let b = name("user", &[], "GenericBox");
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar("T"))])
+        else {
+            unreachable!("generic_class builds a class")
+        };
+        class.instance_methods.push({
+            let mut m = nullary_string_fn(&name("user", &[], "get"));
+            m.arguments = vec![arg(
+                "self",
+                Ty::Class(b.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY),
+            )];
+            m
+        });
+        let pool = SymbolPool::from([(b, Symbol::Class(class))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("pubstructGenericBox<T:::baml_bridge::BamlValue>"),
+            "{lib}"
+        );
+        assert!(
+            !flat(lib).contains("fnget"),
+            "the method must not emit:\n{lib}"
+        );
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert_eq!(generated.warnings[0].fqn, "user.GenericBox");
+        assert!(
+            generated.warnings[0]
+                .reason
+                .contains("methods on generic classes"),
+            "{}",
+            generated.warnings[0].reason
+        );
+    }
+
+    #[test]
+    fn generic_class_with_a_param_unused_by_fields_skips() {
+        // Phantom<T> { x: int } — `T` appears in no field, so the emitted
+        // struct would be an E0392 "unused parameter". Skip, fail closed.
+        let p = name("user", &[], "Phantom");
+        let pool = SymbolPool::from([(
+            p.clone(),
+            generic_class(
+                &p,
+                &["T"],
+                vec![(
+                    "x",
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+            ),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            !flat(text(&generated, "src/lib.rs")).contains("structPhantom"),
+            "must skip"
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| w.fqn == "user.Phantom" && w.reason.contains("non-recursive")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn generic_class_using_its_param_only_recursively_skips() {
+        // GNode<T> { children: GNode<T>[] } — `T` appears only as the arg of
+        // the recursive self-reference, so Rust would reject the struct with
+        // "type parameter T is only used recursively". Skip, fail closed.
+        let g = name("user", &[], "GNode");
+        let children = Ty::List(
+            Box::new(Ty::Class(
+                g.clone(),
+                vec![typevar("T")],
+                baml_base::TyAttr::EMPTY,
+            )),
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([(
+            g.clone(),
+            generic_class(&g, &["T"], vec![("children", children)]),
+        )]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            !flat(text(&generated, "src/lib.rs")).contains("structGNode"),
+            "must skip"
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| w.fqn == "user.GNode" && w.reason.contains("non-recursive")),
+            "{:?}",
+            generated.warnings
         );
     }
 
