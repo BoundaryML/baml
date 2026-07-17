@@ -60,7 +60,12 @@ cmake -S "$BUILD_DIR" -B "$BUILD_DIR/build" \
     -DFETCHCONTENT_SOURCE_DIR_ABSL="$WORKSPACE_ROOT/target/cpp-absl-src" \
     > "$BUILD_DIR/configure.log" 2>&1 ||
     { cat "$BUILD_DIR/configure.log" >&2 && exit 1; }
-cmake --build "$BUILD_DIR/build" -j > "$BUILD_DIR/build.log" 2>&1 ||
+# Bounded parallelism: up to eight fixture builds run concurrently under
+# nextest, and a bare `-j` (unbounded with Makefiles) can starve the CI
+# runner to death. Quarter of the cores per build tree, minimum 2.
+NPROC="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+JOBS=$((NPROC / 4)); [ "$JOBS" -lt 2 ] && JOBS=2
+cmake --build "$BUILD_DIR/build" -j "$JOBS" > "$BUILD_DIR/build.log" 2>&1 ||
     { cat "$BUILD_DIR/build.log" >&2 && exit 1; }
 
 if [ "$HAVE_TESTS" = 0 ]; then

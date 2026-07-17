@@ -6704,6 +6704,7 @@ dependencies = [
  "baml_base",
  "baml_codegen_types",
  "baml_version",
+ "flate2",
  "protoc-bin-vendored",
  "tempfile",
 ]

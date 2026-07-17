@@ -215,6 +215,9 @@ pub fn to_source_code_with_bytecode(
     for (rel, content) in BRIDGE_HEADERS {
         out.insert(PathBuf::from(rel), (*content).to_string());
     }
+    for (rel, gz) in PB_SOURCES {
+        out.insert(PathBuf::from(rel), gunzip(rel, gz));
+    }
     out
 }
 
@@ -253,6 +256,53 @@ target_link_libraries(baml_sdk
   PUBLIC protobuf::libprotobuf-lite Threads::Threads ${CMAKE_DL_LIBS})
 ";
 
+/// The generated protobuf sources for the CFFI wire schema, vendored into
+/// every generated SDK. Embedded gzipped (see build.rs): the plain text is
+/// ~1.9 MB and `baml-cli` carries every generator under a size gate.
+const PB_SOURCES: &[(&str, &[u8])] = &[
+    (
+        "include/baml_bridge/cffi/v1/baml_handle.pb.h",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_handle.pb.h.gz")),
+    ),
+    (
+        "include/baml_bridge/cffi/v1/baml_inbound.pb.h",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_inbound.pb.h.gz")),
+    ),
+    (
+        "include/baml_bridge/cffi/v1/baml_outbound.pb.h",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_outbound.pb.h.gz")),
+    ),
+    (
+        "include/baml_bridge/cffi/v1/baml_type.pb.h",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_type.pb.h.gz")),
+    ),
+    (
+        "src/pb/baml_handle.pb.cc",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_handle.pb.cc.gz")),
+    ),
+    (
+        "src/pb/baml_inbound.pb.cc",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_inbound.pb.cc.gz")),
+    ),
+    (
+        "src/pb/baml_outbound.pb.cc",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_outbound.pb.cc.gz")),
+    ),
+    (
+        "src/pb/baml_type.pb.cc",
+        include_bytes!(concat!(env!("OUT_DIR"), "/baml_type.pb.cc.gz")),
+    ),
+];
+
+fn gunzip(name: &str, gz: &[u8]) -> String {
+    use std::io::Read as _;
+    let mut out = String::new();
+    flate2::read::GzDecoder::new(gz)
+        .read_to_string(&mut out)
+        .unwrap_or_else(|e| panic!("embedded {name} failed to decompress: {e}"));
+    out
+}
+
 /// The bridge runtime headers, vendored verbatim into every generated SDK
 /// (embedded at emitter build time, so headers and generator are the same
 /// version by construction). The generated tree is self-contained source;
@@ -262,38 +312,6 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
     (
         "cmake/fetch_protobuf.cmake",
         include_str!("../../bridge_cpp/cmake/fetch_protobuf.cmake"),
-    ),
-    (
-        "include/baml_bridge/cffi/v1/baml_handle.pb.h",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_handle.pb.h"),
-    ),
-    (
-        "include/baml_bridge/cffi/v1/baml_inbound.pb.h",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_inbound.pb.h"),
-    ),
-    (
-        "include/baml_bridge/cffi/v1/baml_outbound.pb.h",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_outbound.pb.h"),
-    ),
-    (
-        "include/baml_bridge/cffi/v1/baml_type.pb.h",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_type.pb.h"),
-    ),
-    (
-        "src/pb/baml_handle.pb.cc",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_handle.pb.cc"),
-    ),
-    (
-        "src/pb/baml_inbound.pb.cc",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_inbound.pb.cc"),
-    ),
-    (
-        "src/pb/baml_outbound.pb.cc",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_outbound.pb.cc"),
-    ),
-    (
-        "src/pb/baml_type.pb.cc",
-        include_str!("../../bridge_cpp/pb/baml_bridge/cffi/v1/baml_type.pb.cc"),
     ),
     (
         "include/baml_cffi.h",
