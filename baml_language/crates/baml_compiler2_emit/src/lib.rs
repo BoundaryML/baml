@@ -828,7 +828,23 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 /// Database trait for compiler2 emit queries.
 #[salsa::db]
-pub trait Db: baml_compiler2_mir::Db {}
+pub trait Db: baml_compiler2_mir::Db {
+    /// Mint an owned database handle that shares this database's storage, for
+    /// MOVING into a worker thread.
+    ///
+    /// Parallel MIR lowering (Stage A of `emit_functions_parallel`) clones one
+    /// handle per work chunk on the calling thread — the database type is
+    /// expected to be `Send` but not `Sync`, so workers can never share `&db`.
+    /// All clones share one salsa memo table (the rust-analyzer concurrency
+    /// model), so a query computed by one worker is a cache hit for the rest.
+    ///
+    /// The default returns `None`, which keeps every salsa read on the calling
+    /// thread (Stage A stays serial). `ProjectDatabase` overrides this with
+    /// `Clone` (an `Arc` bump).
+    fn parallel_db_handle(&self) -> Option<Box<dyn baml_compiler2_mir::Db + Send>> {
+        None
+    }
+}
 
 /// Compile options.
 pub struct CompileOptions {
@@ -953,7 +969,7 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
     generate_project_bytecode_with_opt(db, options, OptLevel::Two)
@@ -961,7 +977,7 @@ pub fn generate_project_bytecode(
 
 /// Generate bytecode for the entire project with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
@@ -977,7 +993,7 @@ pub fn generate_project_bytecode_with_opt(
 /// compiler build + opt level) that `generate_project_bytecode_with_stdlib`
 /// splices into project compiles.
 pub fn generate_stdlib_program(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
     generate_impl(
@@ -1001,7 +1017,7 @@ pub fn generate_stdlib_program(
 /// a full [`generate_project_bytecode_with_opt`] run (asserted by the
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1032,7 +1048,7 @@ pub fn generate_project_bytecode_with_stdlib(
 /// incompatible previous units) and propagates any [`LoweringError`] from the
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1047,7 +1063,7 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// units. Cache-aware callers can persist these directly instead of decomposing
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
@@ -1206,7 +1222,7 @@ pub fn reuse_throws_mismatches(
 /// the Stage 2 decomposition does not yet handle (a `$init`/generic-function
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
@@ -2239,7 +2255,7 @@ fn inject_clean_object_placeholders(
 /// whole-project (Pass-1) global slots so the decomposition reverses their
 /// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
@@ -2534,7 +2550,7 @@ fn spliced_throws_match(
 /// only by the compiler build) spliceable into any project's compile.
 #[allow(clippy::too_many_arguments)]
 fn emit_file_group(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
@@ -4177,7 +4193,7 @@ fn emit_functions_serial(
     }
 }
 
-/// One function's Pass-4 state carried from the serial lowering stage to the
+/// One function's Pass-4 state carried from the lowering stage to the
 /// parallel codegen stage and the serial merge stage.
 struct FnWorkItem {
     file: baml_base::SourceFile,
@@ -4191,13 +4207,123 @@ struct FnWorkItem {
     is_builtin_file: bool,
 }
 
-/// Pass 4, parallel (`BAML_PARALLEL_EMIT=1`): compile function bodies across
-/// rayon workers, byte-identically to [`emit_functions_serial`].
+/// Identity of one Pass-4 function before MIR lowering: the [`FnWorkItem`]
+/// fields known from enumeration alone (Stage A's input).
+struct FnSeed {
+    file: baml_base::SourceFile,
+    local_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    /// Project-relative source path (`relative_source_path`).
+    source_file: String,
+    /// Line index of the item's file, shared by every function in the file.
+    line_starts: std::sync::Arc<[u32]>,
+    is_builtin_file: bool,
+}
+
+/// Lower one seed's function to MIR on the given database handle.
+///
+/// `FunctionLoc` is minted on the SAME handle the lowering reads from — it is
+/// a `'db`-interned key, and interning is shared storage, so every handle
+/// mints the identical id.
+fn lower_seed(
+    db: &dyn baml_compiler2_mir::Db,
+    seed: &FnSeed,
+    opt: OptLevel,
+) -> baml_compiler2_mir::MirFunction {
+    lower_function(db, FunctionLoc::new(db, seed.file, seed.local_id), opt)
+}
+
+/// Stage A driver: lower every seed's function to MIR, returned in seed order.
+///
+/// `lower_function` reads salsa (PPIR bodies, scope type inference) and
+/// returns an owned [`baml_compiler2_mir::MirFunction`] that is a pure
+/// function of the frozen inputs, and every call is independent — so when the
+/// database mints worker handles ([`Db::parallel_db_handle`]) the seeds are
+/// lowered across rayon workers and the reassembled output is exactly the
+/// serial loop's.
+///
+/// The database type is `Send` but deliberately not `Sync` (each salsa handle
+/// carries thread-confined query-stack state), so — exactly like
+/// `baml_project`'s parallel check — one handle per chunk is cloned on THIS
+/// thread and MOVED into its task; all clones share one memo table, so a
+/// scope inferred by one worker is a cache hit for every other. The first
+/// seed is lowered serially before fanning out to warm the file/package-level
+/// memos every body read reaches. Tiny batches, single-threaded pools, and
+/// databases without handles take the serial loop directly.
+fn lower_seed_mirs(
+    db: &dyn crate::Db,
+    seeds: &[FnSeed],
+    opt: OptLevel,
+) -> Vec<baml_compiler2_mir::MirFunction> {
+    // Small chunks keep rayon's work-stealing effective — bodies vary a lot
+    // in inference cost — while amortizing the per-task handle clone.
+    const CHUNK: usize = 4;
+    // Fan-out pays for itself only past a handful of bodies (mirrors the
+    // parallel-check threshold in `baml_project`).
+    const MIN_PARALLEL: usize = 9;
+
+    if seeds.len() < MIN_PARALLEL || rayon::current_num_threads() <= 1 {
+        return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+    }
+    let (first, rest) = seeds.split_first().expect("seeds checked non-empty above");
+
+    // Handles are cloned OUTSIDE the rayon scope — a `!Sync` database cannot
+    // be borrowed by the (Send) scope closure — and each chunk's handle is
+    // MOVED into its task. A database that mints no handles keeps Stage A
+    // serial.
+    let chunks: Vec<&[FnSeed]> = rest.chunks(CHUNK).collect();
+    let mut handles: Vec<Box<dyn baml_compiler2_mir::Db + Send>> = Vec::with_capacity(chunks.len());
+    for _ in &chunks {
+        match db.parallel_db_handle() {
+            Some(handle) => handles.push(handle),
+            None => return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect(),
+        }
+    }
+
+    // Warm the shared file/package-level memos before fanning out, so cold
+    // workers don't all block on the same shared memo slots.
+    let first_mir = lower_seed(db, first, opt);
+
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<baml_compiler2_mir::MirFunction>)>();
+    rayon::scope(move |s| {
+        // Seed index of the current chunk's first element (`first` is 0).
+        let mut next_start = 1usize;
+        for (chunk, handle) in chunks.into_iter().zip(handles) {
+            let tx = tx.clone();
+            let chunk_start = next_start;
+            next_start += chunk.len();
+            s.spawn(move |_| {
+                let db: &dyn baml_compiler2_mir::Db = &*handle;
+                let out: Vec<baml_compiler2_mir::MirFunction> =
+                    chunk.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+                // Receiver outlives the scope; a send only fails if it
+                // dropped early, which would mean a panic elsewhere.
+                let _ = tx.send((chunk_start, out));
+            });
+        }
+    });
+
+    let mut mirs: Vec<Option<baml_compiler2_mir::MirFunction>> = Vec::with_capacity(seeds.len());
+    mirs.resize_with(seeds.len(), || None);
+    mirs[0] = Some(first_mir);
+    for (chunk_start, out) in rx {
+        for (offset, mir) in out.into_iter().enumerate() {
+            mirs[chunk_start + offset] = Some(mir);
+        }
+    }
+    mirs.into_iter()
+        .map(|mir| mir.expect("every chunk reports exactly its seeds"))
+        .collect()
+}
+
+/// Pass 4, parallel (multi-threaded rayon pools): compile function bodies
+/// across rayon workers, byte-identically to [`emit_functions_serial`].
 ///
 /// Three stages:
 ///
-/// - **Stage A (serial, salsa)**: lower every function to MIR in exactly the
-///   serial pass's iteration order, collecting owned work items.
+/// - **Stage A (parallel, salsa)**: lower every function to MIR across
+///   worker-owned database handles ([`lower_seed_mirs`]), collecting owned
+///   work items in exactly the serial pass's iteration order. Falls back to
+///   the serial loop when the database mints no handles.
 /// - **Stage B (parallel, no salsa)**: pure codegen of every bytecode body.
 ///   Each worker mints into a fresh fragment pool based at the shared
 ///   watermark `W = program.objects.len()`, so pre-existing absolute indices
@@ -4218,7 +4344,7 @@ struct FnWorkItem {
 /// reproduces the serial pool layout byte for byte.
 #[allow(clippy::too_many_arguments)]
 fn emit_functions_parallel(
-    db: &dyn baml_compiler2_mir::Db,
+    db: &dyn crate::Db,
     files: &[baml_base::SourceFile],
     skip_clean: Option<&HashSet<String>>,
     globals: &HashMap<String, usize>,
@@ -4233,8 +4359,13 @@ fn emit_functions_parallel(
 ) {
     use rayon::prelude::*;
 
-    // --- Stage A: lower every function to MIR (serial: salsa queries) ---
-    let mut work: Vec<FnWorkItem> = Vec::new();
+    // --- Stage A: lower every function to MIR (parallel: salsa queries on
+    // pre-cloned handles) ---
+    // Enumeration (clean-file skip, item trees, line indexes) is cheap and
+    // stays serial on `db`; the lowering itself — the expensive half of
+    // Pass 4 — fans out across worker-owned database handles (see
+    // [`lower_seed_mirs`]), reassembled into this exact enumeration order.
+    let mut seeds: Vec<FnSeed> = Vec::new();
     for file in files {
         let rel_path = relative_source_path(db, *file);
         // Clean files are never lowered (see the serial pass).
@@ -4248,20 +4379,29 @@ fn emit_functions_parallel(
         let item_tree = file_item_tree(db, *file);
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         for local_id in item_tree.functions.keys() {
-            let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
-            let fq_name = mir.item_ref.to_string();
-            work.push(FnWorkItem {
+            seeds.push(FnSeed {
                 file: *file,
                 local_id: *local_id,
-                mir,
-                fq_name,
                 source_file: rel_path.clone(),
                 line_starts: line_starts.clone(),
                 is_builtin_file,
             });
         }
     }
+    let mirs = lower_seed_mirs(db, &seeds, opt);
+    let work: Vec<FnWorkItem> = seeds
+        .into_iter()
+        .zip(mirs)
+        .map(|(seed, mir)| FnWorkItem {
+            file: seed.file,
+            local_id: seed.local_id,
+            fq_name: mir.item_ref.to_string(),
+            mir,
+            source_file: seed.source_file,
+            line_starts: seed.line_starts,
+            is_builtin_file: seed.is_builtin_file,
+        })
+        .collect();
 
     // --- Stage B: compile bytecode bodies (parallel: pure codegen) ---
     let watermark = program.objects.len();
