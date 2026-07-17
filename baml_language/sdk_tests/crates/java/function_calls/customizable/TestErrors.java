@@ -159,13 +159,6 @@ class TestErrors {
         assertTrue(Integer.parseInt(m.group("line")) >= 1);
     }
 
-    @Disabled(
-            "capability still TBD (orthogonal to cancellation): the BAML trace is "
-                    + "not yet spliced into the native stack trace as StackTraceElements, "
-                    + "so printStackTrace() does not render the `.baml` source frame. The "
-                    + "structured trace itself (.baml_trace()) works and is covered by "
-                    + "test_baml_error_carries_baml_trace; only the printStackTrace splicing "
-                    + "(test_errors.py 31g-phase6) is pending.")
     @Test
     void test_baml_trace_spliced_into_python_traceback() {
         // java-port note: Python splices the BAML frames into the exception's

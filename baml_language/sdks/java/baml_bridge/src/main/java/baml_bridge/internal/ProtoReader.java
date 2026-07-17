@@ -218,7 +218,7 @@ public final class ProtoReader {
         };
     }
 
-    private static BamlError decodeError(byte[] errBytes) {
+    private static RuntimeException decodeError(byte[] errBytes) {
         WireReader r = new WireReader(errBytes);
         byte[] valueBytes = null;
         List<String> trace = new ArrayList<>();
@@ -234,10 +234,63 @@ public final class ProtoReader {
         }
         String className = valueBytes == null ? null : outboundClassFqn(valueBytes);
         Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), true);
-        return new BamlError(value, trace, className);
+        // A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
+        // synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
+        // type error — surface it as Java's native IllegalArgumentException (the
+        // analog of Python's TypeError remap, proto.py) rather than a BamlError
+        // wrapper. Covers inbound-generics inference failures (a TypeVar that
+        // can't be inferred / has no consistent binding) and ordinary
+        // argument-type mismatches. The message is the value's `message` field
+        // so the host-side type-error assertions (TestGenericInference /
+        // TestGenericCalls) can match on it.
+        if (TYPE_MISMATCH_CLASS.equals(className)) {
+            return BamlTraceback.splice(
+                    new IllegalArgumentException(typeMismatchMessage(value)), trace);
+        }
+        return BamlTraceback.splice(new BamlError(value, trace, className), trace);
     }
 
-    private static RuntimeException decodePanic(byte[] panicBytes) {
+    /** The BAML FQN whose thrown value is remapped to {@link IllegalArgumentException}. */
+    private static final String TYPE_MISMATCH_CLASS = "baml.errors.TypeMismatch";
+
+    /**
+     * The message for the {@link IllegalArgumentException} a {@code
+     * baml.errors.TypeMismatch} is remapped to: the value's {@code message} field
+     * (a registered {@code TypeMismatch} instance's {@code message()} accessor, or
+     * a {@code "message"} map entry when the FQN is unregistered), falling back to
+     * {@code value.toString()} — mirroring Python's {@code getattr(decoded,
+     * "message", None)} → dict lookup → {@code str(decoded)} ladder.
+     */
+    private static String typeMismatchMessage(Object value) {
+        Object message = extractMessageField(value);
+        if (message != null) {
+            return message.toString();
+        }
+        return value == null ? "null" : value.toString();
+    }
+
+    /**
+     * The {@code message} field of a decoded thrown value, or null. A map (the
+     * unregistered-FQN fallback) yields its {@code "message"} entry; any other
+     * object is probed reflectively for a zero-arg {@code message()} accessor (the
+     * runtime library cannot statically reference the generated {@code
+     * baml.errors.TypeMismatch} class).
+     */
+    private static Object extractMessageField(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return map.get("message");
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return value.getClass().getMethod("message").invoke(value);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static Error decodePanic(byte[] panicBytes) {
         WireReader r = new WireReader(panicBytes);
         byte[] valueBytes = null;
         List<String> trace = new ArrayList<>();
@@ -259,12 +312,13 @@ public final class ProtoReader {
             // Clean baml.sys.exit: hard-terminate the process, bypassing JVM
             // shutdown hooks (the analog of Python's os._exit).
             Runtime.getRuntime().halt((int) exitCode);
-            // Unreachable: halt() never returns. Satisfy the compiler.
-            return new IllegalStateException("halt returned");
+            // Unreachable: halt() never returns. Satisfy the compiler with an
+            // Error (BamlPanic is now an Error, so this method returns Error).
+            return new AssertionError("halt returned");
         }
         String className = valueBytes == null ? null : outboundClassFqn(valueBytes);
         Object value = valueBytes == null ? null : decodeValue(new WireReader(valueBytes), true);
-        return new BamlPanic(value, trace, className);
+        return BamlTraceback.splice(new BamlPanic(value, trace, className), trace);
     }
 
     /**

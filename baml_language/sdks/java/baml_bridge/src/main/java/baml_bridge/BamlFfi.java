@@ -1,5 +1,6 @@
 package baml_bridge;
 
+import baml_bridge.internal.BamlTraceback;
 import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
@@ -389,7 +390,13 @@ public final class BamlFfi {
      */
     private static Throwable mapAsyncFailure(Throwable t) {
         if (t instanceof BamlPanic panic && CANCELLED_PANIC_CLASS.equals(panic.class_name())) {
-            return new BamlCancelledError(panic.value(), panic.baml_trace(), panic.class_name());
+            // Prepend the BAML frames onto the freshly-minted cancellation, the
+            // same synthetic-stack splice decodeError/decodePanic apply (the
+            // remap builds a new exception, so it re-splices rather than
+            // inheriting the panic's stack).
+            return BamlTraceback.splice(
+                    new BamlCancelledError(panic.value(), panic.baml_trace(), panic.class_name()),
+                    panic.baml_trace());
         }
         return t;
     }
