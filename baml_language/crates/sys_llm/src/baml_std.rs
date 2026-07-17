@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use baml_base::{ClientOptionsPresence, ClientOptionsValidationError};
+
 use crate::LlmProvider;
 
 #[derive(Debug, thiserror::Error)]
@@ -8,6 +10,12 @@ pub enum ClientError {
     MissingOption { client: String, option: String },
     #[error("client '{client}': unknown provider '{provider}'")]
     UnknownProvider { client: String, provider: String },
+    #[error("client '{client}': {error}")]
+    InvalidOptions {
+        client: String,
+        #[source]
+        error: ClientOptionsValidationError,
+    },
 }
 
 #[derive(Debug)]
@@ -53,6 +61,24 @@ impl PrimitiveClient {
             _ => llm_provider,
         };
         apply_provider_defaults(defaults_provider, &mut options);
+
+        let (resource_name, deployment_id) = match &provider_options {
+            Some(ProviderOptions::AzureOpenAi(options)) => (
+                options.resource_name.is_some(),
+                options.deployment_id.is_some(),
+            ),
+            _ => (false, false),
+        };
+        baml_base::validate_client_options(ClientOptionsPresence {
+            provider: &provider,
+            base_url: options.base_url.is_some(),
+            resource_name,
+            deployment_id,
+        })
+        .map_err(|error| ClientError::InvalidOptions {
+            client: name.clone(),
+            error,
+        })?;
 
         let model = options
             .model
@@ -334,4 +360,68 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: indexmap::IndexMap<String, String>,
     pub body: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_external_types::AsBexExternalValue;
+
+    use super::*;
+
+    fn azure_options() -> PrimitiveClientOptions {
+        PrimitiveClientOptions {
+            model: Some("gpt-4o".to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn runtime_azure_client_requires_an_endpoint() {
+        let error = PrimitiveClient::new(
+            "runtime-azure".to_string(),
+            "azure-openai".to_string(),
+            azure_options(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, ClientError::InvalidOptions { .. }));
+        assert_eq!(
+            error.to_string(),
+            "client 'runtime-azure': azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)"
+        );
+    }
+
+    #[test]
+    fn runtime_azure_client_accepts_base_url() {
+        let client = PrimitiveClient::new(
+            "runtime-azure".to_string(),
+            "azure-openai".to_string(),
+            PrimitiveClientOptions {
+                base_url: Some("https://example.openai.azure.com".to_string()),
+                ..azure_options()
+            },
+        );
+
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn runtime_azure_client_accepts_resource_and_deployment() {
+        let client = PrimitiveClient::new(
+            "runtime-azure".to_string(),
+            "azure-openai".to_string(),
+            PrimitiveClientOptions {
+                provider_options: AzureOpenAiOptions {
+                    resource_name: Some("example".to_string()),
+                    deployment_id: Some("gpt-4o".to_string()),
+                    api_version: "2024-02-15-preview".to_string(),
+                    max_tokens: None,
+                }
+                .into_bex_external_value(),
+                ..azure_options()
+            },
+        );
+
+        assert!(client.is_ok());
+    }
 }
