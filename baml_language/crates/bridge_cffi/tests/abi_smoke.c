@@ -61,7 +61,7 @@ static int baml_required_functions_exist(const BamlApiV1 *api) {
          api->handle_clone != NULL && api->handle_release != NULL && api->media_from_url != NULL &&
          api->media_from_file != NULL && api->media_from_base64 != NULL && api->media_url != NULL &&
          api->media_file != NULL && api->media_base64 != NULL && api->media_mime_type != NULL &&
-         api->register_bridge != NULL;
+         api->register_bridge != NULL && api->flush_events != NULL;
 }
 
 static int baml_test_evolution_checks(const BamlApiV1 *api) {
@@ -71,13 +71,32 @@ static int baml_test_evolution_checks(const BamlApiV1 *api) {
     fprintf(stderr, "truncated V1 table was accepted\n");
     return 0;
   }
-  synthetic.struct_size = BAML_API_V1_MIN_SIZE + sizeof(void *);
+  synthetic.struct_size = BAML_API_V1_MIN_SIZE;
   if (!baml_api_v1_is_compatible(&synthetic)) {
+    fprintf(stderr, "original V1 prefix was rejected\n");
+    return 0;
+  }
+  if (baml_api_v1_has_flush_events(&synthetic)) {
+    fprintf(stderr, "original V1 prefix claimed to include flush_events\n");
+    return 0;
+  }
+  synthetic.struct_size = BAML_API_V1_FLUSH_EVENTS_SIZE - 1;
+  if (baml_api_v1_has_flush_events(&synthetic)) {
+    fprintf(stderr, "truncated flush_events extension was accepted\n");
+    return 0;
+  }
+  synthetic.struct_size = BAML_API_V1_FLUSH_EVENTS_SIZE;
+  if (!baml_api_v1_has_flush_events(&synthetic)) {
+    fprintf(stderr, "complete flush_events extension was rejected\n");
+    return 0;
+  }
+  synthetic.struct_size = BAML_API_V1_FLUSH_EVENTS_SIZE + sizeof(void *);
+  if (!baml_api_v1_has_flush_events(&synthetic)) {
     fprintf(stderr, "larger append-only V1 table was rejected\n");
     return 0;
   }
   synthetic.abi_version = BAML_API_V1_ABI_VERSION + 1;
-  if (baml_api_v1_is_compatible(&synthetic)) {
+  if (baml_api_v1_is_compatible(&synthetic) || baml_api_v1_has_flush_events(&synthetic)) {
     fprintf(stderr, "unknown ABI version was accepted as V1\n");
     return 0;
   }
@@ -111,9 +130,14 @@ int main(int argc, char **argv) {
     baml_close_library(library);
     return 5;
   }
-  if (!baml_required_functions_exist(api) || !baml_test_evolution_checks(api)) {
+  if (!baml_api_v1_has_flush_events(api)) {
+    fprintf(stderr, "runtime V1 table does not include flush_events\n");
     baml_close_library(library);
     return 6;
+  }
+  if (!baml_required_functions_exist(api) || !baml_test_evolution_checks(api)) {
+    baml_close_library(library);
+    return 7;
   }
 
   BamlBuffer version = api->version();
@@ -121,15 +145,16 @@ int main(int argc, char **argv) {
     fprintf(stderr, "version returned an empty buffer\n");
     api->free_buffer(version);
     baml_close_library(library);
-    return 7;
+    return 8;
   }
   if (fwrite(version.ptr, 1, version.len, stdout) != version.len || fputc('\n', stdout) == EOF) {
     fprintf(stderr, "failed to write version bytes\n");
     api->free_buffer(version);
     baml_close_library(library);
-    return 8;
+    return 9;
   }
   api->free_buffer(version);
+  api->flush_events();
   baml_close_library(library);
   return 0;
 }

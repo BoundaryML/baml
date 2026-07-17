@@ -1,0 +1,95 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>Baml.Bridge</AssemblyName>
+    <RootNamespace>Baml</RootNamespace>
+    <PackageId>baml-bridge</PackageId>
+    <Version>0.15.0</Version>
+    <Authors>BoundaryML</Authors>
+    <Description>The native BAML bridge for modern .NET.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/BoundaryML/baml</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <BamlProtoRoot>$(MSBuildThisFileDirectory)../../../../../crates/bridge_ctypes/types</BamlProtoRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="BamlSdkVersion" Value="$(Version)" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../buildTransitive/baml-bridge.targets"
+          Pack="true"
+          PackagePath="buildTransitive/baml-bridge.targets" />
+    <Protobuf Include="$(BamlProtoRoot)/baml_bridge/cffi/v1/*.proto"
+              ProtoRoot="$(BamlProtoRoot)"
+              GrpcServices="None"
+              Access="Internal"
+              OutputOptions="file_extension=.g.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(BamlNativeLibrary)' != '' and '$(BamlNativeRid)' != ''">
+    <None Include="$(BamlNativeLibrary)"
+          Pack="true"
+          PackagePath="runtimes/$(BamlNativeRid)/native/"
+          Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(BamlPackAllNative)' == 'true'">
+    <None Include="$(BamlNativeLinuxX64)" Pack="true" PackagePath="runtimes/linux-x64/native/" Visible="false" />
+    <None Include="$(BamlNativeLinuxArm64)" Pack="true" PackagePath="runtimes/linux-arm64/native/" Visible="false" />
+    <None Include="$(BamlNativeLinuxMuslX64)" Pack="true" PackagePath="runtimes/linux-musl-x64/native/" Visible="false" />
+    <None Include="$(BamlNativeLinuxMuslArm64)" Pack="true" PackagePath="runtimes/linux-musl-arm64/native/" Visible="false" />
+    <None Include="$(BamlNativeOsxX64)" Pack="true" PackagePath="runtimes/osx-x64/native/" Visible="false" />
+    <None Include="$(BamlNativeOsxArm64)" Pack="true" PackagePath="runtimes/osx-arm64/native/" Visible="false" />
+    <None Include="$(BamlNativeWinX64)" Pack="true" PackagePath="runtimes/win-x64/native/" Visible="false" />
+    <None Include="$(BamlNativeWinArm64)" Pack="true" PackagePath="runtimes/win-arm64/native/" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="BamlValidateNativePackAsset"
+          BeforeTargets="Pack"
+          Condition="'$(BamlNativeLibrary)' != '' or '$(BamlNativeRid)' != ''">
+    <Error Condition="'$(BamlNativeLibrary)' == ''"
+           Text="BamlNativeLibrary is required when BamlNativeRid is set." />
+    <Error Condition="'$(BamlNativeRid)' == ''"
+           Text="BamlNativeRid is required when BamlNativeLibrary is set." />
+    <Error Condition="!Exists('$(BamlNativeLibrary)')"
+           Text="BAML native pack asset does not exist: $(BamlNativeLibrary)" />
+  </Target>
+
+  <Target Name="BamlValidateAllNativePackAssets"
+          BeforeTargets="Pack"
+          Condition="'$(BamlPackAllNative)' == 'true'">
+    <Error Condition="'$(BamlNativeLibrary)' != '' or '$(BamlNativeRid)' != ''"
+           Text="BamlPackAllNative cannot be combined with the single-RID pack properties." />
+    <Error Condition="!Exists('$(BamlNativeLinuxX64)')" Text="Missing linux-x64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeLinuxArm64)')" Text="Missing linux-arm64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeLinuxMuslX64)')" Text="Missing linux-musl-x64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeLinuxMuslArm64)')" Text="Missing linux-musl-arm64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeOsxX64)')" Text="Missing osx-x64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeOsxArm64)')" Text="Missing osx-arm64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeWinX64)')" Text="Missing win-x64 native pack asset." />
+    <Error Condition="!Exists('$(BamlNativeWinArm64)')" Text="Missing win-arm64 native pack asset." />
+  </Target>
+
+  <Target Name="BamlUseGeneratedProtobufSources"
+          AfterTargets="Protobuf_PrepareCompile"
+          BeforeTargets="_Protobuf_AugmentLanguageCompile">
+    <ItemGroup>
+      <BamlPredictedProtobufOutput Include="@(Protobuf_ExpectedOutputs)" />
+      <Protobuf_ExpectedOutputs Remove="@(Protobuf_ExpectedOutputs)" />
+      <Protobuf_ExpectedOutputs Include="@(BamlPredictedProtobufOutput->'%(RootDir)%(Directory)%(Filename).g.cs')" />
+    </ItemGroup>
+  </Target>
+</Project>

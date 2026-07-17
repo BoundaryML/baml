@@ -206,6 +206,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlApiV1", BamlApiV1, media_base64);
     field!("BamlApiV1", BamlApiV1, media_mime_type);
     field!("BamlApiV1", BamlApiV1, register_bridge);
+    field!("BamlApiV1", BamlApiV1, flush_events);
 
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);
@@ -219,6 +220,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     assert_eq!(BridgeLanguage::Go as u32, 3);
     assert_eq!(BridgeLanguage::Rust as u32, 4);
     assert_eq!(BridgeLanguage::CSharp as u32, 5);
+    assert_eq!(BridgeLanguage::Cpp as u32, 6);
 
     let _ = fs::remove_dir_all(scratch);
 }

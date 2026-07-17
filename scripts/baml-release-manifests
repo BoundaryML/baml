@@ -111,6 +111,9 @@ def main() -> None:
     # manifest records `sdks.rust`. crates.io's version encoding is the identity
     # of the canonical version (SemVer prereleases are valid).
     parser.add_argument("--crates-io-version", default=None)
+    # Optional for the same reason as Rust: a real manifest must only record the
+    # C# SDK after the exact package has reached nuget.org.
+    parser.add_argument("--nuget-version", default=None)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
     args = parser.parse_args()
@@ -146,17 +149,23 @@ def main() -> None:
         },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
-    # Generated-SDK registry coordinates, recorded once a language's publisher
-    # lands. Rust is gated on --crates-io-version so a manifest never claims a
-    # baml_bridge crate that has not been published to crates.io yet.
+    # Generated-SDK registry coordinates are gated on the publisher results so a
+    # manifest never claims a version that has not reached its registry.
+    sdks: dict[str, dict[str, str]] = {}
     if args.crates_io_version:
-        toolchain["sdks"] = {
-            "rust": {
-                "registry": "crates_io",
-                "package": "baml_bridge",
-                "version": args.crates_io_version,
-            },
+        sdks["rust"] = {
+            "registry": "crates_io",
+            "package": "baml_bridge",
+            "version": args.crates_io_version,
         }
+    if args.nuget_version:
+        sdks["csharp"] = {
+            "registry": "nuget_org",
+            "package": "baml-bridge",
+            "version": args.nuget_version,
+        }
+    if sdks:
+        toolchain["sdks"] = sdks
     text = json.dumps(toolchain, indent=2, sort_keys=True) + "\n"
     (args.out / "version" / f"{args.version}.json").write_text(text)
     (args.out / f"{args.channel}.json").write_text(text)

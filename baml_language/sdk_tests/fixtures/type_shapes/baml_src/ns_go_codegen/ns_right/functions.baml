@@ -1,3 +1,5 @@
-function echo(value: string) -> string {
+type EchoValue = string
+
+function echo(value: EchoValue) -> EchoValue {
   value
 }

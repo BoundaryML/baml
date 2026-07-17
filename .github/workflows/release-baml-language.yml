@@ -57,6 +57,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       pypi_version: ${{ steps.plan.outputs.pypi_version }}
       crates_io_version: ${{ steps.plan.outputs.crates_io_version }}
+      nuget_version: ${{ steps.plan.outputs.nuget_version }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
@@ -102,12 +103,14 @@ jobs:
           version="$(jq -r .canonical_version release-plan.json)"
           pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
+          nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
             echo "version=$version"
             echo "pypi_version=$pypi_version"
             echo "crates_io_version=$crates_io_version"
+            echo "nuget_version=$nuget_version"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
             cat release-plan.json
@@ -396,6 +399,26 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-csharp-sdk:
+    name: Build C# SDK
+    needs: [plan, build-bridge-cffi]
+    uses: ./.github/workflows/build2-csharp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  verify-csharp-sdk:
+    name: Verify C# SDK
+    needs: [plan, build-toolchain, build-csharp-sdk]
+    uses: ./.github/workflows/verify-csharp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   build-go-sdk:
     name: Build Go SDK mirror
     needs: [plan]
@@ -474,6 +497,8 @@ jobs:
       # The engine cdylib is required — it is the shared artifact every
       # dylib-loader SDK depends on.
       - build-bridge-cffi
+      - build-csharp-sdk
+      - verify-csharp-sdk
       - build-go-sdk
       - verify-cpp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
@@ -546,6 +571,218 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
       channel: ${{ needs.plan.outputs.channel }}
+
+  publish-csharp-sdk:
+    name: Publish C# NuGet
+    needs: [plan, build-csharp-sdk, verify-csharp-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # External prerequisite: the nuget.org owner of baml-bridge must configure a
+    # trusted-publishing policy for release-baml-language.yml and the NUGET_USER
+    # profile. This job fails closed if either the profile or OIDC exchange is
+    # unavailable.
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download the verified NuGet artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: csharp-sdk-nuget
+          path: dist/csharp
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify the immutable artifact
+        id: artifact
+        env:
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.nuget_version }}
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find dist/csharp -maxdepth 1 -type f -name '*.nupkg' -print)
+          mapfile -t symbols < <(find dist/csharp -maxdepth 1 -type f -name '*.snupkg' -print)
+          if [[ ${#packages[@]} -ne 1 || ${#symbols[@]} -ne 1 ]]; then
+            echo "::error::expected one nupkg and one snupkg, found ${#packages[@]} and ${#symbols[@]}"
+            exit 1
+          fi
+          package="${packages[0]}"
+          symbol="${symbols[0]}"
+          expected_name="baml-bridge.${VERSION}.nupkg"
+          if [[ "$(basename "$package")" != "$expected_name" ]]; then
+            echo "::error::NuGet artifact $(basename "$package") does not match frozen version $VERSION"
+            exit 1
+          fi
+          jq -e \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg version "$VERSION" \
+            --argjson package_size "$(stat -c %s "$package")" \
+            '.source_sha == $source_sha
+              and .version == $version
+              and .package_size == $package_size' \
+            dist/csharp/provenance.json >/dev/null
+
+          declare -A checked_assets=()
+          checked=0
+          while read -r expected recorded_path; do
+            asset="dist/csharp/$(basename "$recorded_path")"
+            test -f "$asset"
+            if [[ -n "${checked_assets[$asset]:-}" ]]; then
+              echo "::error::duplicate checksum entry for $(basename "$asset")"
+              exit 1
+            fi
+            actual="$(sha256sum "$asset" | cut -d' ' -f1)"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::checksum mismatch for $(basename "$asset")"
+              exit 1
+            fi
+            checked_assets[$asset]=true
+            checked=$((checked + 1))
+          done < dist/csharp/SHA256SUMS
+          if [[ "$checked" -ne 2
+            || -z "${checked_assets[$package]:-}"
+            || -z "${checked_assets[$symbol]:-}" ]]; then
+            echo "::error::expected checksums for the nupkg and snupkg, found $checked"
+            exit 1
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+
+      - name: Verify NuGet trusted-publishing prerequisites
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NUGET_USER" ]]; then
+            echo "::error::NUGET_USER must contain the nuget.org profile named by the baml-bridge trusted-publishing policy"
+            exit 1
+          fi
+          if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then
+            echo "::error::GitHub OIDC is unavailable; publish-csharp-sdk requires id-token: write"
+            exit 1
+          fi
+
+      - name: Exchange GitHub OIDC for a temporary NuGet API key
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish the exact verified package
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          PACKAGE: ${{ steps.artifact.outputs.package }}
+        run: |
+          set -euo pipefail
+          test -n "$NUGET_API_KEY"
+          dotnet nuget push "$PACKAGE" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json
+
+  smoke-csharp-release:
+    name: Smoke published C# SDK (${{ matrix.rid }})
+    needs: [plan, publish-csharp-sdk]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+          - os: macos-14
+            rid: osx-arm64
+          - os: windows-2025
+            rid: win-x64
+    env:
+      NUGET_SOURCE: https://api.nuget.org/v3/index.json
+      VERSION: ${{ needs.plan.outputs.nuget_version }}
+      RID: ${{ matrix.rid }}
+      BAML_BRIDGE_LIBRARY: ""
+      BAML_LIBRARY_PATH: ""
+      BAML_RUNTIME_PATH: ""
+    steps:
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore only from nuget.org and call the native bridge
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/baml-csharp-registry-smoke"
+          export NUGET_PACKAGES="$root/packages"
+          rm -rf "$root"
+          mkdir -p "$root"
+          cd "$root"
+          dotnet new console --framework net10.0 --no-restore
+          dotnet add package baml-bridge \
+            --version "$VERSION" \
+            --source "$NUGET_SOURCE" \
+            --no-restore
+          cat > NuGet.Config <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="$NUGET_SOURCE" protocolVersion="3" />
+            </packageSources>
+          </configuration>
+          EOF
+          cat > Program.cs <<'EOF'
+          using System.Reflection;
+          using Baml;
+
+          var expected = args.Single();
+          foreach (var variable in new[]
+          {
+              "BAML_RUNTIME_PATH",
+              "BAML_LIBRARY_PATH",
+              "BAML_BRIDGE_LIBRARY",
+          })
+          {
+              if (Environment.GetEnvironmentVariable(variable) is not null)
+              {
+                  throw new InvalidOperationException(
+                      $"Native runtime override {variable} leaked into registry smoke.");
+              }
+          }
+          var actual = typeof(BamlBridge).Assembly
+              .GetCustomAttributes<AssemblyMetadataAttribute>()
+              .Single(attribute => attribute.Key == "BamlSdkVersion")
+              .Value;
+          if (!string.Equals(actual, expected, StringComparison.Ordinal))
+          {
+              throw new InvalidOperationException(
+                  $"Restored baml-bridge version {actual ?? "<missing>"}, expected {expected}.");
+          }
+          BamlBridge.FlushEvents();
+          Console.WriteLine($"Loaded baml-bridge {actual} for {System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier}.");
+          EOF
+
+          restored=false
+          for attempt in {1..20}; do
+            if dotnet restore \
+              --configfile NuGet.Config \
+              --no-cache \
+              --force \
+              --runtime "$RID" \
+              -p:NuGetAudit=false; then
+              restored=true
+              break
+            fi
+            echo "nuget.org has not indexed baml-bridge $VERSION yet (attempt $attempt/20)"
+            sleep 30
+          done
+          if [[ "$restored" != "true" ]]; then
+            echo "::error::could not restore baml-bridge $VERSION from nuget.org"
+            exit 1
+          fi
+          env -u BAML_RUNTIME_PATH -u BAML_LIBRARY_PATH -u BAML_BRIDGE_LIBRARY \
+            dotnet run --no-restore --runtime "$RID" -- "$VERSION"
 
   publish-toolchain-release:
     name: Publish toolchain release assets
@@ -841,8 +1078,8 @@ jobs:
 
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-go-sdk, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && needs.publish-go-sdk.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-csharp-sdk, smoke-csharp-release, publish-toolchain-release, publish-bridge-cffi-release, publish-go-sdk, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-csharp-sdk.result == 'success' && needs.smoke-csharp-release.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && needs.publish-go-sdk.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -888,6 +1125,8 @@ jobs:
           if [[ "${{ needs.publish-crates-io.result }}" == "success" ]]; then
             args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           fi
+          # Publication and a clean registry consumer smoke both gate this job.
+          args+=(--nuget-version "${{ needs.plan.outputs.nuget_version }}")
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \
@@ -1127,6 +1366,8 @@ jobs:
           # Dry-run rehearses the real manifest shape: a real run publishes the
           # Rust SDK and records sdks.rust, so include it here too.
           args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
+          # Dry-run rehearses the C# manifest entry without publishing.
+          args+=(--nuget-version "${{ needs.plan.outputs.nuget_version }}")
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \

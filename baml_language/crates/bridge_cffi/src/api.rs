@@ -110,6 +110,7 @@ pub type BamlMediaConstructorFn = unsafe extern "C" fn(
 pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
 pub type BamlRegisterBridgeFn = unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer;
+pub type BamlFlushEventsFn = extern "C" fn();
 pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 
 /// First version of the shared BAML C API.
@@ -231,6 +232,8 @@ pub struct BamlApiV1 {
     /// process-global, thread-safe, first-successful-call-wins, and idempotent
     /// only for an identical language/version pair.
     pub register_bridge: BamlRegisterBridgeFn,
+    /// Flush the process event sink before a host exits or completes a test.
+    pub flush_events: BamlFlushEventsFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -256,6 +259,7 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     media_base64: crate::baml_media_base64,
     media_mime_type: crate::baml_media_mime_type,
     register_bridge: crate::register_bridge_ffi,
+    flush_events: crate::flush_events,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -277,6 +281,20 @@ mod tests {
         let api = unsafe { &*baml_get_api_v1() };
         assert_eq!(api.abi_version, BAML_API_V1_ABI_VERSION);
         assert_eq!(api.struct_size, std::mem::size_of::<BamlApiV1>());
+    }
+
+    #[test]
+    fn flush_events_is_appended_after_the_original_v1_prefix() {
+        let original_v1_prefix_size = std::mem::offset_of!(BamlApiV1, register_bridge)
+            + std::mem::size_of::<BamlRegisterBridgeFn>();
+        let flush_events_end = std::mem::offset_of!(BamlApiV1, flush_events)
+            + std::mem::size_of::<BamlFlushEventsFn>();
+
+        assert_eq!(
+            std::mem::offset_of!(BamlApiV1, flush_events),
+            original_v1_prefix_size
+        );
+        assert_eq!(std::mem::size_of::<BamlApiV1>(), flush_events_end);
     }
 
     #[test]
@@ -317,6 +335,7 @@ mod tests {
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
+        assert_same_function!(api.flush_events, crate::flush_events);
     }
 
     #[test]
@@ -342,6 +361,7 @@ mod tests {
         let _: BamlMediaAccessorFn = api.media_base64;
         let _: BamlMediaAccessorFn = api.media_mime_type;
         let _: BamlRegisterBridgeFn = api.register_bridge;
+        let _: BamlFlushEventsFn = api.flush_events;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

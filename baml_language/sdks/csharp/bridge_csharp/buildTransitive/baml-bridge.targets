@@ -1,0 +1,12 @@
+<Project>
+  <Target Name="BamlBridgeValidateRuntimeIdentifier"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(RuntimeIdentifier)' != '' or '$(RuntimeIdentifiers)' != ''">
+    <Error
+      Condition="'$(RuntimeIdentifier)' != '' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^(linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|win-x64|win-arm64)$'))"
+      Text="baml-bridge does not support RuntimeIdentifier '$(RuntimeIdentifier)'. Supported RIDs: linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64, win-arm64." />
+    <Error
+      Condition="'$(RuntimeIdentifiers)' != '' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifiers)', '^(linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|win-x64|win-arm64)(;(linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64|osx-x64|osx-arm64|win-x64|win-arm64))*$'))"
+      Text="baml-bridge found an unsupported RID in RuntimeIdentifiers '$(RuntimeIdentifiers)'. Supported RIDs: linux-x64, linux-arm64, linux-musl-x64, linux-musl-arm64, osx-x64, osx-arm64, win-x64, win-arm64." />
+  </Target>
+</Project>

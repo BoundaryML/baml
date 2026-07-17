@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Baml.Bridge/Baml.Bridge.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Baml.Bridge.Tests/Baml.Bridge.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Baml.NuGet.Normalize/Baml.NuGet.Normalize.csproj" />
+    <Project Path="tools/Baml.Union.LayoutProbe/Baml.Union.LayoutProbe.csproj" />
+    <Project Path="tools/Baml.Union.Generate/Baml.Union.Generate.csproj" />
+  </Folder>
+</Solution>

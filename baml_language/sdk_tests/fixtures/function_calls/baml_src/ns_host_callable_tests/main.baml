@@ -52,6 +52,10 @@ function call_callback_with_optional_args_all_set(callback: (x: int, y?: int, z?
     [callback(x, y = 2, z = 3)]
 }
 
+function call_generic_callback_with_optional_arg<T>(callback: (x: T, fallback?: T) -> T, x: T, fallback: T) -> T[] {
+    [callback(x), callback(x, fallback = fallback)]
+}
+
 // Loop that invokes the callback N times — exercises N round-trips
 // through SysOp::BamlHostCallHostValue.
 function call_repeatedly(callback: (int) -> string, n: int) -> string[] {

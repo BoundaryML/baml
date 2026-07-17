@@ -268,6 +268,121 @@ fn generate_valid_project_returns_zero_exit_code() {
 }
 
 #[test]
+fn generate_csharp_removes_stale_owned_files_and_refuses_user_edits() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function root_echo(value: string) -> string {\n  value\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.csharp]\n\
+         output_type = \"csharp\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+    let stale_source = tmp.path().join("baml_src/ns_stale/extra.baml");
+    std::fs::create_dir_all(stale_source.parent().unwrap()).unwrap();
+    std::fs::write(
+        &stale_source,
+        "function stale_echo(value: int) -> int {\n  value\n}\n",
+    )
+    .unwrap();
+    let sdk = tmp.path().join("baml_sdk");
+    std::fs::create_dir(&sdk).unwrap();
+    std::fs::write(sdk.join("User.cs"), "public sealed class UserOwned {}\n").unwrap();
+
+    let first = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        first.status.success(),
+        "initial C# generation failed: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(sdk.join("Stale/Functions.g.cs").is_file());
+    assert!(sdk.join(".baml-generated-files.json").is_file());
+
+    std::fs::remove_file(stale_source).unwrap();
+    let second = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        second.status.success(),
+        "second C# generation failed: {}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    assert!(!sdk.join("Stale").exists());
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("User.cs")).unwrap(),
+        "public sealed class UserOwned {}\n"
+    );
+
+    let manifest_before = std::fs::read(sdk.join(".baml-generated-files.json")).unwrap();
+    let program_before = std::fs::read(sdk.join("BamlGeneratedProgram.g.cs")).unwrap();
+    let functions = sdk.join("Functions.g.cs");
+    let mut edited = std::fs::read_to_string(&functions).unwrap();
+    edited.push_str("// intentional user edit\n");
+    std::fs::write(&functions, &edited).unwrap();
+
+    let rejected = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert_eq!(rejected.status.code(), Some(4));
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("was modified; refusing to overwrite")
+    );
+    assert_eq!(std::fs::read_to_string(functions).unwrap(), edited);
+    assert_eq!(
+        std::fs::read(sdk.join(".baml-generated-files.json")).unwrap(),
+        manifest_before
+    );
+    assert_eq!(
+        std::fs::read(sdk.join("BamlGeneratedProgram.g.cs")).unwrap(),
+        program_before
+    );
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("User.cs")).unwrap(),
+        "public sealed class UserOwned {}\n"
+    );
+}
+
+#[test]
+fn generate_rejects_duplicate_output_directory_before_writing_files() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function root_echo(value: string) -> string {\n  value\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.first]\n\
+         output_type = \"csharp\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n\n\
+         [generator.second]\n\
+         output_type = \"csharp\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert_eq!(output.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("resolve to the same output directory"),
+        "unexpected duplicate-output diagnostic: {stderr}"
+    );
+    assert!(
+        std::fs::read_dir(tmp.path().join("baml_sdk"))
+            .unwrap()
+            .next()
+            .is_none(),
+        "duplicate output ownership must fail before generated files are written"
+    );
+}
+
+#[test]
 fn generate_go_writes_sdk_through_cli() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();

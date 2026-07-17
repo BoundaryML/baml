@@ -50,6 +50,7 @@ BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_PYTHON == 2, "language discriminant drif
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_GO == 3, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUST == 4, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_C_SHARP == 5, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_CPP == 6, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_UNSPECIFIED == 0, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_IMAGE == 1, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_AUDIO == 2, "media discriminant drifted");
@@ -111,9 +112,21 @@ BAML_ASSERT_AFTER(media_url, media_file);
 BAML_ASSERT_AFTER(media_file, media_base64);
 BAML_ASSERT_AFTER(media_base64, media_mime_type);
 BAML_ASSERT_AFTER(media_mime_type, register_bridge);
+BAML_ASSERT_AFTER(register_bridge, flush_events);
 BAML_STATIC_ASSERT(
-    BAML_API_V1_MIN_SIZE == sizeof(BamlApiV1),
-    "the checked-in original V1 prefix must currently be the complete table");
+    BAML_API_V1_MIN_SIZE ==
+        offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge),
+    "the original V1 prefix must end with register_bridge");
+BAML_STATIC_ASSERT(
+    BAML_API_V1_FLUSH_EVENTS_SIZE ==
+        offsetof(BamlApiV1, flush_events) + sizeof(((BamlApiV1 *)0)->flush_events),
+    "the flush_events extension size must include flush_events");
+BAML_STATIC_ASSERT(
+    BAML_API_V1_MIN_SIZE < BAML_API_V1_FLUSH_EVENTS_SIZE,
+    "flush_events must follow the original V1 prefix");
+BAML_STATIC_ASSERT(
+    BAML_API_V1_FLUSH_EVENTS_SIZE == sizeof(BamlApiV1),
+    "flush_events must currently be the final V1 field");
 
 BAML_ASSERT_FIELD_TYPE(version, BamlVersionFn)
 BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode, BamlInitializeRuntimeFromBytecodeFn)
@@ -135,5 +148,6 @@ BAML_ASSERT_FIELD_TYPE(media_file, BamlMediaAccessorFn)
 BAML_ASSERT_FIELD_TYPE(media_base64, BamlMediaAccessorFn)
 BAML_ASSERT_FIELD_TYPE(media_mime_type, BamlMediaAccessorFn)
 BAML_ASSERT_FIELD_TYPE(register_bridge, BamlRegisterBridgeFn)
+BAML_ASSERT_FIELD_TYPE(flush_events, BamlFlushEventsFn)
 
 #endif /* BAML_CFFI_TEST_ABI_ASSERTIONS_H */

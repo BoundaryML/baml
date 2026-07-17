@@ -1,0 +1,141 @@
+name: BAML Release - Build C# SDK
+
+# Assembles the platform-neutral managed bridge and every contract-selected
+# bridge_cffi artifact into one deterministic baml-bridge NuGet package.
+# Native libraries are built by build2-bridge-cffi.reusable.yaml; this workflow
+# only verifies, renames, packs, inspects, and records their bytes.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to package"
+        type: string
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Assemble atomic NuGet package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download native bridge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-cffi-*
+          path: native-download
+          merge-multiple: true
+
+      - name: Verify and stage all native RIDs
+        run: |
+          set -euo pipefail
+          (
+            cd native-download
+            sha256sum --check ./*.sha256
+          )
+
+          stage=artifacts/csharp-native
+          mkdir -p "$stage"
+          contract_status="$(jq -er '
+            if .schema == 1
+              and .csharp_package.package_id == "baml-bridge"
+              and .csharp_package.atomic_all_rids == true
+              and .csharp_package.cffi_inputs_required == true
+              and ([.targets[] | select(.artifacts.csharp != null)] | length) > 0
+              and ([.targets[] | select(.artifacts.csharp != null)] | length)
+                == ([.targets[] | select(.artifacts.cffi != null)] | length)
+              and all(.targets[];
+                (.artifacts.csharp == null and .artifacts.cffi == null)
+                or (.artifacts.csharp != null and .artifacts.cffi != null))
+            then "valid"
+            else error("invalid atomic C# package platform contract")
+            end
+          ' release/platforms.json)"
+          [[ "$contract_status" == valid ]]
+
+          # A csharp entry is required even when its corresponding standalone
+          # cffi entry is experimental. Missing any selected input therefore
+          # fails this atomic package assembly.
+          matrix="$(jq -ce '[.targets[]
+            | select(.artifacts.csharp != null)
+            | {target: .triple,
+               source_asset: .artifacts.cffi.asset,
+               rid: .artifacts.csharp.rid,
+               native_asset: .artifacts.csharp.native_asset,
+               pack_property: .artifacts.csharp.pack_property,
+               cffi_experimental: (.artifacts.cffi.experimental // false)}]'
+            release/platforms.json)"
+          printf '%s\n' "$matrix" > "$stage/platform-matrix.json"
+          jq . <<<"$matrix"
+
+          while IFS=$'\t' read -r source_asset rid native_asset; do
+            install -Dm755 \
+              "native-download/$source_asset" \
+              "$stage/runtimes/$rid/native/$native_asset"
+          done < <(
+            jq -r '.[] | [.source_asset, .rid, .native_asset] | @tsv' \
+              "$stage/platform-matrix.json"
+          )
+
+      - name: Pack and inspect baml-bridge
+        run: |
+          set -euo pipefail
+          baml_language/sdks/csharp/bridge_csharp/tools/pack-all-native.sh \
+            artifacts/csharp-native \
+            artifacts/csharp-package \
+            release/platforms.json
+
+          package=$(find artifacts/csharp-package -maxdepth 1 -type f -name '*.nupkg' -print -quit)
+          test -n "$package"
+          size=$(stat -c %s "$package")
+          # nuget.org documents an approximately 250 MB hard limit. The design
+          # requires a safety ceiling no greater than 80% of that limit.
+          if (( size > 200000000 )); then
+            echo "::error::baml-bridge package is $size bytes; the 200,000,000-byte safety ceiling is exceeded"
+            exit 1
+          fi
+
+          sha256sum "$package" artifacts/csharp-package/*.snupkg > artifacts/csharp-package/SHA256SUMS
+          jq -n \
+            --arg source_sha "${{ inputs.source_sha }}" \
+            --arg version "$(jq -r .registry_versions.nuget release-plan.json)" \
+            --arg canonical_version "$(jq -r .canonical_version release-plan.json)" \
+            --arg platform_contract_sha256 "$(sha256sum release/platforms.json | cut -d' ' -f1)" \
+            --argjson rid_matrix "$(cat artifacts/csharp-native/platform-matrix.json)" \
+            --argjson package_size "$size" \
+            '{source_sha: $source_sha, version: $version, canonical_version: $canonical_version, platform_contract_sha256: $platform_contract_sha256, rid_matrix: $rid_matrix, package_size: $package_size, package_size_ceiling: 200000000}' \
+            > artifacts/csharp-package/provenance.json
+
+      - name: Upload immutable NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-sdk-nuget
+          path: artifacts/csharp-package/
+          if-no-files-found: error
