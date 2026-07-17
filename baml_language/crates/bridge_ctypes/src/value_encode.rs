@@ -491,8 +491,9 @@ pub fn build_to_host_call(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{fmt::Write as _, sync::Arc};
 
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use bex_project::{
         BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
         PromptAst, PromptAstSimple,
@@ -502,6 +503,109 @@ mod tests {
     use crate::baml_bridge::cffi::{
         BamlHandleType, baml_outbound_value::Value as BamlValueVariant,
     };
+
+    fn optional_host_call_cases() -> Vec<(&'static str, BamlToHostCall)> {
+        let options = CffiHandleTableOptions::for_in_process();
+        let required = [BexExternalValue::Int(7)];
+        let mut cases = Vec::new();
+
+        let optional = IndexMap::new();
+        cases.push((
+            "7:unset:unset",
+            build_to_host_call(&required, &optional, &options).unwrap(),
+        ));
+
+        let mut optional = IndexMap::new();
+        optional.insert(
+            "first".to_string(),
+            BexExternalValue::String("alpha".into()),
+        );
+        cases.push((
+            "7:alpha:unset",
+            build_to_host_call(&required, &optional, &options).unwrap(),
+        ));
+
+        let mut optional = IndexMap::new();
+        optional.insert("later".to_string(), BexExternalValue::Int(9));
+        cases.push((
+            "7:unset:9",
+            build_to_host_call(&required, &optional, &options).unwrap(),
+        ));
+
+        let mut optional = IndexMap::new();
+        optional.insert("first".to_string(), BexExternalValue::Null);
+        cases.push((
+            "7:null:unset",
+            build_to_host_call(&required, &optional, &options).unwrap(),
+        ));
+
+        let mut optional = IndexMap::new();
+        optional.insert(
+            "first".to_string(),
+            BexExternalValue::String("alpha".into()),
+        );
+        optional.insert("later".to_string(), BexExternalValue::Int(9));
+        cases.push((
+            "7:alpha:9",
+            build_to_host_call(&required, &optional, &options).unwrap(),
+        ));
+
+        cases
+    }
+
+    #[test]
+    fn host_call_optional_arguments_preserve_omission_name_and_order() {
+        for (expected, call) in optional_host_call_cases() {
+            assert!(!call.args.is_empty(), "{expected}: required arg missing");
+            assert_eq!(call.args[0].arg_name, "");
+            assert!(!call.args[0].is_optional_arg);
+            assert!(call.args[0].value.is_some());
+            for arg in &call.args[1..] {
+                assert!(arg.is_optional_arg, "{expected}: optional flag missing");
+                assert!(
+                    !arg.arg_name.is_empty(),
+                    "{expected}: optional name missing"
+                );
+                assert!(arg.value.is_some(), "{expected}: optional value missing");
+            }
+            let names = call.args[1..]
+                .iter()
+                .map(|arg| arg.arg_name.as_str())
+                .collect::<Vec<_>>();
+            match expected {
+                "7:unset:unset" => assert!(names.is_empty()),
+                "7:alpha:unset" | "7:null:unset" => assert_eq!(names, ["first"]),
+                "7:unset:9" => assert_eq!(names, ["later"]),
+                "7:alpha:9" => assert_eq!(names, ["first", "later"]),
+                other => panic!("unexpected fixture {other}"),
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "writes Rust-produced protobuf vectors for cross-language consumers"]
+    fn emit_csharp_optional_host_call_vectors() {
+        use prost::Message as _;
+
+        let path = std::env::var_os("BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS")
+            .map(std::path::PathBuf::from)
+            .expect("BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS must be set");
+        assert!(path.is_absolute(), "vector output path must be absolute");
+        let mut output = String::new();
+        for (expected, call) in optional_host_call_cases() {
+            writeln!(
+                output,
+                "{expected}\t{}",
+                STANDARD.encode(call.encode_to_vec())
+            )
+            .unwrap();
+        }
+        std::fs::write(&path, output).expect("write optional host-call vectors");
+        assert!(
+            std::fs::metadata(&path).unwrap().len() > 0,
+            "optional host-call vector output is empty"
+        );
+    }
 
     fn extract_handle(out: BamlOutboundValue) -> BamlOutboundHandle {
         match out.value {

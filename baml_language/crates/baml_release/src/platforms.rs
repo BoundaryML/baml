@@ -94,6 +94,9 @@ pub struct CffiArtifact {
     pub asset: String,
     /// GitHub Actions runner label (distinct from the target's `os` family).
     pub runner: String,
+    /// .NET runtime-asset projection for the atomic C# package and its native
+    /// consumer verification.
+    pub dotnet: DotnetRuntimeAsset,
     /// Build via `cross` (Linux cross-compile targets).
     #[serde(default)]
     pub use_cross: bool,
@@ -103,6 +106,16 @@ pub struct CffiArtifact {
     /// Built best-effort: a build failure must not block the release.
     #[serde(default)]
     pub experimental: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DotnetRuntimeAsset {
+    /// Portable .NET Runtime Identifier used in `runtimes/{rid}/native/`.
+    pub rid: String,
+    /// Canonical library filename inside the RID directory.
+    pub canonical_asset: String,
+    /// Native GitHub Actions runner for executing the packaged asset.
+    pub consumer_runner: String,
 }
 
 /// Parse the embedded platform contract. Panics if the committed file is
@@ -223,6 +236,43 @@ mod tests {
                 _ => format!("libbaml_cffi-{}.so", t.triple),
             };
             assert_eq!(cffi.asset, expected, "{}: unexpected cffi asset", t.triple);
+        }
+    }
+
+    #[test]
+    fn dotnet_runtime_assets_follow_the_platform_contract() {
+        for t in platforms().targets {
+            let Some(cffi) = &t.artifacts.cffi else {
+                continue;
+            };
+            let arch = match t.arch.as_str() {
+                "aarch64" => "arm64",
+                "x86_64" => "x64",
+                other => panic!("{}: unsupported .NET architecture {other}", t.triple),
+            };
+            let rid = match (t.os.as_str(), t.libc.as_deref()) {
+                ("macos", _) => format!("osx-{arch}"),
+                ("linux", Some("musl")) => format!("linux-musl-{arch}"),
+                ("linux", _) => format!("linux-{arch}"),
+                ("windows", _) => format!("win-{arch}"),
+                (other, _) => panic!("{}: unsupported .NET OS {other}", t.triple),
+            };
+            let canonical_asset = match t.os.as_str() {
+                "macos" => "libbridge_cffi.dylib",
+                "windows" => "bridge_cffi.dll",
+                _ => "libbridge_cffi.so",
+            };
+            assert_eq!(cffi.dotnet.rid, rid, "{}: unexpected .NET RID", t.triple);
+            assert_eq!(
+                cffi.dotnet.canonical_asset, canonical_asset,
+                "{}: unexpected .NET native filename",
+                t.triple
+            );
+            assert!(
+                !cffi.dotnet.consumer_runner.is_empty(),
+                "{}: empty .NET consumer runner",
+                t.triple
+            );
         }
     }
 

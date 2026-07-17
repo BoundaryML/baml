@@ -346,13 +346,20 @@ typedef struct BamlApiV1 {
   BamlCallFunctionFn call_function;
   /**
    * Allocate a nonzero process-unique BAML function-call identifier.
+   *
+   * Returns zero only after the nonzero `u64` identifier domain is
+   * exhausted. The host must fail the operation without dispatching when
+   * it receives zero.
    */
   BamlNewFunctionCallFn new_function_call;
   /**
    * Request cancellation of a BAML function call.
    *
-   * Returns 0 on success and 1 when the ID is zero, unknown, completed, or
-   * the runtime is unavailable.
+   * Returns 0 when a nonzero ID is accepted by the active runtime and 1
+   * when the ID is zero or the runtime is unavailable. Cancellation may
+   * race ahead of call registration, so an ID that is not active yet is
+   * reserved as pre-cancelled; a completed ID is likewise reserved against
+   * accidental reuse.
    */
   BamlCancelFunctionCallFn cancel_function_call;
   /**

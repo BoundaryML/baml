@@ -19,17 +19,18 @@ name: BAML Release - Build bridge_cffi
 # asserting the product version stamped into the release plan.
 #
 # Consumer contract (for other bridges): one artifact per target named
-# `bridge-cffi-<target>`, each containing the cdylib plus its `.sha256`. The
-# cdylib filename matches `baml_bridge::loader::target_lib_filename`
+# `bridge-cffi-<target>`, each containing the cdylib, its `.sha256`, and the
+# current source/run/attempt/release identity record. The cdylib filename
+# matches `baml_bridge::loader::target_lib_filename`
 # (`libbaml_cffi-<triple>.{so,dylib}` on Unix, `baml_cffi-<triple>.dll` on
 # Windows); its C ABI `version()` returns the plan's canonical version. A Go
 # (or any) dylib-loader SDK consumes these the same way.
 #
-# NOTE (open question): the filename reuses the legacy `baml_cffi` convention;
-# the two families never collide because new-graph assets live under
-# `baml-language-<version>` tags, but a distinguishing name
-# (`bridge_cffi-<triple>`) is still on the table — it would change the loader
-# and this job together.
+# The producer artifact retains the legacy `baml_cffi` filename declared by
+# the central platform/release contract. The C# package assembler maps that
+# immutable producer input to its canonical RID-local `bridge_cffi` filename.
+# A future producer rename is a coordinated loader/release-contract change,
+# not an open C# implementation decision.
 #
 # Cross-compilation status (validate the full matrix with a `workflow_dispatch`
 # dry-run before other bridges depend on this):
@@ -58,10 +59,18 @@ on:
         type: string
         default: ""
         required: false
+      include_csharp_entry_diagnostics:
+        description: "Also build and upload debug-enabled, unstripped native diagnostics for the manual C# feasibility gate"
+        type: boolean
+        default: false
+        required: false
   # Manual-only standalone trigger for testing this reusable workflow before it
   # is wired into the release graph (with no inputs it builds a canary-stamped
   # artifact). It is otherwise invoked via `workflow_call`.
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -81,12 +90,13 @@ jobs:
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
       include: ${{ steps.gen.outputs.include }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -116,6 +126,7 @@ jobs:
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.os }}
+    timeout-minutes: 180
     # Experimental targets are built when possible but never block the release.
     continue-on-error: ${{ matrix._.experimental || false }}
     env:
@@ -124,19 +135,7 @@ jobs:
       # runner has no NASM installed (consulted only there; harmless elsewhere).
       AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
-      - name: Setup build environment (ARM64 Windows)
-        if: matrix._.target == 'aarch64-pc-windows-msvc'
-        shell: powershell
-        run: |
-          # rustup is not preinstalled on aarch64 Windows runners
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
-              .\rustup-init.exe --default-toolchain stable -y
-              Remove-Item "rustup-init.exe"
-              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
-          }
-
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -158,6 +157,8 @@ jobs:
         with:
           targets: ${{ matrix._.target }}
           enable-cache: false
+          enable-cross: false
+          skip-protoc: true
 
       - name: Install cross (Linux targets)
         if: matrix._.use_cross
@@ -218,6 +219,14 @@ jobs:
               shasum -a 256 "${asset}"
             fi
           ) > "${outdir}/${asset}.sha256"
+          {
+            echo "source_sha=${{ inputs.source_sha || github.sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$(jq -r .canonical_version ../release-plan.json)"
+            echo "target=$target"
+            echo "asset=$asset"
+          } > "${outdir}/artifact-identity.txt"
 
           echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
@@ -261,10 +270,343 @@ jobs:
           }
 
       - name: Upload cdylib artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bridge-cffi-${{ matrix._.target }}
           path: |
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
+            baml_language/${{ steps.artifact.outputs.dir }}/artifact-identity.txt
           if-no-files-found: error
+          overwrite: true
+
+      - name: Build unstripped C# entry-gate diagnostic
+        if: inputs.include_csharp_entry_diagnostics
+        working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET" == *-musl ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
+          # Use Cargo CLI controls rather than environment variables: `cross`
+          # forwards only its configured environment allowlist into Linux
+          # build containers.
+          ${CARGO} build \
+            -p bridge_cffi \
+            --profile release-bridge-cffi \
+            --target "$TARGET" \
+            --target-dir target/csharp-entry-unstripped \
+            --config profile.release-bridge-cffi.strip=false \
+            --config profile.release-bridge-cffi.debug=2
+
+      - name: Verify Unix diagnostic contains debug information and symbols
+        if: inputs.include_csharp_entry_diagnostics && !contains(matrix._.target, 'windows')
+        working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          outdir="target/csharp-entry-unstripped/${TARGET}/release-bridge-cffi"
+          case "$TARGET" in
+            *apple*)
+              primary="libbridge_cffi.dylib"
+              format="mach-o"
+              file "$outdir/$primary" > "$outdir/diagnostic-inspection.txt"
+              case "$TARGET" in
+                aarch64-*) expected_arch="arm64" ;;
+                x86_64-*) expected_arch="x86_64" ;;
+                *)
+                  echo "unsupported diagnostic Mach-O target: $TARGET" >&2
+                  exit 1
+                  ;;
+              esac
+              actual_arch="$(lipo -archs "$outdir/$primary")"
+              test "$actual_arch" = "$expected_arch"
+              echo "architecture=$actual_arch" \
+                >> "$outdir/diagnostic-inspection.txt"
+              dwarf_source="$outdir/$primary"
+              dsym_dwarf_count="$(find "$outdir" \
+                -path '*.dSYM/Contents/Resources/DWARF/*' \
+                -type f -print |
+                wc -l |
+                tr -d ' ')"
+              test "$dsym_dwarf_count" -le 1
+              dsym_dwarf="$(find "$outdir" \
+                -path '*.dSYM/Contents/Resources/DWARF/*' \
+                -type f -print |
+                sed -n '1p')"
+              if [[ -n "$dsym_dwarf" ]]; then
+                dwarf_source="$dsym_dwarf"
+                dylib_uuid="$(dwarfdump --uuid "$outdir/$primary" |
+                  awk '
+                    /^UUID:/ {
+                      arch = $3
+                      gsub(/[()]/, "", arch)
+                      print tolower($2) " " arch
+                    }
+                  ')"
+                dsym_uuid="$(dwarfdump --uuid "$dsym_dwarf" |
+                  awk '
+                    /^UUID:/ {
+                      arch = $3
+                      gsub(/[()]/, "", arch)
+                      print tolower($2) " " arch
+                    }
+                  ')"
+                test -n "$dylib_uuid"
+                test "$dylib_uuid" = "$dsym_uuid"
+                {
+                  echo "dylib_uuid_arch=$dylib_uuid"
+                  echo "dsym_uuid_arch=$dsym_uuid"
+                } >> "$outdir/diagnostic-inspection.txt"
+              fi
+              dwarfdump --debug-info "$dwarf_source" |
+                awk '
+                  !found && /DW_TAG_compile_unit/ {
+                    print "debug_compile_unit=" $0
+                    found = 1
+                  }
+                  END { exit !found }
+                ' >> "$outdir/diagnostic-inspection.txt"
+              all_symbol_count="$(nm -U "$outdir/$primary" |
+                awk 'NF { count++ } END { print count + 0 }')"
+              exported_symbol_count="$(nm -gU "$outdir/$primary" |
+                awk 'NF { count++ } END { print count + 0 }')"
+              test "$all_symbol_count" -gt "$exported_symbol_count"
+              local_symbol_count="$((all_symbol_count - exported_symbol_count))"
+              symbol_count="$all_symbol_count"
+              ;;
+            *)
+              primary="libbridge_cffi.so"
+              format="elf"
+              {
+                file "$outdir/$primary"
+                readelf --file-header --sections --wide "$outdir/$primary"
+              } > "$outdir/diagnostic-inspection.txt"
+              case "$TARGET" in
+                aarch64-*)
+                  expected_arch="aarch64"
+                  grep -Eq 'Machine:[[:space:]]+AArch64' \
+                    "$outdir/diagnostic-inspection.txt"
+                  ;;
+                x86_64-*)
+                  expected_arch="x86_64"
+                  grep -Eq \
+                    'Machine:[[:space:]]+Advanced Micro Devices X86-64' \
+                    "$outdir/diagnostic-inspection.txt"
+                  ;;
+                *)
+                  echo "unsupported diagnostic ELF target: $TARGET" >&2
+                  exit 1
+                  ;;
+              esac
+              grep -Fq 'not stripped' "$outdir/diagnostic-inspection.txt"
+              grep -Fq '.debug_info' "$outdir/diagnostic-inspection.txt"
+              grep -Fq '.debug_line' "$outdir/diagnostic-inspection.txt"
+              grep -Fq '.symtab' "$outdir/diagnostic-inspection.txt"
+              symbol_count="$(nm --defined-only "$outdir/$primary" |
+                awk 'END { print NR }')"
+              test "$symbol_count" -gt 0
+              ;;
+          esac
+          {
+            echo "target=$TARGET"
+            echo "source_sha=${{ inputs.source_sha || github.sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$(jq -r .canonical_version ../release-plan.json)"
+            echo "format=$format"
+            echo "architecture=$expected_arch"
+            echo "debug_info=present"
+            echo "symbol_table=present"
+            echo "unstripped=true"
+            echo "symbol_count=$symbol_count"
+            if [[ "$format" == "mach-o" ]]; then
+              echo "exported_symbol_count=$exported_symbol_count"
+              echo "local_symbol_count=$local_symbol_count"
+            fi
+          } > "$outdir/diagnostic-verification.txt"
+          (
+            cd "$outdir"
+            {
+              printf '%s\n' \
+                "$primary" \
+                diagnostic-inspection.txt \
+                diagnostic-verification.txt
+              find . -path '*.dSYM/*' -type f -print
+              find . -maxdepth 1 -type f -name '*.dwp' -print
+            } |
+              sed 's#^\./##' |
+              LC_ALL=C sort -u |
+              while IFS= read -r file; do
+                if command -v sha256sum >/dev/null 2>&1; then
+                  sha256sum "$file"
+                else
+                  shasum -a 256 "$file"
+                fi
+              done
+          ) > "$outdir/diagnostic-manifest.sha256"
+
+      - name: Verify Windows diagnostic contains debug information and symbols
+        if: inputs.include_csharp_entry_diagnostics && contains(matrix._.target, 'windows')
+        shell: pwsh
+        working-directory: baml_language
+        env:
+          TARGET: ${{ matrix._.target }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $outdir = "target/csharp-entry-unstripped/$env:TARGET/release-bridge-cffi"
+          $primary = Join-Path $outdir "bridge_cffi.dll"
+          if (-not (Test-Path $primary -PathType Leaf)) {
+            throw "missing diagnostic DLL: $primary"
+          }
+          $pdbs = @(Get-ChildItem $outdir -Filter "*.pdb" -File)
+          if ($pdbs.Count -ne 1) {
+            throw "expected exactly one diagnostic PDB, found $($pdbs.Count)"
+          }
+          $pdb = $pdbs[0]
+          $pdbMagicBytes = [byte[]]::new(32)
+          $pdbStream = [System.IO.File]::OpenRead($pdb.FullName)
+          try {
+            if ($pdbStream.Length -lt $pdbMagicBytes.Length) {
+              throw "diagnostic PDB is truncated"
+            }
+            $pdbMagicRead = $pdbStream.Read(
+              $pdbMagicBytes,
+              0,
+              $pdbMagicBytes.Length)
+            if ($pdbMagicRead -ne $pdbMagicBytes.Length) {
+              throw "diagnostic PDB signature could not be read"
+            }
+          } finally {
+            $pdbStream.Dispose()
+          }
+          $pdbMagic = [System.Text.Encoding]::ASCII.GetString($pdbMagicBytes)
+          if (-not $pdbMagic.StartsWith("Microsoft C/C++ MSF 7.00")) {
+            throw "diagnostic PDB has an unexpected container signature"
+          }
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} `
+            "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) {
+            throw "Visual Studio installation not found"
+          }
+          Import-Module (Join-Path $vsInstall `
+            "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          $arch = if ($env:TARGET.StartsWith("aarch64-")) { "arm64" } else { "amd64" }
+          Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation `
+            -DevCmdArguments "-arch=$arch -host_arch=$arch"
+          $inspection = & dumpbin /headers $primary
+          if ($LASTEXITCODE -ne 0) {
+            throw "dumpbin failed for diagnostic DLL"
+          }
+          $inspectionText = $inspection -join [Environment]::NewLine
+          $expectedMachine = if ($env:TARGET.StartsWith("aarch64-")) {
+            "AA64 machine \(ARM64\)"
+          } else {
+            "8664 machine \(x64\)"
+          }
+          if ($inspectionText -notmatch $expectedMachine) {
+            throw "diagnostic DLL machine does not match $env:TARGET"
+          }
+          if ($inspectionText -notmatch "Debug Directories") {
+            throw "diagnostic DLL has no PE debug directory"
+          }
+          if ($inspectionText -notmatch `
+              'Format:\s+RSDS,\s+\{(?<Guid>[0-9A-Fa-f-]{36})\},\s+(?<Age>[0-9]+),') {
+            throw "diagnostic DLL has no parseable RSDS GUID and age"
+          }
+          $peGuid = $Matches["Guid"].ToLowerInvariant()
+          $peAge = [int]$Matches["Age"]
+
+          $pdbUtil = (Get-Command llvm-pdbutil.exe -ErrorAction Stop).Source
+          $pdbSummary = & $pdbUtil dump -summary $pdb.FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw "llvm-pdbutil failed to inspect the diagnostic PDB"
+          }
+          $pdbSummaryText = $pdbSummary -join [Environment]::NewLine
+          if ($pdbSummaryText -notmatch `
+              '(?m)^\s*Guid:\s+\{?(?<Guid>[0-9A-Fa-f-]{36})\}?\s*$') {
+            throw "diagnostic PDB summary has no parseable GUID"
+          }
+          $pdbGuid = $Matches["Guid"].ToLowerInvariant()
+          if ($pdbSummaryText -notmatch '(?m)^\s*Age:\s+(?<Age>[0-9]+)\s*$') {
+            throw "diagnostic PDB summary has no parseable age"
+          }
+          $pdbAge = [int]$Matches["Age"]
+          if ($peGuid -ne $pdbGuid -or $peAge -ne $pdbAge) {
+            throw "diagnostic DLL RSDS identity does not match the PDB"
+          }
+
+          [long]$procedureSymbolCount = 0
+          & $pdbUtil dump -symbols $pdb.FullName |
+            ForEach-Object {
+              if ($_ -match 'S_(G|L)PROC32') {
+                $procedureSymbolCount++
+              }
+            }
+          if ($LASTEXITCODE -ne 0) {
+            throw "llvm-pdbutil failed to inspect diagnostic PDB symbols"
+          }
+          if ($procedureSymbolCount -le 0) {
+            throw "diagnostic PDB contains no procedure symbol records"
+          }
+          $inspectionText | Out-File `
+            (Join-Path $outdir "diagnostic-inspection.txt") -Encoding utf8
+          @(
+            "pe_rsds_guid=$peGuid"
+            "pe_rsds_age=$peAge"
+            "pdb_guid=$pdbGuid"
+            "pdb_age=$pdbAge"
+            "pdb_procedure_symbol_count=$procedureSymbolCount"
+          ) | Add-Content `
+            (Join-Path $outdir "diagnostic-inspection.txt") -Encoding ascii
+          @(
+            "target=$env:TARGET"
+            "source_sha=${{ inputs.source_sha || github.sha }}"
+            "workflow_run_id=${{ github.run_id }}"
+            "workflow_run_attempt=${{ github.run_attempt }}"
+            "release_version=$(jq -r .canonical_version ..\release-plan.json)"
+            "format=pe"
+            "architecture=$arch"
+            "debug_info=present"
+            "symbol_table=present"
+            "unstripped=true"
+            "pdb=present"
+            "pdb_bytes=$($pdb.Length)"
+          ) | Set-Content `
+            (Join-Path $outdir "diagnostic-verification.txt") -Encoding ascii
+
+          $manifestFiles = @(
+            (Get-Item $primary)
+            $pdb
+            (Get-Item (Join-Path $outdir "diagnostic-inspection.txt"))
+            (Get-Item (Join-Path $outdir "diagnostic-verification.txt"))
+          )
+          $manifest = foreach ($file in $manifestFiles) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $manifest | Set-Content `
+            (Join-Path $outdir "diagnostic-manifest.sha256") -Encoding ascii
+
+      - name: Upload unstripped C# entry-gate diagnostic
+        if: inputs.include_csharp_entry_diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bridge-cffi-diagnostics-${{ matrix._.target }}
+          path: |
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/bridge_cffi.dll
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/libbridge_cffi.dylib
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/libbridge_cffi.so
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/*.pdb
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/*.dSYM/**
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/*.dwp
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/diagnostic-inspection.txt
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/diagnostic-verification.txt
+            baml_language/target/csharp-entry-unstripped/${{ matrix._.target }}/release-bridge-cffi/diagnostic-manifest.sha256
+          if-no-files-found: error
+          overwrite: true

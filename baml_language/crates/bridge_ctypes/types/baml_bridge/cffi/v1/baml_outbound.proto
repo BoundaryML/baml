@@ -132,8 +132,13 @@ message BamlValueEnum {
 }
 
 // A union value: the selected variant's value plus its `self_type` (the full
-// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-// `self_type` metadata is written for completeness but read by no host.
+// union type as a `BamlTy`). Descriptor-aware typed bindings (including the C#
+// bridge) must validate `self_type` and `value_option_name` against the
+// generated expected descriptor before decoding `value`. Missing, unknown, or
+// payload-contradictory metadata is a protocol/type error in those bindings;
+// they must not select the first arm with a compatible runtime payload tag.
+// Legacy dynamic bindings may continue to unwrap the selected payload without
+// reconstructing the static union descriptor.
 message BamlValueUnionVariant {
   // Optional union name; unions carry their full type in `self_type`.
   string name = 1;

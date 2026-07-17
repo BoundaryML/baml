@@ -1,0 +1,1665 @@
+name: BAML C# - Verify implementation entry gates
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content used by every native build"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit whose artifacts are under test"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  BAML_EXPECTED_VERSION: ${{ fromJSON(inputs.release_plan_json).canonical_version }}
+  BamlNativeProbeMode: Package
+
+jobs:
+  platform-matrix:
+    name: Compute native consumer matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          sparse-checkout: release
+
+      - id: derive
+        name: Derive .NET RIDs and native runners
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
+          matrix="$(jq -c '{include: [.targets[]
+            | select(.artifacts.cffi != null)
+            | {target: .triple,
+               arch: .arch,
+               os: .os,
+               libc: .libc,
+               asset: .artifacts.cffi.asset,
+               rid: .artifacts.cffi.dotnet.rid,
+               canonical: .artifacts.cffi.dotnet.canonical_asset,
+               runner: .artifacts.cffi.dotnet.consumer_runner}]}' \
+            release/platforms.json)"
+          jq -e '
+            (.include | length) == 8
+            and ([.include[].target] | unique | length) == 8
+            and ([.include[].asset] | unique | length) == 8
+            and ([.include[].rid] | unique | length) == 8
+            and ([.include[].arch
+              | select(. == "aarch64" or . == "x86_64")]
+              | length) == 8
+            and ([.include[].os
+              | select(. == "linux" or . == "macos" or . == "windows")]
+              | length) == 8
+            and ([.include[].canonical | select(type == "string")]
+              | length) == 8
+            and ([.include[].runner | select(type == "string")]
+              | length) == 8
+          ' <<<"$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq . <<<"$matrix"
+
+  package:
+    name: Assemble deterministic eight-RID evidence package
+    needs: platform-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          enable-cache: false
+          enable-cross: false
+          skip-protoc: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: bridge-cffi-*
+          path: native-downloads
+          merge-multiple: false
+
+      - name: Stage exactly one native asset per .NET RID
+        env:
+          PLATFORM_MATRIX: ${{ needs.platform-matrix.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging/runtimes
+          {
+            jq -r '.include[].target' <<<"$PLATFORM_MATRIX" |
+              while IFS= read -r target; do
+                echo "bridge-cffi-${target}"
+                echo "bridge-cffi-diagnostics-${target}"
+              done
+          } | LC_ALL=C sort > expected-native-artifacts.txt
+          find native-downloads -mindepth 1 -maxdepth 1 -type d \
+            -printf '%f\n' |
+            LC_ALL=C sort > actual-native-artifacts.txt
+          diff -u expected-native-artifacts.txt actual-native-artifacts.txt
+          test "$(wc -l < actual-native-artifacts.txt)" -eq 16
+          jq -r \
+            '.include[]
+             | [.target, .asset, .rid, .canonical]
+             | @tsv' <<<"$PLATFORM_MATRIX" |
+          while IFS=$'\t' read -r target asset rid canonical; do
+            artifact_root="native-downloads/bridge-cffi-${target}"
+            mapfile -d '' artifact_files < <(
+              find "$artifact_root" -type f -print0
+            )
+            test "${#artifact_files[@]}" -eq 3
+            mapfile -d '' sources < <(
+              find "$artifact_root" \
+                -type f -name "$asset" -print0
+            )
+            mapfile -d '' sidecars < <(
+              find "$artifact_root" \
+                -type f -name "${asset}.sha256" -print0
+            )
+            mapfile -d '' identities < <(
+              find "$artifact_root" \
+                -type f -name artifact-identity.txt -print0
+            )
+            test "${#sources[@]}" -eq 1
+            test "${#sidecars[@]}" -eq 1
+            test "${#identities[@]}" -eq 1
+            source="${sources[0]}"
+            sidecar="${sidecars[0]}"
+            identity="${identities[0]}"
+            test "$(dirname "$source")" = "$(dirname "$sidecar")"
+            test "$(dirname "$source")" = "$(dirname "$identity")"
+            grep -Fxq "source_sha=${{ inputs.source_sha }}" "$identity"
+            grep -Fxq "workflow_run_id=${{ github.run_id }}" "$identity"
+            grep -Fxq \
+              "workflow_run_attempt=${{ github.run_attempt }}" \
+              "$identity"
+            grep -Fxq "release_version=$BAML_EXPECTED_VERSION" "$identity"
+            grep -Fxq "target=$target" "$identity"
+            grep -Fxq "asset=$asset" "$identity"
+            (
+              cd "$(dirname "$sidecar")"
+              sha256sum -c "$(basename "$sidecar")"
+            )
+            destination="staging/runtimes/${rid}/native/${canonical}"
+            install -Dm755 "$source" "$destination"
+          done
+
+          test "$(find staging/runtimes -type f | wc -l)" -eq 8
+          (
+            cd staging
+            find runtimes -type f -print0 |
+              sort -z |
+              xargs -0 sha256sum
+          ) > native-manifest.sha256
+          cat native-manifest.sha256
+
+      - name: Record shipping and unstripped measurements
+        run: |
+          set -euo pipefail
+          : > native-measurements.tsv
+          mkdir -p diagnostic-archives/first diagnostic-archives/second
+          while IFS=$'\t' read -r target asset; do
+            mapfile -d '' shipping_files < <(
+              find "native-downloads/bridge-cffi-${target}" \
+                -type f -name "$asset" -print0
+            )
+            test "${#shipping_files[@]}" -eq 1
+            shipping="${shipping_files[0]}"
+            diagnostic_root="native-downloads/bridge-cffi-diagnostics-${target}"
+            mapfile -d '' unstripped_files < <(
+              find "$diagnostic_root" \
+                -maxdepth 1 -type f \
+                \( -name bridge_cffi.dll -o \
+                   -name libbridge_cffi.dylib -o \
+                   -name libbridge_cffi.so \) \
+                -print0
+            )
+            test "${#unstripped_files[@]}" -eq 1
+            unstripped="${unstripped_files[0]}"
+            test -s "$diagnostic_root/diagnostic-inspection.txt"
+            test -s "$diagnostic_root/diagnostic-verification.txt"
+            test -s "$diagnostic_root/diagnostic-manifest.sha256"
+            (
+              cd "$diagnostic_root"
+              sha256sum -c diagnostic-manifest.sha256
+            )
+            grep -Fxq "target=$target" \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq "source_sha=${{ inputs.source_sha }}" \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq "workflow_run_id=${{ github.run_id }}" \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq \
+              "workflow_run_attempt=${{ github.run_attempt }}" \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq "release_version=$BAML_EXPECTED_VERSION" \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq 'debug_info=present' \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq 'symbol_table=present' \
+              "$diagnostic_root/diagnostic-verification.txt"
+            grep -Fxq 'unstripped=true' \
+              "$diagnostic_root/diagnostic-verification.txt"
+            if [[ "$target" == *windows* ]]; then
+              grep -Fxq 'pdb=present' \
+                "$diagnostic_root/diagnostic-verification.txt"
+              test "$(find "$diagnostic_root" -maxdepth 1 \
+                -type f -name '*.pdb' | wc -l)" -eq 1
+            fi
+            shipping_size="$(stat -c %s "$shipping")"
+            shipping_digest="$(sha256sum "$shipping" | cut -d ' ' -f 1)"
+            unstripped_size="$(stat -c %s "$unstripped")"
+            unstripped_digest="$(sha256sum "$unstripped" | cut -d ' ' -f 1)"
+            diagnostic_size="$(find "$diagnostic_root" -type f \
+              -printf '%s\n' | awk '{sum += $1} END {print sum}')"
+            diagnostic_files="$(find "$diagnostic_root" -type f | wc -l)"
+            test "$diagnostic_files" -ge 1
+            test "$diagnostic_size" -gt "$shipping_size"
+            test "$unstripped_digest" != "$shipping_digest"
+            for pass in first second; do
+              tar \
+                --sort=name \
+                --format=pax \
+                --pax-option=delete=atime,delete=ctime \
+                --mtime='UTC 1970-01-01' \
+                --owner=0 \
+                --group=0 \
+                --numeric-owner \
+                --mode='u+rwX,go+rX,go-w' \
+                -cf - \
+                -C "$diagnostic_root" . |
+                gzip -n -9 \
+                  > "diagnostic-archives/$pass/${target}.tar.gz"
+            done
+            cmp \
+              "diagnostic-archives/first/${target}.tar.gz" \
+              "diagnostic-archives/second/${target}.tar.gz"
+            diagnostic_archive_size="$(stat -c %s \
+              "diagnostic-archives/first/${target}.tar.gz")"
+            diagnostic_archive_digest="$(sha256sum \
+              "diagnostic-archives/first/${target}.tar.gz" |
+              cut -d ' ' -f 1)"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$target" \
+              "$shipping_size" \
+              "$shipping_digest" \
+              "$diagnostic_size" \
+              "$unstripped_size" \
+              "$unstripped_digest" \
+              "$diagnostic_files" \
+              "$diagnostic_archive_size" \
+              "$diagnostic_archive_digest" \
+              >> native-measurements.tsv
+          done < <(
+            jq -r '.targets[]
+              | select(.artifacts.cffi != null)
+              | [.triple, .artifacts.cffi.asset]
+              | @tsv' release/platforms.json
+          )
+          test "$(wc -l < native-measurements.tsv)" -eq 8
+          test "$(cut -f3 native-measurements.tsv |
+            LC_ALL=C sort -u | wc -l)" -eq 8
+          test "$(cut -f6 native-measurements.tsv |
+            LC_ALL=C sort -u | wc -l)" -eq 8
+          test "$(cut -f9 native-measurements.tsv |
+            LC_ALL=C sort -u | wc -l)" -eq 8
+          (
+            cd diagnostic-archives/first
+            sha256sum -- *.tar.gz
+          ) > native-diagnostic-archive-manifest.sha256
+          (
+            cd native-downloads
+            find bridge-cffi-diagnostics-* -type f -print0 |
+              sort -z |
+              xargs -0 sha256sum
+          ) > native-diagnostic-manifest.sha256
+          cat native-measurements.tsv
+          cat native-diagnostic-manifest.sha256
+
+      - name: Emit canonical ordinary-call bytecode
+        working-directory: baml_language
+        env:
+          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ runner.temp }}/function-calls.bytecode
+          BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS: ${{ runner.temp }}/optional-host-call-vectors.tsv
+          RUSTC_WRAPPER: ""
+        run: |
+          set -euo pipefail
+          cargo test -p sdk_test_harness_setup \
+            csharp_abi_probe_tests::emit_function_calls_bytecode \
+            --lib -- --ignored --exact --nocapture
+          test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
+          sha256sum "$BAML_CSHARP_ABI_PROBE_BYTECODE"
+          cargo test -p bridge_ctypes \
+            value_encode::tests::emit_csharp_optional_host_call_vectors \
+            --lib -- --ignored --exact --nocapture
+          test "$(wc -l < "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS")" -eq 5
+          sha256sum "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS"
+
+      - name: Build, pack twice, and normalize
+        env:
+          PLATFORM_MATRIX: ${{ needs.platform-matrix.outputs.matrix }}
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.MultiRidPackageProbe/Baml.Bridge.MultiRidPackageProbe.csproj
+          NORMALIZER: baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj
+        run: |
+          set -euo pipefail
+          root="$PWD/staging"
+          target_template="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.MultiRidPackageProbe/Baml.Bridge.MultiRidPackageProbe.targets.in"
+          generated_targets="$root/Baml.Bridge.MultiRidPackageProbe.targets"
+          supported_rids="$(jq -r \
+            '[.include[].rid] | join(";")' <<<"$PLATFORM_MATRIX")"
+          test -n "$supported_rids"
+          sed "s|@BAML_SUPPORTED_RIDS@|$supported_rids|" \
+            "$target_template" > "$generated_targets"
+          ! grep -Fq '@BAML_SUPPORTED_RIDS@' "$generated_targets"
+          mkdir -p raw-a raw-b normalized
+          started=$SECONDS
+          dotnet build "$NORMALIZER" --configuration Release --nologo \
+            -p:NuGetAudit=false
+          dotnet build "$PROJECT" --configuration Release --nologo \
+            -p:NuGetAudit=false \
+            -p:BamlNativeAssetRoot="$root" \
+            -p:BamlGeneratedTargetsPath="$generated_targets"
+          dotnet pack "$PROJECT" --configuration Release --nologo \
+            --no-build --no-restore \
+            --output raw-a \
+            -p:NuGetAudit=false \
+            -p:BamlNativeAssetRoot="$root" \
+            -p:BamlGeneratedTargetsPath="$generated_targets"
+          dotnet pack "$PROJECT" --configuration Release --nologo \
+            --no-build --no-restore \
+            --output raw-b \
+            -p:NuGetAudit=false \
+            -p:BamlNativeAssetRoot="$root" \
+            -p:BamlGeneratedTargetsPath="$generated_targets"
+          dotnet run --project "$NORMALIZER" \
+            --configuration Release --no-build --no-restore -- \
+            raw-a/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg \
+            normalized/package-a.nupkg
+          dotnet run --project "$NORMALIZER" \
+            --configuration Release --no-build --no-restore -- \
+            raw-b/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg \
+            normalized/package-b.nupkg
+          cmp normalized/package-a.nupkg normalized/package-b.nupkg
+          mv normalized/package-a.nupkg \
+            normalized/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg
+          rm normalized/package-b.nupkg
+          echo "$((SECONDS - started))" > package-seconds.txt
+
+      - name: Enforce package inventory and size ceiling
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          package="normalized/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg"
+          size="$(stat -c %s "$package")"
+          test "$size" -lt 200000000
+
+          find staging/runtimes -type f -printf '%P\n' |
+            sed 's#^#runtimes/#' |
+            sort > expected-runtime-entries.txt
+          unzip -Z1 "$package" > package-entries.txt
+          {
+            echo 'Baml.Bridge.MultiRidPackageProbe.nuspec'
+            echo 'README.md'
+            echo '[Content_Types].xml'
+            echo '_rels/.rels'
+            echo 'buildTransitive/Baml.Bridge.MultiRidPackageProbe.targets'
+            echo 'lib/net10.0/Baml.Bridge.dll'
+            echo 'package/services/metadata/core-properties/core-properties.psmdcp'
+            cat expected-runtime-entries.txt
+          } | sort > expected-package-entries.txt
+          sort package-entries.txt > actual-package-entries.txt
+          diff -u expected-package-entries.txt actual-package-entries.txt
+          zipinfo -l "$package" > package-zipinfo.txt
+          test "$(grep -Ec '^-rw-r--r--' package-zipinfo.txt)" \
+            -eq "$(wc -l < package-entries.txt)"
+          grep '^runtimes/.*/native/' package-entries.txt |
+            sort > actual-runtime-entries.txt
+          diff -u expected-runtime-entries.txt actual-runtime-entries.txt
+          test "$(wc -l < actual-runtime-entries.txt)" -eq 8
+          grep -qx 'lib/net10.0/Baml.Bridge.dll' package-entries.txt
+          grep -qx \
+            'buildTransitive/Baml.Bridge.MultiRidPackageProbe.targets' \
+            package-entries.txt
+          expected_supported_rids="$(jq -r \
+            '[.targets[]
+              | select(.artifacts.cffi != null)
+              | .artifacts.cffi.dotnet.rid]
+             | join(";")' release/platforms.json)"
+          unzip -p "$package" \
+            buildTransitive/Baml.Bridge.MultiRidPackageProbe.targets \
+            > packaged-targets.xml
+          grep -Fq \
+            "<_BamlSupportedRid Include=\"$expected_supported_rids\" />" \
+            packaged-targets.xml
+
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "package_size=$size"
+            echo "package_sha256=$(sha256sum "$package" | cut -d ' ' -f 1)"
+            echo "package_build_normalize_seconds=$(cat package-seconds.txt)"
+            echo "shipping_native_bytes=$(awk '{sum += $2} END {print sum}' native-measurements.tsv)"
+            echo "unstripped_diagnostic_bytes=$(awk '{sum += $4} END {print sum}' native-measurements.tsv)"
+            echo "compressed_diagnostic_bytes=$(awk '{sum += $8} END {print sum}' native-measurements.tsv)"
+            echo "diagnostic_compression_reproducible=true"
+            echo "bytecode_size=$(stat -c %s "$RUNNER_TEMP/function-calls.bytecode")"
+            echo "bytecode_sha256=$(sha256sum "$RUNNER_TEMP/function-calls.bytecode" | cut -d ' ' -f 1)"
+            echo "optional_host_call_vectors=$(wc -l < "$RUNNER_TEMP/optional-host-call-vectors.tsv")"
+            echo "optional_host_call_vectors_sha256=$(sha256sum "$RUNNER_TEMP/optional-host-call-vectors.tsv" | cut -d ' ' -f 1)"
+            echo "runtime_entries=8"
+            echo "ceiling=200000000"
+          } > package-measurements.txt
+          cat package-measurements.txt
+          mkdir -p entry-output/normalized
+          cp "$package" entry-output/normalized/
+          cp native-manifest.sha256 entry-output/
+          cp native-diagnostic-manifest.sha256 entry-output/
+          cp native-diagnostic-archive-manifest.sha256 entry-output/
+          cp native-measurements.tsv entry-output/
+          cp package-measurements.txt entry-output/
+          cp package-zipinfo.txt entry-output/
+          printf '%s\n' "$RELEASE_PLAN_JSON" \
+            > entry-output/release-plan.json
+          jq -e \
+            --arg version "$BAML_EXPECTED_VERSION" \
+            '.canonical_version == $version' \
+            entry-output/release-plan.json
+          cp "$RUNNER_TEMP/function-calls.bytecode" entry-output/
+          cp "$RUNNER_TEMP/optional-host-call-vectors.tsv" entry-output/
+          mkdir -p native-diagnostic-evidence/archives
+          cp diagnostic-archives/first/*.tar.gz \
+            native-diagnostic-evidence/archives/
+          cp native-diagnostic-archive-manifest.sha256 \
+            native-diagnostic-evidence/
+          cp native-measurements.tsv native-diagnostic-evidence/
+          (
+            cd native-diagnostic-evidence/archives
+            sha256sum -c ../native-diagnostic-archive-manifest.sha256
+          )
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "diagnostic_archives=$(find native-diagnostic-evidence/archives -type f -name '*.tar.gz' | wc -l)"
+            echo "compressed_diagnostic_bytes=$(find native-diagnostic-evidence/archives -type f -name '*.tar.gz' -printf '%s\n' | awk '{sum += $1} END {print sum}')"
+            echo "compression_reproducible=true"
+          } > native-diagnostic-evidence/diagnostic-measurements.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-package
+          path: entry-output
+          if-no-files-found: error
+          overwrite: true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-native-diagnostics
+          path: native-diagnostic-evidence
+          if-no-files-found: error
+          overwrite: true
+
+  native-consumer:
+    name: Package consumer ${{ matrix.rid }}
+    needs: [platform-matrix, package]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: csharp-entry-package
+          path: entry-package
+
+      - name: Publish and execute the exact package (native host)
+        if: matrix.libc != 'musl'
+        env:
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj
+          RID_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.RidDiagnosticProbe/Baml.Bridge.RidDiagnosticProbe.csproj
+          RID: ${{ matrix.rid }}
+          CANONICAL: ${{ matrix.canonical }}
+        run: |
+          set -euo pipefail
+          feed="$PWD/entry-package/normalized"
+          if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+            feed="$(cygpath -am "$feed")"
+          fi
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          output="$RUNNER_TEMP/csharp-package-consumer"
+          packages="$RUNNER_TEMP/csharp-package-cache"
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          mkdir -p consumer-evidence
+          restore_started=$SECONDS
+          env NUGET_PACKAGES="$packages" dotnet restore "$PROJECT" \
+            --runtime "$RID" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          env NUGET_PACKAGES="$packages" dotnet restore "$RID_PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false
+          cmp \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+            "$packages/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+          restore_seconds=$((SECONDS - restore_started))
+          publish_started=$SECONDS
+          env NUGET_PACKAGES="$packages" dotnet publish "$PROJECT" \
+            --configuration Release \
+            --runtime "$RID" \
+            --self-contained false \
+            --no-restore \
+            --output "$output" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          publish_seconds=$((SECONDS - publish_started))
+          native_count="$(find "$output" -type f \
+            \( -name bridge_cffi.dll -o \
+               -name libbridge_cffi.dylib -o \
+               -name libbridge_cffi.so \) | wc -l)"
+          test "$native_count" -eq 1
+          native_file="$(find "$output" -type f -name "$CANONICAL" -print |
+            sed -n '1p')"
+          test -n "$native_file"
+          dotnet "$output/Baml.Bridge.AbiLifetimeProbe.dll" \
+            package-default \
+            "$BAML_EXPECTED_VERSION" \
+            "$PWD/entry-package/function-calls.bytecode" |
+            tee consumer-evidence/abi-lifetime.txt
+          env NUGET_PACKAGES="$packages" dotnet run \
+            --project "$RID_PROJECT" \
+            --configuration Release \
+            --no-restore \
+            -p:NuGetAudit=false -- \
+            "$RID" |
+            tee consumer-evidence/rid-policy.txt
+          if command -v sha256sum >/dev/null 2>&1; then
+            digest="$(sha256sum "$native_file" | cut -d ' ' -f 1)"
+            package_digest="$(sha256sum \
+              "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" |
+              cut -d ' ' -f 1)"
+          else
+            digest="$(shasum -a 256 "$native_file" | cut -d ' ' -f 1)"
+            package_digest="$(shasum -a 256 \
+              "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" |
+              cut -d ' ' -f 1)"
+          fi
+          printf '%s  %s\n' \
+            "$digest" \
+            "runtimes/$RID/native/$CANONICAL" |
+            diff -u - <(
+              grep "  runtimes/$RID/native/$CANONICAL$" \
+                entry-package/native-manifest.sha256
+            )
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "package_sha256=$package_digest"
+            echo "target=${{ matrix.target }}"
+            echo "rid=$RID"
+            echo "restore_seconds=$restore_seconds"
+            echo "publish_seconds=$publish_seconds"
+            echo "expanded_cache_bytes=$(( $(du -sk "$packages" | cut -f 1) * 1024 ))"
+            echo "publish_bytes=$(( $(du -sk "$output" | cut -f 1) * 1024 ))"
+            echo "native_bytes=$(wc -c < "$native_file" | tr -d ' ')"
+            echo "native_sha256=$digest"
+            echo "published_native_count=1"
+            echo "dotnet_sdk=$(dotnet --version)"
+          } > consumer-evidence/measurements.txt
+          cat consumer-evidence/measurements.txt
+          echo "rid_publish_native_count=1"
+
+      - name: Publish and execute the exact package (real musl userspace)
+        if: matrix.libc == 'musl'
+        env:
+          RID: ${{ matrix.rid }}
+          CANONICAL: ${{ matrix.canonical }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            -e RID \
+            -e CANONICAL \
+            -e ARCH \
+            -e BAML_EXPECTED_VERSION \
+            mcr.microsoft.com/dotnet/sdk@sha256:fac7cce841f78faa4bca416fb4c636d1a129c09abd9b50e9b45664b95fd008a0 \
+            sh -c '
+              set -eu
+              apk add --no-cache \
+                binutils=2.45.1-r0 \
+                file=5.46-r2
+              project=baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj
+              rid_project=baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.RidDiagnosticProbe/Baml.Bridge.RidDiagnosticProbe.csproj
+              feed=/work/entry-package/normalized
+              config=/work/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config
+              output=/tmp/csharp-package-consumer
+              export NUGET_PACKAGES=/tmp/csharp-package-cache
+              export BAML_NATIVE_PROBE_FEED="$feed"
+              mkdir -p /work/consumer-evidence
+              restore_started=$(date +%s)
+              dotnet restore "$project" --runtime "$RID" \
+                --configfile "$config" \
+                -p:NuGetAudit=false \
+                -p:BamlNativeProbeFeed="$feed"
+              dotnet restore "$rid_project" \
+                --configfile "$config" \
+                -p:NuGetAudit=false
+              cmp \
+                "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+                "$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+              restore_seconds=$(($(date +%s) - restore_started))
+              publish_started=$(date +%s)
+              dotnet publish "$project" \
+                --configuration Release \
+                --runtime "$RID" \
+                --self-contained false \
+                --no-restore \
+                --output "$output" \
+                -p:NuGetAudit=false \
+                -p:BamlNativeProbeFeed="$feed"
+              publish_seconds=$(($(date +%s) - publish_started))
+              test "$(find "$output" -type f \
+                \( -name bridge_cffi.dll -o \
+                   -name libbridge_cffi.dylib -o \
+                   -name libbridge_cffi.so \) | wc -l)" -eq 1
+              test -f "$output/$CANONICAL"
+              dotnet "$output/Baml.Bridge.AbiLifetimeProbe.dll" \
+                package-default \
+                "$BAML_EXPECTED_VERSION" \
+                /work/entry-package/function-calls.bytecode \
+                > /work/consumer-evidence/abi-lifetime.txt
+              cat /work/consumer-evidence/abi-lifetime.txt
+              dotnet run \
+                --project "$rid_project" \
+                --configuration Release \
+                --no-restore \
+                -p:NuGetAudit=false -- \
+                "$RID" \
+                > /work/consumer-evidence/rid-policy.txt
+              cat /work/consumer-evidence/rid-policy.txt
+              actual="$(sha256sum "$output/$CANONICAL" | cut -d " " -f 1)"
+              package_digest="$(sha256sum \
+                "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" |
+                cut -d " " -f 1)"
+              expected="$(grep "  runtimes/$RID/native/$CANONICAL$" \
+                /work/entry-package/native-manifest.sha256 | cut -d " " -f 1)"
+              test "$actual" = "$expected"
+              {
+                file "$output/$CANONICAL"
+                ldd "$output/$CANONICAL"
+                readelf -h -d --sections --wide \
+                  "$output/$CANONICAL"
+              } > /work/consumer-evidence/elf-inspection.txt 2>&1
+              cat /work/consumer-evidence/elf-inspection.txt
+              case "$ARCH" in
+                aarch64)
+                  grep -Eq "Machine:[[:space:]]+AArch64" \
+                    /work/consumer-evidence/elf-inspection.txt
+                  ;;
+                x86_64)
+                  grep -Eq "Machine:[[:space:]]+Advanced Micro Devices X86-64" \
+                    /work/consumer-evidence/elf-inspection.txt
+                  ;;
+                *)
+                  echo "unsupported expected ELF architecture: $ARCH" >&2
+                  exit 1
+                  ;;
+              esac
+              grep -Fq "stripped" \
+                /work/consumer-evidence/elf-inspection.txt
+              ! grep -Fq "not stripped" \
+                /work/consumer-evidence/elf-inspection.txt
+              ! grep -Eq "\\.(debug_info|debug_line|symtab)([[:space:]]|$)" \
+                /work/consumer-evidence/elf-inspection.txt
+              ! grep -E "\\((RPATH|RUNPATH)\\)" \
+                /work/consumer-evidence/elf-inspection.txt
+              nm -D --defined-only "$output/$CANONICAL" |
+                awk "{print \$3}" |
+                sed "s/@.*$//" |
+                sort -u > /work/consumer-evidence/actual-exports.txt
+              diff -u \
+                /work/baml_language/sdks/csharp/bridge_csharp/tests/expected-bridge-cffi-exports.txt \
+                /work/consumer-evidence/actual-exports.txt
+              {
+                echo "source_sha=${{ inputs.source_sha }}"
+                echo "workflow_run_id=${{ github.run_id }}"
+                echo "workflow_run_attempt=${{ github.run_attempt }}"
+                echo "release_version=$BAML_EXPECTED_VERSION"
+                echo "package_sha256=$package_digest"
+                echo "target=${{ matrix.target }}"
+                echo "rid=$RID"
+                echo "restore_seconds=$restore_seconds"
+                echo "publish_seconds=$publish_seconds"
+                echo "expanded_cache_bytes=$(($(du -sk "$NUGET_PACKAGES" | cut -f 1) * 1024))"
+                echo "publish_bytes=$(($(du -sk "$output" | cut -f 1) * 1024))"
+                echo "native_bytes=$(wc -c < "$output/$CANONICAL" | tr -d " ")"
+                echo "native_sha256=$actual"
+                echo "published_native_count=1"
+                echo "dotnet_sdk=$(dotnet --version)"
+                echo "binutils=$(apk info -v binutils)"
+                echo "file=$(apk info -v file)"
+              } > /work/consumer-evidence/measurements.txt
+              cat /work/consumer-evidence/measurements.txt
+              echo rid_publish_native_count=1
+            '
+
+      - name: Inspect format, dependencies, minimum platform, and exports (ELF)
+        if: startsWith(matrix.rid, 'linux-') && matrix.libc != 'musl'
+        env:
+          CANONICAL: ${{ matrix.canonical }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          native="$RUNNER_TEMP/csharp-package-consumer/$CANONICAL"
+          {
+            file "$native"
+            readelf -h -d --sections --wide "$native"
+          } | tee consumer-evidence/elf-inspection.txt
+          case "$ARCH" in
+            aarch64)
+              grep -Eq 'Machine:[[:space:]]+AArch64' \
+                consumer-evidence/elf-inspection.txt
+              ;;
+            x86_64)
+              grep -Eq \
+                'Machine:[[:space:]]+Advanced Micro Devices X86-64' \
+                consumer-evidence/elf-inspection.txt
+              ;;
+            *)
+              echo "unsupported expected ELF architecture: $ARCH" >&2
+              exit 1
+              ;;
+          esac
+          grep -Fq 'stripped' consumer-evidence/elf-inspection.txt
+          ! grep -Fq 'not stripped' \
+            consumer-evidence/elf-inspection.txt
+          ! grep -Eq '\.(debug_info|debug_line|symtab)([[:space:]]|$)' \
+            consumer-evidence/elf-inspection.txt
+          ! grep -E '\((RPATH|RUNPATH)\)' \
+            consumer-evidence/elf-inspection.txt
+          objdump -T "$native" |
+            grep -o 'GLIBC_[0-9.]*' |
+            sort -Vu |
+            tail -1 |
+            tee consumer-evidence/maximum-glibc-version.txt
+          nm -D --defined-only "$native" |
+            awk '{print $3}' |
+            sed 's/@.*$//' |
+            sort -u > "$RUNNER_TEMP/actual-exports.txt"
+          diff -u \
+            baml_language/sdks/csharp/bridge_csharp/tests/expected-bridge-cffi-exports.txt \
+            "$RUNNER_TEMP/actual-exports.txt"
+          cp "$RUNNER_TEMP/actual-exports.txt" consumer-evidence/
+
+      - name: Inspect format, dependencies, minimum platform, and exports (Mach-O)
+        if: startsWith(matrix.rid, 'osx-')
+        env:
+          CANONICAL: ${{ matrix.canonical }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          native="$RUNNER_TEMP/csharp-package-consumer/$CANONICAL"
+          {
+            file "$native"
+            otool -hvL "$native"
+            otool -l "$native"
+          } | tee consumer-evidence/macho-inspection.txt
+          ! grep -q 'LC_RPATH' consumer-evidence/macho-inspection.txt
+          case "$ARCH" in
+            aarch64) expected_arch=arm64 ;;
+            x86_64) expected_arch=x86_64 ;;
+            *)
+              echo "unsupported expected Mach-O architecture: $ARCH" >&2
+              exit 1
+              ;;
+          esac
+          actual_archs="$(lipo -archs "$native")"
+          test "$actual_archs" = "$expected_arch"
+          printf 'architecture=%s\n' "$actual_archs" |
+            tee consumer-evidence/macho-architecture.txt
+          ! grep -Fq 'segname __DWARF' \
+            consumer-evidence/macho-inspection.txt
+          grep -A4 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX' \
+            consumer-evidence/macho-inspection.txt \
+            > consumer-evidence/minimum-macos-version.txt
+          nm -U "$native" |
+            awk 'NF {print $NF}' |
+            sort -u > "$RUNNER_TEMP/all-defined-symbols.txt"
+          nm -gU "$native" |
+            awk '{print $NF}' |
+            sed 's/^_//' |
+            sort -u > "$RUNNER_TEMP/actual-exports.txt"
+          sed 's/^_//' "$RUNNER_TEMP/all-defined-symbols.txt" |
+            sort -u > "$RUNNER_TEMP/all-defined-symbols-normalized.txt"
+          diff -u \
+            "$RUNNER_TEMP/actual-exports.txt" \
+            "$RUNNER_TEMP/all-defined-symbols-normalized.txt"
+          diff -u \
+            baml_language/sdks/csharp/bridge_csharp/tests/expected-bridge-cffi-exports.txt \
+            "$RUNNER_TEMP/actual-exports.txt"
+          cp "$RUNNER_TEMP/actual-exports.txt" consumer-evidence/
+          cp "$RUNNER_TEMP/all-defined-symbols-normalized.txt" \
+            consumer-evidence/all-defined-symbols.txt
+
+      - name: Inspect format, dependencies, and exports (PE)
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        env:
+          CANONICAL: ${{ matrix.canonical }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $native = Join-Path $env:RUNNER_TEMP "csharp-package-consumer/$env:CANONICAL"
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) { throw "Visual Studio installation not found" }
+          Import-Module (Join-Path $vsInstall "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          $arch = if ("${{ matrix.rid }}" -eq "win-arm64") { "arm64" } else { "amd64" }
+          Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation `
+            -DevCmdArguments "-arch=$arch -host_arch=$arch"
+          $inspection = & dumpbin /headers /dependents /exports $native
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin failed" }
+          $inspection | Out-File "consumer-evidence/pe-inspection.txt"
+          $inspectionText = $inspection -join [Environment]::NewLine
+          $expectedMachine = switch ($env:ARCH) {
+            "aarch64" { "AA64 machine \(ARM64\)" }
+            "x86_64" { "8664 machine \(x64\)" }
+            default { throw "unsupported expected PE architecture: $env:ARCH" }
+          }
+          if ($inspectionText -notmatch $expectedMachine) {
+            throw "PE machine does not match $env:ARCH"
+          }
+          if ($inspectionText -notmatch '(?m)^\s*0 number of symbols\s*$') {
+            throw "shipping PE retains a COFF symbol table"
+          }
+          $exports = $inspection |
+            ForEach-Object {
+              if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)\s*$') {
+                $Matches[1]
+              }
+            } |
+            Sort-Object -Unique
+          $expected = Get-Content `
+            baml_language/sdks/csharp/bridge_csharp/tests/expected-bridge-cffi-exports.txt
+          $difference = Compare-Object $expected $exports
+          if ($difference) {
+            $difference | Format-Table | Out-String | Write-Error
+          }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-consumer-${{ matrix.rid }}
+          path: consumer-evidence
+          if-no-files-found: error
+          overwrite: true
+
+  protocol-builders:
+    name: Protocol builder ${{ matrix.os }}
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux-x64
+            runner: ubuntu-24.04
+          - os: macos-arm64
+            runner: macos-15
+          - os: windows-x64
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: csharp-entry-package
+          path: entry-package
+
+      - name: Generate twice and execute the protocol vectors
+        env:
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.ProtocolProbe/Baml.Bridge.ProtocolProbe.csproj
+        run: |
+          set -euo pipefail
+          export NUGET_PACKAGES="$RUNNER_TEMP/csharp-protocol-packages"
+          vectors="$PWD/entry-package/optional-host-call-vectors.tsv"
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          feed="$PWD/entry-package/normalized"
+          if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+            feed="$(cygpath -am "$feed")"
+          fi
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          sha256_digest() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1" | awk '{print $1}'
+            else
+              shasum -a 256 "$1" | awk '{print $1}'
+            fi
+          }
+          test "$(wc -l < "$vectors")" -eq 5
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false
+          mkdir -p protocol-evidence
+          dotnet run --project "$PROJECT" \
+            --configuration Release \
+            --no-restore \
+            -p:NuGetAudit=false -- \
+            "$vectors" |
+            tee protocol-evidence/probe-output.txt
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/protocol-a/"
+          dotnet build "$PROJECT" \
+            --configuration Release \
+            --nologo \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/protocol-a/"
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/protocol-b/"
+          dotnet build "$PROJECT" \
+            --configuration Release \
+            --nologo \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/protocol-b/"
+          generated_a="$(find "$RUNNER_TEMP/protocol-a" \
+            -type d -path '*/baml_bridge/cffi/v1' -print |
+            sed -n '1p')"
+          generated_b="$(find "$RUNNER_TEMP/protocol-b" \
+            -type d -path '*/baml_bridge/cffi/v1' -print |
+            sed -n '1p')"
+          test -n "$generated_a"
+          test -n "$generated_b"
+          diff -ru "$generated_a" "$generated_b"
+          test "$(find "$generated_a" -type f -name '*.g.cs' | wc -l)" -eq 4
+          mkdir -p protocol-evidence/generated
+          cp -R "$generated_a/." protocol-evidence/generated/
+          (
+            cd protocol-evidence/generated
+            while IFS= read -r file; do
+              printf '%s  %s\n' "$(sha256_digest "$file")" "$file"
+            done < <(
+              find . -type f -name '*.g.cs' -print |
+                LC_ALL=C sort
+            )
+          ) > protocol-evidence/generated-manifest.sha256
+          test "$(wc -l < protocol-evidence/generated-manifest.sha256)" -eq 4
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "builder=${{ matrix.os }}"
+            echo "dotnet_sdk=$(dotnet --version)"
+            echo "generated_files=4"
+            echo "evidence_package_sha256=$(sha256_digest \
+              "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg")"
+            echo "rust_host_call_vectors_sha256=$(sha256_digest "$vectors")"
+            echo "within_host_generation=byte_identical"
+          } > protocol-evidence/measurements.txt
+          cat protocol-evidence/generated-manifest.sha256
+          echo "protocol_generation=byte_identical"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-protocol-${{ matrix.os }}
+          path: protocol-evidence
+          if-no-files-found: error
+          overwrite: true
+
+  protocol-consistency:
+    name: Compare protocol generation across build hosts
+    needs: protocol-builders
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: csharp-entry-protocol-*
+          path: protocol-downloads
+          merge-multiple: false
+
+      - name: Require identical Linux, macOS, and Windows output
+        run: |
+          set -euo pipefail
+          expected=(
+            csharp-entry-protocol-linux-x64
+            csharp-entry-protocol-macos-arm64
+            csharp-entry-protocol-windows-x64
+          )
+          for artifact in "${expected[@]}"; do
+            test -f "protocol-downloads/$artifact/generated-manifest.sha256"
+          done
+          mapfile -t manifests < <(
+            find protocol-downloads \
+              -type f -name generated-manifest.sha256 |
+              sort
+          )
+          test "${#manifests[@]}" -eq 3
+          reference="${manifests[0]}"
+          for manifest in "${manifests[@]:1}"; do
+            diff -u "$reference" "$manifest"
+          done
+          mkdir -p protocol-consistency
+          cp "$reference" protocol-consistency/generated-manifest.sha256
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "builders=3"
+            echo "generated_files=4"
+            echo "cross_host_generation=byte_identical"
+          } > protocol-consistency/measurements.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-proto-consistency
+          path: protocol-consistency
+          if-no-files-found: error
+          overwrite: true
+
+  semantic-and-deployment:
+    name: Stream and trimmed deployment evidence
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          enable-cache: false
+          enable-cross: false
+          skip-protoc: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: csharp-entry-package
+          path: entry-package
+
+      - name: Emit canonical bytecode fixtures
+        run: |
+          set -euo pipefail
+          cd baml_language
+          export RUSTC_WRAPPER=
+          export BAML_CSHARP_ABI_PROBE_BYTECODE="$RUNNER_TEMP/function-calls.bytecode"
+          cargo test -p sdk_test_harness_setup \
+            csharp_abi_probe_tests::emit_function_calls_bytecode \
+            --lib -- --ignored --exact --nocapture
+          export BAML_CSHARP_MEDIA_PROBE_BYTECODE="$RUNNER_TEMP/type-shapes.bytecode"
+          cargo test -p sdk_test_harness_setup \
+            csharp_abi_probe_tests::emit_type_shapes_bytecode \
+            --lib -- --ignored --exact --nocapture
+          export BAML_CSHARP_STREAM_PROBE_BYTECODE="$RUNNER_TEMP/llm-functions.bytecode"
+          cargo test -p sdk_test_harness_setup \
+            csharp_abi_probe_tests::emit_llm_functions_bytecode \
+            --lib -- --ignored --exact --nocapture
+
+      - name: Execute the exact pull-based stream fixture
+        env:
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.StreamMediaAbiProbe/Baml.Bridge.StreamMediaAbiProbe.csproj
+        run: |
+          set -euo pipefail
+          feed="$PWD/entry-package/normalized"
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          recording="$PWD/baml_language/sdk_tests/fixtures/llm_functions/recordings/replay_extract_string.snap.sse"
+          export NUGET_PACKAGES="$RUNNER_TEMP/csharp-semantic-packages"
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          dotnet build "$PROJECT" --configuration Release --nologo \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          cmp \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+            "$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+          dotnet run --project "$PROJECT" \
+            --configuration Release --no-build --no-restore -- \
+            package-default "$BAML_EXPECTED_VERSION" stream \
+            "$RUNNER_TEMP/llm-functions.bytecode" "$recording" |
+            tee "$RUNNER_TEMP/stream-output.txt"
+
+      - name: Publish and execute trimmed ABI, media, stream, and managed-value probes
+        env:
+          ABI_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj
+          STREAM_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.StreamMediaAbiProbe/Baml.Bridge.StreamMediaAbiProbe.csproj
+          MANAGED_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.ManagedContractProbe/Baml.Bridge.ManagedContractProbe.csproj
+          REFLECTION_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.ReflectionRootProbe/Baml.Bridge.ReflectionRootProbe.csproj
+          RID_PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.RidDiagnosticProbe/Baml.Bridge.RidDiagnosticProbe.csproj
+        run: |
+          set -euo pipefail
+          feed="$PWD/entry-package/normalized"
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          recording="$PWD/baml_language/sdk_tests/fixtures/llm_functions/recordings/replay_extract_string.snap.sse"
+          export NUGET_PACKAGES="$RUNNER_TEMP/csharp-trim-packages"
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          projects=(
+            "$ABI_PROJECT"
+            "$STREAM_PROJECT"
+            "$MANAGED_PROJECT"
+            "$REFLECTION_PROJECT"
+            "$RID_PROJECT"
+          )
+          for project in "${projects[@]}"; do
+            dotnet restore "$project" \
+              --runtime linux-x64 \
+              --configfile "$config" \
+              -p:NuGetAudit=false \
+              -p:BamlNativeProbeFeed="$feed"
+          done
+          common=(
+            --configuration Release
+            --runtime linux-x64
+            --self-contained true
+            --no-restore
+            -p:PublishTrimmed=true
+            -p:TrimMode=link
+            -p:SuppressTrimAnalysisWarnings=false
+            -p:TrimmerSingleWarn=false
+            -p:ILLinkTreatWarningsAsErrors=true
+            -p:NuGetAudit=false
+            -p:BamlNativeProbeFeed="$feed"
+          )
+
+          dotnet publish "$ABI_PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/trimmed-abi"
+          cmp \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+            "$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+          test "$(find "$RUNNER_TEMP/trimmed-abi" -type f \
+            -name libbridge_cffi.so | wc -l)" -eq 1
+          "$RUNNER_TEMP/trimmed-abi/Baml.Bridge.AbiLifetimeProbe" \
+            package-default \
+            "$BAML_EXPECTED_VERSION" \
+            "$RUNNER_TEMP/function-calls.bytecode" |
+            tee "$RUNNER_TEMP/trimmed-output.txt"
+
+          dotnet publish "$STREAM_PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/trimmed-stream"
+          test "$(find "$RUNNER_TEMP/trimmed-stream" -type f \
+            -name libbridge_cffi.so | wc -l)" -eq 1
+          "$RUNNER_TEMP/trimmed-stream/Baml.Bridge.StreamMediaAbiProbe" \
+            package-default \
+            "$BAML_EXPECTED_VERSION" media \
+            "$RUNNER_TEMP/type-shapes.bytecode" |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+          "$RUNNER_TEMP/trimmed-stream/Baml.Bridge.StreamMediaAbiProbe" \
+            package-default \
+            "$BAML_EXPECTED_VERSION" stream \
+            "$RUNNER_TEMP/llm-functions.bytecode" "$recording" |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+
+          dotnet publish "$MANAGED_PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/trimmed-managed"
+          "$RUNNER_TEMP/trimmed-managed/Baml.Bridge.ManagedContractProbe" |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+
+          dotnet publish "$REFLECTION_PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/trimmed-reflection"
+          "$RUNNER_TEMP/trimmed-reflection/Baml.Bridge.ReflectionRootProbe" \
+            rooted |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+          "$RUNNER_TEMP/trimmed-reflection/Baml.Bridge.ReflectionRootProbe" \
+            unrooted |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+
+          dotnet publish "$RID_PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/trimmed-rid"
+          "$RUNNER_TEMP/trimmed-rid/Baml.Bridge.RidDiagnosticProbe" |
+            tee -a "$RUNNER_TEMP/trimmed-output.txt"
+          echo "trimmed_representative_paths=executed"
+
+      - name: Publish and execute all single-file native shapes
+        env:
+          EMITTER: baml_language/sdks/csharp/bridge_csharp/tools/Baml.BytecodeCarrierEmitter/Baml.BytecodeCarrierEmitter.csproj
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.ProgramBootstrapProbe/Baml.Bridge.ProgramBootstrapProbe.csproj
+        run: |
+          set -euo pipefail
+          feed="$PWD/entry-package/normalized"
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          generated="$RUNNER_TEMP/BamlProgram.g.cs"
+          export NUGET_PACKAGES="$RUNNER_TEMP/csharp-single-file-packages"
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          dotnet restore "$EMITTER" \
+            --configfile "$config" \
+            -p:NuGetAudit=false
+          dotnet run --project "$EMITTER" \
+            --configuration Release \
+            --no-restore \
+            -p:NuGetAudit=false -- \
+            "$RUNNER_TEMP/function-calls.bytecode" \
+            "$generated" "$BAML_EXPECTED_VERSION"
+          dotnet restore "$PROJECT" \
+            --runtime linux-x64 \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed" \
+            -p:BamlGeneratedProgramSource="$generated"
+          common=(
+            --configuration Release
+            --runtime linux-x64
+            --self-contained true
+            --no-restore
+            -p:PublishSingleFile=true
+            -p:SuppressTrimAnalysisWarnings=false
+            -p:TrimmerSingleWarn=false
+            -p:ILLinkTreatWarningsAsErrors=true
+            -p:NuGetAudit=false
+            -p:BamlGeneratedProgramSource="$generated"
+            -p:BamlNativeProbeFeed="$feed"
+          )
+          trimmed=(
+            -p:PublishTrimmed=true
+            -p:TrimMode=link
+          )
+          validate_single_file_inventory() {
+            local output="$1"
+            local native_shape="$2"
+            local expected="$RUNNER_TEMP/expected-single-file-inventory.txt"
+            local actual="$RUNNER_TEMP/actual-single-file-inventory.txt"
+            test -x "$output/Baml.Bridge.ProgramBootstrapProbe"
+            {
+              echo 'Baml.Bridge.ProgramBootstrapProbe'
+              if test -f \
+                "$output/Baml.Bridge.ProgramBootstrapProbe.pdb"; then
+                echo 'Baml.Bridge.ProgramBootstrapProbe.pdb'
+              fi
+              if test "$native_shape" = sidecar; then
+                echo 'libbridge_cffi.so'
+              fi
+            } | sort > "$expected"
+            find "$output" -maxdepth 1 -type f -printf '%f\n' |
+              sort > "$actual"
+            diff -u "$expected" "$actual"
+          }
+          package_native="$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/runtimes/linux-x64/native/libbridge_cffi.so"
+          require_exact_extracted_native() {
+            local extraction_root="$1"
+            local -a extracted_natives
+            mapfile -d '' extracted_natives < <(
+              find "$extraction_root" \
+                -type f -name libbridge_cffi.so -print0
+            )
+            test "${#extracted_natives[@]}" -eq 1
+            cmp "$package_native" "${extracted_natives[0]}"
+          }
+          cmp \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+            "$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+          test -s "$package_native"
+
+          dotnet publish "$PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/untrimmed-single-sidecar" \
+            -p:PublishTrimmed=false \
+            -p:IncludeNativeLibrariesForSelfExtract=false
+          test -f "$RUNNER_TEMP/untrimmed-single-sidecar/libbridge_cffi.so"
+          cmp \
+            "$package_native" \
+            "$RUNNER_TEMP/untrimmed-single-sidecar/libbridge_cffi.so"
+          validate_single_file_inventory \
+            "$RUNNER_TEMP/untrimmed-single-sidecar" sidecar
+          "$RUNNER_TEMP/untrimmed-single-sidecar/Baml.Bridge.ProgramBootstrapProbe" \
+            valid-packaged |
+            tee "$RUNNER_TEMP/single-file-output.txt"
+
+          dotnet publish "$PROJECT" "${common[@]}" \
+            --output "$RUNNER_TEMP/untrimmed-single-extract" \
+            -p:PublishTrimmed=false \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          test ! -e "$RUNNER_TEMP/untrimmed-single-extract/libbridge_cffi.so"
+          validate_single_file_inventory \
+            "$RUNNER_TEMP/untrimmed-single-extract" self-extract
+          untrimmed_extract_root="$RUNNER_TEMP/untrimmed-single-extract-cache"
+          mkdir -p "$untrimmed_extract_root"
+          DOTNET_BUNDLE_EXTRACT_BASE_DIR="$untrimmed_extract_root" \
+            "$RUNNER_TEMP/untrimmed-single-extract/Baml.Bridge.ProgramBootstrapProbe" \
+              valid-packaged |
+            tee -a "$RUNNER_TEMP/single-file-output.txt"
+          require_exact_extracted_native "$untrimmed_extract_root"
+
+          dotnet publish "$PROJECT" "${common[@]}" "${trimmed[@]}" \
+            --output "$RUNNER_TEMP/trimmed-single-sidecar" \
+            -p:IncludeNativeLibrariesForSelfExtract=false
+          test -f "$RUNNER_TEMP/trimmed-single-sidecar/libbridge_cffi.so"
+          cmp \
+            "$package_native" \
+            "$RUNNER_TEMP/trimmed-single-sidecar/libbridge_cffi.so"
+          validate_single_file_inventory \
+            "$RUNNER_TEMP/trimmed-single-sidecar" sidecar
+          "$RUNNER_TEMP/trimmed-single-sidecar/Baml.Bridge.ProgramBootstrapProbe" \
+            valid-packaged |
+            tee -a "$RUNNER_TEMP/single-file-output.txt"
+
+          dotnet publish "$PROJECT" "${common[@]}" "${trimmed[@]}" \
+            --output "$RUNNER_TEMP/trimmed-single-extract" \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          test ! -e "$RUNNER_TEMP/trimmed-single-extract/libbridge_cffi.so"
+          validate_single_file_inventory \
+            "$RUNNER_TEMP/trimmed-single-extract" self-extract
+          trimmed_extract_root="$RUNNER_TEMP/trimmed-single-extract-cache"
+          mkdir -p "$trimmed_extract_root"
+          DOTNET_BUNDLE_EXTRACT_BASE_DIR="$trimmed_extract_root" \
+            "$RUNNER_TEMP/trimmed-single-extract/Baml.Bridge.ProgramBootstrapProbe" \
+              valid-packaged |
+            tee -a "$RUNNER_TEMP/single-file-output.txt"
+          require_exact_extracted_native "$trimmed_extract_root"
+          {
+            echo "untrimmed_single_file=sidecar_and_self_extract"
+            echo "trimmed_single_file=sidecar_and_self_extract"
+            echo "single_file_native_bytes=exact_package_asset"
+            echo "single_file_exact_native_copies=4"
+            echo "single_file_native_sha256=$(sha256sum "$package_native" | cut -d ' ' -f 1)"
+          } | tee -a "$RUNNER_TEMP/single-file-output.txt"
+
+      - name: Prove exact-package NativeAOT rejection
+        env:
+          PROJECT: baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NativeAotGuardProbe/Baml.Bridge.NativeAotGuardProbe.csproj
+        run: |
+          set -euo pipefail
+          feed="$PWD/entry-package/normalized"
+          config="$PWD/baml_language/sdks/csharp/bridge_csharp/tests/NuGet.EntryGates.Config"
+          export NUGET_PACKAGES="$RUNNER_TEMP/csharp-aot-packages"
+          export BAML_NATIVE_PROBE_FEED="$feed"
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          cmp \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" \
+            "$NUGET_PACKAGES/baml.bridge.multiridpackageprobe/0.0.0-b4/baml.bridge.multiridpackageprobe.0.0.0-b4.nupkg"
+          dotnet run --project "$PROJECT" \
+            --configuration Release \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed"
+          supported_rids="$(jq -r '
+            [.targets[]
+              | select(.artifacts.cffi != null)
+              | .artifacts.cffi.dotnet.rid]
+            | join(", ")
+          ' release/platforms.json)"
+          test "$(tr ',' '\n' <<<"$supported_rids" | wc -l)" -eq 8
+          require_exact_msbuild_error() {
+            local output="$1"
+            local code="$2"
+            local expected="$3"
+            local line payload
+            local -a error_lines error_codes
+
+            mapfile -t error_lines < <(
+              grep -E '(^|: )error ' <<<"$output"
+            )
+            test "${#error_lines[@]}" -ge 1
+            for line in "${error_lines[@]}"; do
+              [[ "$line" == *"error $code: "* ]]
+              payload="${line#*error $code: }"
+              payload="$(sed -E 's/ \[[^][]+\]$//' <<<"$payload")"
+              test "$payload" = "$expected"
+            done
+            mapfile -t error_codes < <(
+              grep -Eo 'error [A-Za-z]+[0-9]+:' <<<"$output" |
+                LC_ALL=C sort -u
+            )
+            test "${#error_codes[@]}" -eq 1
+            test "${error_codes[0]}" = "error $code:"
+          }
+          expected_unsupported_message="baml-bridge does not support RuntimeIdentifier(s) linux-s390x. Supported RIDs: ${supported_rids}."
+          unsupported_obj="$RUNNER_TEMP/unsupported-rid-obj/"
+          unsupported_bin="$RUNNER_TEMP/unsupported-rid-bin/"
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed" \
+            -p:BaseIntermediateOutputPath="$unsupported_obj"
+          set +e
+          unsupported_output="$(dotnet build "$PROJECT" \
+            --configuration Release \
+            --nologo \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed" \
+            -p:RuntimeIdentifier=linux-s390x \
+            -p:BaseOutputPath="$unsupported_bin" \
+            -p:BaseIntermediateOutputPath="$unsupported_obj" \
+            2>&1)"
+          unsupported_status=$?
+          set -e
+          test "$unsupported_status" -ne 0
+          require_exact_msbuild_error \
+            "$unsupported_output" \
+            BAML0010 \
+            "$expected_unsupported_message"
+          test -z "$(find "$unsupported_bin" \
+            -type f \( -name '*.dll' -o -perm -u+x \) -print |
+            sed -n '1p' \
+            2>/dev/null || true)"
+          mkdir -p semantic-evidence
+          printf '%s\n' "$unsupported_output" \
+            > semantic-evidence/BAML0010.txt
+          dotnet restore "$PROJECT" \
+            --configfile "$config" \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed" \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/aot-negative-obj/"
+          set +e
+          output="$(dotnet build "$PROJECT" \
+            --configuration Release \
+            --nologo \
+            --no-restore \
+            -p:NuGetAudit=false \
+            -p:BamlNativeProbeFeed="$feed" \
+            -p:PublishAot=true \
+            -p:BaseOutputPath="$RUNNER_TEMP/aot-negative-bin/" \
+            -p:BaseIntermediateOutputPath="$RUNNER_TEMP/aot-negative-obj/" \
+            2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          expected_aot_message='baml-bridge does not support NativeAOT in v1. Use a normal, trimmed, single-file, or trimmed single-file JIT publish instead.'
+          require_exact_msbuild_error \
+            "$output" \
+            BAML0019 \
+            "$expected_aot_message"
+          printf '%s\n' "$output" \
+            > semantic-evidence/BAML0019.txt
+          test -z "$(find "$RUNNER_TEMP/aot-negative-bin" \
+            -type f \( -name '*.dll' -o -perm -u+x \) -print |
+            sed -n '1p' \
+            2>/dev/null || true)"
+          echo "exact_package_unsupported_rid=BAML0010"
+          echo "exact_package_nativeaot=BAML0019"
+
+      - name: Collect immutable semantic and deployment evidence
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          mkdir -p semantic-evidence/manifests
+          cp "$RUNNER_TEMP/stream-output.txt" semantic-evidence/
+          cp "$RUNNER_TEMP/trimmed-output.txt" semantic-evidence/
+          cp "$RUNNER_TEMP/single-file-output.txt" semantic-evidence/
+          cp "$RUNNER_TEMP/function-calls.bytecode" semantic-evidence/
+          cp "$RUNNER_TEMP/type-shapes.bytecode" semantic-evidence/
+          cp "$RUNNER_TEMP/llm-functions.bytecode" semantic-evidence/
+          printf '%s\n' "$RELEASE_PLAN_JSON" \
+            > semantic-evidence/release-plan.json
+          dotnet --info > semantic-evidence/dotnet-info.txt
+
+          outputs=(
+            trimmed-abi
+            trimmed-stream
+            trimmed-managed
+            trimmed-reflection
+            trimmed-rid
+            untrimmed-single-sidecar
+            untrimmed-single-extract
+            trimmed-single-sidecar
+            trimmed-single-extract
+          )
+          for output in "${outputs[@]}"; do
+            test -d "$RUNNER_TEMP/$output"
+            (
+              cd "$RUNNER_TEMP/$output"
+              find . -type f -print0 |
+                sort -z |
+              xargs -0 sha256sum
+            ) > "semantic-evidence/manifests/${output}.sha256"
+          done
+          extraction_roots=(
+            untrimmed-single-extract-cache
+            trimmed-single-extract-cache
+          )
+          for extraction_root in "${extraction_roots[@]}"; do
+            test "$(find "$RUNNER_TEMP/$extraction_root" \
+              -type f -name libbridge_cffi.so | wc -l)" -eq 1
+            (
+              cd "$RUNNER_TEMP/$extraction_root"
+              find . -type f -name libbridge_cffi.so -print0 |
+                sort -z |
+                xargs -0 sha256sum
+            ) > "semantic-evidence/manifests/${extraction_root}.sha256"
+          done
+
+          package="entry-package/normalized/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg"
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "package_sha256=$(sha256sum "$package" | cut -d ' ' -f 1)"
+            echo "stream_fixture=executed"
+            echo "trimmed_package_default=executed"
+            echo "untrimmed_single_file_sidecar=executed"
+            echo "untrimmed_single_file_self_extract=executed"
+            echo "trimmed_single_file_sidecar=executed"
+            echo "trimmed_single_file_self_extract=executed"
+            echo "single_file_exact_native_copies=4"
+            echo "single_file_native_sha256=$(unzip -p "$package" runtimes/linux-x64/native/libbridge_cffi.so | sha256sum | cut -d ' ' -f 1)"
+            echo "unsupported_rid=BAML0010"
+            echo "nativeaot=BAML0019"
+          } > semantic-evidence/measurements.txt
+          sha256sum \
+            semantic-evidence/function-calls.bytecode \
+            semantic-evidence/type-shapes.bytecode \
+            semantic-evidence/llm-functions.bytecode \
+            > semantic-evidence/bytecode-manifest.sha256
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-entry-semantic-deployment
+          path: semantic-evidence
+          if-no-files-found: error
+          overwrite: true
+
+  completeness:
+    name: Require the complete immutable evidence set
+    needs:
+      - package
+      - native-consumer
+      - protocol-consistency
+      - semantic-and-deployment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: csharp-entry-*
+          path: all-evidence
+          merge-multiple: false
+
+      - name: Require every package, consumer, protocol, and semantic artifact
+        run: |
+          set -euo pipefail
+          expected=(
+            csharp-entry-package
+            csharp-entry-native-diagnostics
+            csharp-entry-consumer-osx-arm64
+            csharp-entry-consumer-osx-x64
+            csharp-entry-consumer-linux-arm64
+            csharp-entry-consumer-linux-musl-arm64
+            csharp-entry-consumer-linux-x64
+            csharp-entry-consumer-linux-musl-x64
+            csharp-entry-consumer-win-x64
+            csharp-entry-consumer-win-arm64
+            csharp-entry-protocol-linux-x64
+            csharp-entry-protocol-macos-arm64
+            csharp-entry-protocol-windows-x64
+            csharp-entry-proto-consistency
+            csharp-entry-semantic-deployment
+          )
+          for artifact in "${expected[@]}"; do
+            test -d "all-evidence/$artifact"
+            test -n "$(find "all-evidence/$artifact" -type f -print |
+              sed -n '1p')"
+            mapfile -t measurements < <(
+              find "all-evidence/$artifact" \
+                -type f -name '*measurements.txt' -print |
+                LC_ALL=C sort
+            )
+            test "${#measurements[@]}" -ge 1
+            for measurement in "${measurements[@]}"; do
+              grep -Fxq "source_sha=${{ inputs.source_sha }}" \
+                "$measurement"
+              grep -Fxq "workflow_run_id=${{ github.run_id }}" \
+                "$measurement"
+              grep -Fxq \
+                "workflow_run_attempt=${{ github.run_attempt }}" \
+                "$measurement"
+              grep -Fxq "release_version=$BAML_EXPECTED_VERSION" \
+                "$measurement"
+            done
+          done
+          test "$(find all-evidence -mindepth 1 -maxdepth 1 \
+            -type d | wc -l)" -eq "${#expected[@]}"
+          test "$(find \
+            all-evidence/csharp-entry-native-diagnostics/archives \
+            -type f -name '*.tar.gz' | wc -l)" -eq 8
+          (
+            cd all-evidence/csharp-entry-native-diagnostics/archives
+            sha256sum -c ../native-diagnostic-archive-manifest.sha256
+          )
+
+          mkdir -p completeness-evidence
+          (
+            cd all-evidence
+            find . -type f -print0 |
+              sort -z |
+              xargs -0 sha256sum
+          ) > completeness-evidence/artifact-files.sha256
+          {
+            echo "source_sha=${{ inputs.source_sha }}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$BAML_EXPECTED_VERSION"
+            echo "evidence_artifacts=${#expected[@]}"
+            echo "required_rid_consumers=8"
+            echo "required_protocol_builders=3"
+            echo "complete=true"
+          } > completeness-evidence/measurements.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: csharp-gate-completeness
+          path: completeness-evidence
+          if-no-files-found: error
+          overwrite: true

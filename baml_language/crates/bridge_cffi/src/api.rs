@@ -170,11 +170,18 @@ pub struct BamlApiV1 {
     /// the registered result callback using `callback_id`.
     pub call_function: BamlCallFunctionFn,
     /// Allocate a nonzero process-unique BAML function-call identifier.
+    ///
+    /// Returns zero only after the nonzero `u64` identifier domain is
+    /// exhausted. The host must fail the operation without dispatching when
+    /// it receives zero.
     pub new_function_call: BamlNewFunctionCallFn,
     /// Request cancellation of a BAML function call.
     ///
-    /// Returns 0 on success and 1 when the ID is zero, unknown, completed, or
-    /// the runtime is unavailable.
+    /// Returns 0 when a nonzero ID is accepted by the active runtime and 1
+    /// when the ID is zero or the runtime is unavailable. Cancellation may
+    /// race ahead of call registration, so an ID that is not active yet is
+    /// reserved as pre-cancelled; a completed ID is likewise reserved against
+    /// accidental reuse.
     pub cancel_function_call: BamlCancelFunctionCallFn,
     /// Install the process-global host-dispatch callback; the first call wins.
     /// Later registrations are ignored. The pointer remains borrowed until

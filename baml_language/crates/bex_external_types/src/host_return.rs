@@ -137,10 +137,12 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
             (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
-            // `Literal::Float` stores the literal as a string for precision;
-            // match by tag (any float), mirroring
-            // `bex_engine::conversion::value_matches_type`.
-            (Literal::Float(_), BexExternalValue::Float(_)) => true,
+            // `Literal::Float` stores source text; compare its parsed semantic
+            // value so host-return validation and union arm selection cannot
+            // accept contradictory same-tag literal metadata.
+            (Literal::Float(literal), BexExternalValue::Float(value)) => {
+                float_matches_literal(*value, literal)
+            }
             _ => false,
         },
 
@@ -214,6 +216,14 @@ fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) ->
         || external_name == type_name.render_dotted(false)
 }
 
+#[allow(
+    clippy::float_cmp,
+    reason = "BAML literal membership requires exact semantic equality, not an approximate numeric comparison"
+)]
+fn float_matches_literal(value: f64, literal: &str) -> bool {
+    literal.parse::<f64>().is_ok_and(|literal| value == literal)
+}
+
 #[cfg(test)]
 mod tests {
     use baml_type::{
@@ -261,9 +271,41 @@ mod tests {
 
     #[test]
     fn literal_value_equality() {
-        let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
-        assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
+        let cases = [
+            (
+                RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default()),
+                BexExternalValue::Int(5),
+                BexExternalValue::Int(6),
+            ),
+            (
+                RuntimeTy::Literal(
+                    Literal::Float("2.5".to_string()),
+                    Freshness::Regular,
+                    TyAttr::default(),
+                ),
+                BexExternalValue::Float(2.5),
+                BexExternalValue::Float(2.25),
+            ),
+            (
+                RuntimeTy::Literal(
+                    Literal::String("crlf".to_string()),
+                    Freshness::Regular,
+                    TyAttr::default(),
+                ),
+                BexExternalValue::String("crlf".into()),
+                BexExternalValue::String("lf".into()),
+            ),
+            (
+                RuntimeTy::Literal(Literal::Bool(false), Freshness::Regular, TyAttr::default()),
+                BexExternalValue::Bool(false),
+                BexExternalValue::Bool(true),
+            ),
+        ];
+
+        for (literal, equal, unequal) in cases {
+            assert!(validate_host_return(&equal, &literal).is_ok());
+            assert!(validate_host_return(&unequal, &literal).is_err());
+        }
     }
 
     #[test]

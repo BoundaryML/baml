@@ -1378,6 +1378,82 @@ function normalize(value: null | string | null) -> null | string | null { value 
     }
 
     #[test]
+    fn recursive_alias_shapes_reach_codegen_as_finite_named_graphs() {
+        let root = Path::new("/tmp/codegen_recursive_alias_shapes");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+type Direct = Direct
+type Left = Right[]
+type Right = map<string, Left>
+type NullableRecursive = null | NullableRecursive[]
+type UnionRecursive = int | UnionRecursive[]
+"#,
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+        let name = |name: &str| cg::Name::new(Name::new("user"), vec![], Name::new(name));
+        let alias = |alias_name: &cg::Name| {
+            let cg::Symbol::TypeAlias(alias) = &pool[alias_name] else {
+                panic!("{alias_name} must be an alias")
+            };
+            assert!(alias.recursive, "{alias_name} must be marked recursive");
+            alias
+        };
+
+        let direct = name("Direct");
+        assert_eq!(
+            alias(&direct).resolves_to,
+            codegen_alias(direct.clone()),
+            "direct recursion must retain one named back edge"
+        );
+
+        let left = name("Left");
+        let right = name("Right");
+        assert_eq!(
+            alias(&left).resolves_to,
+            codegen_list(codegen_alias(right.clone())),
+        );
+        assert_eq!(
+            alias(&right).resolves_to,
+            cg::Ty::Map {
+                key: Box::new(cg::Ty::String {
+                    attr: codegen_attr()
+                }),
+                value: Box::new(codegen_alias(left)),
+                attr: codegen_attr(),
+            },
+        );
+
+        let nullable = name("NullableRecursive");
+        assert_eq!(
+            alias(&nullable).resolves_to,
+            codegen_union(vec![
+                codegen_list(codegen_alias(nullable.clone())),
+                cg::Ty::Null {
+                    attr: codegen_attr()
+                },
+            ]),
+        );
+
+        let union = name("UnionRecursive");
+        assert_eq!(
+            alias(&union).resolves_to,
+            codegen_union(vec![
+                cg::Ty::Int {
+                    attr: codegen_attr()
+                },
+                codegen_list(codegen_alias(union)),
+            ]),
+        );
+    }
+
+    #[test]
     fn aliased_map_keys_are_checked_through_resolved_targets() {
         use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 

@@ -46,6 +46,13 @@ function round_trip_float(value: float) -> float {
   value
 }
 
+// Deterministic cancellation fixture for every host bridge. It performs no
+// provider/network work and remains dormant unless a test calls it.
+function slow_cancel_probe() -> int {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+  42
+}
+
 // Helper used as an *expression* default below — `opt2`'s default is a call to
 // this function, so the engine evaluates it whenever `opt2` is omitted.
 function make_opt2() -> int {

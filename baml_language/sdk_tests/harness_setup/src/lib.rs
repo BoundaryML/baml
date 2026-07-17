@@ -335,3 +335,45 @@ pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
     }
     out
 }
+
+#[cfg(test)]
+mod csharp_abi_probe_tests {
+    use std::{env, fs, path::PathBuf};
+
+    fn emit_fixture_bytecode(fixture_name: &str, output_variable: &str) {
+        let output = env::var_os(output_variable)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| panic!("{output_variable} must name the output file"));
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let fixtures = manifest
+            .parent()
+            .expect("harness_setup must be inside sdk_tests")
+            .join("fixtures");
+        let loaded = super::load_fixture(&fixtures, fixture_name);
+        fs::write(&output, &loaded.baml_bytecode)
+            .unwrap_or_else(|error| panic!("failed to write {}: {error}", output.display()));
+        eprintln!(
+            "csharp_abi_probe_fixture={fixture_name} bytecode={} bytes={}",
+            output.display(),
+            loaded.baml_bytecode.len()
+        );
+    }
+
+    #[test]
+    #[ignore = "writes bytecode only when explicitly invoked for the C# ABI evidence gate"]
+    fn emit_function_calls_bytecode() {
+        emit_fixture_bytecode("function_calls", "BAML_CSHARP_ABI_PROBE_BYTECODE");
+    }
+
+    #[test]
+    #[ignore = "writes bytecode only when explicitly invoked for the C# media ABI evidence gate"]
+    fn emit_type_shapes_bytecode() {
+        emit_fixture_bytecode("type_shapes", "BAML_CSHARP_MEDIA_PROBE_BYTECODE");
+    }
+
+    #[test]
+    #[ignore = "writes bytecode only when explicitly invoked for the C# stream ABI evidence gate"]
+    fn emit_llm_functions_bytecode() {
+        emit_fixture_bytecode("llm_functions", "BAML_CSHARP_STREAM_PROBE_BYTECODE");
+    }
+}

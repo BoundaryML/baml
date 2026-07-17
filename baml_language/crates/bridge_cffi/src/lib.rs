@@ -58,7 +58,7 @@ pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>,
 
 /// Allocate a new process-unique function-call ID.
 pub fn new_function_call_id() -> u64 {
-    bex_project::CallId::next().0
+    bex_project::CallId::try_next().map_or(0, |id| id.0)
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
@@ -68,9 +68,12 @@ pub fn function_call_context_builder(
     bex_project::FunctionCallContextBuilder::new(call_id)
 }
 
-/// Cancel an in-flight function call by ID.
+/// Cancel a function call by ID, including before active-call registration.
 ///
-/// Returns true on success, false if the runtime is not initialized.
+/// Returns true when a nonzero ID is accepted by the active runtime. An ID
+/// that is not active yet is reserved as pre-cancelled so cancellation cannot
+/// lose a race with dispatch. Returns false for zero or an unavailable
+/// runtime.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
@@ -90,9 +93,10 @@ pub extern "C" fn new_function_call() -> u64 {
     new_function_call_id()
 }
 
-/// Cancel an in-flight function call.
+/// Cancel a function call, including before active-call registration.
 ///
-/// Returns 0 on success, 1 if the call ID is unknown or already completed.
+/// Returns 0 when a nonzero ID is accepted by the active runtime and 1 for
+/// zero or an unavailable runtime.
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u64) -> i32 {
     if cancel_function_call_by_id(id) { 0 } else { 1 }

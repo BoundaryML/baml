@@ -1798,13 +1798,27 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Float(_), RuntimeTy::Float { .. }) => true,
         (BexExternalValue::Bool(_), RuntimeTy::Bool { .. }) => true,
         (BexExternalValue::String(_), RuntimeTy::String { .. }) => true,
-        // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), RuntimeTy::Literal(Literal::Int(_), _, _)) => true,
-        (BexExternalValue::Bigint(_), RuntimeTy::Literal(Literal::Bigint(_), _, _)) => true,
-        (BexExternalValue::Float(_), RuntimeTy::Literal(Literal::Float(_), _, _)) => true,
+        // Literal types match the exact declared value, not merely the
+        // underlying runtime tag. This arm selection becomes public union
+        // metadata at the CFFI boundary, so a same-tag first match would label
+        // `"crlf"` as `"lf"` (and produce equally contradictory numeric
+        // metadata).
+        (BexExternalValue::Int(value), RuntimeTy::Literal(Literal::Int(literal), _, _)) => {
+            value == literal
+        }
+        (BexExternalValue::Bigint(value), RuntimeTy::Literal(Literal::Bigint(literal), _, _)) => {
+            value == literal
+        }
+        (BexExternalValue::Float(value), RuntimeTy::Literal(Literal::Float(literal), _, _)) => {
+            float_matches_literal(*value, literal)
+        }
         (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array { .. }) => true,
-        (BexExternalValue::String(_), RuntimeTy::Literal(Literal::String(_), _, _)) => true,
-        (BexExternalValue::Bool(_), RuntimeTy::Literal(Literal::Bool(_), _, _)) => true,
+        (BexExternalValue::String(value), RuntimeTy::Literal(Literal::String(literal), _, _)) => {
+            value == literal
+        }
+        (BexExternalValue::Bool(value), RuntimeTy::Literal(Literal::Bool(literal), _, _)) => {
+            value == literal
+        }
         (BexExternalValue::Array { .. }, RuntimeTy::List(_, _)) => true,
         (BexExternalValue::Map { .. }, RuntimeTy::Map { .. }) => true,
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
@@ -1842,6 +1856,140 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             members.iter().any(|m| value_matches_type(value, m))
         }
         _ => false,
+    }
+}
+
+#[allow(
+    clippy::float_cmp,
+    reason = "BAML literal membership requires exact semantic equality, not an approximate numeric comparison"
+)]
+fn float_matches_literal(value: f64, literal: &str) -> bool {
+    literal.parse::<f64>().is_ok_and(|literal| value == literal)
+}
+
+#[cfg(test)]
+mod literal_union_selection_tests {
+    use std::fmt::Write as _;
+
+    use baml_type::{Freshness, Literal, TyAttr};
+    use bridge_ctypes::{
+        CffiHandleTableOptions,
+        baml_bridge::cffi::{BamlOutboundValue, baml_outbound_value::Value as OutboundValue},
+        external_to_outbound, runtime_ty_to_proto_ty,
+    };
+    use num_bigint::BigInt;
+    use prost::Message;
+
+    use super::*;
+
+    fn literal(value: Literal) -> RuntimeTy {
+        RuntimeTy::Literal(value, Freshness::Regular, TyAttr::default())
+    }
+
+    #[test]
+    fn selects_the_exact_string_literal_instead_of_the_first_string_arm() {
+        let lf = literal(Literal::String("lf".to_string()));
+        let crlf = literal(Literal::String("crlf".to_string()));
+
+        assert_eq!(
+            find_matching_member(
+                &BexExternalValue::String("crlf".into()),
+                &[lf, crlf.clone()],
+            )
+            .expect("crlf must match its declared literal arm"),
+            crlf,
+        );
+    }
+
+    #[test]
+    fn exact_literal_matching_covers_every_literal_value_kind() {
+        let cases = [
+            (
+                BexExternalValue::Int(2),
+                literal(Literal::Int(1)),
+                literal(Literal::Int(2)),
+            ),
+            (
+                BexExternalValue::Bigint(BigInt::from(2)),
+                literal(Literal::Bigint(BigInt::from(1))),
+                literal(Literal::Bigint(BigInt::from(2))),
+            ),
+            (
+                BexExternalValue::Float(2.5),
+                literal(Literal::Float("1.25".to_string())),
+                literal(Literal::Float("2.5".to_string())),
+            ),
+            (
+                BexExternalValue::Bool(false),
+                literal(Literal::Bool(true)),
+                literal(Literal::Bool(false)),
+            ),
+        ];
+
+        for (value, other, expected) in cases {
+            assert_eq!(
+                find_matching_member(&value, &[other, expected.clone()])
+                    .expect("value must match its exact literal arm"),
+                expected,
+            );
+        }
+    }
+
+    #[test]
+    fn same_tag_with_no_equal_literal_is_not_a_match() {
+        let error = find_matching_member(
+            &BexExternalValue::String("cr".into()),
+            &[
+                literal(Literal::String("lf".to_string())),
+                literal(Literal::String("crlf".to_string())),
+            ],
+        )
+        .expect_err("a same-tag but unequal literal must be rejected");
+
+        assert!(matches!(error, EngineError::TypeMismatch { .. }));
+    }
+
+    #[test]
+    #[allow(
+        clippy::print_stderr,
+        reason = "the cross-language evidence command captures this serialized envelope with --nocapture"
+    )]
+    fn outbound_cffi_envelope_records_the_exact_selected_literal() {
+        let lf = literal(Literal::String("lf".to_string()));
+        let crlf = literal(Literal::String("crlf".to_string()));
+        let union_type = RuntimeTy::Union(vec![lf, crlf.clone()], TyAttr::default());
+        let wrapped = maybe_wrap_union(BexExternalValue::String("crlf".into()), &union_type)
+            .expect("the payload must select the exact crlf literal");
+
+        let outbound = external_to_outbound(&wrapped, &CffiHandleTableOptions::for_wire())
+            .expect("the selected union must encode");
+        let bytes = outbound.encode_to_vec();
+        let decoded =
+            BamlOutboundValue::decode(bytes.as_slice()).expect("the wire bytes must decode");
+        let variant = match decoded.value {
+            Some(OutboundValue::UnionVariantValue(variant)) => variant,
+            other => panic!("expected outbound union metadata, got {other:?}"),
+        };
+
+        assert_eq!(variant.value_option_name, crlf.to_string());
+        assert_eq!(variant.self_type, Some(runtime_ty_to_proto_ty(&union_type)));
+        assert_eq!(
+            variant.value.and_then(|value| value.value),
+            Some(OutboundValue::StringValue("crlf".to_string())),
+        );
+
+        // Keep the serialized envelope available to an explicit `--nocapture`
+        // evidence run without coupling the semantic regression to protobuf
+        // field ordering.
+        let mut wire_hex = String::with_capacity(bytes.len() * 2);
+        for byte in &bytes {
+            write!(wire_hex, "{byte:02x}").expect("writing to a String cannot fail");
+        }
+        eprintln!("literal_union_crlf_envelope={wire_hex}");
+        assert!(
+            !bytes.is_empty(),
+            "outbound union envelope must not be empty"
+        );
     }
 }
 

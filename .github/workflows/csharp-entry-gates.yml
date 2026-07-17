@@ -1,0 +1,68 @@
+name: C# bridge - Manual entry gates
+
+# Manual, non-publishing evidence run for the design gates that require native
+# release artifacts or a less restricted host than a development container.
+# This workflow deliberately does not participate in the release graph. Once
+# its immutable evidence passes and is recorded, the production C# build and
+# publish workflows can be implemented from the settled design.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Freeze source and release plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - id: plan
+        name: Compute one immutable canary plan
+        run: |
+          set -euo pipefail
+          scripts/baml-language-version plan \
+            --channel canary \
+            --out release-plan.json
+          source_sha="$(git rev-parse HEAD)"
+          test "$source_sha" = "${{ github.sha }}"
+          {
+            echo "release_plan_json<<EOF"
+            jq -c . release-plan.json
+            echo "EOF"
+            echo "source_sha=$source_sha"
+          } >> "$GITHUB_OUTPUT"
+
+  build-native:
+    name: Build all bridge_cffi inputs
+    needs: plan
+    uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      include_csharp_entry_diagnostics: true
+
+  verify:
+    name: Verify C# entry gates
+    needs: [plan, build-native]
+    uses: ./.github/workflows/verify-csharp-entry-gates.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}

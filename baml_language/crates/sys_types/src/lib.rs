@@ -130,7 +130,8 @@ pub mod runtime_io {
 ///
 /// The playground uses this to associate fetch logs with the function call
 /// that triggered them. Callers that don't need tracking pass `CallId::next()`.
-/// Use `CallId::next()` for a unique ID per call (e.g. from bridges with concurrent calls).
+/// Infallible internal callers use `CallId::next()`; host bridges use
+/// `CallId::try_next()` so exhaustion becomes a bounded host diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallId(pub u64);
 
@@ -138,11 +139,92 @@ pub struct CallId(pub u64);
 static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(1_000_000);
 
 impl CallId {
-    /// Returns a fresh call ID that is unique across the process. Use this from
-    /// bridges (e.g. Python) when multiple overlapping calls can occur.
+    /// Try to return a fresh nonzero call ID that is unique across the process.
+    ///
+    /// Once the allocator's monotonic nonzero range is consumed, it remains
+    /// exhausted rather than wrapping into zero or the reserved low-ID range.
+    #[inline]
+    pub fn try_next() -> Option<Self> {
+        Self::try_next_from(&NEXT_CALL_ID)
+    }
+
+    /// Returns a fresh nonzero call ID for infallible internal callers.
+    ///
+    /// Exhaustion is unrecoverable for this legacy API, so it panics rather
+    /// than injecting the reserved zero sentinel into engine state. Host
+    /// bridges should call [`Self::try_next`] and return a bounded diagnostic.
     #[inline]
     pub fn next() -> Self {
-        CallId(NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed))
+        Self::next_from(&NEXT_CALL_ID)
+    }
+
+    fn try_next_from(counter: &AtomicU64) -> Option<Self> {
+        counter
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                (current != 0).then(|| current.wrapping_add(1))
+            })
+            .ok()
+            .map(CallId)
+    }
+
+    fn next_from(counter: &AtomicU64) -> Self {
+        Self::try_next_from(counter).expect("process-wide BAML call ID space exhausted")
+    }
+}
+
+#[cfg(test)]
+mod call_id_tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+
+    use super::CallId;
+
+    #[test]
+    fn call_id_exhaustion_never_wraps_or_reuses_zero() {
+        let counter = AtomicU64::new(u64::MAX - 1);
+
+        assert_eq!(CallId::try_next_from(&counter), Some(CallId(u64::MAX - 1)));
+        assert_eq!(CallId::try_next_from(&counter), Some(CallId(u64::MAX)));
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+        assert_eq!(CallId::try_next_from(&counter), None);
+        assert_eq!(CallId::try_next_from(&counter), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "process-wide BAML call ID space exhausted")]
+    fn infallible_call_id_allocator_never_returns_zero() {
+        let counter = AtomicU64::new(0);
+        let _ = CallId::next_from(&counter);
+    }
+
+    #[test]
+    fn concurrent_call_id_allocation_is_unique() {
+        let counter = Arc::new(AtomicU64::new(1));
+        let threads = (0..8)
+            .map(|_| {
+                let counter = Arc::clone(&counter);
+                std::thread::spawn(move || {
+                    (0..2_048)
+                        .map(|_| {
+                            CallId::try_next_from(&counter)
+                                .expect("test counter must not exhaust")
+                                .0
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut identifiers = threads
+            .into_iter()
+            .flat_map(|thread| thread.join().expect("allocator thread panicked"))
+            .collect::<Vec<_>>();
+        identifiers.sort_unstable();
+        identifiers.dedup();
+        assert_eq!(identifiers.len(), 8 * 2_048);
+        assert!(!identifiers.contains(&0));
     }
 }
 

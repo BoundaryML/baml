@@ -14,6 +14,22 @@ inputs:
     description: "wasm-pack version to install (only used when enable-wasm is true)"
     required: false
     default: "0.14.0"
+  cross-version:
+    description: "cross-rs crate version to install when cross is enabled"
+    required: false
+    default: "0.2.5"
+  protoc-version:
+    description: "Exact protoc version installed when protoc is enabled"
+    required: false
+    default: "23.4"
+  rustup-init-version:
+    description: "Archived rustup-init release used to bootstrap Windows ARM64"
+    required: false
+    default: "1.28.2"
+  rustup-init-aarch64-windows-sha256:
+    description: "Expected SHA-256 for the Windows ARM64 rustup-init bootstrap"
+    required: false
+    default: "de9f7d29ccd39efa59a3dda3ec363b396e09b92681229b9b8f6aaa4c84285e9c"
   enable-cross:
     description: "Enable cross-rs for cross-compilation"
     required: false
@@ -56,8 +72,13 @@ runs:
         set -euo pipefail
         if [[ "${RUNNER_OS:-}" == "Windows" && "${RUNNER_ARCH:-}" =~ [Aa][Rr][Mm]64 ]]; then
           if ! command -v rustup >/dev/null 2>&1; then
-            curl -LO "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe"
-            ./rustup-init.exe --default-toolchain stable -y
+            curl --fail --location --silent --show-error \
+              --output rustup-init.exe \
+              "https://static.rust-lang.org/rustup/archive/${{ inputs.rustup-init-version }}/aarch64-pc-windows-msvc/rustup-init.exe"
+            actual="$(sha256sum rustup-init.exe | awk '{print $1}')"
+            expected="${{ inputs.rustup-init-aarch64-windows-sha256 }}"
+            test "$actual" = "$expected"
+            ./rustup-init.exe --default-toolchain none -y
             rm rustup-init.exe
             echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
           fi
@@ -77,7 +98,7 @@ runs:
 
     - name: Setup Rust toolchain
       # if: steps.check-rust.outputs.rust-installed != 'true'
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
       with:
         toolchain: ${{ inputs.toolchain }}
         targets: ${{ inputs.targets }}
@@ -95,7 +116,7 @@ runs:
 
     - name: Setup Rust cache
       if: inputs.enable-cache == 'true'
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       with:
         workspaces: ${{ inputs.workspace }}
         prefix-key: ${{ inputs.prefix-key }}
@@ -108,16 +129,17 @@ runs:
 
     - name: Install wasm-pack
       if: inputs.enable-wasm == 'true'
-      run: cargo install wasm-pack --version ${{ inputs.wasm-pack-version }}
+      run: cargo install wasm-pack --locked --version ${{ inputs.wasm-pack-version }}
       shell: bash
 
     - name: Install cross-rs
       if: inputs.enable-cross == 'true'
-      run: cargo install cross --git https://github.com/cross-rs/cross
+      run: cargo install cross --locked --version ${{ inputs.cross-version }}
       shell: bash
 
     - name: Install Protoc
       if: inputs.skip-protoc != 'true'
-      uses: arduino/setup-protoc@v3
+      uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
       with:
+        version: ${{ inputs.protoc-version }}
         repo-token: ${{ inputs.github-token }}
