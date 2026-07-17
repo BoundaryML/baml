@@ -36,14 +36,14 @@ static_assert(
     "Union must be a plain std::variant instantiation");
 
 // match exhaustiveness: an arm set missing an alternative is not invocable
-// with that alternative, which is exactly what makes baml::match (std::visit
+// with that alternative, which is exactly what makes baml::Match (std::visit
 // underneath) reject it at compile time.
 const auto int_only = [](int64_t) { return 0; };
 using IntOnlyArms = baml::detail::Overloaded<std::decay_t<decltype(int_only)>>;
 static_assert(std::is_invocable<IntOnlyArms, int64_t>::value,
               "sanity: the int arm must accept int64_t");
 static_assert(!std::is_invocable<IntOnlyArms, const std::string&>::value,
-              "a match missing the string arm must not compile");
+              "a Match missing the string arm must not compile");
 
 // The const auto& catch-all restores invocability for every alternative.
 const auto catch_all = [](const auto&) { return 0; };
