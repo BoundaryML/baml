@@ -85,6 +85,7 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
             },
         )),
         document_symbol_provider: Some(lsp_types::OneOf::Left(true)),
+        document_highlight_provider: Some(lsp_types::OneOf::Left(true)),
         workspace_symbol_provider: Some(lsp_types::OneOf::Left(true)),
         workspace: Some(WorkspaceServerCapabilities {
             workspace_folders: Some(WorkspaceFoldersServerCapabilities {
@@ -683,6 +684,33 @@ impl BexLspRequest for BexMulitProject {
             Ok(None)
         } else {
             Ok(Some(references))
+        }
+    }
+
+    fn on_request_text_document_document_highlight(
+        &self,
+        params: lsp_request_params!("textDocument/documentHighlight"),
+    ) -> Result<lsp_request_result!("textDocument/documentHighlight"), LspError> {
+        let highlights: Vec<lsp_types::DocumentHighlight> = self.compute_on_position(
+            &params.text_document_position_params,
+            |db, source_file, offset, encoding| {
+                let codec = PositionCodec::new(source_file.text(db), encoding);
+                baml_lsp2_actions::document_highlights_at(db, source_file, offset)
+                    .into_iter()
+                    .map(|range| lsp_types::DocumentHighlight {
+                        range: codec.byte_range_to_lsp(range),
+                        // BAML has no reassignment, so the read/write kind
+                        // split carries no signal; leave it unspecified.
+                        kind: None,
+                    })
+                    .collect()
+            },
+        )?;
+
+        if highlights.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(highlights))
         }
     }
 

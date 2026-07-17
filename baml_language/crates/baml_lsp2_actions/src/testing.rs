@@ -153,6 +153,11 @@ impl CursorTest {
         usages_at(&self.db, self.cursor.file, self.cursor.offset)
     }
 
+    /// Document highlights at the cursor position.
+    pub(crate) fn document_highlights(&self) -> Vec<text_size::TextRange> {
+        crate::highlights::document_highlights_at(&self.db, self.cursor.file, self.cursor.offset)
+    }
+
     /// Format a `Location` as `"filename:line:col"` for assertion messages.
     pub(crate) fn format_location(&self, loc: &Location) -> String {
         let filename = loc

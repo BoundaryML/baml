@@ -110,30 +110,7 @@ fn local_definition_location(
     at_offset: TextSize,
     site: DefinitionSite,
 ) -> Option<Location> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-
-    // Find the enclosing Function scope to locate the function in the item tree.
-    let scope_id = index.scope_at_offset(at_offset, None);
-    let enclosing_func_scope = index
-        .ancestor_scopes(scope_id)
-        .into_iter()
-        .find(|ancestor_id| {
-            matches!(
-                index.scopes[ancestor_id.index() as usize].kind,
-                baml_compiler2_hir::scope::ScopeKind::Function
-            )
-        })?;
-
-    let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-
-    // Find the function in the item tree by matching the scope range.
-    let (func_local_id, _) = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range)?;
-
-    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+    let func_loc = utils::enclosing_function_loc(db, file, at_offset)?;
 
     match site {
         DefinitionSite::Statement(stmt_id) => {

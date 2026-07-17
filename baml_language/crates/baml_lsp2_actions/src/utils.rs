@@ -66,6 +66,42 @@ pub fn find_token_at_offset(
     }
 }
 
+// ── enclosing_function_loc ────────────────────────────────────────────────────
+
+/// Find the `FunctionLoc` of the function whose body encloses `offset`, by
+/// walking the semantic-index scope chain to the nearest `Function` scope and
+/// matching its range against the item tree.
+///
+/// Returns `None` when `offset` is not inside a function body, or the scope
+/// has no item-tree counterpart (malformed code).
+pub(crate) fn enclosing_function_loc(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+
+    let scope_id = index.scope_at_offset(offset, None);
+    let func_scope = index.ancestor_scopes(scope_id).into_iter().find(|id| {
+        matches!(
+            index.scopes[id.index() as usize].kind,
+            baml_compiler2_hir::scope::ScopeKind::Function
+        )
+    })?;
+    let func_scope_range = index.scopes[func_scope.index() as usize].range;
+
+    let (func_local_id, _) = item_tree
+        .functions
+        .iter()
+        .find(|(_, f)| f.span == func_scope_range)?;
+    Some(baml_compiler2_hir::loc::FunctionLoc::new(
+        db,
+        file,
+        *func_local_id,
+    ))
+}
+
 // ── definition_span ───────────────────────────────────────────────────────────
 
 /// Map a top-level `Definition` to its source file and name span.

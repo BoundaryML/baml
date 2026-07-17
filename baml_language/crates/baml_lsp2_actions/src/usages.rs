@@ -21,9 +21,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
-use baml_compiler2_hir::{
-    body::FunctionBody, loc::FunctionLoc, scope::ScopeKind, semantic_index::BindingId,
-};
+use baml_compiler2_hir::{body::FunctionBody, scope::ScopeKind, semantic_index::BindingId};
 use baml_compiler2_tir::resolve::{ResolvedName, resolve_name_at};
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
@@ -44,6 +42,27 @@ use crate::{Db, definition::Location, utils};
 /// want "peek references + definition" should call `definition_at` separately
 /// and decide whether to include it.
 pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Location> {
+    usages_at_impl(db, file, offset, false)
+}
+
+/// Like [`usages_at`], but scans only `file` itself instead of every source
+/// file in the package. Used by document highlights, which the LSP scopes to
+/// one document and editors re-request on every cursor move — a package-wide
+/// CST scan there would be wasted work.
+pub(crate) fn same_file_usages_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Vec<Location> {
+    usages_at_impl(db, file, offset, true)
+}
+
+fn usages_at_impl(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    current_file_only: bool,
+) -> Vec<Location> {
     // ── Step 1: find and resolve the token at the cursor ─────────────────────
     let Some(token) = utils::find_token_at_offset(db, file, offset) else {
         return Vec::new();
@@ -62,10 +81,16 @@ pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Locatio
 
     let resolved = resolve_name_at(db, file, offset, &name);
 
+    let scan_files = if current_file_only {
+        vec![file]
+    } else {
+        collect_source_files(db, file)
+    };
+
     match &resolved {
         ResolvedName::Item(_) | ResolvedName::Builtin(_) => {
-            // Top-level item — scan all source files.
-            find_top_level_usages(db, file, &name_text, &resolved)
+            // Top-level item — scan the in-scope source files.
+            find_top_level_usages(db, &scan_files, &name_text, &resolved)
         }
         ResolvedName::Local {
             definition_site: Some(_),
@@ -78,29 +103,26 @@ pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Locatio
         | ResolvedName::Unknown => {
             // Try field-definition usages: if cursor is on a class field definition,
             // find all field access and constructor field sites.
-            find_field_definition_usages(db, file, offset, &name_text)
+            find_field_definition_usages(db, file, offset, &name_text, &scan_files)
         }
     }
 }
 
 // ── top-level usages ──────────────────────────────────────────────────────────
 
-/// Scan all source files for references to a top-level item.
+/// Scan `scan_files` for references to a top-level item.
 ///
 /// Pre-filters each file by checking if the name string appears in the raw
 /// text before walking the CST.
 fn find_top_level_usages(
     db: &dyn Db,
-    current_file: SourceFile,
+    scan_files: &[SourceFile],
     name_text: &str,
     target_resolved: &ResolvedName<'_>,
 ) -> Vec<Location> {
-    // Collect all user source files.
-    let source_files = collect_source_files(db, current_file);
-
     let mut results = Vec::new();
 
-    for sf in source_files {
+    for &sf in scan_files {
         // Optimization: skip files that do not contain the name string at all.
         let text = sf.text(db);
         if !text.contains(name_text) {
@@ -165,38 +187,9 @@ fn find_local_usages(
     name_text: &str,
     target_binding: BindingId,
 ) -> Vec<Location> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-
-    // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset, None);
-    let enclosing_func_scope = index
-        .ancestor_scopes(scope_id)
-        .into_iter()
-        .find(|ancestor_id| {
-            matches!(
-                index.scopes[ancestor_id.index() as usize].kind,
-                ScopeKind::Function
-            )
-        });
-
-    let Some(enclosing_func_scope) = enclosing_func_scope else {
+    let Some(func_loc) = utils::enclosing_function_loc(db, file, at_offset) else {
         return Vec::new();
     };
-
-    let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-
-    // Find the function in the item tree by matching its span.
-    let func_entry = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range);
-
-    let Some((func_local_id, _)) = func_entry else {
-        return Vec::new();
-    };
-
-    let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
     // We need an expression body and source map.
     let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -265,7 +258,7 @@ fn collect_local_path_usages(
     }
 }
 
-fn local_binding_id_at(
+pub(crate) fn local_binding_id_at(
     db: &dyn Db,
     file: SourceFile,
     offset: TextSize,
@@ -296,14 +289,15 @@ fn local_binding_id_at(
 ///
 /// Uses text pre-filter + `ScopeInference` confirmation pattern:
 /// 1. Check that cursor is on a class field definition (Class scope).
-/// 2. Collect all source files.
-/// 3. For each file, scan function scopes for `MemberAccess` and Object constructor
-///    expressions that reference the same field of the same class.
+/// 2. For each file in `scan_files`, scan function scopes for `MemberAccess`
+///    and Object constructor expressions that reference the same field of the
+///    same class.
 fn find_field_definition_usages(
     db: &dyn Db,
     file: SourceFile,
     offset: TextSize,
     field_name_text: &str,
+    scan_files: &[SourceFile],
 ) -> Vec<Location> {
     use baml_compiler2_tir::ty::Ty;
 
@@ -338,12 +332,9 @@ fn find_field_definition_usages(
 
     let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_local_id);
 
-    // Collect all source files
-    let source_files = collect_source_files(db, file);
-
     let mut results = Vec::new();
 
-    for sf in source_files {
+    for &sf in scan_files {
         // Text pre-filter
         let text = sf.text(db);
         if !text.contains(field_name_text) {
