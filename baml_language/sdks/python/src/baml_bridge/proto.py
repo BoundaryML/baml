@@ -178,7 +178,14 @@ def _set_inbound_value(
     if isinstance(value, enum.Enum):
         ev = inbound_value.enum_value
         ev.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
-        ev.value = value.name
+        # Send the member VALUE, not its Python name. Decode is already by
+        # value (`_decode_enum`: `cls(enum_value.value)`), and codegen keeps the
+        # value equal to the BAML wire identity even when the member name is
+        # escaped off a keyword (`None_ = "None"`). For every non-escaped member
+        # name == value, so this is a no-op for existing SDKs; for an escaped
+        # member it puts the raw BAML name (`None`) on the wire instead of the
+        # Python identifier (`None_`) the engine would reject.
+        ev.value = value.value
         return
 
     # bool must precede int — bool is an int subclass in Python.
@@ -318,9 +325,21 @@ def _set_inbound_value(
         # then see them as `Map` instead of `Instance`, so a
         # `Box<Box<int>>` round-trip collapses into bare dicts at the
         # second level.
+        model_fields = type(value).model_fields
         for k, v in dict(value).items():
+            # Codegen escapes a field whose BAML name is a Python keyword
+            # (`pass` -> `pass_: T = pydantic.Field(alias="pass")`). The engine
+            # keys class fields by the raw BAML name, so put the alias on the
+            # wire when one is present; for every non-escaped field the alias is
+            # None and the wire key is the attribute name unchanged.
+            field_info = model_fields.get(k)
+            wire_key = (
+                field_info.alias
+                if field_info is not None and field_info.alias is not None
+                else k
+            )
             _set_inbound_map_entry(
-                cv.fields.add(), k, v, kwarg_name=kwarg_name, registered=registered
+                cv.fields.add(), wire_key, v, kwarg_name=kwarg_name, registered=registered
             )
         # Private attrs aren't iterated by `dict(value)`. Codegen emits
         # `$rust_type` fields as private attrs (single-underscore names);
@@ -357,7 +376,10 @@ def _set_inbound_map_entry(
         # before the `str`/`int` arms would swallow it as a plain scalar key.
         ek = entry.enum_key
         ek.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(key)))
-        ek.value = key.name
+        # Map-key twin of the enum-value encode above: send the member VALUE so
+        # a keyword-escaped member (`None_ = "None"`) keys the map by its raw
+        # BAML name. No-op when name == value (every non-escaped member).
+        ek.value = key.value
     elif isinstance(key, str):
         entry.string_key = key
     elif isinstance(key, int):
