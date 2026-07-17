@@ -1192,42 +1192,89 @@ mod tests {
     }
 
     #[test]
-    fn methods_on_generic_classes_skip_but_the_struct_emits() {
-        // A generic class with a method: struct emits, method is skipped.
+    fn generic_class_instance_methods_bind_class_params_first() {
+        // GenericBox<T> with `get(self) -> string` and
+        // `pair_with<U>(self, other: U) -> string`: methods land in a
+        // generic `impl` block; the wire bindings send the class params
+        // ahead of the method's own (De Bruijn order).
         let b = name("user", &[], "GenericBox");
         let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar("T"))])
         else {
             unreachable!("generic_class builds a class")
         };
+        class
+            .instance_methods
+            .push(nullary_string_fn(&name("user", &[], "get")));
         class.instance_methods.push({
-            let mut m = nullary_string_fn(&name("user", &[], "get"));
-            m.arguments = vec![arg(
-                "self",
-                Ty::Class(b.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY),
-            )];
+            let mut m = nullary_string_fn(&name("user", &[], "pair_with"));
+            m.generic_params = vec![baml_base::Name::new("U")];
+            m.arguments = vec![arg("other", typevar("U"))];
             m
         });
         let pool = SymbolPool::from([(b, Symbol::Class(class))]);
 
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
         let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // Methods live in a generic impl block; only the method's own
+        // params appear on the fn (the class's come from the header).
         assert!(
-            flat(lib).contains("pubstructGenericBox<T:::baml_bridge::BamlValue>"),
+            flat.contains("impl<T:::baml_bridge::BamlValue>GenericBox<T>{"),
+            "{lib}"
+        );
+        assert!(flat.contains("pubfnget(&self"), "{lib}");
+        assert!(
+            flat.contains("pubfnpair_with<U:::baml_bridge::BamlValue>(&self,other:U"),
+            "{lib}"
+        );
+        // `pair_with` binds the class `T` first, then its own `U`.
+        assert!(
+            flat.contains(concat!(
+                "(\"T\",<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),),",
+                "(\"U\",<Uas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),)"
+            )),
+            "{lib}"
+        );
+        // `get` has no own params but still binds the class `T`:
+        // 2 bindings each (sync + async) for `get` and `pair_with`.
+        assert_eq!(flat.matches("(\"T\",<Tas").count(), 4, "{lib}");
+    }
+
+    #[test]
+    fn generic_class_statics_bind_only_their_own_params() {
+        // GenericBox<T> with static `make_box<V>(value: V) -> GenericBox<V>`:
+        // no receiver exists, so no class TypeVars ride the call — the wire
+        // carries only the static's own `V` ("no phantom class params").
+        let b = name("user", &[], "GenericBox");
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar("T"))])
+        else {
+            unreachable!("generic_class builds a class")
+        };
+        class.static_methods.push({
+            let mut m = nullary_string_fn(&name("user", &[], "make_box"));
+            m.generic_params = vec![baml_base::Name::new("V")];
+            m.arguments = vec![arg("value", typevar("V"))];
+            m.return_type = Ty::Class(b.clone(), vec![typevar("V")], baml_base::TyAttr::EMPTY);
+            m
+        });
+        let pool = SymbolPool::from([(b, Symbol::Class(class))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains("pubfnmake_box<V:::baml_bridge::BamlValue>(value:V"),
             "{lib}"
         );
         assert!(
-            !flat(lib).contains("fnget"),
-            "the method must not emit:\n{lib}"
+            flat.contains("Result<crate::GenericBox<V>,"),
+            "the static's own param instantiates the return:\n{lib}"
         );
-        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
-        assert_eq!(generated.warnings[0].fqn, "user.GenericBox");
-        assert!(
-            generated.warnings[0]
-                .reason
-                .contains("methods on generic classes"),
-            "{}",
-            generated.warnings[0].reason
-        );
+        // Sync + async each bind exactly `V`; the class `T` is never sent.
+        assert_eq!(flat.matches("(\"V\",<Vas").count(), 2, "{lib}");
+        assert_eq!(flat.matches("(\"T\",<Tas").count(), 0, "{lib}");
     }
 
     #[test]
@@ -1385,6 +1432,8 @@ mod tests {
         let ok = nullary_string_fn(&name("user", &[], "ok"));
         let mut snap = nullary_string_fn(&name("user", &[], "snap"));
         snap.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
+        // A generic method on a non-generic class emits (its own `<T>`),
+        // proving `snap`'s skip is per-method, not per-vec.
         let mut pick = nullary_string_fn(&name("user", &[], "pick"));
         pick.generic_params.push(baml_base::Name::new("T"));
         let pool = SymbolPool::from([(
@@ -1398,19 +1447,16 @@ mod tests {
         let flat = flat(lib);
         assert!(flat.contains("pubfnok(&self"), "{lib}");
         assert!(!flat.contains("pubfnsnap"), "{lib}");
-        assert!(!flat.contains("pubfnpick"), "{lib}");
-        assert_eq!(generated.warnings.len(), 2);
+        assert!(
+            flat.contains("pubfnpick<T:::baml_bridge::BamlValue>(&self"),
+            "{lib}"
+        );
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
         assert_eq!(generated.warnings[0].fqn, "user.Widget.snap");
         assert!(
             generated.warnings[0].reason.contains("media"),
             "{}",
             generated.warnings[0].reason
-        );
-        assert_eq!(generated.warnings[1].fqn, "user.Widget.pick");
-        assert!(
-            generated.warnings[1].reason.contains("generic methods"),
-            "{}",
-            generated.warnings[1].reason
         );
     }
 

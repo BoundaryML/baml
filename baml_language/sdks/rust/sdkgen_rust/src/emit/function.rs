@@ -39,20 +39,35 @@ pub(crate) fn emit(
     }
     // Generic free functions ARE emitted: their `<...>` params become Rust
     // generics bound by `BamlValue`. TypeVars that appear in positions the
-    // translator can't represent (a union arm, a generic-class argument)
-    // still make the whole function skip, at the per-type translation site.
-    emit_binding(&fqn, name.name().as_str(), function, Receiver::None, ctx)
+    // translator can't represent still make the whole function skip, at the
+    // per-type translation site.
+    emit_binding(
+        &fqn,
+        name.name().as_str(),
+        function,
+        Receiver::None,
+        &[],
+        ctx,
+    )
 }
 
 /// Emit the sync + async bindings for a static or instance method, shaped
 /// for the enclosing class's `impl` block. The wire FQN is
 /// `<class fqn>.<method name>` — the engine resolves it like any other
 /// function, so the binding body is the free-function one plus (for
-/// instance methods) the receiver kwarg.
+/// instance methods) the receiver kwarg and the class `TypeVar` bindings.
+///
+/// `class_params` are the enclosing class's `<...>` params — pass them for
+/// instance methods only. A static has no receiver, so no class `TypeVar`s
+/// bind through it: its frame has only the method's own params ("no
+/// phantom class params"), and a class param in its signature would have
+/// no binding to ride on — passing `&[]` keeps that fail-closed (such a
+/// signature fails translation instead of silently not binding).
 pub(crate) fn emit_method(
     class_name: &Name,
     method: &Function,
     receiver: Receiver,
+    class_params: &[String],
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let method_name = method.name.as_str();
@@ -64,13 +79,7 @@ pub(crate) fn emit_method(
                 .to_string(),
         });
     }
-    if !method.generic_params.is_empty() {
-        return Err(SkipWarning {
-            fqn,
-            reason: "generic methods are not emitted yet".to_string(),
-        });
-    }
-    emit_binding(&fqn, method_name, method, receiver, ctx)
+    emit_binding(&fqn, method_name, method, receiver, class_params, ctx)
 }
 
 /// Shared body of [`emit`] / [`emit_method`]: translate the signature and
@@ -80,6 +89,7 @@ fn emit_binding(
     binding_name: &str,
     function: &Function,
     receiver: Receiver,
+    class_params: &[String],
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let skip = |reason: String| SkipWarning {
@@ -87,18 +97,26 @@ fn emit_binding(
         reason,
     };
 
-    // The callee's own `<...>` params come into scope for translating this
-    // binding's signature: a `Ty::TypeVar` naming one of them resolves to
-    // that Rust generic parameter. (Methods reach here only when
-    // non-generic — `emit_method` skips generic methods — so `gctx` matches
-    // the passed `ctx` for them.)
-    let generic_params: Vec<String> = function
+    // The class's params (for instance methods) and the callee's own
+    // `<...>` params come into scope for translating this binding's
+    // signature: a `Ty::TypeVar` naming either resolves to that Rust
+    // generic parameter (the class's come from the `impl` header, the
+    // callee's own from this binding's `<...>`).
+    let own_params: Vec<String> = function
         .generic_params
         .iter()
         .map(|param| param.as_str().to_string())
         .collect();
+    // The compiler requires a method's own params to be distinct from the
+    // enclosing class's (a shadowing name would make the named TyArg wire
+    // ambiguous).
+    debug_assert!(
+        own_params.iter().all(|own| !class_params.contains(own)),
+        "method type param shadows a class type param in {fqn}"
+    );
+    let scope: Vec<String> = class_params.iter().chain(&own_params).cloned().collect();
     let gctx = TyCtx {
-        generic_params: generic_params.as_slice(),
+        generic_params: scope.as_slice(),
         ..*ctx
     };
 
@@ -195,24 +213,28 @@ fn emit_binding(
         TokenStream::new()
     };
 
-    // Each callee TypeVar becomes a Rust generic bound by `BamlValue` (the
-    // only bound the SDK can express — interfaces/traits aren't wired up),
-    // and its concrete binding is sent explicitly in `type_args`. Rust call
+    // Each TypeVar becomes a Rust generic bound by `BamlValue` (the only
+    // bound the SDK can express — interfaces/traits aren't wired up), and
+    // its concrete binding is sent explicitly in `type_args`. Rust call
     // sites are always fully monomorphic, so we never lean on the engine's
-    // argument-side inference: every param is bound by name here.
-    let generics_decl = if generic_params.is_empty() {
+    // argument-side inference: every param is bound by name here. Only the
+    // callee's OWN params are declared on this binding — an instance
+    // method's class params are declared by the enclosing `impl` header —
+    // but the wire bindings cover the whole scope, class params first
+    // (the De Bruijn order the engine expects).
+    let generics_decl = if own_params.is_empty() {
         TokenStream::new()
     } else {
-        let bounded = generic_params.iter().map(|param| {
+        let bounded = own_params.iter().map(|param| {
             let ident = idents::ident(param);
             quote! { #ident: ::baml_bridge::BamlValue }
         });
         quote! { <#(#bounded),*> }
     };
-    let type_args_expr = if generic_params.is_empty() {
+    let type_args_expr = if scope.is_empty() {
         quote! { ::std::vec![] }
     } else {
-        let entries = generic_params.iter().map(|param| {
+        let entries = scope.iter().map(|param| {
             let ident = idents::ident(param);
             quote! {
                 (

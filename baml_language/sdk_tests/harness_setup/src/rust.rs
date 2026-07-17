@@ -104,24 +104,10 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_errors.rs",
         Gate::Later("needs rich error decoding"),
     ),
-    (
-        "function_calls",
-        "test_generic_calls.rs",
-        // Generic functions, generic class shapes, and generic union enums
-        // all emit now; the last missing piece for this file is methods on
-        // generic classes (`GenericBox.get`, `.pair_with`, `.new`,
-        // `NamedStatic.make`), which must bind the class type params into
-        // the call frame.
-        Gate::Later("needs generic-class methods"),
-    ),
-    (
-        "function_calls",
-        "test_generic_inference.rs",
-        // Bare generic calls with no explicit type args: needs the engine's
-        // inbound argument-inference phase (the Rust SDK always binds
-        // explicitly), plus generic classes.
-        Gate::Later("needs generic-argument inference + generic classes"),
-    ),
+    ("function_calls", "test_generic_calls.rs", Gate::Now),
+    // Intentionally empty: the Rust SDK does no inference (rustc solves type
+    // params at compile time; bindings are always sent explicitly).
+    ("function_calls", "test_generic_inference.rs", Gate::Now),
     (
         "function_calls",
         "test_host_callables.rs",
@@ -160,11 +146,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ),
     ("type_shapes", "test_main.rs", Gate::Now),
     ("type_shapes", "test_complex_models.rs", Gate::Now),
-    (
-        "type_shapes",
-        "test_generic.rs",
-        Gate::Later("needs generics"),
-    ),
+    ("type_shapes", "test_generic.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_aliases.rs", Gate::Now),
     (
         "type_shapes",
@@ -172,16 +154,14 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Now,
     ),
     ("type_shapes", "roundtrip_tests/test_enums.rs", Gate::Now),
+    // `GNode<T>`'s round trip is a permanent DIVERGENCE (param used only
+    // recursively — not representable as a Rust struct); the rest runs.
     (
         "type_shapes",
         "roundtrip_tests/test_forward_refs.rs",
-        Gate::Later("needs generics (GNode<T>)"),
+        Gate::Now,
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_generics.rs",
-        Gate::Later("needs generics"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_generics.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_handles.rs",

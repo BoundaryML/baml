@@ -45,42 +45,38 @@ pub(crate) fn emit(
         ..*ctx
     };
 
+    // Field-site boxing does not apply to method signatures: a method
+    // mentioning a same-SCC class (e.g. a static factory returning the
+    // class itself) is not a containment edge, so its types translate
+    // without a boxing owner. Scope (class params for instance methods,
+    // plus each method's own) is threaded through `emit_method` instead.
+    let method_ctx = TyCtx {
+        analysis: ctx.analysis,
+        unions: ctx.unions,
+        leaf: ctx.leaf,
+        boxing_for: None,
+        generic_params: &[],
+    };
     let mut method_tokens: Vec<TokenStream> = Vec::new();
-    if class_params.is_empty() {
-        // Field-site boxing does not apply to method signatures: a method
-        // mentioning a same-SCC class (e.g. a static factory returning the
-        // class itself) is not a containment edge, so its types translate
-        // without a boxing owner.
-        let method_ctx = TyCtx {
-            analysis: ctx.analysis,
-            unions: ctx.unions,
-            leaf: ctx.leaf,
-            boxing_for: None,
-            generic_params: &[],
-        };
-        for (methods, receiver) in [
-            (&class.static_methods, Receiver::None),
-            (&class.instance_methods, Receiver::RefSelf),
-        ] {
-            for method in methods {
-                match emit_method(name, method, receiver, &method_ctx) {
-                    Ok(tokens) => method_tokens.push(tokens),
-                    Err(warning) => warnings.push(warning),
-                }
+    // Statics bind only their own `<...>` params — no receiver exists, so
+    // no class TypeVars ride the call ("no phantom class params"); the
+    // Rust caller names the impl's class params (turbofish on the struct),
+    // but those bindings are namespace-only and never sent. Instance
+    // methods bind the class params (from the monomorphized receiver)
+    // ahead of their own.
+    for (methods, receiver, method_class_params) in [
+        (&class.static_methods, Receiver::None, &[] as &[String]),
+        (
+            &class.instance_methods,
+            Receiver::RefSelf,
+            class_params.as_slice(),
+        ),
+    ] {
+        for method in methods {
+            match emit_method(name, method, receiver, method_class_params, &method_ctx) {
+                Ok(tokens) => method_tokens.push(tokens),
+                Err(warning) => warnings.push(warning),
             }
-        }
-    } else {
-        // Methods on a generic class need the class type parameters bound
-        // into the call frame (recovered from the receiver / passed as
-        // `class_type_params`) — deferred. Skip them, keeping the struct.
-        let method_count = class.static_methods.len() + class.instance_methods.len();
-        if method_count > 0 {
-            warnings.push(SkipWarning {
-                fqn: fqn.clone(),
-                reason: format!(
-                    "methods on generic classes are not emitted yet ({method_count} skipped)"
-                ),
-            });
         }
     }
 
@@ -132,20 +128,8 @@ pub(crate) fn emit(
         }
     };
 
-    let methods_impl = if method_tokens.is_empty() {
-        TokenStream::new()
-    } else {
-        // Only non-generic classes reach here with methods (generic-class
-        // methods are skipped above), so the impl block needs no generics.
-        quote! {
-            impl #ident {
-                #(#method_tokens)*
-            }
-        }
-    };
-
-    // `<T: BamlValue, …>` on the struct + impl header, `<T, …>` on the
-    // `for` type, and one `<param>::baml_ty()` per param for the wire
+    // `<T: BamlValue, …>` on the struct + impl headers, `<T, …>` on the
+    // referenced type, and one `<param>::baml_ty()` per param for the wire
     // type-arg channel. All empty for a non-generic class.
     let param_idents: Vec<_> = class_params.iter().map(|p| idents::ident(p)).collect();
     let (bounded_generics, type_generics, wire_type_args) = if param_idents.is_empty() {
@@ -166,6 +150,16 @@ pub(crate) fn emit(
             quote! { <#(#param_idents),*> },
             quote! { ::std::vec![#(#args),*] },
         )
+    };
+
+    let methods_impl = if method_tokens.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! {
+            impl #bounded_generics #ident #type_generics {
+                #(#method_tokens)*
+            }
+        }
     };
 
     let tokens = quote! {
