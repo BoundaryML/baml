@@ -11,18 +11,18 @@ Functions are PascalCase except the following, all sanctioned by the Google
 guide itself:
 
 1. Accessors returning stored state keep snake_case: `message()`,
-   `class_name()`, `baml_trace()`, `payload()`, `bytes()`, `code()`.
-2. std-mimicking vocabulary API keeps std spelling: `Arg` (`is_set`,
-   `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
-   `operator->`), `OwnedBuffer` (`data`, `size`, `empty`, `to_string`),
-   `BamlError` (`is<T>`, `get<T>`, `what`).
-   (The union surface is regular Google style: `baml::Union` type alias,
-   `baml::Match` function, `baml::Unset`/`baml::kUnset` sentinel;
-   lowercase `union` is a C++ keyword regardless.)
-3. Type traits keep std spelling: `is_std_optional`, `has_set_opt1`,
+   `class_name()`, `baml_trace()`, `payload()`, `bytes()`, `code()`, and
+   `detail::OwnedBuffer`'s `empty()`/`to_string()`. Everything else on
+   the public surface is regular Google PascalCase: `Arg`
+   (`IsSet`/`IsUnset`/`Value`), `Box`/`OptionalBox` (`HasValue`),
+   `BamlError` (`Is<T>`/`Get<T>`), `baml::Union`/`baml::Match`,
+   `baml::Unset`/`baml::kUnset` (lowercase `union` is a C++ keyword
+   regardless). Generated opts setters are `set_<param>` -- the guide's
+   own mutator convention.
+2. Type traits keep std spelling: `is_std_optional`, `has_set_opt1`,
    `has_set_opt3`.
-4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.
-5. Generated identifiers derived from BAML source names are unchanged,
+3. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.
+4. Generated identifiers derived from BAML source names are unchanged,
    including derived names: the opts struct for function `probe` is
    `probeOpts` (source casing preserved, never re-cased)
    (functions, classes, fields, params in generated `baml_sdk` code).

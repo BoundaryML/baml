@@ -11,7 +11,7 @@ namespace baml {
 
 // A value thrown by BAML code (the `error` arm of the result envelope).
 // what() carries the rendered message plus the BAML trace; the thrown value
-// itself rides along as encoded bytes and decodes via is<T>() / get<T>().
+// itself rides along as encoded bytes and decodes via Is<T>() / Get<T>().
 class BamlError : public std::runtime_error {
  public:
   explicit BamlError(std::string message)
@@ -31,11 +31,11 @@ class BamlError : public std::runtime_error {
   const std::vector<uint8_t>& payload() const { return payload_; }
 
   // Typed access to the thrown BAML value. Defined in the codec header;
-  // instantiating these requires the generated typemap.
+  // instantiating these requires the generated codecs.
   template <typename T>
-  bool is() const;
+  bool Is() const;
   template <typename T>
-  T get() const;
+  T Get() const;
 
  private:
   static std::string Render(const std::string& message,
@@ -58,7 +58,7 @@ class BamlPanic : public BamlError {
 // A thrown BAML value decoded into the function's declared `throws` set:
 // generated bindings throw BamlThrown<baml::Union<A, B>> when the error
 // arm decodes into that set, so a catch site reads the typed payload with
-// baml::Match instead of probing is<T>()/get<T>(). The template argument
+// baml::Match instead of probing Is<T>()/Get<T>(). The template argument
 // is order-canonical (baml::Union), so BamlThrown<Union<A, B>> and
 // BamlThrown<Union<B, A>> are the same catchable type. Derives BamlError:
 // untyped catch sites keep working, and an undeclared thrown value (one

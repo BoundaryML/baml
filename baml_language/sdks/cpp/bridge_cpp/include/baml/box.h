@@ -61,18 +61,18 @@ class OptionalBox {
   }
   OptionalBox& operator=(OptionalBox&&) noexcept = default;
 
-  bool has_value() const { return ptr_ != nullptr; }
-  explicit operator bool() const { return has_value(); }
+  bool HasValue() const { return ptr_ != nullptr; }
+  explicit operator bool() const { return HasValue(); }
   T& operator*() { return *ptr_; }
   const T& operator*() const { return *ptr_; }
   T* operator->() { return ptr_.get(); }
   const T* operator->() const { return ptr_.get(); }
 
   friend bool operator==(const OptionalBox& a, const OptionalBox& b) {
-    if (a.has_value() != b.has_value()) {
+    if (a.HasValue() != b.HasValue()) {
       return false;
     }
-    return !a.has_value() || *a.ptr_ == *b.ptr_;
+    return !a.HasValue() || *a.ptr_ == *b.ptr_;
   }
   friend bool operator!=(const OptionalBox& a, const OptionalBox& b) {
     return !(a == b);

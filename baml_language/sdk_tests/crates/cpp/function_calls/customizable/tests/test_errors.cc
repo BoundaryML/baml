@@ -40,8 +40,8 @@ BAML_TEST(user_throw_surfaces_declared_instance) {
                                     [](const MyError& m) { return m; });
     BAML_ASSERT((got == MyError{42, "boom"}));
     // The untyped probes still work on the same exception.
-    BAML_ASSERT(e.is<MyError>());
-    BAML_ASSERT(!e.is<ParseError>());
+    BAML_ASSERT(e.Is<MyError>());
+    BAML_ASSERT(!e.Is<ParseError>());
   }
 }
 
@@ -81,7 +81,7 @@ BAML_TEST(typed_throw_is_still_a_baml_error) {
     baml_test::Fail("ThrowMyError did not throw");
   } catch (const baml::BamlError& e) {
     BAML_ASSERT_EQ(e.class_name(), std::string("user.throws_test.MyError"));
-    BAML_ASSERT(e.is<MyError>());
-    BAML_ASSERT((e.get<MyError>() == MyError{42, "boom"}));
+    BAML_ASSERT(e.Is<MyError>());
+    BAML_ASSERT((e.Get<MyError>() == MyError{42, "boom"}));
   }
 }

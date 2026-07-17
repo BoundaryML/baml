@@ -1223,9 +1223,9 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
         let field = p.name.identifier();
         let _ = writeln!(
             buf,
-            "{indent}if ({opts}.{field}.is_set()) {{\n{indent}  \
+            "{indent}if ({opts}.{field}.IsSet()) {{\n{indent}  \
              {args}.AddArg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
-             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
+             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.Value()); }});\n{indent}}}",
             wire = p.name.wire(),
             ty = p.ty
         );

@@ -61,12 +61,12 @@ class Arg {
             typename = std::enable_if_t<detail::is_std_optional<U>::value>>
   Arg(std::monostate) : value_(std::in_place, std::nullopt) {}
 
-  bool is_unset() const { return !value_.has_value(); }
-  bool is_set() const { return value_.has_value(); }
+  bool IsUnset() const { return !value_.has_value(); }
+  bool IsSet() const { return value_.has_value(); }
 
-  const T& value() const {
-    if (!is_set()) {
-      throw std::logic_error("baml::Arg::value() called while unset");
+  const T& Value() const {
+    if (!IsSet()) {
+      throw std::logic_error("baml::Arg::Value() called while unset");
     }
     return *value_;
   }
