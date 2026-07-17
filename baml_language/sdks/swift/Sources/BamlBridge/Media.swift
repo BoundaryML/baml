@@ -8,11 +8,14 @@ import Foundation
 /// are VM-native methods that never enter the codegen pool; Python
 /// exposes them through its PyO3 wrapper the same way).
 public enum BamlMedia {
+    /// Raw values are `BamlCffiMediaKind` — the canonical V1 ABI values
+    /// (shared with the protobuf `MediaTypeEnum`; zero is reserved).
     public enum Kind: Int32, Sendable {
-        case image = 0
-        case audio = 1
-        case video = 2
+        case image = 1
+        case audio = 2
         case pdf = 3
+        case video = 4
+        case generic = 5
     }
 
     /// Mint a media handle from base64 payload — wrap the result in
@@ -27,13 +30,13 @@ public enum BamlMedia {
         let status = base64.withCString { b64 -> UInt32 in
             if let mimeType {
                 return mimeType.withCString { mime in
-                    baml_media_from_base64(kind.rawValue, b64, mime, &key, &handleType)
+                    BamlApi.mediaFromBase64(kind.rawValue, b64, mime, &key, &handleType)
                 }
             }
-            return baml_media_from_base64(kind.rawValue, b64, nil, &key, &handleType)
+            return BamlApi.mediaFromBase64(kind.rawValue, b64, nil, &key, &handleType)
         }
-        guard status == 0 else {
-            throw BamlDecodeError.unsupported("baml_media_from_base64 failed with status \(status)")
+        guard status == BAML_CFFI_STATUS_OK.rawValue else {
+            throw BamlDecodeError.unsupported("media_from_base64 failed with status \(status)")
         }
         guard
             let wireType = BamlBridge_Cffi_V1_BamlHandleType(rawValue: Int(handleType))

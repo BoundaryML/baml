@@ -32,19 +32,25 @@ pub(crate) fn sort_key(symbol: &Symbol, bare: &str) -> String {
     format!("{group}:{bare}")
 }
 
-pub(crate) fn render_type_alias(alias: &TypeAlias, ctx: &TranslateCtx) -> Option<String> {
+pub(crate) fn render_type_alias(
+    alias: &TypeAlias,
+    key: &Name,
+    ctx: &TranslateCtx,
+) -> Option<String> {
     // Swift `typealias` cannot be recursive; recursive aliases wait
     // for a boxed representation (they're all unions today anyway).
     if alias.recursive {
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    let name = escape_ident(alias.name.name().as_str());
+    // `$stream` companion aliases strip the suffix like companion
+    // classes do (they route under stream_types, so no collision).
+    let name = escape_ident(key.bare_name());
     Some(format!("public typealias {name} = {target}\n"))
 }
 
 pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
-    let name = escape_ident(enum_.name.name().as_str());
+    let name = escape_ident(key.bare_name());
     let fqn = key.to_string();
     let doc = enum_
         .docstring
@@ -315,7 +321,10 @@ pub(crate) fn render_callable(
     }
 
     let ret = match &function.return_type {
-        Ty::Void { .. } => None,
+        // `never` (diverging: panic/exit) spells as a void function —
+        // the call only ever returns by throwing (Python maps both
+        // void and never to `None` the same way).
+        Ty::Void { .. } | Ty::Never { .. } => None,
         other => Some(translate_ty(other, ctx)?),
     };
 
@@ -610,7 +619,7 @@ fn render_callable_param(
     }
     let invoke = invoke_args.join(", ");
     let (ret_ty, wrapper_body) = match ret {
-        Ty::Void { .. } => (
+        Ty::Void { .. } | Ty::Never { .. } => (
             "Swift.Void".to_string(),
             format!(
                 "try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"

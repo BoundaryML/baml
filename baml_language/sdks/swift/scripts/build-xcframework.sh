@@ -14,14 +14,24 @@
 #       Always builds with --profile release-bridge-swift (panic=unwind).
 #
 # The xcframework bundles the static lib together with
-# Sources/CBamlBridge/include/{baml_bridge.h, module.modulemap}, so the
-# binary target vends the `CBamlBridge` module directly.
+# Sources/CBamlBridge/include/{baml_cffi.h, module.modulemap}, so the
+# binary target vends the `CBamlBridge` module directly. baml_cffi.h is
+# the canonical generated V1 C ABI header owned by crates/bridge_cffi;
+# it is re-synced from there on every build so the copy cannot drift.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."  # sdks/swift
 SWIFT_SDK_DIR="$(pwd)"
 WORKSPACE_ROOT="$(cd ../.. && pwd)"
 INCLUDE_DIR="$SWIFT_SDK_DIR/Sources/CBamlBridge/include"
+
+# Sync the canonical ABI header (fail loudly if the source moved).
+CANONICAL_HEADER="$WORKSPACE_ROOT/crates/bridge_cffi/include/baml_cffi.h"
+[ -f "$CANONICAL_HEADER" ] || {
+    echo "error: canonical ABI header not found: $CANONICAL_HEADER" >&2
+    exit 1
+}
+cp "$CANONICAL_HEADER" "$INCLUDE_DIR/baml_cffi.h"
 OUT="$SWIFT_SDK_DIR/Binaries/BamlBridgeFFI.xcframework"
 
 MODE="${1:---host-only}"

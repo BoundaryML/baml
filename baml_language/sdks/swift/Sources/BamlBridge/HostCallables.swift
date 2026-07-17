@@ -195,11 +195,11 @@ private struct RawInbound: BamlEncodable {
 
 private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {
     payload.withUnsafeBytes { buf in
-        complete_host_call(
+        BamlApi.completeHostCall(
             callId,
             isError,
             buf.baseAddress?.assumingMemoryBound(to: Int8.self),
-            UInt(buf.count)
+            buf.count
         )
     }
 }
@@ -208,9 +208,7 @@ private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {
 /// fire-and-return (the engine thread must not be blocked; the
 /// no-synchronous-re-entrancy rule is honored because the body runs
 /// on a detached Task).
-let bamlHostDispatch: @convention(c) (
-    UInt64, UInt32, UnsafePointer<UInt8>?, UInt
-) -> Void = { key, callId, args, length in
+let bamlHostDispatch: BamlHostDispatchCallback = { key, callId, args, length in
     let data: Data
     if let args, length > 0 {
         data = Data(bytes: args, count: Int(length))
@@ -222,7 +220,7 @@ let bamlHostDispatch: @convention(c) (
     }
 }
 
-let bamlHostRelease: @convention(c) (UInt64) -> Void = { key in
+let bamlHostRelease: BamlHostReleaseCallback = { key in
     HostCallableRegistry.shared.release(key)
 }
 

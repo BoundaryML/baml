@@ -219,6 +219,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     assert_eq!(BridgeLanguage::Go as u32, 3);
     assert_eq!(BridgeLanguage::Rust as u32, 4);
     assert_eq!(BridgeLanguage::CSharp as u32, 5);
+    assert_eq!(BridgeLanguage::Swift as u32, 7);
 
     let _ = fs::remove_dir_all(scratch);
 }

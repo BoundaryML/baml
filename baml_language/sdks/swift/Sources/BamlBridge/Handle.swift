@@ -22,7 +22,7 @@ public final class BamlHandle: @unchecked Sendable {
         // numerically-colliding engine entry (same rule as Python's
         // BamlPyHandle::Drop).
         if handleType != .hostValueCallable && handleType != .hostValueOpaque {
-            _ = baml_handle_release(key)
+            _ = BamlApi.handleRelease(key)
         }
     }
 }
@@ -42,9 +42,11 @@ extension BamlHandle: BamlEncodable {
         // Clone a fresh key for the wire; the engine drains it while
         // this instance keeps its own.
         var wireKey: UInt64 = 0
-        let status = baml_handle_clone(key, &wireKey)
-        // BamlCffiStatus imports as a raw uint32; 0 == Ok.
-        precondition(status == 0, "baml_handle_clone failed with status \(status)")
+        let status = BamlApi.handleClone(key, &wireKey)
+        precondition(
+            status == BAML_CFFI_STATUS_OK.rawValue,
+            "handle_clone failed with status \(status)"
+        )
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = wireKey
         handle.handleType = handleType

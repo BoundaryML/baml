@@ -62,8 +62,16 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_SWIFT_SETUP";
 /// Fixtures whose `swift_build` / `swift_test` run for real. Everything
 /// else is emitted `#[ignore]`d. Flip fixtures in as their capability
 /// phases land (Phase 1: type_shapes + function_calls subsets).
-const ENFORCED_FIXTURES: &[&str] =
-    &["type_shapes", "function_calls", "docstrings_etc", "llm_functions"];
+const ENFORCED_FIXTURES: &[&str] = &[
+    "type_shapes",
+    "function_calls",
+    "docstrings_etc",
+    "llm_functions",
+    // No Swift overlay (placeholder test only): everything in it is
+    // within Swift's type algebra, so it runs as a codegen-compiles
+    // integrity check.
+    "unsupported_only",
+];
 
 const IGNORE_REASON: &str = "sdkgen_swift emitter incomplete (bridge Phase 0)";
 
