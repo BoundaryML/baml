@@ -19,12 +19,12 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink, ItemTree},
+    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
-    scope::{FileScopeId, Scope, ScopeId, ScopeKind},
+    scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
         BindingId, DefinitionSite, FileSemanticIndex, LocalBinding, PathResolution, ScopeBindings,
         SemanticIndexExtra, visible_binding_at_in_scopes,
@@ -60,6 +60,8 @@ pub struct SemanticIndexBuilder<'db> {
 
     scopes: Vec<Scope>,
     scope_bindings: Vec<ScopeBindings>,
+    /// Owning item -> its scope. Inverse of `Scope::owner`.
+    item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
     /// Stack of currently-open scope IDs.
     scope_stack: Vec<FileScopeId>,
     /// Depth of class scopes we're inside (> 0 means methods shouldn't
@@ -78,8 +80,7 @@ pub struct SemanticIndexBuilder<'db> {
     path_root_references: Vec<PathRootReference>,
     lambda_stack: Vec<FileScopeId>,
 
-    item_tree: ItemTree,
-    item_tree_source_map: crate::item_tree::ItemTreeSourceMap,
+    item_tree: crate::item_tree::builder::ItemTreeBuilder,
     type_contributions: Vec<(Name, Contribution<'db>)>,
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
@@ -94,14 +95,14 @@ impl<'db> SemanticIndexBuilder<'db> {
             file,
             scopes: Vec::new(),
             scope_bindings: Vec::new(),
+            item_scopes: FxHashMap::default(),
             scope_stack: Vec::new(),
             class_depth: 0,
             expr_scopes: Vec::new(),
             path_resolutions: Vec::new(),
             path_root_references: Vec::new(),
             lambda_stack: Vec::new(),
-            item_tree: ItemTree::new(),
-            item_tree_source_map: crate::item_tree::ItemTreeSourceMap::default(),
+            item_tree: crate::item_tree::builder::ItemTreeBuilder::new(),
             type_contributions: Vec::new(),
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
@@ -185,13 +186,17 @@ impl<'db> SemanticIndexBuilder<'db> {
             }))
         };
 
+        // Drops the collision counter — it has no meaning once the tree is built.
+        let (item_tree, item_tree_source_map) = self.item_tree.finish();
+
         FileSemanticIndex {
             scopes: self.scopes,
             expr_scopes: self.expr_scopes,
             scope_bindings: self.scope_bindings,
             scope_ids,
-            item_tree: Arc::new(self.item_tree),
-            item_tree_source_map: Arc::new(self.item_tree_source_map),
+            item_scopes: self.item_scopes,
+            item_tree: Arc::new(item_tree),
+            item_tree_source_map: Arc::new(item_tree_source_map),
             symbol_contributions: Arc::new(FileSymbolContributions {
                 types: self.type_contributions,
                 values: self.value_contributions,
@@ -212,12 +217,22 @@ impl<'db> SemanticIndexBuilder<'db> {
             parent,
             kind,
             name,
+            owner: None,
             range,
             descendants: id.next()..id.next(), // empty initially; filled on pop
             is_template_body: false,
         });
         self.scope_bindings.push(ScopeBindings::new());
         self.scope_stack.push(id);
+    }
+
+    /// Link a scope to the item it was opened for.
+    ///
+    /// Recorded here, at the one place that knows both, rather than recovered
+    /// later by comparing `item.span == scope.range`.
+    fn record_scope_owner(&mut self, scope: FileScopeId, owner: ItemScopeOwner) {
+        self.scopes[scope.index() as usize].owner = Some(owner);
+        self.item_scopes.insert(owner, scope);
     }
 
     fn pop_scope(&mut self) {
@@ -1173,7 +1188,6 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_function(&mut self, f: &ast::FunctionDef) -> LocalItemId<FunctionMarker> {
         let local_id = self.item_tree.alloc_function(f);
-        ItemTree::collect_function_span(&mut self.item_tree_source_map, local_id, f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
 
         // Only contribute as a top-level symbol if not inside a class.
@@ -1190,6 +1204,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         self.push_scope(ScopeKind::Function, Some(f.name.clone()), f.span);
         let scope_id = self.current_scope_id();
+        self.record_scope_owner(scope_id, ItemScopeOwner::Function(local_id));
 
         for (idx, param) in f.params.iter().enumerate() {
             self.scope_bindings[scope_id.index() as usize]
@@ -1218,7 +1233,6 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_class(&mut self, c: &ast::ClassDef) {
         let local_id = self.item_tree.alloc_class(c);
-        ItemTree::collect_class_spans(&mut self.item_tree_source_map, local_id, c);
         let loc = ClassLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             c.name.clone(),
@@ -1229,6 +1243,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Class, Some(c.name.clone()), c.span);
+        let class_scope = self.current_scope_id();
+        self.record_scope_owner(class_scope, ItemScopeOwner::Class(local_id));
 
         // Unified per-scope duplicate detection: all members (fields, methods)
         // share one name-map so cross-kind collisions are also caught.
@@ -1310,12 +1326,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                 // BEP-044: remember which interface this method came from so
                 // `default.<name>()` calls inside the body can resolve back
                 // to the interface's default function.
-                self.item_tree
-                    .method_to_iface_target
-                    .insert(fid, impl_block.target.clone());
-                self.item_tree
-                    .method_to_iface_associated_type_bindings
-                    .insert(fid, impl_block.associated_type_bindings.clone());
+                self.item_tree.record_method_interface_target(
+                    fid,
+                    impl_block.target.clone(),
+                    impl_block.associated_type_bindings.clone(),
+                );
                 block_method_ids.push(fid);
             }
             // Dual-write: also record this in-body impl under a stable `ImplId`.
@@ -1351,6 +1366,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         // For blanket impls (implements<T> I for C<T>), push a class-like scope
         // so TIR can resolve `self` and type variables in method bodies.
         let has_generic_params = !imp.generic_params.is_empty();
+        let mut impl_scope: Option<FileScopeId> = None;
         if has_generic_params {
             // Derive a synthetic scope name from the for_target for `self` resolution.
             // Use the for_target's root name (e.g. "Container" from "Container<T>").
@@ -1361,16 +1377,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                 _ => None,
             };
             self.push_scope(ScopeKind::Class, scope_name, imp.span);
+            impl_scope = Some(self.current_scope_id());
         }
         let mut method_ids = Vec::new();
         for method in &imp.methods {
             let fid = self.lower_function(method);
-            self.item_tree
-                .method_to_iface_target
-                .insert(fid, imp.interface_target.clone());
-            self.item_tree
-                .method_to_iface_associated_type_bindings
-                .insert(fid, imp.associated_type_bindings.clone());
+            self.item_tree.record_method_interface_target(
+                fid,
+                imp.interface_target.clone(),
+                imp.associated_type_bindings.clone(),
+            );
             method_ids.push(fid);
         }
         if has_generic_params {
@@ -1403,7 +1419,10 @@ impl<'db> SemanticIndexBuilder<'db> {
             methods: method_ids,
             span: imp.span,
         };
-        self.item_tree.alloc_impl(&iface_head, &for_head, block);
+        let impl_id = self.item_tree.alloc_impl(&iface_head, &for_head, block);
+        if let Some(scope) = impl_scope {
+            self.record_scope_owner(scope, ItemScopeOwner::Impl(impl_id));
+        }
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).
@@ -1420,6 +1439,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         // methods so we can record their `FunctionMarker` ids on the
         // interface.
         self.push_scope(ScopeKind::Class, Some(i.name.clone()), i.span);
+        let interface_scope = self.current_scope_id();
 
         // BEP-044: default methods are lowered inside the interface's
         // `Class`-kind scope so the semantic index reports the interface
@@ -1435,7 +1455,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
 
         let local_id = self.item_tree.alloc_interface(i, default_method_ids);
-        ItemTree::collect_interface_spans(&mut self.item_tree_source_map, local_id, i);
+        self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             i.name.clone(),
@@ -1483,7 +1503,6 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_enum(&mut self, e: &ast::EnumDef) {
         let local_id = self.item_tree.alloc_enum(e);
-        ItemTree::collect_enum_spans(&mut self.item_tree_source_map, local_id, e);
         let loc = EnumLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             e.name.clone(),
@@ -1494,6 +1513,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Enum, Some(e.name.clone()), e.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::Enum(local_id));
 
         let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
         for variant in &e.variants {
@@ -1522,6 +1543,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::TypeAlias, Some(ta.name.clone()), ta.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::TypeAlias(local_id));
         self.pop_scope();
     }
 
@@ -1537,6 +1560,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Item, Some(c.name.clone()), c.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::Client(local_id));
         self.pop_scope();
     }
 
@@ -1552,6 +1577,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Item, Some(t.name.clone()), t.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::Test(local_id));
         self.pop_scope();
     }
 
@@ -1567,6 +1594,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Function, Some(ts.name.clone()), ts.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::TemplateString(local_id));
         self.pop_scope();
     }
 
@@ -1582,6 +1611,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Item, Some(rp.name.clone()), rp.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::RetryPolicy(local_id));
         self.pop_scope();
     }
 
@@ -1597,6 +1628,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Let, Some(l.name.clone()), l.span);
+        let scope = self.current_scope_id();
+        self.record_scope_owner(scope, ItemScopeOwner::Let(local_id));
         if let Some((ref body, ref source_map)) = l.initializer {
             self.walk_expr_body(body, source_map);
         }

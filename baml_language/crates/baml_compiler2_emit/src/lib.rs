@@ -3474,6 +3474,8 @@ fn compute_function_metadata_from_item_tree(
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
 ) -> FunctionSignatureMetadata {
+    use baml_compiler2_hir::item_tree::MethodOwner;
+
     let param_names: Vec<String> = func_data
         .params
         .iter()
@@ -3498,26 +3500,24 @@ fn compute_function_metadata_from_item_tree(
     // both its `for_target` (for `Self` substitution) and its declared
     // generics/bounds are recoverable — replacing the removed
     // `item_tree.implements_for`, which exposed those as flat fields.
-    let enclosing_free_impl = item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block
-            .methods
-            .contains(&func_id)
-            .then_some((*impl_id, block))
-    });
+    let owner = item_tree.method_owners.get(&func_id);
+    let enclosing_free_impl = match owner {
+        Some(MethodOwner::FreeImpl(impl_id)) => Some((*impl_id, &item_tree.impls[impl_id])),
+        Some(MethodOwner::Class(_) | MethodOwner::Interface(_)) | None => None,
+    };
     let enclosing_impl_for_target =
         enclosing_free_impl.and_then(|(_, block)| match &block.subject {
             baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
             baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
         });
-    let enclosing_class = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&func_id));
-    let enclosing_interface = item_tree
-        .interfaces
-        .values()
-        .find(|iface_data| iface_data.default_methods.contains(&func_id));
+    let enclosing_class = match owner {
+        Some(MethodOwner::Class(class_id)) => Some(&item_tree[*class_id]),
+        Some(MethodOwner::FreeImpl(_) | MethodOwner::Interface(_)) | None => None,
+    };
+    let enclosing_interface = match owner {
+        Some(MethodOwner::Interface(iface_id)) => Some(&item_tree[*iface_id]),
+        Some(MethodOwner::Class(_) | MethodOwner::FreeImpl(_)) | None => None,
+    };
     let self_replacement = enclosing_impl_for_target
         .cloned()
         .or_else(|| {
@@ -3674,14 +3674,39 @@ fn compute_function_metadata_from_item_tree(
             None => rustc_hash::FxHashMap::default(),
         };
 
+    // The concrete receiver (`ClassName<T,…>` or a free-impl `for` target), lowered
+    // once. A non-interface method's `Self` / `Self.Assoc` then root at it through the
+    // `self_ty` channel — the same projection path the interface branch drives with its
+    // rigid `Self` type variable. `None` for a free function (no receiver in scope) and
+    // unused for interface methods (which bind `Self` via `interface_signature_bindings`).
+    let receiver_ty: Option<baml_compiler2_tir::ty::Ty> = if enclosing_interface.is_none() {
+        self_replacement.as_ref().map(|replacement| {
+            let mut receiver_diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                replacement,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &enclosing_generics,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                &mut receiver_diags,
+            )
+        })
+    } else {
+        None
+    };
+
     // Lower a signature type expression against this method's scope, recording any
     // diagnostics into `diags`. For an interface method the associated-type / `Self`
     // bindings are applied by lowering with their names in scope (so `Item` lowers
     // to `TypeVar(Item)`) and then substituting; for every other method `Self` is
-    // first replaced by the concrete receiver type. In both cases `scope_bounds`
-    // drives projection resolution. Namespace-relative resolution (e.g. `MyLorem`
-    // in a signature under `ns_lorem/`) uses the file's namespace so a non-root-ns
-    // class does not erase to `unknown`.
+    // bound to the concrete `receiver_ty` via the `self_ty` channel. In both cases
+    // `scope_bounds` drives projection resolution. Namespace-relative resolution
+    // (e.g. `MyLorem` in a signature under `ns_lorem/`) uses the file's namespace so
+    // a non-root-ns class does not erase to `unknown`.
     let lower_scoped = |te: &TypeExpr,
                         diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
      -> baml_compiler2_tir::ty::Ty {
@@ -3704,22 +3729,15 @@ fn compute_function_metadata_from_item_tree(
                 &interface_signature_bindings,
             );
         }
-        let resolved_te = match &self_replacement {
-            Some(replacement) => baml_compiler2_tir::lower_type_expr::substitute_paths_in(
-                te,
-                &std::collections::HashMap::from([(Name::new("Self"), replacement.clone())]),
-            ),
-            None => te.clone(),
-        };
         baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &resolved_te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db,
                 package_items: pkg_items,
                 ns_context: &pkg_info.namespace_path,
                 generic_params: &enclosing_generics,
                 bounds: &scope_bounds,
-                self_ty: None,
+                self_ty: receiver_ty.clone(),
             },
             diags,
         )

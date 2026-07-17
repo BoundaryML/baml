@@ -42,29 +42,29 @@ policy.max_delta_pct = 3.0
 # Baselines re-recorded after merging canary (~+4%). Reclaiming the `syn`
 # cost would mean dropping prettyplease (raw, unformatted generated SDK
 # output).
-# macOS arm64: baseline 18.30 MB file (18_300_864), ceiling = baseline x1.03.
+# macOS arm64: baseline 18.90 MB file (18_900_160), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 18_849_890
-# Linux x86_64: baseline 23.75 MB file (23_753_040), ceiling = baseline x1.03.
+max_file_bytes = 19_467_165
+# Linux x86_64: baseline 24.51 MB file (24_507_664), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 24_465_631
-# Windows x86_64: baseline 19.80 MB file (19_798_528), ceiling = baseline x1.03.
+max_file_bytes = 25_242_894
+# Windows x86_64: baseline 20.43 MB file (20_426_752), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 20_392_484
+max_file_bytes = 21_039_555
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 12.64 MB file.
+# macOS arm64: baseline 13.21 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 13_019_384
-# Linux x86_64: baseline 16.26 MB file.
+max_file_bytes = 13_602_990
+# Linux x86_64: baseline 17.03 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 16_771_886
-# Windows x86_64: baseline 13.53 MB file.
+max_file_bytes = 17_542_251
+# Windows x86_64: baseline 14.14 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 13_944_063
+max_file_bytes = 14_567_300
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"

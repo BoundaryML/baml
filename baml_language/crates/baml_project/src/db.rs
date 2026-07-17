@@ -173,6 +173,19 @@ pub struct ProjectDatabase {
     removed_file_tombstones: HashMap<std::path::PathBuf, SourceFile>,
 }
 
+/// Origin-preference order for disambiguating functions that share one
+/// declaration span (a declarative LLM function and its `$stream` /
+/// `$parse_stream` companions): the user-authored function sorts first.
+fn func_origin_rank(origin: baml_compiler2_ast::ast::FunctionOrigin) -> u8 {
+    use baml_compiler2_ast::ast::FunctionOrigin;
+    match origin {
+        FunctionOrigin::UserDefined => 0,
+        FunctionOrigin::Companion => 1,
+        FunctionOrigin::Internal => 2,
+        FunctionOrigin::AutoDerive => 3,
+    }
+}
+
 #[salsa::db]
 impl salsa::Database for ProjectDatabase {}
 
@@ -660,31 +673,23 @@ impl ProjectDatabase {
 
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
-                // Check if this is an LLM function via declarative_meta (not body variant,
-                // since compiler2 desugars LLM functions to Expr bodies).
-                let is_llm = matches!(
-                    func_data.declarative_meta,
-                    Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
-                );
-
-                result = if is_llm {
-                    let client_name =
-                        if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
-                            func_data.declarative_meta
-                        {
-                            llm.client
-                                .as_ref()
-                                .map(|c: &baml_db::Name| c.to_string())
-                                .unwrap_or_else(|| "unknown".to_string())
-                        } else {
-                            "unknown".to_string()
-                        };
+                // LLM functions desugar to Expr bodies, so it is `declarative_meta`
+                // (surfaced span-free by `function_llm_meta`) — not the body variant —
+                // that marks them.
+                result = if let Some(llm_meta) =
+                    baml_compiler2_ppir::item_data::function_llm_meta(self, func_loc)
+                {
+                    let client_name = llm_meta
+                        .client_name
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "unknown".to_string());
                     let mut graph = build_llm_control_flow_graph(function_name, &client_name);
-                    if let Some(source_span) =
-                        self.source_span_for_range(source_file, func_data.span)
-                    {
+                    if let Some(source_span) = self.source_span_for_range(source_file, func_span) {
                         if let Some(node) = graph.nodes.values_mut().next() {
                             node.source_span = Some(source_span);
                         }
@@ -709,7 +714,7 @@ impl ProjectDatabase {
                             // whole function declaration so clicking the root in the
                             // playground selects the function (mirrors the LLM path above).
                             if let Some(root_span) =
-                                self.source_span_for_range(source_file, func_data.span)
+                                self.source_span_for_range(source_file, func_span)
                             {
                                 if let Some(root) = graph.nodes.values_mut().find(|node| {
                                     node.node_type
@@ -831,7 +836,7 @@ impl ProjectDatabase {
         let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for func_data in index.item_tree.functions.values() {
+            for (local_id, func_data) in &index.item_tree.functions {
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -839,8 +844,12 @@ impl ProjectDatabase {
                 ) {
                     continue;
                 }
+                let func_loc =
+                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let text = source_file.text(self);
-                let start = usize::from(func_data.span.start()).min(text.len());
+                let start = usize::from(func_span.start()).min(text.len());
                 if let Some(title) = header_title_above(&text[..start]) {
                     match &unique_title {
                         Some(existing) if existing != &title => return None,
@@ -1263,7 +1272,6 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> Option<(String, bool)> {
-        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -1278,19 +1286,19 @@ impl ProjectDatabase {
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
 
-        // Match against item tree functions by span
-        let item_tree = &index.item_tree;
-        let (local_id, _) = item_tree
+        // A declarative LLM function and its `$stream`/`$parse_stream` companions
+        // share one declaration span, hence one scope range — so multiple
+        // functions match here. Prefer the user-authored one (origin order).
+        let (local_id, _) = index
+            .item_tree
             .functions
             .iter()
-            .filter(|(_, func_data)| func_data.span == func_scope_range)
-            .min_by_key(|(_, func_data)| match func_data.origin {
-                FunctionOrigin::UserDefined => 0,
-                FunctionOrigin::Companion => 1,
-                FunctionOrigin::Internal => 2,
-                FunctionOrigin::AutoDerive => 3,
-            })?;
-
+            .filter(|(id, _)| {
+                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+                baml_compiler2_ppir::item_data::function_source_map(self, loc).span
+                    == func_scope_range
+            })
+            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))?;
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
@@ -1386,7 +1394,6 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> (Option<u32>, Vec<u32>) {
-        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -1401,18 +1408,16 @@ impl ProjectDatabase {
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-
-        let item_tree = &index.item_tree;
-        if let Some((local_id, _)) = item_tree
+        if let Some((local_id, _)) = index
+            .item_tree
             .functions
             .iter()
-            .filter(|(_, func_data)| func_data.span == func_scope_range)
-            .min_by_key(|(_, func_data)| match func_data.origin {
-                FunctionOrigin::UserDefined => 0,
-                FunctionOrigin::Companion => 1,
-                FunctionOrigin::Internal => 2,
-                FunctionOrigin::AutoDerive => 3,
+            .filter(|(id, _)| {
+                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+                baml_compiler2_ppir::item_data::function_source_map(self, loc).span
+                    == func_scope_range
             })
+            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))
         {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
