@@ -436,7 +436,7 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
-/// A selector that matches no test must NOT print a green `PASS testing::*`
+/// A selector that matches no test must NOT print a green aggregate pass
 /// line: the aggregate of zero tests is a vacuous pass, but stdout that says
 /// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
 /// Regression for B-628.
@@ -630,8 +630,13 @@ testset "suite" with testing.PassRate(0.6) {
         stderr,
     );
     assert!(
-        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        combined.contains("AGGREGATE PASS [outcome=pass; 1 tolerated failure]"),
         "Expected unfiltered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(combined.contains("PASS root::suite::one"), "{combined}");
+    assert!(
+        combined.contains("TOLERATED root::suite::three"),
+        "{combined}"
     );
     assert!(
         combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
@@ -655,7 +660,11 @@ testset "suite" with testing.PassRate(0.6) {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "suite::"]);
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "root::suite::*"],
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
@@ -668,8 +677,13 @@ testset "suite" with testing.PassRate(0.6) {
         stderr,
     );
     assert!(
-        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        combined.contains("AGGREGATE PASS [outcome=pass; 1 tolerated failure]"),
         "Expected filtered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(combined.contains("PASS root::suite::two"), "{combined}");
+    assert!(
+        combined.contains("TOLERATED root::suite::three"),
+        "{combined}"
     );
     assert!(
         combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
@@ -694,7 +708,7 @@ testset "suite" with testing.PassRate(0.0) {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "suite::failing leaf"],
+        &["test", "--from", ".", "-i", "root::suite::failing leaf"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -708,8 +722,12 @@ testset "suite" with testing.PassRate(0.0) {
         stderr,
     );
     assert!(
-        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        combined.contains("AGGREGATE PASS [outcome=pass; 1 tolerated failure]"),
         "Expected filtered leaf output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("TOLERATED root::suite::failing leaf"),
+        "{combined}"
     );
     assert!(
         combined.contains("aggregate passed — 0 passed, 1 tolerated failure, 1 total"),
@@ -783,8 +801,8 @@ testset "suite" {
         stderr,
     );
     assert!(
-        stdout.contains("failed: suite/two"),
-        "Expected aggregate output to include the failed child name, got:\n{stdout}"
+        stdout.contains("FAIL root::suite::two"),
+        "Expected output to include the canonical failed child ID, got:\n{stdout}"
     );
 }
 
@@ -823,6 +841,42 @@ testset "suite" with AlwaysFail {
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+#[test]
+fn test_fail_fast_does_not_report_skipped_leaf_as_passed() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" with testing.FailFast() {
+  test "first fails" { assert.is_true(false) }
+  test "never runs" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.status.code(), Some(2), "{combined}");
+    assert!(
+        combined.contains("FAIL root::suite::first fails"),
+        "{combined}"
+    );
+    assert!(
+        !combined.contains("PASS root::suite::never runs"),
+        "{combined}"
+    );
+    assert!(
+        combined.contains("0 passed, 1 failed, 1 total"),
+        "{combined}"
     );
 }
 

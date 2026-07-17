@@ -28,7 +28,8 @@ pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
-    lower_file, lower_file_with_path, synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
+    lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
+    synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
 };
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;

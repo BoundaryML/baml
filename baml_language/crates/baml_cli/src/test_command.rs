@@ -10,7 +10,7 @@ use bex_engine::{
     BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
     test_arg_to_external,
 };
-use clap::Args;
+use clap::{Args, CommandFactory, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{
@@ -21,40 +21,91 @@ use crate::{
 };
 
 #[derive(Args, Clone, Debug)]
+#[command(
+    after_help = "SELECTORS:\n  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.\n  Each -i/--include and -x/--exclude value is an anchored full-ID glob; `*` is\n  the only wildcard and it also matches `::`. Repeated includes are OR. Excludes\n  always win. With no includes, every non-excluded test is selected.\n\nPROFILES:\n  Profile names are case-sensitive. A profile is saved `baml test` argv, parsed\n  without shell expansion:\n\n    [test]\n    default = \"regular\"\n\n    [test.profiles.regular]\n    args = [\"-x\", \"*::integration::*\", \"--color\", \"never\"]\n\n  Direct CLI filters narrow the profile selection; they never reopen it. Direct\n  scalar options override profile scalar options. Repeated --features values are\n  combined. Bootstrap options --profile, --no-profile, --from, and --help are not\n  allowed in profile args. With no default profile, `baml test` runs all tests.\n\nRun `baml test --list` to discover IDs and `baml test --help` for this reference."
+)]
 pub struct TestArgs {
     #[arg(long, help = "Project search starting point", value_name = "PATH")]
     pub from: Option<PathBuf>,
 
+    /// Use a named test profile from `[test.profiles.<name>]` in `baml.toml`.
+    /// Profile arguments establish the initial test set; command-line filters
+    /// further narrow it.
+    #[arg(long, value_name = "NAME", conflicts_with = "no_profile")]
+    profile: Option<String>,
+
+    /// Do not apply the default profile configured in `baml.toml`.
+    #[arg(long, default_value_t = false, conflicts_with = "profile")]
+    no_profile: bool,
+
     /// List the selected tests instead of running them. The
-    /// "Testset::TestName" shown on each line is a valid -i / -x selector.
+    /// canonical id shown on each line is a valid -i / -x selector.
     #[arg(long, default_value_t = false)]
     list: bool,
 
     #[arg(long, short = 'i')]
-    /// Tests (or whole testsets) to include. If none provided, runs all tests.
+    /// Canonical test-id globs to include. If none are provided, all tests are
+    /// included. `*` matches any sequence, including `::`.
     ///
-    /// A selector is "Testset::TestName": the part before `::` is the enclosing
-    /// testset, the part after is the test. Either side may be empty or use `*`
-    /// wildcards. (For a legacy function-attached `test`, the part before `::`
-    /// is the function name instead.)
+    /// Test ids start with `root` (the current package), use `.` for BAML
+    /// namespaces/function ownership, and `::` for testset/test nesting.
     ///
     /// Examples:
     ///
-    /// -i "MySet::my test"  one test inside testset "MySet"
+    /// -i "root.payments::*"  every test in the payments namespace
     ///
-    /// -i "MySet::"  every test in testset "MySet"
+    /// -i "*::integration::*"  every test nested under an integration testset
     ///
-    /// -i "::my test"  a test in any testset — also the form for a top-level
-    /// `test` with no enclosing testset (its testset name is empty)
-    ///
-    /// -i "Get*::*Bar"  wildcards on either side
+    /// -i "*hello*"  any canonical id containing hello
     pub include: Vec<String>,
 
     #[arg(long, short = 'x')]
     /// Tests (or whole testsets) to exclude. Takes precedence over --include.
     ///
-    /// Uses the same "Testset::TestName" syntax as --include.
+    /// Uses the same canonical-id glob syntax as --include.
     pub exclude: Vec<String>,
+
+    /// Explicit global CLI color, injected by the top-level parser so a direct
+    /// scalar value can override the selected profile's value.
+    #[arg(skip)]
+    pub(crate) cli_color: Option<crate::paint::ColorChoice>,
+
+    /// Explicit global feature flags, injected by the top-level parser.
+    #[arg(skip)]
+    pub(crate) cli_features: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+struct TestInvocation {
+    list: bool,
+    profile_include: Vec<String>,
+    profile_exclude: Vec<String>,
+    cli_include: Vec<String>,
+    cli_exclude: Vec<String>,
+    color: Option<crate::paint::ColorChoice>,
+    #[allow(dead_code)]
+    features: Vec<String>,
+}
+
+#[derive(Debug)]
+struct ParsedProfileArgs {
+    test: TestArgs,
+    color: Option<crate::paint::ColorChoice>,
+    features: Vec<String>,
+}
+
+impl TestInvocation {
+    fn includes_id(&self, id: &str) -> bool {
+        TestFilter::includes_patterns(id, &self.profile_include, &self.profile_exclude)
+            && TestFilter::includes_patterns(id, &self.cli_include, &self.cli_exclude)
+    }
+
+    fn has_filters(&self) -> bool {
+        !self.profile_include.is_empty()
+            || !self.profile_exclude.is_empty()
+            || !self.cli_include.is_empty()
+            || !self.cli_exclude.is_empty()
+    }
 }
 
 /// A legacy `test "name" { functions [Foo] args {…} }` attached to an LLM
@@ -63,9 +114,59 @@ pub struct TestArgs {
 /// entirely inside the `testing` stdlib package (see `run_filtered`), so they
 /// have no Rust-side representation.
 struct LegacyTest {
+    /// Engine lookup name (the compiler's `user`-package spelling).
     function_name: String,
     test_name: String,
+    /// Public, stable selector/report id.
+    canonical_id: String,
     file_path: PathBuf,
+}
+
+fn canonical_legacy_id(function_name: &str, test_name: &str) -> String {
+    let function = function_name.strip_prefix("user.").unwrap_or(function_name);
+    format!("root.{function}::{test_name}")
+}
+
+fn qualify_function_from_source(function_name: &str, source_file: &std::path::Path) -> String {
+    if function_name.contains('.') {
+        return function_name.to_string();
+    }
+    let namespace = source_file
+        .parent()
+        .into_iter()
+        .flat_map(std::path::Path::components)
+        .filter_map(|component| {
+            let std::path::Component::Normal(component) = component else {
+                return None;
+            };
+            component.to_str()?.strip_prefix("ns_").map(str::to_string)
+        })
+        .collect::<Vec<_>>()
+        .join(".");
+    if namespace.is_empty() {
+        function_name.to_string()
+    } else {
+        format!("{namespace}.{function_name}")
+    }
+}
+
+fn validate_selectors<'a>(selectors: impl Iterator<Item = &'a String>) -> Result<()> {
+    for selector in selectors {
+        // Canonical ids may contain a literal `/` inside a user-provided test
+        // name. Only diagnose the recognizable legacy shape: an unrooted
+        // two-column selector whose test tail used `/` for further nesting.
+        if selector.contains('/')
+            && selector.contains("::")
+            && !selector.contains('*')
+            && !selector.starts_with("root")
+        {
+            anyhow::bail!(
+                "test selector `{selector}` uses the old `/` hierarchy separator; use `::` instead (for example `{}`)",
+                selector.replace('/', "::")
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Bundle of the engine + tokio runtime + cancellation token shared by every
@@ -82,6 +183,10 @@ impl TestArgs {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
         let resolved = resolve_project_sources(self.from.as_deref())?;
+        let invocation = self.resolve_invocation(resolved.manifest.as_deref(), &resolved.root)?;
+        if let Some(color) = invocation.color {
+            crate::paint::init_color(color);
+        }
         if resolved.files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -101,8 +206,8 @@ impl TestArgs {
         // under BAML_CACHE_VERIFY (the oracle must run honest discovery) and
         // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
         // honest path below.
-        if self.list {
-            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref()) {
+        if invocation.list {
+            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref(), &invocation) {
                 return Ok(exit);
             }
         }
@@ -257,13 +362,9 @@ impl TestArgs {
             };
 
         // ── 6. Filter legacy tests (testset filtering happens in BAML) ──────
-        let filter = TestFilter::new(
-            self.include.iter().map(|s| s.as_str()),
-            self.exclude.iter().map(|s| s.as_str()),
-        );
         let legacy_selected: Vec<&LegacyTest> = legacy
             .iter()
-            .filter(|t| filter.includes(&t.function_name, &t.test_name))
+            .filter(|t| invocation.includes_id(&t.canonical_id))
             .collect();
 
         let run_ctx = RunCtx {
@@ -273,18 +374,16 @@ impl TestArgs {
         };
 
         // ── 7. List mode ───────────────────────────────────────────────────
-        if self.list {
+        if invocation.list {
             let testset_names = match &registry {
-                Some(reg) => {
-                    match list_selected_testset_names(&run_ctx, reg, &self.include, &self.exclude) {
-                        Ok(names) => names,
-                        Err(e) => {
-                            reporter.abandon();
-                            crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                            return Ok(crate::ExitCode::Other);
-                        }
+                Some(reg) => match list_selected_testset_names(&run_ctx, reg, &invocation) {
+                    Ok(names) => names,
+                    Err(e) => {
+                        reporter.abandon();
+                        crate::reporter::print_error(format_args!("failed to list tests: {e}"));
+                        return Ok(crate::ExitCode::Other);
                     }
-                }
+                },
                 None => Vec::new(),
             };
 
@@ -294,27 +393,20 @@ impl TestArgs {
             // with no filters the display list above already IS the unfiltered
             // list, so no extra VM call. Written only from an error-free
             // discovery (never-save-on-error).
-            if let Some(ctx) = &cache {
-                let all_leaf_names = if self.include.is_empty() && self.exclude.is_empty() {
-                    testset_names.clone()
-                } else {
-                    match &registry {
-                        Some(reg) => match list_selected_testset_names(&run_ctx, reg, &[], &[]) {
-                            Ok(names) => names,
-                            Err(e) => {
-                                reporter.abandon();
-                                crate::reporter::print_error(format_args!(
-                                    "failed to list tests: {e}"
-                                ));
-                                return Ok(crate::ExitCode::Other);
-                            }
-                        },
-                        None => Vec::new(),
-                    }
-                };
+            // A filtered/profiled discovery may have deliberately pruned lazy,
+            // expensive testsets. Do not defeat that guarantee by expanding the
+            // excluded tree merely to populate an unfiltered cache entry. A
+            // cache produced by an earlier unfiltered run can still serve this
+            // invocation through the fast path above.
+            if let Some(ctx) = &cache
+                && !invocation.has_filters()
+                && !testset_names
+                    .iter()
+                    .any(|name| name.ends_with("::(failed to expand)"))
+            {
                 let disco = crate::bytecode_cache::TestDiscovery {
                     legacy: legacy.iter().map(cached_legacy_test).collect(),
-                    testset_leaf_names: all_leaf_names,
+                    testset_leaf_names: testset_names.clone(),
                 };
                 ctx.verify_test_discovery(&disco)?;
                 ctx.store_test_discovery(&disco);
@@ -352,7 +444,7 @@ impl TestArgs {
         // expands, filters, runs (concurrently via spawn/await), and aggregates
         // (honoring testset runners), returning a tolerated-aware flat report.
         if let Some(reg) = &registry {
-            match run_filtered_report(&run_ctx, reg, &self.include, &self.exclude) {
+            match run_filtered_report(&run_ctx, reg, &invocation) {
                 Ok(value) => match parse_flat_report(&value) {
                     Some(flat) => consume_flat_report(
                         &flat,
@@ -363,14 +455,14 @@ impl TestArgs {
                         &mut command_failed,
                     ),
                     None => {
-                        eprintln!("FAIL testing::* - could not read test report");
+                        eprintln!("AGGREGATE FAIL - could not read test report");
                         failed += 1;
                         total += 1;
                         command_failed = true;
                     }
                 },
                 Err(e) => {
-                    eprintln!("FAIL testing::*");
+                    eprintln!("AGGREGATE FAIL");
                     eprintln!("  => {e}");
                     failed += 1;
                     total += 1;
@@ -408,6 +500,141 @@ impl TestArgs {
         }
     }
 
+    fn resolve_invocation(
+        &self,
+        manifest_text: Option<&str>,
+        project_root: &std::path::Path,
+    ) -> Result<TestInvocation> {
+        let manifest = manifest_text
+            .map(crate::manifest::parse)
+            .transpose()
+            .with_context(|| {
+                format!(
+                    "failed to read test profiles from {}",
+                    project_root.join("baml.toml").display()
+                )
+            })?;
+
+        let selected_name = if self.no_profile {
+            None
+        } else if let Some(name) = &self.profile {
+            Some(name.as_str())
+        } else {
+            manifest.as_ref().and_then(|m| m.test.default.as_deref())
+        };
+
+        let profile_args = if let Some(name) = selected_name {
+            let manifest = manifest.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "test profile `{name}` was requested, but {} does not exist",
+                    project_root.join("baml.toml").display()
+                )
+            })?;
+            let profile = manifest.test.profiles.get(name).ok_or_else(|| {
+                let available = if manifest.test.profiles.is_empty() {
+                    "none configured".to_string()
+                } else {
+                    manifest
+                        .test
+                        .profiles
+                        .keys()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                anyhow!(
+                    "test profile `{name}` is not defined in {} (available: {available})",
+                    project_root.join("baml.toml").display()
+                )
+            })?;
+            Self::parse_profile_args(name, &profile.args).with_context(|| {
+                format!(
+                    "{}: invalid [test.profiles.{name}].args",
+                    project_root.join("baml.toml").display()
+                )
+            })?
+        } else {
+            None
+        };
+
+        let invocation = TestInvocation {
+            // Boolean flags compose naturally. Future value-taking scalar test
+            // options should use clap value-source tracking so an explicit CLI
+            // value overrides the profile value.
+            list: self.list || profile_args.as_ref().is_some_and(|p| p.test.list),
+            profile_include: profile_args
+                .as_ref()
+                .map(|p| p.test.include.clone())
+                .unwrap_or_default(),
+            profile_exclude: profile_args
+                .as_ref()
+                .map(|p| p.test.exclude.clone())
+                .unwrap_or_default(),
+            cli_include: self.include.clone(),
+            cli_exclude: self.exclude.clone(),
+            color: self
+                .cli_color
+                .or_else(|| profile_args.as_ref().and_then(|p| p.color)),
+            features: profile_args
+                .as_ref()
+                .map(|p| p.features.clone())
+                .unwrap_or_default()
+                .into_iter()
+                .chain(self.cli_features.iter().cloned())
+                .collect(),
+        };
+        validate_selectors(
+            invocation
+                .profile_include
+                .iter()
+                .chain(&invocation.profile_exclude)
+                .chain(&invocation.cli_include)
+                .chain(&invocation.cli_exclude),
+        )?;
+        Ok(invocation)
+    }
+
+    fn parse_profile_args(name: &str, tokens: &[String]) -> Result<Option<ParsedProfileArgs>> {
+        for token in tokens {
+            let bootstrap = matches!(
+                token.as_str(),
+                "--profile" | "--no-profile" | "--from" | "--help" | "-h"
+            ) || token.starts_with("--profile=")
+                || token.starts_with("--from=");
+            if bootstrap {
+                anyhow::bail!(
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --from, or --help"
+                );
+            }
+        }
+        if tokens.is_empty() {
+            return Ok(None);
+        }
+        // Parse with the real top-level command grammar so global options shown
+        // by `baml test --help` (for example --color and repeated --features)
+        // mean exactly the same thing in a profile.
+        let command = crate::commands::RuntimeCli::command();
+        let matches = command
+            .try_get_matches_from(
+                ["baml", "test"]
+                    .into_iter()
+                    .chain(tokens.iter().map(String::as_str)),
+            )
+            .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
+        let color_is_explicit =
+            matches.value_source("color") == Some(clap::parser::ValueSource::CommandLine);
+        let parsed = crate::commands::RuntimeCli::from_arg_matches(&matches)
+            .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
+        let crate::commands::Commands::Test(test) = parsed.command else {
+            unreachable!("synthetic profile argv always selects the test command")
+        };
+        Ok(Some(ParsedProfileArgs {
+            test,
+            color: color_is_explicit.then_some(parsed.color),
+            features: parsed.features,
+        }))
+    }
+
     /// Warm `--list` fast path: render the flattened test list straight from the
     /// discovery cache and skip engine boot entirely. The include/exclude filter
     /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
@@ -419,27 +646,21 @@ impl TestArgs {
         &self,
         reporter: &Reporter,
         cache: Option<&CacheContext>,
+        invocation: &TestInvocation,
     ) -> Option<crate::ExitCode> {
         if CacheContext::verify_enabled() {
             return None;
         }
         let disco = cache?.load_test_discovery()?;
-        let filter = TestFilter::new(
-            self.include.iter().map(|s| s.as_str()),
-            self.exclude.iter().map(|s| s.as_str()),
-        );
         let legacy_selected: Vec<crate::bytecode_cache::CachedLegacyTest> = disco
             .legacy
             .into_iter()
-            .filter(|t| filter.includes(&t.function_name, &t.test_name))
+            .filter(|t| invocation.includes_id(&t.canonical_id))
             .collect();
         let testset_names: Vec<String> = disco
             .testset_leaf_names
             .into_iter()
-            .filter(|name| {
-                let (func, test) = split_top(name);
-                filter.includes(&func, &test)
-            })
+            .filter(|name| invocation.includes_id(name))
             .collect();
         crate::bytecode_cache::cache_debug(format_args!(
             "served `test --list` from discovery cache ({} legacy + {} testset leaf(s) selected); \
@@ -474,22 +695,19 @@ fn render_test_list(
     // Canonicalize the order at this single render point — both the fresh-compile
     // and bytecode-cache paths flow through here — so `--list` output is
     // byte-identical between them regardless of upstream map/enumeration order.
-    // Sort by (function, test) so each function's tests group together (a legacy
-    // `test` is function-attached), with the path as a final deterministic tiebreak.
+    // Sort by canonical id, with the path as a deterministic tiebreak.
     let mut legacy_sorted: Vec<&crate::bytecode_cache::CachedLegacyTest> =
         legacy_selected.iter().collect();
     legacy_sorted.sort_by(|a, b| {
-        a.function_name
-            .cmp(&b.function_name)
-            .then_with(|| a.test_name.cmp(&b.test_name))
+        a.canonical_id
+            .cmp(&b.canonical_id)
             .then_with(|| a.file_path.cmp(&b.file_path))
     });
     for t in legacy_sorted {
-        println!("  {}::{}  ({})", t.function_name, t.test_name, t.file_path);
+        println!("  {}  ({})", t.canonical_id, t.file_path);
     }
     for name in testset_names {
-        let (func, test) = split_top(name);
-        println!("  {func}::{test}  (<testset>)");
+        println!("  {name}  (<testset>)");
     }
     crate::ExitCode::Success
 }
@@ -500,6 +718,7 @@ fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest
     crate::bytecode_cache::CachedLegacyTest {
         function_name: t.function_name.clone(),
         test_name: t.test_name.clone(),
+        canonical_id: t.canonical_id.clone(),
         file_path: t.file_path.display().to_string(),
     }
 }
@@ -524,13 +743,25 @@ fn discover_legacy_tests(
         // bytecode-cache-served runs.
         let file_path = source_file.path(db);
         let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
+        let namespace = baml_db::baml_compiler2_hir::file_package::file_package(db, source_file)
+            .namespace_path
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(".");
 
         for test_loc in file_tests(db, source_file) {
             let test = test_data(db, *test_loc);
             for func_ref in &test.function_refs {
+                let function_name = if namespace.is_empty() {
+                    func_ref.to_string()
+                } else {
+                    format!("{namespace}.{func_ref}")
+                };
                 tests.push(LegacyTest {
-                    function_name: func_ref.to_string(),
+                    function_name: function_name.clone(),
                     test_name: test.name.to_string(),
+                    canonical_id: canonical_legacy_id(&function_name, test.name.as_ref()),
                     file_path: file_path.to_path_buf(),
                 });
             }
@@ -564,9 +795,11 @@ fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest>
             PathBuf::from(&tc.source_file)
         };
         for func in &tc.function_names {
+            let function_name = qualify_function_from_source(func, &file_path);
             tests.push(LegacyTest {
-                function_name: func.clone(),
+                function_name: function_name.clone(),
                 test_name: tc.name.clone(),
+                canonical_id: canonical_legacy_id(&function_name, &tc.name),
                 file_path: file_path.clone(),
             });
         }
@@ -583,8 +816,8 @@ fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mu
         Some(tc) => tc,
         None => {
             eprintln!(
-                "FAIL {}::{} - test case not found in compiled program",
-                t.function_name, t.test_name
+                "FAIL {} - test case not found in compiled program",
+                t.canonical_id
             );
             *failed += 1;
             return;
@@ -594,7 +827,7 @@ fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mu
     let ordered_args = match build_ordered_args(ctx.engine, &t.function_name, test_case) {
         Ok(args) => args,
         Err(e) => {
-            eprintln!("FAIL {}::{} - {e}", t.function_name, t.test_name);
+            eprintln!("FAIL {} - {e}", t.canonical_id);
             *failed += 1;
             return;
         }
@@ -611,12 +844,12 @@ fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mu
         ),
     ) {
         Ok(result) => {
-            println!("PASS {}::{}", t.function_name, t.test_name);
+            println!("PASS {}", t.canonical_id);
             println!("  => {result:?}");
             *passed += 1;
         }
         Err(e) => {
-            eprintln!("FAIL {}::{}", t.function_name, t.test_name);
+            eprintln!("FAIL {}", t.canonical_id);
             eprintln!("  => {e}");
             *failed += 1;
         }
@@ -654,7 +887,7 @@ fn build_ordered_args(
 // Testset entry points: a single BAML call does discovery + filtering +
 // concurrent execution + aggregation, returning a flat report.
 //
-// `testing.TestRegistry.run_filtered(registry, include[], exclude[])` and
+// `testing.TestRegistry.run_filtered(registry, profile filters, CLI filters)` and
 // `testing.TestRegistry.list_filtered(...)` are defined in
 // baml_std/testing/registry.baml. `self` is passed as the first positional
 // argument (the live registry handle).
@@ -663,8 +896,7 @@ fn build_ordered_args(
 fn run_filtered_report(
     ctx: &RunCtx,
     registry: &BexExternalValue,
-    include: &[String],
-    exclude: &[String],
+    invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
         .with_cancel_token(ctx.cancel.clone())
@@ -674,8 +906,10 @@ fn run_filtered_report(
             "testing.TestRegistry.run_filtered",
             vec![
                 registry.clone(),
-                string_array(include),
-                string_array(exclude),
+                string_array(&invocation.profile_include),
+                string_array(&invocation.profile_exclude),
+                string_array(&invocation.cli_include),
+                string_array(&invocation.cli_exclude),
             ],
             call_ctx,
             true,
@@ -686,8 +920,7 @@ fn run_filtered_report(
 fn list_selected_testset_names(
     ctx: &RunCtx,
     registry: &BexExternalValue,
-    include: &[String],
-    exclude: &[String],
+    invocation: &TestInvocation,
 ) -> Result<Vec<String>> {
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
         .with_cancel_token(ctx.cancel.clone())
@@ -698,8 +931,10 @@ fn list_selected_testset_names(
             "testing.TestRegistry.list_filtered",
             vec![
                 registry.clone(),
-                string_array(include),
-                string_array(exclude),
+                string_array(&invocation.profile_include),
+                string_array(&invocation.profile_exclude),
+                string_array(&invocation.cli_include),
+                string_array(&invocation.cli_exclude),
             ],
             call_ctx,
             true,
@@ -710,16 +945,13 @@ fn list_selected_testset_names(
 
 /// Print a flat report and fold its counts into the running totals.
 ///
-/// Filtered runs print one `PASS/FAIL func::test` line per selected leaf
-/// (parent testset runners are bypassed). Unfiltered runs print a single
-/// aggregate `PASS/FAIL testing::*` line plus failed child names and failure
-/// messages, and the exit verdict follows the aggregate `outcome` (so a runner
-/// like `PassRate` can pass the suite even with a failing leaf).
 /// Print the aggregate testset result and fold its counts into the running
 /// totals. Both filtered and unfiltered runs go through the same aggregate path
 /// (filtered selections still run under their testset runners), so a failing
 /// leaf whose runner still passes the suite is reported as a *tolerated* failure
-/// — kept out of the hard `failed` count and not failing the command.
+/// — kept out of the hard `failed` count and not failing the command. Every
+/// leaf line uses the same canonical ID emitted by `baml test --list`; aggregate
+/// runner verdicts are labeled as aggregates rather than presented as test IDs.
 fn consume_flat_report(
     flat: &FlatReport,
     passed: &mut usize,
@@ -734,7 +966,7 @@ fn consume_flat_report(
     *total += flat.total;
 
     // An empty selection (a filter that matched no testset tests) aggregates
-    // to a vacuous `pass` over zero tests. Printing a green `PASS testing::*`
+    // to a vacuous `pass` over zero tests. Printing a green aggregate pass
     // for that contradicts the `NoTestsRun` exit the caller then returns and
     // reads as success to anything parsing stdout, so skip the aggregate line
     // entirely and let the caller's "no tests selected" guard speak.
@@ -747,27 +979,26 @@ fn consume_flat_report(
         return;
     }
 
+    for name in &flat.passed_names {
+        println!("PASS {name}");
+    }
+    for name in &flat.tolerated_names {
+        println!("TOLERATED {name}");
+    }
+    for name in &flat.failed_names {
+        println!("FAIL {name}");
+    }
+
     if flat.outcome == "pass" {
         if flat.tolerated > 0 {
             println!(
-                "PASS testing::* [outcome=pass; {} tolerated {}]",
+                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
                 flat.tolerated,
                 pluralize(flat.tolerated, "failure", "failures")
             );
-            // The aggregate-pass path's failed_names hold the tolerated names
-            // (a passing suite contributes none to the top failed_names, so this
-            // is usually empty — printed for symmetry with the FAIL path).
-            for name in &flat.failed_names {
-                println!("  tolerated: {name}");
-            }
-        } else {
-            println!("PASS testing::*");
         }
     } else {
-        println!("FAIL testing::* [outcome={}]", flat.outcome);
-        for name in &flat.failed_names {
-            println!("  failed: {name}");
-        }
+        println!("AGGREGATE FAIL [outcome={}]", flat.outcome);
         for message in &flat.messages {
             eprintln!("  => {message}");
         }
@@ -805,7 +1036,9 @@ struct FlatReport {
     failed: usize,
     tolerated: usize,
     total: usize,
+    passed_names: Vec<String>,
     failed_names: Vec<String>,
+    tolerated_names: Vec<String>,
     messages: Vec<String>,
 }
 
@@ -823,8 +1056,16 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
     let failed = fields.get("failed").and_then(as_usize)?;
     let tolerated = fields.get("tolerated").and_then(as_usize)?;
     let total = fields.get("total").and_then(as_usize)?;
+    let passed_names = fields
+        .get("passed_names")
+        .map(string_array_values)
+        .unwrap_or_default();
     let failed_names = fields
         .get("failed_names")
+        .map(string_array_values)
+        .unwrap_or_default();
+    let tolerated_names = fields
+        .get("tolerated_names")
         .map(string_array_values)
         .unwrap_or_default();
     let messages = fields
@@ -837,7 +1078,9 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         failed,
         tolerated,
         total,
+        passed_names,
         failed_names,
+        tolerated_names,
         messages,
     })
 }
@@ -891,16 +1134,6 @@ fn as_usize(value: &BexExternalValue) -> Option<usize> {
     }
 }
 
-/// Split a testset's slash-separated path into (first-segment, rest). For
-/// `"tictactoe/x wins row"` → ("tictactoe", "x wins row"). For a path with no
-/// slash → ("", whole-thing).
-fn split_top(full_path: &str) -> (String, String) {
-    match full_path.split_once('/') {
-        Some((head, tail)) => (head.to_string(), tail.to_string()),
-        None => (String::new(), full_path.to_string()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use baml_type::RuntimeTy;
@@ -951,7 +1184,9 @@ mod tests {
                 ("failed", int(failed)),
                 ("tolerated", int(tolerated)),
                 ("total", int(total)),
+                ("passed_names", array(Vec::new())),
                 ("failed_names", array(failed_names)),
+                ("tolerated_names", array(Vec::new())),
                 ("messages", array(messages)),
             ],
         )
@@ -995,7 +1230,9 @@ mod tests {
                 ("failed", int(0)),
                 ("tolerated", int(0)),
                 ("total", int(1)),
+                ("passed_names", array(vec![string("root::passes")])),
                 ("failed_names", array(Vec::new())),
+                ("tolerated_names", array(Vec::new())),
                 ("messages", array(Vec::new())),
             ],
         );
@@ -1003,6 +1240,7 @@ mod tests {
         let parsed = parse_flat_report(&value).expect("should parse");
         assert_eq!(parsed.outcome, "pass");
         assert_eq!(parsed.total, 1);
+        assert_eq!(parsed.passed_names, ["root::passes"]);
     }
 
     fn consume(report: &FlatReport) -> (usize, usize, usize, usize, bool) {
@@ -1024,7 +1262,7 @@ mod tests {
         // A no-match selector aggregates to a vacuous `pass` over zero tests.
         // Folding it must leave every counter at zero (so the caller's
         // `total == 0` guard fires "no tests selected") and must NOT print a
-        // green `PASS testing::*` line contradicting the non-zero exit (B-628).
+        // green aggregate pass line contradicting the non-zero exit (B-628).
         let parsed =
             parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
@@ -1072,5 +1310,70 @@ mod tests {
         let parsed =
             parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(&parsed), (1, 1, 0, 2, true));
+    }
+
+    #[test]
+    fn profile_args_use_test_cli_grammar_and_reject_bootstrap_flags() {
+        let tokens = vec![
+            "-i".to_string(),
+            "root::integration::*".to_string(),
+            "-x".to_string(),
+            "*::flaky::*".to_string(),
+        ];
+        let parsed = TestArgs::parse_profile_args("ci", &tokens)
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.test.include, vec!["root::integration::*"]);
+        assert_eq!(parsed.test.exclude, vec!["*::flaky::*"]);
+
+        let globals = TestArgs::parse_profile_args(
+            "globals",
+            &[
+                "--color".to_string(),
+                "never".to_string(),
+                "--features".to_string(),
+                "beta".to_string(),
+                "--features=display_all_warnings".to_string(),
+            ],
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(globals.color, Some(crate::paint::ColorChoice::Never));
+        assert_eq!(globals.features, ["beta", "display_all_warnings"]);
+
+        let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("cannot contain --profile"), "{error}");
+    }
+
+    #[test]
+    fn explicit_cli_scalar_overrides_profile_and_repeated_features_combine() {
+        let cli = crate::commands::RuntimeCli::parse_from_smart(vec![
+            "baml".into(),
+            "test".into(),
+            "--profile".into(),
+            "ci".into(),
+            "--color".into(),
+            "always".into(),
+            "--features".into(),
+            "cli-feature".into(),
+        ]);
+        let crate::commands::Commands::Test(args) = cli.command else {
+            panic!("expected test command")
+        };
+        let invocation = args
+            .resolve_invocation(
+                Some(
+                    r#"
+[test.profiles.ci]
+args = ["--color", "never", "--features", "profile-feature"]
+"#,
+                ),
+                std::path::Path::new("/project"),
+            )
+            .unwrap();
+        assert_eq!(invocation.color, Some(crate::paint::ColorChoice::Always));
+        assert_eq!(invocation.features, ["profile-feature", "cli-feature"]);
     }
 }

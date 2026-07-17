@@ -419,6 +419,9 @@ impl CacheContext {
 pub(crate) struct CachedLegacyTest {
     pub(crate) function_name: String,
     pub(crate) test_name: String,
+    /// Public root-qualified test id. Adding this field intentionally makes
+    /// older discovery blobs fail Borsh decoding and fall back to discovery.
+    pub(crate) canonical_id: String,
     /// Project-root-relative display path (the `--list` `(path)` suffix).
     pub(crate) file_path: String,
 }
@@ -442,7 +445,7 @@ pub(crate) struct CachedLegacyTest {
 pub(crate) struct TestDiscovery {
     /// Legacy function-attached tests, unfiltered, in discovery order.
     pub(crate) legacy: Vec<CachedLegacyTest>,
-    /// Fully-expanded testset leaf names (full slash paths), unfiltered, in
+    /// Fully-expanded testset leaf names (canonical `root...::...` ids), unfiltered, in
     /// `collect_leaf_names` order.
     pub(crate) testset_leaf_names: Vec<String>,
 }
@@ -3654,18 +3657,20 @@ mod tests {
                 CachedLegacyTest {
                     function_name: "Greet".to_string(),
                     test_name: "hello".to_string(),
+                    canonical_id: "root.Greet::hello".to_string(),
                     file_path: "greet.baml".to_string(),
                 },
                 CachedLegacyTest {
                     function_name: "Greet".to_string(),
                     test_name: "world".to_string(),
+                    canonical_id: "root.Greet::world".to_string(),
                     file_path: "greet.baml".to_string(),
                 },
             ],
             testset_leaf_names: vec![
-                "suite/one".to_string(),
-                "suite/two".to_string(),
-                "nested/inner/leaf".to_string(),
+                "root::suite::one".to_string(),
+                "root::suite::two".to_string(),
+                "root::nested::inner::leaf".to_string(),
             ],
         }
     }
@@ -3750,7 +3755,7 @@ mod tests {
         // A drifted testset leaf set (e.g. a nondeterministic generator) bails.
         let cached = sample_discovery();
         let mut honest = sample_discovery();
-        honest.testset_leaf_names[0] = "suite/one-CHANGED".to_string();
+        honest.testset_leaf_names[0] = "root::suite::one-CHANGED".to_string();
         let err = CacheContext::compare_test_discovery(&cached, &honest)
             .expect_err("a testset-list mismatch must bail");
         assert!(
