@@ -737,6 +737,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
             .map(|member| union_type_component(member, names))
             .collect::<Vec<_>>()
             .join("Or"),
+        GoTy::Function(_) => "Function".into(),
         GoTy::Unsupported => "Unsupported".into(),
     }
 }
@@ -813,6 +814,17 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
             }
         }
         GoTy::Unsupported => hash.byte(16),
+        GoTy::Function(key) => {
+            hash.byte(17);
+            for param in key.params() {
+                hash_go_ty(hash, param);
+            }
+            hash.byte(u8::from(key.ret().is_some()));
+            if let Some(ret) = key.ret() {
+                hash_go_ty(hash, ret);
+            }
+            hash.byte(u8::from(key.throws()));
+        }
     }
 }
 

@@ -30,6 +30,58 @@ function call_with_class_callback(callback: (Person) -> string, p: Person) -> st
     callback(p)
 }
 
+function call_class_roundtrip_callback(callback: (Person) -> Person, p: Person) -> Person {
+    callback(p)
+}
+
+enum CallbackMood {
+    HAPPY
+    SAD
+}
+
+function call_enum_roundtrip_callback(callback: (CallbackMood) -> CallbackMood, mood: CallbackMood) -> CallbackMood {
+    callback(mood)
+}
+
+function call_list_roundtrip_callback(callback: (int[]) -> int[], values: int[]) -> int[] {
+    callback(values)
+}
+
+function call_map_roundtrip_callback(callback: (map<string, int>) -> map<string, int>, values: map<string, int>) -> map<string, int> {
+    callback(values)
+}
+
+function call_union_roundtrip_callback(callback: (string | int) -> string | int, value: string | int) -> string | int {
+    callback(value)
+}
+
+function call_media_roundtrip_callback(callback: (image) -> image, value: image) -> image {
+    callback(value)
+}
+
+function call_void_callback(callback: (int) -> void, value: int) -> int {
+    callback(value)
+    value
+}
+
+function call_throwing_void_callback(
+    callback: (int) -> void throws baml.errors.HostCallable,
+    value: int,
+) -> void throws baml.errors.HostCallable {
+    callback(value)
+}
+
+function propagate_throwing_callback(
+    callback: (int) -> string throws baml.errors.HostCallable,
+    value: int,
+) -> string throws baml.errors.HostCallable {
+    callback(value)
+}
+
+function ignore_callback(callback: (int) -> string) -> string {
+    "ignored"
+}
+
 // ─── Optional args × host callables (the combination) ───────────────────────
 //
 // These exercise the intersection of two surfaces that were each covered

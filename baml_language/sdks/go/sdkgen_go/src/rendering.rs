@@ -17,6 +17,7 @@ pub(crate) enum GeneratorIdent {
     ContextParameter,
     ReceiverParameter,
     ErrorLocal,
+    CallbackErrorLocal,
     ResultLocal,
     ZeroLocal,
     ArgumentsLocal,
@@ -79,6 +80,38 @@ pub(crate) struct UnionCodecIdent {
     index: usize,
 }
 
+pub(crate) struct CallbackCodecIdent {
+    index: usize,
+}
+
+pub(crate) struct CallbackArgumentIdent {
+    index: usize,
+}
+
+impl CallbackArgumentIdent {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for CallbackArgumentIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlCallbackArg{}_", self.index)
+    }
+}
+
+impl CallbackCodecIdent {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for CallbackCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlEncodeCallback{}", self.index)
+    }
+}
+
 impl UnionCodecIdent {
     pub(crate) fn new(direction: UnionCodecDirection, index: usize) -> Self {
         Self { direction, index }
@@ -139,6 +172,7 @@ impl GeneratorIdent {
         Self::ContextParameter,
         Self::ReceiverParameter,
         Self::ErrorLocal,
+        Self::CallbackErrorLocal,
         Self::ResultLocal,
         Self::ZeroLocal,
         Self::ArgumentsLocal,
@@ -172,6 +206,7 @@ impl GeneratorIdent {
             Self::ContextParameter => "ctx_",
             Self::ReceiverParameter => "receiver_",
             Self::ErrorLocal => "err_",
+            Self::CallbackErrorLocal => "callbackErr_",
             Self::ResultLocal => "result_",
             Self::ZeroLocal => "zero_",
             Self::ArgumentsLocal => "arguments_",
@@ -282,6 +317,22 @@ mod tests {
         assert_eq!(
             EnumCodecIdent::new(EnumCodecDirection::Decode, 4).to_string(),
             "_bamlDecodeEnum4"
+        );
+    }
+
+    #[test]
+    fn callback_identifiers_are_generator_owned_and_stable() {
+        assert_eq!(
+            CallbackCodecIdent::new(3).to_string(),
+            "_bamlEncodeCallback3"
+        );
+        assert_eq!(
+            CallbackArgumentIdent::new(4).to_string(),
+            "_bamlCallbackArg4_"
+        );
+        assert_eq!(
+            GeneratorIdent::CallbackErrorLocal.to_string(),
+            "callbackErr_"
         );
     }
 

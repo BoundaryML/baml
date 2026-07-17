@@ -12,7 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::{Literal, MediaKind, Name as BaseName};
-use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
 
 /// A canonical, attribute-free Go type identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -34,6 +34,7 @@ pub(crate) enum GoTy {
         value: Box<Self>,
     },
     Optional(Box<Self>),
+    Function(GoFunctionKey),
     TypedUnion(GoUnionKey),
     /// Renders as `any`, but deliberately retains every canonical candidate.
     DynamicUnion {
@@ -59,6 +60,28 @@ pub(crate) struct GoUnionKey(Box<[GoTy]>);
 impl GoUnionKey {
     pub(crate) fn members(&self) -> &[GoTy] {
         &self.0
+    }
+}
+
+/// The structural identity of the required-only callback subset exposed to Go.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct GoFunctionKey {
+    params: Box<[GoTy]>,
+    ret: Option<Box<GoTy>>,
+    throws: bool,
+}
+
+impl GoFunctionKey {
+    pub(crate) fn params(&self) -> &[GoTy] {
+        &self.params
+    }
+
+    pub(crate) fn ret(&self) -> Option<&GoTy> {
+        self.ret.as_deref()
+    }
+
+    pub(crate) fn throws(&self) -> bool {
+        self.throws
     }
 }
 
@@ -181,7 +204,82 @@ impl<'a> GoTypeProjection<'a> {
                 projected
             }
             Ty::Union(members, _) => self.project_union(members, aliases),
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                if params
+                    .iter()
+                    .any(|param| param.mode != CodegenFunctionParamMode::Required)
+                {
+                    return GoTy::Unsupported;
+                }
+                let throws = if matches!(throws.as_ref(), Ty::Never { .. }) {
+                    false
+                } else if self.throws_accepts_host_callable(throws, aliases) {
+                    true
+                } else {
+                    // A Go `error` is encoded as baml.errors.HostCallable. Do
+                    // not generate a signature that falsely promises it can
+                    // construct an arbitrary declared BAML error class.
+                    return GoTy::Unsupported;
+                };
+                let params = params
+                    .iter()
+                    .map(|param| self.project_inner(&param.ty, aliases))
+                    .collect::<Vec<_>>();
+                let ret = match ret.as_ref() {
+                    Ty::Void { .. } | Ty::Never { .. } => None,
+                    ret => Some(Box::new(self.project_inner(ret, aliases))),
+                };
+                if params.iter().any(callback_component_is_unsupported)
+                    || ret
+                        .as_deref()
+                        .is_some_and(callback_component_is_unsupported)
+                {
+                    GoTy::Unsupported
+                } else {
+                    GoTy::Function(GoFunctionKey {
+                        params: params.into_boxed_slice(),
+                        ret,
+                        throws,
+                    })
+                }
+            }
             _ => GoTy::Unsupported,
+        }
+    }
+
+    fn throws_accepts_host_callable(&self, ty: &Ty, aliases: &mut HashSet<Name>) -> bool {
+        match ty {
+            Ty::Class(name, arguments, _) => {
+                arguments.is_empty()
+                    && name
+                        == &Name::new(
+                            BaseName::new("baml"),
+                            vec![BaseName::new("errors")],
+                            BaseName::new("HostCallable"),
+                        )
+            }
+            Ty::Union(members, _) => members
+                .iter()
+                .any(|member| self.throws_accepts_host_callable(member, aliases)),
+            Ty::TypeAlias(name, _) => {
+                if !aliases.insert(name.clone()) {
+                    return false;
+                }
+                let accepts = match &self.pool[name] {
+                    Symbol::TypeAlias(alias) if !alias.recursive => {
+                        self.throws_accepts_host_callable(&alias.resolves_to, aliases)
+                    }
+                    _ => false,
+                };
+                aliases.remove(name);
+                accepts
+            }
+            _ => false,
         }
     }
 
@@ -271,6 +369,14 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
             }
         }
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
+        GoTy::Function(key) => {
+            for param in key.params() {
+                collect_typed_unions(param, found);
+            }
+            if let Some(ret) = key.ret() {
+                collect_typed_unions(ret, found);
+            }
+        }
         GoTy::Map { key, value } => {
             collect_typed_unions(key, found);
             collect_typed_unions(value, found);
@@ -286,6 +392,38 @@ fn contains_unsupported(ty: &GoTy) -> bool {
         GoTy::Map { key, value } => contains_unsupported(key) || contains_unsupported(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
             key.members().iter().any(contains_unsupported)
+        }
+        GoTy::Function(key) => {
+            key.params().iter().any(contains_unsupported)
+                || key.ret().is_some_and(contains_unsupported)
+        }
+        _ => false,
+    }
+}
+
+fn callback_component_is_unsupported(ty: &GoTy) -> bool {
+    contains_unsupported(ty) || contains_function(ty) || contains_union(ty)
+}
+
+fn contains_function(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::Function(_) => true,
+        GoTy::List(inner) | GoTy::Optional(inner) => contains_function(inner),
+        GoTy::Map { key, value } => contains_function(key) || contains_function(value),
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            key.members().iter().any(contains_function)
+        }
+        _ => false,
+    }
+}
+
+fn contains_union(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::TypedUnion(_) | GoTy::DynamicUnion { .. } => true,
+        GoTy::List(inner) | GoTy::Optional(inner) => contains_union(inner),
+        GoTy::Map { key, value } => contains_union(key) || contains_union(value),
+        GoTy::Function(key) => {
+            key.params().iter().any(contains_union) || key.ret().is_some_and(contains_union)
         }
         _ => false,
     }
@@ -303,7 +441,7 @@ pub(crate) fn literal_surface(literal: &GoLiteral) -> GoTy {
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{Origin, TypeAlias};
+    use baml_codegen_types::{CallableParam, Origin, TypeAlias};
     use baml_type::{Freshness, TyAttr};
 
     use super::*;
@@ -318,6 +456,35 @@ mod tests {
 
     fn alias_name(value: &str) -> Name {
         Name::new(BaseName::new("user"), vec![], BaseName::new(value))
+    }
+
+    fn callable(params: Vec<CallableParam>, ret: Ty, throws: Ty) -> Ty {
+        Ty::Function {
+            params,
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+            attr: a(),
+        }
+    }
+
+    fn callable_param(mode: CodegenFunctionParamMode, ty: Ty) -> CallableParam {
+        CallableParam {
+            name: None,
+            ty,
+            mode,
+        }
+    }
+
+    fn host_callable_error() -> Ty {
+        Ty::Class(
+            Name::new(
+                BaseName::new("baml"),
+                vec![BaseName::new("errors")],
+                BaseName::new("HostCallable"),
+            ),
+            vec![],
+            a(),
+        )
     }
 
     #[test]
@@ -415,5 +582,101 @@ mod tests {
             projection.project(&Ty::Media(MediaKind::Generic, a())),
             GoTy::Unsupported
         );
+    }
+
+    #[test]
+    fn required_only_callables_project_structurally_with_declared_throws() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let projected = projection.project(&callable(
+            vec![
+                callable_param(CodegenFunctionParamMode::Required, Ty::Int { attr: a() }),
+                callable_param(
+                    CodegenFunctionParamMode::Required,
+                    Ty::List(Box::new(Ty::String { attr: a() }), a()),
+                ),
+            ],
+            Ty::Bool { attr: a() },
+            host_callable_error(),
+        ));
+        let GoTy::Function(key) = projected else {
+            panic!("supported callback should project to a Go function")
+        };
+        assert_eq!(
+            key.params(),
+            &[GoTy::Int, GoTy::List(Box::new(GoTy::String))]
+        );
+        assert_eq!(key.ret(), Some(&GoTy::Bool));
+        assert!(key.throws());
+    }
+
+    #[test]
+    fn callback_projection_omits_optional_generic_nested_and_union_shapes() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let never = || Ty::Never { attr: a() };
+        let unsupported = [
+            callable(
+                vec![callable_param(
+                    CodegenFunctionParamMode::Optional,
+                    Ty::Int { attr: a() },
+                )],
+                Ty::String { attr: a() },
+                never(),
+            ),
+            callable(
+                vec![callable_param(
+                    CodegenFunctionParamMode::Required,
+                    Ty::TypeVar(BaseName::new("T"), a()),
+                )],
+                Ty::String { attr: a() },
+                never(),
+            ),
+            callable(
+                vec![callable_param(
+                    CodegenFunctionParamMode::Required,
+                    callable(vec![], Ty::String { attr: a() }, never()),
+                )],
+                Ty::String { attr: a() },
+                never(),
+            ),
+            callable(
+                vec![callable_param(
+                    CodegenFunctionParamMode::Required,
+                    union(vec![Ty::Int { attr: a() }, Ty::String { attr: a() }]),
+                )],
+                Ty::String { attr: a() },
+                never(),
+            ),
+        ];
+        for ty in unsupported {
+            assert_eq!(projection.project(&ty), GoTy::Unsupported);
+        }
+    }
+
+    #[test]
+    fn callback_projection_rejects_incompatible_declared_throws() {
+        let validation_error = Ty::Class(alias_name("ValidationError"), vec![], a());
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(
+            projection.project(&callable(
+                vec![callable_param(
+                    CodegenFunctionParamMode::Required,
+                    Ty::Int { attr: a() },
+                )],
+                Ty::String { attr: a() },
+                validation_error.clone(),
+            )),
+            GoTy::Unsupported
+        );
+        assert!(matches!(
+            projection.project(&callable(
+                vec![],
+                Ty::String { attr: a() },
+                union(vec![validation_error, host_callable_error()]),
+            )),
+            GoTy::Function(key) if key.throws()
+        ));
     }
 }

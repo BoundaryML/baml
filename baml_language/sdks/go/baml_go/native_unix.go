@@ -24,10 +24,16 @@ static int baml_is_musl(void) {
 }
 
 extern void bamlGoResultCallback(uint32_t call_id, int8_t *content, size_t length);
+extern void bamlGoHostDispatch(uint64_t host_value_key, uint32_t call_id, uint8_t *args, size_t length);
+extern void bamlGoHostRelease(uint64_t host_value_key);
 
 static void baml_go_result_callback(uint32_t call_id, const int8_t *content, size_t length) {
 	bamlGoResultCallback(call_id, (int8_t *)content, length);
 }
+static void baml_go_host_dispatch(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length) {
+	bamlGoHostDispatch(host_value_key, call_id, (uint8_t *)args, length);
+}
+static void baml_go_host_release(uint64_t host_value_key) { bamlGoHostRelease(host_value_key); }
 
 static void *baml_library_handle = NULL;
 static const BamlApiV1 *baml_api = NULL;
@@ -114,12 +120,19 @@ static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) {
 	return baml_api->initialize_runtime_from_bytecode(bytecode, length);
 }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
-static void baml_register_go_callback(void) { baml_api->register_callback(baml_go_result_callback); }
+static void baml_register_go_callback(void) {
+	baml_api->register_callback(baml_go_result_callback);
+	baml_api->register_host_dispatch_callback(baml_go_host_dispatch);
+	baml_api->register_host_release_callback(baml_go_host_release);
+}
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static void baml_call_function(const char *name, const uint8_t *args, size_t length, uint32_t callback_id) {
 	baml_api->call_function(name, args, length, callback_id);
 }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
+static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) {
+	baml_api->complete_host_call(call_id, is_error, (const int8_t *)content, length);
+}
 static uint32_t baml_handle_clone_go(uint64_t key, uint64_t *out_key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_clone(key, out_key); }
 static uint32_t baml_handle_release_go(uint64_t key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_release(key); }
 static uint32_t baml_media_from_url_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) {
@@ -212,6 +225,18 @@ func nativeCall(function string, encoded []byte, callbackID uint32) {
 
 func nativeCancel(callID uint64) int32 {
 	return int32(C.baml_cancel_function_call(C.uint64_t(callID)))
+}
+
+func nativeCompleteHostCall(callID uint32, isError bool, content []byte) {
+	var pointer *C.uint8_t
+	if len(content) != 0 {
+		pointer = (*C.uint8_t)(unsafe.Pointer(&content[0]))
+	}
+	flag := C.int32_t(0)
+	if isError {
+		flag = 1
+	}
+	C.baml_complete_host_call_go(C.uint32_t(callID), flag, pointer, C.size_t(len(content)))
 }
 
 func nativeHandleClone(key uint64) (uint64, error) {
@@ -321,4 +346,19 @@ func bamlGoResultCallback(callID C.uint32_t, content *C.int8_t, length C.size_t)
 	call := value.(*pendingCall)
 	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
 	call.result <- payload
+}
+
+//export bamlGoHostDispatch
+func bamlGoHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, content *C.uint8_t, length C.size_t) {
+	if uint64(length) > uint64(^uint32(0)>>1) {
+		go completeHostCallFailure(uint32(callID), fmt.Errorf("BAML host-call payload is too large: %d bytes", uint64(length)), "")
+		return
+	}
+	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
+	dispatchHostCall(uint64(hostValueKey), uint32(callID), payload)
+}
+
+//export bamlGoHostRelease
+func bamlGoHostRelease(hostValueKey C.uint64_t) {
+	unregisterHostValue(uint64(hostValueKey))
 }

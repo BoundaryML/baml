@@ -119,11 +119,26 @@ type inputEncoder struct {
 // handles have already been drained (so release harmlessly reports invalid),
 // while any handle after a decode failure remains in the table and is freed.
 type inputTransaction struct {
-	keys []uint64
+	keys          []uint64
+	hostValueKeys []uint64
 }
 
 func (transaction *inputTransaction) own(key uint64) {
 	transaction.keys = append(transaction.keys, key)
+}
+
+func (transaction *inputTransaction) ownHostValue(key uint64) {
+	transaction.hostValueKeys = append(transaction.hostValueKeys, key)
+}
+
+// commitHostValues transfers host-value lifetime to the native runtime after
+// it has synchronously decoded an inbound payload. Native handle clones remain
+// transaction-owned and are released by rollback as before; host values are
+// instead released exactly once by the registered host-release callback.
+func (transaction *inputTransaction) commitHostValues() {
+	if transaction != nil {
+		transaction.hostValueKeys = nil
+	}
 }
 
 func (transaction *inputTransaction) rollback() {
@@ -136,6 +151,10 @@ func (transaction *inputTransaction) rollback() {
 		}
 	}
 	transaction.keys = nil
+	for _, key := range transaction.hostValueKeys {
+		unregisterHostValue(key)
+	}
+	transaction.hostValueKeys = nil
 }
 
 func (input Input) encodeValue(transaction *inputTransaction) (*cffi.InboundValue, error) {
@@ -260,6 +279,7 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	}
 	defer transaction.rollback()
 	nativeCall(function, encoded, callbackID)
+	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
 	if err != nil {
@@ -373,6 +393,7 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 		}
 		failure := outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
 		releaseOutboundHandles(item.Error.GetValue())
+		releaseOutboundOpaqueHostValues(item.Error.GetValue())
 		return Value{}, failure
 	case *cffi.BamlOutboundResult_Panic:
 		if item.Panic == nil {
@@ -380,11 +401,13 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 		}
 		if item.Panic.GetIsExitPanic() {
 			releaseOutboundHandles(item.Panic.GetValue())
+			releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 			processExit(processExitCode(item.Panic.GetExitCode()))
 			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
 		}
 		failure := outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
 		releaseOutboundHandles(item.Panic.GetValue())
+		releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 		return Value{}, failure
 	default:
 		return Value{}, errors.New("BAML returned an empty result envelope")

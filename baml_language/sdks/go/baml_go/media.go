@@ -52,6 +52,10 @@ var (
 func ownOutboundHandles(value *cffi.BamlOutboundValue) *resultOwner {
 	keys := make(map[uint64]struct{})
 	collectOutboundHandles(value, keys)
+	return ownOutboundHandleKeys(keys)
+}
+
+func ownOutboundHandleKeys(keys map[uint64]struct{}) *resultOwner {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -65,10 +69,15 @@ func ownOutboundHandles(value *cffi.BamlOutboundValue) *resultOwner {
 
 func releaseOutboundHandles(value *cffi.BamlOutboundValue) {
 	owner := ownOutboundHandles(value)
-	if owner != nil {
-		runtime.SetFinalizer(owner, nil)
-		finalizeResultOwner(owner)
+	releaseResultOwner(owner)
+}
+
+func releaseResultOwner(owner *resultOwner) {
+	if owner == nil {
+		return
 	}
+	runtime.SetFinalizer(owner, nil)
+	finalizeResultOwner(owner)
 }
 
 func finalizeResultOwner(owner *resultOwner) {
@@ -126,6 +135,57 @@ func collectOutboundHandles(value *cffi.BamlOutboundValue, keys map[uint64]struc
 				stack = append(stack, item.UnionVariantValue.Value)
 			}
 		}
+	}
+}
+
+// releaseOutboundOpaqueHostValues releases Go-native error identities only
+// after an error/panic envelope has been fully formatted. These handles are
+// not native handle-table entries and deliberately remain excluded from the
+// ordinary result owner; callable handles may have independent live uses and
+// are never reclaimed here.
+func releaseOutboundOpaqueHostValues(value *cffi.BamlOutboundValue) {
+	keys := make(map[uint64]struct{})
+	stack := []*cffi.BamlOutboundValue{value}
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		value = stack[last]
+		stack = stack[:last]
+		if value == nil {
+			continue
+		}
+		switch item := value.Value.(type) {
+		case *cffi.BamlOutboundValue_HandleValue:
+			if item.HandleValue != nil && item.HandleValue.Key != 0 && item.HandleValue.HandleType == cffi.BamlHandleType_HOST_VALUE_OPAQUE {
+				keys[item.HandleValue.Key] = struct{}{}
+			}
+		case *cffi.BamlOutboundValue_ClassValue:
+			if item.ClassValue != nil {
+				for _, field := range item.ClassValue.Fields {
+					if field != nil {
+						stack = append(stack, field.Value)
+					}
+				}
+			}
+		case *cffi.BamlOutboundValue_ListValue:
+			if item.ListValue != nil {
+				stack = append(stack, item.ListValue.Items...)
+			}
+		case *cffi.BamlOutboundValue_MapValue:
+			if item.MapValue != nil {
+				for _, entry := range item.MapValue.Entries {
+					if entry != nil {
+						stack = append(stack, entry.Value)
+					}
+				}
+			}
+		case *cffi.BamlOutboundValue_UnionVariantValue:
+			if item.UnionVariantValue != nil {
+				stack = append(stack, item.UnionVariantValue.Value)
+			}
+		}
+	}
+	for key := range keys {
+		unregisterHostValue(key)
 	}
 }
 
@@ -483,6 +543,32 @@ func decodeMedia(value Value, kind mediaKind) (mediaValue, error) {
 	}
 	var handle *cffi.BamlOutboundHandle
 	switch item := value.value.Value.(type) {
+	case *cffi.BamlOutboundValue_MediaValue:
+		if item.MediaValue == nil {
+			return mediaValue{}, fmt.Errorf("BAML media value is empty")
+		}
+		expected := cffi.MediaTypeEnum(kind)
+		if kind == mediaKindPDF {
+			expected = cffi.MediaTypeEnum_PDF
+		} else if kind == mediaKindVideo {
+			expected = cffi.MediaTypeEnum_VIDEO
+		}
+		if item.MediaValue.Media != expected {
+			return mediaValue{}, fmt.Errorf("expected BAML media kind %s, got %s", expected, item.MediaValue.Media)
+		}
+		var operation mediaConstructor
+		var content string
+		switch encoded := item.MediaValue.Value.(type) {
+		case *cffi.BamlValueMedia_Url:
+			operation, content = mediaFromURL, encoded.Url
+		case *cffi.BamlValueMedia_File:
+			operation, content = mediaFromFile, encoded.File
+		case *cffi.BamlValueMedia_Base64:
+			operation, content = mediaFromBase64, encoded.Base64
+		default:
+			return mediaValue{}, fmt.Errorf("BAML media value has no content")
+		}
+		return constructMedia(operation, kind, content, item.MediaValue.MimeType)
 	case *cffi.BamlOutboundValue_HandleValue:
 		handle = item.HandleValue
 	case *cffi.BamlOutboundValue_ClassValue:

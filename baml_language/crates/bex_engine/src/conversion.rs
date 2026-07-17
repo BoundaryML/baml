@@ -941,12 +941,15 @@ impl BexEngine {
                 // admit an unvalidatable return. (This also rejects a genuine
                 // bare `-> void` host callable; such a callable must declare a
                 // concrete return type.)
-                if ret_ty_has_unvalidatable_position(&ret) {
+                // A top-level `void` callback has one canonical host wire
+                // representation: Null. Nested void positions remain invalid
+                // (they indicate an erased/unresolved type).
+                if !matches!(ret, RuntimeTy::Void { .. }) && ret_ty_has_unvalidatable_position(&ret)
+                {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
-                            "host callable cannot be bound: its return type `{ret}` is generic \
-                             or void, so the host's returned value cannot be validated; host \
-                             callables require a concrete return type",
+                            "host callable cannot be bound: its return type `{ret}` contains an \
+                             unresolved position, so the host's returned value cannot be validated",
                         ),
                     });
                 }
@@ -1668,10 +1671,11 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     }
 }
 
-/// Whether a host-callable's declared return type contains a position the
-/// host-return validator treats as "accept anything": a `RuntimeTy::Void` (the runtime
-/// form of an erased generic type variable, and also a bare `-> void`) or a
-/// `RuntimeTy::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
+/// Whether a host-callable's declared return type contains an unresolved
+/// position the host-return validator cannot check. A top-level
+/// `RuntimeTy::Void` is handled specially by the caller and accepts only the
+/// canonical Null wire value; a nested Void remains an erased/unresolved
+/// position. Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
 /// its returned value validated, so binding one is rejected.
@@ -1681,7 +1685,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // against these declared types (the host-return validator has no
         // positive discriminator for them), so a host could inject a value that
         // violates the declared type. Reject binding such a callable.
-        //   - `Void`/`BuiltinUnknown`: accept-anything tops.
+        //   - nested `Void`/`BuiltinUnknown`: unresolved positions.
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
@@ -1845,6 +1849,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // accepts any partial-stream payload as the `TStream` arm.
         (_, RuntimeTy::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
+        (BexExternalValue::Null, RuntimeTy::Void { .. }) => true,
         (BexExternalValue::Int(_), RuntimeTy::Int { .. }) => true,
         (BexExternalValue::Bigint(_), RuntimeTy::Bigint { .. }) => true,
         (BexExternalValue::Float(_), RuntimeTy::Float { .. }) => true,
