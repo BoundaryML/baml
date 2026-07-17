@@ -73,13 +73,30 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
         match symbol {
             Symbol::Class(c) => {
                 let sort_key = origin_key(&c.origin);
+                // Escape keyword field names collision-aware within the class
+                // scope. A field renamed off a keyword carries an `alias` = its
+                // raw BAML name so it stays the JSON/wire key (pydantic
+                // `Field(alias=…)`); non-escaped fields keep `alias: None` and
+                // render byte-identically to today.
+                let raw_prop_names: Vec<String> = c
+                    .properties
+                    .iter()
+                    .map(|p| p.name.as_str().to_string())
+                    .collect();
+                let escaped_prop_names = escape_keywords_in_scope(&raw_prop_names);
                 let properties = c
                     .properties
                     .iter()
-                    .map(|p| PyClassProperty {
-                        name: p.name.as_str().to_string(),
-                        ty: p.ty.clone(),
-                        docstring: p.docstring.clone(),
+                    .zip(escaped_prop_names)
+                    .map(|(p, escaped)| {
+                        let raw = p.name.as_str();
+                        let alias = (escaped != raw).then(|| raw.to_string());
+                        PyClassProperty {
+                            name: escaped,
+                            ty: p.ty.clone(),
+                            docstring: p.docstring.clone(),
+                            alias,
+                        }
                     })
                     .collect();
                 // The class's pool key Display form is already the
@@ -94,12 +111,12 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 let generic_params = c
                     .generic_params
                     .iter()
-                    .map(|n| n.as_str().to_string())
+                    .map(|n| escape_python_keyword(n.as_str().to_string()))
                     .collect();
                 out.push((
                     leaf,
                     EmittedSymbol::Class(PyClass {
-                        py_name: bare,
+                        py_name: escape_python_keyword(bare),
                         source: key.clone(),
                         generic_params,
                         docstring: c.docstring.clone(),
@@ -112,11 +129,22 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
             }
             Symbol::Enum(e) => {
                 let sort_key = origin_key(&e.origin);
+                // Escape keyword member idents collision-aware within the enum
+                // scope. The RHS `value` stays IR-verbatim, so `None` renders
+                // `None_ = "None"` — the wire value is unchanged and decode
+                // (which is by VALUE) keeps working with no alias machinery.
+                let raw_variant_idents: Vec<String> = e
+                    .variants
+                    .iter()
+                    .map(|v| v.name.as_str().to_string())
+                    .collect();
+                let escaped_idents = escape_keywords_in_scope(&raw_variant_idents);
                 let variants = e
                     .variants
                     .iter()
-                    .map(|v| PyEnumVariant {
-                        ident: v.name.as_str().to_string(),
+                    .zip(escaped_idents)
+                    .map(|(v, ident)| PyEnumVariant {
+                        ident,
                         value: v.value.clone(),
                         docstring: v.docstring.clone(),
                     })
@@ -124,7 +152,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 out.push((
                     leaf,
                     EmittedSymbol::Enum(PyEnum {
-                        py_name: bare,
+                        py_name: escape_python_keyword(bare),
                         source: key.clone(),
                         variants,
                         docstring: e.docstring.clone(),
@@ -137,7 +165,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 out.push((
                     leaf,
                     EmittedSymbol::TypeAlias(PyTypeAlias {
-                        py_name: bare,
+                        py_name: escape_python_keyword(bare),
                         source: key.clone(),
                         resolves_to: t.resolves_to.clone(),
                         recursive: t.recursive,
@@ -176,7 +204,7 @@ fn expand_function(
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|n| escape_python_keyword(n.as_str().to_string()))
         .collect();
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref());
@@ -254,7 +282,7 @@ fn expand_methods(
         let method_generic_params: Vec<String> = m
             .generic_params
             .iter()
-            .map(|n| n.as_str().to_string())
+            .map(|n| escape_python_keyword(n.as_str().to_string()))
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref());
@@ -323,26 +351,85 @@ pub(crate) fn bare_callable_name(name: &str) -> String {
     }
 }
 
+/// The 35 Python 3 **hard** keywords (`keyword.kwlist` on `CPython` 3.9–3.13).
+/// Soft keywords (`match`, `case`, `type`, `_`) are valid identifiers and are
+/// intentionally excluded — the source guard `RESERVED_NAMES_PYTHON` in the
+/// engine uses this same set. Kept sorted so the
+/// `python_hard_keyword_set_is_exactly_the_35_cpython_hard_keywords` test can
+/// diff it against a sorted expectation.
+const PYTHON_HARD_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
+    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+    "with", "yield",
+];
+
+/// True when `ident` is a Python 3 hard keyword (and therefore an illegal
+/// identifier). Shared by every escape site so the generator's escape sites
+/// stay in sync with the engine's `RESERVED_NAMES_PYTHON` guard (two synced
+/// copies of one list).
+pub(crate) fn is_python_hard_keyword(ident: &str) -> bool {
+    PYTHON_HARD_KEYWORDS.contains(&ident)
+}
+
 /// Append `_` to a Python hard keyword so it is a usable identifier on the
 /// Python side (`from` → `from_`), generalizing the `assert` → `assert_` rule
 /// in [`crate::routing`] to callable identifiers. Only the rendered Python name
 /// is affected; the runtime BAML FQN (`PyMethodBinding::baml_fqn` /
 /// `PyFunction::baml_fqn`) is built from the raw `Name`, so dispatch still
 /// targets the original `from`. Non-keyword names pass through unchanged.
+///
+/// This is the *stateless* escape used for symbols whose escaped spelling has
+/// to be reproducible from the bare `Name` alone at a distance — class / enum /
+/// type-alias names (which `translate_ty::render_name_ref` re-escapes at every
+/// cross-reference) and `TypeVar` names. Collision-resolving escaping (for
+/// class fields and enum members, which live in a single self-contained scope)
+/// goes through [`escape_keywords_in_scope`].
 pub(crate) fn escape_python_keyword(ident: String) -> String {
-    // Python 3 hard keywords (soft keywords like `match`/`case`/`type` are
-    // valid identifiers and are intentionally excluded).
-    const PYTHON_KEYWORDS: &[&str] = &[
-        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
-        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
-        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
-        "try", "while", "with", "yield",
-    ];
-    if PYTHON_KEYWORDS.contains(&ident.as_str()) {
+    if is_python_hard_keyword(&ident) {
         format!("{ident}_")
     } else {
         ident
     }
+}
+
+/// Collision-aware keyword escaping for one self-contained scope (a single
+/// class's fields, or a single enum's members). Mirrors the Go generator's
+/// per-scope allocation (PR #4067) with a used-set instead of a content hash:
+///
+/// - **Pass 1** reserves every RAW non-keyword name in the scope.
+/// - **Pass 2**, in declaration order, escapes each keyword name: start from
+///   `name + "_"` and append `_` while the candidate is a hard keyword or is
+///   already reserved, then reserve the result.
+///
+/// So a scope declaring both `pass` and `pass_` yields `{pass__, pass_}` — the
+/// raw `pass_` is reserved in pass 1, forcing `pass` past it. Deterministic and
+/// order-independent for the raw set (distinct keywords escape to disjoint
+/// prefixes, and BAML forbids duplicate field / member names, so pass-2
+/// insertions never perturb another keyword's resolution). Non-keyword names
+/// are returned unchanged, so `escaped[i] != names[i]` exactly identifies the
+/// escaped positions (used to derive the pydantic `Field(alias=…)` wire name).
+pub(crate) fn escape_keywords_in_scope(names: &[String]) -> Vec<String> {
+    let mut reserved: std::collections::HashSet<String> = names
+        .iter()
+        .filter(|n| !is_python_hard_keyword(n))
+        .cloned()
+        .collect();
+    names
+        .iter()
+        .map(|name| {
+            if !is_python_hard_keyword(name) {
+                name.clone()
+            } else {
+                let mut candidate = format!("{name}_");
+                while is_python_hard_keyword(&candidate) || reserved.contains(&candidate) {
+                    candidate.push('_');
+                }
+                reserved.insert(candidate.clone());
+                candidate
+            }
+        })
+        .collect()
 }
 
 /// Shared fan-out for free functions and methods. Calls `emit` twice:
@@ -399,7 +486,52 @@ fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_python_keyword;
+    use super::{
+        PYTHON_HARD_KEYWORDS, escape_keywords_in_scope, escape_python_keyword,
+        is_python_hard_keyword,
+    };
+
+    #[test]
+    fn python_hard_keyword_set_is_exactly_the_35_cpython_hard_keywords() {
+        // MUST equal `keyword.kwlist` on CPython 3.9–3.13. The Python bridge
+        // test `test_reserved_keywords.py::test_rust_keyword_list_matches_python_kwlist`
+        // anchors the same 35 to `keyword.kwlist` from the Python side, closing
+        // the cross-language loop the spec (§4) requires.
+        let mut got: Vec<&str> = PYTHON_HARD_KEYWORDS.to_vec();
+        got.sort_unstable();
+        let mut want: Vec<&str> = vec![
+            "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+            "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+            "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise",
+            "return", "try", "while", "with", "yield",
+        ];
+        want.sort_unstable();
+        assert_eq!(got, want);
+        assert_eq!(PYTHON_HARD_KEYWORDS.len(), 35);
+        // Soft keywords stay valid identifiers and must NOT be treated as hard.
+        for soft in ["match", "case", "type", "_"] {
+            assert!(
+                !is_python_hard_keyword(soft),
+                "soft keyword {soft} misclassified"
+            );
+        }
+    }
+
+    #[test]
+    fn escape_keywords_in_scope_resolves_collisions_order_independently() {
+        // {pass, pass_} → {pass__, pass_}, regardless of declaration order:
+        // the raw `pass_` is reserved in pass 1, forcing `pass` past it.
+        let forward = escape_keywords_in_scope(&["pass".into(), "pass_".into()]);
+        assert_eq!(forward, vec!["pass__".to_string(), "pass_".to_string()]);
+        let reversed = escape_keywords_in_scope(&["pass_".into(), "pass".into()]);
+        assert_eq!(reversed, vec!["pass_".to_string(), "pass__".to_string()]);
+        // Distinct keywords escape to disjoint prefixes; non-keywords untouched.
+        let mixed = escape_keywords_in_scope(&["from".into(), "ok".into(), "class".into()]);
+        assert_eq!(
+            mixed,
+            vec!["from_".to_string(), "ok".to_string(), "class_".to_string()]
+        );
+    }
 
     #[test]
     fn keyword_identifiers_get_a_trailing_underscore() {

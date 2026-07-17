@@ -10,6 +10,7 @@ use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
 
 use crate::{
+    emit::escape_python_keyword,
     py_string,
     routing::{LeafPath, route_class_ref},
 };
@@ -82,7 +83,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 head
             }
         }
-        Ty::TypeVar(name, _) => name.as_str().to_string(),
+        Ty::TypeVar(name, _) => escape_python_keyword(name.as_str().to_string()),
         Ty::List(inner, _) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value, .. } => {
             format!(
@@ -206,12 +207,19 @@ fn media_ref(bare: &str, ctx: &TranslateCtx) -> String {
     render_name_ref(&name, ctx)
 }
 
+/// Render a reference to a class / enum / type-alias name. The bare name is
+/// keyword-escaped with the same stateless [`escape_python_keyword`] used at
+/// the definition site (`emit/mod.rs`), so a class declared `None_` is
+/// referenced as `None_` (or `lorem.None_` cross-leaf) — never the raw `None`,
+/// which would `NameError`. Module-path segments are handled separately by the
+/// routing sanitizer and are not escaped here.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
     let routed_leaf = route_class_ref(name);
+    let bare = escape_python_keyword(name.bare_name().to_string());
     if routed_leaf == ctx.current_leaf || routed_leaf.segments.is_empty() {
-        name.bare_name().to_string()
+        bare
     } else {
-        format!("{}.{}", routed_leaf.segments.join("."), name.bare_name())
+        format!("{}.{}", routed_leaf.segments.join("."), bare)
     }
 }
 

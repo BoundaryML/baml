@@ -3648,4 +3648,368 @@ mod tests {
             "root still passes sdk_root: {root}"
         );
     }
+
+    // ── #4059: Python reserved-keyword escaping ─────────────────────────────
+
+    /// The 35 `CPython` hard keywords (`keyword.kwlist`, 3.9–3.13). Unit tests
+    /// build the `SymbolPool` directly, so all 35 are exercisable even though
+    /// only 24 are reachable through BAML source syntax (the other 11 are BAML
+    /// keywords too). Kept in-test as the ground truth the emitter's private
+    /// `PYTHON_HARD_KEYWORDS` const and the Python bridge test both anchor to.
+    const HARD_KEYWORDS: [&str; 35] = [
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ];
+
+    fn int_ty() -> Ty {
+        Ty::Int {
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
+
+    fn enum_with_variants(name: Name, variants: &[(&str, &str)]) -> Symbol {
+        Symbol::Enum(Enum {
+            name,
+            docstring: None,
+            variants: variants
+                .iter()
+                .map(|(ident, value)| EnumVariant {
+                    name: BaseName::new(ident),
+                    docstring: None,
+                    value: value.to_string(),
+                })
+                .collect(),
+            origin: origin("x.baml", 0),
+        })
+    }
+
+    fn class_with_fields(name: Name, fields: &[(&str, Ty)]) -> Symbol {
+        Symbol::Class(Class {
+            generic_params: Vec::new(),
+            name,
+            docstring: None,
+            properties: fields
+                .iter()
+                .map(|(n, ty)| ClassProperty {
+                    name: BaseName::new(n),
+                    docstring: None,
+                    ty: ty.clone(),
+                })
+                .collect(),
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: origin("x.baml", 0),
+        })
+    }
+
+    #[test]
+    fn every_hard_keyword_enum_member_escapes_and_keeps_wire_value() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "AllKw");
+        let variants: Vec<(&str, &str)> = HARD_KEYWORDS.iter().map(|kw| (*kw, *kw)).collect();
+        pool.insert(n.clone(), enum_with_variants(n, &variants));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for kw in HARD_KEYWORDS {
+            // `<kw>_ = "<kw>"`: LHS escaped, RHS wire value verbatim.
+            assert!(
+                leaf.contains(&format!("    {kw}_ = \"{kw}\"\n")),
+                "enum member {kw} not escaped as {kw}_ = \"{kw}\":\n{leaf}"
+            );
+            // The bare `<kw> =` keyword-LHS spelling must never appear.
+            assert!(
+                !leaf.contains(&format!("    {kw} = ")),
+                "bare keyword member {kw} = present:\n{leaf}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_hard_keyword_class_field_escapes_with_alias_and_populate_by_name() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "AllKw");
+        let fields: Vec<(&str, Ty)> = HARD_KEYWORDS.iter().map(|kw| (*kw, int_ty())).collect();
+        pool.insert(n.clone(), class_with_fields(n, &fields));
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains(
+                "model_config = pydantic.ConfigDict(extra=\"forbid\", populate_by_name=True)\n"
+            ),
+            "populate_by_name not added to ConfigDict:\n{leaf}"
+        );
+        for kw in HARD_KEYWORDS {
+            assert!(
+                leaf.contains(&format!(
+                    "    {kw}_: int = pydantic.Field(alias=\"{kw}\")\n"
+                )),
+                "field {kw} not escaped/aliased:\n{leaf}"
+            );
+            // The bare keyword annotation target must be absent — this is the
+            // `lambda` silent-corruption assertion (a bare `lambda: int` parses
+            // as a lambda expression, dropping the field).
+            assert!(
+                !leaf.contains(&format!("    {kw}: int")),
+                "bare keyword field {kw}: present:\n{leaf}"
+            );
+        }
+    }
+
+    #[test]
+    fn keyword_class_name_escapes_at_def_ref_and_keeps_raw_typemap_fqn() {
+        let mut pool: SymbolPool = HashMap::new();
+        // Class named `None` (an uppercase-initial hard keyword — the only
+        // NAME-position keywords BAML grammar admits: None / True / False).
+        let none = cg_name("user", &["lorem"], "None");
+        pool.insert(
+            none.clone(),
+            class_with_fields(none, &[("value", int_ty())]),
+        );
+        // Same-leaf class referencing `None`.
+        let same = cg_name("user", &["lorem"], "SameRef");
+        pool.insert(
+            same.clone(),
+            class_with_fields(
+                same,
+                &[(
+                    "child",
+                    class_ty(cg_name("user", &["lorem"], "None"), vec![]),
+                )],
+            ),
+        );
+        // Cross-leaf class referencing `None`.
+        let cross = cg_name("user", &["ipsum"], "CrossRef");
+        pool.insert(
+            cross.clone(),
+            class_with_fields(
+                cross,
+                &[(
+                    "child",
+                    class_ty(cg_name("user", &["lorem"], "None"), vec![]),
+                )],
+            ),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let lorem = &out[&PathBuf::from("lorem/__init__.py")];
+        let lorem_pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        let ipsum = &out[&PathBuf::from("ipsum/__init__.py")];
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+
+        // Definition escaped in both `.py` and `.pyi`.
+        assert!(
+            lorem.contains("class None_(pydantic.BaseModel):\n"),
+            "def:\n{lorem}"
+        );
+        assert!(
+            lorem_pyi.contains("class None_(pydantic.BaseModel):\n"),
+            "pyi:\n{lorem_pyi}"
+        );
+        // `__all__` uses the escaped name.
+        assert!(lorem.contains("\"None_\","), "__all__:\n{lorem}");
+        // Same-leaf reference → bare `None_`; cross-leaf → `lorem.None_`.
+        assert!(
+            lorem.contains("    child: None_\n"),
+            "same-leaf ref:\n{lorem}"
+        );
+        assert!(ipsum.contains("lorem.None_"), "cross-leaf ref:\n{ipsum}");
+        // Typemap key stays the RAW BAML FQN; only the attr is escaped.
+        assert!(
+            typemap.contains("\"user.lorem.None\""),
+            "typemap lost raw FQN key:\n{typemap}"
+        );
+        assert!(
+            !typemap.contains("\"user.lorem.None_\""),
+            "typemap FQN key wrongly escaped:\n{typemap}"
+        );
+        assert!(
+            typemap.contains("\"None_\""),
+            "typemap attr not escaped:\n{typemap}"
+        );
+    }
+
+    #[test]
+    fn keyword_typevar_escapes_at_declaration_and_reference() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Box");
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                generic_params: vec![BaseName::new("None")],
+                name: n,
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("None")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("x.baml", 0),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("None_ = typing.TypeVar(\"None_\")\n"),
+            "typevar decl not escaped:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("class Box(pydantic.BaseModel, typing.Generic[None_]):\n"),
+            "generic base not escaped:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    item: None_\n"),
+            "typevar ref not escaped:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn field_collision_pass_and_pass_underscore_diverge() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Coll");
+        pool.insert(
+            n.clone(),
+            class_with_fields(n, &[("pass", int_ty()), ("pass_", int_ty())]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // `pass` is pushed past the raw `pass_` (reserved in pass 1) → `pass__`,
+        // aliased to the raw wire key `pass`. `pass_` is not a keyword: unchanged
+        // and un-aliased.
+        assert!(
+            leaf.contains("    pass__: int = pydantic.Field(alias=\"pass\")\n"),
+            "pass not bumped to pass__:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    pass_: int\n"),
+            "raw pass_ perturbed:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn enum_member_collision_pass_and_pass_underscore_diverge() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Coll");
+        pool.insert(
+            n.clone(),
+            enum_with_variants(n, &[("pass", "pass"), ("pass_", "pass_")]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            leaf.contains("    pass__ = \"pass\"\n"),
+            "enum pass twin:\n{leaf}"
+        );
+        assert!(
+            leaf.contains("    pass_ = \"pass_\"\n"),
+            "enum pass_ twin:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn soft_keywords_are_never_escaped() {
+        let mut pool: SymbolPool = HashMap::new();
+        let en = cg_name("user", &["lorem"], "SoftEnum");
+        pool.insert(
+            en.clone(),
+            enum_with_variants(
+                en,
+                &[("match", "match"), ("case", "case"), ("type", "type")],
+            ),
+        );
+        let cl = cg_name("user", &["lorem"], "SoftClass");
+        pool.insert(
+            cl.clone(),
+            class_with_fields(
+                cl,
+                &[("match", int_ty()), ("case", int_ty()), ("type", int_ty())],
+            ),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        for soft in ["match", "case", "type"] {
+            assert!(
+                leaf.contains(&format!("    {soft} = \"{soft}\"\n")),
+                "soft member {soft} wrongly escaped:\n{leaf}"
+            );
+            assert!(
+                leaf.contains(&format!("    {soft}: int\n")),
+                "soft field {soft} wrongly escaped:\n{leaf}"
+            );
+        }
+        // No escaped field anywhere → no alias / populate_by_name machinery.
+        assert!(
+            !leaf.contains("pydantic.Field"),
+            "soft keywords pulled in Field:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("populate_by_name"),
+            "soft keywords flipped populate_by_name:\n{leaf}"
+        );
+    }
+
+    #[test]
+    fn no_keyword_class_config_is_byte_identical_to_baseline() {
+        let mut pool: SymbolPool = HashMap::new();
+        let n = cg_name("user", &["lorem"], "Plain");
+        pool.insert(
+            n.clone(),
+            class_with_fields(n, &[("x", int_ty()), ("y", int_ty())]),
+        );
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // Exact pre-fix shape: no populate_by_name, no Field, plain annotations.
+        assert!(
+            leaf.contains(
+                "    model_config = pydantic.ConfigDict(extra=\"forbid\")\n    \
+                 x: int\n    y: int\n"
+            ),
+            "non-keyword class churned:\n{leaf}"
+        );
+        assert!(!leaf.contains("populate_by_name"));
+        assert!(!leaf.contains("pydantic.Field"));
+    }
+
+    #[test]
+    fn canonical_4059_repro_cases_render_valid_python() {
+        // The three canonical #4059 repros: enum member `None`,
+        // class field `pass`, class field `lambda` (the silent-corruption trap).
+        let mut pool: SymbolPool = HashMap::new();
+        let e = cg_name("user", &["lorem"], "E");
+        pool.insert(e.clone(), enum_with_variants(e, &[("None", "None")]));
+        let c = cg_name("user", &["lorem"], "C");
+        pool.insert(
+            c.clone(),
+            class_with_fields(c, &[("pass", int_ty()), ("lambda", int_ty())]),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("lorem/__init__.py")];
+        // (a) `None` enum member → `None_ = "None"`.
+        assert!(
+            leaf.contains("    None_ = \"None\"\n"),
+            "enum None:\n{leaf}"
+        );
+        // (b) `pass` field → aliased escape.
+        assert!(
+            leaf.contains("    pass_: int = pydantic.Field(alias=\"pass\")\n"),
+            "field pass:\n{leaf}"
+        );
+        // (b/lambda) `lambda` field → a real annotated field, NOT a bare
+        // `lambda: int` (which would parse as a lambda expression and vanish).
+        assert!(
+            leaf.contains("    lambda_: int = pydantic.Field(alias=\"lambda\")\n"),
+            "field lambda:\n{leaf}"
+        );
+        assert!(
+            !leaf.contains("    lambda: int"),
+            "lambda silent-corruption:\n{leaf}"
+        );
+    }
 }

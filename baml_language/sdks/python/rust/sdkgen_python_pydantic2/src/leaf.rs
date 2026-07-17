@@ -845,6 +845,17 @@ fn collect_alias_dependencies(
     }
 }
 
+/// Render-boundary guard mirroring the Go generator's `GoIdent::new`
+/// assertion (PR #4067): no identifier reaching the emitter may still be a
+/// Python hard keyword. A miss here is a codegen bug (an unescaped emit site),
+/// so it panics loudly in debug builds with the offending name. Off in release.
+fn debug_assert_identifier(name: &str) {
+    debug_assert!(
+        !crate::emit::is_python_hard_keyword(name),
+        "Python keyword escaped too late: {name}"
+    );
+}
+
 /// Non-generic: `pydantic.BaseModel`.
 /// Generic: `pydantic.BaseModel, typing.Generic[T, …]`.
 fn render_class_bases(generic_params: &[String]) -> String {
@@ -899,9 +910,9 @@ fn is_media_reexport(s: &EmittedSymbol) -> bool {
 {%- if let Some(doc) = docstring %}
     {{ doc }}
 {%- endif %}
-    model_config = pydantic.ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(extra="forbid"{% if populate_by_name %}, populate_by_name=True{% endif %})
 {%- for prop in properties %}
-    {{ prop.name }}: {{ prop.ty_py }}
+    {{ prop.name }}: {{ prop.ty_py }}{{ prop.field_expr }}
 {%- endfor %}
 {%- if !static_methods.is_empty() %}
 
@@ -934,6 +945,12 @@ struct ClassBodyPy {
     /// inline `# …` comment — the `Attributes:` section is the sole
     /// channel.
     docstring: Option<String>,
+    /// True when ≥1 field was keyword-escaped and therefore carries a
+    /// `pydantic.Field(alias=…)`. Adds `populate_by_name=True` to the
+    /// `ConfigDict` so the model validates from both the escaped Python
+    /// attribute name and the raw BAML/JSON key. Classes with no escaped
+    /// field leave this `false` and render byte-identically to today.
+    populate_by_name: bool,
     properties: Vec<ClassPropertyView>,
     static_methods: Vec<MethodLineView>,
     instance_methods: Vec<MethodLineView>,
@@ -942,6 +959,11 @@ struct ClassBodyPy {
 struct ClassPropertyView {
     name: String,
     ty_py: String,
+    /// Trailing field expression appended after the annotation. Empty for a
+    /// plain field; ` = pydantic.Field(alias="<raw>")` for a keyword-escaped
+    /// field so the raw BAML name stays the wire/JSON key. Only consumed by
+    /// the `.py` template — the `.pyi` stub renders the escaped name alone.
+    field_expr: String,
 }
 
 struct MethodLineView {
@@ -1057,14 +1079,25 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                     py_name = c.py_name,
                 );
             }
+            debug_assert_identifier(&c.py_name);
             let properties = c
                 .properties
                 .iter()
-                .map(|prop| ClassPropertyView {
-                    name: prop.name.clone(),
-                    ty_py: translate_ty(&prop.ty, &ctx),
+                .map(|prop| {
+                    debug_assert_identifier(&prop.name);
+                    ClassPropertyView {
+                        name: prop.name.clone(),
+                        ty_py: translate_ty(&prop.ty, &ctx),
+                        field_expr: match &prop.alias {
+                            Some(raw) => {
+                                format!(" = pydantic.Field(alias={})", py_string(raw))
+                            }
+                            None => String::new(),
+                        },
+                    }
                 })
                 .collect();
+            let populate_by_name = c.properties.iter().any(|p| p.alias.is_some());
             let attrs: Vec<(String, Option<String>)> = c
                 .properties
                 .iter()
@@ -1080,6 +1113,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 py_name: c.py_name.clone(),
                 bases: render_class_bases(&c.generic_params),
                 docstring,
+                populate_by_name,
                 properties,
                 static_methods: build_method_line_views(&c.static_methods, &c.generic_params),
                 instance_methods: build_method_line_views(&c.instance_methods, &c.generic_params),
@@ -1090,12 +1124,16 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::Enum(e) => {
+            debug_assert_identifier(&e.py_name);
             let variants = e
                 .variants
                 .iter()
-                .map(|v| EnumVariantView {
-                    ident: v.ident.clone(),
-                    value: py_string(&v.value),
+                .map(|v| {
+                    debug_assert_identifier(&v.ident);
+                    EnumVariantView {
+                        ident: v.ident.clone(),
+                        value: py_string(&v.value),
+                    }
                 })
                 .collect();
             let members: Vec<(String, Option<String>)> = e
@@ -1159,6 +1197,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 /// through its JSON-schema definitions machinery instead of recursing.
 fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
     use askama::Template;
+
+    debug_assert_identifier(&a.py_name);
 
     // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
     // a recursive JSON-shaped union (`bool | int | float | str | List[json]
@@ -1501,6 +1541,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     if !typevars.is_empty() {
         out.push_str("\n\n");
         for tv in &typevars {
+            debug_assert_identifier(tv);
             writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
         }
     }
@@ -1726,6 +1767,9 @@ fn render_symbol_pyi(
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
                     ty_py: translate_ty(&prop.ty, &ctx),
+                    // The `.pyi` stub renders the escaped attribute name only;
+                    // the `Field(alias=…)` runtime detail lives in the `.py`.
+                    field_expr: String::new(),
                 })
                 .collect();
             let mut out = ClassBodyPyi {
@@ -2148,6 +2192,7 @@ pub(crate) fn render_leaf_body_pyi(
     if !typevars.is_empty() {
         out.push_str("\n\n");
         for tv in &typevars {
+            debug_assert_identifier(tv);
             writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
         }
     }
