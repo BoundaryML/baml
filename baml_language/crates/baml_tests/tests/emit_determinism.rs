@@ -99,12 +99,20 @@ fn baml_src_project_emit_is_deterministic() {
 fn parallel_emit_is_byte_identical_to_serial() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
     let sources = read_project(&root);
-    let serial = rayon::ThreadPoolBuilder::new()
-        .num_threads(1)
-        .build()
-        .expect("build 1-thread rayon pool")
-        .install(|| compile_to_bytes(&root, &sources, true));
-    let parallel = compile_to_bytes(&root, &sources, true);
+    // Both paths are pinned to explicit pools so the test exercises what it
+    // claims regardless of the ambient pool's size: 1 thread forces the serial
+    // reference emitter, >1 forces `emit_functions_parallel`. (On a single-core
+    // CI runner the default pool is 1 thread, which would otherwise make the
+    // "parallel" call silently take the serial path and test nothing.)
+    let run_with = |threads: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .expect("build rayon pool")
+            .install(|| compile_to_bytes(&root, &sources, true))
+    };
+    let serial = run_with(1);
+    let parallel = run_with(4);
 
     if serial != parallel {
         let diff_at = serial
