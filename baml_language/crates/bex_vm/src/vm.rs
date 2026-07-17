@@ -4255,7 +4255,13 @@ impl BexVm {
                 }
                 .into());
             };
-            (sys_op, f.function_id, f.arity, f.capture, f.param_names.clone())
+            (
+                sys_op,
+                f.function_id,
+                f.arity,
+                f.capture,
+                f.param_names.clone(),
+            )
         };
         let args_offset = self
             .stack
@@ -4380,7 +4386,7 @@ impl BexVm {
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
         // GenericFunction), carried on call notifications so the engine can map
         // it to a `FunctionId` without a name lookup.
-        let (callee, _callee_fn_ptr) = match self.get_object(callee_ptr) {
+        let (callee, callee_fn_ptr) = match self.get_object(callee_ptr) {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
@@ -4707,14 +4713,19 @@ impl BexVm {
             }
 
             FunctionKind::SysOp(_) => {
-                log::error!(
-                    "[VM] tried to CALL SysOp function '{callee_name}' via bytecode — SysOps must go through the engine yield path"
-                );
-                return Err(VmInternalError::TypeError {
-                    expected: FunctionType::Callable.into(),
-                    got: FunctionType::from(&callee_kind).into(),
-                }
-                .into());
+                // A sys-op reached as a callable value — virtual/interface
+                // dispatch or a bound-method value — runs through the same
+                // engine yield as a direct `OpCode::SysOp`: drain its args and
+                // suspend. The resolved sys-op `Function`'s arity already counts
+                // the receiver, so the top-of-stack args are exactly what the
+                // op's glue expects. On resume the engine pushes the result and
+                // the caller's post-call store binds it, identically to a
+                // returning bytecode callee.
+                return Ok(Some(self.dispatch_sysop_yield(
+                    callee_fn_ptr,
+                    runtime_id,
+                    *frame_idx,
+                )?));
             }
 
             FunctionKind::NativeUnresolved => {
@@ -5981,12 +5992,11 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), callee);
                     // `as_object_ptr` asserts the global is a `FunctionType::SysOp`
                     // function; `dispatch_sysop_yield` drains the args and yields.
-                    let callee_ptr = self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
-                    return Ok(Some(self.dispatch_sysop_yield(
-                        callee_ptr,
-                        runtime_id,
-                        *frame_idx,
-                    )?));
+                    let callee_ptr =
+                        self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
+                    return Ok(Some(
+                        self.dispatch_sysop_yield(callee_ptr, runtime_id, *frame_idx)?,
+                    ));
                 }
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
