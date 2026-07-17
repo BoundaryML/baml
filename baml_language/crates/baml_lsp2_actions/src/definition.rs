@@ -1,9 +1,10 @@
 //! `definition_at` — go-to-definition at a cursor position.
 //!
 //! This is a regular function (not a Salsa query). It uses the Rowan CST to
-//! find the token under the cursor, extracts its text as a name, calls
-//! `resolve_name_at` to resolve the name in scope, and then maps the
-//! `ResolvedName` to a `Location` (source file + text range).
+//! find the token under the cursor, extracts its text as a name, prefers member
+//! resolution when the token is in member position, then calls `resolve_name_at`
+//! for ordinary names and maps the result to a `Location` (source file + text
+//! range).
 //!
 //! ## Resolution cases
 //!
@@ -66,6 +67,10 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
 
     let name_text = token.text();
     let name = Name::new(name_text);
+
+    if let Some(location) = resolve_member_at(db, file, offset, name_text) {
+        return Some(location);
+    }
 
     // ── Step 2: resolve the name in scope ─────────────────────────────────────
     let resolved = baml_compiler2_tir::resolve::resolve_name_at(db, file, offset, &name);

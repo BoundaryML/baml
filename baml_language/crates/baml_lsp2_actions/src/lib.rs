@@ -48,9 +48,9 @@ pub mod definition;
 pub mod describe;
 pub mod env_vars;
 pub mod fixes;
-pub mod grep;
 pub mod listing;
 pub mod outline;
+pub mod project_search;
 pub mod search;
 pub mod tokens;
 pub mod type_info;
@@ -64,9 +64,9 @@ mod definition_at_tests;
 #[cfg(test)]
 mod describe_tests;
 #[cfg(test)]
-mod grep_tests;
-#[cfg(test)]
 mod listing_tests;
+#[cfg(test)]
+mod project_search_tests;
 #[cfg(test)]
 mod testing;
 #[cfg(test)]
@@ -96,16 +96,20 @@ pub use check::check_file;
 pub use completions::{Completion, CompletionKind, completions_at};
 pub use definition::{Location, definition_at};
 pub use describe::{
-    DepRef, RefSite, SymbolDescription, describe, describe_by_definition, describe_item_member,
+    DepRef, DescribeOptions, RefSite, SymbolDescription, describe, describe_by_definition,
+    describe_by_definition_with_options, describe_dependency, describe_item_member,
 };
 pub use env_vars::all_env_var_names;
 pub use fixes::{Fix, FixKind, fixes_at};
-pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items, non_user_package_names,
     resolve_target,
 };
 pub use outline::{OutlineItem, file_outline};
+pub use project_search::{
+    MatchAnnotation, ProjectSearchOptions, ProjectSearchResult, TextMatch, list_symbols,
+    search_project, search_text,
+};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{
     ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES, semantic_tokens,

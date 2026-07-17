@@ -1,6 +1,6 @@
-//! `grep` — semantic code search for BAML files.
+//! Compiler-aware project search used by `baml describe --search`.
 //!
-//! The core `grep()` function routes between semantic and text search modes:
+//! The core search function routes between semantic and text search modes:
 //! - If the pattern matches a known symbol name → delegate to `describe()`
 //! - Otherwise → text search with semantic annotations on matches
 //!
@@ -17,19 +17,19 @@ use crate::{
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-/// Result of a grep operation.
-pub struct GrepResult {
+/// Result of a project search operation.
+pub struct ProjectSearchResult {
     /// Whether the result came from semantic lookup or text search.
-    pub mode: GrepMode,
+    pub mode: ProjectSearchMode,
     /// Symbol descriptions (populated in Semantic mode).
     pub descriptions: Vec<SymbolDescription>,
     /// Text search matches (populated in `TextSearch` mode).
     pub text_matches: Vec<TextMatch>,
 }
 
-/// How the grep was resolved.
+/// How the project search was resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GrepMode {
+pub enum ProjectSearchMode {
     /// Pattern matched a known symbol — results come from `describe()`.
     Semantic,
     /// Fallback to text matching with semantic annotations.
@@ -53,7 +53,7 @@ pub struct TextMatch {
 #[derive(Debug, Clone)]
 pub enum MatchAnnotation {
     /// This match is a definition site.
-    Definition { kind: DefinitionKind },
+    Definition { name: String, kind: DefinitionKind },
     /// This match is a reference to a known symbol.
     Reference {
         target_name: String,
@@ -61,10 +61,10 @@ pub enum MatchAnnotation {
     },
 }
 
-// ── grep ─────────────────────────────────────────────────────────────────────
+// ── project search ───────────────────────────────────────────────────────────
 
-/// Options for grep.
-pub struct GrepOptions<'a> {
+/// Options for project search.
+pub struct ProjectSearchOptions<'a> {
     /// The search pattern.
     pub pattern: &'a str,
     /// Case-insensitive matching (for text search mode).
@@ -73,8 +73,12 @@ pub struct GrepOptions<'a> {
     pub kind_filter: &'a [DefinitionKind],
 }
 
-/// Semantic grep: if pattern is a known symbol, describe it; else text search.
-pub fn grep(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> GrepResult {
+/// Semantic project search: describe a known symbol, otherwise search text.
+pub fn search_project(
+    db: &dyn Db,
+    files: &[SourceFile],
+    opts: &ProjectSearchOptions<'_>,
+) -> ProjectSearchResult {
     // Try semantic lookup first.
     let descriptions = describe(db, files, opts.pattern);
 
@@ -87,18 +91,18 @@ pub fn grep(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> GrepRe
                 .filter(|d| opts.kind_filter.contains(&d.kind))
                 .collect()
         };
-        return GrepResult {
-            mode: GrepMode::Semantic,
+        return ProjectSearchResult {
+            mode: ProjectSearchMode::Semantic,
             descriptions,
             text_matches: Vec::new(),
         };
     }
 
     // Fall back to text search.
-    let text_matches = text_search(db, files, opts);
+    let text_matches = search_text(db, files, opts);
 
-    GrepResult {
-        mode: GrepMode::TextSearch,
+    ProjectSearchResult {
+        mode: ProjectSearchMode::TextSearch,
         descriptions: Vec::new(),
         text_matches,
     }
@@ -177,7 +181,11 @@ impl OutlineIndex {
 }
 
 /// Text search across all source files with semantic annotations.
-fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec<TextMatch> {
+pub fn search_text(
+    db: &dyn Db,
+    files: &[SourceFile],
+    opts: &ProjectSearchOptions<'_>,
+) -> Vec<TextMatch> {
     let pattern = if opts.ignore_case {
         opts.pattern.to_lowercase()
     } else {
@@ -218,6 +226,22 @@ fn text_search(db: &dyn Db, files: &[SourceFile], opts: &GrepOptions<'_>) -> Vec
                 let annotation =
                     annotate_match(file, line_start_offset, match_col, opts.pattern, &index);
 
+                // A kind filter is a semantic filter. Unannotated text has no
+                // kind, so it cannot satisfy one; annotated definitions and
+                // references must match the requested kind explicitly.
+                if !opts.kind_filter.is_empty()
+                    && !annotation.as_ref().is_some_and(|annotation| {
+                        let kind = match annotation {
+                            MatchAnnotation::Definition { kind, .. } => kind,
+                            MatchAnnotation::Reference { target_kind, .. } => target_kind,
+                        };
+                        opts.kind_filter.contains(kind)
+                    })
+                {
+                    line_start_offset += raw_line.len();
+                    continue;
+                }
+
                 matches.push(TextMatch {
                     file_path: file.path(db).display().to_string(),
                     file,
@@ -250,7 +274,7 @@ fn annotate_match(
     if let Some((name, kind)) = index.is_definition(file, match_offset) {
         // Verify the match is actually for this symbol (pattern matches the name).
         if name.contains(pattern) || pattern.contains(&name) || name.eq_ignore_ascii_case(pattern) {
-            return Some(MatchAnnotation::Definition { kind });
+            return Some(MatchAnnotation::Definition { name, kind });
         }
     }
 

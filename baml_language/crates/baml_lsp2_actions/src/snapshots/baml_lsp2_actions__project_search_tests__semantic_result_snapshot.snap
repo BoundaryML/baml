@@ -1,5 +1,5 @@
 ---
-source: crates/baml_lsp2_actions/src/grep_tests.rs
+source: crates/baml_lsp2_actions/src/project_search_tests.rs
 expression: output
 ---
 class Point  types.baml:2

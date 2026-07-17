@@ -24,7 +24,6 @@ mod diagnostics_cache_oracle;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;

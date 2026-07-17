@@ -827,7 +827,7 @@ testset "suite" with AlwaysFail {
 }
 
 // ============================================================================
-// Tests for project-less introspection (`baml describe` / `baml grep` /
+// Tests for project-less introspection (`baml describe` /
 // `baml fmt` without a `baml.toml`). The most expensive thing an agent can
 // do is fail fast and burn a turn, so these read-only commands fall back to
 // a stdlib-only "default state" instead of erroring.
@@ -897,6 +897,323 @@ fn describe_walks_up_to_ancestor_project() {
     );
 }
 
+#[test]
+fn describe_exact_batch_and_qualified_member_workflows() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class User {
+  name: string
+  function label(self) -> string { self.name }
+}
+
+function normalize(name: string) -> string {
+  name
+}
+
+function make_user(name: string) -> User {
+  let local_name = normalize(name);
+  User { name: local_name }
+}
+"#,
+    );
+
+    let batch = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "User", "make_user", "--max-lines", "40"],
+    );
+    assert!(
+        batch.status.success(),
+        "batched exact describe failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&batch.stdout),
+        String::from_utf8_lossy(&batch.stderr),
+    );
+    let batch_stdout = String::from_utf8_lossy(&batch.stdout);
+    assert!(batch_stdout.contains("class User"), "{batch_stdout}");
+    assert!(
+        batch_stdout.contains("function make_user"),
+        "{batch_stdout}"
+    );
+
+    let member = run_baml_cli(built, tmp.path(), &["describe", "User.label"]);
+    assert!(
+        member.status.success(),
+        "qualified member describe failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&member.stdout),
+        String::from_utf8_lossy(&member.stderr),
+    );
+
+    let local = run_baml_cli(built, tmp.path(), &["describe", "local_name"]);
+    assert!(
+        !local.status.success(),
+        "bare local binding should not resolve"
+    );
+    let local_stderr = String::from_utf8_lossy(&local.stderr);
+    assert!(local_stderr.contains("No exact symbol found: local_name"));
+    assert!(
+        local_stderr.contains("baml describe --search local_name"),
+        "{local_stderr}"
+    );
+
+    let dependencies = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "make_user", "--view", "dependencies"],
+    );
+    assert!(dependencies.status.success());
+    let dependencies_stdout = String::from_utf8_lossy(&dependencies.stdout);
+    assert!(
+        dependencies_stdout.contains("contract (1)"),
+        "{dependencies_stdout}"
+    );
+    assert!(
+        dependencies_stdout.contains("class            User"),
+        "{dependencies_stdout}"
+    );
+    assert!(
+        dependencies_stdout.contains("function         normalize"),
+        "{dependencies_stdout}"
+    );
+
+    let depth = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "make_user", "--depth", "1"],
+    );
+    assert!(
+        !depth.status.success(),
+        "removed --depth should be rejected"
+    );
+}
+
+#[test]
+fn describe_search_groups_candidates_and_previews_only_unique_exact_matches() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class Trophy {}
+
+function parse_trophy(raw: string) -> Trophy {
+  Trophy {}
+}
+
+function process_trophy(trophy: Trophy) -> string {
+  let channel = "slack";
+  channel
+}
+
+function slack_post_message(message: string) -> string {
+  let payload_note = "posting payload to slack";
+  payload_note + message
+}
+"#,
+    );
+
+    let name_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy",
+            "--kind",
+            "class,function",
+            "--max-lines",
+            "20",
+        ],
+    );
+    assert!(
+        name_search.status.success(),
+        "name search failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&name_search.stdout),
+        String::from_utf8_lossy(&name_search.stderr),
+    );
+    let name_stdout = String::from_utf8_lossy(&name_search.stdout);
+    assert!(name_stdout.contains("trophy (3 matches):"), "{name_stdout}");
+    assert!(name_stdout.contains("Trophy"), "{name_stdout}");
+    assert!(name_stdout.contains("parse_trophy"), "{name_stdout}");
+    assert!(name_stdout.contains("Previewing: Trophy"), "{name_stdout}");
+
+    let source_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "posting payload",
+            "--view",
+            "source",
+            "--max-lines",
+            "20",
+        ],
+    );
+    assert!(
+        source_search.status.success(),
+        "source fallback search failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&source_search.stdout),
+        String::from_utf8_lossy(&source_search.stderr),
+    );
+    let source_stdout = String::from_utf8_lossy(&source_search.stdout);
+    assert!(
+        source_stdout.contains("slack_post_message"),
+        "{source_stdout}"
+    );
+    assert!(!source_stdout.contains("Previewing:"), "{source_stdout}");
+    assert!(
+        source_stdout.contains("suggested: baml describe slack_post_message"),
+        "{source_stdout}"
+    );
+    assert!(source_stdout.lines().count() <= 20, "{source_stdout}");
+
+    let multi_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy,slack",
+            "--view",
+            "impact",
+            "--max-lines",
+            "30",
+        ],
+    );
+    assert!(multi_search.status.success());
+    let multi_stdout = String::from_utf8_lossy(&multi_search.stdout);
+    assert!(
+        multi_stdout.contains("Matches multiple terms:"),
+        "{multi_stdout}"
+    );
+    assert_eq!(
+        multi_stdout.matches("process_trophy").count(),
+        2,
+        "{multi_stdout}"
+    );
+    assert!(multi_stdout.contains("trophy ("), "{multi_stdout}");
+    assert!(multi_stdout.contains("slack ("), "{multi_stdout}");
+    assert!(!multi_stdout.contains("Previewing:"), "{multi_stdout}");
+    assert!(
+        multi_stdout.contains("--view impact --max-lines 60"),
+        "{multi_stdout}"
+    );
+
+    let json_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy,slack",
+            "--view",
+            "impact",
+            "--output",
+            "json",
+        ],
+    );
+    assert!(json_search.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&json_search.stdout).unwrap();
+    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["query"]["mode"], "balanced_or");
+    assert!(json["preview"].is_null());
+    assert!(json["groups"].as_array().unwrap().len() >= 2);
+    assert_eq!(json["groups"][0]["type"], "multi_term");
+    assert_eq!(json["groups"][0]["candidates"][0]["name"], "process_trophy");
+    assert_eq!(
+        json["groups"][0]["candidates"][0]["matches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(
+        json["suggested"]["command"]
+            .as_str()
+            .unwrap()
+            .contains("--view impact --max-lines 60")
+    );
+    assert!(json["suggested"]["symbols"].as_array().unwrap().len() <= 4);
+
+    let zero = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "--search", "definitely_absent_symbol"],
+    );
+    assert!(!zero.status.success(), "zero-result search should fail");
+    assert!(
+        String::from_utf8_lossy(&zero.stderr)
+            .contains("No search results for: definitely_absent_symbol")
+    );
+}
+
+#[test]
+fn describe_output_keeps_color_separate_from_serialization() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "class Trophy {}\n");
+
+    let text = run_baml_cli(
+        built,
+        tmp.path(),
+        &["--color", "always", "describe", "Trophy"],
+    );
+    assert!(text.status.success());
+    assert!(text.stdout.windows(2).any(|bytes| bytes == b"\x1b["));
+
+    let json = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "--color", "always", "describe", "Trophy", "--output", "json",
+        ],
+    );
+    assert!(json.status.success());
+    assert!(!json.stdout.windows(2).any(|bytes| bytes == b"\x1b["));
+    serde_json::from_slice::<serde_json::Value>(&json.stdout).unwrap();
+
+    let rejected_compact = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "Trophy", "--output", "compact"],
+    );
+    assert!(!rejected_compact.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected_compact.stderr).contains("invalid value 'compact'"),
+        "{}",
+        String::from_utf8_lossy(&rejected_compact.stderr)
+    );
+}
+
+#[test]
+fn describe_ambiguous_type_and_value_name_returns_candidates() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class Shared {}
+function Shared() -> string { "value" }
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["describe", "Shared"]);
+    assert!(
+        !output.status.success(),
+        "ambiguous exact lookup should fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Ambiguous exact symbol: Shared"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("class Shared"), "{stderr}");
+    assert!(stderr.contains("function Shared"), "{stderr}");
+}
+
 /// `baml fmt` in a directory with no project is a no-op success, not an
 /// error — nothing to format is not a failure.
 #[test]
@@ -911,30 +1228,6 @@ fn fmt_without_project_is_noop_success() {
         "Expected exit 0 for `baml fmt` with no project, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
-    );
-}
-
-/// `baml grep` with no `baml.toml` must not hard-fail on the missing
-/// manifest. The user-file set is empty in the default state (grep only
-/// searches user files, not the stdlib), so a "no match" result is correct
-/// — what matters is that the old "doesn't look like a BAML project" bail
-/// is gone and the process doesn't crash.
-#[test]
-fn grep_without_baml_toml_does_not_fail_on_missing_manifest() {
-    let built = common::ensure_built();
-    let tmp = tempfile::tempdir().unwrap();
-
-    let output = run_baml_cli(built, tmp.path(), &["grep", "Foo", "--from", "."]);
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("doesn't look like a BAML project"),
-        "grep should not emit the no-project error in the default state, got:\n{stderr}",
-    );
-    // Exited normally (Some(code)) rather than crashing on a signal (None).
-    assert!(
-        output.status.code().is_some(),
-        "grep should exit cleanly in the default state, not crash",
     );
 }
 
@@ -1089,7 +1382,7 @@ class Ticket {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["describe", "Ticket", "--from", ".", "--budget", "120"],
+        &["describe", "Ticket", "--from", ".", "--max-lines", "120"],
     );
 
     assert!(
@@ -1146,7 +1439,7 @@ function get_public_key() -> (AccountRecord as PublicIdentity).Key {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "get_public_key", "--from", ".", "--features", "beta"],
+        &["--features", "beta", "run", "get_public_key", "--from", "."],
     );
 
     assert!(
@@ -1234,7 +1527,7 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "--list", "--from", ".", "--features", "beta"],
+        &["--features", "beta", "run", "--list", "--from", "."],
     );
 
     assert!(
@@ -1272,14 +1565,14 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         built,
         tmp.path(),
         &[
+            "--features",
+            "beta",
             "run",
             "--list",
             "--output-format",
             "json",
             "--from",
             ".",
-            "--features",
-            "beta",
         ],
     );
     assert!(

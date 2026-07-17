@@ -3,14 +3,19 @@
 //! These tests exercise the real `write_description` and `write_listing`
 //! functions to verify the exact CLI output format agents will see.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use baml_db::baml_compiler2_hir;
-use baml_lsp2_actions::ResolvedTarget;
+use baml_lsp2_actions::{ListingEntry, ResolvedTarget, TextMatch};
 use baml_project::ProjectDatabase;
 
 use crate::describe_command::{
-    definition_line_range, dispatch, write_description, write_keyword, write_listing,
+    DescribeArgs, DescribeOutput, DescribeView, SearchCandidate, SearchGroupKind,
+    SearchMatchReason, TermMatch, definition_line_range, dispatch, exact_item_candidates,
+    filter_listing_by_kind, parse_kind_filter, parse_search_terms, path_matches, preview_candidate,
+    resolve_exact_description, search_match_rank, search_to_json, select_search_candidates,
+    source_candidate_for_match, source_candidate_ranges, suggested_search_candidates,
+    write_batch_output, write_description, write_keyword, write_listing, write_search_output,
 };
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -937,7 +942,7 @@ fn render_describe_methods_respect_budget() {
     for needle in [
         "methods:",
         "static_methods:",
-        "more lines (re-run with a higher --budget)",
+        "more lines (re-run with a higher --max-lines)",
     ] {
         assert!(
             tight.contains(needle),
@@ -967,7 +972,7 @@ fn render_describe_methods_respect_budget() {
         );
     }
     assert!(
-        !full.contains("re-run with a higher --budget"),
+        !full.contains("re-run with a higher --max-lines"),
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
@@ -1001,7 +1006,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
     assert_eq!(body_part(&tight), body_part(&full));
     assert!(
-        tight.contains("more lines (re-run with a higher --budget)"),
+        tight.contains("more lines (re-run with a higher --max-lines)"),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
     );
     for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
@@ -1357,4 +1362,1182 @@ fn dispatch_root_prefix_nonexistent() {
         output.starts_with("NOT FOUND:"),
         "expected NOT FOUND, got: {output}"
     );
+}
+
+// ── Overview / usage / impact / dependencies view tests ─────────────────────
+//
+// Ported from the `dhilan-atb-rewrite` prototype and adapted to the combined
+// renderer and the shared line budget across all views.
+
+use crate::describe_command::{
+    MAX_BUDGET_OVERRUN, write_dependencies_view, write_impact_view, write_overview,
+    write_source_view, write_usage_view,
+};
+
+/// Capture `write_overview` output as a String.
+fn capture_overview(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut buf = Vec::new();
+    write_overview(&mut buf, db, &files, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn describe_one(db: &ProjectDatabase, name: &str) -> baml_lsp2_actions::SymbolDescription {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    baml_lsp2_actions::describe(db, &files, name)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("no description for {name}"))
+}
+
+#[test]
+fn source_view_omits_reference_count() {
+    let db = make_db(&[(
+        "main.baml",
+        r#"
+function helper() -> int {
+    1
+}
+
+function caller() -> int {
+    helper()
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "helper");
+    let mut output = Vec::new();
+    write_source_view(&mut output, &db, &desc, 30, Path::new("/test")).unwrap();
+    let output = String::from_utf8(output).unwrap();
+
+    assert!(output.contains("function helper"), "{output}");
+    assert!(!output.contains("references ("), "{output}");
+}
+
+#[test]
+fn overview_expands_direct_function_dependencies_and_keeps_usage() {
+    let db = make_db(&[(
+        "main.baml",
+        r#"
+class Request {
+    text: string,
+}
+
+class Result {
+    answer: string,
+}
+
+function Plan(req: Request) -> Result {
+    Result { answer: req.text }
+}
+
+test PlanTest {
+    let result = Plan(Request { text: "hello" });
+    assert.equal(result.answer, "hello")
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Plan");
+
+    let output = capture_overview(&db, &desc, 30);
+
+    assert!(output.contains("signature"), "missing signature: {output}");
+    assert!(
+        output.contains("input Request"),
+        "missing input section: {output}"
+    );
+    assert!(
+        output.contains("class Request {"),
+        "input shape not expanded: {output}"
+    );
+    assert!(
+        output.contains("output Result"),
+        "missing output section: {output}"
+    );
+    assert!(
+        output.contains("class Result {"),
+        "output shape not expanded: {output}"
+    );
+    assert!(output.contains("usage (1"), "missing usage: {output}");
+    // The 3-line body fits the leftover budget, so it renders whole.
+    assert!(
+        output.contains("implementation (3 lines)"),
+        "missing implementation preview: {output}"
+    );
+}
+
+#[test]
+fn overview_expands_direct_dependency_shapes_by_default() {
+    let db = simple_project();
+    let desc = describe_one(&db, "ExtractPoint");
+
+    let output = capture_overview(&db, &desc, 30);
+
+    assert!(
+        output.contains("output Point"),
+        "dependency name must stay discoverable: {output}"
+    );
+    assert!(
+        output.contains("class Point {"),
+        "direct dependency shape must expand: {output}"
+    );
+}
+
+#[test]
+fn overview_does_not_expand_transitive_dependencies() {
+    let db = make_db(&[(
+        "nested.baml",
+        r#"
+class Inner {
+    value: string,
+}
+
+class Outer {
+    inner: Inner,
+}
+
+function Use(outer: Outer) -> string {
+    outer.inner.value
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Use");
+
+    let output = capture_overview(&db, &desc, 40);
+    assert!(
+        output.contains("class Outer {"),
+        "direct dependency shape must render: {output}"
+    );
+    assert!(
+        !output.contains("class Inner {"),
+        "transitive dependency must remain an explicit follow-up: {output}"
+    );
+}
+
+#[test]
+fn overview_stops_at_direct_dependency_shape() {
+    let db = make_db(&[(
+        "cycle.baml",
+        r#"
+class Alpha {
+    value: string,
+    beta: Beta?,
+}
+
+class Beta {
+    alpha: Alpha?,
+}
+
+function First(alpha: Alpha) -> string {
+    alpha.value
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "First");
+
+    let output = capture_overview(&db, &desc, 60);
+
+    assert_eq!(
+        output.matches("class Alpha {").count(),
+        1,
+        "direct dependency shape must render exactly once: {output}"
+    );
+    assert!(!output.contains("class Beta {"), "{output}");
+}
+
+#[test]
+fn overview_interface_separates_required_and_default_methods() {
+    let db = make_db(&[(
+        "processor.baml",
+        r#"
+interface Processor {
+    function config(self) -> string
+    function process(self, raw: string) -> int
+    function run(self) -> int {
+        0
+    }
+}
+
+class Worker {
+    implements Processor {
+        function config(self) -> string { "worker" }
+        function process(self, raw: string) -> int { raw.length() }
+    }
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Processor");
+
+    let output = capture_overview(&db, &desc, 30);
+
+    assert!(
+        output.contains("requires (2)"),
+        "missing required methods group: {output}"
+    );
+    assert!(output.contains("function config(self) -> string"));
+    assert!(output.contains("function process(self, raw: string) -> int"));
+    assert!(
+        output.contains("default methods (1)"),
+        "missing default methods group: {output}"
+    );
+    assert!(output.contains("function run(self) -> int"));
+    assert!(
+        !output.contains("default methods (1)\n  function config"),
+        "required methods must not appear under defaults: {output}"
+    );
+}
+
+/// A project with one function referenced from many call sites, for
+/// budget-adherence tests on the relationship views.
+fn many_refs_project() -> ProjectDatabase {
+    let mut callers = String::new();
+    for i in 0..12 {
+        callers.push_str(&format!(
+            "function Caller{i}() -> int {{\n    Target({i})\n}}\n\n"
+        ));
+    }
+    make_db(&[
+        (
+            "target.baml",
+            "function Target(n: int) -> int {\n    n\n}\n",
+        ),
+        ("callers.baml", &callers),
+        (
+            "tests.baml",
+            r#"
+test TargetTest {
+    assert.equal(Target(1), 1)
+}
+"#,
+        ),
+    ])
+}
+
+fn capture_usage(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_usage_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn capture_impact(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_impact_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn capture_dependencies(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_dependencies_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+#[test]
+fn dependencies_view_separates_contract_and_implementation() {
+    let db = make_db(&[(
+        "dependencies.baml",
+        r#"
+class Request {
+    text: string,
+}
+
+class Result {
+    answer: string,
+}
+
+function helper(req: Request) -> Result {
+    Result { answer: req.text }
+}
+
+function Plan(req: Request) -> Result {
+    helper(req)
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Plan");
+
+    let output = capture_dependencies(&db, &desc, 20);
+
+    assert!(output.contains("dependencies of Plan"), "{output}");
+    assert!(output.contains("contract (2)"), "{output}");
+    assert!(output.contains("class            Request"), "{output}");
+    assert!(output.contains("class            Result"), "{output}");
+    assert!(output.contains("implementation (1)"), "{output}");
+    assert!(output.contains("function         helper"), "{output}");
+    assert!(!output.contains("function         Plan"), "{output}");
+}
+
+#[test]
+fn usage_view_honors_budget_and_reports_omissions() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+    assert!(total >= 12, "fixture must produce many references");
+
+    let budget = 8;
+    let output = capture_usage(&db, &desc, budget);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "usage view exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains(&format!("({total} references)")),
+        "total count must always render: {output}"
+    );
+    assert!(
+        output.contains("more references — re-run with --max-lines"),
+        "omissions must name a recovering budget: {output}"
+    );
+    // Tests rank first within the sample.
+    assert!(
+        output.contains("tests (1)"),
+        "test group must render: {output}"
+    );
+}
+
+#[test]
+fn usage_view_unbudgeted_shows_everything() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+
+    let output = capture_usage(&db, &desc, 100);
+
+    assert!(!output.contains("more references"));
+    assert_eq!(
+        output.matches("Target(").count(),
+        total,
+        "every reference must render when budget allows: {output}"
+    );
+}
+
+#[test]
+fn impact_view_honors_budget_and_reports_omissions() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+
+    let budget = 8;
+    let output = capture_impact(&db, &desc, budget);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "impact view exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains(&format!("({total} sites in")),
+        "total counts must always render: {output}"
+    );
+    assert!(
+        output.contains("more sites — re-run with --max-lines"),
+        "omissions must name a recovering budget: {output}"
+    );
+}
+
+#[test]
+fn overview_large_enum_respects_budget() {
+    let mut body = String::from("enum Big {\n");
+    for i in 0..40 {
+        body.push_str(&format!("    Variant{i},\n"));
+    }
+    body.push_str("}\n");
+    let db = make_db(&[("big.baml", &body)]);
+    let desc = describe_one(&db, "Big");
+
+    let budget = 15;
+    let output = capture_overview(&db, &desc, budget);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "enum overview exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains("more lines — --view source"),
+        "elision must name the recovery command: {output}"
+    );
+}
+
+#[test]
+fn overview_duplicate_dependency_renders_once() {
+    let db = make_db(&[(
+        "dup.baml",
+        r#"
+class Shared {
+    value: string,
+}
+
+function Pair(a: Shared, b: Shared) -> Shared {
+    a
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Pair");
+
+    let output = capture_overview(&db, &desc, 40);
+
+    assert_eq!(
+        output.matches("class Shared {").count(),
+        1,
+        "duplicate dependency shape must render once: {output}"
+    );
+}
+
+fn batch_args(budget: usize) -> DescribeArgs {
+    DescribeArgs {
+        names: Vec::new(),
+        search_queries: Vec::new(),
+        kind: Vec::new(),
+        file: Vec::new(),
+        from: Some(PathBuf::from("/test")),
+        view: DescribeView::Source,
+        max_lines: budget,
+        output: DescribeOutput::Text,
+    }
+}
+
+fn search_candidate(
+    entry: ListingEntry,
+    matches: &[(usize, &str, SearchMatchReason)],
+) -> SearchCandidate {
+    SearchCandidate {
+        entry,
+        matches: matches
+            .iter()
+            .map(|(term_index, term, reason)| TermMatch {
+                term_index: *term_index,
+                term: (*term).to_string(),
+                reason: *reason,
+                evidence_count: 1,
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn search_terms_support_repeated_values_and_deduplicate_case() {
+    let terms = parse_search_terms(&[
+        "parse_trophy".to_string(),
+        "TrophyReport".to_string(),
+        "slack_post_message".to_string(),
+        "PARSE_TROPHY".to_string(),
+    ])
+    .unwrap();
+    assert_eq!(
+        terms,
+        ["parse_trophy", "TrophyReport", "slack_post_message"]
+    );
+}
+
+#[test]
+fn search_terms_reject_empty_queries() {
+    assert!(parse_search_terms(&["".to_string()]).is_err());
+    assert!(parse_search_terms(&["   ".to_string()]).is_err());
+}
+
+#[test]
+fn discovery_filters_parse_and_match() {
+    use baml_compiler2_hir::contributions::DefinitionKind;
+
+    let kinds = parse_kind_filter(&[
+        "class".to_string(),
+        "enum".to_string(),
+        "interface".to_string(),
+        "type_alias".to_string(),
+        "function".to_string(),
+        "template_string".to_string(),
+        "client".to_string(),
+        "test".to_string(),
+        "retry_policy".to_string(),
+        "let".to_string(),
+    ])
+    .unwrap();
+    assert_eq!(
+        kinds,
+        [
+            DefinitionKind::Class,
+            DefinitionKind::Enum,
+            DefinitionKind::Interface,
+            DefinitionKind::TypeAlias,
+            DefinitionKind::Function,
+            DefinitionKind::TemplateString,
+            DefinitionKind::Client,
+            DefinitionKind::Test,
+            DefinitionKind::RetryPolicy,
+            DefinitionKind::Let,
+        ]
+    );
+    assert!(parse_kind_filter(&["field".to_string()]).is_err());
+    assert!(parse_kind_filter(&["variant".to_string()]).is_err());
+    assert!(parse_kind_filter(&["unknown".to_string()]).is_err());
+    assert!(path_matches("flows/trophy.baml", &["trophy".to_string()]));
+    assert!(!path_matches("flows/slack.baml", &["trophy".to_string()]));
+}
+
+#[test]
+fn listing_filters_to_requested_top_level_kinds() {
+    use baml_compiler2_hir::contributions::DefinitionKind;
+
+    let db = make_db(&[(
+        "types.baml",
+        r#"
+interface Named {
+    function name(self) -> string
+}
+
+class User {
+    name: string
+}
+
+function make_user(name: string) -> User {
+    User { name: name }
+}
+"#,
+    )]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to the user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let filtered = filter_listing_by_kind(entries, &[DefinitionKind::Interface]);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].kind, DefinitionKind::Interface);
+    assert_eq!(filtered[0].item_name.as_str(), "Named");
+}
+
+#[test]
+fn exact_lookup_requires_qualified_member_names_and_excludes_locals() {
+    let db = make_db(&[(
+        "members.baml",
+        r#"
+class User {
+    name: string
+    function label(self) -> string { self.name }
+}
+
+function make_user(name: string) -> User {
+    let local_name = name;
+    User { name: local_name }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let options = baml_lsp2_actions::DescribeOptions::source();
+
+    assert!(resolve_exact_description(&db, &files, "label", options).is_none());
+    assert!(resolve_exact_description(&db, &files, "local_name", options).is_none());
+    assert!(resolve_exact_description(&db, &files, "User.label", options).is_some());
+}
+
+#[test]
+fn exact_lookup_reports_type_and_value_namespace_ambiguity() {
+    let db = make_db(&[(
+        "ambiguous.baml",
+        r#"
+class Shared {}
+function Shared() -> string { "value" }
+"#,
+    )]);
+
+    let candidates = exact_item_candidates(&db, "Shared");
+    assert_eq!(candidates.len(), 2);
+    assert_eq!(candidates[0].kind.as_str(), "class");
+    assert_eq!(candidates[1].kind.as_str(), "function");
+}
+
+#[test]
+fn search_ranking_prefers_exact_then_prefix_then_substring() {
+    let db = make_db(&[(
+        "search.baml",
+        r#"
+class Trophy {}
+class TrophyReport {}
+class ArchivedTrophy {}
+"#,
+    )]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let trophy = entries
+        .iter()
+        .find(|entry| entry.fqn() == "Trophy")
+        .unwrap();
+    let report = entries
+        .iter()
+        .find(|entry| entry.fqn() == "TrophyReport")
+        .unwrap();
+    let archived = entries
+        .iter()
+        .find(|entry| entry.fqn() == "ArchivedTrophy")
+        .unwrap();
+
+    assert_eq!(
+        search_match_rank(trophy, "Trophy"),
+        Some(SearchMatchReason::ExactName)
+    );
+    assert_eq!(
+        search_match_rank(trophy, "trophy"),
+        Some(SearchMatchReason::ExactNameIgnoreCase)
+    );
+    assert_eq!(
+        search_match_rank(report, "trophy"),
+        Some(SearchMatchReason::NamePrefix)
+    );
+    assert_eq!(
+        search_match_rank(archived, "trophy"),
+        Some(SearchMatchReason::NameSubstring)
+    );
+}
+
+#[test]
+fn source_search_maps_nested_text_to_its_top_level_symbol() {
+    let db = make_db(&[(
+        "source_search.baml",
+        r#"
+class User {
+    name: string
+    function label(self) -> string { `profile ${self.name}` }
+}
+
+function make_user(name: string) -> User {
+    let local_name = `profile ${name}`;
+    User { name: local_name }
+}
+"#,
+    )]);
+    let files = db.get_source_files();
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let ranges = source_candidate_ranges(&db, &files, &entries);
+    let file = files[0];
+
+    let method_match = TextMatch {
+        file,
+        file_path: file.path(&db).display().to_string(),
+        line_number: 4,
+        line_text: "    function label(self) -> string { `profile ${self.name}` }".to_string(),
+        annotation: None,
+    };
+    let local_match = TextMatch {
+        file,
+        file_path: file.path(&db).display().to_string(),
+        line_number: 8,
+        line_text: "    let local_name = `profile ${name}`;".to_string(),
+        annotation: None,
+    };
+
+    assert_eq!(
+        source_candidate_for_match(&ranges, &method_match)
+            .unwrap()
+            .fqn(),
+        "User"
+    );
+    assert_eq!(
+        source_candidate_for_match(&ranges, &local_match)
+            .unwrap()
+            .fqn(),
+        "make_user"
+    );
+}
+
+#[test]
+fn multi_query_selection_balances_terms_deduplicates_and_caps_results() {
+    let mut source = String::new();
+    for index in 0..8 {
+        source.push_str(&format!("class Alpha{index} {{}}\n"));
+    }
+    for index in 0..8 {
+        source.push_str(&format!("class Beta{index} {{}}\n"));
+    }
+    let db = make_db(&[("balanced.baml", &source)]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let candidates = entries
+        .into_iter()
+        .map(|entry| {
+            let name = entry.fqn();
+            if name == "Alpha0" {
+                search_candidate(
+                    entry,
+                    &[
+                        (0, "alpha", SearchMatchReason::NamePrefix),
+                        (1, "beta", SearchMatchReason::SourceReference),
+                    ],
+                )
+            } else if name.starts_with("Alpha") {
+                search_candidate(entry, &[(0, "alpha", SearchMatchReason::NamePrefix)])
+            } else {
+                search_candidate(entry, &[(1, "beta", SearchMatchReason::NamePrefix)])
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let selection =
+        select_search_candidates(&["alpha".to_string(), "beta".to_string()], candidates, 12);
+    let names = selection
+        .groups
+        .iter()
+        .flat_map(|group| group.candidates.iter())
+        .map(|candidate| candidate.entry.fqn())
+        .collect::<Vec<_>>();
+
+    assert_eq!(names.len(), 12);
+    assert_eq!(selection.total, 16);
+    assert_eq!(names[0], "Alpha0");
+    assert_eq!(selection.groups[0].kind, SearchGroupKind::MultiTerm);
+    assert!(names.iter().any(|name| name.starts_with("Beta")));
+    assert_eq!(
+        names.iter().collect::<std::collections::HashSet<_>>().len(),
+        names.len()
+    );
+}
+
+#[test]
+fn search_preview_requires_one_unique_exact_single_term_match() {
+    let db = make_db(&[(
+        "preview.baml",
+        "class Trophy {}\nclass TrophyReport {}\nfunction Trophy() -> string { \"ok\" }\n",
+    )]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let class_trophy = entries
+        .iter()
+        .find(|entry| entry.fqn() == "Trophy" && entry.kind.as_str() == "class")
+        .unwrap()
+        .clone();
+    let function_trophy = entries
+        .iter()
+        .find(|entry| entry.fqn() == "Trophy" && entry.kind.as_str() == "function")
+        .unwrap()
+        .clone();
+    let report = entries
+        .iter()
+        .find(|entry| entry.fqn() == "TrophyReport")
+        .unwrap()
+        .clone();
+    let terms = vec!["Trophy".to_string()];
+    let unique = vec![
+        search_candidate(
+            class_trophy.clone(),
+            &[(0, "Trophy", SearchMatchReason::ExactName)],
+        ),
+        search_candidate(
+            report.clone(),
+            &[(0, "Trophy", SearchMatchReason::NamePrefix)],
+        ),
+    ];
+    assert_eq!(
+        preview_candidate(&terms, &unique)
+            .unwrap()
+            .entry
+            .kind
+            .as_str(),
+        "class"
+    );
+    assert!(
+        preview_candidate(
+            &terms,
+            &[search_candidate(
+                report,
+                &[(0, "Trophy", SearchMatchReason::NamePrefix)]
+            )],
+        )
+        .is_none()
+    );
+    let tied = vec![
+        search_candidate(class_trophy, &[(0, "Trophy", SearchMatchReason::ExactName)]),
+        search_candidate(
+            function_trophy,
+            &[(0, "Trophy", SearchMatchReason::ExactName)],
+        ),
+    ];
+    assert!(preview_candidate(&terms, &tied).is_none());
+    assert!(preview_candidate(&["Trophy".to_string(), "report".to_string()], &unique).is_none());
+}
+
+#[test]
+fn search_group_order_is_stable_across_file_insertion_order() {
+    fn selected_names(files: &[(&str, &str)]) -> Vec<String> {
+        let db = make_db(files);
+        let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+            panic!("empty describe target should resolve to user package");
+        };
+        let candidates = baml_lsp2_actions::list_package_items(&db, package)
+            .into_iter()
+            .map(|entry| {
+                search_candidate(entry, &[(0, "gateway", SearchMatchReason::NameSubstring)])
+            })
+            .collect::<Vec<_>>();
+        select_search_candidates(&["gateway".to_string()], candidates, 12)
+            .groups
+            .into_iter()
+            .flat_map(|group| group.candidates)
+            .map(|candidate| candidate.entry.fqn())
+            .collect()
+    }
+
+    let first = selected_names(&[
+        ("b.baml", "class ZGateway {}"),
+        ("a.baml", "class AGateway {}"),
+    ]);
+    let second = selected_names(&[
+        ("a.baml", "class AGateway {}"),
+        ("b.baml", "class ZGateway {}"),
+    ]);
+    assert_eq!(first, second);
+    assert_eq!(first, ["AGateway", "ZGateway"]);
+}
+
+#[test]
+fn suggested_search_batch_prefers_multi_term_then_balances_and_caps() {
+    let mut source = String::new();
+    for name in ["Bridge", "AlphaOne", "AlphaTwo", "BetaOne", "BetaTwo"] {
+        source.push_str(&format!("class {name} {{}}\n"));
+    }
+    let db = make_db(&[("suggested.baml", &source)]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let candidates = baml_lsp2_actions::list_package_items(&db, package)
+        .into_iter()
+        .map(|entry| match entry.fqn().as_str() {
+            "Bridge" => search_candidate(
+                entry,
+                &[
+                    (0, "alpha", SearchMatchReason::SourceReference),
+                    (1, "beta", SearchMatchReason::SourceReference),
+                ],
+            ),
+            name if name.starts_with("Alpha") => {
+                search_candidate(entry, &[(0, "alpha", SearchMatchReason::NamePrefix)])
+            }
+            _ => search_candidate(entry, &[(1, "beta", SearchMatchReason::NamePrefix)]),
+        })
+        .collect::<Vec<_>>();
+    let selection =
+        select_search_candidates(&["alpha".to_string(), "beta".to_string()], candidates, 12);
+    let suggested = suggested_search_candidates(&selection, 2);
+    let names = suggested
+        .iter()
+        .map(|candidate| candidate.entry.fqn())
+        .collect::<Vec<_>>();
+    assert_eq!(names.len(), 4);
+    assert_eq!(names[0], "Bridge");
+    assert!(names.iter().any(|name| name.starts_with("Alpha")));
+    assert!(names.iter().any(|name| name.starts_with("Beta")));
+}
+
+#[test]
+fn search_outputs_include_candidates_preview_and_structured_json() {
+    let db = make_db(&[(
+        "search_output.baml",
+        r#"
+class Trophy {}
+class TrophyReport {}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let candidates = baml_lsp2_actions::list_package_items(&db, package)
+        .into_iter()
+        .map(|entry| {
+            let reason = if entry.fqn() == "Trophy" {
+                SearchMatchReason::ExactNameIgnoreCase
+            } else {
+                SearchMatchReason::NamePrefix
+            };
+            search_candidate(entry, &[(0, "trophy", reason)])
+        })
+        .collect::<Vec<_>>();
+    let terms = vec!["trophy".to_string()];
+    let selection = select_search_candidates(&terms, candidates.clone(), 12);
+    let preview = resolve_exact_description(
+        &db,
+        &files,
+        "Trophy",
+        baml_lsp2_actions::DescribeOptions::source(),
+    )
+    .unwrap();
+    let mut args = batch_args(8);
+    args.view = DescribeView::Source;
+
+    let mut text = Vec::new();
+    write_search_output(
+        &mut text,
+        &db,
+        &files,
+        Path::new("/test"),
+        &selection,
+        Some(&preview),
+        &[],
+        &args,
+        &[],
+        0,
+    )
+    .unwrap();
+    let text = String::from_utf8(text).unwrap();
+    assert!(text.contains("trophy (2 matches):"), "{text}");
+    assert!(text.contains("Previewing: Trophy"), "{text}");
+    assert!(text.lines().count() <= args.max_lines, "{text}");
+
+    let tight_args = batch_args(4);
+    let mut tight = Vec::new();
+    write_search_output(
+        &mut tight,
+        &db,
+        &files,
+        Path::new("/test"),
+        &selection,
+        Some(&preview),
+        &[],
+        &tight_args,
+        &[],
+        0,
+    )
+    .unwrap();
+    let tight = String::from_utf8(tight).unwrap();
+    assert!(
+        tight.contains("2 unique matches · showing 1 · 1 omitted"),
+        "{tight}"
+    );
+    assert!(tight.lines().count() <= tight_args.max_lines, "{tight}");
+
+    let suggested = suggested_search_candidates(&selection, terms.len());
+    let mut suggested_output = Vec::new();
+    write_search_output(
+        &mut suggested_output,
+        &db,
+        &files,
+        Path::new("/test"),
+        &selection,
+        None,
+        &suggested,
+        &args,
+        &[],
+        0,
+    )
+    .unwrap();
+    let suggested_output = String::from_utf8(suggested_output).unwrap();
+    assert_eq!(
+        suggested_output.matches("suggested: baml describe").count(),
+        1,
+        "{suggested_output}"
+    );
+    assert!(
+        !suggested_output.contains("Previewing:"),
+        "{suggested_output}"
+    );
+    assert!(
+        !suggested_output.contains("class Trophy {"),
+        "{suggested_output}"
+    );
+
+    args.output = DescribeOutput::Json;
+    let json = search_to_json(
+        &db,
+        Path::new("/test"),
+        &terms,
+        &selection,
+        Some(&preview),
+        &[],
+        &args,
+        &[],
+        0,
+    );
+    assert_eq!(json["query"]["search"][0], "trophy");
+    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["query"]["mode"], "balanced_or");
+    assert_eq!(json["groups"][0]["candidates"].as_array().unwrap().len(), 2);
+    assert_eq!(json["preview"]["identity"]["name"], "Trophy");
+    assert_eq!(json["omitted"], 0);
+    assert!(json["suggested"].is_null());
+}
+
+#[test]
+fn batch_output_deduplicates_symbols_and_obeys_global_budget() {
+    let db = make_db(&[(
+        "flow.baml",
+        r#"
+class TrophyReport { winner: string, reason: string, }
+function parse_trophy(raw: string) -> TrophyReport {
+    TrophyReport { winner: raw, reason: "ok" }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![
+        describe_one(&db, "parse_trophy"),
+        describe_one(&db, "TrophyReport"),
+    ];
+    let args = batch_args(7);
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.lines().count() <= 7, "{output}");
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.starts_with("function parse_trophy  "))
+            .count(),
+        1,
+        "{output}"
+    );
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.starts_with("class TrophyReport  "))
+            .count(),
+        1,
+        "{output}"
+    );
+}
+
+#[test]
+fn text_batch_honors_max_lines_without_recommending_redundant_expansion() {
+    let mut source =
+        String::from("class First { value: string, }\nclass Second { value: string, }\n");
+    source.push_str("function first() -> First {\n");
+    for _ in 0..60 {
+        source.push_str("    let value = \"first\";\n");
+    }
+    source.push_str("    First { value: value }\n}\nfunction second() -> Second {\n");
+    for _ in 0..60 {
+        source.push_str("    let value = \"second\";\n");
+    }
+    source.push_str("    Second { value: value }\n}\n");
+    let db = make_db(&[("agent.baml", &source)]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
+    let args = batch_args(240);
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.lines().count() <= 240, "{output}");
+    assert!(output.lines().count() > 80, "{output}");
+    assert!(!output.contains("next: baml describe"), "{output}");
+    assert!(!output.contains("lines omitted —"), "{output}");
+    assert!(output.contains("\"first\""), "{output}");
+    assert!(output.contains("\"second\""), "{output}");
+    assert!(!output.contains("depends on class First"), "{output}");
+    assert!(!output.contains("depends on class Second"), "{output}");
+}
+
+#[test]
+fn text_batch_emits_one_next_command_when_symbols_receive_no_content() {
+    let db = make_db(&[(
+        "tiny.baml",
+        r#"
+function first() -> string { "first" }
+function second() -> string { "second" }
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
+    let args = batch_args(3);
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert_eq!(output.lines().count(), 3, "{output}");
+    assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
+    assert!(!output.contains("--output"), "{output}");
+    assert!(output.contains("first second"), "{output}");
+}
+
+#[test]
+fn text_source_batch_gives_every_symbol_a_signature_and_follows_up_truncation() {
+    let mut source = String::new();
+    for name in ["first", "second", "third", "fourth"] {
+        source.push_str(&format!("function {name}() -> string {{\n"));
+        for _ in 0..20 {
+            source.push_str(&format!("    let value = \"{name}\";\n"));
+        }
+        source.push_str("    value\n}\n");
+    }
+    let db = make_db(&[("flow.baml", &source)]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = ["first", "second", "third", "fourth"]
+        .into_iter()
+        .map(|name| describe_one(&db, name))
+        .collect::<Vec<_>>();
+    let mut args = batch_args(13);
+    args.view = DescribeView::Source;
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+
+    assert!(output.lines().count() <= args.max_lines, "{output}");
+    for name in ["first", "second", "third", "fourth"] {
+        assert!(
+            output.contains(&format!("function {name}() -> string {{")),
+            "missing signature for {name}: {output}"
+        );
+    }
+    assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
+    assert!(output.contains("first second third fourth"), "{output}");
 }

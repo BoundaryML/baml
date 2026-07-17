@@ -1,0 +1,8 @@
+---
+source: crates/baml_lsp2_actions/src/project_search_tests.rs
+assertion_line: 105
+expression: output
+---
+types.baml:2│ class Point {  ← Definition { name: "Point", kind: Class }
+funcs.baml:2│ function MakePoint(x: int, y: int) -> Point {
+funcs.baml:3│ return Point { x: x, y: y };

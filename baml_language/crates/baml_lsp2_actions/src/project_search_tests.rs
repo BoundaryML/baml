@@ -1,8 +1,12 @@
-//! Snapshot tests for `grep()` and `list_symbols()`.
+//! Snapshot tests for `search_project()` and `list_symbols()`.
 
 use std::fmt::Write;
 
-use crate::{grep::GrepMode, testing::ProjectTest};
+use crate::{
+    DefinitionKind,
+    project_search::{ProjectSearchMode, ProjectSearchOptions, search_text},
+    testing::ProjectTest,
+};
 
 fn make_project() -> ProjectTest {
     let mut builder = ProjectTest::builder();
@@ -41,18 +45,18 @@ function ReadColor(c: Color) -> string {
 }
 
 #[test]
-fn grep_known_symbol_uses_semantic_mode() {
+fn known_symbol_uses_semantic_mode() {
     let project = make_project();
-    let result = project.grep("Point");
-    assert_eq!(result.mode, GrepMode::Semantic);
+    let result = project.search_project("Point");
+    assert_eq!(result.mode, ProjectSearchMode::Semantic);
     assert!(!result.descriptions.is_empty());
     assert!(result.text_matches.is_empty());
 }
 
 #[test]
-fn grep_semantic_result_snapshot() {
+fn semantic_result_snapshot() {
     let project = make_project();
-    let result = project.grep("Point");
+    let result = project.search_project("Point");
     let mut output = String::new();
     for desc in &result.descriptions {
         output.push_str(&project.format_description(desc));
@@ -61,20 +65,20 @@ fn grep_semantic_result_snapshot() {
 }
 
 #[test]
-fn grep_unknown_pattern_uses_text_mode() {
+fn unknown_pattern_uses_text_mode() {
     let project = make_project();
-    let result = project.grep("xyz_no_match");
-    assert_eq!(result.mode, GrepMode::TextSearch);
+    let result = project.search_project("xyz_no_match");
+    assert_eq!(result.mode, ProjectSearchMode::TextSearch);
     assert!(result.descriptions.is_empty());
     assert!(result.text_matches.is_empty());
 }
 
 #[test]
-fn grep_text_search_with_matches() {
+fn text_search_with_matches() {
     let project = make_project();
     // "return" appears in source but isn't a symbol name
-    let result = project.grep("return");
-    assert_eq!(result.mode, GrepMode::TextSearch);
+    let result = project.search_project("return");
+    assert_eq!(result.mode, ProjectSearchMode::TextSearch);
     assert!(!result.text_matches.is_empty());
 
     let mut output = String::new();
@@ -86,13 +90,13 @@ fn grep_text_search_with_matches() {
 }
 
 #[test]
-fn grep_case_insensitive_text_search() {
+fn case_insensitive_text_search() {
     let project = make_project();
     // "point" lowercase should find matches in text mode since describe is case-sensitive
     let result = project.grep_case_insensitive("point");
     // Should either go semantic (if case-insensitive matching applies) or text search
     let mut output = String::new();
-    if result.mode == GrepMode::Semantic {
+    if result.mode == ProjectSearchMode::Semantic {
         for desc in &result.descriptions {
             output.push_str(&project.format_description(desc));
         }
@@ -124,13 +128,46 @@ fn list_symbols_snapshot() {
 }
 
 #[test]
-fn grep_enum_symbol() {
+fn enum_symbol_search() {
     let project = make_project();
-    let result = project.grep("Color");
-    assert_eq!(result.mode, GrepMode::Semantic);
+    let result = project.search_project("Color");
+    assert_eq!(result.mode, ProjectSearchMode::Semantic);
     let mut output = String::new();
     for desc in &result.descriptions {
         output.push_str(&project.format_description(desc));
     }
     insta::assert_snapshot!(output);
+}
+
+#[test]
+fn text_search_kind_filter_excludes_other_kinds_and_unannotated_text() {
+    let project = make_project();
+    let class_only = [DefinitionKind::Class];
+    let opts = ProjectSearchOptions {
+        pattern: "Point",
+        ignore_case: false,
+        kind_filter: &class_only,
+    };
+
+    let matches = search_text(&project.db, &project.files, &opts);
+
+    assert!(!matches.is_empty());
+    assert!(matches.iter().all(|text_match| matches!(
+        text_match.annotation,
+        Some(crate::MatchAnnotation::Definition {
+            kind: DefinitionKind::Class,
+            ..
+        }) | Some(crate::MatchAnnotation::Reference {
+            target_kind: DefinitionKind::Class,
+            ..
+        })
+    )));
+
+    let function_only = [DefinitionKind::Function];
+    let opts = ProjectSearchOptions {
+        pattern: "return",
+        ignore_case: false,
+        kind_filter: &function_only,
+    };
+    assert!(search_text(&project.db, &project.files, &opts).is_empty());
 }

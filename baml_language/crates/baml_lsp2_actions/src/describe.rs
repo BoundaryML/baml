@@ -2,8 +2,8 @@
 //!
 //! The core `describe()` function takes a symbol name and produces a
 //! `SymbolDescription` containing everything needed to understand the symbol:
-//! shape (compact representation), full source body, docstring, signature-level
-//! dependencies, and reference sites.
+//! shape (compact representation), full source body, docstring, contract and
+//! implementation dependencies, and reference sites.
 //!
 //! This is a regular function (not a Salsa query). Internally it calls
 //! Salsa-cached queries (`file_outline`, `file_item_tree`, `syntax_tree`, etc.).
@@ -19,6 +19,7 @@ use text_size::TextRange;
 
 use crate::{
     Db,
+    definition::definition_at,
     search::{SymbolInfo, search_symbols},
     type_info::type_info_for_definition,
     usages::usages_at,
@@ -55,6 +56,8 @@ pub struct SymbolDescription {
     pub resolved_type: Option<String>,
     /// Symbols referenced in the signature (parameter types, return type, etc.).
     pub dependencies: Vec<DepRef>,
+    /// Symbols referenced by the implementation body.
+    pub implementation_dependencies: Vec<DepRef>,
     /// Sites where this symbol is used.
     pub references: Vec<RefSite>,
     /// Instance methods (first param `self`) for classes.
@@ -116,6 +119,105 @@ pub struct RefSite {
     pub line_number: usize,
 }
 
+/// Controls which expensive parts of a symbol description are computed.
+///
+/// The default preserves the complete description used by IDE and JSON
+/// consumers. CLI views can request only the data they render.
+#[derive(Clone, Copy, Debug)]
+pub struct DescribeOptions {
+    pub shape: bool,
+    pub docstring: bool,
+    pub dependencies: bool,
+    pub implementation_dependencies: bool,
+    pub resolved_type: bool,
+    pub references: bool,
+    pub methods: bool,
+    pub full_body: bool,
+}
+
+impl DescribeOptions {
+    pub const fn source() -> Self {
+        Self {
+            shape: false,
+            docstring: false,
+            dependencies: false,
+            implementation_dependencies: false,
+            resolved_type: false,
+            references: false,
+            methods: false,
+            full_body: true,
+        }
+    }
+
+    pub const fn usage() -> Self {
+        Self {
+            shape: false,
+            docstring: false,
+            dependencies: false,
+            implementation_dependencies: false,
+            resolved_type: false,
+            references: true,
+            methods: false,
+            full_body: false,
+        }
+    }
+
+    /// The minimum semantic data needed to expand a dependency shape in an
+    /// overview. In particular, skip project-wide reference discovery and
+    /// source-body reconstruction for every nested type.
+    pub const fn dependency_shape() -> Self {
+        Self {
+            shape: true,
+            docstring: false,
+            dependencies: false,
+            implementation_dependencies: false,
+            resolved_type: false,
+            references: false,
+            methods: false,
+            full_body: false,
+        }
+    }
+
+    pub const fn overview() -> Self {
+        Self {
+            implementation_dependencies: false,
+            ..Self::default_const()
+        }
+    }
+
+    pub const fn dependencies() -> Self {
+        Self {
+            shape: false,
+            docstring: false,
+            dependencies: true,
+            implementation_dependencies: true,
+            resolved_type: false,
+            references: false,
+            methods: false,
+            full_body: false,
+        }
+    }
+
+    pub const fn default_const() -> Self {
+        Self {
+            shape: true,
+            docstring: true,
+            dependencies: true,
+            implementation_dependencies: true,
+            resolved_type: true,
+            references: true,
+            methods: true,
+            full_body: true,
+        }
+    }
+}
+
+impl Default for DescribeOptions {
+    fn default() -> Self {
+        Self::default_const()
+    }
+}
+
 // ── describe ─────────────────────────────────────────────────────────────────
 
 /// Describe a symbol by exact name.
@@ -170,6 +272,15 @@ pub fn describe_by_definition(
     files: &[SourceFile],
     definition: Definition<'_>,
 ) -> Option<SymbolDescription> {
+    describe_by_definition_with_options(db, files, definition, DescribeOptions::default())
+}
+
+pub fn describe_by_definition_with_options(
+    db: &dyn Db,
+    files: &[SourceFile],
+    definition: Definition<'_>,
+    options: DescribeOptions,
+) -> Option<SymbolDescription> {
     let (file, name_span) = crate::utils::definition_span(db, definition)?;
 
     // Extract the name text from the source.
@@ -188,7 +299,27 @@ pub fn describe_by_definition(
         container_name: None,
     };
 
-    describe_top_level(db, files, &sym)
+    describe_top_level(db, files, &sym, Some(definition), options)
+}
+
+/// Describe a dependency that has already been semantically resolved.
+///
+/// This avoids repeating a project-wide name search when the caller already
+/// has the dependency's exact file, span, name, and kind.
+pub fn describe_dependency(
+    db: &dyn Db,
+    files: &[SourceFile],
+    dependency: &DepRef,
+    options: DescribeOptions,
+) -> Option<SymbolDescription> {
+    let sym = SymbolInfo {
+        name: dependency.name.clone(),
+        kind: dependency.kind,
+        file: dependency.file,
+        name_span: dependency.name_span,
+        container_name: None,
+    };
+    describe_top_level(db, files, &sym, None, options)
 }
 
 /// Describe a member (field, variant) within a known parent item.
@@ -250,7 +381,7 @@ fn describe_symbol(
     if sym.kind.is_member() {
         describe_member(db, files, sym)
     } else {
-        describe_top_level(db, files, sym)
+        describe_top_level(db, files, sym, None, DescribeOptions::default())
     }
 }
 
@@ -259,6 +390,8 @@ fn describe_top_level(
     db: &dyn Db,
     files: &[SourceFile],
     sym: &SymbolInfo,
+    known_definition: Option<Definition<'_>>,
+    options: DescribeOptions,
 ) -> Option<SymbolDescription> {
     let file = sym.file;
 
@@ -267,26 +400,53 @@ fn describe_top_level(
 
     // Resolve the symbol's definition once; every downstream helper reuses it
     // instead of re-running name resolution.
-    let definition = resolve_definition(db, file, sym);
+    let definition = known_definition.or_else(|| resolve_definition(db, file, sym));
 
     // ── Shape generation ─────────────────────────────────────────────────────
-    let shape = build_shape(db, sym, definition);
+    let shape = if options.shape {
+        build_shape(db, sym, definition)
+    } else {
+        format!("{} {}", sym.kind.as_str(), sym.name)
+    };
 
     // ── Docstring extraction ─────────────────────────────────────────────────
-    let docstring = extract_docstring(db, file, item_range);
+    let docstring = options
+        .docstring
+        .then(|| extract_docstring(db, file, item_range))
+        .flatten();
 
     // ── Dependency discovery ─────────────────────────────────────────────────
-    let dependencies = find_dependencies(db, files, file, sym, definition);
+    let dependencies = if options.dependencies {
+        find_dependencies(db, files, file, sym, definition)
+    } else {
+        Vec::new()
+    };
+
+    let implementation_dependencies = if options.implementation_dependencies {
+        find_implementation_dependencies(db, file, item_range, sym, &dependencies)
+    } else {
+        Vec::new()
+    };
 
     // ── Resolved type ────────────────────────────────────────────────────────
-    let resolved_type = resolve_type_for_item(db, definition);
+    let resolved_type = options
+        .resolved_type
+        .then(|| resolve_type_for_item(db, definition))
+        .flatten();
 
     // ── Reference finding ────────────────────────────────────────────────────
-    let references = find_references(db, files, file, sym.name_span, item_range);
+    let references = if options.references {
+        find_references(db, files, file, sym.name_span, item_range)
+    } else {
+        Vec::new()
+    };
 
     // ── Methods + canonical FQN (classes) ────────────────────────────────────
-    let (instance_methods, static_methods, canonical_fqn) =
-        class_methods_and_fqn(db, sym, definition);
+    let (instance_methods, static_methods, canonical_fqn) = if options.methods {
+        class_methods_and_fqn(db, sym, definition)
+    } else {
+        (Vec::new(), Vec::new(), None)
+    };
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
@@ -294,7 +454,9 @@ fn describe_top_level(
     //   prefixed with the full `///` docstring;
     // - builtin function: the signature only, never the native body block;
     // - everything else: the real source body.
-    let full_body = if matches!(sym.kind, DefinitionKind::Class) {
+    let full_body = if !options.full_body {
+        String::new()
+    } else if matches!(sym.kind, DefinitionKind::Class) && options.shape {
         let mut body = String::new();
         if let Some(doc) = &docstring {
             for line in doc.lines() {
@@ -327,6 +489,7 @@ fn describe_top_level(
         docstring,
         resolved_type,
         dependencies,
+        implementation_dependencies,
         references,
         instance_methods,
         static_methods,
@@ -405,6 +568,7 @@ fn describe_member(
         docstring,
         resolved_type,
         dependencies: Vec::new(),
+        implementation_dependencies: Vec::new(),
         references,
         instance_methods: Vec::new(),
         static_methods: Vec::new(),
@@ -482,6 +646,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     docstring: None,
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
+                    implementation_dependencies: Vec::new(),
                     references: param_refs,
                     instance_methods: Vec::new(),
                     static_methods: Vec::new(),
@@ -594,6 +759,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         docstring: None,
                         resolved_type: Some(type_str),
                         dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
+                        implementation_dependencies: Vec::new(),
                         references: binding_refs,
                         instance_methods: Vec::new(),
                         static_methods: Vec::new(),
@@ -1074,6 +1240,28 @@ fn describe_class_method(
     let name_span = function_def_name_span(db, file, m.span, member_name)
         .unwrap_or_else(|| TextRange::empty(m.span.start()));
 
+    let mut dependencies = Vec::new();
+    let mut seen = std::collections::HashSet::from([
+        class_data.name.as_str().to_string(),
+        m.name.as_str().to_string(),
+    ]);
+    if let Some(ef) = ef {
+        for param in &ef.params {
+            collect_ty_deps(db, files, &param.ty, &mut dependencies, &mut seen);
+        }
+        collect_ty_deps(db, files, &ef.return_type, &mut dependencies, &mut seen);
+        collect_ty_deps(db, files, &ef.callable_throws, &mut dependencies, &mut seen);
+    }
+    let sym = SymbolInfo {
+        name: m.name.as_str().to_string(),
+        kind: DefinitionKind::Method,
+        file,
+        name_span,
+        container_name: Some(class_data.name.as_str().to_string()),
+    };
+    let implementation_dependencies =
+        find_implementation_dependencies(db, file, m.span, &sym, &dependencies);
+
     // The owning class is the container.
     let container =
         crate::utils::definition_span(db, Definition::Class(class_loc)).map(|(cfile, cspan)| {
@@ -1099,7 +1287,8 @@ fn describe_class_method(
         full_body,
         docstring: m.docstring.clone(),
         resolved_type: Some(signature),
-        dependencies: Vec::new(),
+        dependencies,
+        implementation_dependencies,
         references,
         instance_methods: Vec::new(),
         static_methods: Vec::new(),
@@ -1430,6 +1619,139 @@ fn find_dependencies(
     }
 
     deps
+}
+
+fn find_implementation_dependencies(
+    db: &dyn Db,
+    file: SourceFile,
+    item_range: TextRange,
+    sym: &SymbolInfo,
+    contract_dependencies: &[DepRef],
+) -> Vec<DepRef> {
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let mut seen = contract_dependencies
+        .iter()
+        .map(dep_identity)
+        .collect::<std::collections::HashSet<_>>();
+    seen.insert((
+        file_path_string(db, file),
+        u32::from(sym.name_span.start()),
+        u32::from(sym.name_span.end()),
+    ));
+    let mut dependencies = Vec::new();
+
+    for node_or_token in tree.descendants_with_tokens() {
+        let rowan::NodeOrToken::Token(token) = node_or_token else {
+            continue;
+        };
+        if token.kind() != SyntaxKind::WORD && !token.kind().is_keyword() {
+            continue;
+        }
+        let token_range = token.text_range();
+        if token_range.start() < item_range.start() || token_range.end() > item_range.end() {
+            continue;
+        }
+        let Some(location) = definition_at(db, file, token_range.start()) else {
+            continue;
+        };
+        if location.file == file && location.range == token_range {
+            continue;
+        }
+        let Some(dependency) = dependency_from_location(db, location.file, location.range) else {
+            continue;
+        };
+        if seen.insert(dep_identity(&dependency)) {
+            dependencies.push(dependency);
+        }
+    }
+
+    dependencies
+}
+
+fn dep_identity(dependency: &DepRef) -> (String, u32, u32) {
+    (
+        dependency.file_path.clone(),
+        u32::from(dependency.name_span.start()),
+        u32::from(dependency.name_span.end()),
+    )
+}
+
+fn dependency_from_location(db: &dyn Db, file: SourceFile, name_span: TextRange) -> Option<DepRef> {
+    let outline = crate::outline::file_outline(db, file);
+    for item in outline {
+        if item.name_span == name_span {
+            return Some(DepRef {
+                name: qualified_dependency_name(db, file, None, &item.name),
+                kind: item.kind,
+                file_path: file_path_string(db, file),
+                file,
+                name_span,
+            });
+        }
+        for child in &item.children {
+            if child.name_span == name_span {
+                return Some(DepRef {
+                    name: qualified_dependency_name(db, file, Some(&item.name), &child.name),
+                    kind: child.kind,
+                    file_path: file_path_string(db, file),
+                    file,
+                    name_span,
+                });
+            }
+        }
+    }
+
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
+    for (_, class) in &item_tree.classes {
+        for method_id in &class.methods {
+            if source_map.function_name_spans.get(method_id) == Some(&name_span) {
+                let method = &item_tree[*method_id];
+                return Some(DepRef {
+                    name: qualified_dependency_name(
+                        db,
+                        file,
+                        Some(class.name.as_str()),
+                        method.name.as_str(),
+                    ),
+                    kind: DefinitionKind::Method,
+                    file_path: file_path_string(db, file),
+                    file,
+                    name_span,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+fn qualified_dependency_name(
+    db: &dyn Db,
+    file: SourceFile,
+    container: Option<&str>,
+    name: &str,
+) -> String {
+    let package = baml_compiler2_hir::file_package::file_package(db, file);
+    let mut segments = Vec::new();
+    if package.package.as_str() == "user" {
+        if !package.namespace_path.is_empty() {
+            segments.push("root".to_string());
+        }
+    } else {
+        segments.push(package.package.as_str().to_string());
+    }
+    segments.extend(
+        package
+            .namespace_path
+            .iter()
+            .map(|segment| segment.as_str().to_string()),
+    );
+    if let Some(container) = container {
+        segments.push(container.to_string());
+    }
+    segments.push(name.to_string());
+    segments.join(".")
 }
 
 /// Walk a `TypeExpr` and collect user-defined type names as `DepRefs`.

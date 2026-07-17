@@ -27,7 +27,7 @@ pub(crate) struct RuntimeCli {
     /// Available features:
     ///   beta - Enable beta features and suppress experimental warnings
     ///   display_all_warnings - Show all warnings in CLI output
-    #[arg(long = "features", value_name = "FEATURE", global = true)]
+    #[arg(long = "features", value_name = "FEATURE")]
     pub features: Vec<String>,
 
     /// When to use colored / hyperlinked output: auto (default), always, or never.
@@ -37,8 +37,7 @@ pub(crate) struct RuntimeCli {
     #[arg(
         long,
         value_enum,
-        default_value_t = crate::paint::ColorChoice::Auto,
-        global = true
+        default_value_t = crate::paint::ColorChoice::Auto
     )]
     pub color: crate::paint::ColorChoice,
 
@@ -95,9 +94,6 @@ pub(crate) enum Commands {
 
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
-
-    #[command(about = "Semantic code search for BAML files", name = "grep")]
-    Grep(crate::grep_command::GrepArgs),
 
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
@@ -256,7 +252,6 @@ impl RuntimeCli {
             Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
-            Commands::Grep(args) => args.run(),
             Commands::Test(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
@@ -327,10 +322,7 @@ mod tests {
     #[test]
     fn ide_help_presents_public_baml_command() {
         let help = help_for(&["baml-cli", "ide", "--help"]);
-        assert!(
-            help.contains("Usage: baml ide [OPTIONS] <COMMAND>"),
-            "{help}"
-        );
+        assert!(help.contains("Usage: baml ide <COMMAND>"), "{help}");
         assert!(!help.contains("Usage: baml-cli ide"), "{help}");
     }
 
@@ -352,6 +344,123 @@ mod tests {
             help.contains("Project search starting point. Defaults to the current directory"),
             "{help}"
         );
+    }
+
+    #[test]
+    fn describe_help_exposes_only_current_describe_flags() {
+        let help = help_for(&["baml-cli", "describe", "--help"]);
+        for expected in [
+            "--search <QUERY>",
+            "--kind <KIND>",
+            "--file <PATH>",
+            "--from <PATH>",
+            "--view <VIEW>",
+            "--max-lines <LINES>",
+            "--output <OUTPUT>",
+        ] {
+            assert!(help.contains(expected), "missing {expected}: {help}");
+        }
+        for removed in [
+            "--grep",
+            "--symbols",
+            "--limit",
+            "--ignore-case",
+            "--agent",
+            "--json",
+            "--budget",
+            "--color",
+            "--features",
+            "--depth",
+        ] {
+            assert!(!help.contains(removed), "unexpected {removed}: {help}");
+        }
+        assert!(help.contains("possible values: text, json"), "{help}");
+        assert!(help.contains("dependencies"), "{help}");
+        for kind in [
+            "class",
+            "enum",
+            "interface",
+            "type_alias",
+            "function",
+            "template_string",
+            "client",
+            "test",
+            "retry_policy",
+            "let",
+        ] {
+            assert!(help.contains(kind), "missing kind {kind}: {help}");
+        }
+    }
+
+    #[test]
+    fn describe_search_accepts_comma_delimited_and_repeated_queries() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "describe".into(),
+            "--search".into(),
+            "trophy,slack".into(),
+            "--search".into(),
+            "slack post".into(),
+        ]);
+        let Commands::Describe(args) = cli.command else {
+            panic!("expected describe command");
+        };
+        assert_eq!(args.search_queries, ["trophy", "slack", "slack post"]);
+    }
+
+    #[test]
+    fn describe_search_conflicts_with_positional_symbols() {
+        let error = RuntimeCli::command()
+            .try_get_matches_from(["baml-cli", "describe", "TrophyReport", "--search", "trophy"])
+            .expect_err("search and exact symbols must conflict");
+        assert!(error.to_string().contains("cannot be used with"), "{error}");
+    }
+
+    #[test]
+    fn describe_file_requires_search() {
+        let error = RuntimeCli::command()
+            .try_get_matches_from(["baml-cli", "describe", "--file", "trophy.baml"])
+            .expect_err("file filter without search should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("required arguments were not provided")
+        );
+        assert!(error.to_string().contains("--search <QUERY>"));
+    }
+
+    #[test]
+    fn describe_removed_flags_are_rejected() {
+        for args in [
+            vec!["baml-cli", "describe", "--grep", "trophy"],
+            vec!["baml-cli", "describe", "--symbols"],
+            vec!["baml-cli", "describe", "--limit", "3"],
+            vec!["baml-cli", "describe", "--ignore-case"],
+            vec!["baml-cli", "describe", "--agent"],
+            vec!["baml-cli", "describe", "--json"],
+            vec!["baml-cli", "describe", "--budget", "30"],
+        ] {
+            let removed = args[2];
+            let error = RuntimeCli::command()
+                .try_get_matches_from(args)
+                .expect_err("removed describe flag should be rejected");
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("unexpected argument '{removed}'")),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn color_is_top_level_only() {
+        let root_help = help_for(&["baml-cli", "--help"]);
+        assert!(root_help.contains("--color <COLOR>"), "{root_help}");
+        let error = RuntimeCli::command()
+            .try_get_matches_from(["baml-cli", "describe", "--color", "never"])
+            .expect_err("describe-local color should be rejected");
+        assert!(error.to_string().contains("unexpected argument '--color'"));
     }
 
     #[test]
