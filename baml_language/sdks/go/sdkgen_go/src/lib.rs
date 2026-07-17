@@ -411,9 +411,9 @@ struct WireCodecs {
     enum_indexes: BTreeMap<Name, usize>,
     union_keys: Vec<(BaseName, GoUnionKey)>,
     union_indexes: BTreeMap<(BaseName, GoUnionKey), usize>,
+    dynamic_union_keys: BTreeSet<(BaseName, GoUnionKey)>,
     callback_keys: Vec<(BaseName, GoFunctionKey)>,
     callback_indexes: BTreeMap<(BaseName, GoFunctionKey), usize>,
-    max_typed_union_arity: usize,
 }
 
 impl WireCodecs {
@@ -485,9 +485,9 @@ impl WireCodecs {
             enum_indexes,
             union_keys,
             union_indexes,
+            dynamic_union_keys: collected.dynamic_unions,
             callback_keys,
             callback_indexes,
-            max_typed_union_arity: projection.max_typed_union_arity(),
         }
     }
 
@@ -541,6 +541,7 @@ struct CollectedCodecTypes {
     classes: BTreeSet<Name>,
     enums: BTreeSet<Name>,
     unions: BTreeSet<(BaseName, GoUnionKey)>,
+    dynamic_unions: BTreeSet<(BaseName, GoUnionKey)>,
     callbacks: BTreeSet<(BaseName, GoFunctionKey)>,
     visited_classes: HashSet<Name>,
 }
@@ -579,7 +580,26 @@ fn collect_projected_codec_types(
             collect_projected_codec_types(key, owner_package, pool, projection, collected);
             collect_projected_codec_types(value, owner_package, pool, projection, collected);
         }
-        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+        GoTy::TypedUnion(key) => {
+            if collected
+                .unions
+                .insert((owner_package.clone(), key.clone()))
+            {
+                for member in key.members() {
+                    collect_projected_codec_types(
+                        member,
+                        owner_package,
+                        pool,
+                        projection,
+                        collected,
+                    );
+                }
+            }
+        }
+        GoTy::DynamicUnion { key, .. } => {
+            collected
+                .dynamic_unions
+                .insert((owner_package.clone(), key.clone()));
             if collected
                 .unions
                 .insert((owner_package.clone(), key.clone()))
@@ -1507,6 +1527,7 @@ fn add_projected_type_imports(
         GoTy::Null | GoTy::Media(_) => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
+        GoTy::Json => {}
         GoTy::Literal(literal) => {
             add_projected_type_imports(&literal_surface(literal), context, imports, visited);
         }
@@ -1598,6 +1619,7 @@ fn render_projected_go_type(
             GeneratorIdent::RuntimePackage,
             media_go_type(*kind)
         ),
+        GoTy::Json => "any".to_string(),
         GoTy::Literal(literal) => render_projected_go_type(
             &literal_surface(literal),
             current_baml_package,
@@ -1742,6 +1764,7 @@ fn projected_input_encoder(
         GoTy::Null => format!("{runtime}.NullInput"),
         GoTy::Uint8Array => format!("{runtime}.Uint8Array"),
         GoTy::Media(kind) => format!("{runtime}.{}Input", media_go_type(*kind)),
+        GoTy::Json => format!("{runtime}.JSON"),
         GoTy::Literal(literal) => {
             projected_input_encoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -1767,7 +1790,9 @@ fn projected_input_encoder(
         GoTy::TypedUnion(key) => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Encode)
             .to_string(),
-        GoTy::DynamicUnion { .. } => format!("{runtime}.Any"),
+        GoTy::DynamicUnion { key, .. } => codecs
+            .union_ident(current_baml_package, key, UnionCodecDirection::Encode)
+            .to_string(),
         GoTy::Function(key) => codecs.callback_ident(current_baml_package, key).to_string(),
         GoTy::Unsupported => unreachable!("unsupported Go type reached input codec"),
     }
@@ -1808,6 +1833,7 @@ fn projected_output_decoder(
         GoTy::Null => format!("{runtime}.Value.Null"),
         GoTy::Uint8Array => format!("{runtime}.Value.Uint8Array"),
         GoTy::Media(kind) => format!("{runtime}.Value.{}", media_go_type(*kind)),
+        GoTy::Json => format!("{runtime}.Value.JSON"),
         GoTy::Literal(literal) => {
             projected_output_decoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -2048,11 +2074,15 @@ fn render_union_codecs(
     let zero_local = GeneratorIdent::ZeroLocal;
     let decoded_local = GeneratorIdent::DecodedLocal;
     let value_parameter = GeneratorIdent::CodecValueParameter;
+    let arm_local = GeneratorIdent::UnionArmLocal;
+    let ok_local = GeneratorIdent::UnionOkLocal;
     let null_local = GeneratorIdent::UnionNullLocal;
     let selected_local = GeneratorIdent::UnionSelectedLocal;
     let payload_local = GeneratorIdent::UnionPayloadLocal;
     for (union_package, key) in &codecs.union_keys {
-        let is_typed = key.members().len() <= codecs.max_typed_union_arity;
+        let is_typed = !codecs
+            .dynamic_union_keys
+            .contains(&(union_package.clone(), key.clone()));
         let typed = is_typed.then(|| {
             names
                 .union(union_package, key)
@@ -2065,9 +2095,38 @@ fn render_union_codecs(
         if is_typed {
             let _ = writeln!(
                 out,
-                "func {encoder}({value_parameter} {}) {runtime}.Input {{ return {value_parameter}.BAMLInput() }}\n",
+                "func {encoder}({value_parameter} {}) {runtime}.Input {{",
                 typed.as_deref().expect("typed union has a Go type")
             );
+            let union_descriptor = baml_type_descriptor(&GoTy::TypedUnion(key.clone()), names);
+            let _ = writeln!(
+                out,
+                "\tswitch {arm_local} := {value_parameter}.Variant().(type) {{"
+            );
+            for member in key.members() {
+                let wrapper = names
+                    .union(union_package, key)
+                    .arm(member)
+                    .wrapper()
+                    .identifier(current_package);
+                let member_encoder = projected_input_encoder(member, union_package, codecs);
+                let selected_descriptor = baml_type_descriptor(member, names);
+                let _ = writeln!(out, "\tcase {wrapper}:");
+                let _ = writeln!(
+                    out,
+                    "\t\treturn {runtime}.SelectedUnionInput({member_encoder}({arm_local}.Value), {union_descriptor}, {selected_descriptor})"
+                );
+            }
+            let _ = writeln!(out, "\tdefault:");
+            let _ = writeln!(
+                out,
+                "\t\treturn {runtime}.InvalidInput({:?})",
+                format!(
+                    "zero or invalid {} union value",
+                    typed.as_deref().expect("typed union has a Go type")
+                )
+            );
+            out.push_str("\t}\n}\n\n");
             let _ = writeln!(
                 out,
                 "func {decoder}({value_parameter} {runtime}.Value) ({}, {error_type}) {{",
@@ -2076,21 +2135,54 @@ fn render_union_codecs(
         } else {
             let _ = writeln!(
                 out,
-                "func {encoder}({value_parameter} any) {runtime}.Input {{ return {runtime}.Any({value_parameter}) }}\n"
+                "func {encoder}({value_parameter} any) {runtime}.Input {{"
             );
+            let direct_json = key.members().contains(&GoTy::Json);
+            let mut rendered_cases = BTreeSet::new();
+            for member in key.members() {
+                if matches!(member, GoTy::Json)
+                    || (!direct_json && !projected_contains_class(member))
+                {
+                    continue;
+                }
+                let member_type =
+                    render_projected_go_type(member, union_package, current_package, names);
+                if !rendered_cases.insert(member_type.clone()) {
+                    continue;
+                }
+                let member_encoder = projected_input_encoder(member, union_package, codecs);
+                let _ = writeln!(
+                    out,
+                    "\tif {decoded_local}, {ok_local} := {value_parameter}.({member_type}); {ok_local} {{"
+                );
+                let _ = writeln!(out, "\t\treturn {member_encoder}({decoded_local})\n\t}}");
+            }
+            if direct_json {
+                let _ = writeln!(out, "\treturn {runtime}.JSON({value_parameter})\n}}\n");
+            } else {
+                let _ = writeln!(out, "\treturn {runtime}.Any({value_parameter})\n}}\n");
+            }
             let _ = writeln!(
                 out,
                 "func {decoder}({value_parameter} {runtime}.Value) (any, {error_type}) {{"
             );
-            let _ = writeln!(
-                out,
-                "\t{null_local}, {error_local} := {value_parameter}.IsNull()"
-            );
-            let _ = writeln!(
-                out,
-                "\tif {error_local} != nil {{ return nil, {error_local} }}"
-            );
-            let _ = writeln!(out, "\tif {null_local} {{ return nil, nil }}");
+            // A direct JSON arm already contains null. A legitimate null is
+            // therefore returned as a union envelope selected as JSON; a
+            // blanket IsNull fast path would discard that identity and accept
+            // forged image/null envelopes. Other dynamic unions retain the
+            // established nullable fast path until codec identity carries the
+            // projection's nullable bit.
+            if !key.members().contains(&GoTy::Json) {
+                let _ = writeln!(
+                    out,
+                    "\t{null_local}, {error_local} := {value_parameter}.IsNull()"
+                );
+                let _ = writeln!(
+                    out,
+                    "\tif {error_local} != nil {{ return nil, {error_local} }}"
+                );
+                let _ = writeln!(out, "\tif {null_local} {{ return nil, nil }}");
+            }
         }
         let _ = writeln!(
             out,
@@ -2151,6 +2243,24 @@ fn render_union_codecs(
                 "dynamic union"
             );
         }
+    }
+}
+
+fn projected_contains_class(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::Class(_) => true,
+        GoTy::List(inner) | GoTy::Optional(inner) => projected_contains_class(inner),
+        GoTy::Map { key, value } => {
+            projected_contains_class(key) || projected_contains_class(value)
+        }
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            key.members().iter().any(projected_contains_class)
+        }
+        GoTy::Function(key) => {
+            key.params().iter().any(projected_contains_class)
+                || key.ret().is_some_and(projected_contains_class)
+        }
+        _ => false,
     }
 }
 
@@ -2264,6 +2374,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Null => format!("{runtime}.PrimitiveBAMLType({runtime}.NullType)"),
         GoTy::Uint8Array => format!("{runtime}.PrimitiveBAMLType({runtime}.BytesType)"),
         GoTy::Media(kind) => format!("{runtime}.{}BAMLType()", media_go_type(*kind)),
+        GoTy::Json => format!("{runtime}.TypeAliasBAMLType(\"baml.json.json\")"),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
         }
@@ -2767,7 +2878,8 @@ fn render_union_type(body: &mut String, key: &GoUnionKey, renderer: &mut ClassTy
     let descriptor = baml_type_descriptor(&GoTy::TypedUnion(key.clone()), renderer.names);
     let _ = writeln!(
         body,
-        "func ({value_parameter} {type_name}) BAMLInput() {runtime}.Input {{"
+        "func ({value_parameter} {type_name}) {}() {runtime}.Input {{",
+        GeneratorIdent::InputMethod
     );
     let _ = writeln!(
         body,

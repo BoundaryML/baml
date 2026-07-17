@@ -29,6 +29,25 @@ func TestMapEncodingIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestGeneratedContainerEncodersPreserveStaticElementTypes(t *testing.T) {
+	list := ListEncoder(Int64)(nil)
+	if list.err != nil {
+		t.Fatal(list.err)
+	}
+	want := PrimitiveBAMLType(IntType).value
+	if got := list.value.GetListValue().ItemType; !reflect.DeepEqual(got, want) {
+		t.Fatalf("list item type = %#v, want %#v", got, want)
+	}
+
+	object := MapEncoder(Int64)(nil)
+	if object.err != nil {
+		t.Fatal(object.err)
+	}
+	if got := object.value.GetMapValue().ValueType; !reflect.DeepEqual(got, want) {
+		t.Fatalf("map value type = %#v, want %#v", got, want)
+	}
+}
+
 func TestDecodeContainersRejectMalformedWireValues(t *testing.T) {
 	list := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ListValue{
 		ListValue: &cffi.BamlValueList{Items: []*cffi.BamlOutboundValue{nil}},

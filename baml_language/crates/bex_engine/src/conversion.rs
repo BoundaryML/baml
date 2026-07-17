@@ -7,7 +7,9 @@
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
-use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata};
+use bex_external_types::{
+    BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata, value_satisfies_json,
+};
 use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError};
@@ -1929,7 +1931,17 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
                     && value_matches_type(value, member)
             })
         }
+        (BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
+            if name.display_name().as_str() == "baml.json.json" =>
+        {
+            false
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
+        (value, RuntimeTy::TypeAlias(name, _))
+            if name.display_name().as_str() == "baml.json.json" =>
+        {
+            value_satisfies_json(value)
+        }
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, RuntimeTy::Union(members, _)) => {
             members.iter().any(|m| value_matches_type(value, m))
@@ -2081,6 +2093,7 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
                     .all(|(left, right)| runtime_ty_structurally_equal(left, right))
         }
         (T::Enum(left, _), T::Enum(right, _)) => left == right,
+        (T::TypeAlias(left, _), T::TypeAlias(right, _)) => left == right,
         (T::Union(left, _), T::Union(right, _)) => {
             left.len() == right.len()
                 && left.iter().all(|left_member| {
@@ -2981,7 +2994,7 @@ mod union_container_selection_tests {
     use std::sync::Arc;
 
     use baml_builtins2::{MediaContent, MediaValue};
-    use baml_type::{Freshness, MediaKind, TyAttr};
+    use baml_type::{Freshness, MediaKind, TyAttr, TypeName};
 
     use super::*;
 
@@ -3026,6 +3039,52 @@ mod union_container_selection_tests {
             },
             None,
         ))))
+    }
+
+    fn json_ty() -> RuntimeTy {
+        RuntimeTy::TypeAlias(
+            TypeName::from_dotted_path("baml.json.json"),
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn canonical_json_alias_matches_values_and_selected_union_arms() {
+        let json = json_ty();
+        let image = media_ty(MediaKind::Image);
+        let mut entries = indexmap::IndexMap::new();
+        entries.insert("value".to_string(), BexExternalValue::Int(7));
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries,
+        };
+        assert!(value_matches_type(&object, &json));
+        assert!(!value_matches_type(
+            &BexExternalValue::Float(f64::INFINITY),
+            &json
+        ));
+        let forged = BexExternalValue::union(
+            BexExternalValue::String("json-shaped payload".into()),
+            [RuntimeTy::bigint(), RuntimeTy::string()],
+            RuntimeTy::bigint(),
+        );
+        assert!(!value_matches_type(&forged, &json));
+
+        let declared = RuntimeTy::union([json.clone(), image]);
+        let selected = BexExternalValue::union(
+            object,
+            [json.clone(), media_ty(MediaKind::Image)],
+            json.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected JSON union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &json
+        ));
     }
 
     #[test]

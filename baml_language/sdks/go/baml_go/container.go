@@ -2,6 +2,7 @@ package baml_go
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
@@ -43,7 +44,17 @@ func listInput(inputs []Input, itemType *BAMLType) Input {
 // ListEncoder adapts an element encoder into the shape used by nested and
 // nullable generated codecs.
 func ListEncoder[T any](encode func(T) Input) func([]T) Input {
-	return func(values []T) Input { return List(values, encode) }
+	return func(values []T) Input {
+		inputs := make([]Input, 0, len(values))
+		for _, value := range values {
+			inputs = append(inputs, encode(value))
+		}
+		var itemType *BAMLType
+		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
+			itemType = &inferred
+		}
+		return listInput(inputs, itemType)
+	}
 }
 
 // Map encodes a present BAML map with string keys. Entries are sorted so the
@@ -102,7 +113,22 @@ func inputsAreStatic(inputs []Input) bool {
 // MapEncoder adapts a value encoder into the shape used by nested and
 // nullable generated codecs.
 func MapEncoder[T any](encode func(T) Input) func(map[string]T) Input {
-	return func(values map[string]T) Input { return Map(values, encode) }
+	return func(values map[string]T) Input {
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		inputs := make([]Input, 0, len(keys))
+		for _, key := range keys {
+			inputs = append(inputs, encode(values[key]))
+		}
+		var valueType *BAMLType
+		if inferred, ok := reflectedBAMLType(reflect.TypeOf((*T)(nil)).Elem()); ok {
+			valueType = &inferred
+		}
+		return mapInput(keys, inputs, valueType)
+	}
 }
 
 func DecodeList[T any](value Value, decode func(Value) (T, error)) ([]T, error) {

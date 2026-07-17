@@ -40,6 +40,7 @@ pub(crate) enum GeneratorIdent {
     ByteType,
     ErrorType,
     ClassNameMethod,
+    InputMethod,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -195,6 +196,7 @@ impl GeneratorIdent {
         Self::ByteType,
         Self::ErrorType,
         Self::ClassNameMethod,
+        Self::InputMethod,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -229,6 +231,7 @@ impl GeneratorIdent {
             Self::ByteType => "byte",
             Self::ErrorType => "error",
             Self::ClassNameMethod => "BAMLClassName",
+            Self::InputMethod => "BAMLInput",
         }
     }
 }

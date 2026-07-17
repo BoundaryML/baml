@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use baml_base::{Literal, MediaKind, Name as BaseName};
+use baml_base::{Literal, MediaKind, Name as BaseName, qualified_name::BAML_JSON_JSON};
 use baml_codegen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
 
 /// A canonical, attribute-free Go type identity.
@@ -25,6 +25,10 @@ pub(crate) enum GoTy {
     Null,
     Uint8Array,
     Media(MediaKind),
+    /// The exact recursive stdlib alias `baml.json.json`. Its Go surface is
+    /// `any`, but unlike a dynamic union its wire decoder accepts only the
+    /// canonical JSON value algebra.
+    Json,
     Literal(GoLiteral),
     Class(Name),
     Enum(Name),
@@ -115,10 +119,6 @@ impl<'a> GoTypeProjection<'a> {
             .flat_map(|unions| unions.iter())
     }
 
-    pub(crate) fn max_typed_union_arity(&self) -> usize {
-        self.max_typed_union_arity
-    }
-
     fn collect(&mut self) {
         let symbols = self
             .pool
@@ -191,6 +191,9 @@ impl<'a> GoTypeProjection<'a> {
                 value: Box::new(self.project_inner(value, aliases)),
             },
             Ty::TypeAlias(name, _) => {
+                if is_baml_json(name) {
+                    return GoTy::Json;
+                }
                 if !aliases.insert(name.clone()) {
                     return GoTy::Unsupported;
                 }
@@ -304,10 +307,27 @@ impl<'a> GoTypeProjection<'a> {
             })
             .unwrap_or(false);
 
+        // `baml.json.json` already contains null. Avoid projecting
+        // `baml.json.json | null` as `*any`, which would both lose the direct
+        // Go value surface and distinguish two semantically identical types.
+        let nullable = nullable && !projected.contains(&GoTy::Json);
+        // Only a direct JSON arm requires the dynamic representation. Classes
+        // and containers still have finite selected-arm descriptors; their
+        // nested JSON values are validated by the registered class/container
+        // codecs and by BAML's assignability check. Looking through classes
+        // here would also make representation depend on implementation detail
+        // and can recurse forever through cyclic class graphs.
+        let contains_json = projected.contains(&GoTy::Json);
+
         let inner = match projected.len() {
             0 => GoTy::Null,
             1 => projected.pop().expect("one projected union member"),
-            arity if arity <= self.max_typed_union_arity => {
+            // The recursive JSON alias has no finite selected-arm descriptor,
+            // so a union containing it cannot use the closed-union ABI even
+            // when its arity is below the configured threshold. Preserve the
+            // canonical candidate metadata but use the established dynamic
+            // `any` representation and let BAML validate assignability.
+            arity if arity <= self.max_typed_union_arity && !contains_json => {
                 GoTy::TypedUnion(GoUnionKey(projected.into_boxed_slice()))
             }
             _ => GoTy::DynamicUnion {
@@ -336,13 +356,29 @@ impl<'a> GoTypeProjection<'a> {
                 }
             }
             Ty::TypeAlias(name, _) => {
+                if is_baml_json(name) {
+                    projected.push(GoTy::Json);
+                    return;
+                }
                 if !aliases.insert(name.clone()) {
                     projected.push(GoTy::Unsupported);
                     return;
                 }
                 match &self.pool[name] {
                     Symbol::TypeAlias(alias) if !alias.recursive => {
+                        let start = projected.len();
                         self.project_union_member(&alias.resolves_to, aliases, projected);
+                        // A user alias that eventually names the recursive
+                        // stdlib JSON alias stays nominal in RuntimeTy. The
+                        // current dynamic-union ABI carries no alias resolver
+                        // or selected-arm descriptor, so generating this
+                        // composition would compile but fail every JSON call.
+                        // Omit it until the ABI can canonicalize recursive
+                        // alias identity across the boundary.
+                        if projected[start..].contains(&GoTy::Json) {
+                            projected.truncate(start);
+                            projected.push(GoTy::Unsupported);
+                        }
                     }
                     _ => projected.push(GoTy::Unsupported),
                 }
@@ -351,6 +387,12 @@ impl<'a> GoTypeProjection<'a> {
             other => projected.push(self.project_inner(other, aliases)),
         }
     }
+}
+
+fn is_baml_json(name: &Name) -> bool {
+    // Parse the canonical compiler-owned FQN into the typed identity rather
+    // than recognizing arbitrary recursive aliases by their expansion.
+    name == &Name::from_dotted_path(BAML_JSON_JSON)
 }
 
 fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
@@ -546,6 +588,133 @@ mod tests {
             Ty::Bool { attr: a() },
         ]));
         assert_eq!(expanded, direct);
+    }
+
+    #[test]
+    fn only_canonical_recursive_json_alias_projects_to_json() {
+        let canonical = Name::from_dotted_path(BAML_JSON_JSON);
+        let lookalike = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("json")],
+            BaseName::new("json"),
+        );
+        let mut pool = SymbolPool::default();
+        for name in [canonical.clone(), lookalike.clone()] {
+            pool.insert(
+                name.clone(),
+                Symbol::TypeAlias(TypeAlias {
+                    name: name.clone(),
+                    resolves_to: Ty::TypeAlias(name, a()),
+                    recursive: true,
+                    origin: Origin {
+                        source_file_path: "types.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            );
+        }
+        let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(
+            projection.project(&Ty::TypeAlias(canonical, a())),
+            GoTy::Json
+        );
+        assert_eq!(
+            projection.project(&Ty::TypeAlias(lookalike, a())),
+            GoTy::Unsupported
+        );
+    }
+
+    #[test]
+    fn json_absorbs_redundant_null_in_unions() {
+        let canonical = Name::from_dotted_path(BAML_JSON_JSON);
+        let mut pool = SymbolPool::default();
+        pool.insert(
+            canonical.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: canonical.clone(),
+                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "types.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(
+            projection.project(&union(vec![
+                Ty::TypeAlias(canonical, a()),
+                Ty::Null { attr: a() },
+            ])),
+            GoTy::Json
+        );
+    }
+
+    #[test]
+    fn unions_containing_recursive_json_use_dynamic_representation() {
+        let canonical = Name::from_dotted_path(BAML_JSON_JSON);
+        let mut pool = SymbolPool::default();
+        pool.insert(
+            canonical.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: canonical.clone(),
+                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "types.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let projection = GoTypeProjection::new(&pool, 3);
+        let projected = projection.project(&union(vec![
+            Ty::TypeAlias(canonical, a()),
+            Ty::String { attr: a() },
+        ]));
+        assert!(matches!(projected, GoTy::DynamicUnion { .. }));
+    }
+
+    #[test]
+    fn user_alias_to_recursive_json_is_omitted_inside_a_union() {
+        let canonical = Name::from_dotted_path(BAML_JSON_JSON);
+        let alias = alias_name("JsonAlias");
+        let mut pool = SymbolPool::default();
+        pool.insert(
+            canonical.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: canonical.clone(),
+                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                recursive: true,
+                origin: Origin {
+                    source_file_path: "types.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        pool.insert(
+            alias.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: alias.clone(),
+                resolves_to: Ty::TypeAlias(canonical, a()),
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "types.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(
+            projection.project(&Ty::TypeAlias(alias.clone(), a())),
+            GoTy::Json
+        );
+        assert_eq!(
+            projection.project(&union(vec![
+                Ty::TypeAlias(alias, a()),
+                Ty::String { attr: a() },
+            ])),
+            GoTy::Unsupported
+        );
     }
 
     #[test]

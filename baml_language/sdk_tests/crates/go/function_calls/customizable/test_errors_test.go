@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,16 +26,17 @@ func initializeGeneratedRuntime(t *testing.T) {
 }
 
 // Direct Go counterpart to Python test_stdlib_error_surfaces_as_baml_error.
-// ParseJson's successful baml.json.json return remains intentionally omitted
-// from generated Go until JSON value projection lands, so this invokes the
-// same canonical BAML entry point through the low-level runtime after the
-// generated bootstrap has initialized it.
 func TestStdlibErrorSurfacesAsGoError(t *testing.T) {
-	initializeGeneratedRuntime(t)
-	_, err := baml_go.Call(context.Background(), "user.throws_test.ParseJson", map[string]baml_go.Input{
-		"s": baml_go.String(badJSON),
-	})
+	_, err := baml_sdk.ThrowsTestParseJson(context.Background(), badJSON)
 	assertErrorContains(t, err, "BAML error", "baml.json.JsonParseError")
+}
+
+func TestParseJsonSuccessfulValueUsesGeneratedJSONProjection(t *testing.T) {
+	got, err := baml_sdk.ThrowsTestParseJson(context.Background(), `{"name":"Ada","items":[null,true,7,1.5]}`)
+	want := map[string]any{"name": "Ada", "items": []any{nil, true, int64(7), 1.5}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseJson = %#v, %v; want %#v", got, err, want)
+	}
 }
 
 // Direct Go counterpart to Python test_user_throw_surfaces_declared_instance.
