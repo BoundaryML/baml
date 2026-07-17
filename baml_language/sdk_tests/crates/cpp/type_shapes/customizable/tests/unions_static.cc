@@ -26,6 +26,15 @@ static_assert(
                  std::vector<baml::Union<std::string, int64_t>>>::value,
     "canonicalization must hold under std::vector");
 
+// Alternatives are a set, not a list: duplicates collapse, so type-based
+// construction and access are never ambiguous.
+static_assert(
+    std::is_same<baml::Union<int64_t, int64_t>, baml::Union<int64_t>>::value,
+    "baml::Union must deduplicate repeated alternatives");
+static_assert(std::is_same<baml::Union<int64_t, std::string, int64_t>,
+                           baml::Union<std::string, int64_t>>::value,
+              "deduplication must compose with order canonicalization");
+
 // A Union IS a std::variant instantiation (alias, not a wrapper).
 static_assert(
     std::is_same<

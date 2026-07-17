@@ -4,14 +4,14 @@
 // baml::Union<Ts...>: BAML's union type as an order-canonical
 // std::variant.
 //
-// BAML unions are sets (`string | int` == `int | string`), but
-// std::variant<A, B> and std::variant<B, A> are distinct C++ types.
-// baml::Union sorts its alternatives at compile time (by a per-type
-// constexpr name), so every spelling of the same alternative set resolves
-// to the SAME std::variant instantiation. It is an alias, not a wrapper
-// class: a baml::Union value is a plain std::variant and works with
-// std::get, std::holds_alternative, std::visit, and every other variant
-// API. (Lowercase `union` is a C++ keyword; Union follows the guide's
+// BAML unions are sets (`string | int` == `int | string`, `int | int` ==
+// `int`), but std::variant<A, B> and std::variant<B, A> are distinct C++
+// types. baml::Union sorts its alternatives at compile time (by a per-type
+// constexpr name) and drops duplicates, so every spelling of the same
+// alternative set resolves to the SAME std::variant instantiation. It is an
+// alias, not a wrapper class: a baml::Union value is a plain std::variant and
+// works with std::get, std::holds_alternative, std::visit, and every other
+// variant API. (Lowercase `union` is a C++ keyword; Union follows the guide's
 // type-alias casing, while match mirrors std::visit per the vocabulary
 // rule in STYLE.md.)
 //
@@ -45,10 +45,19 @@ constexpr std::string_view TypeName() {
 #endif
 }
 
-// Indices 0..N-1 sorted by type name (insertion sort: constexpr std::sort
-// is C++20 and this is C++17).
+// Indices 0..N-1 sorted by type name and then deduplicated (equal names
+// are adjacent after the sort, and a name is unique per type). Surviving
+// indices are packed at the front with `count` saying how many; a constexpr
+// function cannot return a runtime-sized array. Insertion sort because
+// constexpr std::sort is C++20 and this is C++17.
+template <std::size_t N>
+struct CanonIndices {
+  std::array<std::size_t, N> idx;
+  std::size_t count;
+};
+
 template <class... Ts>
-constexpr std::array<std::size_t, sizeof...(Ts)> SortedIndices() {
+constexpr CanonIndices<sizeof...(Ts)> SortedUniqueIndices() {
   std::array<std::string_view, sizeof...(Ts)> names{TypeName<Ts>()...};
   std::array<std::size_t, sizeof...(Ts)> idx{};
   for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = i;
@@ -58,18 +67,22 @@ constexpr std::array<std::size_t, sizeof...(Ts)> SortedIndices() {
       idx[j] = idx[j - 1];
       idx[j - 1] = tmp;
     }
-  return idx;
+  std::size_t count = 0;
+  for (std::size_t i = 0; i < idx.size(); ++i)
+    if (i == 0 || names[idx[i]] != names[idx[i - 1]]) idx[count++] = idx[i];
+  return {idx, count};
 }
 
-// Reorders the pack into canonical order via the sorted indices.
+// Reorders the pack into canonical order via the sorted, deduplicated
+// indices.
 template <class... Ts>
 struct CanonSort {
-  static constexpr std::array<std::size_t, sizeof...(Ts)> idx =
-      SortedIndices<Ts...>();
+  static constexpr CanonIndices<sizeof...(Ts)> canon =
+      SortedUniqueIndices<Ts...>();
   template <std::size_t... Is>
-  static std::variant<std::tuple_element_t<idx[Is], std::tuple<Ts...>>...>
+  static std::variant<std::tuple_element_t<canon.idx[Is], std::tuple<Ts...>>...>
       Helper(std::index_sequence<Is...>);
-  using type = decltype(Helper(std::make_index_sequence<sizeof...(Ts)>{}));
+  using type = decltype(Helper(std::make_index_sequence<canon.count>{}));
 };
 
 }  // namespace detail
