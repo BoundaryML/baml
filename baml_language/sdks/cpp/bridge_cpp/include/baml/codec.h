@@ -259,7 +259,7 @@ struct Codec<std::unordered_map<std::string, T>> {
   }
 };
 
-// BAML unions (baml::Union<Ts...> = order-canonical std::variant). Encode
+// BAML unions (baml::variant<Ts...> = order-canonical std::variant). Encode
 // writes the ACTIVE alternative's value with no union wrapper (the engine
 // types the member; Python parity). Decode receives the union-unwrapped
 // inner value and must pick an alternative from the concrete wire arm

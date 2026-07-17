@@ -3,7 +3,7 @@
 // Non-recursive aliases emit `using` declarations; recursive aliases emit
 // named wrapper structs whose self-references are boxed, so
 // `RecList = int | RecList[]` is
-// `struct RecList { baml::Union<int64_t, vector<Box<RecList>>> value; }`.
+// `struct RecList { baml::variant<int64_t, vector<Box<RecList>>> value; }`.
 #include <baml_sdk.h>
 #include <baml_test.h>
 

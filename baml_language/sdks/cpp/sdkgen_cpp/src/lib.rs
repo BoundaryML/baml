@@ -3,7 +3,7 @@
 //! with required + optional arguments (per-function opts structs, spec D4),
 //! classes + enums with generated `Codec<T>` specializations, transparent
 //! and recursive type aliases, and recursion via `baml::Box` cycle-breaking.
-//! multi-member unions as order-canonical `::baml::Union` variants, and
+//! multi-member unions as order-canonical `::baml::variant` aliases, and
 //! typed error unions via `BamlThrown`.
 //! Post-step-8 features (async, methods, callbacks, generics, streaming
 //! companions, media/handles) are skipped and reported in a trailing
@@ -348,8 +348,8 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
     (
-        "include/baml/union.h",
-        include_str!("../../bridge_cpp/include/baml/union.h"),
+        "include/baml/variant.h",
+        include_str!("../../bridge_cpp/include/baml/variant.h"),
     ),
     (
         "include/baml/detail/call.h",
@@ -795,7 +795,7 @@ struct EmittedFn {
     opts_name: Option<CppName>,
     doc: Option<String>,
     raises: Vec<String>,
-    /// The declared throws set as a `::baml::Union<...>` spelling, when
+    /// The declared throws set as a `::baml::variant<...>` spelling, when
     /// every member translates; `None` uses the untyped `BamlError` path.
     thrown: Option<String>,
 }
@@ -864,17 +864,17 @@ fn emit_callable(
     };
 
     // The declared throws set as a C++ type for the typed error path:
-    // always spelled as a ::baml::Union (a single thrown type wraps into a
-    // one-alternative Union) so every catch site reads uniformly via
+    // always spelled as a ::baml::variant (a single thrown type wraps into
+    // a one-alternative variant) so every catch site reads uniformly via
     // baml::match. A throws set this slice cannot translate falls back to
     // the untyped BamlError path (None -> CallSync's ThrownU = void).
     let thrown = function.throws.as_ref().and_then(|ty| {
         match translate_ty(pool, names, ty, emitted_types, &BTreeSet::new()) {
             Translated::Cpp(t) => {
-                if t.starts_with("::baml::Union<") {
+                if t.starts_with("::baml::variant<") {
                     Some(t)
                 } else {
-                    Some(format!("::baml::Union<{t}>"))
+                    Some(format!("::baml::variant<{t}>"))
                 }
             }
             Translated::NotYet | Translated::Unsupported(_) => None,
@@ -1070,16 +1070,16 @@ fn translate_ty(
                     other => return other,
                 }
             }
-            // Multi-member unions spell ::baml::Union<...>, an
+            // Multi-member unions spell ::baml::variant<...>, an
             // order-canonical std::variant alias: the C++ type system
-            // dedups spellings (Union<A, B> == Union<B, A>), so
+            // dedups spellings (variant<A, B> == variant<B, A>), so
             // declaration order is fine here; sorting the rendered text
             // just keeps regenerated headers byte-stable.
             alternatives.sort();
             let inner = match alternatives.as_slice() {
                 [] => return Translated::Unsupported("empty union".to_string()),
                 [single] => single.clone(),
-                many => format!("::baml::Union<{}>", many.join(", ")),
+                many => format!("::baml::variant<{}>", many.join(", ")),
             };
             if had_null {
                 // A nullable boxed recursive edge cannot be optional<Box<T>>

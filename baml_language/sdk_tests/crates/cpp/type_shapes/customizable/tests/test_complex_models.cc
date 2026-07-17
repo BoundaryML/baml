@@ -5,7 +5,7 @@
 // - Union-typed fields (Invoice.payment, ComplexProfile.featured, flags
 //   elements) spell a baml::Union alternative explicitly; the spellings
 //   below deliberately use the python declaration order, which is legal
-//   because baml::Union is order-canonical.
+//   because baml::variant is order-canonical.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
@@ -24,9 +24,9 @@ using complex_models::PostalAddress;
 using complex_models::ProfileOwner;
 using complex_models::WirePayment;
 
-using Payment = baml::Union<CardPayment, WirePayment>;
-using Featured = baml::Union<Invoice, PostalAddress, std::string>;
-using Flag = baml::Union<int64_t, std::string, bool>;
+using Payment = baml::variant<CardPayment, WirePayment>;
+using Featured = baml::variant<Invoice, PostalAddress, std::string>;
+using Flag = baml::variant<int64_t, std::string, bool>;
 
 BAML_TEST(
     round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class) {
