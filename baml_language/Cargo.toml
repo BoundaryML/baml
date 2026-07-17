@@ -14,6 +14,7 @@ members = [
   "sdk_tests/harness/llm_recordings",
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
+  "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
@@ -68,6 +69,7 @@ baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
+sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }

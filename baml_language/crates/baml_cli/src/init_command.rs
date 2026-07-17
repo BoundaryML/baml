@@ -194,6 +194,15 @@ name = "{name}"
 # output_type = "typescript/node"
 # output_dir = "./baml_ts"
 # naming_convention = "preserve-case"
+
+# Uncomment this to generate the Go SDK. `sdk_import_path` must match the
+# import path of the generated `baml_sdk` directory in your Go module.
+#
+# [generator.go_client]
+# output_type = "go"
+# output_dir = "."
+# naming_convention = "language"
+# sdk_import_path = "example.com/my-project/baml_sdk"
 "#,
     )
 }

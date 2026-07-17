@@ -120,6 +120,22 @@ filter = 'package(=sdk_test_python_pydantic2)'
 platform = { host = 'cfg(windows)' }
 setup = 'python_pydantic2_uv_win'
 
+[scripts.setup.go_bridge_unix]
+command = './sdk_tests/crates/go/setup.sh'
+
+[scripts.setup.go_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/go/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_go)'
+platform = { host = 'cfg(unix)' }
+setup = 'go_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_go)'
+platform = { host = 'cfg(windows)' }
+setup = 'go_bridge_win'
+
 # cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
 # when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte
 # equivalent — same cargo build in the host shell of each platform.

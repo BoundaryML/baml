@@ -733,6 +733,32 @@ mod tests {
     }
 
     #[test]
+    fn functions_with_many_arguments_allow_the_clippy_lint() {
+        let n = name("user", &[], "wide_function");
+        let mut function = nullary_string_fn(&n);
+        function.arguments = (0..8)
+            .map(|index| baml_codegen_types::FunctionArgument {
+                name: baml_base::Name::new(format!("arg_{index}")),
+                docstring: None,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                default: None,
+            })
+            .collect();
+        let pool = SymbolPool::from([(n, Symbol::Function(function))]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert_eq!(
+            lib.matches("#[allow(clippy::too_many_arguments)]").count(),
+            2,
+            "both sync and async wrappers need the generated-code allowance:\n{lib}"
+        );
+    }
+
+    #[test]
     fn namespaced_function_lands_in_its_module_with_ancestors_closed() {
         let n = name("user", &["a", "b"], "f");
         let pool = SymbolPool::from([(n.clone(), Symbol::Function(nullary_string_fn(&n)))]);
