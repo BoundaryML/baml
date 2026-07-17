@@ -246,31 +246,46 @@ implements TranscriptImportProvider for OpenAi {
         MessageRole.Assistant => {
           let tool_calls = baml.json.path_or<json[]?>(provider_data, ".tool_calls", null);
           match (tool_calls) {
-            let calls: json[] => wire.push({ "role": "assistant", "tool_calls": calls }),
-            null => wire.push({ "role": "assistant", "content": message_text(message) }),
+            let calls: json[] => {
+              let frame: json = { "role": "assistant", "tool_calls": calls };
+              wire.push(frame);
+            },
+            null => {
+              let frame: json = { "role": "assistant", "content": message_text(message) };
+              wire.push(frame);
+            },
           };
         },
         MessageRole.Tool => {
           let call_id = baml.json.path_or<string?>(provider_data, ".tool_call_id", null);
           match (call_id) {
-            let id: string => wire.push({
-              "role": "tool",
-              "tool_call_id": id,
-              "content": baml.json.stringify(baml.json.path_or(provider_data, ".output", null)),
-            }),
+            let id: string => {
+              let frame: json = {
+                "role": "tool",
+                "tool_call_id": id,
+                "content": baml.json.stringify(baml.json.path_or(provider_data, ".output", null)),
+              };
+              wire.push(frame);
+            },
             // A foreign/provider-neutral tool result has no valid OpenAI call
             // ID. Preserve it as user-visible context instead of emitting an
             // orphan `role: tool` frame that OpenAI must reject.
-            null => wire.push({
-              "role": "user",
-              "content": "Imported tool result: " + baml.json.stringify(provider_data),
-            }),
+            null => {
+              let frame: json = {
+                "role": "user",
+                "content": "Imported tool result: " + baml.json.stringify(provider_data),
+              };
+              wire.push(frame);
+            },
           };
         },
-        _ => wire.push({
-          "role": message_role_name(message.role()),
-          "content": message_text(message),
-        }),
+        _ => {
+          let frame: json = {
+            "role": message_role_name(message.role()),
+            "content": message_text(message),
+          };
+          wire.push(frame);
+        },
       }
     }
     TranscriptImport {

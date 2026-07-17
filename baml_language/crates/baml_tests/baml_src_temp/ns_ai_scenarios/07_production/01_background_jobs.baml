@@ -35,7 +35,7 @@ testset "integ-test-guide-07-background" {
     let complete: root.ai.Response<Resolution>? = null;
     let attempts = 0;
     let started_ms = baml.sys.now_ms();
-    let deadline_ms = started_ms + 60_000;
+    let deadline_ms = started_ms + 60000;
     while (complete == null && baml.sys.now_ms() < deadline_ms) {
       complete = resumed.poll();
       attempts = attempts + 1;
