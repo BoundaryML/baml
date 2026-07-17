@@ -164,25 +164,29 @@ rules digest, not the rationale log).
     list/map/union/optional/literal produces **no** side-table entry (a
     nested out-of-grammar arg poisons the whole token —
     `BamlType.classFromWire`, `BamlType.java:229-231`).
-  - **[open]** D3 readback naming: the accessor is provisionally
-    `typeArgsOf`; the emitted per-instance form is `bamlTypeArgs()` with a
-    `Fns$`-style collision escape **vs** an always-`$`-named accessor.
-  - **[open]** D3 overload matrix: the trailing-overload combinatorics
-    (req → opts → types → ctx, worst case 16 methods) **vs** a fluent
-    builder. Do not add the `type_args` overloads to the emitter until
-    this is decided.
-  - Known wart (relevant to the surface ruling): `BamlType.toWireTy()` /
-    `fromWireTy` are `public` only because the codec lives in
-    `baml_bridge` rather than `baml_bridge.internal`; hiding them needs a
-    package reshuffle. And the minimal grammar **caps readback** —
-    `bamlTypeArgs()` will either widen the grammar or document graceful
-    degradation (folded into the two open items above).
+  - **[decided]** D3 readback (owner, 2026-07-17): per-instance
+    `bamlTypeArgs()` delegating to the side-table, with the `Fns$`-style
+    yield-to-user escape (`bamlTypeArgs$()`) iff a BAML field claims the
+    name. Reified factories `of(BamlType…, fields…)` bind on construct.
+  - **[decided]** D3 overloads (owner, 2026-07-17): trailing-overload
+    matrix, fixed order `f(required…, opts?, types?, ctx?)`; only
+    combinations that exist for the callable are emitted (worst case 16
+    methods for generic+optional). Synthetic param names (`types`, `ctx`)
+    yield to user arguments via trailing-`$` escape.
+  - **[decided]** token grammar (owner: "do B now"): FULL —
+    list/map/optional/union/literal tokens with wire round-trip; the
+    side-table binds whenever every wire arg is representable (residual
+    skips: media/function/rust_type/etc. arms and null/bytes primitive
+    kinds, still all-or-nothing to keep positions aligned).
+  - Known wart: `BamlType.toWireTy()`/`fromWireTy` are `public` only
+    because the codec lives in `baml_bridge.internal`; hiding them needs
+    a package reshuffle.
 - **Runtime init** **[decided]**: loading any generated class triggers
   (idempotent) runtime initialization from embedded bytecode via a static
   initializer on the root holder — the Java analog of Python's
   root-package import side effect. `nativeInitFromBytecode` also
   **registers the bridge with the versioned C ABI** —
-  `BridgeLanguage::Java = 6` (telemetry id `"java"`) at
+  `BridgeLanguage::Java = 7` (telemetry id `"java"`) at
   `baml_version::CANONICAL_VERSION`, mirroring `bridge_python`
   (`bridge_java/src/lib.rs:118`); a canonical-version mismatch surfaces as
   a Java exception.

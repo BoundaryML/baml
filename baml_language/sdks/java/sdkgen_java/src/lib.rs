@@ -1233,4 +1233,337 @@ mod tests {
         assert_eq!(base64_encode(b"fo"), "Zm8=");
         assert_eq!(base64_encode(b"foo"), "Zm9v");
     }
+
+    // -- explicit generics: emitter surface ----------------------------------
+
+    /// A generic free function (`identity<T>(x: T) -> T`).
+    fn generic_identity_sym(span: u32) -> Symbol {
+        Symbol::Function(Function {
+            name: BaseName::new("identity"),
+            generic_params: vec![BaseName::new("T")],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("x"),
+                docstring: None,
+                ty: t_typevar("T"),
+                default: None,
+            }],
+            return_type: t_typevar("T"),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(span),
+        })
+    }
+
+    #[test]
+    fn generic_function_emits_types_overloads() {
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["generic_tests"], "identity"),
+            generic_identity_sym(0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("generic_tests/Fns.java")];
+
+        // The required-only pair and its trailing-`ctx` pair are preserved.
+        assert!(
+            file.contains("public static <T> T identity(T x) {"),
+            "{file}"
+        );
+        assert!(
+            file.contains("public static <T> T identity(T x, baml_bridge.BamlCallContext ctx) {"),
+            "{file}"
+        );
+
+        // The `types` overload (no ctx) threads the bag through the 6-arg
+        // runtime call with a `null` ctx; the return descriptor is the TypeVar
+        // token `tv:T`.
+        assert!(
+            file.contains("public static <T> T identity(T x, baml_bridge.BamlTypes types) {"),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"tv:T\", null, types);"
+            ),
+            "{file}"
+        );
+
+        // The `types` + `ctx` overload passes both, in `(ctx, types)` order.
+        assert!(
+            file.contains(
+                "public static <T> T identity(T x, baml_bridge.BamlTypes types, baml_bridge.BamlCallContext ctx) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains("new java.lang.Object[] {x}, \"tv:T\", ctx, types);"),
+            "{file}"
+        );
+
+        // The async siblings gain the same two overloads.
+        assert!(
+            file.contains(
+                "public static <T> java.util.concurrent.CompletableFuture<T> identity_async(T x, baml_bridge.BamlTypes types) {"
+            ),
+            "{file}"
+        );
+
+        // Exactly four sync + four async entry points (8 declarations): the
+        // required-only base's {types?}×{ctx?} family.
+        assert_eq!(file.matches("public static <T>").count(), 8, "{file}");
+        // A free function has no receiver, so no explicit-bag receiver guard.
+        assert!(!file.contains("reified receiver"), "{file}");
+    }
+
+    #[test]
+    fn non_generic_function_emits_no_types_overload() {
+        // `func_sym` is non-generic: only the required-only + ctx pairs, no bag.
+        let mut pool = SymbolPool::new();
+        pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(0));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("lorem/Fns.java")];
+        assert!(!file.contains("baml_bridge.BamlTypes"), "{file}");
+    }
+
+    #[test]
+    fn generic_optional_function_emits_full_overload_matrix() {
+        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        // A generic (`<T>`) function with one optional arg → the worst-case
+        // matrix: {opts?}×{types?}×{ctx?} = 8 pairs = 16 entry-point methods.
+        let mut pool = SymbolPool::new();
+        let f = Function {
+            name: BaseName::new("probe"),
+            generic_params: vec![BaseName::new("T")],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("x"),
+                    docstring: None,
+                    ty: t_typevar("T"),
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt1"),
+                    docstring: None,
+                    ty: t_int(),
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::Int(5),
+                    ))),
+                },
+            ],
+            return_type: t_typevar("T"),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(name("user", &[], "probe"), Symbol::Function(f));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("Fns.java")];
+
+        // 16 generic entry-point declarations (the opts class is `public static
+        // final class`, not `public static <T>`, so it doesn't count).
+        assert_eq!(file.matches("public static <T>").count(), 16, "{file}");
+        // The fullest overload stacks every trailing param in order:
+        // `f(required…, opts, types, ctx)`.
+        assert!(
+            file.contains(
+                "public static <T> T probe(T x, java.util.function.Consumer<probe$Opts> $cfg, baml_bridge.BamlTypes types, baml_bridge.BamlCallContext ctx) {"
+            ),
+            "{file}"
+        );
+        // The configurator + types overload routes the opts accessors AND the
+        // bag through the runtime call.
+        assert!(
+            file.contains(
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"tv:T\", ctx, types);"
+            ),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn generic_class_emits_reified_factory_and_readback() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["generic_tests"], "GenericBox");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &["T"], vec![("value", t_typevar("T"))], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("generic_tests/GenericBox.java")];
+
+        // Reified factory: one BamlType token per class type param, then fields.
+        assert!(
+            file.contains(
+                "public static <T> GenericBox<T> of(baml_bridge.BamlType $t0, T value) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains("GenericBox<T> $instance = new GenericBox<>(value);"),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "baml_bridge.TypeRegistry.bindTypeArgs($instance, java.util.List.of($t0));"
+            ),
+            "{file}"
+        );
+        assert!(file.contains("        return $instance;"), "{file}");
+
+        // Readback delegates to the side-table.
+        assert!(
+            file.contains("public java.util.List<baml_bridge.BamlType> bamlTypeArgs() {"),
+            "{file}"
+        );
+        assert!(
+            file.contains("return baml_bridge.TypeRegistry.typeArgsOf(this);"),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn reified_factory_takes_one_token_per_type_param() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["g"], "Pair");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &["A", "B"],
+                vec![("first", t_typevar("A")), ("second", t_typevar("B"))],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("g/Pair.java")];
+        assert!(
+            file.contains(
+                "public static <A, B> Pair<A, B> of(baml_bridge.BamlType $t0, baml_bridge.BamlType $t1, A first, B second) {"
+            ),
+            "{file}"
+        );
+        assert!(file.contains("new Pair<>(first, second)"), "{file}");
+        assert!(file.contains("java.util.List.of($t0, $t1)"), "{file}");
+    }
+
+    #[test]
+    fn non_generic_class_has_no_reified_surface() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["p"], "Plain");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &[], vec![("x", t_int())], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("p/Plain.java")];
+        assert!(!file.contains("bamlTypeArgs"), "{file}");
+        assert!(!file.contains("bindTypeArgs"), "{file}");
+        assert!(!file.contains(" of("), "{file}");
+    }
+
+    #[test]
+    fn baml_type_args_readback_escapes_on_field_collision() {
+        // A BAML field literally named `bamlTypeArgs` claims that accessor name,
+        // so the readback method escapes to `bamlTypeArgs$()` (the Fns→Fns$ rule).
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["g"], "Weird");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &["T"], vec![("bamlTypeArgs", t_typevar("T"))], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("g/Weird.java")];
+        // The field's own accessor keeps the un-escaped name.
+        assert!(file.contains("public T bamlTypeArgs() {"), "{file}");
+        // The readback escapes.
+        assert!(
+            file.contains("public java.util.List<baml_bridge.BamlType> bamlTypeArgs$() {"),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn generic_instance_method_explicit_overload_guards_receiver() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["g"], "GenericBox");
+        let mut pair_with = method_fn("pair_with", ("other", t_typevar("U")), t_string(), 1);
+        pair_with.generic_params = vec![BaseName::new("U")];
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                name: n,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: t_typevar("T"),
+                }],
+                static_methods: Vec::new(),
+                instance_methods: vec![pair_with],
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("g/GenericBox.java")];
+
+        // The bare + ctx overloads take no bag and carry no guard.
+        assert!(
+            file.contains("public <U> java.lang.String pair_with(U other) {"),
+            "{file}"
+        );
+        // The explicit-bag overload exists and guards the receiver.
+        assert!(
+            file.contains(
+                "public <U> java.lang.String pair_with(U other, baml_bridge.BamlTypes types) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains("if (baml_bridge.TypeRegistry.typeArgsOf(this).isEmpty()) {"),
+            "{file}"
+        );
+        assert!(file.contains("reified receiver"), "{file}");
+        // The guard rides only the two explicit-bag overloads (types-only and
+        // types+ctx), each sync + async → exactly four occurrences.
+        assert_eq!(
+            file.matches("if (baml_bridge.TypeRegistry.typeArgsOf(this).isEmpty()) {")
+                .count(),
+            4,
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn generic_static_method_types_overload_has_no_receiver_guard() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["g"], "GenericBox");
+        let mut new_m = method_fn("new", ("value", t_typevar("V")), t_string(), 1);
+        new_m.generic_params = vec![BaseName::new("V")];
+        pool.insert(
+            n.clone(),
+            Symbol::Class(Class {
+                name: n,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: Vec::new(),
+                static_methods: vec![new_m],
+                instance_methods: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("g/GenericBox.java")];
+
+        // A static re-declares the class param plus its own; the `new` keyword
+        // escapes to `new$`; the explicit-bag overload exists with NO guard.
+        assert!(
+            file.contains("public static <T, V> ")
+                && file.contains("new$(V value, baml_bridge.BamlTypes types)"),
+            "{file}"
+        );
+        assert!(!file.contains("reified receiver"), "{file}");
+    }
 }

@@ -31,9 +31,9 @@ import java.util.Map;
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
  * InboundClassValue: fields = 2 (repeated InboundMapEntry), class_ty = 3 (BamlTyClass)
  *                    (field 1, formerly `name`, is reserved — the FQN lives on class_ty)
- * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (unused for a class value — an
- *                    instance's generics reify later; on the type-token path a reified
- *                    BamlType renders its own class_ty.type_args, see {@link BamlType})
+ * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (repeated BamlTy — a reified
+ *                    generic instance's concrete class type args, from the TypeRegistry
+ *                    side-table; empty for a non-generic/unbound instance)
  * InboundEnumValue:  name = 1 (BAML FQN), value = 2 (wire variant name)
  * </pre>
  */
@@ -79,6 +79,7 @@ public final class ProtoWriter {
     private static final int CLASS_FIELDS = 2;
     private static final int CLASS_TY = 3;
     private static final int TY_CLASS_NAME = 1;
+    private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated BamlTy)
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
 
@@ -123,9 +124,13 @@ public final class ProtoWriter {
                 // unsupported list element or class field inside argument `x`
                 // still reports `x`, mirroring bridge_python's TypeError naming
                 // the kwarg (proto.py). The offending Java type carries through
-                // in the message (and the original as the cause).
+                // in the message (and the original as the cause). The message
+                // reads "cannot encode argument '<name>': …" — an encode-time
+                // rejection naming the top-level kwarg (Python parity: "Cannot
+                // encode …" + naming the kwarg).
                 throw new IllegalArgumentException(
-                        "argument '" + names[i] + "' has unsupported Java type " + e.typeName(),
+                        "cannot encode argument '" + names[i] + "': unsupported Java type "
+                                + e.typeName(),
                         e);
             }
         }
@@ -237,7 +242,7 @@ public final class ProtoWriter {
             if (cw == null) {
                 throw unsupported(value);
             }
-            w.writeMessage(IV_CLASS, encodeClass(cw));
+            w.writeMessage(IV_CLASS, encodeClass(cw, TypeRegistry.typeArgsOf(value)));
         }
         return w.toByteArray();
     }
@@ -245,16 +250,26 @@ public final class ProtoWriter {
     /**
      * Encode an {@code InboundClassValue}: one {@code fields} entry per registry
      * field (key = field name, value = the accessor-read value, recursed through
-     * {@link #encodeInboundValue}) plus the FQN on {@code class_ty.name}. Generic
-     * {@code type_args} are omitted — they reify later.
+     * {@link #encodeInboundValue}) plus the FQN on {@code class_ty.name} and,
+     * for a reified generic instance, its concrete {@code class_ty.type_args}
+     * (the value-level type channel — recovered from the {@link TypeRegistry}
+     * side-table, in declaration order) so the engine can recover and
+     * type-check {@code Box<int>} against a declared generic param. Empty for a
+     * non-generic (or unbound) instance, in which case the output is
+     * byte-identical to the pre-generics encoding. Mirrors {@code bridge_python}'s
+     * {@code _set_inbound_value} class branch ({@code proto.py}, which reads
+     * {@code pydantic_instance_type_args}).
      */
-    private static byte[] encodeClass(TypeRegistry.ClassWire cw) {
+    private static byte[] encodeClass(TypeRegistry.ClassWire cw, List<BamlType> typeArgs) {
         WireWriter w = new WireWriter();
         for (int i = 0; i < cw.fieldNames.length; i++) {
             w.writeMessage(CLASS_FIELDS, encodeMapEntry(cw.fieldNames[i], cw.fieldValues[i]));
         }
         WireWriter classTy = new WireWriter();
         classTy.writeString(TY_CLASS_NAME, cw.fqn);
+        for (BamlType arg : typeArgs) {
+            classTy.writeMessage(TY_CLASS_TYPE_ARGS, arg.toWireTy());
+        }
         w.writeMessage(CLASS_TY, classTy.toByteArray());
         return w.toByteArray();
     }

@@ -346,7 +346,8 @@ class WireCodecTest {
                         new Object[] {new java.util.Date()},
                         123L));
         assertEquals(
-                "argument 'tool' has unsupported Java type java.util.Date", ex.getMessage());
+                "cannot encode argument 'tool': unsupported Java type java.util.Date",
+                ex.getMessage());
     }
 
     @Test
@@ -360,7 +361,8 @@ class WireCodecTest {
                         new Object[] {java.util.List.of(1L, new java.util.Date())},
                         123L));
         assertEquals(
-                "argument 'items' has unsupported Java type java.util.Date", ex.getMessage());
+                "cannot encode argument 'items': unsupported Java type java.util.Date",
+                ex.getMessage());
     }
 
     // -- class / enum wire codec (TypeRegistry) ------------------------------
@@ -497,6 +499,46 @@ class WireCodecTest {
 
         WireWriter expected = new WireWriter();
         expected.writeMessage(8, classMsg.toByteArray()); // InboundValue.class_value = 8
+
+        assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /**
+     * A reified generic instance (its concrete type args bound in the side-table
+     * via the generated {@code of(...)} factory or wire decode) encodes its
+     * {@code class_ty.type_args} — the value-level type channel the engine reads
+     * to type-check a generic argument. An unbound instance stays byte-identical
+     * to the pre-generics encoding (see {@code inbound_class_value_layout}).
+     */
+    @Test
+    void inbound_class_value_carries_reified_type_args() {
+        Resume r = new Resume("Alice", 30L);
+        TypeRegistry.bindTypeArgs(r, List.of(BamlType.INT));
+        byte[] got = ProtoWriter.encodeInboundValue(r);
+
+        WireWriter nameVal = new WireWriter();
+        nameVal.writeString(2, "Alice");
+        WireWriter nameEntry = new WireWriter();
+        nameEntry.writeString(1, "name");
+        nameEntry.writeMessage(6, nameVal.toByteArray());
+
+        WireWriter ageVal = new WireWriter();
+        ageVal.writeInt64(3, 30L);
+        WireWriter ageEntry = new WireWriter();
+        ageEntry.writeString(1, "age");
+        ageEntry.writeMessage(6, ageVal.toByteArray());
+
+        WireWriter classTy = new WireWriter();
+        classTy.writeString(1, RESUME_FQN); // BamlTyClass.name = 1
+        classTy.writeMessage(2, BamlType.INT.toWireTy()); // BamlTyClass.type_args = 2
+
+        WireWriter classMsg = new WireWriter();
+        classMsg.writeMessage(2, nameEntry.toByteArray());
+        classMsg.writeMessage(2, ageEntry.toByteArray());
+        classMsg.writeMessage(3, classTy.toByteArray());
+
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(8, classMsg.toByteArray());
 
         assertArrayEquals(expected.toByteArray(), got);
     }
@@ -1300,11 +1342,33 @@ class WireCodecTest {
         assertEquals(List.of(), TypeRegistry.typeArgsOf(r));
     }
 
-    /** An out-of-grammar type arg (e.g. list<int>) skips the whole binding (all-or-nothing). */
+    /**
+     * A container type arg (e.g. list&lt;int&gt;) is now in the widened token
+     * grammar, so it binds alongside its siblings (decision 4: bind whenever
+     * EVERY wire arg is representable). Previously this whole binding was
+     * skipped all-or-nothing.
+     */
+    @Test
+    void decode_class_value_container_type_arg_binds_with_widened_grammar() {
+        byte[] listTy = tyList(tyPrimitive(PRIM_INT)); // list<int> — now representable
+        byte[] classValue = ovResumeWithTypeArgs("Cara", 22L, tyPrimitive(PRIM_INT), listTy);
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(classValue));
+        Resume r = assertInstanceOf(Resume.class, decoded);
+        assertEquals(
+                List.of(BamlType.INT, BamlType.list(BamlType.INT)), TypeRegistry.typeArgsOf(r));
+    }
+
+    /**
+     * A genuinely out-of-grammar type arg (a media arm — no {@link BamlType}
+     * kind) still poisons the whole binding all-or-nothing: positions must never
+     * misalign. The residual skip cases after the widening are the non-token
+     * {@code BamlTy} arms (media / function / rust_type / unknown / never / …)
+     * and the {@code null}/{@code bytes}/{@code bigint} primitive kinds.
+     */
     @Test
     void decode_class_value_out_of_grammar_type_arg_skips_binding() {
-        byte[] listTy = tyList(tyPrimitive(PRIM_INT)); // list<int> — outside the minimal grammar
-        byte[] classValue = ovResumeWithTypeArgs("Cara", 22L, tyPrimitive(PRIM_INT), listTy);
+        byte[] mediaTy = tyMedia(); // BamlTy.media = 11 — outside the token grammar
+        byte[] classValue = ovResumeWithTypeArgs("Cara", 22L, tyPrimitive(PRIM_INT), mediaTy);
         Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(classValue));
         Resume r = assertInstanceOf(Resume.class, decoded);
         assertEquals(List.of(), TypeRegistry.typeArgsOf(r));
@@ -1340,12 +1404,19 @@ class WireCodecTest {
         return ty.toByteArray();
     }
 
-    /** A BamlTy wrapping a list (BamlTy.list = 4) — outside BamlType's minimal grammar. */
+    /** A BamlTy wrapping a list (BamlTy.list = 4) — now in the widened token grammar. */
     private static byte[] tyList(byte[] itemTy) {
         WireWriter list = new WireWriter();
         list.writeMessage(1, itemTy); // BamlTyList.item = 1
         WireWriter ty = new WireWriter();
         ty.writeMessage(4, list.toByteArray()); // BamlTy.list = 4
+        return ty.toByteArray();
+    }
+
+    /** A BamlTy wrapping a media arm (BamlTy.media = 11) — outside the token grammar. */
+    private static byte[] tyMedia() {
+        WireWriter ty = new WireWriter();
+        ty.writeMessage(11, new byte[0]); // BamlTy.media = 11
         return ty.toByteArray();
     }
 

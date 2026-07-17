@@ -213,6 +213,22 @@ fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -
             if let Some(base) = common_literal_base(&non_null) {
                 return base;
             }
+            // A union with a TypeVar arm (`T | string | null`,
+            // `T | U | int`) degenerates to `java.lang.Object`: the arm is
+            // whatever the caller's bound `T` inhabits, so no positional
+            // arity family can hold it and callers pass the raw value (the
+            // engine does the real check). This covers both the parameter
+            // position (an explicit/inferred generic call passes a bare
+            // value) and the field position (its accessor returns the bare
+            // decoded value). Decode stays type-directed via the per-binding
+            // union descriptor, unaffected by this Java-type choice.
+            if non_null.iter().any(|arm| {
+                let mut tvs = Vec::new();
+                collect_type_vars(arm, &mut tvs);
+                !tvs.is_empty()
+            }) {
+                return "java.lang.Object".to_string();
+            }
             // TEAM DECISION (2026-07-16): anonymous unions render as the
             // runtime's generic arity family in DECLARATION order; arm
             // selection is type-directed at decode time, so no nominal
@@ -323,6 +339,18 @@ pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
                                 baml_base::Literal::Bool(_) => "bool".to_string(),
                             };
                         }
+                    }
+                    // A union with a TypeVar arm renders as `java.lang.Object`
+                    // (see `translate_union`); there is no arity family to build,
+                    // so decode must yield the bare wire value. `unknown` is the
+                    // wire-driven passthrough descriptor (no union wrapping) —
+                    // keep it in lockstep with the Java type choice.
+                    if non_null.iter().any(|arm| {
+                        let mut tvs = Vec::new();
+                        collect_type_vars(arm, &mut tvs);
+                        !tvs.is_empty()
+                    }) {
+                        return "unknown".to_string();
                     }
                     let arms: Vec<String> = non_null
                         .iter()
@@ -662,6 +690,34 @@ mod tests {
     }
 
     #[test]
+    fn union_with_typevar_arm_degenerates_to_object() {
+        // A union with a TypeVar arm can't be held by a positional arity family
+        // (the arm is whatever the caller's `T` inhabits) → `java.lang.Object`.
+        let u = union(vec![typevar(BaseName::new("T")), string(), null()]);
+        assert_eq!(tr(&u, TyPosition::TopLevel), "java.lang.Object");
+        let u2 = union(vec![
+            typevar(BaseName::new("T")),
+            typevar(BaseName::new("U")),
+            int(),
+        ]);
+        assert_eq!(tr(&u2, TyPosition::TopLevel), "java.lang.Object");
+        // A concrete multi-arm union is unaffected.
+        assert_eq!(
+            tr(&union(vec![int(), string()]), TyPosition::TopLevel),
+            "baml_bridge.Union2<java.lang.Long, java.lang.String>"
+        );
+        // A nested TypeVar (e.g. `GenericBox<T> | string`) also degenerates.
+        let nested = union(vec![
+            class_ty(
+                name("user", &["g"], "GenericBox"),
+                vec![typevar(BaseName::new("T"))],
+            ),
+            string(),
+        ]);
+        assert_eq!(tr(&nested, TyPosition::TopLevel), "java.lang.Object");
+    }
+
+    #[test]
     fn literal_union_same_base_erases() {
         let u = union(vec![
             literal(baml_base::Literal::String("draft".into())),
@@ -762,6 +818,16 @@ mod tests {
         let aliases = AliasTable::new();
         let opt_int = union(vec![int(), null()]);
         assert_eq!(descriptor_token(&opt_int, &aliases), "int");
+    }
+
+    #[test]
+    fn descriptor_union_with_typevar_is_unknown() {
+        // A union with a TypeVar arm renders as Object and must decode to the
+        // bare wire value (no arity family) — its descriptor degenerates to the
+        // `unknown` passthrough, in lockstep with `translate_union`.
+        let aliases = AliasTable::new();
+        let u = union(vec![typevar(BaseName::new("T")), string(), null()]);
+        assert_eq!(descriptor_token(&u, &aliases), "unknown");
     }
 
     #[test]

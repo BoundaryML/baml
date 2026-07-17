@@ -218,6 +218,23 @@ pub(crate) fn render_class(
         ));
     }
 
+    // Generic classes carry the explicit-generics value surface: a reified
+    // static factory `of(<one BamlType per class type param>, <fields…>)` that
+    // constructs the instance AND binds its type-arg tokens in the runtime
+    // side-table, plus a `bamlTypeArgs()` readback delegating to that table.
+    // The plain constructor stays unbound (an unbound generic instance). Only
+    // classes with type params get this; a plain constructor is enough for the
+    // rest.
+    if !class.generic_params.is_empty() {
+        out.push_str(&render_reified_factory(
+            &ident,
+            &generics,
+            class.generic_params.len(),
+            &fields,
+        ));
+        out.push_str(&render_baml_type_args_readback(&fields));
+    }
+
     // Static and instance method bindings. Static methods (like free
     // functions) render as `static` bindings; instance methods are
     // non-static and prepend the receiver (`self` / `this`) to the
@@ -245,12 +262,16 @@ pub(crate) fn render_class(
     });
     for m in instances {
         let fqn = format!("{class_fqn}.{}", m.name.as_str());
+        // Pass the class's own generic params: an instance method is never
+        // `static`, so they are not re-declared at method level (that guard is
+        // `is_static`), but a generic class drives the explicit-bag receiver
+        // guard (a reified receiver is required to recover the class TypeVars).
         out.push_str(&render_callable_pair(
             &fqn,
             m,
             Receiver::This,
             false,
-            &[],
+            &class.generic_params,
             ctx,
             sink,
         ));
@@ -305,6 +326,57 @@ pub(crate) fn render_class(
 
     out.push_str("}\n");
     out
+}
+
+/// The reified static factory for a generic class: `of(BamlType t1[, t2…],
+/// field1, field2…)` — one type-arg token per class type param (declaration
+/// order), then the fields (declaration order). It constructs the instance via
+/// the plain constructor and binds the tokens in the runtime side-table
+/// (`TypeRegistry.bindTypeArgs`), so the value encodes with its concrete
+/// `class_ty.type_args` and `bamlTypeArgs()` can read them back. `generics` is
+/// the class's `<...>` clause (re-declared at method level — a static cannot
+/// reference class type vars); `n_type_params` how many token params to take.
+fn render_reified_factory(
+    ident: &str,
+    generics: &str,
+    n_type_params: usize,
+    fields: &[(String, String)],
+) -> String {
+    let ret_ty = format!("{ident}{generics}");
+    let mut params: Vec<String> = Vec::with_capacity(n_type_params + fields.len());
+    let mut token_names: Vec<String> = Vec::with_capacity(n_type_params);
+    for i in 0..n_type_params {
+        let tok = format!("$t{i}");
+        params.push(format!("baml_bridge.BamlType {tok}"));
+        token_names.push(tok);
+    }
+    for (f_ident, f_ty) in fields {
+        params.push(format!("{f_ty} {f_ident}"));
+    }
+    let field_args: Vec<String> = fields.iter().map(|(f_ident, _)| f_ident.clone()).collect();
+
+    format!(
+        "\n    /**\n     * Reified factory: constructs a {ident} bound to the given type-arg\n     * tokens (one per class type parameter, in declaration order), binding\n     * them in the runtime side-table so the value carries its concrete\n     * {{@code class_ty.type_args}} on the wire and {{@link #bamlTypeArgs()}}\n     * reads them back. The plain constructor leaves an instance unbound.\n     */\n    public static {generics} {ret_ty} of({}) {{\n        {ret_ty} $instance = new {ident}<>({});\n        baml_bridge.TypeRegistry.bindTypeArgs($instance, java.util.List.of({}));\n        return $instance;\n    }}\n",
+        params.join(", "),
+        field_args.join(", "),
+        token_names.join(", "),
+    )
+}
+
+/// The `bamlTypeArgs()` readback for a generic class: returns the reified
+/// type-arg tokens bound on this instance (via the reified factory or wire
+/// decode), or an empty list for an unbound instance. Escapes to
+/// `bamlTypeArgs$()` iff a BAML field of the class already claims the name
+/// (its accessor would collide) — the `Fns` → `Fns$` policy.
+fn render_baml_type_args_readback(fields: &[(String, String)]) -> String {
+    let name = if fields.iter().any(|(f_ident, _)| f_ident == "bamlTypeArgs") {
+        "bamlTypeArgs$"
+    } else {
+        "bamlTypeArgs"
+    };
+    format!(
+        "\n    /**\n     * The reified generic type-arg tokens bound on this instance (in\n     * declaration order), or an empty list when it is unbound (constructed\n     * via the plain constructor, or decoded without wire type-args).\n     */\n    public java.util.List<baml_bridge.BamlType> {name}() {{\n        return baml_bridge.TypeRegistry.typeArgsOf(this);\n    }}\n"
+    )
 }
 
 /// `public enum Sentiment { Positive, Negative }`. Constants keep the
@@ -387,6 +459,24 @@ fn render_callable_pair(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
+    // A callable with its OWN generic params (`fn map<U>(...)`) gains the
+    // explicit-binding overloads that thread a trailing `baml_bridge.BamlTypes`
+    // bag; class-only params (recovered from a reified receiver / an inferred
+    // instance) are not the callee's own and do not trigger the bag.
+    let is_generic = !function.generic_params.is_empty();
+    let is_instance = matches!(receiver, Receiver::This);
+    // An explicit-bag overload on an instance method of a GENERIC class needs a
+    // reified receiver to recover the class TypeVars (the bare/inference path
+    // instead recovers them from the argument values engine-side). Mirrors
+    // Python's host-side check (test_instance_method_unparameterized_receiver_raises).
+    let receiver_guard: Option<String> = if is_instance && !class_generic_params.is_empty() {
+        Some(
+            "        if (baml_bridge.TypeRegistry.typeArgsOf(this).isEmpty()) {\n            throw new java.lang.IllegalArgumentException(\"explicit type bindings on a generic method require a reified receiver so the class type args can be recovered\");\n        }\n"
+                .to_string(),
+        )
+    } else {
+        None
+    };
     let ident = java_identifier(function.name.as_str());
     let required: Vec<_> = function
         .arguments
@@ -473,18 +563,17 @@ fn render_callable_pair(
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
     let params = param_decls.join(", ");
     // Java identifiers already claimed by BAML arguments — the synthetic
-    // trailing params must yield to them (go_codegen fixtures name an
-    // argument `ctx`).
+    // trailing params (`types`, `ctx`) must yield to them (go_codegen fixtures
+    // name an argument `ctx`).
     let taken: Vec<String> = required
         .iter()
         .map(|a| java_identifier(a.name.as_str()))
         .collect();
-    let ctx_name = synthetic_param_name("ctx", &taken);
 
-    // Required-only pair, then the trailing-`ctx` overload pair (same body,
-    // `BamlCallContext` threaded to the runtime as the last argument) for
-    // cancellation. `ctx` is always last, per the cancellation design.
-    let mut out = render_method_pair(
+    // Required-only base: the {types?}×{ctx?} overload family (fixed trailing
+    // order `f(required…, types?, ctx?)`; the `types` overloads exist only for a
+    // callable with its own generic params).
+    let mut out = render_overload_family(
         &doc,
         static_kw,
         &generics_kw,
@@ -498,29 +587,15 @@ fn render_callable_pair(
         &names_literal,
         &args_literal,
         &descriptor,
-        None,
+        is_generic,
+        receiver_guard.as_deref(),
+        &taken,
     );
-    out.push_str(&render_method_pair(
-        &doc,
-        static_kw,
-        &generics_kw,
-        &ident,
-        &params,
-        "",
-        &ret_top,
-        &ret_boxed,
-        &async_ret,
-        fqn,
-        &names_literal,
-        &args_literal,
-        &descriptor,
-        Some(&ctx_name),
-    ));
 
-    // Optional-argument configurator: a second sync/async overload pair
-    // (trailing `Consumer<<Ident>$Opts>`), its own trailing-`ctx` pair, and
-    // the nested opts class. The required-only pairs above stay untouched, so
-    // omitting the configurator still lets the engine evaluate BAML defaults.
+    // Optional-argument configurator base: the same overload family over a
+    // trailing `Consumer<<Ident>$Opts>` (so `f(required…, opts?, types?, ctx?)`),
+    // plus the nested opts class. The required-only base above stays untouched,
+    // so omitting the configurator still lets the engine evaluate BAML defaults.
     if !optionals.is_empty() {
         out.push_str(&render_optional_configurator(
             &ident,
@@ -537,8 +612,123 @@ fn render_callable_pair(
             &args_literal,
             &param_decls,
             &taken,
+            is_generic,
+            receiver_guard.as_deref(),
             ctx,
             sink,
+        ));
+    }
+
+    out
+}
+
+/// Emit the {types?}×{ctx?} overload family for one call base (a fixed
+/// required-or-configurator parameter list `params` plus its runtime
+/// name/arg arrays). Four pairs at most, in the order the trailing params
+/// stack — `f(base…)`, `f(base…, ctx)`, then (only when the callable has its
+/// own generic params) `f(base…, types)`, `f(base…, types, ctx)` — each a
+/// sync + `_async` [`render_method_pair`]. The `types` overloads carry
+/// `receiver_guard` (an instance method on a generic class must have a reified
+/// receiver) prepended to their body prologue.
+#[allow(clippy::too_many_arguments)]
+fn render_overload_family(
+    doc: &str,
+    static_kw: &str,
+    generics_kw: &str,
+    ident: &str,
+    params: &str,
+    prologue: &str,
+    ret_top: &str,
+    ret_boxed: &str,
+    async_ret: &str,
+    fqn: &str,
+    call_names: &str,
+    call_args: &str,
+    descriptor: &str,
+    is_generic: bool,
+    receiver_guard: Option<&str>,
+    taken: &[String],
+) -> String {
+    // `types` and `ctx` derive from distinct base names, so their yield-to-user
+    // escapes can never collide with each other.
+    let ctx_name = synthetic_param_name("ctx", taken);
+
+    let mut out = render_method_pair(
+        doc,
+        static_kw,
+        generics_kw,
+        ident,
+        params,
+        prologue,
+        ret_top,
+        ret_boxed,
+        async_ret,
+        fqn,
+        call_names,
+        call_args,
+        descriptor,
+        None,
+        None,
+    );
+    out.push_str(&render_method_pair(
+        doc,
+        static_kw,
+        generics_kw,
+        ident,
+        params,
+        prologue,
+        ret_top,
+        ret_boxed,
+        async_ret,
+        fqn,
+        call_names,
+        call_args,
+        descriptor,
+        None,
+        Some(&ctx_name),
+    ));
+
+    if is_generic {
+        let types_name = synthetic_param_name("types", taken);
+        // The explicit-bag overloads carry the receiver guard (when any) in
+        // front of the shared prologue.
+        let types_prologue = match receiver_guard {
+            Some(guard) => format!("{prologue}{guard}"),
+            None => prologue.to_string(),
+        };
+        out.push_str(&render_method_pair(
+            doc,
+            static_kw,
+            generics_kw,
+            ident,
+            params,
+            &types_prologue,
+            ret_top,
+            ret_boxed,
+            async_ret,
+            fqn,
+            call_names,
+            call_args,
+            descriptor,
+            Some(&types_name),
+            None,
+        ));
+        out.push_str(&render_method_pair(
+            doc,
+            static_kw,
+            generics_kw,
+            ident,
+            params,
+            &types_prologue,
+            ret_top,
+            ret_boxed,
+            async_ret,
+            fqn,
+            call_names,
+            call_args,
+            descriptor,
+            Some(&types_name),
+            Some(&ctx_name),
         ));
     }
 
@@ -554,18 +744,18 @@ fn render_callable_pair(
 /// engine call (see `BamlFfi.callAsync` / `CancellableCall`).
 ///
 /// `params` is the already-joined Java parameter list (required args, plus an
-/// optional configurator when present); when `ctx_name` is set, a trailing
-/// `baml_bridge.BamlCallContext <ctx_name>` is appended and threaded to the
-/// runtime as the last `callSync`/`callAsync` argument (the name has already
-/// been escaped past any colliding user argument). `prologue` runs before the runtime
-/// call (opts instantiation, or empty). `call_names` / `call_args` are the
-/// runtime name/arg array expressions (base literals, or the opts accessors).
-/// Name for a synthetic (emitter-owned) parameter: `base`, escaped with
-/// trailing `$`s until it collides with no user parameter (yield-to-user,
-/// the `Fns` -> `Fns$` policy). Call sites are unaffected — Java parameter
-/// names are not part of the call-site API — but javadoc/IDE hints keep the
-/// pretty name whenever no BAML argument claims it (e.g. an argument
-/// literally named `ctx`, as the shared `go_codegen` fixtures do).
+/// optional configurator when present). The synthetic trailing params stack in
+/// a fixed order after it: `types_name` (a `baml_bridge.BamlTypes` explicit
+/// binding bag) then `ctx_name` (a `baml_bridge.BamlCallContext`), each
+/// appended only when set (both names already escaped past colliding user
+/// arguments). They thread to the runtime through the 6-arg
+/// `callSync`/`callAsync` overload `(…, returnDesc, ctx, typeArgs)`: an absent
+/// `ctx` passes `null` when a bag is present, and an absent bag drops back to
+/// the 5-arg (`ctx`) or 4-arg (`returnDesc`) overload byte-for-byte.
+///
+/// `prologue` runs before the runtime call (opts instantiation and/or the
+/// receiver guard, or empty). `call_names` / `call_args` are the runtime
+/// name/arg array expressions (base literals, or the opts accessors).
 fn synthetic_param_name(base: &str, taken: &[String]) -> String {
     let mut name = base.to_string();
     while taken.iter().any(|t| t == &name) {
@@ -589,17 +779,36 @@ fn render_method_pair(
     call_names: &str,
     call_args: &str,
     descriptor: &str,
+    types_name: Option<&str>,
     ctx_name: Option<&str>,
 ) -> String {
-    let sig_params = match ctx_name {
-        Some(name) if params.is_empty() => format!("baml_bridge.BamlCallContext {name}"),
-        Some(name) => format!("{params}, baml_bridge.BamlCallContext {name}"),
-        None => params.to_string(),
+    // Trailing synthetic params in fixed order: `types` (BamlTypes) then `ctx`
+    // (BamlCallContext).
+    let mut trailing = String::new();
+    if let Some(name) = types_name {
+        trailing.push_str(&format!(", baml_bridge.BamlTypes {name}"));
+    }
+    if let Some(name) = ctx_name {
+        trailing.push_str(&format!(", baml_bridge.BamlCallContext {name}"));
+    }
+    let sig_params = if params.is_empty() {
+        trailing.strip_prefix(", ").unwrap_or("").to_string()
+    } else {
+        format!("{params}{trailing}")
     };
-    let ctx_arg = ctx_name.map(|n| format!(", {n}")).unwrap_or_default();
+
+    // Runtime-call suffix after the descriptor. The bag routes through the 6-arg
+    // overload `(…, ctx, typeArgs)`, so a bag with no ctx passes `null` for ctx;
+    // no bag keeps the 5-arg (`ctx`) or 4-arg (`returnDesc`) form unchanged.
+    let call_suffix = match (ctx_name, types_name) {
+        (None, None) => String::new(),
+        (Some(c), None) => format!(", {c}"),
+        (None, Some(t)) => format!(", null, {t}"),
+        (Some(c), Some(t)) => format!(", {c}, {t}"),
+    };
 
     let sync_call = format!(
-        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{ctx_arg})"
+        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{call_suffix})"
     );
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
@@ -607,7 +816,7 @@ fn render_method_pair(
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
     let async_body = format!(
-        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{ctx_arg});"
+        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{call_suffix});"
     );
 
     format!(
@@ -646,6 +855,8 @@ fn render_optional_configurator(
     args_literal: &str,
     param_decls: &[String],
     taken: &[String],
+    is_generic: bool,
+    receiver_guard: Option<&str>,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -671,11 +882,11 @@ fn render_optional_configurator(
     overload_params.push(format!("{cfg_ty} $cfg"));
     let params = overload_params.join(", ");
 
-    // The ctx param must dodge user args AND this overload's own synthetics.
+    // The `types`/`ctx` params must dodge user args AND this overload's own
+    // synthetics.
     let mut taken_cfg = taken.to_vec();
     taken_cfg.push("$cfg".to_string());
     taken_cfg.push("$opts".to_string());
-    let ctx_name = synthetic_param_name("ctx", &taken_cfg);
 
     // Shared prologue: instantiate the opts holder and run the configurator.
     let prologue =
@@ -685,9 +896,8 @@ fn render_optional_configurator(
     let call_names = format!("$opts.$names({names_literal})");
     let call_args = format!("$opts.$args({args_literal})");
 
-    // Configurator pair, then its trailing-`ctx` overload pair (`ctx` last,
-    // after the configurator).
-    let mut out = render_method_pair(
+    // The configurator base's own {types?}×{ctx?} overload family.
+    let mut out = render_overload_family(
         doc,
         static_kw,
         generics_kw,
@@ -701,24 +911,10 @@ fn render_optional_configurator(
         &call_names,
         &call_args,
         descriptor,
-        None,
+        is_generic,
+        receiver_guard,
+        &taken_cfg,
     );
-    out.push_str(&render_method_pair(
-        doc,
-        static_kw,
-        generics_kw,
-        ident,
-        &params,
-        &prologue,
-        ret_top,
-        ret_boxed,
-        async_ret,
-        fqn,
-        &call_names,
-        &call_args,
-        descriptor,
-        Some(&ctx_name),
-    ));
 
     // Fluent boxed setters. The wire key is the BAML arg name; the setter
     // method name is the Java-escaped identifier (they differ only when the

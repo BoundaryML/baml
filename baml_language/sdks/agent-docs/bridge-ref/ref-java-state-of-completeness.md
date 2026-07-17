@@ -27,7 +27,7 @@ Architecture: minimum supported Java is **17** (records + sealed interfaces; the
 | Streaming                                   | ✅      | ❌    | `classify$stream(...)`                                             | `..._stream`-style companion returning `BamlStream<TPartial, TFinal>` (runtime-owned wrapper around a handle)    |
 | `$build_request` companion                  | ✅      | ❌    | `classify$build_request(...)`                                      | `$` is legal in Java identifiers, so the BAML name can be preserved verbatim like TS does (TBD vs `__` mangling) |
 | Generic function / method (inferred)        | ✅      | ✅    | `function classify<T>(...)`                                        | `classify(...)` (type args inferred engine-side)                                                                 |
-| Generic function / method (explicit)        | ✅      | ❌    | `function classify<T>(...)`                                        | explicit type-args overload taking `BamlType` tokens (Java has no `_types=` kwarg or subscript; shape TBD)       |
+| Generic function / method (explicit)        | ✅      | ✅    | `function classify<T>(...)`                                        | explicit type-args overload taking `BamlType` tokens (Java has no `_types=` kwarg or subscript; shape TBD)       |
 | Host callback param                         | ✅      | ❌    | `function run_agent(query: string, tool: (string) -> string) -> T` | `java.util.function.*` / generated functional interface, registered in the host-value registry                   |
 
 # Runtime-behavior forms (what a call *does* at the boundary, beyond returning a value)

@@ -254,11 +254,11 @@ public final class BamlFfi {
      * {@link #callSync(String, String[], Object[], String, BamlCallContext)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
      * {@code CallFunctionArgs.type_args} so a generic function/method's TypeVars
-     * are bound at the call. Package-private and <em>not</em> yet reached from any
-     * generated code — the explicit-generics emitter surface is deferred; a
-     * {@code null} bag is exactly the five-arg (non-generic) behavior.
+     * are bound at the call. Reached from the generated explicit-generics
+     * overloads; a {@code null} bag is exactly the five-arg (non-generic)
+     * behavior, and a {@code null} {@code ctx} is exactly the four-arg behavior.
      */
-    static Object callSync(
+    public static Object callSync(
             String fqn,
             String[] names,
             Object[] args,
@@ -331,11 +331,12 @@ public final class BamlFfi {
      * Explicit-generics variant of
      * {@link #callAsync(String, String[], Object[], String, BamlCallContext)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
-     * {@code CallFunctionArgs.type_args}. Package-private and <em>not</em> yet
-     * reached from any generated code (the emitter surface is deferred); a
-     * {@code null} bag is exactly the five-arg (non-generic) behavior.
+     * {@code CallFunctionArgs.type_args}. Reached from the generated
+     * explicit-generics overloads; a {@code null} bag is exactly the five-arg
+     * (non-generic) behavior, and a {@code null} {@code ctx} is exactly the
+     * four-arg behavior.
      */
-    static CompletableFuture<Object> callAsync(
+    public static CompletableFuture<Object> callAsync(
             String fqn,
             String[] names,
             Object[] args,

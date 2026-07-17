@@ -17,9 +17,7 @@
 // test names, same intent.
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import baml_bridge.Union2;
 import baml_sdk.generics.Fns;
 import baml_sdk.generics.WrapperMethods;
 import org.junit.jupiter.api.Test;
@@ -32,22 +30,16 @@ class TestGeneric {
         // round-trip a string when the declared return is
         // `T | WrapperMarker`.
         //
-        // java-port note: `get_value_or_marker` returns `T | WrapperMarker`
-        // — a union whose first arm is the *class's* TypeVar rather than a
-        // concrete BAML type, so it renders as `Union2<Object, WrapperMarker>`
-        // (Arm0 = the `T` arm, Arm1 = `WrapperMarker`); the descriptor keeps
-        // the arm as `tv:T` and the Java type arg erases to `Object`. The
-        // conventions doc leaves the shape of a TypeVar-bearing union return
-        // type as an open question (the "Generic function/method (explicit)"
-        // row in ref-java-state-of-completeness.md: "shape TBD"). This port
-        // narrows the returned value with a wildcard `Union2.Arm0<?, ?>`
-        // pattern and reads `.value()` (Java 17: `instanceof` only, no record
-        // patterns). This needs a real codegen decision — flagged for review.
+        // java-port note (codegen decision, 2026-07-17): the shape of a
+        // TypeVar-bearing union (`T | WrapperMarker`) was previously left "TBD"
+        // and this port narrowed it with a `Union2.Arm0<?, ?>` wrapper. The
+        // explicit-generics slice settles it: a union with a TypeVar arm renders
+        // as `java.lang.Object` and decodes to the bare wire value (no arity
+        // family — the TypeVar arm inhabits whatever the caller's `T` is), which
+        // matches the Python twin's `== "hello"` exactly. So the returned value
+        // is just the round-tripped string.
         WrapperMethods<String> w = Fns.make_wrapper_methods("hello");
-        Object result = w.get_value_or_marker();
-        assertTrue(
-                result instanceof Union2.Arm0<?, ?> tv
-                        && "hello".equals(tv.value()));
+        assertEquals("hello", w.get_value_or_marker());
     }
 
     @Test
