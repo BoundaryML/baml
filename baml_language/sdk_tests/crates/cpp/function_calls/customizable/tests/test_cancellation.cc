@@ -75,10 +75,8 @@ BAML_TEST(future_wait_for_times_out_while_in_flight) {
 }
 
 BAML_TEST(future_destruction_detaches) {
-  // Dropping a future neither blocks nor cancels; the abandoned call
-  // completes on its own and later calls are unaffected.
-  {
-    auto fut = throws_test::SleepMsAsync(1);
-  }
+  // The temporary future is dropped at the end of the statement: neither
+  // blocks nor cancels, and later calls are unaffected.
+  (void)throws_test::SleepMsAsync(1);
   BAML_ASSERT(throws_test::SleepMs(1) == std::monostate{});
 }
