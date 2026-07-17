@@ -63,3 +63,17 @@ function round_trip_literal_false(x: false) -> false {
 function round_trip_literals(l: Literals) -> Literals {
   l
 }
+
+// Distinct BAML literals normalize to one CLR primitive alternative. These
+// signatures must therefore project as `string` and `long`, not unions with
+// duplicate CLR arms.
+type Status = "draft" | "published"
+type Priority = 1 | 2
+
+function round_trip_status(value: Status) -> Status {
+  value
+}
+
+function round_trip_priority(value: Priority) -> Priority {
+  value
+}

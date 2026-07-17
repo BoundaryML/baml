@@ -766,8 +766,8 @@ dependencies = [
  "object 0.36.3",
  "regex",
  "reqwest",
- "sdkgen_csharp",
  "sdkgen_cpp",
+ "sdkgen_csharp",
  "sdkgen_go",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
@@ -6652,7 +6652,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_csharp"
+name = "sdk_test_cpp"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6660,7 +6660,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk_test_cpp"
+name = "sdk_test_csharp"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6692,8 +6692,8 @@ dependencies = [
  "borsh",
  "proc-macro2",
  "quote",
- "sdkgen_csharp",
  "sdkgen_cpp",
+ "sdkgen_csharp",
  "sdkgen_go",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
@@ -6743,17 +6743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdkgen_csharp"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_codegen_types",
- "baml_version",
- "base64",
- "sha2",
-]
-
-[[package]]
 name = "sdkgen_cpp"
 version = "0.0.0-beta"
 dependencies = [
@@ -6763,6 +6752,17 @@ dependencies = [
  "flate2",
  "protoc-bin-vendored",
  "tempfile",
+]
+
+[[package]]
+name = "sdkgen_csharp"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "baml_version",
+ "base64",
+ "sha2",
 ]
 
 [[package]]

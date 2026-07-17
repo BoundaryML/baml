@@ -74,5 +74,6 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, media_base64);
   PRINT_OFFSET(BamlApiV1, media_mime_type);
   PRINT_OFFSET(BamlApiV1, register_bridge);
+  PRINT_OFFSET(BamlApiV1, flush_events);
   return 0;
 }

@@ -24,7 +24,7 @@ pub(crate) fn allocate_function_names(functions: &mut [LeafFunction<'_>]) {
     let requests = functions
         .iter()
         .flat_map(|function| {
-            let preferred = method_name(function.identity.name.as_str());
+            let preferred = method_name(function.identity.name().as_str());
             let identity = function.identity.to_string();
             [
                 (preferred.clone(), format!("{identity}:method:sync")),
@@ -37,7 +37,7 @@ pub(crate) fn allocate_function_names(functions: &mut [LeafFunction<'_>]) {
         .collect::<Vec<_>>();
     let allocated = allocate_scope(requests, &mut occupied);
     for function in functions {
-        let preferred = method_name(function.identity.name.as_str());
+        let preferred = method_name(function.identity.name().as_str());
         let identity = function.identity.to_string();
         function
             .projected_name

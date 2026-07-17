@@ -47,7 +47,7 @@ impl<'a> AliasMap<'a> {
         self.projected_type_names
             .get(name)
             .cloned()
-            .unwrap_or_else(|| namespace_segment(name.name.as_str()))
+            .unwrap_or_else(|| preferred_type_name(name))
     }
 
     fn projected_namespace(&self, name: &Name) -> String {
@@ -56,6 +56,14 @@ impl<'a> AliasMap<'a> {
             .cloned()
             .unwrap_or_else(|| route(name).namespace)
     }
+}
+
+pub(crate) fn preferred_type_name(name: &Name) -> String {
+    let mut projected = namespace_segment(name.bare_name());
+    if name.is_stream() {
+        projected.push_str("Stream");
+    }
+    projected
 }
 
 impl<'a> FromIterator<(Name, &'a TypeAlias)> for AliasMap<'a> {
@@ -188,9 +196,16 @@ pub(crate) fn callback_delegate_with_type_variables(
     argument_name: &str,
     type_variables: &BTreeMap<String, String>,
 ) -> Option<CallbackDelegate> {
-    let Ty::Callable { params, ret } = ty else {
+    let Ty::Function {
+        params,
+        ret,
+        throws,
+        attr: _,
+    } = ty
+    else {
         return None;
     };
+    let _ = throws;
     if !params
         .iter()
         .any(|parameter| parameter.mode == CodegenFunctionParamMode::Optional)
@@ -207,7 +222,7 @@ pub(crate) fn callback_delegate_with_type_variables(
     if translated_parameters
         .iter()
         .any(|parameter| !parameter.primitive_codec)
-        || (!matches!(ret.as_ref(), Ty::Unit) && !translated_return.primitive_codec)
+        || (!matches!(ret.as_ref(), Ty::Void { .. }) && !translated_return.primitive_codec)
     {
         return None;
     }
@@ -257,7 +272,7 @@ pub(crate) fn callback_delegate_with_type_variables(
             })
             .collect(),
         return_type: translated_return.source,
-        returns_void: matches!(ret.as_ref(), Ty::Unit),
+        returns_void: matches!(ret.as_ref(), Ty::Void { .. }),
     })
 }
 
@@ -331,31 +346,67 @@ impl CallbackDelegate {
 
 fn collect_type_variables(ty: &Ty, names: &mut BTreeSet<String>) {
     match ty {
-        Ty::TypeVar(name) => {
+        Ty::TypeVar(name, _) => {
             names.insert(name.to_string());
         }
-        Ty::List(inner) => collect_type_variables(inner, names),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_type_variables(inner, names),
+        Ty::Map { key, value, .. } => {
             collect_type_variables(key, names);
             collect_type_variables(value, names);
         }
-        Ty::Union(options) => {
+        Ty::Union(options, _) => {
             for option in options {
                 collect_type_variables(option, names);
             }
         }
-        Ty::Class(_, arguments) => {
+        Ty::Class(_, arguments, _) => {
             for argument in arguments {
                 collect_type_variables(argument, names);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Interface(_, generics, associated_types, _) => {
+            for generic in generics {
+                collect_type_variables(generic, names);
+            }
+            for (_, associated_type) in associated_types {
+                collect_type_variables(associated_type, names);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr: _,
+        } => {
             for parameter in params {
                 collect_type_variables(&parameter.ty, names);
             }
             collect_type_variables(ret, names);
+            let _ = throws;
         }
-        _ => {}
+        Ty::Future(value, error, _) => {
+            collect_type_variables(value, names);
+            collect_type_variables(error, names);
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeAlias(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => {}
     }
 }
 
@@ -366,23 +417,23 @@ fn translate_inner(
     active_aliases: &mut HashSet<Name>,
 ) -> TranslatedType {
     match ty {
-        Ty::Int => TranslatedType::primitive("long"),
-        Ty::Bigint => TranslatedType::primitive("global::System.Numerics.BigInteger"),
-        Ty::Float => TranslatedType::primitive("double"),
-        Ty::String => TranslatedType::primitive("string"),
-        Ty::Bool => TranslatedType::primitive("bool"),
-        Ty::Null => TranslatedType::primitive("object?"),
-        Ty::Uint8Array => TranslatedType::primitive("byte[]"),
-        Ty::Literal(literal) => translate_literal(literal),
-        Ty::Union(options) => translate_union(options, aliases, type_variables, active_aliases),
-        Ty::BuiltinUnknown => TranslatedType::primitive("object?"),
-        Ty::TypeVar(name) => TranslatedType::primitive(
+        Ty::Int { .. } => TranslatedType::primitive("long"),
+        Ty::Bigint { .. } => TranslatedType::primitive("global::System.Numerics.BigInteger"),
+        Ty::Float { .. } => TranslatedType::primitive("double"),
+        Ty::String { .. } => TranslatedType::primitive("string"),
+        Ty::Bool { .. } => TranslatedType::primitive("bool"),
+        Ty::Null { .. } => TranslatedType::primitive("object?"),
+        Ty::Uint8Array { .. } => TranslatedType::primitive("byte[]"),
+        Ty::Literal(literal, ..) => translate_literal(literal),
+        Ty::Union(options, _) => translate_union(options, aliases, type_variables, active_aliases),
+        Ty::BuiltinUnknown { .. } => TranslatedType::primitive("object?"),
+        Ty::TypeVar(name, _) => TranslatedType::primitive(
             type_variables
                 .get(name.as_str())
                 .cloned()
                 .unwrap_or_else(|| namespace_segment(name.as_str())),
         ),
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             let inner = translate_inner(inner, aliases, type_variables, active_aliases);
             TranslatedType {
                 source: format!("global::System.Collections.Generic.List<{}>", inner.source),
@@ -391,8 +442,8 @@ fn translate_inner(
                 contains_host_callable: inner.contains_host_callable,
             }
         }
-        Ty::Map { key, value } => {
-            let key = translate_inner(key, aliases, type_variables, active_aliases);
+        Ty::Map { key, value, .. } => {
+            let key = translate_map_key(key, aliases, type_variables, active_aliases);
             let value = translate_inner(value, aliases, type_variables, active_aliases);
             TranslatedType {
                 source: format!(
@@ -404,9 +455,9 @@ fn translate_inner(
                 contains_host_callable: key.contains_host_callable || value.contains_host_callable,
             }
         }
-        Ty::Unit => TranslatedType::stub("object?"),
-        Ty::Class(name, arguments) => {
-            if name.pkg.as_str() != "user"
+        Ty::Void { .. } | Ty::Never { .. } => TranslatedType::stub("object?"),
+        Ty::Class(name, arguments, _) => {
+            if !name.is_local()
                 && name.to_string() != "baml.llm.Stream"
                 && name.to_string() != "baml.stream.StreamFinished"
                 && name.to_string() != "baml.llm.PromptAst"
@@ -518,17 +569,30 @@ fn translate_inner(
                     .any(|argument| argument.contains_host_callable),
             }
         }
-        Ty::Enum(name) if name.to_string() == "baml.llm.ClientType" => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _)
+            if name.to_string() == "baml.llm.ClientType" =>
+        {
             TranslatedType::primitive("global::Baml.BamlClientType")
         }
-        Ty::Enum(name) => TranslatedType::primitive(render_name(name, aliases)),
-        Ty::Media(kind) => translate_media(*kind),
-        Ty::RustType => TranslatedType::primitive("global::Baml.BamlHandle"),
-        Ty::TypeAlias(name) => translate_alias(name, aliases, type_variables, active_aliases),
-        Ty::Callable { params, ret } => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+            TranslatedType::primitive(render_name(name, aliases))
+        }
+        Ty::Media(kind, _) => translate_media(*kind),
+        Ty::RustType { .. } => TranslatedType::primitive("global::Baml.BamlHandle"),
+        Ty::TypeAlias(name, _) => translate_alias(name, aliases, type_variables, active_aliases),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr: _,
+        } => {
+            let _ = throws;
             translate_callable(params, ret, aliases, type_variables, active_aliases)
         }
-        Ty::BamlOptions => TranslatedType::primitive("object?"),
+        Ty::PromptAst { .. } => TranslatedType::primitive("global::Baml.BamlPromptAst"),
+        Ty::Interface(..) | Ty::Future(..) | Ty::Type { .. } | Ty::Resource { .. } => {
+            TranslatedType::stub("object?")
+        }
     }
 }
 
@@ -549,7 +613,7 @@ fn translate_callable(
             .iter()
             .all(|parameter| parameter.mode == CodegenFunctionParamMode::Required)
         && parameters.iter().all(|parameter| parameter.primitive_codec)
-        && (matches!(ret, Ty::Unit) || return_type.primitive_codec);
+        && (matches!(ret, Ty::Void { .. }) || return_type.primitive_codec);
     if !supported {
         return TranslatedType {
             source: "global::System.Delegate".to_string(),
@@ -563,7 +627,7 @@ fn translate_callable(
         .iter()
         .map(|parameter| parameter.source.as_str())
         .collect::<Vec<_>>();
-    let source = if matches!(ret, Ty::Unit) {
+    let source = if matches!(ret, Ty::Void { .. }) {
         render_delegate("global::System.Action", &parameter_sources, None)
     } else {
         render_delegate(
@@ -572,7 +636,7 @@ fn translate_callable(
             Some(return_type.source.as_str()),
         )
     };
-    let async_return = if matches!(ret, Ty::Unit) {
+    let async_return = if matches!(ret, Ty::Void { .. }) {
         "global::System.Threading.Tasks.ValueTask".to_string()
     } else {
         format!(
@@ -613,7 +677,7 @@ fn translate_alias(
     let Some(alias) = aliases.get(name) else {
         return TranslatedType::stub("object?");
     };
-    if alias.recursive && name.pkg.as_str() != "user" {
+    if alias.recursive && !name.is_local() {
         return TranslatedType::primitive("object?");
     }
     if alias.recursive {
@@ -656,6 +720,65 @@ fn translate_literal(literal: &Literal) -> TranslatedType {
     }
 }
 
+fn translate_map_key(
+    key: &Ty,
+    aliases: &AliasMap<'_>,
+    type_variables: &BTreeMap<String, String>,
+    active_aliases: &mut HashSet<Name>,
+) -> TranslatedType {
+    if map_key_is_string_denoting(key, aliases, &mut HashSet::new()) {
+        TranslatedType::primitive("string")
+    } else {
+        translate_inner(key, aliases, type_variables, active_aliases)
+    }
+}
+
+fn map_key_is_string_denoting(
+    key: &Ty,
+    aliases: &AliasMap<'_>,
+    active_aliases: &mut HashSet<Name>,
+) -> bool {
+    match key {
+        Ty::String { .. } | Ty::Literal(Literal::String(_), ..) | Ty::Never { .. } => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| map_key_is_string_denoting(member, aliases, active_aliases)),
+        Ty::TypeAlias(name, _) => {
+            if !active_aliases.insert(name.clone()) {
+                return false;
+            }
+            let string_denoting = aliases.get(name).is_some_and(|alias| {
+                map_key_is_string_denoting(&alias.resolves_to, aliases, active_aliases)
+            });
+            active_aliases.remove(name);
+            string_denoting
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Class(..)
+        | Ty::Interface(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::List(..)
+        | Ty::Map { .. }
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. } => false,
+    }
+}
+
 fn translate_union(
     options: &[Ty],
     aliases: &AliasMap<'_>,
@@ -664,29 +787,42 @@ fn translate_union(
 ) -> TranslatedType {
     let non_null: Vec<&Ty> = options
         .iter()
-        .filter(|option| !matches!(option, Ty::Null))
+        .filter(|option| !matches!(option, Ty::Null { .. }))
         .collect();
     let has_null = non_null.len() != options.len();
 
-    if has_null && non_null.len() == 1 {
-        let inner = translate_inner(non_null[0], aliases, type_variables, active_aliases);
-        let source = match non_null[0] {
-            Ty::TypeVar(_) => format!("global::Baml.BamlNullable<{}>", inner.source),
-            _ if inner.source.ends_with('?') => inner.source.clone(),
-            _ => format!("{}?", inner.source),
-        };
-        return TranslatedType {
-            source,
-            primitive_codec: inner.primitive_codec,
-            async_callback_source: None,
-            contains_host_callable: inner.contains_host_callable,
-        };
+    let mut translated = Vec::<TranslatedType>::new();
+    for option in &non_null {
+        let item = translate_inner(option, aliases, type_variables, active_aliases);
+        if let Some(existing) = translated
+            .iter_mut()
+            .find(|existing| existing.source == item.source)
+        {
+            existing.primitive_codec &= item.primitive_codec;
+            existing.contains_host_callable |= item.contains_host_callable;
+        } else {
+            translated.push(item);
+        }
     }
 
-    let translated = non_null
-        .iter()
-        .map(|option| translate_inner(option, aliases, type_variables, active_aliases))
-        .collect::<Vec<_>>();
+    if translated.len() == 1 {
+        let mut inner = translated.pop().expect("one translated union alternative");
+        inner.async_callback_source = None;
+        if has_null {
+            inner.source = if non_null
+                .iter()
+                .all(|option| type_variable_denoting(option, aliases, &mut HashSet::new()))
+            {
+                format!("global::Baml.BamlNullable<{}>", inner.source)
+            } else if inner.source.ends_with('?') {
+                inner.source
+            } else {
+                format!("{}?", inner.source)
+            };
+        }
+        return inner;
+    }
+
     if !(2..=32).contains(&translated.len()) {
         return TranslatedType::stub("object?");
     }
@@ -707,10 +843,56 @@ fn translate_union(
     }
 }
 
+fn type_variable_denoting(
+    ty: &Ty,
+    aliases: &AliasMap<'_>,
+    active_aliases: &mut HashSet<Name>,
+) -> bool {
+    match ty {
+        Ty::TypeVar(..) => true,
+        Ty::TypeAlias(name, _) => {
+            if !active_aliases.insert(name.clone()) {
+                return false;
+            }
+            let is_type_variable = aliases.get(name).is_some_and(|alias| {
+                !alias.recursive
+                    && type_variable_denoting(&alias.resolves_to, aliases, active_aliases)
+            });
+            active_aliases.remove(name);
+            is_type_variable
+        }
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Class(..)
+        | Ty::Interface(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::List(..)
+        | Ty::Map { .. }
+        | Ty::Union(..)
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. } => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use baml_base::Name as BaseName;
-    use baml_codegen_types::Origin;
+    use baml_base::{Name as BaseName, TyAttr};
+    use baml_codegen_types::{CallableParam, Freshness, Origin};
 
     use super::*;
 
@@ -718,46 +900,310 @@ mod tests {
         translate(ty, &AliasMap::new())
     }
 
+    fn a() -> TyAttr {
+        TyAttr::EMPTY
+    }
+
+    fn int() -> Ty {
+        Ty::Int { attr: a() }
+    }
+
+    fn string() -> Ty {
+        Ty::String { attr: a() }
+    }
+
+    fn bool_() -> Ty {
+        Ty::Bool { attr: a() }
+    }
+
+    fn null() -> Ty {
+        Ty::Null { attr: a() }
+    }
+
+    fn type_var(name: &str) -> Ty {
+        Ty::TypeVar(BaseName::new(name), a())
+    }
+
+    fn list(inner: Ty) -> Ty {
+        Ty::List(Box::new(inner), a())
+    }
+
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, a())
+    }
+
+    fn alias_ty(name: Name) -> Ty {
+        Ty::TypeAlias(name, a())
+    }
+
+    fn class(name: Name, arguments: Vec<Ty>) -> Ty {
+        Ty::Class(name, arguments, a())
+    }
+
+    fn enum_(name: Name) -> Ty {
+        Ty::Enum(name, a())
+    }
+
+    fn literal(value: Literal) -> Ty {
+        Ty::Literal(value, Freshness::Regular, a())
+    }
+
+    fn function(params: Vec<CallableParam>, ret: Ty) -> Ty {
+        Ty::Function {
+            params,
+            ret: Box::new(ret),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        }
+    }
+
     #[test]
     fn translates_basic_wire_types() {
-        assert_eq!(without_aliases(&Ty::Int), TranslatedType::primitive("long"));
+        assert_eq!(without_aliases(&int()), TranslatedType::primitive("long"));
         assert_eq!(
-            without_aliases(&Ty::String),
+            without_aliases(&string()),
             TranslatedType::primitive("string")
         );
         assert_eq!(
-            without_aliases(&Ty::Union(vec![Ty::String, Ty::Null])),
+            without_aliases(&union(vec![string(), null()])),
             TranslatedType::primitive("string?")
         );
         assert_eq!(
-            without_aliases(&Ty::Union(vec![Ty::Int, Ty::String])),
+            without_aliases(&union(vec![int(), string()])),
             TranslatedType::primitive("global::Baml.BamlUnion<long, string>")
         );
         assert_eq!(
-            without_aliases(&Ty::Union(vec![Ty::Int, Ty::Null, Ty::String])),
+            without_aliases(&union(vec![int(), null(), string()])),
             TranslatedType::primitive("global::Baml.BamlUnion<long, string>?")
         );
         assert_eq!(
-            without_aliases(&Ty::Union(vec![Ty::Int, Ty::String, Ty::Bool])),
+            without_aliases(&union(vec![int(), string(), bool_()])),
             TranslatedType::primitive("global::Baml.BamlUnion<long, string, bool>")
         );
         assert_eq!(
-            without_aliases(&Ty::Union(vec![Ty::TypeVar(BaseName::new("T")), Ty::Null,])).source,
+            without_aliases(&union(vec![type_var("T"), null()])).source,
             "global::Baml.BamlNullable<T>"
         );
         assert_eq!(
-            without_aliases(&Ty::List(Box::new(Ty::Int))),
+            without_aliases(&list(int())),
             TranslatedType::primitive("global::System.Collections.Generic.List<long>")
         );
         assert_eq!(
             without_aliases(&Ty::Map {
-                key: Box::new(Ty::String),
-                value: Box::new(Ty::Union(vec![Ty::Int, Ty::Null])),
+                key: Box::new(string()),
+                value: Box::new(union(vec![int(), null()])),
+                attr: a(),
             }),
             TranslatedType::primitive(
                 "global::System.Collections.Generic.Dictionary<string, long?>"
             )
         );
+    }
+
+    #[test]
+    fn collapses_literal_unions_after_clr_widening() {
+        assert_eq!(
+            without_aliases(&union(vec![
+                literal(Literal::String("a".to_string())),
+                literal(Literal::String("b".to_string())),
+            ])),
+            TranslatedType::primitive("string")
+        );
+        assert_eq!(
+            without_aliases(&union(vec![
+                literal(Literal::Int(0x1)),
+                literal(Literal::Int(0x2)),
+            ])),
+            TranslatedType::primitive("long")
+        );
+        assert_eq!(
+            without_aliases(&union(vec![
+                literal(Literal::Int(1)),
+                literal(Literal::Int(2)),
+                null(),
+            ])),
+            TranslatedType::primitive("long?")
+        );
+
+        let unsupported_collision = without_aliases(&union(vec![
+            Ty::BuiltinUnknown { attr: a() },
+            Ty::Interface(
+                Name::local(BaseName::new("Shape")),
+                Vec::new(),
+                Vec::new(),
+                a(),
+            ),
+        ]));
+        assert_eq!(unsupported_collision.source, "object?");
+        assert!(!unsupported_collision.primitive_codec);
+
+        let callable_collision = without_aliases(&union(vec![
+            function(
+                vec![CallableParam {
+                    name: None,
+                    ty: string(),
+                    mode: CodegenFunctionParamMode::Required,
+                }],
+                string(),
+            ),
+            function(
+                vec![CallableParam {
+                    name: None,
+                    ty: literal(Literal::String("value".to_string())),
+                    mode: CodegenFunctionParamMode::Required,
+                }],
+                string(),
+            ),
+        ]));
+        assert_eq!(
+            callable_collision.source,
+            "global::System.Func<string, string>"
+        );
+        assert!(callable_collision.primitive_codec);
+        assert!(callable_collision.contains_host_callable);
+        assert_eq!(callable_collision.async_callback_source, None);
+    }
+
+    #[test]
+    fn maps_alias_chains_of_string_literal_unions_to_string_keys() {
+        let literals_name = Name::new(
+            BaseName::new("user"),
+            Vec::new(),
+            BaseName::new("LiteralKey"),
+        );
+        let chain_name = Name::new(BaseName::new("user"), Vec::new(), BaseName::new("KeyChain"));
+        let literals = TypeAlias {
+            name: literals_name.clone(),
+            resolves_to: union(vec![
+                literal(Literal::String("a".to_string())),
+                literal(Literal::String("b".to_string())),
+            ]),
+            recursive: false,
+            origin: Origin {
+                source_file_path: "keys.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let chain = TypeAlias {
+            name: chain_name.clone(),
+            resolves_to: alias_ty(literals_name.clone()),
+            recursive: false,
+            origin: Origin {
+                source_file_path: "keys.baml".to_string(),
+                span_start: 1,
+            },
+        };
+        let mut aliases = AliasMap::new();
+        aliases.insert(literals_name, &literals);
+        aliases.insert(chain_name.clone(), &chain);
+
+        assert_eq!(
+            translate(
+                &Ty::Map {
+                    key: Box::new(alias_ty(chain_name)),
+                    value: Box::new(int()),
+                    attr: a(),
+                },
+                &aliases,
+            ),
+            TranslatedType::primitive(
+                "global::System.Collections.Generic.Dictionary<string, long>"
+            )
+        );
+    }
+
+    #[test]
+    fn preserves_other_compiler_valid_map_key_projections() {
+        let enum_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("models")],
+            BaseName::new("Status"),
+        );
+        for (key, expected) in [
+            (int(), "long".to_string()),
+            (bool_(), "bool".to_string()),
+            (
+                Ty::Enum(enum_name.clone(), a()),
+                "global::BamlSdk.Models.Status".to_string(),
+            ),
+        ] {
+            let translated = without_aliases(&Ty::Map {
+                key: Box::new(key),
+                value: Box::new(string()),
+                attr: a(),
+            });
+            assert_eq!(
+                translated,
+                TranslatedType::primitive(format!(
+                    "global::System.Collections.Generic.Dictionary<{expected}, string>"
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn lowers_enum_variants_to_the_owning_enum() {
+        let enum_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("models")],
+            BaseName::new("Status"),
+        );
+
+        assert_eq!(
+            without_aliases(&Ty::EnumVariant(enum_name, BaseName::new("Ready"), a(),)),
+            TranslatedType::primitive("global::BamlSdk.Models.Status")
+        );
+    }
+
+    #[test]
+    fn classifies_canonical_special_types_and_ignores_unchecked_throws() {
+        assert_eq!(
+            without_aliases(&Ty::PromptAst { attr: a() }),
+            TranslatedType::primitive("global::Baml.BamlPromptAst")
+        );
+        for unsupported in [
+            Ty::Interface(
+                Name::local(BaseName::new("Shape")),
+                Vec::new(),
+                Vec::new(),
+                a(),
+            ),
+            Ty::Future(Box::new(string()), Box::new(Ty::Never { attr: a() }), a()),
+            Ty::Type { attr: a() },
+            Ty::Resource { attr: a() },
+            Ty::Void { attr: a() },
+            Ty::Never { attr: a() },
+        ] {
+            assert_eq!(
+                without_aliases(&unsupported),
+                TranslatedType::stub("object?")
+            );
+        }
+
+        let callable = Ty::Function {
+            params: vec![CallableParam {
+                name: None,
+                ty: int(),
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(Ty::Void { attr: a() }),
+            throws: Box::new(string()),
+            attr: a(),
+        };
+        let translated = without_aliases(&callable);
+        assert_eq!(translated.source, "global::System.Action<long>");
+        assert_eq!(
+            translated.async_callback_source.as_deref(),
+            Some("global::System.Func<long, global::System.Threading.Tasks.ValueTask>")
+        );
+        assert!(translated.primitive_codec);
+        assert!(translated.contains_host_callable);
+    }
+
+    #[test]
+    fn projects_stream_type_names_from_canonical_name_accessors() {
+        let stream = Name::local(BaseName::new("Payload$stream"));
+        assert_eq!(preferred_type_name(&stream), "PayloadStream");
     }
 
     #[test]
@@ -769,10 +1215,7 @@ mod tests {
         );
         let alias = TypeAlias {
             name: alias_name.clone(),
-            resolves_to: Ty::Union(vec![
-                Ty::String,
-                Ty::List(Box::new(Ty::TypeAlias(alias_name.clone()))),
-            ]),
+            resolves_to: union(vec![string(), list(alias_ty(alias_name.clone()))]),
             recursive: true,
             origin: Origin {
                 source_file_path: "stdlib.baml".to_string(),
@@ -782,21 +1225,21 @@ mod tests {
         let aliases = [(alias_name.clone(), &alias)].into_iter().collect();
 
         assert_eq!(
-            translate(&Ty::TypeAlias(alias_name), &aliases),
+            translate(&alias_ty(alias_name), &aliases),
             TranslatedType::primitive("object?")
         );
     }
 
     #[test]
     fn translates_required_host_callables_to_sync_and_async_delegates() {
-        let translated = without_aliases(&Ty::Callable {
-            params: vec![baml_codegen_types::CallableParam {
+        let translated = without_aliases(&function(
+            vec![CallableParam {
                 name: None,
-                ty: Ty::Int,
+                ty: int(),
                 mode: CodegenFunctionParamMode::Required,
             }],
-            ret: Box::new(Ty::String),
-        });
+            string(),
+        ));
 
         assert_eq!(translated.source, "global::System.Func<long, string>");
         assert_eq!(
@@ -806,24 +1249,24 @@ mod tests {
         assert!(translated.primitive_codec);
         assert!(translated.contains_host_callable);
 
-        let optional = without_aliases(&Ty::Callable {
-            params: vec![baml_codegen_types::CallableParam {
+        let optional = without_aliases(&function(
+            vec![CallableParam {
                 name: Some(BaseName::new("value")),
-                ty: Ty::Int,
+                ty: int(),
                 mode: CodegenFunctionParamMode::Optional,
             }],
-            ret: Box::new(Ty::String),
-        });
+            string(),
+        ));
         assert!(!optional.primitive_codec);
 
-        let optional_ty = Ty::Callable {
-            params: vec![baml_codegen_types::CallableParam {
+        let optional_ty = function(
+            vec![CallableParam {
                 name: Some(BaseName::new("value")),
-                ty: Ty::Int,
+                ty: int(),
                 mode: CodegenFunctionParamMode::Optional,
             }],
-            ret: Box::new(Ty::String),
-        };
+            string(),
+        );
         let translated_optional = translate_argument(
             &optional_ty,
             &AliasMap::new(),
@@ -844,21 +1287,21 @@ mod tests {
         assert!(rendered.contains("BamlOptional<long>"));
         assert!(rendered.contains("BamlWireNameAttribute(\"value\")"));
 
-        let generic_optional_ty = Ty::Callable {
-            params: vec![
-                baml_codegen_types::CallableParam {
+        let generic_optional_ty = function(
+            vec![
+                CallableParam {
                     name: Some(BaseName::new("value")),
-                    ty: Ty::TypeVar(BaseName::new("T")),
+                    ty: type_var("T"),
                     mode: CodegenFunctionParamMode::Required,
                 },
-                baml_codegen_types::CallableParam {
+                CallableParam {
                     name: Some(BaseName::new("fallback")),
-                    ty: Ty::TypeVar(BaseName::new("T")),
+                    ty: type_var("T"),
                     mode: CodegenFunctionParamMode::Optional,
                 },
             ],
-            ret: Box::new(Ty::TypeVar(BaseName::new("T"))),
-        };
+            type_var("T"),
+        );
         let generic_callback = callback_delegate(
             &generic_optional_ty,
             &AliasMap::new(),
@@ -881,9 +1324,9 @@ mod tests {
             vec![BaseName::new("llm")],
             BaseName::new("Stream"),
         );
-        let translated = without_aliases(&Ty::Class(
+        let translated = without_aliases(&class(
             stream_name,
-            vec![Ty::Union(vec![Ty::Null, Ty::String]), Ty::String],
+            vec![union(vec![null(), string()]), string()],
         ));
 
         assert_eq!(
@@ -992,79 +1435,79 @@ mod tests {
         );
 
         assert_eq!(
-            without_aliases(&Ty::Class(prompt_ast, Vec::new())),
+            without_aliases(&class(prompt_ast, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlPromptAst")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(prompt_message, Vec::new())),
+            without_aliases(&class(prompt_message, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlPromptMessage")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(http_request, Vec::new())),
+            without_aliases(&class(http_request, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlHttpRequest")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(http_response, Vec::new())),
+            without_aliases(&class(http_response, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlHttpResponse")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(file, Vec::new())),
+            without_aliases(&class(file, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlFile")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(sse_stream, Vec::new())),
+            without_aliases(&class(sse_stream, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlSseStream")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(glob, Vec::new())),
+            without_aliases(&class(glob, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlGlob")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(glob_scan_options, Vec::new())),
+            without_aliases(&class(glob_scan_options, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlGlobScanOptions")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(cancel_token, Vec::new())),
+            without_aliases(&class(cancel_token, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCancelToken")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(task_group, Vec::new())),
+            without_aliases(&class(task_group, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlTaskGroup")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_writer, Vec::new())),
+            without_aliases(&class(csv_writer, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvWriter")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_reader, Vec::new())),
+            without_aliases(&class(csv_reader, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvReader")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_record, Vec::new())),
+            without_aliases(&class(csv_record, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvRecord")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_position, Vec::new())),
+            without_aliases(&class(csv_position, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvPosition")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_writer_options, Vec::new())),
+            without_aliases(&class(csv_writer_options, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvWriterOptions")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(csv_reader_options, Vec::new())),
+            without_aliases(&class(csv_reader_options, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlCsvReaderOptions")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(client, Vec::new())),
+            without_aliases(&class(client, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlClient")
         );
         assert_eq!(
-            without_aliases(&Ty::Class(retry_policy, Vec::new())),
+            without_aliases(&class(retry_policy, Vec::new())),
             TranslatedType::primitive("global::Baml.BamlRetryPolicy")
         );
         assert_eq!(
-            without_aliases(&Ty::Enum(client_type)),
+            without_aliases(&enum_(client_type)),
             TranslatedType::primitive("global::Baml.BamlClientType")
         );
     }
@@ -1074,7 +1517,7 @@ mod tests {
         let alias_name = Name::new(BaseName::new("user"), Vec::new(), BaseName::new("ProbeId"));
         let alias = TypeAlias {
             name: alias_name.clone(),
-            resolves_to: Ty::Int,
+            resolves_to: int(),
             recursive: false,
             origin: Origin {
                 source_file_path: "main.baml".to_string(),
@@ -1085,7 +1528,7 @@ mod tests {
         aliases.insert(alias_name.clone(), &alias);
 
         assert_eq!(
-            translate(&Ty::TypeAlias(alias_name), &aliases),
+            translate(&alias_ty(alias_name), &aliases),
             TranslatedType::primitive("long")
         );
 
@@ -1096,7 +1539,7 @@ mod tests {
         );
         let recursive = TypeAlias {
             name: recursive_name.clone(),
-            resolves_to: Ty::List(Box::new(Ty::TypeAlias(recursive_name.clone()))),
+            resolves_to: list(alias_ty(recursive_name.clone())),
             recursive: true,
             origin: Origin {
                 source_file_path: "main.baml".to_string(),
@@ -1105,7 +1548,7 @@ mod tests {
         };
         aliases.insert(recursive_name.clone(), &recursive);
         assert_eq!(
-            translate(&Ty::TypeAlias(recursive_name), &aliases),
+            translate(&alias_ty(recursive_name), &aliases),
             TranslatedType::primitive("global::BamlSdk.Recursive")
         );
     }

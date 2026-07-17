@@ -15,6 +15,6 @@ if (-not (Test-Path $NativeLibrary)) { throw "missing $NativeLibrary" }
 
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value "SDK_TEST_CSHARP_SETUP=1"
-    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_BRIDGE_LIBRARY=$NativeLibrary"
+    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_RUNTIME_PATH=$NativeLibrary"
     Add-Content -Path $env:NEXTEST_ENV -Value "NuGetAudit=false"
 }

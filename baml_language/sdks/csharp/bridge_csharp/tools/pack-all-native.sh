@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <native-assets-root> <output-directory>" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "usage: $0 <native-assets-root> <output-directory> [platform-contract]" >&2
   exit 2
 fi
 
 assets_input=$1
 output_input=$2
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+contract_input=${3:-"$script_dir/../../../../../release/platforms.json"}
 bridge_project="$script_dir/../src/Baml.Bridge/Baml.Bridge.csproj"
 normalizer_project="$script_dir/Baml.NuGet.Normalize/Baml.NuGet.Normalize.csproj"
 
@@ -17,44 +18,62 @@ if [[ ! -d "$assets_input" ]]; then
   exit 2
 fi
 
+if [[ ! -f "$contract_input" ]]; then
+  echo "platform contract does not exist: $contract_input" >&2
+  exit 2
+fi
+
 assets_root=$(cd -- "$assets_input" && pwd -P)
-declare -A expected_names=(
-  [linux-x64]=libbridge_cffi.so
-  [linux-arm64]=libbridge_cffi.so
-  [linux-musl-x64]=libbridge_cffi.so
-  [linux-musl-arm64]=libbridge_cffi.so
-  [osx-x64]=libbridge_cffi.dylib
-  [osx-arm64]=libbridge_cffi.dylib
-  [win-x64]=bridge_cffi.dll
-  [win-arm64]=bridge_cffi.dll
-)
-declare -A properties=(
-  [linux-x64]=BamlNativeLinuxX64
-  [linux-arm64]=BamlNativeLinuxArm64
-  [linux-musl-x64]=BamlNativeLinuxMuslX64
-  [linux-musl-arm64]=BamlNativeLinuxMuslArm64
-  [osx-x64]=BamlNativeOsxX64
-  [osx-arm64]=BamlNativeOsxArm64
-  [win-x64]=BamlNativeWinX64
-  [win-arm64]=BamlNativeWinArm64
+contract_dir=$(cd -- "$(dirname -- "$contract_input")" && pwd -P)
+platform_contract="$contract_dir/$(basename -- "$contract_input")"
+
+contract_status=$(jq -er '
+  if .schema == 1
+    and .csharp_package.package_id == "baml-bridge"
+    and .csharp_package.atomic_all_rids == true
+    and .csharp_package.cffi_inputs_required == true
+    and ([.targets[] | select(.artifacts.csharp != null)] | length) > 0
+    and ([.targets[] | select(.artifacts.csharp != null)] | length)
+      == ([.targets[] | select(.artifacts.cffi != null)] | length)
+    and all(.targets[];
+      (.artifacts.csharp == null and .artifacts.cffi == null)
+      or (.artifacts.csharp != null
+        and .artifacts.cffi != null
+        and (.artifacts.csharp.rid | type == "string" and length > 0)
+        and (.artifacts.csharp.native_asset | type == "string" and length > 0)
+        and (.artifacts.csharp.pack_property | type == "string" and length > 0)))
+  then "valid"
+  else error("invalid atomic C# package platform contract")
+  end
+' "$platform_contract")
+[[ "$contract_status" == valid ]]
+
+mapfile -t csharp_assets < <(
+  jq -er '.targets[]
+    | select(.artifacts.csharp != null)
+    | .artifacts.csharp
+    | [.rid, .native_asset, .pack_property]
+    | @tsv' "$platform_contract"
 )
 
 pack_properties=(-p:BamlPackAllNative=true)
 expected_entries=()
-for rid in "${!expected_names[@]}"; do
-  name=${expected_names[$rid]}
+for asset in "${csharp_assets[@]}"; do
+  IFS=$'\t' read -r rid name property <<<"$asset"
   path="$assets_root/runtimes/$rid/native/$name"
   if [[ ! -f "$path" || -L "$path" ]]; then
     echo "missing regular native asset for $rid: $path" >&2
     exit 2
   fi
-  pack_properties+=("-p:${properties[$rid]}=$path")
+  pack_properties+=("-p:${property}=$path")
   expected_entries+=("runtimes/$rid/native/$name")
 done
 
-mapfile -t actual_assets < <(find "$assets_root/runtimes" -type f -print | sort)
-if [[ ${#actual_assets[@]} -ne 8 ]]; then
-  echo "expected exactly 8 native input files, found ${#actual_assets[@]}" >&2
+mapfile -t actual_assets < <(
+  find "$assets_root/runtimes" \( -type f -o -type l \) -print | sort
+)
+if [[ ${#actual_assets[@]} -ne ${#expected_entries[@]} ]]; then
+  echo "expected exactly ${#expected_entries[@]} native input files from the platform contract, found ${#actual_assets[@]}" >&2
   printf '  %s\n' "${actual_assets[@]}" >&2
   exit 2
 fi
@@ -105,7 +124,7 @@ dotnet run \
 mapfile -t packaged_native < <(unzip -Z1 "$partial_output" | sed -n '/^runtimes\/.*\/native\//p' | sort)
 mapfile -t expected_sorted < <(printf '%s\n' "${expected_entries[@]}" | sort)
 if [[ "${packaged_native[*]}" != "${expected_sorted[*]}" ]]; then
-  echo "NuGet native payload does not match the required eight RID assets" >&2
+  echo "NuGet native payload does not match the required platform-contract RID assets" >&2
   printf 'actual:   %s\n' "${packaged_native[@]}" >&2
   printf 'expected: %s\n' "${expected_sorted[@]}" >&2
   exit 1

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: $0 <native-library> <rid> <output-directory>" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+  echo "usage: $0 <native-library> <rid> <output-directory> [platform-contract]" >&2
   exit 2
 fi
 
@@ -10,6 +10,7 @@ native_input=$1
 rid=$2
 output_input=$3
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+contract_input=${4:-"$script_dir/../../../../../release/platforms.json"}
 bridge_project="$script_dir/../src/Baml.Bridge/Baml.Bridge.csproj"
 normalizer_project="$script_dir/Baml.NuGet.Normalize/Baml.NuGet.Normalize.csproj"
 
@@ -18,23 +19,25 @@ if [[ ! -f "$native_input" ]]; then
   exit 2
 fi
 
+if [[ ! -f "$contract_input" ]]; then
+  echo "platform contract does not exist: $contract_input" >&2
+  exit 2
+fi
+
 native_dir=$(cd -- "$(dirname -- "$native_input")" && pwd -P)
 native_library="$native_dir/$(basename -- "$native_input")"
-case "$rid" in
-  linux-x64|linux-arm64|linux-musl-x64|linux-musl-arm64)
-    expected_name=libbridge_cffi.so
-    ;;
-  osx-x64|osx-arm64)
-    expected_name=libbridge_cffi.dylib
-    ;;
-  win-x64|win-arm64)
-    expected_name=bridge_cffi.dll
-    ;;
-  *)
-    echo "unsupported BAML RID: $rid" >&2
-    exit 2
-    ;;
-esac
+expected_name=$(jq -er --arg rid "$rid" '
+  [.targets[].artifacts.csharp
+    | select(. != null and .rid == $rid)
+    | .native_asset]
+  | if length == 1 then .[0]
+    elif length == 0 then error("unsupported BAML RID")
+    else error("duplicate BAML RID in platform contract")
+    end
+' "$contract_input") || {
+  echo "unsupported or invalid BAML RID in platform contract: $rid" >&2
+  exit 2
+}
 
 if [[ $(basename -- "$native_library") != "$expected_name" ]]; then
   echo "native library for $rid must be named $expected_name" >&2

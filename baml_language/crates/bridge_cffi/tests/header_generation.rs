@@ -52,6 +52,23 @@ fn generation_is_byte_for_byte_deterministic() {
 }
 
 #[test]
+fn generated_header_pins_the_original_prefix_and_flush_events_extension() {
+    let header =
+        String::from_utf8(generated_bytes()).expect("generated header must be valid UTF-8");
+    let register_bridge = header
+        .find("BamlRegisterBridgeFn register_bridge;")
+        .expect("generated table must contain register_bridge");
+    let flush_events = header
+        .find("BamlFlushEventsFn flush_events;")
+        .expect("generated table must contain flush_events");
+
+    assert!(register_bridge < flush_events);
+    assert!(header.contains("#define BAML_API_V1_MIN_SIZE"));
+    assert!(header.contains("#define BAML_API_V1_FLUSH_EVENTS_SIZE"));
+    assert!(header.contains("baml_api_v1_has_flush_events"));
+}
+
+#[test]
 fn public_structs_explicitly_use_c_layout() {
     let root = crate_dir();
     let api = read_normalized(root.join("src/api.rs"));

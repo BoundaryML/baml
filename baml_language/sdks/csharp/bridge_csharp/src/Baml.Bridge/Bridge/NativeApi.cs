@@ -7,10 +7,6 @@ namespace Baml.Bridge;
 
 internal static unsafe class NativeApi
 {
-    private const uint ExpectedAbiVersion = 1;
-    private const uint CSharpBridgeLanguage = 5;
-    private const string LibraryOverrideEnvironmentVariable = "BAML_BRIDGE_LIBRARY";
-
     private static readonly ConcurrentDictionary<uint, PendingCall> PendingCalls = new();
     private static readonly string SdkVersion = BridgeVersion.Current;
     private static readonly nint LibraryHandle;
@@ -25,7 +21,7 @@ internal static unsafe class NativeApi
             var getApiAddress = NativeLibrary.GetExport(LibraryHandle, "baml_get_api_v1");
             var getApi = (delegate* unmanaged[Cdecl]<ApiV1*>)getApiAddress;
             Api = getApi();
-            ValidateApi();
+            NativeApiContract.Validate(Api);
             RegisterBridge();
             Api->RegisterCallback(&CompleteCall);
             Api->RegisterHostDispatchCallback(&HostValueRegistry.Dispatch);
@@ -103,7 +99,7 @@ internal static unsafe class NativeApi
         fixed (byte* bytecodePointer = bytecode)
         {
             var result = Api->InitializeRuntimeFromBytecode(bytecodePointer, (nuint)bytecode.Length);
-            var error = CopyAndFree(result);
+            var error = NativeBufferMarshaller.CopyAndFree(result, Api->FreeBuffer);
             if (error.Length != 0)
             {
                 throw new BamlBridgeException($"Failed to initialize BAML bytecode: {Encoding.UTF8.GetString(error)}");
@@ -243,87 +239,15 @@ internal static unsafe class NativeApi
             var info = new BridgeInfoV1
             {
                 StructSize = (nuint)sizeof(BridgeInfoV1),
-                Language = CSharpBridgeLanguage,
+                Language = NativeBridgeLanguage.CSharp,
                 SdkVersion = versionPointer,
                 SdkVersionLength = (nuint)versionBytes.Length,
             };
             var result = Api->RegisterBridge(&info);
-            var error = CopyAndFree(result);
+            var error = NativeBufferMarshaller.CopyAndFree(result, Api->FreeBuffer);
             if (error.Length != 0)
             {
                 throw new BamlBridgeException(Encoding.UTF8.GetString(error));
-            }
-        }
-    }
-
-    private static void ValidateApi()
-    {
-        if (Api == null)
-        {
-            throw new BamlBridgeException("baml_get_api_v1 returned a null API table.");
-        }
-
-        if (Api->AbiVersion != ExpectedAbiVersion)
-        {
-            throw new BamlBridgeException(
-                $"Unsupported BAML C ABI version {Api->AbiVersion}; this bridge requires version {ExpectedAbiVersion}.");
-        }
-
-        if (Api->StructSize < (nuint)sizeof(ApiV1))
-        {
-            throw new BamlBridgeException(
-                $"BAML C ABI table is truncated: native size {Api->StructSize}, required size {sizeof(ApiV1)}.");
-        }
-
-        if (Api->Version == null
-            || Api->InitializeRuntimeFromBytecode == null
-            || Api->FreeBuffer == null
-            || Api->RegisterCallback == null
-            || Api->CallFunction == null
-            || Api->NewFunctionCall == null
-            || Api->CancelFunctionCall == null
-            || Api->RegisterHostDispatchCallback == null
-            || Api->RegisterHostReleaseCallback == null
-            || Api->CompleteHostCall == null
-            || Api->HandleClone == null
-            || Api->HandleRelease == null
-            || Api->MediaFromUrl == null
-            || Api->MediaFromFile == null
-            || Api->MediaFromBase64 == null
-            || Api->MediaUrl == null
-            || Api->MediaFile == null
-            || Api->MediaBase64 == null
-            || Api->MediaMimeType == null
-            || Api->RegisterBridge == null
-            || Api->FlushEvents == null)
-        {
-            throw new BamlBridgeException("BAML C ABI table is missing one or more required function pointers.");
-        }
-    }
-
-    private static byte[] CopyAndFree(NativeBuffer buffer)
-    {
-        try
-        {
-            if (buffer.Pointer == null && buffer.Length != 0)
-            {
-                throw new BamlBridgeException("The native runtime returned a null buffer pointer with nonzero length.");
-            }
-
-            if (buffer.Length > int.MaxValue)
-            {
-                throw new BamlBridgeException($"Native buffer length {buffer.Length} exceeds the managed limit.");
-            }
-
-            return buffer.Length == 0
-                ? Array.Empty<byte>()
-                : new ReadOnlySpan<byte>(buffer.Pointer, checked((int)buffer.Length)).ToArray();
-        }
-        finally
-        {
-            if (buffer.Pointer != null)
-            {
-                Api->FreeBuffer(buffer);
             }
         }
     }
@@ -337,17 +261,7 @@ internal static unsafe class NativeApi
     {
         var buffer = default(NativeBuffer);
         ThrowIfFailed(accessor(key, handleType, &buffer), operation);
-        if (buffer.Pointer == null)
-        {
-            if (buffer.Length != 0)
-            {
-                throw new BamlBridgeException($"Native handle operation {operation} returned a null pointer with nonzero length.");
-            }
-
-            return optional ? null : string.Empty;
-        }
-
-        return Encoding.UTF8.GetString(CopyAndFree(buffer));
+        return NativeBufferMarshaller.ReadUtf8AndFree(buffer, optional, Api->FreeBuffer);
     }
 
     private static byte[] NullTerminatedUtf8(string value, string parameterName)
@@ -371,20 +285,6 @@ internal static unsafe class NativeApi
     private static nint LoadLibrary()
     {
         BridgePlatform.EnsureSupported();
-        var explicitPath = Environment.GetEnvironmentVariable(LibraryOverrideEnvironmentVariable);
-        if (!string.IsNullOrWhiteSpace(explicitPath))
-        {
-            try
-            {
-                return NativeLibrary.Load(Path.GetFullPath(explicitPath));
-            }
-            catch (Exception error)
-            {
-                throw new BamlBridgeException(
-                    $"Failed to load bridge_cffi from {LibraryOverrideEnvironmentVariable}={explicitPath}.",
-                    error);
-            }
-        }
 
         if (NativeLibrary.TryLoad(
                 "bridge_cffi",
@@ -393,6 +293,21 @@ internal static unsafe class NativeApi
                 out var packageHandle))
         {
             return packageHandle;
+        }
+
+        var explicitPath = NativeLibraryOverride.Resolve(Environment.GetEnvironmentVariable);
+        if (explicitPath is not null)
+        {
+            try
+            {
+                return NativeLibrary.Load(Path.GetFullPath(explicitPath.Value.Path));
+            }
+            catch (Exception error)
+            {
+                throw new BamlBridgeException(
+                    $"Failed to load bridge_cffi from {explicitPath.Value.Variable}={explicitPath.Value.Path}.",
+                    error);
+            }
         }
 
         var fileName = OperatingSystem.IsWindows()
@@ -408,7 +323,7 @@ internal static unsafe class NativeApi
 
         throw new BamlBridgeException(
             $"Could not load {fileName}. Install a baml-bridge package containing the current RID, "
-            + $"or set {LibraryOverrideEnvironmentVariable} to an absolute development-library path.");
+            + $"or set {NativeLibraryOverride.CanonicalVariable} to an absolute development-library path.");
     }
 
     private static IEnumerable<string> DevelopmentCandidates(string fileName)
@@ -431,53 +346,6 @@ internal static unsafe class NativeApi
             }
         }
     }
-
-    // These fields are populated by native memory, not managed assignments.
-#pragma warning disable CS0649
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeBuffer
-    {
-        internal sbyte* Pointer;
-        internal nuint Length;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BridgeInfoV1
-    {
-        internal nuint StructSize;
-        internal uint Language;
-        internal byte* SdkVersion;
-        internal nuint SdkVersionLength;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ApiV1
-    {
-        internal uint AbiVersion;
-        internal nuint StructSize;
-        internal delegate* unmanaged[Cdecl]<NativeBuffer> Version;
-        internal delegate* unmanaged[Cdecl]<byte*, nuint, NativeBuffer> InitializeRuntimeFromBytecode;
-        internal delegate* unmanaged[Cdecl]<NativeBuffer, void> FreeBuffer;
-        internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, sbyte*, nuint, void>, void> RegisterCallback;
-        internal delegate* unmanaged[Cdecl]<byte*, byte*, nuint, uint, void> CallFunction;
-        internal delegate* unmanaged[Cdecl]<ulong> NewFunctionCall;
-        internal delegate* unmanaged[Cdecl]<ulong, int> CancelFunctionCall;
-        internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>, void> RegisterHostDispatchCallback;
-        internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, void>, void> RegisterHostReleaseCallback;
-        internal delegate* unmanaged[Cdecl]<uint, int, sbyte*, nuint, void> CompleteHostCall;
-        internal delegate* unmanaged[Cdecl]<ulong, ulong*, BamlCffiStatus> HandleClone;
-        internal delegate* unmanaged[Cdecl]<ulong, BamlCffiStatus> HandleRelease;
-        internal delegate* unmanaged[Cdecl]<int, byte*, byte*, ulong*, int*, BamlCffiStatus> MediaFromUrl;
-        internal delegate* unmanaged[Cdecl]<int, byte*, byte*, ulong*, int*, BamlCffiStatus> MediaFromFile;
-        internal delegate* unmanaged[Cdecl]<int, byte*, byte*, ulong*, int*, BamlCffiStatus> MediaFromBase64;
-        internal delegate* unmanaged[Cdecl]<ulong, int, NativeBuffer*, BamlCffiStatus> MediaUrl;
-        internal delegate* unmanaged[Cdecl]<ulong, int, NativeBuffer*, BamlCffiStatus> MediaFile;
-        internal delegate* unmanaged[Cdecl]<ulong, int, NativeBuffer*, BamlCffiStatus> MediaBase64;
-        internal delegate* unmanaged[Cdecl]<ulong, int, NativeBuffer*, BamlCffiStatus> MediaMimeType;
-        internal delegate* unmanaged[Cdecl]<BridgeInfoV1*, NativeBuffer> RegisterBridge;
-        internal delegate* unmanaged[Cdecl]<void> FlushEvents;
-    }
-#pragma warning restore CS0649
 
     private sealed class PendingCall
     {
@@ -551,10 +419,12 @@ internal enum BamlCffiStatus : uint
 
 internal enum NativeMediaKind
 {
+    Unspecified = 0,
     Image = 1,
     Audio = 2,
     Pdf = 3,
     Video = 4,
+    Generic = 5,
 }
 
 internal enum NativeMediaSource

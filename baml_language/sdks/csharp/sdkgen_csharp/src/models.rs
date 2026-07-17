@@ -668,15 +668,15 @@ fn enum_discriminant_with(
 ) -> i64 {
     let mut input = Vec::new();
     push_hash_component(&mut input, 0, b"baml-csharp-enum-discriminant-v1");
-    push_hash_component(&mut input, 1, name.pkg.as_str().as_bytes());
-    let namespace_count = u32::try_from(name.namespace_path.len())
+    push_hash_component(&mut input, 1, name.package().as_str().as_bytes());
+    let namespace_count = u32::try_from(name.namespace().len())
         .expect("BAML namespace depth must fit in a 32-bit hash component");
     input.push(2);
     input.extend_from_slice(&namespace_count.to_be_bytes());
-    for segment in &name.namespace_path {
+    for segment in name.namespace() {
         push_hash_component(&mut input, 3, segment.as_str().as_bytes());
     }
-    push_hash_component(&mut input, 4, name.name.as_str().as_bytes());
+    push_hash_component(&mut input, 4, name.name().as_str().as_bytes());
     push_hash_component(&mut input, 5, variant.as_bytes());
 
     let digest = digest(&input);

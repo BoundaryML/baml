@@ -51,12 +51,10 @@ SHA_RE = re.compile(r"^[a-z]$")
 # closed on any other schema.
 PLAN_SCHEMA = 2
 
-# Registries whose package version this plan carries. crates.io and npm both
-# accept the canonical SemVer verbatim (identity translation); PyPI needs the
-# `.devN` encoding (see `to_pypi_version`). No .NET/NuGet registry ships yet,
-# so it is intentionally absent — a plan must never claim a registry it does
-# not produce.
-PLAN_REGISTRIES = ("pypi", "npm", "crates_io")
+# Registries whose package version this plan carries. crates.io, npm, and
+# NuGet all accept the canonical SemVer verbatim (identity translation); PyPI
+# needs the `.devN` encoding (see `to_pypi_version`).
+PLAN_REGISTRIES = ("pypi", "npm", "crates_io", "nuget")
 
 
 @dataclass(frozen=True, order=True)
@@ -113,6 +111,10 @@ class ReleasePlan:
     @property
     def crates_io_version(self) -> str:
         return self.registry_versions["crates_io"]
+
+    @property
+    def nuget_version(self) -> str:
+        return self.registry_versions["nuget"]
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -329,6 +331,7 @@ def registry_versions_for(canonical: str) -> dict[str, str]:
         "pypi": to_pypi_version(canonical),
         "npm": canonical,
         "crates_io": canonical,
+        "nuget": canonical,
     }
     # Keep the map and the declared registry set in lockstep.
     assert set(translations) == set(PLAN_REGISTRIES)
@@ -440,7 +443,7 @@ def stamp(plan: ReleasePlan) -> None:
         replace_regex(
             CSHARP_BRIDGE_PROJECT,
             r"^    <Version>.*</Version>$",
-            f"    <Version>{plan.canonical_version}</Version>",
+            f"    <Version>{plan.nuget_version}</Version>",
         )
 
     text = PY_INIT.read_text(encoding="utf-8")
@@ -556,7 +559,7 @@ def check_release() -> None:
 
     if CSHARP_BRIDGE_PROJECT.exists():
         checks["C# bridge package version"] = (
-            f"<Version>{expected.canonical_version}</Version>"
+            f"<Version>{expected.nuget_version}</Version>"
             in CSHARP_BRIDGE_PROJECT.read_text(encoding="utf-8")
         )
 

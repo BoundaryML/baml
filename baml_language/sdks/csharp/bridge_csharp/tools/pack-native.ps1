@@ -7,28 +7,30 @@ param(
     [string] $Rid,
 
     [Parameter(Mandatory = $true)]
-    [string] $OutputDirectory
+    [string] $OutputDirectory,
+
+    [string] $PlatformContract
 )
 
 $ErrorActionPreference = 'Stop'
-$expectedNames = @{
-    'linux-x64'        = 'libbridge_cffi.so'
-    'linux-arm64'      = 'libbridge_cffi.so'
-    'linux-musl-x64'   = 'libbridge_cffi.so'
-    'linux-musl-arm64' = 'libbridge_cffi.so'
-    'osx-x64'          = 'libbridge_cffi.dylib'
-    'osx-arm64'        = 'libbridge_cffi.dylib'
-    'win-x64'          = 'bridge_cffi.dll'
-    'win-arm64'        = 'bridge_cffi.dll'
+
+if ([string]::IsNullOrWhiteSpace($PlatformContract)) {
+    $PlatformContract = Join-Path $PSScriptRoot '../../../../../release/platforms.json'
 }
 
-if (-not $expectedNames.ContainsKey($Rid)) {
-    throw "Unsupported BAML RID: $Rid"
+$contractPath = (Resolve-Path -LiteralPath $PlatformContract).Path
+$contract = Get-Content -LiteralPath $contractPath -Raw | ConvertFrom-Json
+$matchingTargets = @($contract.targets | Where-Object {
+    $null -ne $_.artifacts.csharp -and $_.artifacts.csharp.rid -ceq $Rid
+})
+if ($matchingTargets.Count -ne 1) {
+    throw "Expected exactly one C# platform-contract entry for RID '$Rid', found $($matchingTargets.Count)"
 }
 
+$expectedName = $matchingTargets[0].artifacts.csharp.native_asset
 $nativePath = (Resolve-Path -LiteralPath $NativeLibrary).Path
-if ([IO.Path]::GetFileName($nativePath) -cne $expectedNames[$Rid]) {
-    throw "Native library for $Rid must be named $($expectedNames[$Rid])"
+if ([IO.Path]::GetFileName($nativePath) -cne $expectedName) {
+    throw "Native library for $Rid must be named $expectedName"
 }
 
 $scriptRoot = $PSScriptRoot

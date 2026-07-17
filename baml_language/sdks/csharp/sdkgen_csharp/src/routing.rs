@@ -70,10 +70,10 @@ impl RouteMap {
             .insert(NamespaceNode::VendorRoot);
 
         for name in &names {
-            if name.pkg.as_str() == "user" {
+            if name.is_local() {
                 let mut parent = NamespaceNode::Root;
                 let mut segments = Vec::new();
-                for source in &name.namespace_path {
+                for source in name.namespace() {
                     segments.push(source.as_str().to_string());
                     let child = NamespaceNode::User(segments.clone());
                     children
@@ -83,7 +83,7 @@ impl RouteMap {
                     parent = child;
                 }
             } else {
-                let package = name.pkg.as_str().to_string();
+                let package = name.package().as_str().to_string();
                 let package_node = NamespaceNode::VendorPackage(package.clone());
                 children
                     .entry(NamespaceNode::VendorRoot)
@@ -91,7 +91,7 @@ impl RouteMap {
                     .insert(package_node.clone());
                 let mut parent = package_node;
                 let mut segments = Vec::new();
-                for source in &name.namespace_path {
+                for source in name.namespace() {
                     segments.push(source.as_str().to_string());
                     let child = NamespaceNode::VendorNamespace {
                         package: package.clone(),
@@ -159,11 +159,11 @@ fn allocated_leaf(
     let mut path = PathBuf::new();
     let mut parent = NamespaceNode::Root;
 
-    if name.pkg.as_str() != "user" {
+    if !name.is_local() {
         let vendor = NamespaceNode::VendorRoot;
         namespace_segments.push(allocated[&(parent.clone(), vendor.clone())].clone());
         parent = vendor;
-        let package = NamespaceNode::VendorPackage(name.pkg.as_str().to_string());
+        let package = NamespaceNode::VendorPackage(name.package().as_str().to_string());
         let projected = allocated[&(parent.clone(), package.clone())].clone();
         namespace_segments.push(projected.clone());
         path.push(file_segment(&projected));
@@ -171,13 +171,13 @@ fn allocated_leaf(
     }
 
     let mut source_segments = Vec::new();
-    for source in &name.namespace_path {
+    for source in name.namespace() {
         source_segments.push(source.as_str().to_string());
-        let child = if name.pkg.as_str() == "user" {
+        let child = if name.is_local() {
             NamespaceNode::User(source_segments.clone())
         } else {
             NamespaceNode::VendorNamespace {
-                package: name.pkg.as_str().to_string(),
+                package: name.package().as_str().to_string(),
                 segments: source_segments.clone(),
             }
         };
@@ -205,14 +205,14 @@ pub(crate) fn route(name: &Name) -> Leaf {
     let mut namespace_segments = vec![ROOT_NAMESPACE.to_string()];
     let mut path = PathBuf::new();
 
-    if name.pkg.as_str() != "user" {
+    if !name.is_local() {
         namespace_segments.push("Vendor".to_string());
-        let segment = namespace_segment(name.pkg.as_str());
+        let segment = namespace_segment(name.package().as_str());
         namespace_segments.push(segment.clone());
         path.push(file_segment(&segment));
     }
 
-    for source_segment in &name.namespace_path {
+    for source_segment in name.namespace() {
         let segment = namespace_segment(source_segment.as_str());
         namespace_segments.push(segment.clone());
         path.push(file_segment(&segment));

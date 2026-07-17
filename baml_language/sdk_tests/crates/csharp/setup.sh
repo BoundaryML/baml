@@ -17,6 +17,6 @@ esac
 
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
   echo "SDK_TEST_CSHARP_SETUP=1" >> "$NEXTEST_ENV"
-  echo "BAML_BRIDGE_LIBRARY=$native_library" >> "$NEXTEST_ENV"
+  echo "BAML_RUNTIME_PATH=$native_library" >> "$NEXTEST_ENV"
   echo "NuGetAudit=false" >> "$NEXTEST_ENV"
 fi

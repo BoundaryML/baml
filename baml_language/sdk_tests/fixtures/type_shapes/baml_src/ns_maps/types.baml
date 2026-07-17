@@ -41,3 +41,13 @@ function round_trip_resume(r: Resume) -> Resume {
 function round_trip_map_container(c: MapContainer) -> MapContainer {
   c
 }
+
+// A union of string literals is a string-denoting map key. Host generators
+// must retain the wire key strings after lowering away the literal values.
+type PublicationKey = "draft" | "published"
+
+function round_trip_literal_keyed_map(
+  m: map<PublicationKey, int>
+) -> map<PublicationKey, int> {
+  m
+}

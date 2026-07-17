@@ -1,0 +1,195 @@
+name: BAML SDK Release - Verify C#
+
+# Verifies the exact atomic NuGet package from build2-csharp-sdk on every
+# contract-claimed host. Each job uses the release's target-native baml-cli to
+# generate a small SDK, restores baml-bridge by exact PackageReference from a
+# clean local feed, publishes for the claimed RID, and executes a real BAML
+# call. Native override variables are removed, so normal NuGet RID selection is
+# the only bridge_cffi acquisition path. musl runs inside a real Alpine image.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to verify"
+        type: string
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-verify-csharp-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  platform-matrix:
+    name: Compute C# verification matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          sparse-checkout: release
+
+      - name: Derive claimed hosts from the platform contract
+        id: derive
+        run: |
+          set -euo pipefail
+          matrix="$(jq -ce '
+            if .schema == 1
+              and .csharp_package.package_id == "baml-bridge"
+              and .csharp_package.atomic_all_rids == true
+              and .csharp_package.cffi_inputs_required == true
+              and ([.targets[] | select(.artifacts.csharp != null)] | length) > 0
+              and ([.targets[] | select(.artifacts.csharp != null)] | length)
+                == ([.targets[] | select(.artifacts.cffi != null)] | length)
+              and all(.targets[];
+                (.artifacts.csharp == null and .artifacts.cffi == null)
+                or (.artifacts.csharp != null and .artifacts.cffi != null))
+            then {include: [.targets[]
+              | select(.artifacts.csharp != null)
+              | {target: .triple,
+                 rid: .artifacts.csharp.rid,
+                 native_asset: .artifacts.csharp.native_asset,
+                 runner: .artifacts.csharp.verify_runner,
+                 libc: .libc}]}
+            else error("invalid atomic C# package platform contract")
+            end
+          ' release/platforms.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq . <<<"$matrix"
+
+  verify:
+    needs: platform-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    name: verify ${{ matrix.rid }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Install .NET 10
+        if: matrix.libc != 'musl'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download immutable NuGet package
+        uses: actions/download-artifact@v4
+        with:
+          name: csharp-sdk-nuget
+          path: artifacts/csharp-package
+
+      - name: Download target-native release toolchain
+        uses: actions/download-artifact@v4
+        with:
+          name: toolchain-${{ matrix.target }}
+          path: artifacts/toolchain
+
+      - name: Verify package identity and provenance
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > "$RUNNER_TEMP/release-plan.json"
+          canonical="$(jq -er .canonical_version "$RUNNER_TEMP/release-plan.json")"
+          nuget_version="$(jq -er .registry_versions.nuget "$RUNNER_TEMP/release-plan.json")"
+          [[ "$(jq -er .version artifacts/csharp-package/provenance.json)" == "$nuget_version" ]]
+          [[ "$(jq -er .canonical_version artifacts/csharp-package/provenance.json)" == "$canonical" ]]
+          [[ "$(jq -er .source_sha artifacts/csharp-package/provenance.json)" == "${{ inputs.source_sha }}" ]]
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum --check artifacts/csharp-package/SHA256SUMS
+          else
+            shasum -a 256 --check artifacts/csharp-package/SHA256SUMS
+          fi
+
+          shopt -s nullglob
+          packages=(artifacts/csharp-package/*.nupkg)
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            echo "::error::expected one immutable .nupkg, found ${#packages[@]}"
+            exit 1
+          fi
+          [[ "$(basename -- "${packages[0]}")" == "baml-bridge.${nuget_version}.nupkg" ]]
+          mkdir -p "$RUNNER_TEMP/csharp-package"
+          cp "${packages[0]}" "$RUNNER_TEMP/csharp-package/"
+          echo "BAML_CANONICAL_VERSION=$canonical" >> "$GITHUB_ENV"
+          echo "BAML_NUGET_VERSION=$nuget_version" >> "$GITHUB_ENV"
+          echo "BAML_NUGET_PACKAGE=$RUNNER_TEMP/csharp-package/$(basename -- "${packages[0]}")" >> "$GITHUB_ENV"
+
+      - name: Extract target-native baml-cli
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/csharp-toolchain"
+          mkdir -p "$destination"
+          if [[ '${{ matrix.target }}' == *windows-msvc ]]; then
+            archive="$(find artifacts/toolchain -type f -name '*.zip' -print -quit)"
+            test -n "$archive"
+            7z x -y "$archive" "-o$destination/extracted"
+            cli="$(find "$destination/extracted" -type f -name baml-cli.exe -print -quit)"
+            target="$destination/baml-cli.exe"
+          else
+            archive="$(find artifacts/toolchain -type f -name '*.tar.gz' -print -quit)"
+            test -n "$archive"
+            mkdir -p "$destination/extracted"
+            tar -C "$destination/extracted" -xzf "$archive"
+            cli="$(find "$destination/extracted" -type f -name baml-cli -print -quit)"
+            target="$destination/baml-cli"
+          fi
+          test -n "$cli"
+          cp "$cli" "$target"
+          chmod +x "$target"
+          echo "BAML_RELEASE_CLI=$target" >> "$GITHUB_ENV"
+          if [[ '${{ matrix.libc }}' != musl ]]; then
+            "$target" --version
+          fi
+
+      - name: Clean package-reference consumer
+        if: matrix.libc != 'musl'
+        env:
+          BAML_RUNTIME_PATH: ""
+          BAML_BRIDGE_LIBRARY: ""
+          BAML_LIBRARY_PATH: ""
+        run: |
+          set -euo pipefail
+          baml_language/sdks/csharp/bridge_csharp/tools/verify-nuget-consumer.sh \
+            "$BAML_RELEASE_CLI" \
+            "$BAML_NUGET_PACKAGE" \
+            "$BAML_NUGET_VERSION" \
+            '${{ matrix.rid }}' \
+            '${{ matrix.native_asset }}' \
+            "$RUNNER_TEMP/csharp-clean-consumer"
+
+      - name: Clean package-reference consumer (Alpine)
+        if: matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          cli_name="$(basename -- "$BAML_RELEASE_CLI")"
+          package_name="$(basename -- "$BAML_NUGET_PACKAGE")"
+          docker run --rm \
+            --volume "$PWD:/repo:ro" \
+            --volume "$RUNNER_TEMP:/work" \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c 'apk add --no-cache bash jq &&
+              exec bash /repo/baml_language/sdks/csharp/bridge_csharp/tools/verify-nuget-consumer.sh "$@"' \
+            verify-csharp \
+            "/work/csharp-toolchain/$cli_name" \
+            "/work/csharp-package/$package_name" \
+            "$BAML_NUGET_VERSION" \
+            '${{ matrix.rid }}' \
+            '${{ matrix.native_asset }}' \
+            /work/csharp-clean-consumer

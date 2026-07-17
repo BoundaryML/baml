@@ -1418,6 +1418,13 @@ internal static class ProtoCodec
             return typeAliasContract.Constructor.Invoke([converted]);
         }
 
+        if (value is DecodedUnion collapsedUnion
+            && (!targetType.IsGenericType
+                || !typeof(IBamlUnionValue).IsAssignableFrom(targetType)))
+        {
+            return ConvertDecoded(collapsedUnion.Value, targetType, depth + 1);
+        }
+
         if (value is null)
         {
             if (!targetType.IsValueType || Nullable.GetUnderlyingType(targetType) is not null)
@@ -1919,11 +1926,29 @@ internal static class ProtoCodec
             return;
         }
 
+        if (expected == BamlTyPrimitiveKind.BamlTyPrimitiveString
+            && IsStringDenotingMapKeyType(keyType))
+        {
+            return;
+        }
+
         if (keyType?.TyCase != BamlTy.TyOneofCase.Primitive || keyType.Primitive.Kind != expected)
         {
             throw MapKeyTypeError(keyType, targetType);
         }
     }
+
+    private static bool IsStringDenotingMapKeyType(BamlTy? keyType) => keyType?.TyCase switch
+    {
+        BamlTy.TyOneofCase.Primitive =>
+            keyType.Primitive.Kind == BamlTyPrimitiveKind.BamlTyPrimitiveString,
+        BamlTy.TyOneofCase.Literal =>
+            keyType.Literal.LiteralCase == BamlTyLiteral.LiteralOneofCase.StringValue,
+        BamlTy.TyOneofCase.Union =>
+            keyType.Union.Options.Count > 0
+            && keyType.Union.Options.All(IsStringDenotingMapKeyType),
+        _ => false,
+    };
 
     private static BamlBridgeException MapKeyTypeError(BamlTy? keyType, Type targetType) => new(
         $"The native runtime returned map key type {keyType?.TyCase.ToString() ?? "missing"}, but generated C# code expected {targetType.FullName}.");

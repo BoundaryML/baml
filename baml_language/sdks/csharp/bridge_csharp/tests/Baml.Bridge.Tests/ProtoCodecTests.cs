@@ -625,6 +625,25 @@ public sealed class ProtoCodecTests
     }
 
     [Fact]
+    public void OutboundCollapsedLiteralUnionDecodesToItsSingleClrType()
+    {
+        var payload = new BamlOutboundResult
+        {
+            Ok = new BamlOutboundValue
+            {
+                UnionVariantValue = new BamlValueUnionVariant
+                {
+                    SelfType = StringLiteralUnionType("draft", "published"),
+                    ValueOptionName = "\"draft\"",
+                    Value = new BamlOutboundValue { StringValue = "draft" },
+                },
+            },
+        }.ToByteArray();
+
+        Assert.Equal("draft", ProtoCodec.DecodeResult<string>(payload));
+    }
+
+    [Fact]
     public void OutboundNullAcceptsUnsetAndExplicitWireRepresentations()
     {
         var unsetPayload = new BamlOutboundResult
@@ -781,6 +800,34 @@ public sealed class ProtoCodecTests
         Assert.Equal(
             "enum",
             ProtoCodec.DecodeResult<Dictionary<TestGeneratedLabel, string>>(enumPayload)[TestGeneratedLabel.Good]);
+    }
+
+    [Fact]
+    public void OutboundStringLiteralUnionMapKeysUseClrStrings()
+    {
+        var payload = MapResult(
+            StringLiteralUnionType("draft", "published"),
+            ("draft", "first"),
+            ("published", "second"));
+
+        var decoded = ProtoCodec.DecodeResult<Dictionary<string, string>>(payload);
+
+        Assert.Equal("first", decoded["draft"]);
+        Assert.Equal("second", decoded["published"]);
+    }
+
+    [Fact]
+    public void OutboundMixedLiteralUnionMapKeysAreRejectedAsClrStrings()
+    {
+        var keyType = StringLiteralUnionType("draft");
+        keyType.Union.Options.Add(new BamlTy
+        {
+            Literal = new BamlTyLiteral { IntValue = 1 },
+        });
+        var payload = MapResult(keyType, ("draft", "value"));
+
+        Assert.Throws<BamlBridgeException>(() =>
+            ProtoCodec.DecodeResult<Dictionary<string, string>>(payload));
     }
 
     [Fact]
@@ -1129,6 +1176,16 @@ public sealed class ProtoCodecTests
         {
             Ok = new BamlOutboundValue { MapValue = map },
         }.ToByteArray();
+    }
+
+    private static BamlTy StringLiteralUnionType(params string[] values)
+    {
+        var union = new BamlTyUnion();
+        union.Options.Add(values.Select(static value => new BamlTy
+        {
+            Literal = new BamlTyLiteral { StringValue = value },
+        }));
+        return new BamlTy { Union = union };
     }
 }
 

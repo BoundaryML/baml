@@ -272,6 +272,8 @@ typedef struct BamlBridgeInfoV1 {
 
 typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 *info);
 
+typedef void (*BamlFlushEventsFn)(void);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -436,6 +438,10 @@ typedef struct BamlApiV1 {
    * only for an identical language/version pair.
    */
   BamlRegisterBridgeFn register_bridge;
+  /**
+   * Flush the process event sink before a host exits or completes a test.
+   */
+  BamlFlushEventsFn flush_events;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -461,6 +467,10 @@ BAML_CFFI_API const struct BamlApiV1 *baml_get_api_v1(void);
 #define BAML_API_V1_MIN_SIZE \
   (offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge))
 
+/* Size through the optional flush_events extension appended to the V1 table. */
+#define BAML_API_V1_FLUSH_EVENTS_SIZE \
+  (offsetof(BamlApiV1, flush_events) + sizeof(((BamlApiV1 *)0)->flush_events))
+
 /*
  * Validate the original V1 prefix without rejecting a runtime that appended
  * fields. Consumers must perform an equivalent end-of-field check before
@@ -469,6 +479,12 @@ BAML_CFFI_API const struct BamlApiV1 *baml_get_api_v1(void);
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
          api->struct_size >= BAML_API_V1_MIN_SIZE;
+}
+
+/* Validate that a compatible V1 table includes the flush_events extension. */
+static inline bool baml_api_v1_has_flush_events(const BamlApiV1 *api) {
+  return baml_api_v1_is_compatible(api) &&
+         api->struct_size >= BAML_API_V1_FLUSH_EVENTS_SIZE;
 }
 
 #endif /* BAML_CFFI_H */

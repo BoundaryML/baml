@@ -1,6 +1,11 @@
 {
-  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The cffi, toolchain, and python build matrices are generated from this file (see .github/workflows/build2-bridge-cffi.reusable.yaml, release-baml-language.yml, build2-python-sdk.reusable.yaml); the Rust side is validated against it by baml_release::platforms tests. The nodejs matrix keeps its bespoke per-target build recipes in its own workflow. Per target, `artifacts` maps each supported SDK/build artifact to its config: a MISSING key means that artifact is not built for the target (unsupported); `experimental: true` means built best-effort (a failure must not block the release); absent/false means required (must succeed). `runner` is the GitHub Actions runner label, distinct from the target's `os` family.",
+  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The cffi, toolchain, python, and C# packaging/verification matrices are generated from this file (see .github/workflows/build2-bridge-cffi.reusable.yaml, release-baml-language.yml, build2-python-sdk.reusable.yaml, build2-csharp-sdk.reusable.yaml, and verify-csharp-sdk.reusable.yaml); the Rust side is validated against it by baml_release::platforms tests. The nodejs matrix keeps its bespoke per-target build recipes in its own workflow. Per target, `artifacts` maps each supported SDK/build artifact to its config: a MISSING key means that artifact is not built for the target (unsupported); `experimental: true` means built best-effort (a failure must not block the release); absent/false means required (must succeed). `runner` and `verify_runner` are GitHub Actions runner labels, distinct from the target's `os` family. C# is one atomic all-RID NuGet package, so its package policy promotes every selected cffi input to required even when the standalone cffi artifact is experimental.",
   "schema": 1,
+  "csharp_package": {
+    "package_id": "baml-bridge",
+    "atomic_all_rids": true,
+    "cffi_inputs_required": true
+  },
   "targets": [
     {
       "triple": "aarch64-apple-darwin",
@@ -12,7 +17,8 @@
         "toolchain": { "runner": "macos-14" },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true },
+        "csharp": { "rid": "osx-arm64", "native_asset": "libbridge_cffi.dylib", "pack_property": "BamlNativeOsxArm64", "verify_runner": "macos-14" }
       }
     },
     {
@@ -25,7 +31,8 @@
         "toolchain": { "runner": "macos-15-intel" },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" }
+        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" },
+        "csharp": { "rid": "osx-x64", "native_asset": "libbridge_cffi.dylib", "pack_property": "BamlNativeOsxX64", "verify_runner": "macos-15-intel" }
       }
     },
     {
@@ -38,7 +45,8 @@
         "toolchain": { "runner": "ubuntu-24.04-arm" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true },
+        "csharp": { "rid": "linux-arm64", "native_asset": "libbridge_cffi.so", "pack_property": "BamlNativeLinuxArm64", "verify_runner": "ubuntu-24.04-arm" }
       }
     },
     {
@@ -51,7 +59,8 @@
         "toolchain": { "runner": "ubuntu-24.04-arm" },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true },
+        "csharp": { "rid": "linux-musl-arm64", "native_asset": "libbridge_cffi.so", "pack_property": "BamlNativeLinuxMuslArm64", "verify_runner": "ubuntu-24.04-arm" }
       }
     },
     {
@@ -64,7 +73,8 @@
         "toolchain": { "runner": "ubuntu-latest" },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true }
+        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true },
+        "csharp": { "rid": "linux-x64", "native_asset": "libbridge_cffi.so", "pack_property": "BamlNativeLinuxX64", "verify_runner": "ubuntu-24.04" }
       }
     },
     {
@@ -77,7 +87,8 @@
         "toolchain": { "runner": "ubuntu-latest" },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
+        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true },
+        "csharp": { "rid": "linux-musl-x64", "native_asset": "libbridge_cffi.so", "pack_property": "BamlNativeLinuxMuslX64", "verify_runner": "ubuntu-24.04" }
       }
     },
     {
@@ -90,7 +101,8 @@
         "toolchain": { "runner": "windows-latest" },
         "python": { "runner": "windows-latest" },
         "nodejs": {},
-        "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true }
+        "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true },
+        "csharp": { "rid": "win-x64", "native_asset": "bridge_cffi.dll", "pack_property": "BamlNativeWinX64", "verify_runner": "windows-2022" }
       }
     },
     {
@@ -103,7 +115,8 @@
         "toolchain": { "runner": "windows-latest" },
         "python": { "runner": "windows-11-arm", "architecture": "arm64" },
         "nodejs": {},
-        "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true, "experimental": true }
+        "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true, "experimental": true },
+        "csharp": { "rid": "win-arm64", "native_asset": "bridge_cffi.dll", "pack_property": "BamlNativeWinArm64", "verify_runner": "windows-11-arm" }
       }
     }
   ]

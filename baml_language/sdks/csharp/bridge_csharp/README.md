@@ -68,7 +68,7 @@ dotnet test --solution Baml.Bridge.slnx --configuration Release
 ```
 
 At runtime, normal NuGet RID probing is attempted first. Development builds can
-set `BAML_BRIDGE_LIBRARY` to an absolute `bridge_cffi` path.
+set `BAML_RUNTIME_PATH` to an absolute `bridge_cffi` path.
 
 The package/tool versions are pinned in `Directory.Packages.props`. Protobuf
 sources are generated internally beneath `obj/` from the canonical
