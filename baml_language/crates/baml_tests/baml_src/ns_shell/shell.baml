@@ -1,28 +1,8 @@
 // Unified tests for shell and exec operations.
 //
-// Converted from crates/baml_tests/tests/shell.rs. Each Rust test that runs a
-// deterministic, cross-platform command becomes a top-level `function` + a
-// `test` block. Functions are used (rather than inline test-block bodies) to
-// avoid the test-block local-boxing VM bug — locals compared against literals
-// inside a test block may compare unequal.
-//
-// Tests left in Rust (not converted):
-//
-//   shell_with_pipe        — Unix-only command (`tr`); also has an insta
-//                            bytecode snapshot that only runs in the Rust harness.
-//   shell_nonexistent_command — asserts exit_code != 0, but the exact value is
-//                            platform-dependent (127 on Unix, 9009 on Windows,
-//                            etc.); non-deterministic enough to leave.
-//   shell_stderr           — uses `>&2` stderr redirection, Unix-only.
-//   exec_failing           — platform-split: Unix uses `false` binary, Windows
-//                            uses `cmd /c exit 1`.
-//   exec_with_args         — platform-split: Unix uses `printf`, Windows uses `cmd`.
-//   exec_stderr            — platform-split redirection syntax.
-//   exec_with_cwd          — platform-split: Unix uses `pwd`, Windows uses `cmd /c cd`.
-//   exec_with_stdin        — platform-split: Unix uses `cat`, Windows uses `findstr`.
-//   exec_with_timeout      — timing-dependent; not safe for deterministic assertion.
-//   shell_with_options     — platform-split: Unix uses `pwd`, Windows uses `cmd /c cd`.
-//   shell_stderr_bytes     — uses `>&2` redirection; Unix-only.
+// Functions are used (rather than inline test-block bodies) to avoid the
+// test-block local-boxing VM bug — locals compared against literals inside a
+// test block may compare unequal.
 
 // ============================================================================
 // shell() tests
@@ -83,6 +63,18 @@ function shell_stdout_bytes_fn() -> bool {
 
 test "shell_stdout_bytes" {
     assert.is_true(shell_stdout_bytes_fn())
+}
+
+// A nonexistent command still spawns the shell fine (no throw); only the exit
+// code is non-zero. The exact code is platform-dependent (127 on Unix shells,
+// 9009 on cmd, 1 on PowerShell), so — exactly like the original Rust test —
+// only `!= 0` is asserted.
+function shell_nonexistent_command_fn() -> bool {
+    baml.sys.shell("nonexistent_command_12345", null).exit_code != 0
+}
+
+test "shell_nonexistent_command" {
+    assert.is_true(shell_nonexistent_command_fn())
 }
 
 // ============================================================================

@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function http.$init_test_ns_http_http(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "http_fetch_timeout_fires"
+    make_closure .<lambda($init_test_ns_http_http, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function http.http_fetch_timeout_fires_fn() -> string {
+    load_const "127.0.0.1:0"
+    sys_op baml.http.Server.bind
+    store_var server
+    load_const 100n
+    call baml.time.Duration.from_milliseconds
+    store_var _6
+    load_const "http://"
+    load_var server
+    load_field .addr
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _6
+    call baml.http.fetch
+    sys_op baml.http.Response.text
+    return
+}
