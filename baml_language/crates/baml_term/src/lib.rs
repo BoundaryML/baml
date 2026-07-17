@@ -111,6 +111,22 @@ pub const CLAP_STYLING: clap::builder::styling::Styles = {
         )
 };
 
+/// A section heading for hand-written help epilogues (`after_help`),
+/// rendered like clap's generated `Commands:` / `Options:` headers.
+/// clap prints help through anstream, which strips the embedded escapes
+/// whenever color is off, so piped output stays plain.
+pub fn help_heading(title: &str) -> String {
+    let style = CLAP_STYLING.get_header();
+    format!("{}{title}:{}", style.render(), style.render_reset())
+}
+
+/// A command or flag literal inside hand-written help prose, bolded the
+/// way clap renders command names.
+pub fn help_literal(text: &str) -> String {
+    let style = CLAP_STYLING.get_literal();
+    format!("{}{text}{}", style.render(), style.render_reset())
+}
+
 // ── error: / warning: line printers ─────────────────────────────────────────────
 
 /// Bold-red `error` keyword, matching ariadne's lowercase custom-kind

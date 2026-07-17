@@ -11,7 +11,9 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest, WrapperManifest};
-use baml_term::{ColorChoice, init_color, print_anyhow_error, print_warning};
+use baml_term::{
+    ColorChoice, help_heading, help_literal, init_color, print_anyhow_error, print_warning,
+};
 use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
@@ -139,17 +141,29 @@ enum WrapperCommand {
     SelfUpdate,
 }
 
-#[derive(Args, Debug)]
-#[command(
-    arg_required_else_help = true,
-    after_help = "Network behavior:
-  list is local-only.
-  status checks remote metadata but does not install or change selection.
-  use, install, and update may download toolchains or change local state.
+/// Epilogue for `baml toolchain --help`, with headings and command
+/// literals styled to match clap's generated sections.
+fn toolchain_after_help() -> String {
+    format!(
+        "{network}\n  \
+         {list} is local-only.\n  \
+         {status} checks remote metadata but does not install or change selection.\n  \
+         {use_cmd}, {install}, and {update} may download toolchains or change local state.\n\n\
+         {updates}\n  \
+         {self_update}    Update curl-installed wrapper only",
+        network = help_heading("Network behavior"),
+        updates = help_heading("Wrapper updates"),
+        list = help_literal("list"),
+        status = help_literal("status"),
+        use_cmd = help_literal("use"),
+        install = help_literal("install"),
+        update = help_literal("update"),
+        self_update = help_literal("baml self-update"),
+    )
+}
 
-Wrapper updates:
-  baml self-update    Update curl-installed wrapper only"
-)]
+#[derive(Args, Debug)]
+#[command(arg_required_else_help = true, after_help = toolchain_after_help())]
 struct ToolchainArgs {
     /// Base URL for release manifests, in place of the production bucket
     #[arg(long, global = true, value_name = "URL")]
