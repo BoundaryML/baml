@@ -423,6 +423,21 @@ jobs:
                 "timeout": 30,
               },
               {
+                // The C++ sdk-test crate needs the host C++ toolchain and
+                // CMake (preinstalled on the runners) plus nextest; its
+                // setup.sh builds the bridge_cffi cdylib with cargo and
+                // pre-clones the pinned protobuf sources. Windows joins
+                // once the MSVC test driver lands (test.sh is bash).
+                "sdk-label": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
@@ -437,6 +452,16 @@ jobs:
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "cpp",
+                "package-name": "sdk_test_cpp",
+                "sdk-path": "cpp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",

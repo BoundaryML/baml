@@ -119,3 +119,22 @@ setup = 'python_pydantic2_uv_unix'
 filter = 'package(=sdk_test_python_pydantic2)'
 platform = { host = 'cfg(windows)' }
 setup = 'python_pydantic2_uv_win'
+
+# cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
+# when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte
+# equivalent — same cargo build in the host shell of each platform.
+[scripts.setup.cpp_cdylib_unix]
+command = './sdk_tests/crates/cpp/setup.sh'
+
+[scripts.setup.cpp_cdylib_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/cpp/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_cpp)'
+platform = { host = 'cfg(unix)' }
+setup = 'cpp_cdylib_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_cpp)'
+platform = { host = 'cfg(windows)' }
+setup = 'cpp_cdylib_win'

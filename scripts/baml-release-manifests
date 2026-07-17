@@ -41,7 +41,9 @@ def artifact_url(tag: str, path: Path) -> str:
     return f"https://github.com/BoundaryML/baml/releases/download/{tag}/{path.name}"
 
 
-def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[str, str]]:
+def collect_artifacts(
+    root: Path, product: str, version: str, tag: str | None = None
+) -> dict[str, dict[str, str]]:
     artifacts = {}
     prefix = f"{product}-{version}-"
     for path in sorted(root.iterdir()):
@@ -55,7 +57,7 @@ def collect_artifacts(root: Path, product: str, version: str) -> dict[str, dict[
         else:
             continue
         artifacts[target] = {
-            "url": artifact_url(f"{product}-{version}", path),
+            "url": artifact_url(tag or f"{product}-{version}", path),
             "sha256": sha256(path),
         }
     missing = sorted(set(TARGETS) - set(artifacts))

@@ -215,6 +215,21 @@ impl GenerateArgs {
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
+                OutputType::Cpp => {
+                    // The C++ emitter embeds source paths (reference
+                    // comments only); the runtime payload is the bytecode.
+                    let source_paths: Vec<PathBuf> = source_files
+                        .iter()
+                        .map(|sf| {
+                            let path = sf.path(&db);
+                            path.strip_prefix(&from).unwrap_or(&path).to_path_buf()
+                        })
+                        .collect();
+                    sdkgen_cpp::to_source_code_with_bytecode(&pool, &source_paths, &baml_bytecode)
+                        .into_iter()
+                        .map(|(path, content)| (path, content.into_bytes()))
+                        .collect()
+                }
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {
@@ -301,7 +316,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "rust""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "rust", "cpp""#,
             table_range,
             &mut diags,
         );

@@ -20,6 +20,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+sdkgen_cpp = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
 sdkgen_rust = { workspace = true }
