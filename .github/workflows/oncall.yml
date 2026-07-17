@@ -26,10 +26,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: astral-sh/setup-uv@v8.3.2
       - run: ./tools/bctl oncall check
 
       - name: Scope check - schedule-file-only PR?
@@ -65,8 +65,8 @@ jobs:
     env:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: Validate schedule
         run: ./tools/bctl oncall check
       - name: Post weekly handoff
@@ -77,8 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: boundary-tools-prod
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
       - run: ./tools/bctl oncall fill-schedule
       - name: Check for changes
         id: check_changes
@@ -88,7 +88,7 @@ jobs:
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: peter-evans/create-pull-request@v6
+      - uses: peter-evans/create-pull-request@v8
         if: steps.check_changes.outputs.has_changes == 'true'
         with:
           token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
@@ -105,8 +105,8 @@ jobs:
     env:
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: Identify failed jobs
         id: failed
         run: |
