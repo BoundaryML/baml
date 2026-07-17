@@ -1917,17 +1917,23 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
     let _42: int
     let _43: (string[]) -> int throws never
     let _44: int
-    let _45: string[]
-    let _46: string[]
-    let _47: "error" | "fail" | "pass"
-    let _48: int
-    let _49: int
-    let _50: int
-    let _51: int
+    let _45: bool
+    let _46: int
+    let _47: int
+    let _48: string[]
+    let _49: string[]
+    let _50: string[]
+    let _51: string[]
     let _52: string[]
-    let _53: string[]
-    let _54: string[]
-    let _55: string[]
+    let _53: "error" | "fail" | "pass"
+    let _54: int
+    let _55: int
+    let _56: int
+    let _57: int
+    let _58: string[]
+    let _59: string[]
+    let _60: string[]
+    let _61: string[]
 
     bb0: {
         _4 = copy _1.0;
@@ -2036,35 +2042,54 @@ fn testing.flatten_with_tolerated(report: testing.TestSetReport, selected_names:
     }
 
     bb17: {
-        branch copy _33 -> [bb19, bb18];
+        branch copy _33 -> [bb22, bb18];
     }
 
     bb18: {
-        _45 = copy _1.4;
-        _46 = copy _22;
-        _32 = call const fn testing.classify_selected_names(copy _2, copy _45, copy _46) -> [bb20];
+        _46 = len(_2);
+        goto -> bb19;
     }
 
     bb19: {
-        _32 = copy _25;
-        goto -> bb20;
+        _47 = copy _5.3;
+        _45 = copy _46 == copy _47;
+        branch copy _45 -> [bb21, bb20];
     }
 
     bb20: {
-        _47 = copy _1.0;
-        _48 = copy _5.0;
-        _49 = copy _5.1;
-        _50 = copy _5.2;
-        _51 = copy _5.3;
-        _52 = copy _32.0;
-        _53 = copy _32.1;
-        _54 = copy _32.2;
-        _55 = copy _18;
-        _0 = testing.FlatTestReport { copy _47, copy _48, copy _49, copy _50, copy _51, copy _52, copy _53, copy _54, copy _55 };
-        goto -> bb21;
+        _50 = []: string[];
+        _51 = []: string[];
+        _52 = []: string[];
+        _32 = testing.LeafIdentities { copy _50, copy _51, copy _52 };
+        goto -> bb23;
     }
 
     bb21: {
+        _48 = copy _1.4;
+        _49 = copy _22;
+        _32 = call const fn testing.classify_selected_names(copy _2, copy _48, copy _49) -> [bb23];
+    }
+
+    bb22: {
+        _32 = copy _25;
+        goto -> bb23;
+    }
+
+    bb23: {
+        _53 = copy _1.0;
+        _54 = copy _5.0;
+        _55 = copy _5.1;
+        _56 = copy _5.2;
+        _57 = copy _5.3;
+        _58 = copy _32.0;
+        _59 = copy _32.1;
+        _60 = copy _32.2;
+        _61 = copy _18;
+        _0 = testing.FlatTestReport { copy _53, copy _54, copy _55, copy _56, copy _57, copy _58, copy _59, copy _60, copy _61 };
+        goto -> bb24;
+    }
+
+    bb24: {
         return;
     }
 }
@@ -2078,48 +2103,50 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     let _4: int // n
     let _5: bool
     let _6: int
-    let _7: string // first
-    let _8: string[]
-    let _9: 0
-    let _10: string // last
-    let _11: string[]
-    let _12: int
-    let _13: int
-    let _14: bool
-    let _15: bool
-    let _16: string
+    let _7: int | null
+    let _8: bool
+    let _9: string // first
+    let _10: string[]
+    let _11: 0
+    let _12: string // last
+    let _13: string[]
+    let _14: int
+    let _15: int
+    let _16: bool
     let _17: bool
-    let _18: bool
-    let _19: string
-    let _20: int // start
-    let _21: int // end_limit
-    let _22: int
-    let _23: int
-    let _24: bool
+    let _18: string
+    let _19: bool
+    let _20: bool
+    let _21: string
+    let _22: int // start
+    let _23: int // end_limit
+    let _24: int
     let _25: int
-    let _26: int
-    let _27: int // pos
-    let _28: int // i
-    let _29: bool
-    let _30: int
-    let _31: int
+    let _26: bool
+    let _27: int
+    let _28: int
+    let _29: int // pos
+    let _30: int // i
+    let _31: bool
     let _32: int
-    let _33: string // part
-    let _34: string[]
-    let _35: int
-    let _36: bool
-    let _37: string
-    let _38: int | null
+    let _33: int
+    let _34: int
+    let _35: string // part
+    let _36: string[]
+    let _37: int
+    let _38: bool
     let _39: string
-    let _40: int
-    let _41: int
-    let _42: string
-    let _43: bool
-    let _44: int // idx
-    let _45: int
-    let _46: int
+    let _40: int | null
+    let _41: string
+    let _42: int
+    let _43: int
+    let _44: string
+    let _45: bool
+    let _46: int // idx
     let _47: int
     let _48: int
+    let _49: int
+    let _50: int
 
     bb0: {
         _3 = call const fn baml.String.split(copy _2, const "*") -> [bb1];
@@ -2137,140 +2164,148 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     }
 
     bb3: {
-        _8 = copy _3;
-        _9 = const 0_i64;
-        _7 = copy _8[_9];
-        _11 = copy _3;
-        _13 = copy _4;
-        _12 = copy _13 - const 1_i64;
-        _10 = copy _11[_12];
-        _16 = copy _7;
-        _15 = call const fn baml.String.starts_with(copy _1, copy _16) -> [bb4];
+        _10 = copy _3;
+        _11 = const 0_i64;
+        _9 = copy _10[_11];
+        _13 = copy _3;
+        _15 = copy _4;
+        _14 = copy _15 - const 1_i64;
+        _12 = copy _13[_14];
+        _18 = copy _9;
+        _17 = call const fn baml.String.starts_with(copy _1, copy _18) -> [bb4];
     }
 
     bb4: {
-        _14 = !copy _15;
-        branch copy _14 -> [bb24, bb5];
+        _16 = !copy _17;
+        branch copy _16 -> [bb24, bb5];
     }
 
     bb5: {
-        _19 = copy _10;
-        _18 = call const fn baml.String.ends_with(copy _1, copy _19) -> [bb6];
+        _21 = copy _12;
+        _20 = call const fn baml.String.ends_with(copy _1, copy _21) -> [bb6];
     }
 
     bb6: {
-        _17 = !copy _18;
-        branch copy _17 -> [bb23, bb7];
+        _19 = !copy _20;
+        branch copy _19 -> [bb23, bb7];
     }
 
     bb7: {
-        _20 = call const fn baml.String.length(copy _7) -> [bb8];
+        _22 = call const fn baml.String.length(copy _9) -> [bb8];
     }
 
     bb8: {
-        _22 = call const fn baml.String.length(copy _1) -> [bb9];
+        _24 = call const fn baml.String.length(copy _1) -> [bb9];
     }
 
     bb9: {
-        _23 = call const fn baml.String.length(copy _10) -> [bb10];
+        _25 = call const fn baml.String.length(copy _12) -> [bb10];
     }
 
     bb10: {
-        _21 = copy _22 - copy _23;
-        _25 = copy _20;
-        _26 = copy _21;
-        _24 = copy _25 > copy _26;
-        branch copy _24 -> [bb22, bb11];
+        _23 = copy _24 - copy _25;
+        _27 = copy _22;
+        _28 = copy _23;
+        _26 = copy _27 > copy _28;
+        branch copy _26 -> [bb22, bb11];
     }
 
     bb11: {
-        _27 = copy _20;
-        _28 = const 1_i64;
+        _29 = copy _22;
+        _30 = const 1_i64;
         goto -> bb12;
     }
 
     bb12: {
-        _30 = copy _28;
-        _32 = copy _4;
-        _31 = copy _32 - const 1_i64;
-        _29 = copy _30 < copy _31;
-        branch copy _29 -> [bb14, bb13];
+        _32 = copy _30;
+        _34 = copy _4;
+        _33 = copy _34 - const 1_i64;
+        _31 = copy _32 < copy _33;
+        branch copy _31 -> [bb14, bb13];
     }
 
     bb13: {
         _0 = const true;
-        goto -> bb26;
+        goto -> bb28;
     }
 
     bb14: {
-        _34 = copy _3;
-        _35 = copy _28;
-        _33 = copy _34[_35];
-        _37 = copy _33;
-        _36 = copy _37 != const "";
-        branch copy _36 -> [bb15, bb21];
+        _36 = copy _3;
+        _37 = copy _30;
+        _35 = copy _36[_37];
+        _39 = copy _35;
+        _38 = copy _39 != const "";
+        branch copy _38 -> [bb15, bb21];
     }
 
     bb15: {
-        _40 = copy _27;
-        _41 = copy _21;
-        _39 = call const fn baml.String.substring(copy _1, copy _40, copy _41) -> [bb16];
+        _42 = copy _29;
+        _43 = copy _23;
+        _41 = call const fn baml.String.substring(copy _1, copy _42, copy _43) -> [bb16];
     }
 
     bb16: {
-        _42 = copy _33;
-        _38 = call const fn baml.String.index_of(copy _39, copy _42) -> [bb17];
+        _44 = copy _35;
+        _40 = call const fn baml.String.index_of(copy _41, copy _44) -> [bb17];
     }
 
     bb17: {
-        _43 = is_type(copy _38, int);
-        branch copy _43 -> [bb19, bb18];
+        _45 = is_type(copy _40, int);
+        branch copy _45 -> [bb19, bb18];
     }
 
     bb18: {
         _0 = const false;
-        goto -> bb26;
+        goto -> bb28;
     }
 
     bb19: {
-        _44 = copy _38;
-        _46 = copy _27;
-        _47 = copy _44;
-        _45 = copy _46 + copy _47;
-        _48 = call const fn baml.String.length(copy _33) -> [bb20];
+        _46 = copy _40;
+        _48 = copy _29;
+        _49 = copy _46;
+        _47 = copy _48 + copy _49;
+        _50 = call const fn baml.String.length(copy _35) -> [bb20];
     }
 
     bb20: {
-        _27 = copy _45 + copy _48;
+        _29 = copy _47 + copy _50;
         goto -> bb21;
     }
 
     bb21: {
-        _28 = copy _28 + const 1_i64;
+        _30 = copy _30 + const 1_i64;
         goto -> bb12;
     }
 
     bb22: {
         _0 = const false;
-        goto -> bb26;
+        goto -> bb28;
     }
 
     bb23: {
         _0 = const false;
-        goto -> bb26;
+        goto -> bb28;
     }
 
     bb24: {
         _0 = const false;
-        goto -> bb26;
+        goto -> bb28;
     }
 
     bb25: {
-        _0 = copy _1 == copy _2;
-        goto -> bb26;
+        _7 = call const fn baml.String.index_of(copy _1, copy _2) -> [bb26];
     }
 
     bb26: {
+        _8 = call const fn baml.ops.equals_equals(copy _7, const null) -> [bb27];
+    }
+
+    bb27: {
+        _0 = !copy _8;
+        goto -> bb28;
+    }
+
+    bb28: {
         return;
     }
 }
@@ -2461,13 +2496,12 @@ fn testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool
     let _3: string // descendant_prefix
     let _4: int | null
     let _5: bool
-    let _6: string
-    let _7: int // star
-    let _8: string // literal
-    let _9: int
-    let _10: bool
+    let _6: int // star
+    let _7: string // literal
+    let _8: int
+    let _9: bool
+    let _10: string
     let _11: string
-    let _12: string
 
     bb0: {
         _3 = copy _2 + const "::";
@@ -2480,28 +2514,28 @@ fn testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool
     }
 
     bb2: {
-        _7 = copy _4;
-        _9 = copy _7;
-        _8 = call const fn baml.String.substring(copy _1, const 0_i64, copy _9) -> [bb3];
+        _6 = copy _4;
+        _8 = copy _6;
+        _7 = call const fn baml.String.substring(copy _1, const 0_i64, copy _8) -> [bb3];
     }
 
     bb3: {
-        _11 = copy _8;
-        _10 = call const fn baml.String.starts_with(copy _3, copy _11) -> [bb4];
+        _10 = copy _7;
+        _9 = call const fn baml.String.starts_with(copy _3, copy _10) -> [bb4];
     }
 
     bb4: {
-        _0 = short_circuit(||) copy _10 -> [eval: bb5, join: bb7];
+        _0 = short_circuit(||) copy _9 -> [eval: bb5, join: bb7];
     }
 
     bb5: {
-        _12 = copy _3;
-        _0 = call const fn baml.String.starts_with(copy _8, copy _12) -> [bb7];
+        _11 = copy _3;
+        _0 = call const fn baml.String.starts_with(copy _7, copy _11) -> [bb7];
     }
 
     bb6: {
-        _6 = copy _3;
-        _0 = call const fn baml.String.starts_with(copy _1, copy _6) -> [bb7];
+        _0 = const true;
+        goto -> bb7;
     }
 
     bb7: {
@@ -3813,8 +3847,14 @@ fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     let _8: string // pattern
     let _9: bool
     let _10: bool
-    let _11: string
-    let _12: string
+    let _11: int | null
+    let _12: int | null
+    let _13: string
+    let _14: bool
+    let _15: bool
+    let _16: bool
+    let _17: string
+    let _18: string
 
     bb0: {
         _3 = copy _1 + const "::";
@@ -3827,41 +3867,76 @@ fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
 
     bb2: {
         _6 = is_type(copy _5, baml.iter.Done);
-        branch copy _6 -> [bb8, bb3];
+        branch copy _6 -> [bb16, bb3];
     }
 
     bb3: {
         _7 = copy _5;
         fresh_cell(_8);
         _8 = copy _7;
-        _10 = call const fn baml.String.ends_with(copy _8, const "*") -> [bb4];
+        _11 = call const fn baml.String.index_of(copy _8, const "*") -> [bb4];
     }
 
     bb4: {
-        _9 = short_circuit(&&) copy _10 -> [eval: bb5, join: bb6];
+        _10 = call const fn baml.ops.equals_equals(copy _11, const null) -> [bb5];
     }
 
     bb5: {
-        _11 = copy _3;
-        _12 = copy _8;
-        _9 = call const fn testing.glob_match(copy _11, copy _12) -> [bb6];
+        _9 = short_circuit(&&) copy _10 -> [eval: bb6, join: bb9];
     }
 
     bb6: {
-        branch copy _9 -> [bb7, bb1];
+        _13 = copy _8;
+        _12 = call const fn baml.String.index_of(copy _3, copy _13) -> [bb7];
     }
 
     bb7: {
-        _0 = const true;
-        goto -> bb9;
+        _14 = call const fn baml.ops.equals_equals(copy _12, const null) -> [bb8];
     }
 
     bb8: {
-        _0 = const false;
+        _9 = !copy _14;
         goto -> bb9;
     }
 
     bb9: {
+        branch copy _9 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _16 = call const fn baml.String.ends_with(copy _8, const "*") -> [bb11];
+    }
+
+    bb11: {
+        _15 = short_circuit(&&) copy _16 -> [eval: bb12, join: bb13];
+    }
+
+    bb12: {
+        _17 = copy _3;
+        _18 = copy _8;
+        _15 = call const fn testing.glob_match(copy _17, copy _18) -> [bb13];
+    }
+
+    bb13: {
+        branch copy _15 -> [bb14, bb1];
+    }
+
+    bb14: {
+        _0 = const true;
+        goto -> bb17;
+    }
+
+    bb15: {
+        _0 = const true;
+        goto -> bb17;
+    }
+
+    bb16: {
+        _0 = const false;
+        goto -> bb17;
+    }
+
+    bb17: {
         return;
     }
 }

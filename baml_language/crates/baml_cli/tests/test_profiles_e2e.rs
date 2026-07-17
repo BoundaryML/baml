@@ -12,13 +12,13 @@ name = "profile-e2e"
 default = "regular"
 
 [test.profiles.regular]
-args = ["-x", "root.orders::integration::*"]
+args = ["-x", "::integration::"]
 
 [test.profiles.integration]
-args = ["-i", "root.orders::integration::*"]
+args = ["-i", "::integration::"]
 
 [test.profiles.unit]
-args = ["-i", "root.orders::unit::*"]
+args = ["-i", "::unit::"]
 "#,
     )
     .unwrap();
@@ -122,14 +122,7 @@ fn cli_include_narrows_profile_instead_of_oring_with_it() {
     create_project(tmp.path());
     let selected = run(
         tmp.path(),
-        &[
-            "test",
-            "--list",
-            "--profile",
-            "integration",
-            "-i",
-            "*hello*",
-        ],
+        &["test", "--list", "--profile", "integration", "-i", "hello"],
     );
     assert!(
         selected.status.success(),
@@ -163,6 +156,12 @@ fn bad_profiles_and_old_slash_selectors_are_actionable() {
     let error = String::from_utf8_lossy(&slash.stderr);
     assert!(error.contains("old `/` hierarchy separator"), "{error}");
     assert!(error.contains("integration::nested::hello_test"), "{error}");
+
+    let rooted = run(tmp.path(), &["test", "-i", "rooted::nested/case"]);
+    assert!(!rooted.status.success());
+    let error = String::from_utf8_lossy(&rooted.stderr);
+    assert!(error.contains("old `/` hierarchy separator"), "{error}");
+    assert!(error.contains("rooted::nested::case"), "{error}");
 }
 
 #[test]
@@ -262,7 +261,7 @@ testset "integration" {
     assert!(!contradictory.status.success());
     assert!(!stdout(&contradictory).contains("failed to expand"));
 
-    for exclude in ["*", "root*"] {
+    for exclude in ["*", "root", "root*"] {
         let excluded = run(
             tmp.path(),
             &["test", "--list", "--no-profile", "-x", exclude],

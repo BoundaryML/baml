@@ -1,20 +1,24 @@
 /// A single layer of `baml test` selectors.
 ///
-/// Patterns are matched against the complete canonical test id (for example
-/// `root.payments::integration::declined_card`). Repeated includes are ORed,
-/// repeated excludes are ORed, and exclusions win.
+/// Selectors are matched against the complete canonical test id (for example
+/// `root.payments::integration::declined_card`). A selector without `*` is a
+/// substring filter; a selector containing `*` is an anchored glob. Repeated
+/// includes are ORed, repeated excludes are ORed, and exclusions win.
 #[derive(Debug, Clone, Default)]
 pub struct TestFilter {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
 }
 
-/// `*`-glob match anchored at both ends. `*` matches any run of Unicode
-/// characters, including `::`; every other character is literal.
+/// Selector match against a canonical test id.
+///
+/// Plain selectors are case-sensitive substring filters. A selector containing
+/// `*` is instead an anchored glob where `*` matches any run of Unicode
+/// characters, including `::`, and every other character is literal.
 pub(crate) fn glob_match(subject: &str, pattern: &str) -> bool {
     let parts: Vec<&str> = pattern.split('*').collect();
     if parts.len() == 1 {
-        return subject == pattern;
+        return subject.contains(pattern);
     }
     let first = parts[0];
     let last = parts[parts.len() - 1];
@@ -78,11 +82,14 @@ mod tests {
     }
 
     #[test]
-    fn matches_full_canonical_ids() {
+    fn plain_selectors_are_substrings_and_explicit_globs_are_anchored() {
         let id = "root.payments::integration::declined_card";
+        assert!(filter(&["payments"], &[]).includes_id(id));
+        assert!(filter(&["declined_card"], &[]).includes_id(id));
         assert!(filter(&["root.payments::*"], &[]).includes_id(id));
         assert!(filter(&["*::integration::*"], &[]).includes_id(id));
         assert!(filter(&["*declined*"], &[]).includes_id(id));
+        assert!(!filter(&["payments::*"], &[]).includes_id(id));
         assert!(!filter(&["root.orders::*"], &[]).includes_id(id));
     }
 
@@ -106,6 +113,7 @@ mod tests {
     #[test]
     fn slash_unicode_punctuation_and_consecutive_stars_are_literal_or_wildcard_as_documented() {
         let id = "root.orders::path/to::café?[x]";
+        assert!(filter(&["path/to::café?[x]"], &[]).includes_id(id));
         assert!(filter(&["*::path/to::café?[x]"], &[]).includes_id(id));
         assert!(filter(&["root**::path/to::*"], &[]).includes_id(id));
         assert!(!filter(&["*::pathXto::*"], &[]).includes_id(id));

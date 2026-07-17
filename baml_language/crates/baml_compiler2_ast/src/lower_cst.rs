@@ -2131,8 +2131,12 @@ fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
             let Some(name) = component.strip_prefix("ns_") else {
                 continue;
             };
-            let valid =
-                !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            let mut chars = name.chars();
+            let valid = chars
+                .next()
+                .map(|c| c.is_ascii_alphabetic() || c == '_')
+                .unwrap_or(false)
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
             if valid {
                 namespaces.push(name.to_string());
             }
@@ -3211,4 +3215,23 @@ fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test_owner_tests {
+    use std::path::Path;
+
+    use super::test_owner_from_path;
+
+    #[test]
+    fn path_owner_uses_the_same_namespace_identifier_rules_as_hir() {
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_orders/ns_v2/tests.baml"))),
+            "root.orders.v2"
+        );
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_123/tests.baml"))),
+            "root"
+        );
+    }
 }

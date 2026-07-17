@@ -2232,21 +2232,42 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
 
   L6:
     pop_jump_if_false L7
-    jump L8
+    jump L10
 
   L7:
+    load_var selected_names
+    container_len
+    store_var _46
+    load_var2 13 4
+    load_field .total
+    cmp_int_op ==
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_type string
+    alloc_array 0
+    load_type string
+    alloc_array 0
+    load_type string
+    alloc_array 0
+    init_instance testing.LeafIdentities .passed, .failed, .tolerated
+    store_var identities
+    jump L11
+
+  L9:
     load_var2 2 1
     load_field .failed_names
     load_var all_failed_names
     call testing.classify_selected_names
     store_var identities
-    jump L9
+    jump L11
 
-  L8:
+  L10:
     load_var executed
     store_var identities
 
-  L9:
+  L11:
     load_var report
     load_field .outcome
     load_var counts
@@ -2311,10 +2332,10 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     store_var start
     load_var subject
     call baml.String.length
-    store_var _22
+    store_var _24
     load_var last
     call baml.String.length
-    store_var _23
+    store_var _25
     load_var2 9 10
     sub_int
     store_var end_limit
@@ -2353,8 +2374,8 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     call baml.String.substring
     load_var part
     call baml.String.index_of
-    store_var _38
-    load_var _38
+    store_var _40
+    load_var _40
     is_type int
     pop_jump_if_false L7
     jump L8
@@ -2366,10 +2387,10 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
   L8:
     load_var2 11 14
     add_int
-    store_var _45
+    store_var _47
     load_var part
     call baml.String.length
-    load_var _45
+    load_var _47
     add_int
     store_var pos
 
@@ -2394,7 +2415,10 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
 
   L13:
     load_var2 1 2
-    cmp_op ==
+    call baml.String.index_of
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
 
   L14:
     return
@@ -2511,8 +2535,7 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     jump L3
 
   L2:
-    load_var2 1 3
-    call baml.String.starts_with
+    load_const true
 
   L3:
     return
@@ -2810,6 +2833,10 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
 }
 
 function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
+    load_var prefix
+    load_const "::"
+    bin_op +
+    store_var descendant_prefix
     load_var excludes
     load_type baml.iter.Iterable<Item = string, Error = never>
     load_const "iter"
@@ -2825,31 +2852,50 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     load_var _5
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L3
+    jump L6
 
   L1:
     load_var _5
     store_var pattern
     load_var pattern
     load_const "*"
-    call baml.String.ends_with
+    call baml.String.index_of
+    load_const null
+    call baml.ops.equals_equals
     jump_if_false L2
     pop 1
-    load_var prefix
-    load_const "::"
-    bin_op +
-    load_var pattern
-    call testing.glob_match
+    load_var2 3 6
+    call baml.String.index_of
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
 
   L2:
-    pop_jump_if_false L0
-    load_const true
-    jump L4
+    pop_jump_if_false L3
+    jump L5
 
   L3:
-    load_const false
+    load_var pattern
+    load_const "*"
+    call baml.String.ends_with
+    jump_if_false L4
+    pop 1
+    load_var2 3 6
+    call testing.glob_match
 
   L4:
+    pop_jump_if_false L0
+    load_const true
+    jump L7
+
+  L5:
+    load_const true
+    jump L7
+
+  L6:
+    load_const false
+
+  L7:
     return
 }
 

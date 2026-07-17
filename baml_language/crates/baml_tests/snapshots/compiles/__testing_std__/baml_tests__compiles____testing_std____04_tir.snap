@@ -534,7 +534,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool throws nev
     let n = parts.length() : int
     if (n == 1 : bool) : void
       { : never
-        return subject == pattern : bool
+        return subject.index_of(pattern) != null : bool
       }
     let first = parts[0] : string
     let last = parts[n - 1] : string
@@ -602,6 +602,10 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool th
     let descendant_prefix = prefix + "::" : string
     for pattern in excludes
       { : void
+        if (pattern.index_of("*") == null && descendant_prefix.index_of(pattern) != null : bool) : void
+          { : never
+            return true : true
+          }
         if (pattern.ends_with("*") && root.glob_match(descendant_prefix, pattern) : bool) : void
           { : never
             return true : true
@@ -611,11 +615,11 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool th
   }
 }
 function testing.pattern_may_match_descendant(pattern: string, prefix: string) -> bool throws never {
-  { : bool
+  { : true | bool
     let descendant_prefix = prefix + "::" : string
-    match (pattern.index_of("*") : int | null) : bool
+    match (pattern.index_of("*") : int | null) : true | bool
       null =>
-        pattern.starts_with(descendant_prefix) : bool
+        true : true
       star: int =>
         { : bool
           let literal = pattern.substring(0, star) : string
@@ -824,9 +828,14 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport, selected_
           executed : testing.LeafIdentities
         }
       else
-        { : testing.LeafIdentities
-          root.classify_selected_names(selected_names, report.failed_names, all_failed_names) : testing.LeafIdentities
-        }
+        if (selected_names.length() == counts.total : bool) : testing.LeafIdentities
+          { : testing.LeafIdentities
+            root.classify_selected_names(selected_names, report.failed_names, all_failed_names) : testing.LeafIdentities
+          }
+        else
+          { : testing.LeafIdentities
+            LeafIdentities { passed: [], failed: [], tolerated: [] } : testing.LeafIdentities
+          }
     FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, passed_names: identities.passed, failed_names: identities.failed, tolerated_names: identities.tolerated, messages: messages } : testing.FlatTestReport
   }
 }

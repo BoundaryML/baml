@@ -22,7 +22,7 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 #[command(
-    after_help = "SELECTORS:\n  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.\n  Each -i/--include and -x/--exclude value is an anchored full-ID glob; `*` is\n  the only wildcard and it also matches `::`. Repeated includes are OR. Excludes\n  always win. With no includes, every non-excluded test is selected.\n\nPROFILES:\n  Profile names are case-sensitive. A profile is saved `baml test` argv, parsed\n  without shell expansion:\n\n    [test]\n    default = \"regular\"\n\n    [test.profiles.regular]\n    args = [\"-x\", \"*::integration::*\", \"--color\", \"never\"]\n\n  Direct CLI filters narrow the profile selection; they never reopen it. Direct\n  scalar options override profile scalar options. Repeated --features values are\n  combined. Bootstrap options --profile, --no-profile, --from, and --help are not\n  allowed in profile args. With no default profile, `baml test` runs all tests.\n\nRun `baml test --list` to discover IDs and `baml test --help` for this reference."
+    after_help = "SELECTORS:\n  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.\n  A plain -i/--include or -x/--exclude value matches anywhere in the full ID. A\n  value containing `*` is instead an anchored full-ID glob; `*` also matches\n  `::`. Repeated includes are OR. Excludes always win. With no includes, every\n  non-excluded test is selected.\n\nPROFILES:\n  Profile names are case-sensitive. A profile is preset `baml test` argv, parsed\n  without shell expansion:\n\n    [test]\n    default = \"regular\"\n\n    [test.profiles.regular]\n    args = [\"-x\", \"::integration::\", \"--color\", \"never\"]\n\n  Profile includes establish the initial candidates; direct CLI includes narrow\n  them rather than reopening the set. Excludes accumulate and always win. Direct\n  scalar options override profile scalar options. Bootstrap options --profile,\n  --no-profile, --from, and --help are not allowed in profile args.\n  With no default profile, `baml test` runs all tests.\n\nRun `baml test --list` to discover IDs and `baml test --help` for this reference."
 )]
 pub struct TestArgs {
     #[arg(long, help = "Project search starting point", value_name = "PATH")]
@@ -44,8 +44,9 @@ pub struct TestArgs {
     list: bool,
 
     #[arg(long, short = 'i')]
-    /// Canonical test-id globs to include. If none are provided, all tests are
-    /// included. `*` matches any sequence, including `::`.
+    /// Canonical test-id selectors to include. Plain values match anywhere in
+    /// the full id. Values containing `*` are anchored globs, where `*` matches
+    /// any sequence, including `::`.
     ///
     /// Test ids start with `root` (the current package), use `.` for BAML
     /// namespaces/function ownership, and `::` for testset/test nesting.
@@ -56,23 +57,19 @@ pub struct TestArgs {
     ///
     /// -i "*::integration::*"  every test nested under an integration testset
     ///
-    /// -i "*hello*"  any canonical id containing hello
+    /// -i "hello"  any canonical id containing hello
     pub include: Vec<String>,
 
     #[arg(long, short = 'x')]
     /// Tests (or whole testsets) to exclude. Takes precedence over --include.
     ///
-    /// Uses the same canonical-id glob syntax as --include.
+    /// Uses the same canonical-id selector syntax as --include.
     pub exclude: Vec<String>,
 
     /// Explicit global CLI color, injected by the top-level parser so a direct
     /// scalar value can override the selected profile's value.
     #[arg(skip)]
     pub(crate) cli_color: Option<crate::paint::ColorChoice>,
-
-    /// Explicit global feature flags, injected by the top-level parser.
-    #[arg(skip)]
-    pub(crate) cli_features: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -83,15 +80,12 @@ struct TestInvocation {
     cli_include: Vec<String>,
     cli_exclude: Vec<String>,
     color: Option<crate::paint::ColorChoice>,
-    #[allow(dead_code)]
-    features: Vec<String>,
 }
 
 #[derive(Debug)]
 struct ParsedProfileArgs {
     test: TestArgs,
     color: Option<crate::paint::ColorChoice>,
-    features: Vec<String>,
 }
 
 impl TestInvocation {
@@ -152,13 +146,15 @@ fn qualify_function_from_source(function_name: &str, source_file: &std::path::Pa
 
 fn validate_selectors<'a>(selectors: impl Iterator<Item = &'a String>) -> Result<()> {
     for selector in selectors {
+        let is_canonical_root =
+            selector == "root" || selector.starts_with("root.") || selector.starts_with("root::");
         // Canonical ids may contain a literal `/` inside a user-provided test
         // name. Only diagnose the recognizable legacy shape: an unrooted
         // two-column selector whose test tail used `/` for further nesting.
         if selector.contains('/')
             && selector.contains("::")
             && !selector.contains('*')
-            && !selector.starts_with("root")
+            && !is_canonical_root
         {
             anyhow::bail!(
                 "test selector `{selector}` uses the old `/` hierarchy separator; use `::` instead (for example `{}`)",
@@ -575,13 +571,6 @@ impl TestArgs {
             color: self
                 .cli_color
                 .or_else(|| profile_args.as_ref().and_then(|p| p.color)),
-            features: profile_args
-                .as_ref()
-                .map(|p| p.features.clone())
-                .unwrap_or_default()
-                .into_iter()
-                .chain(self.cli_features.iter().cloned())
-                .collect(),
         };
         validate_selectors(
             invocation
@@ -610,9 +599,8 @@ impl TestArgs {
         if tokens.is_empty() {
             return Ok(None);
         }
-        // Parse with the real top-level command grammar so global options shown
-        // by `baml test --help` (for example --color and repeated --features)
-        // mean exactly the same thing in a profile.
+        // Parse with the real top-level command grammar so options shown by
+        // `baml test --help` are validated the same way in a profile.
         let command = crate::commands::RuntimeCli::command();
         let matches = command
             .try_get_matches_from(
@@ -631,7 +619,6 @@ impl TestArgs {
         Ok(Some(ParsedProfileArgs {
             test,
             color: color_is_explicit.then_some(parsed.color),
-            features: parsed.features,
         }))
     }
 
@@ -1313,7 +1300,7 @@ mod tests {
     }
 
     #[test]
-    fn profile_args_use_test_cli_grammar_and_reject_bootstrap_flags() {
+    fn profile_args_use_real_test_cli_grammar_and_reject_bootstrap_flags() {
         let tokens = vec![
             "-i".to_string(),
             "root::integration::*".to_string(),
@@ -1339,7 +1326,6 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(globals.color, Some(crate::paint::ColorChoice::Never));
-        assert_eq!(globals.features, ["beta", "display_all_warnings"]);
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
             .unwrap_err()
@@ -1348,7 +1334,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_cli_scalar_overrides_profile_and_repeated_features_combine() {
+    fn explicit_cli_scalar_overrides_profile_scalar() {
         let cli = crate::commands::RuntimeCli::parse_from_smart(vec![
             "baml".into(),
             "test".into(),
@@ -1356,8 +1342,6 @@ mod tests {
             "ci".into(),
             "--color".into(),
             "always".into(),
-            "--features".into(),
-            "cli-feature".into(),
         ]);
         let crate::commands::Commands::Test(args) = cli.command else {
             panic!("expected test command")
@@ -1367,13 +1351,12 @@ mod tests {
                 Some(
                     r#"
 [test.profiles.ci]
-args = ["--color", "never", "--features", "profile-feature"]
+args = ["--color", "never"]
 "#,
                 ),
                 std::path::Path::new("/project"),
             )
             .unwrap();
         assert_eq!(invocation.color, Some(crate::paint::ColorChoice::Always));
-        assert_eq!(invocation.features, ["profile-feature", "cli-feature"]);
     }
 }

@@ -880,6 +880,54 @@ testset "suite" with testing.FailFast() {
     );
 }
 
+#[test]
+fn test_legacy_custom_runner_does_not_invent_identity_for_skipped_leaf() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function FirstOnlyWithoutNames(children: testing.TestSetChild[]) -> testing.TestSetReport {
+  let report = testing.Sequential()([children[0]])
+  testing.TestSetReport {
+    outcome: report.outcome,
+    passed: report.passed,
+    failed: report.failed,
+    total: report.total,
+    failed_names: report.failed_names,
+    results: report.results,
+  }
+}
+
+testset "suite" with FirstOnlyWithoutNames {
+  test "first runs" { assert.is_true(true) }
+  test "never runs" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{combined}");
+    assert!(
+        !combined.contains("PASS root::suite::first runs"),
+        "{combined}"
+    );
+    assert!(
+        !combined.contains("PASS root::suite::never runs"),
+        "{combined}"
+    );
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "{combined}"
+    );
+}
+
 // ============================================================================
 // Tests for project-less introspection (`baml describe` / `baml grep` /
 // `baml fmt` without a `baml.toml`). The most expensive thing an agent can

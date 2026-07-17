@@ -475,13 +475,14 @@ function expansion_error_report(name: string) -> TestSetReport {
   }
 }
 
-// Glob match where '*' matches any run of characters (including '::'), anchored
-// at both ends. Callers pass only non-empty patterns (filter_match handles "").
+// Match a CLI selector against a canonical test id. Plain selectors are
+// case-sensitive substrings. A selector containing '*' is an anchored glob
+// where '*' matches any run of characters (including '::').
 function glob_match(subject: string, pattern: string) -> bool {
   let parts = pattern.split("*")
   let n = parts.length()
   if (n == 1) {
-    return subject == pattern
+    return subject.index_of(pattern) != null
   }
   let first = parts[0]
   let last = parts[n - 1]
@@ -538,6 +539,11 @@ function leaf_selected_layered(name: string, profile_include: string[], profile_
 function subtree_excluded(prefix: string, excludes: string[]) -> bool {
   let descendant_prefix = prefix + "::"
   for (let pattern in excludes) {
+    // A plain substring already present in the descendant prefix will be
+    // present in every leaf below it.
+    if (pattern.index_of("*") == null && descendant_prefix.index_of(pattern) != null) {
+      return true
+    }
     // Matching the descendant prefix with a trailing-star glob proves every
     // possible suffix is excluded. This includes `*` and `root*`.
     if (pattern.ends_with("*") && root.glob_match(descendant_prefix, pattern)) {
@@ -547,13 +553,14 @@ function subtree_excluded(prefix: string, excludes: string[]) -> bool {
   false
 }
 
-// Whether an include glob could match at least one leaf below `prefix`.
-// The literal portion before the first `*` must be compatible with the
-// canonical descendant prefix; after a wildcard we conservatively expand.
+// Whether an include selector could match at least one leaf below `prefix`.
+// A plain substring can always occur in a future leaf name, so it expands
+// conservatively. For an explicit glob, the literal portion before the first
+// `*` must be compatible with the canonical descendant prefix.
 function pattern_may_match_descendant(pattern: string, prefix: string) -> bool {
   let descendant_prefix = prefix + "::"
   match (pattern.index_of("*")) {
-    null => pattern.starts_with(descendant_prefix),
+    null => true,
     let star: int => {
       let literal = pattern.substring(0, star)
       descendant_prefix.starts_with(literal) || literal.starts_with(descendant_prefix)
@@ -719,8 +726,13 @@ function flatten_with_tolerated(report: TestSetReport, selected_names: string[])
   // account for the leaf counts.
   let identities = if (executed.passed.length() == counts.passed && executed.failed.length() == counts.failed && executed.tolerated.length() == counts.tolerated) {
     executed
-  } else {
+  } else if (selected_names.length() == counts.total) {
     root.classify_selected_names(selected_names, report.failed_names, all_failed_names)
+  } else {
+    // An older custom runner may execute only part of the selection without
+    // returning result_names. In that case the aggregate counts remain valid,
+    // but assigning the unexecuted names would fabricate PASS identities.
+    LeafIdentities { passed: [], failed: [], tolerated: [] }
   }
   FlatTestReport {
     outcome: report.outcome,

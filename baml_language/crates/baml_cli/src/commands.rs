@@ -217,7 +217,6 @@ impl RuntimeCli {
             test.cli_color = (matches.value_source("color")
                 == Some(clap::parser::ValueSource::CommandLine))
             .then_some(cli.color);
-            test.cli_features.clone_from(&cli.features);
         }
 
         cli
@@ -310,20 +309,17 @@ mod tests {
     }
 
     #[test]
-    fn test_command_records_explicit_global_overrides() {
+    fn test_command_records_explicit_global_color_override() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
             "test".into(),
             "--color".into(),
             "always".into(),
-            "--features".into(),
-            "beta".into(),
         ]);
         let Commands::Test(args) = cli.command else {
             panic!("expected test command")
         };
         assert_eq!(args.cli_color, Some(crate::paint::ColorChoice::Always));
-        assert_eq!(args.cli_features, ["beta"]);
     }
 
     fn help_for(args: &[&str]) -> String {
@@ -402,13 +398,13 @@ mod tests {
     fn test_help_is_a_complete_selector_and_profile_reference() {
         let help = help_for(&["baml-cli", "test", "--help"]);
         for required in [
-            "anchored full-ID glob",
+            "matches anywhere in the full ID",
             "Repeated includes are OR",
             "always win",
             "case-sensitive",
             "without shell expansion",
             "Profile names are case-sensitive",
-            "Direct CLI filters narrow",
+            "direct CLI includes narrow",
             "scalar options override",
             "With no default profile",
             "Bootstrap options",

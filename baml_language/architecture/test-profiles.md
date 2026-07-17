@@ -12,14 +12,16 @@ root.orders.ChargeCard::declined_card
 
 Run `baml test --list` to see the ids in a project. The values it prints can be
 used directly with `-i`/`--include` and `-x`/`--exclude`. Selectors are
-case-sensitive, anchored full-ID globs. `*` is the only wildcard and can cross
-`::` boundaries; every other character, including `/`, `?`, and `[`, is
+case-sensitive. A value without `*` matches anywhere in the full canonical id.
+A value containing `*` is instead an anchored full-ID glob; `*` can cross `::`
+boundaries, while every other character, including `/`, `?`, and `[`, is
 literal:
 
 ```sh
 baml test -i "root.orders::*"
-baml test -i "*::integration::*"
-baml test -i "*hello*" -x "*::flaky::*"
+baml test -i "::integration::"
+baml test -i "hello" -x "::flaky::"
+baml test -i "root.orders::*hello*"
 ```
 
 Execution uses those same IDs in result lines:
@@ -35,9 +37,9 @@ or `AGGREGATE FAIL` label; an aggregate glob is not presented as a test ID.
 
 ## Saving common invocations
 
-A test profile is a named argument vector for `baml test`. It does not add a
-new test classification system: names such as `regular` and `integration` are
-chosen by the project, and the arguments use the same syntax documented by
+A test profile is a named preset argument vector for `baml test`. It does not
+add a new test classification system: names such as `regular` and `integration`
+are chosen by the project, and the arguments use the same syntax documented by
 `baml test --help`. Profile names are case-sensitive.
 
 ```toml
@@ -45,10 +47,10 @@ chosen by the project, and the arguments use the same syntax documented by
 default = "regular"
 
 [test.profiles.regular]
-args = ["-x", "*::integration::*"]
+args = ["-x", "::integration::"]
 
 [test.profiles.integration]
-args = ["-i", "*::integration::*"]
+args = ["-i", "::integration::"]
 ```
 
 With that configuration:
@@ -60,17 +62,18 @@ baml test
 baml test --profile integration
 # uses the integration profile
 
-baml test --profile integration -i "*hello*"
+baml test --profile integration -i "hello"
 # integration tests AND tests whose full id contains hello
 
 baml test --no-profile
 # bypasses the configured default profile
 ```
 
-Profile arguments and command-line arguments are separate selection layers.
-Repeated `-i` values within one layer mean OR, but an explicit command-line
-filter narrows the profile's candidates. This makes adding `-i` to a saved
-invocation predictable: it cannot accidentally broaden the profile.
+Think of a profile as preset command-line arguments. For selection, BAML keeps
+the preset and explicit arguments as two layers so they compose predictably:
+repeated `-i` values within one layer mean OR, while an explicit command-line
+filter narrows the profile's candidates. Thus adding `-i` to a saved invocation
+cannot accidentally broaden it.
 
 Within either layer, exclusions always win. With no includes, every
 non-excluded test is selected. If `[test].default` is absent, plain `baml test`
@@ -91,9 +94,8 @@ args = "-i 'root.orders::*'"
 
 Profile arguments cannot contain `--profile`, `--no-profile`, `--from`, or
 `--help`, because those options determine how the profile itself is resolved.
-Other options shown by `baml test --help`, including global `--color` and
-repeated `--features`, use the same grammar. Explicit CLI scalar values override
-profile scalar values; repeated feature values are combined.
+Other options shown by `baml test --help` use the same parser. Explicit CLI
+scalar values, such as `--color`, override profile scalar values.
 
 ## Separator migration
 
