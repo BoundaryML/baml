@@ -105,6 +105,16 @@ pub fn to_source_code(
         }
     }
 
+    // The root runtime anchor is `baml_sdk.Baml` — unless a user BAML type at
+    // the ROOT namespace already claims the `Baml` name (its generated file
+    // would otherwise be overwritten by `out.insert`), in which case the ANCHOR
+    // escapes to `Baml$` (the same trailing-`$` policy as `Fns` → `Fns$`) and
+    // the user's `Baml` file is preserved. The chosen name threads through every
+    // `<root>.Baml.ensure()` reference (the `Fns` holders and each binding
+    // class's runtime-init static block).
+    let anchor_ident = root_anchor_ident(pool);
+    let anchor_fqn = format!("baml_sdk.{anchor_ident}");
+
     // Group symbols per package. BTreeMap/BTreeSet for deterministic
     // output independent of the pool's HashMap iteration order.
     let mut sink = UnionSink::default();
@@ -167,7 +177,7 @@ pub fn to_source_code(
                 type_files.push((
                     pkg,
                     ident,
-                    render_class(class, &symbol_fqn, &ctx, &mut sink),
+                    render_class(class, &symbol_fqn, &anchor_fqn, &ctx, &mut sink),
                 ));
             }
             Symbol::Enum(enum_) => {
@@ -237,7 +247,14 @@ pub fn to_source_code(
             java_file_path(&pkg, holder),
             with_package(
                 &pkg,
-                &render_fns_holder(holder, &pkg.java_package(), &functions, &ctx, &mut sink),
+                &render_fns_holder(
+                    holder,
+                    &pkg.java_package(),
+                    &anchor_fqn,
+                    &functions,
+                    &ctx,
+                    &mut sink,
+                ),
             ),
         );
     }
@@ -332,10 +349,10 @@ pub fn to_source_code(
         ));
     }
     let anchor_body = format!(
-        "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class Baml {{\n    private Baml() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = Baml.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
+        "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
     );
     out.insert(
-        java_file_path(&root, "Baml"),
+        java_file_path(&root, anchor_ident),
         with_package(&root, &anchor_body),
     );
 
@@ -377,16 +394,6 @@ pub fn to_source_code_with_bytecode(
 /// engine-side normalization can't cause a mismatch. Keep in lockstep
 /// with `baml_bridge.TypeRegistry`'s `BamlTy` tokenizer.
 pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
-    fn fqn(name: &baml_codegen_types::Name) -> String {
-        let mut s = String::from(name.package().as_str());
-        for seg in name.namespace() {
-            s.push('.');
-            s.push_str(seg.as_str());
-        }
-        s.push('.');
-        s.push_str(name.name().as_str());
-        s
-    }
     match ty {
         Ty::Int { .. } => "int".to_string(),
         Ty::Bigint { .. } => "bigint".to_string(),
@@ -397,10 +404,25 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Uint8Array { .. } => "uint8array".to_string(),
         Ty::Void { .. } => "void".to_string(),
         Ty::BuiltinUnknown { .. } => "unknown".to_string(),
-        Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => fqn(name),
+        // A generic class carries its concrete type args in its identity token
+        // (`Wrapper<int>` vs `Wrapper<string>`): without them two distinct
+        // instantiations collapse to the same token and a union / registry keyed
+        // on it silently first-wins. (The class-FQN *descriptor* path stays bare
+        // — see `descriptor_token`'s explicit `Class` arm — so class decode still
+        // resolves by FQN.)
+        Ty::Class(name, args, _) => {
+            let base = baml_fqn(name);
+            if args.is_empty() {
+                base
+            } else {
+                let inner: Vec<String> = args.iter().map(|a| signature_token(a, aliases)).collect();
+                format!("{base}<{}>", inner.join(","))
+            }
+        }
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => baml_fqn(name),
         Ty::TypeAlias(name, _) => match aliases.get(name) {
             Some((resolved, false)) => signature_token(resolved, aliases),
-            _ => fqn(name),
+            _ => baml_fqn(name),
         },
         Ty::TypeVar(name, _) => format!("tv:{}", name.as_str()),
         Ty::List(inner, _) => format!("list<{}>", signature_token(inner, aliases)),
@@ -412,8 +434,8 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::Int(v) => format!("lit:int:{v}"),
             baml_base::Literal::Bigint(v) => format!("lit:bigint:{v}"),
-            baml_base::Literal::Float(v) => format!("lit:float:{v}"),
-            baml_base::Literal::String(v) => format!("lit:string:{v}"),
+            baml_base::Literal::Float(v) => format!("lit:float:{}", escape_literal_value(v)),
+            baml_base::Literal::String(v) => format!("lit:string:{}", escape_literal_value(v)),
             baml_base::Literal::Bool(v) => format!("lit:bool:{v}"),
         },
         Ty::Media(kind, _) => format!("media:{}", format!("{kind:?}").to_lowercase()),
@@ -431,6 +453,51 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
     }
 }
 
+/// The canonical dotted BAML FQN of a named type (`pkg.namespace….Name`),
+/// shared by [`signature_token`] and [`crate::translate_ty::descriptor_token`].
+pub(crate) fn baml_fqn(name: &baml_codegen_types::Name) -> String {
+    let mut s = String::from(name.package().as_str());
+    for seg in name.namespace() {
+        s.push('.');
+        s.push_str(seg.as_str());
+    }
+    s.push('.');
+    s.push_str(name.name().as_str());
+    s
+}
+
+/// Percent-escape the descriptor-grammar structural characters (and the `%`
+/// escape sentinel) in a literal value so it survives the `union[…]` / `list<>`
+/// / `map<>` separators when embedded in a compound descriptor token. A no-op
+/// for values without any of these characters, so a plain literal renders
+/// byte-identically (`"draft"` → `lit:string:draft`); a value carrying a
+/// separator (`"a;b"`) survives round-trip (`lit:string:a%3Bb`). The Java wire
+/// tokenizers apply the identical escape (`ProtoReader.escapeLiteralValue`), so
+/// literal arm tokens compare escaped-to-escaped on both sides (the token is a
+/// match key, never decoded back — the value itself rides the wire bytes).
+pub(crate) fn escape_literal_value(s: &str) -> String {
+    if !s
+        .bytes()
+        .any(|b| matches!(b, b'%' | b'<' | b'>' | b'[' | b']' | b';' | b','))
+    {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + 4);
+    for ch in s.chars() {
+        match ch {
+            '%' => out.push_str("%25"),
+            '<' => out.push_str("%3C"),
+            '>' => out.push_str("%3E"),
+            '[' => out.push_str("%5B"),
+            ']' => out.push_str("%5D"),
+            ';' => out.push_str("%3B"),
+            ',' => out.push_str("%2C"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
 /// Build one union registry entry: the sorted-token signature, the
 /// sealed interface's binary name, and (arm token, record binary name)
 /// pairs in declaration order. Record binary names use the `$` nested
@@ -442,15 +509,14 @@ fn union_registration(
     aliases: &AliasTable,
 ) -> UnionRegistration {
     let union_binary = format!("{}.{}", pkg.java_package(), ident);
+    let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
     let arm_entries: Vec<(String, String)> = arms
         .iter()
-        .map(|arm| {
+        .zip(&arm_tokens)
+        .map(|(arm, token)| {
             (
                 signature_token(arm, aliases),
-                format!(
-                    "{union_binary}${}Value",
-                    crate::translate_ty::union_arm_token(arm)
-                ),
+                format!("{union_binary}${token}Value"),
             )
         })
         .collect();
@@ -461,6 +527,24 @@ fn union_registration(
     // dedup'd — the signature must be duplicate-insensitive on both sides.
     tokens.dedup();
     (tokens.join("|"), union_binary, arm_entries)
+}
+
+/// The root runtime-anchor class name: `Baml`, or `Baml$` when a user BAML type
+/// at the ROOT namespace generates a file that would claim the `Baml` name (a
+/// root-package `Class`/`Enum`/recursive `TypeAlias`). Non-recursive aliases
+/// erase (no file), and functions land on `Fns`, so only those three kinds can
+/// collide. Mirrors the `Fns` → `Fns$` holder escape.
+fn root_anchor_ident(pool: &SymbolPool) -> &'static str {
+    let claimed = pool.iter().any(|(name, symbol)| {
+        route(name).segments.is_empty()
+            && java_identifier(name.name().as_str()) == "Baml"
+            && match symbol {
+                Symbol::Class(_) | Symbol::Enum(_) => true,
+                Symbol::TypeAlias(alias) => alias.recursive,
+                Symbol::Function(_) => false,
+            }
+    });
+    if claimed { "Baml$" } else { "Baml" }
 }
 
 fn java_file_path(pkg: &PackagePath, ident: &str) -> PathBuf {
@@ -538,8 +622,23 @@ mod tests {
     fn t_int() -> Ty {
         Ty::Int { attr: a() }
     }
+    fn t_float() -> Ty {
+        Ty::Float { attr: a() }
+    }
     fn t_string() -> Ty {
         Ty::String { attr: a() }
+    }
+    fn nullary_fn(fn_name: &str, span: u32) -> Function {
+        Function {
+            name: BaseName::new(fn_name),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: t_int(),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(span),
+        }
     }
     fn t_uint8array() -> Ty {
         Ty::Uint8Array { attr: a() }
@@ -1681,5 +1780,129 @@ mod tests {
             "{file}"
         );
         assert!(!file.contains("reified receiver"), "{file}");
+    }
+
+    // -- double field equality (NaN / ±0.0) ----------------------------------
+
+    #[test]
+    fn double_field_uses_double_compare_and_hashcode() {
+        // A `double` field must NOT use `==` (NaN != NaN; +0.0 == -0.0 with
+        // differing hashCodes breaks the equals/hashCode contract). Use
+        // Double.compare in equals and Double.hashCode in hashCode.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["primitives"], "Floaty");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &[], vec![("ratio", t_float())], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("primitives/Floaty.java")];
+        assert!(file.contains("private final double ratio;"), "{file}");
+        assert!(
+            file.contains("java.lang.Double.compare(this.ratio, other.ratio) == 0"),
+            "{file}"
+        );
+        assert!(!file.contains("this.ratio == other.ratio"), "{file}");
+        assert!(
+            file.contains("java.lang.Double.hashCode(this.ratio)"),
+            "{file}"
+        );
+    }
+
+    // -- runtime-init static block on binding-bearing classes ----------------
+
+    #[test]
+    fn class_with_bindings_emits_runtime_init_static_block() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["methods_on_classes"], "Greeter");
+        pool.insert(
+            n.clone(),
+            class_sym_with_methods(
+                &n,
+                vec![method_fn("create", ("name", t_string()), t_string(), 1)],
+                Vec::new(),
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("methods_on_classes/Greeter.java")];
+        // The FIRST-touched entrypoint (`Greeter.create()`) must boot the runtime.
+        assert!(
+            file.contains("    static {\n        baml_sdk.Baml.ensure();\n    }"),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn pure_value_class_has_no_runtime_init_static_block() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["p"], "Plain");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &[], vec![("x", t_int())], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("p/Plain.java")];
+        // A pure value class is only reached via decode (runtime already up).
+        assert!(!file.contains("ensure()"), "{file}");
+    }
+
+    // -- `_async` sibling collision escape -----------------------------------
+
+    #[test]
+    fn async_sibling_escapes_on_user_async_named_collision() {
+        // A user function `foo_async` collides with the generated `_async`
+        // sibling of `foo`; foo's SYNTHETIC sibling escapes to `foo_async$`.
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &["lorem"], "foo"),
+            Symbol::Function(nullary_fn("foo", 0)),
+        );
+        pool.insert(
+            name("user", &["lorem"], "foo_async"),
+            Symbol::Function(nullary_fn("foo_async", 1)),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("lorem/Fns.java")];
+        // foo's sync + escaped async.
+        assert!(file.contains("public static long foo() {"), "{file}");
+        assert!(file.contains("foo_async$("), "{file}");
+        // The user's own foo_async sync + its (unescaped) async sibling.
+        assert!(file.contains("public static long foo_async() {"), "{file}");
+        assert!(file.contains("foo_async_async("), "{file}");
+    }
+
+    // -- root `Baml` anchor collision escape ---------------------------------
+
+    #[test]
+    fn user_root_type_named_baml_escapes_anchor() {
+        // A user root-level type named `Baml` must NOT be clobbered by the
+        // generated anchor; the ANCHOR escapes to `Baml$` and every
+        // `<root>.Baml.ensure()` reference threads the escaped name.
+        let mut pool = SymbolPool::new();
+        let baml = name("user", &[], "Baml");
+        pool.insert(
+            baml.clone(),
+            class_sym_with_props(&baml, &[], vec![("x", t_int())], 0),
+        );
+        pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(1));
+        let out = emit_sdk(&pool);
+
+        // The user's Baml type keeps Baml.java (not overwritten).
+        let user = &out[&PathBuf::from("Baml.java")];
+        assert!(user.contains("public final class Baml {"), "{user}");
+        assert!(!user.contains("public static void ensure()"), "{user}");
+
+        // The anchor lives at Baml$.java.
+        let anchor = &out[&PathBuf::from("Baml$.java")];
+        assert!(anchor.contains("public final class Baml$ {"), "{anchor}");
+        assert!(
+            anchor.contains("public static void ensure() {}"),
+            "{anchor}"
+        );
+
+        // The Fns holder references the escaped anchor.
+        let fns = &out[&PathBuf::from("lorem/Fns.java")];
+        assert!(fns.contains("baml_sdk.Baml$.ensure();"), "{fns}");
     }
 }

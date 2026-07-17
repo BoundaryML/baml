@@ -108,8 +108,12 @@ class TestHandles {
         Path dir = Files.createTempDirectory("baml-handles-test");
         Path path = dir.resolve("digits.txt");
         Files.writeString(path, "0123456789");
+        // Hoisted so a failing assertion below cannot leak the open engine-side
+        // file handle: it is closed in `finally` (before the deletes, which on
+        // some platforms require the file be closed first).
+        File f = null;
         try {
-            File f = Fns.open(path.toString(), "r");
+            f = Fns.open(path.toString(), "r");
 
             // Two successive reads on the *same* handle must advance the
             // cursor — the second read continues where the first stopped.
@@ -126,7 +130,11 @@ class TestHandles {
             assertEquals("23456789", f.text());
 
             assertNull(f.close());
+            f = null; // closed cleanly; skip the finally-close.
         } finally {
+            if (f != null) {
+                f.close();
+            }
             Files.deleteIfExists(path);
             Files.deleteIfExists(dir);
         }

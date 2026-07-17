@@ -384,6 +384,11 @@ pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
             Some((resolved, false)) => descriptor_token(resolved, aliases),
             _ => crate::signature_token(ty, aliases),
         },
+        // A class descriptor is the BARE FQN — decode resolves the class by FQN
+        // (`TypeRegistry.isClass`), so it must NOT carry the generic-args
+        // identity `signature_token` now adds (that identity is for union-arm /
+        // registry keying, not the class-decode path).
+        Ty::Class(name, _, _) => crate::baml_fqn(name),
         Ty::List(inner, _) => format!("list<{}>", descriptor_token(inner, aliases)),
         Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
@@ -392,6 +397,36 @@ pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
         ),
         _ => crate::signature_token(ty, aliases),
     }
+}
+
+/// Per-arm record tokens for a whole union arm set, with COLLISIONS resolved:
+/// two arms whose simple [`union_arm_token`] coincides (`a.Node` and `b.Node`
+/// both → `Node`, which would mint two `NodeValue` records in one sealed
+/// interface — a javac duplicate) are disambiguated by a trailing counter
+/// (`Node`, `Node2`, …). A set with no collision is returned byte-identically,
+/// so existing single-name arms keep their record names. Both the emitter
+/// ([`crate::emit::render_union`]) and the registry
+/// ([`crate::union_registration`]) derive record names through this, so they
+/// stay in lockstep.
+pub(crate) fn union_arm_tokens(arms: &[Ty]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(arms.len());
+    for arm in arms {
+        let base = union_arm_token(arm);
+        if !out.contains(&base) {
+            out.push(base);
+            continue;
+        }
+        let mut n = 2;
+        loop {
+            let candidate = format!("{base}{n}");
+            if !out.contains(&candidate) {
+                out.push(candidate);
+                break;
+            }
+            n += 1;
+        }
+    }
+    out
 }
 
 /// Deterministic per-arm token, used to name a recursive alias's
@@ -1037,5 +1072,74 @@ mod tests {
             literal(baml_base::Literal::String("sent".into())),
         ]);
         assert_eq!(descriptor_token(&u, &aliases), "string");
+    }
+
+    #[test]
+    fn signature_token_carries_class_generic_args() {
+        // A generic class's identity token includes its concrete args, so two
+        // distinct instantiations no longer collide (silently first-winning in a
+        // union / the registry).
+        let aliases = AliasTable::new();
+        let w_int = class_ty(name("user", &["g"], "Wrapper"), vec![int()]);
+        let w_str = class_ty(name("user", &["g"], "Wrapper"), vec![string()]);
+        assert_eq!(
+            crate::signature_token(&w_int, &aliases),
+            "user.g.Wrapper<int>"
+        );
+        assert_eq!(
+            crate::signature_token(&w_str, &aliases),
+            "user.g.Wrapper<string>"
+        );
+        assert_ne!(
+            crate::signature_token(&w_int, &aliases),
+            crate::signature_token(&w_str, &aliases)
+        );
+        // The class DESCRIPTOR stays the bare FQN (decode resolves by FQN via
+        // TypeRegistry.isClass), so the class-decode path is unaffected.
+        assert_eq!(descriptor_token(&w_int, &aliases), "user.g.Wrapper");
+    }
+
+    #[test]
+    fn descriptor_and_signature_escape_literal_structural_chars() {
+        let aliases = AliasTable::new();
+        // A `;` in a string literal is percent-escaped so it can't be mistaken
+        // for a `union[...]` arm separator.
+        assert_eq!(
+            crate::signature_token(&literal(baml_base::Literal::String("a;b".into())), &aliases),
+            "lit:string:a%3Bb"
+        );
+        let u = union(vec![
+            literal(baml_base::Literal::String("a;b".into())),
+            literal(baml_base::Literal::Int(1)),
+        ]);
+        assert_eq!(
+            descriptor_token(&u, &aliases),
+            "union[lit:string:a%3Bb;lit:int:1]"
+        );
+        // Byte-compat: a literal with no structural chars is unchanged.
+        assert_eq!(
+            crate::signature_token(
+                &literal(baml_base::Literal::String("draft".into())),
+                &aliases
+            ),
+            "lit:string:draft"
+        );
+    }
+
+    #[test]
+    fn union_arm_tokens_disambiguates_colliding_simple_names() {
+        // `a.Node` and `b.Node` both simple-name to `Node`; the arm set gets
+        // distinct record tokens (`Node`, `Node2`) rather than two colliding
+        // `NodeValue` records. A non-colliding set is byte-identical.
+        let a_node = class_ty(name("user", &["a"], "Node"), vec![]);
+        let b_node = class_ty(name("user", &["b"], "Node"), vec![]);
+        assert_eq!(
+            union_arm_tokens(&[a_node, b_node]),
+            vec!["Node".to_string(), "Node2".to_string()]
+        );
+        assert_eq!(
+            union_arm_tokens(&[int(), string()]),
+            vec!["Int".to_string(), "String".to_string()]
+        );
     }
 }

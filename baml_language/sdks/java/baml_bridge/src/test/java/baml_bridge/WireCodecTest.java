@@ -157,6 +157,23 @@ class WireCodecTest {
         assertTrue(ex.getMessage().length() < 200);
     }
 
+    /**
+     * A malformed (non-strict-hex) payload that is UNDER the cap still must not
+     * echo the whole blob into the exception message: it can be nearly cap-sized
+     * (~67 MB), so the message reports the length plus a short prefix preview.
+     */
+    @Test
+    void bigint_malformed_hex_message_is_length_bounded() {
+        String bad = "z".repeat(5000); // non-hex, well under the cap
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> ProtoReader.parseHexBigInt(bad));
+        assertTrue(ex.getMessage().contains("invalid bigint hex string"), ex.getMessage());
+        // The true length is reported, but the 5000-char blob is not echoed.
+        assertTrue(ex.getMessage().contains("5000 chars"), ex.getMessage());
+        assertTrue(ex.getMessage().length() < 200, "message too long: " + ex.getMessage());
+        assertFalse(ex.getMessage().contains(bad));
+    }
+
     /** Non-strict hex — letters outside [0-9a-fA-F], `0x`, `+`, whitespace, empty — is rejected. */
     @Test
     void bigint_malformed_hex_rejects() {
@@ -934,6 +951,50 @@ class WireCodecTest {
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "tv:T"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "unknown"));
         assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "union[")); // malformed
+    }
+
+    /**
+     * A string literal carrying a descriptor separator (`;`) survives the
+     * `union[...]` grammar: the emitter percent-escapes it in the descriptor
+     * (`lit:string:a%3Bb`) and the wire tokenizer escapes identically, so the
+     * literal arm still matches and the raw value round-trips.
+     */
+    @Test
+    void decode_desc_union_literal_with_structural_char_matches_escaped() {
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovLiteralString("a;b")), "union[lit:string:a%3Bb;int]");
+        Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
+        assertEquals("a;b", arm.value());
+    }
+
+    /**
+     * Registering the same union signature under a DIFFERENT sealed interface is
+     * an identity conflict (two unions sharing one key — decode would silently
+     * reify onto whichever won the slot) and throws, rather than first-winning.
+     * A re-registration under the SAME interface stays idempotent.
+     */
+    @Test
+    void register_union_conflicting_sealed_interface_throws() {
+        TypeRegistry.registerUnion(
+                "conflict-sig",
+                "baml_sdk.x.UnionA",
+                new String[] {"int"},
+                new String[] {"baml_sdk.x.UnionA$IntValue"});
+        // Same signature + same interface: idempotent no-op (no throw).
+        TypeRegistry.registerUnion(
+                "conflict-sig",
+                "baml_sdk.x.UnionA",
+                new String[] {"int"},
+                new String[] {"baml_sdk.x.UnionA$IntValue"});
+        // Same signature + DIFFERENT interface: conflict.
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> TypeRegistry.registerUnion(
+                        "conflict-sig",
+                        "baml_sdk.x.UnionB",
+                        new String[] {"string"},
+                        new String[] {"baml_sdk.x.UnionB$StringValue"}));
+        assertTrue(ex.getMessage().contains("conflicting union registration"), ex.getMessage());
     }
 
     // -- typed-container union arm selection (empty-list correctness fix) -----

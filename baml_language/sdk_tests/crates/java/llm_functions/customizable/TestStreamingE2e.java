@@ -47,8 +47,14 @@ import baml_sdk.baml.stream.StreamFinished;
 import baml_sdk.lorem.Fns;
 import baml_sdk.lorem.StreamE2ECollectResult;
 import baml_sdk.lorem.StreamingDoc;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+// A blocking `next()` / `join()` that never drains (a mis-behaving replay
+// server, a stuck SSE stream) would otherwise hang the whole suite; a
+// class-level per-test timeout bounds every streaming test.
+@Timeout(value = 30, unit = TimeUnit.SECONDS)
 class TestStreamingE2e {
 
     /** Java analog of Python's `hasattr(obj, name)` for a no-arg accessor. */

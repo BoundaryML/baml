@@ -44,12 +44,28 @@
 //! Not yet emitted (later capabilities): explicit generic type-args
 //! overloads.
 
+use std::collections::BTreeSet;
+
 use baml_codegen_types::{Class, Enum, Function, Ty};
 
 use crate::{
     routing::java_identifier,
     translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
+
+/// The `_async` sibling name for a callable `ident`, escaped past a collision:
+/// if the enclosing group (package for free functions, class for methods)
+/// already declares a callable literally named `{ident}_async` (a user function
+/// whose own sync binding would be that method), the SYNTHETIC sibling escapes
+/// to `{ident}_async$` (repeating `$` per the trailing-`$` collision policy) so
+/// the two never emit the same method signature.
+fn async_sibling_ident(ident: &str, declared: &BTreeSet<String>) -> String {
+    let mut name = format!("{ident}_async");
+    while declared.contains(&name) {
+        name.push('$');
+    }
+    name
+}
 
 /// Render a `///` docstring as a Javadoc block. Returns an empty
 /// string when there is no docstring.
@@ -82,9 +98,13 @@ pub(crate) fn render_javadoc_with_throws(
         for line in doc.lines() {
             out.push_str(indent);
             out.push_str(" * ");
-            // A literal `*/` inside the docstring would terminate the
-            // Javadoc block early.
-            out.push_str(&line.replace("*/", "* /"));
+            // `javac` decodes `\uXXXX` unicode escapes over the raw source
+            // BEFORE lexing — inside comments too — so a docstring carrying the
+            // escape form of `*/` (`*/`) would terminate the Javadoc
+            // block early even though no literal `*/` is present. Neutralize any
+            // unicode-escape run first, THEN guard the literal `*/`.
+            let safe = neutralize_unicode_escapes(line);
+            out.push_str(&safe.replace("*/", "* /"));
             out.push('\n');
         }
     }
@@ -105,6 +125,59 @@ pub(crate) fn render_javadoc_with_throws(
     out.push_str(indent);
     out.push_str(" */\n");
     out
+}
+
+/// Break Java unicode escapes (`\uXXXX`, including multi-`u` markers) in
+/// docstring text so `javac`'s pre-lex unicode-escape pass cannot decode them
+/// into comment-terminating `*/` (or any other structural character): Java
+/// processes `\u` escapes over the whole source — comments included — before
+/// the surrounding `*/` guard can help, so `*/` would otherwise close
+/// the Javadoc block.
+///
+/// Only an *eligible* backslash begins an escape (JLS 3.3: eligible iff preceded
+/// by an even number of backslashes — so within a run of `n` backslashes the
+/// last one is eligible iff `n` is odd) and only when it is followed by one or
+/// more `u` and 4 hex digits. We insert a single space between that backslash
+/// and the `u` run, breaking the `\`↔`u` adjacency; a space can never begin a
+/// new escape, so this is safe regardless of surrounding backslash parity.
+/// Non-escape text (a lone `\u`, `\username`, an inert `\\uXXXX`) is left
+/// untouched, so ordinary docstrings render byte-identically.
+fn neutralize_unicode_escapes(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\\' {
+            // Emit the whole run of consecutive backslashes.
+            let run_start = i;
+            while i < chars.len() && chars[i] == '\\' {
+                out.push('\\');
+                i += 1;
+            }
+            let run_len = i - run_start;
+            // The trailing backslash is the only one immediately followed by the
+            // next char; it is eligible to start an escape iff the run length is
+            // odd. Break the escape when it begins a `u`+ hex4 sequence.
+            if run_len % 2 == 1 && starts_unicode_escape(&chars, i) {
+                out.push(' ');
+            }
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// Whether `chars[i..]` is a Java unicode-escape tail: one or more `u` markers
+/// followed by exactly 4 hex digits.
+fn starts_unicode_escape(chars: &[char], mut i: usize) -> bool {
+    let mut saw_u = false;
+    while i < chars.len() && chars[i] == 'u' {
+        saw_u = true;
+        i += 1;
+    }
+    saw_u && i + 4 <= chars.len() && chars[i..i + 4].iter().all(char::is_ascii_hexdigit)
 }
 
 /// Collect the unqualified leaf names of the thrown types in a `throws`
@@ -138,6 +211,12 @@ pub(crate) fn collect_raises_names(throws: Option<&Ty>) -> Vec<String> {
 enum FieldEq {
     /// `==` comparison, `Objects.hash` member.
     Primitive,
+    /// `Double.compare(a, b) == 0` / `Double.hashCode`. A `double` must NOT use
+    /// `==`: `NaN == NaN` is false (a round-tripped NaN would not equal itself)
+    /// and `+0.0 == -0.0` is true while their `Double.hashCode`s differ (an
+    /// equals/hashCode contract violation). `Double.compare`/`Double.hashCode`
+    /// give total-order, contract-consistent semantics.
+    Double,
     /// `Arrays.equals` / `Arrays.hashCode`.
     ByteArray,
     /// `Objects.equals` / `Objects.hash`.
@@ -146,7 +225,8 @@ enum FieldEq {
 
 fn field_eq(java_ty: &str) -> FieldEq {
     match java_ty {
-        "long" | "boolean" | "double" => FieldEq::Primitive,
+        "long" | "boolean" => FieldEq::Primitive,
+        "double" => FieldEq::Double,
         "byte[]" => FieldEq::ByteArray,
         _ => FieldEq::Reference,
     }
@@ -155,10 +235,16 @@ fn field_eq(java_ty: &str) -> FieldEq {
 /// Full value-class body: fields, canonical constructor, accessors,
 /// static/instance method bindings, deep `equals`/`hashCode`.
 /// `class_fqn` is the class's BAML FQN (`pkg.namespace.Name`); each
-/// method binds to `<class_fqn>.<method name>`.
+/// method binds to `<class_fqn>.<method name>`. `anchor_fqn` is the root
+/// runtime anchor's FQN (`baml_sdk.Baml`, or `baml_sdk.Baml$` when a user
+/// type claims the `Baml` name) — a class that carries method bindings emits
+/// a `static { <anchor_fqn>.ensure(); }` block so its FIRST touched
+/// entrypoint (e.g. `Greeter.create()`) boots the runtime, the analog of the
+/// `Fns` holder's own static init.
 pub(crate) fn render_class(
     class: &Class,
     class_fqn: &str,
+    anchor_fqn: &str,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -194,6 +280,21 @@ pub(crate) fn render_class(
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
     out.push_str(&format!("public final class {ident}{generics} {{\n"));
+
+    // A class that carries method bindings (static or instance) must boot the
+    // runtime when it is the FIRST generated symbol a program touches — merely
+    // referencing `Greeter.class` does not run a static initializer, but
+    // invoking `Greeter.create()` does. Pure value classes (no bindings) are
+    // only ever reached via decode, which already went through the runtime, so
+    // they skip this. `ensure()` is idempotent and the anchor's own init
+    // registers types by string name (never touching this class's statics), so
+    // there is no init-order cycle.
+    let has_bindings = !class.static_methods.is_empty() || !class.instance_methods.is_empty();
+    if has_bindings {
+        out.push_str(&format!(
+            "    static {{\n        {anchor_fqn}.ensure();\n    }}\n\n"
+        ));
+    }
 
     for ((f_ident, f_ty), prop) in fields.iter().zip(&class.properties) {
         out.push_str(&render_javadoc(prop.docstring.as_deref(), "    "));
@@ -235,6 +336,16 @@ pub(crate) fn render_class(
         out.push_str(&render_baml_type_args_readback(&fields));
     }
 
+    // The declared-callable ident set for this class (static + instance method
+    // names) — used to escape a synthetic `_async` sibling that would collide
+    // with a user method literally named `{ident}_async`.
+    let method_idents: BTreeSet<String> = class
+        .static_methods
+        .iter()
+        .chain(&class.instance_methods)
+        .map(|m| java_identifier(m.name.as_str()))
+        .collect();
+
     // Static and instance method bindings. Static methods (like free
     // functions) render as `static` bindings; instance methods are
     // non-static and prepend the receiver (`self` / `this`) to the
@@ -252,6 +363,7 @@ pub(crate) fn render_class(
             Receiver::None,
             true,
             &class.generic_params,
+            &method_idents,
             ctx,
             sink,
         ));
@@ -272,6 +384,7 @@ pub(crate) fn render_class(
             Receiver::This,
             false,
             &class.generic_params,
+            &method_idents,
             ctx,
             sink,
         ));
@@ -296,6 +409,9 @@ pub(crate) fn render_class(
             .iter()
             .map(|(f_ident, f_ty)| match field_eq(f_ty) {
                 FieldEq::Primitive => format!("this.{f_ident} == other.{f_ident}"),
+                FieldEq::Double => {
+                    format!("java.lang.Double.compare(this.{f_ident}, other.{f_ident}) == 0")
+                }
                 FieldEq::ByteArray => {
                     format!("java.util.Arrays.equals(this.{f_ident}, other.{f_ident})")
                 }
@@ -316,6 +432,7 @@ pub(crate) fn render_class(
         .iter()
         .map(|(f_ident, f_ty)| match field_eq(f_ty) {
             FieldEq::ByteArray => format!("java.util.Arrays.hashCode(this.{f_ident})"),
+            FieldEq::Double => format!("java.lang.Double.hashCode(this.{f_ident})"),
             _ => format!("this.{f_ident}"),
         })
         .collect();
@@ -402,19 +519,29 @@ pub(crate) fn render_enum(enum_: &Enum) -> String {
 /// The per-package free-function holder with its static bindings.
 /// `holder_ident` is `Fns`, or `Fns$` when the package defines a
 /// symbol named `Fns` (the conventions doc's collision escape).
-/// `functions` is `(fqn, function)` in deterministic order.
+/// `functions` is `(fqn, function)` in deterministic order. `anchor_fqn` is
+/// the root runtime anchor's FQN (`baml_sdk.Baml`, or `baml_sdk.Baml$` when a
+/// user type claims the `Baml` name) whose static init boots the runtime.
 pub(crate) fn render_fns_holder(
     holder_ident: &str,
     java_package: &str,
+    anchor_fqn: &str,
     functions: &[(String, &Function)],
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
     let mut out = format!(
-        "/**\n * Free functions declared in the BAML namespace backing\n * `{java_package}`.\n */\npublic final class {holder_ident} {{\n    private {holder_ident}() {{}}\n\n    static {{\n        baml_sdk.Baml.ensure();\n    }}\n"
+        "/**\n * Free functions declared in the BAML namespace backing\n * `{java_package}`.\n */\npublic final class {holder_ident} {{\n    private {holder_ident}() {{}}\n\n    static {{\n        {anchor_fqn}.ensure();\n    }}\n"
     );
+    // The declared-callable ident set for this package's free functions — used
+    // to escape a synthetic `_async` sibling that would collide with a user
+    // function literally named `{ident}_async`.
+    let fn_idents: BTreeSet<String> = functions
+        .iter()
+        .map(|(_, f)| java_identifier(f.name.as_str()))
+        .collect();
     for (fqn, function) in functions {
-        out.push_str(&render_function_pair(fqn, function, ctx, sink));
+        out.push_str(&render_function_pair(fqn, function, &fn_idents, ctx, sink));
     }
     out.push_str("}\n");
     out
@@ -435,10 +562,20 @@ enum Receiver {
 fn render_function_pair(
     fqn: &str,
     function: &Function,
+    sibling_idents: &BTreeSet<String>,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    render_callable_pair(fqn, function, Receiver::None, true, &[], ctx, sink)
+    render_callable_pair(
+        fqn,
+        function,
+        Receiver::None,
+        true,
+        &[],
+        sibling_idents,
+        ctx,
+        sink,
+    )
 }
 
 /// One sync + one `_async` binding for a callable — a free function, a
@@ -450,12 +587,14 @@ fn render_function_pair(
 /// overload pair taking a trailing `Consumer<<Ident>$Opts>` is appended,
 /// along with the nested `<Ident>$Opts` options class (see
 /// [`render_optional_configurator`]).
+#[allow(clippy::too_many_arguments)]
 fn render_callable_pair(
     fqn: &str,
     function: &Function,
     receiver: Receiver,
     is_static: bool,
     class_generic_params: &[baml_base::Name],
+    sibling_idents: &BTreeSet<String>,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -478,6 +617,9 @@ fn render_callable_pair(
         None
     };
     let ident = java_identifier(function.name.as_str());
+    // The `_async` sibling name, escaped past a user callable that already
+    // claims `{ident}_async` (see [`async_sibling_ident`]).
+    let async_ident = async_sibling_ident(&ident, sibling_idents);
     let required: Vec<_> = function
         .arguments
         .iter()
@@ -578,6 +720,7 @@ fn render_callable_pair(
         static_kw,
         &generics_kw,
         &ident,
+        &async_ident,
         &params,
         "",
         &ret_top,
@@ -599,6 +742,7 @@ fn render_callable_pair(
     if !optionals.is_empty() {
         out.push_str(&render_optional_configurator(
             &ident,
+            &async_ident,
             &optionals,
             &doc,
             static_kw,
@@ -636,6 +780,7 @@ fn render_overload_family(
     static_kw: &str,
     generics_kw: &str,
     ident: &str,
+    async_ident: &str,
     params: &str,
     prologue: &str,
     ret_top: &str,
@@ -658,6 +803,7 @@ fn render_overload_family(
         static_kw,
         generics_kw,
         ident,
+        async_ident,
         params,
         prologue,
         ret_top,
@@ -675,6 +821,7 @@ fn render_overload_family(
         static_kw,
         generics_kw,
         ident,
+        async_ident,
         params,
         prologue,
         ret_top,
@@ -701,6 +848,7 @@ fn render_overload_family(
             static_kw,
             generics_kw,
             ident,
+            async_ident,
             params,
             &types_prologue,
             ret_top,
@@ -718,6 +866,7 @@ fn render_overload_family(
             static_kw,
             generics_kw,
             ident,
+            async_ident,
             params,
             &types_prologue,
             ret_top,
@@ -770,6 +919,7 @@ fn render_method_pair(
     static_kw: &str,
     generics_kw: &str,
     ident: &str,
+    async_ident: &str,
     params: &str,
     prologue: &str,
     ret_top: &str,
@@ -820,7 +970,7 @@ fn render_method_pair(
     );
 
     format!(
-        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({sig_params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({sig_params}) {{\n{async_body}\n    }}\n"
+        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({sig_params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {async_ident}({sig_params}) {{\n{async_body}\n    }}\n"
     )
 }
 
@@ -842,6 +992,7 @@ fn render_method_pair(
 #[allow(clippy::too_many_arguments)]
 fn render_optional_configurator(
     ident: &str,
+    async_ident: &str,
     optionals: &[&baml_codegen_types::FunctionArgument],
     doc: &str,
     static_kw: &str,
@@ -902,6 +1053,7 @@ fn render_optional_configurator(
         static_kw,
         generics_kw,
         ident,
+        async_ident,
         &params,
         &prologue,
         ret_top,
@@ -1042,11 +1194,13 @@ pub(crate) fn render_union(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
+    let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
     let arm_infos: Vec<(String, String)> = arms
         .iter()
-        .map(|arm| {
+        .zip(&arm_tokens)
+        .map(|(arm, token)| {
             (
-                format!("{}Value", crate::translate_ty::union_arm_token(arm)),
+                format!("{token}Value"),
                 translate_ty(arm, TyPosition::Boxed, ctx, sink),
             )
         })
@@ -1082,4 +1236,46 @@ pub(crate) fn render_union(
     }
     out.push_str("}\n");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn javadoc_neutralizes_unicode_escape_star_slash() {
+        // A docstring carrying the unicode-escape form of `*/` must not close
+        // the Javadoc block: the `\` is broken from the `u` run.
+        let doc = "danger \\u002a\\u002f end";
+        let rendered = render_javadoc(Some(doc), "");
+        // No decodable escape survives: every `\u`+hex run is broken by a space.
+        assert!(!rendered.contains("\\u002a"), "{rendered}");
+        assert!(!rendered.contains("\\u002f"), "{rendered}");
+        assert!(rendered.contains("\\ u002a"), "{rendered}");
+        assert!(rendered.contains("\\ u002f"), "{rendered}");
+        // The block still opens and closes exactly once.
+        assert_eq!(rendered.matches("/**").count(), 1, "{rendered}");
+        assert_eq!(rendered.matches("*/").count(), 1, "{rendered}");
+    }
+
+    #[test]
+    fn javadoc_handles_multi_u_and_odd_backslash_runs() {
+        // Multi-`u` marker is still an escape → broken.
+        assert_eq!(neutralize_unicode_escapes("\\uu002a"), "\\ uu002a");
+        // An inert `\\uXXXX` (even backslash run → not an escape) is untouched.
+        assert_eq!(neutralize_unicode_escapes("\\\\u002a"), "\\\\u002a");
+        // Three backslashes: the last is eligible → broken.
+        assert_eq!(neutralize_unicode_escapes("\\\\\\u002a"), "\\\\\\ u002a");
+    }
+
+    #[test]
+    fn javadoc_leaves_ordinary_text_untouched() {
+        // A lone `\u` without 4 hex digits, and a non-`u` backslash, are inert.
+        assert_eq!(neutralize_unicode_escapes("path C:\\temp"), "path C:\\temp");
+        assert_eq!(neutralize_unicode_escapes("\\university"), "\\university");
+        assert_eq!(
+            neutralize_unicode_escapes("no escapes here"),
+            "no escapes here"
+        );
+    }
 }

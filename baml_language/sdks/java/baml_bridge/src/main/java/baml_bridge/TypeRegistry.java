@@ -138,7 +138,13 @@ public final class TypeRegistry {
      * (one {@code record ...Value(T value)} per arm). Decode resolves an arm from
      * the inner value's shape (see {@link #constructUnion}); encode unwraps a
      * record instance back to its bare inner value (see {@link #unionRecordInner}).
-     * Idempotent: the first registration of {@code signature} wins.
+     *
+     * <p>Idempotent for a re-registration under the SAME {@code sealedInterfaceName}
+     * (the first registration wins). A re-registration of an already-bound
+     * {@code signature} under a <em>different</em> {@code sealedInterfaceName} is a
+     * genuine identity conflict — two distinct unions sharing one signature key,
+     * so decode would silently reify onto whichever won the slot — and throws
+     * {@link IllegalStateException} rather than first-winning silently.
      */
     public static void registerUnion(
             String signature, String sealedInterfaceName, String[] armTokens, String[] recordNames) {
@@ -148,7 +154,13 @@ public final class TypeRegistry {
                             + armTokens.length + " arm tokens vs " + recordNames.length + " records");
         }
         UnionEntry entry = new UnionEntry(signature, sealedInterfaceName, armTokens, recordNames);
-        unionsBySignature.putIfAbsent(signature, entry);
+        UnionEntry existing = unionsBySignature.putIfAbsent(signature, entry);
+        if (existing != null && !existing.sealedInterfaceName.equals(sealedInterfaceName)) {
+            throw new IllegalStateException(
+                    "conflicting union registration for signature '" + signature
+                            + "': already bound to " + existing.sealedInterfaceName
+                            + ", refused rebind to " + sealedInterfaceName);
+        }
         // Record-name registration is unconditional: encode must be able to
         // unwrap ANY registered record class, independent of which
         // registration won the signature slot.

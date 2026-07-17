@@ -819,11 +819,11 @@ public final class ProtoReader {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             switch (field) {
-                case LIT_STRING -> token = "lit:string:" + msg.readString();
+                case LIT_STRING -> token = "lit:string:" + escapeLiteralValue(msg.readString());
                 case LIT_INT -> token = "lit:int:" + msg.readVarint();
                 case LIT_BOOL -> token = "lit:bool:" + (msg.readVarint() != 0);
                 case LIT_BIGINT -> token = "lit:bigint:" + msg.readString(); // decimal
-                case LIT_FLOAT -> token = "lit:float:" + msg.readString(); // source text
+                case LIT_FLOAT -> token = "lit:float:" + escapeLiteralValue(msg.readString());
                 default -> msg.skipField(wire);
             }
         }
@@ -1022,12 +1022,12 @@ public final class ProtoReader {
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             switch (field) {
-                case LIT_STRING -> token = "lit:string:" + msg.readString();
+                case LIT_STRING -> token = "lit:string:" + escapeLiteralValue(msg.readString());
                 case LIT_INT -> token = "lit:int:" + msg.readVarint();
                 case LIT_BOOL -> token = "lit:bool:" + (msg.readVarint() != 0);
                 // Hex on the wire → decimal, matching the arm token's spelling.
                 case LIT_BIGINT -> token = "lit:bigint:" + parseHexBigInt(msg.readString());
-                case LIT_FLOAT -> token = "lit:float:" + msg.readString();
+                case LIT_FLOAT -> token = "lit:float:" + escapeLiteralValue(msg.readString());
                 default -> msg.skipField(wire);
             }
         }
@@ -1456,8 +1456,19 @@ public final class ProtoReader {
     private static boolean armMatchesToken(Desc arm, String token) {
         switch (arm.kind) {
             case PRIM:
-            case FQN:
                 return arm.text.equals(token);
+            case FQN:
+                if (arm.text.equals(token)) {
+                    return true;
+                }
+                // A registered recursive-alias union arm: the wire discriminator
+                // is the STRUCTURAL token of the inner value (e.g. `int`,
+                // `list<int>`, a member class FQN), not the alias FQN itself, so
+                // an exact FQN compare misses it. Match when the union named by
+                // `arm.text` recognizes that token as one of its arms (the same
+                // isUnionKey / unionArmToken helpers the FQN decode path uses).
+                return TypeRegistry.isUnionKey(arm.text)
+                        && TypeRegistry.unionArmToken(arm.text, token) != null;
             case LIST:
             case MAP:
                 // arm.toString() renders the descriptor container token
@@ -1558,6 +1569,47 @@ public final class ProtoReader {
             }
         }
         return -1;
+    }
+
+    /**
+     * Percent-escape the descriptor-grammar structural characters (and the
+     * {@code %} escape sentinel) in a literal token value, byte-for-byte
+     * matching the Rust emitter's {@code escape_literal_value} (sdkgen_java).
+     *
+     * <p>A literal arm token ({@code lit:string:<value>}) is a MATCH KEY, never
+     * decoded back to the raw value — the real value rides the wire value bytes.
+     * Both sides escape identically, so a value carrying a {@code union[...]} /
+     * {@code list<>} / {@code map<>} separator (e.g. {@code "a;b"} →
+     * {@code lit:string:a%3Bb}) can't be mistaken for grammar structure, and a
+     * plain value ({@code "draft"}) is returned unchanged (byte-compat).
+     */
+    static String escapeLiteralValue(String s) {
+        boolean needs = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '%' || c == '<' || c == '>' || c == '[' || c == ']' || c == ';' || c == ',') {
+                needs = true;
+                break;
+            }
+        }
+        if (!needs) {
+            return s;
+        }
+        StringBuilder out = new StringBuilder(s.length() + 4);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '%' -> out.append("%25");
+                case '<' -> out.append("%3C");
+                case '>' -> out.append("%3E");
+                case '[' -> out.append("%5B");
+                case ']' -> out.append("%5D");
+                case ';' -> out.append("%3B");
+                case ',' -> out.append("%2C");
+                default -> out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     // -- descriptor grammar (one tokenizer, shared with the emitter) ----------
@@ -1690,9 +1742,14 @@ public final class ProtoReader {
             }
             String base = s.substring(bs, p[0]);
             expect(s, p, ':');
-            // The literal value is a leaf: read to the next structural terminator
-            // (so `lit:string:hello world` keeps its space; a value containing
-            // `;]>,` is an accepted parser limitation, noted in the conventions).
+            // The literal value is a leaf read to the next structural terminator.
+            // The emitter percent-escapes the grammar-structural characters
+            // (`< > [ ] ; ,` and the `%` sentinel — see the emitter's
+            // `escape_literal_value` / this file's `escapeLiteralValue`), so a
+            // raw terminator here is always a genuine separator, never part of
+            // the value. The captured value stays ESCAPED: it is only ever a
+            // match key compared against the (identically-escaped) wire token,
+            // never decoded back — the real value rides the wire value bytes.
             int vs = p[0];
             while (p[0] < s.length()) {
                 char c = s.charAt(p[0]);
@@ -1859,10 +1916,30 @@ public final class ProtoReader {
                             + magnitude.length() + " chars, limit " + MAX_BIGINT_HEX_LEN + ")");
         }
         if (magnitude.isEmpty() || !isStrictHex(magnitude)) {
-            throw new IllegalStateException("invalid bigint hex string: " + hex);
+            // A malformed payload can be nearly cap-sized (up to MAX_BIGINT_HEX_LEN
+            // ~67 MB): report its length plus a short prefix preview rather than
+            // echoing the whole adversarial blob into the exception message / logs.
+            throw new IllegalStateException(
+                    "invalid bigint hex string (" + hex.length() + " chars): " + preview(hex));
         }
         BigInteger value = new BigInteger(magnitude, 16);
         return negative ? value.negate() : value;
+    }
+
+    /** Max characters of a wire string echoed into an error message. */
+    private static final int PREVIEW_CAP = 32;
+
+    /**
+     * A length-bounded preview of a possibly-huge wire string for error messages:
+     * the first {@link #PREVIEW_CAP} characters, then an elision marker noting how
+     * many were dropped, so an adversarial multi-megabyte payload can't bloat the
+     * message.
+     */
+    private static String preview(String s) {
+        if (s.length() <= PREVIEW_CAP) {
+            return s;
+        }
+        return s.substring(0, PREVIEW_CAP) + "… (+" + (s.length() - PREVIEW_CAP) + " more chars)";
     }
 
     /** True iff every char is an ASCII hex digit (no sign, `0x` prefix, or whitespace). */

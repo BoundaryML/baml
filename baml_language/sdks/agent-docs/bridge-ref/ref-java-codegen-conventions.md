@@ -181,10 +181,18 @@ rules digest, not the rationale log).
   - Known wart: `BamlType.toWireTy()`/`fromWireTy` are `public` only
     because the codec lives in `baml_bridge.internal`; hiding them needs
     a package reshuffle.
-- **Runtime init** **[decided]**: loading any generated class triggers
-  (idempotent) runtime initialization from embedded bytecode via a static
-  initializer on the root holder — the Java analog of Python's
-  root-package import side effect. `nativeInitFromBytecode` also
+- **Runtime init** **[decided]**: (idempotent) runtime initialization from
+  embedded bytecode runs from a static initializer on the root `Baml` anchor —
+  the Java analog of Python's root-package import side effect. Note the Java
+  semantics: a bare `.class` reference does **not** run a class's static
+  initializer, so the runtime boots only on genuine class *initialization* —
+  `Baml.ensure()`, `Class.forName(name, /*initialize=*/true, cl)`, `new`, or a
+  static-member touch. Every generated `Fns` holder forces this via a
+  `static { <root>.Baml.ensure(); }` block, and any generated class that carries
+  static/instance method bindings emits the same block so its first invoked
+  entrypoint (e.g. `Greeter.create()`) boots the runtime. The anchor name is
+  `Baml`, or `Baml$` when a user root-level type already claims `Baml`.
+  `nativeInitFromBytecode` also
   **registers the bridge with the versioned C ABI** —
   `BridgeLanguage::Java = 7` (telemetry id `"java"`) at
   `baml_version::CANONICAL_VERSION`, mirroring `bridge_python`
@@ -311,6 +319,10 @@ rules digest, not the rationale log).
   static widening, pydantic construction-time coercion): keep the test
   name and intent, adapt the body, and leave a
   `// java-port note: ...` comment explaining the semantic shift.
-- Namespace-import smoke tests: the Java analog of `import
-  baml_sdk.ns` is referencing a known generated symbol's `.class`
-  (compile-time reachability + class-load side effects).
+- Namespace-import smoke tests: the Java analog of `import baml_sdk.ns` is
+  compile-time reachability of a known generated symbol. A bare `.class`
+  literal only pins reachability — it does **not** run the class's static
+  initializer (no class-load side effect), so a test that means to force the
+  runtime-init side effect must actually *initialize* the class:
+  `Class.forName(name, /*initialize=*/true, cl)`, `Baml.ensure()`, or a
+  static-member touch.

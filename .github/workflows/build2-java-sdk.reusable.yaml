@@ -46,11 +46,20 @@ jobs:
         run: cargo build -p bridge_java --release
       - name: Package native jar
         working-directory: baml_language/sdks/java/baml_bridge
+        shell: bash
+        env:
+          # zizmor: expansions land in `env:` and are read as shell vars in
+          # `run:` (never interpolated into the script body), so a crafted value
+          # can't inject shell. `shell: bash` keeps `"$VAR"` consistent across
+          # the linux/macos/windows matrix.
+          BAML_VERSION: ${{ inputs.version }}
+          BAML_NATIVE_PLATFORM: ${{ matrix.platform }}
+          BAML_NATIVE_LIB: ${{ matrix.lib }}
         run: |
           mise exec -- gradle --no-daemon nativeJar \
-            -PbamlVersion=${{ inputs.version }} \
-            -PbamlNativePlatform=${{ matrix.platform }} \
-            -PbamlNativeLib=../../../target/release/${{ matrix.lib }}
+            -PbamlVersion="$BAML_VERSION" \
+            -PbamlNativePlatform="$BAML_NATIVE_PLATFORM" \
+            -PbamlNativeLib="../../../target/release/$BAML_NATIVE_LIB"
       - uses: actions/upload-artifact@v4
         with:
           name: java-native-${{ matrix.platform }}
@@ -63,7 +72,11 @@ jobs:
       - uses: ./.github/actions/setup-mise
       - name: Build + test main jar
         working-directory: baml_language/sdks/java/baml_bridge
-        run: mise exec -- gradle --no-daemon build -PbamlVersion=${{ inputs.version }}
+        env:
+          # zizmor: read the version as a shell var rather than interpolating it
+          # into the `run:` script body.
+          BAML_VERSION: ${{ inputs.version }}
+        run: mise exec -- gradle --no-daemon build -PbamlVersion="$BAML_VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: java-main

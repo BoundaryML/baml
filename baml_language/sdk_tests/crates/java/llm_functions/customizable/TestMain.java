@@ -90,14 +90,16 @@ class TestMain {
     // --- tests -------------------------------------------------------------
 
     @Test
-    void test_root_imports_cleanly() {
+    void test_root_imports_cleanly() throws ClassNotFoundException {
         // java-port note: Python `import baml_sdk` runs the root package's
-        // runtime-init side effect. The Java analog is referencing the root
-        // holder whose static initializer performs the (idempotent) runtime
-        // bootstrap. [INVENTED: `baml_sdk.Fns` as the root free-function /
-        // runtime-init holder — needs review; a root namespace with no free
-        // functions may not emit an `Fns` holder.]
-        assertNotNull(baml_sdk.Fns.class);
+        // runtime-init side effect. The Java analog is FORCING the root holder's
+        // static initializer to run — a bare `.class` literal does NOT initialize
+        // a class in Java, so `Class.forName(name, /*initialize=*/true, cl)` is
+        // what actually performs the (idempotent) runtime bootstrap. [INVENTED:
+        // `baml_sdk.Fns` as the root free-function / runtime-init holder — needs
+        // review; a root namespace with no free functions may not emit an `Fns`
+        // holder.]
+        assertNotNull(Class.forName("baml_sdk.Fns", true, TestMain.class.getClassLoader()));
     }
 
     @Test

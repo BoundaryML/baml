@@ -39,10 +39,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class TestHostCallables {
 
@@ -205,6 +210,57 @@ class TestHostCallables {
         assertSame(raisedFirst, ei1);
         assertSame(raisedSecond, ei2);
         assertNotSame(ei1, ei2);
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void test_concurrent_throws_in_flight_rehydrate_to_their_own_object() throws Exception {
+        // The sequential test above proves keys don't collide back-to-back; this
+        // proves the host-value registry (BamlFfi.HOST_VALUES) stays isolated
+        // under genuine PARALLELISM — two callables throwing distinct exceptions
+        // on concurrent engine calls must each rehydrate to ITS original object
+        // by identity, never crossing keys.
+        RuntimeException raisedFirst = new RuntimeException("first-concurrent");
+        RuntimeException raisedSecond = new RuntimeException("second-concurrent");
+
+        Function<Long, String> cbFirst = x -> {
+            throw raisedFirst;
+        };
+        Function<Long, String> cbSecond = x -> {
+            throw raisedSecond;
+        };
+
+        int rounds = 32;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < rounds; i++) {
+                futures.add(
+                        pool.submit(
+                                () -> {
+                                    RuntimeException caught =
+                                            assertThrows(
+                                                    RuntimeException.class,
+                                                    () -> Fns.call_with_callback(cbFirst, 1L));
+                                    assertSame(raisedFirst, caught);
+                                }));
+                futures.add(
+                        pool.submit(
+                                () -> {
+                                    RuntimeException caught =
+                                            assertThrows(
+                                                    RuntimeException.class,
+                                                    () -> Fns.call_with_callback(cbSecond, 2L));
+                                    assertSame(raisedSecond, caught);
+                                }));
+            }
+            // Propagate any assertion failure raised on a worker thread.
+            for (Future<?> f : futures) {
+                f.get();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Disabled(
