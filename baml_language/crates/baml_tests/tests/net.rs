@@ -125,6 +125,45 @@ async fn net_multiple_reads() {
     );
 }
 
+// Kept in Rust (not the baml_src corpus): the silent peer must be a
+// controlled Rust listener that accepts and holds the connection open. A
+// corpus version using `baml.http.Server.bind` as the silent peer is flaky —
+// the BAML listener object can be GC-collected between `connect` and the
+// throwing `read`, resetting the connection into an `Io` error instead of the
+// expected `Timeout`, intermittently under load.
+#[tokio::test]
+async fn net_read_timeout_fires() {
+    // The server accepts the connection but never writes, so a bare read() would
+    // block forever. A short read timeout must surface as baml.errors.Timeout.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let _conn = listener.accept().await.unwrap();
+        // Hold the connection open (silent) past the client's deadline.
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                sock.read(timeout = baml.time.Duration.from_milliseconds(50n))
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    let err = output
+        .result
+        .expect_err("read with a 50ms timeout against a silent peer should time out")
+        .to_string();
+    assert!(
+        err.contains("baml.errors.Timeout"),
+        "expected a baml.errors.Timeout throw, got: {err}"
+    );
+}
+
 #[tokio::test]
 async fn net_read_succeeds_within_timeout() {
     // A generous read timeout must not interfere with a prompt response.

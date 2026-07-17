@@ -256,6 +256,54 @@ async fn http_fetch_network_error() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
+// Kept in Rust (not the baml_src corpus): the silent peer must be a controlled
+// Rust listener that accepts and holds the connection open. A corpus version
+// using `baml.http.Server.bind` as the silent peer is flaky — the BAML
+// listener object can be GC-collected between building the request and the
+// throwing `fetch`, resetting the connection into an `Io` error instead of the
+// expected `Timeout`, intermittently under load.
+#[tokio::test]
+async fn http_fetch_timeout_fires() {
+    // A raw TCP listener that accepts connections but never writes an HTTP
+    // response, so the request hangs after connecting. A short total timeout
+    // must surface as baml.errors.Timeout.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let server = tokio::spawn(async move {
+        loop {
+            if let Ok((conn, _)) = listener.accept().await {
+                // Hold the connection open, silent, past the client's deadline.
+                tokio::spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    drop(conn);
+                });
+            }
+        }
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let response = baml.http.fetch(
+                    "http://{addr}/",
+                    timeout = baml.time.Duration.from_milliseconds(100n),
+                );
+                response.text()
+            }}
+        "#
+    ));
+    server.abort();
+
+    let err = output
+        .result
+        .expect_err("fetch with a 100ms timeout against a silent server should time out")
+        .to_string();
+    assert!(
+        err.contains("baml.errors.Timeout"),
+        "expected a baml.errors.Timeout throw, got: {err}"
+    );
+}
+
 #[tokio::test]
 async fn http_response_text_consumed() {
     let (_server, uri) = mock(&[MockEndpoint {

@@ -13,27 +13,10 @@
 // Error classes (crates/sys_native/src/io_impls.rs):
 //   read / recv_from deadline expiry          -> baml.errors.Timeout
 //   op on a closed stream / listener / socket -> baml.errors.Io
-
-// ─── TCP read timeout ─────────────────────────────────────────────────────────
-
-// A listening socket that never sends: connect() lands in the accept backlog
-// (established at the TCP level even though nothing accepts), no bytes ever
-// arrive, so a bare read() would block forever. A short read timeout must
-// surface as baml.errors.Timeout.
-function net_read_timeout_fires_fn() -> uint8array {
-    let server = baml.http.Server.bind("127.0.0.1:0");
-    let sock = baml.net.TcpStream.connect(server.addr);
-    sock.read(timeout = baml.time.Duration.from_milliseconds(50n))
-}
-
-test "net_read_timeout_fires" {
-    {
-        net_read_timeout_fires_fn();
-        baml.sys.panic("read with a 50ms timeout against a silent peer should time out")
-    } catch (e) {
-        baml.errors.Timeout => null
-    }
-}
+//
+// The TCP read-timeout test lives in Rust (tests/net.rs), not here: its silent
+// peer needs a controlled listener that stays alive across the throwing read,
+// which a GC-managed BAML `baml.http.Server` cannot guarantee under load.
 
 // ─── close() invalidates the shared handle ────────────────────────────────────
 

@@ -30,6 +30,15 @@ fn collect_baml_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) 
     for entry in std::fs::read_dir(dir).expect("read_dir baml_src") {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
+            // Skip hidden dirs (e.g. a stray `.baml/cache` a CLI run may have
+            // left behind); the corpus is only the checked-in `.baml` sources.
+            if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with('.'))
+            {
+                continue;
+            }
             collect_baml_files(root, &path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("baml") {
             let rel = path
@@ -145,6 +154,14 @@ fn bytecode() {
 /// Execute `baml test`
 #[test]
 fn baml_test() {
+    // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
+    // writes `<project>/.baml/cache` straight into the source tree that the
+    // `bytecode`/`emit_determinism`/`link_units_oracle` tests scan
+    // concurrently, and successive runs share (and can corrupt) that cache.
+    let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let status = std::process::Command::new("cargo")
         .args([
             "run",
@@ -155,6 +172,9 @@ fn baml_test() {
             "--from",
             concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
         ])
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_HOME", &home)
+        .env("BAML_CACHE_DIR", tmp.path().join("cache"))
         .status()
         .expect("baml_cli test should not fail");
     assert!(status.success());

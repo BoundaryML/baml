@@ -275,7 +275,7 @@ fn generate_valid_project_returns_zero_exit_code() {
 
 #[test]
 fn generate_go_writes_sdk_through_cli() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project_with_go_generator(
         tmp.path(),
