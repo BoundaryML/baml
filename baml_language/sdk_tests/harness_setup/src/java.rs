@@ -80,6 +80,15 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_JAVA_SETUP";
 /// `#[ignore]`d until its API surface lands.
 const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
 
+/// Fixtures whose JUnit runtime suite (`gradle test`) runs green against the
+/// built `bridge_java` cdylib — their `junit` gate runs for real (CI
+/// enforcement, mirroring [`GREEN_JAVAC_FIXTURES`]); everything else stays
+/// `#[ignore]`d until its runtime surface lands. A green-junit fixture must
+/// also be a green-javac fixture (the `test` task compiles the test sources
+/// first). Kept a subset of `GREEN_JAVAC_FIXTURES` — the `llm_functions`
+/// fixture is deliberately excluded (its suite makes live LLM calls).
+const GREEN_JUNIT_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
+
 const IGNORE_REASON: &str =
     "generated Java API not complete enough for this fixture yet — un-ignore as capabilities land";
 
@@ -278,8 +287,7 @@ mod {fixture} {{
             buf.push_str(&format!(
                 r#"
     #[test]
-    #[ignore = {ignore_reason:?}]
-    fn junit() {{
+{junit_ignore}    fn junit() {{
         ::sdk_test_harness_runner::run_java_test_cmd(
             "{fixture}",
             "gradle --no-daemon --console=plain test",
@@ -288,7 +296,11 @@ mod {fixture} {{
         );
     }}
 "#,
-                ignore_reason = IGNORE_REASON,
+                junit_ignore = if GREEN_JUNIT_FIXTURES.contains(&name.as_str()) {
+                    String::new()
+                } else {
+                    format!("    #[ignore = {IGNORE_REASON:?}]\n")
+                },
                 fixture = fixture.name,
                 cache_subdir = CACHE_SUBDIR,
                 cache_env_var = CACHE_ENV_VAR,

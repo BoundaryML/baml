@@ -123,6 +123,80 @@ class WireCodecTest {
         assertEquals(big, ProtoReader.decodeOutboundResult(okEnvelope(w.toByteArray())));
     }
 
+    // -- bigint decode length cap (Python-parity DoS hardening) --------------
+    // Mirrors the Python bridge's `_parse_hex_bigint` (proto.py) and the
+    // Rust `MAX_BIGINT_HEX_LEN` in bridge_ctypes/src/value_decode.rs: strict
+    // hex plus a pre-allocation length cap so an adversarial multi-megabyte
+    // hex blob can't drive an unbounded BigInteger allocation. Boundary cases
+    // hit `parseHexBigInt` directly (avoids copying a 64 MB blob through the
+    // full envelope); the two wire read sites are covered end-to-end below.
+
+    /** The Java cap is byte-for-byte the workspace formula (2^28 bits / 4 + 2). */
+    @Test
+    void bigint_cap_matches_workspace_formula() {
+        assertEquals((1 << 28) / 4 + 2, ProtoReader.MAX_BIGINT_HEX_LEN);
+    }
+
+    /** A hex string of exactly the cap length is accepted (parse stays cheap). */
+    @Test
+    void bigint_at_cap_length_decodes() {
+        // Length == cap; leading zeros keep BigInteger's radix parse O(n) cheap.
+        String hex = "0".repeat(ProtoReader.MAX_BIGINT_HEX_LEN - 2) + "ff";
+        assertEquals(ProtoReader.MAX_BIGINT_HEX_LEN, hex.length());
+        assertEquals(BigInteger.valueOf(255), ProtoReader.parseHexBigInt(hex));
+    }
+
+    /** One char over the cap is rejected before the BigInteger is built. */
+    @Test
+    void bigint_over_cap_length_rejects() {
+        String hex = "f".repeat(ProtoReader.MAX_BIGINT_HEX_LEN + 1);
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> ProtoReader.parseHexBigInt(hex));
+        assertTrue(ex.getMessage().contains("exceeds the workspace cap"));
+        // The error must not embed the megabyte-scale input.
+        assertTrue(ex.getMessage().length() < 200);
+    }
+
+    /** Non-strict hex — letters outside [0-9a-fA-F], `0x`, `+`, whitespace, empty — is rejected. */
+    @Test
+    void bigint_malformed_hex_rejects() {
+        for (String bad : new String[] {"12xz", "", "0x1f", " 1f", "1f ", "+1f", "-", "1_000"}) {
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> ProtoReader.parseHexBigInt(bad),
+                    () -> "expected reject for " + '"' + bad + '"');
+        }
+    }
+
+    /** A single leading minus is honored (magnitude then parsed strictly). */
+    @Test
+    void bigint_negative_hex_round_trips() {
+        assertEquals(BigInteger.valueOf(-42), ProtoReader.parseHexBigInt("-2a"));
+        assertEquals(BigInteger.ZERO, ProtoReader.parseHexBigInt("0"));
+    }
+
+    /** The value read site (OV_BIGINT = 20) routes through the strict-hex guard. */
+    @Test
+    void decode_bigint_value_site_rejects_malformed() {
+        WireWriter w = new WireWriter();
+        w.writeString(OV_BIGINT, "not-a-number");
+        assertThrows(
+                IllegalStateException.class,
+                () -> ProtoReader.decodeOutboundResult(okEnvelope(w.toByteArray())));
+    }
+
+    /** The literal read site (BamlLiteralValue.bigint_value = 4) also routes through the guard. */
+    @Test
+    void decode_literal_bigint_site_rejects_malformed() {
+        WireWriter lit = new WireWriter();
+        lit.writeString(4, "not-a-number"); // BamlLiteralValue.bigint_value = 4
+        WireWriter w = new WireWriter();
+        w.writeMessage(OV_LITERAL, lit.toByteArray());
+        assertThrows(
+                IllegalStateException.class,
+                () -> ProtoReader.decodeOutboundResult(okEnvelope(w.toByteArray())));
+    }
+
     @Test
     void decode_ok_literal_int_unwraps() {
         WireWriter lit = new WireWriter();

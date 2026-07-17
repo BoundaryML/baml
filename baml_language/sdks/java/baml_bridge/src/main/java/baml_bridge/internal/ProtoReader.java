@@ -354,7 +354,7 @@ public final class ProtoReader {
                 case OV_MAP -> result = decodeMap(r.readMessage(), lenient);
                 case OV_UNION -> result = decodeUnionVariant(r.readMessage(), lenient);
                 case OV_UINT8ARRAY -> result = r.readBytes();
-                case OV_BIGINT -> result = new BigInteger(r.readString(), 16);
+                case OV_BIGINT -> result = parseHexBigInt(r.readString());
                 case OV_CLASS -> result = decodeClass(r.readMessage(), lenient);
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE -> result = decodeHandle(r.readMessage());
@@ -383,7 +383,7 @@ public final class ProtoReader {
                 case LIT_STRING -> result = r.readString();
                 case LIT_INT -> result = r.readVarint();
                 case LIT_BOOL -> result = r.readVarint() != 0;
-                case LIT_BIGINT -> result = new BigInteger(r.readString(), 16);
+                case LIT_BIGINT -> result = parseHexBigInt(r.readString());
                 case LIT_FLOAT -> result = Double.parseDouble(r.readString());
                 default -> r.skipField(wire);
             }
@@ -754,7 +754,7 @@ public final class ProtoReader {
                 case LIT_INT -> token = "lit:int:" + msg.readVarint();
                 case LIT_BOOL -> token = "lit:bool:" + (msg.readVarint() != 0);
                 // Hex on the wire → decimal, matching the arm token's spelling.
-                case LIT_BIGINT -> token = "lit:bigint:" + new BigInteger(msg.readString(), 16);
+                case LIT_BIGINT -> token = "lit:bigint:" + parseHexBigInt(msg.readString());
                 case LIT_FLOAT -> token = "lit:float:" + msg.readString();
                 default -> msg.skipField(wire);
             }
@@ -1548,6 +1548,58 @@ public final class ProtoReader {
 
     private static UnsupportedOperationException unsupported(String kind) {
         return new UnsupportedOperationException("capability not yet implemented: " + kind);
+    }
+
+    /**
+     * Workspace bigint cap = 2^28 bits ⇒ at most {@code (2^28)/4} hex digits
+     * (plus a small slack for the sign), mirroring the Rust-side
+     * {@code MAX_BIGINT_HEX_LEN} in {@code bridge_ctypes/src/value_decode.rs}
+     * and the Python ({@code _MAX_BIGINT_HEX_LEN}) / TypeScript bridges. A wire
+     * payload longer than this is rejected before the {@link BigInteger} is
+     * built, so an adversarial multi-megabyte hex blob can't drive an unbounded
+     * allocation ahead of the VM's own {@code MAX_BIGINT_BITS} guard.
+     */
+    public static final int MAX_BIGINT_HEX_LEN = (1 << 28) / 4 + 2;
+
+    /**
+     * Decode a wire {@code bigint_value} (base-16, with an optional single
+     * leading {@code -}) with a pre-allocation length cap and strict-hex
+     * validation, mirroring the Python bridge's {@code _parse_hex_bigint} and
+     * the Rust/TypeScript bridges. Rejects an over-cap or non-strict-hex payload
+     * with {@link IllegalStateException} — the malformed-wire failure mode the
+     * rest of this codec uses (see {@link WireReader}) — rather than letting
+     * {@code new BigInteger(hex, 16)} allocate unbounded or surface a bare
+     * {@link NumberFormatException}.
+     */
+    public static BigInteger parseHexBigInt(String hex) {
+        // Strip exactly one leading minus (matching the encoders and the other
+        // bridges); anything else — `+`, `0x`, underscores, whitespace — is
+        // rejected by the strict-hex check below.
+        boolean negative = !hex.isEmpty() && hex.charAt(0) == '-';
+        String magnitude = negative ? hex.substring(1) : hex;
+        if (magnitude.length() > MAX_BIGINT_HEX_LEN) {
+            throw new IllegalStateException(
+                    "bigint hex exceeds the workspace cap ("
+                            + magnitude.length() + " chars, limit " + MAX_BIGINT_HEX_LEN + ")");
+        }
+        if (magnitude.isEmpty() || !isStrictHex(magnitude)) {
+            throw new IllegalStateException("invalid bigint hex string: " + hex);
+        }
+        BigInteger value = new BigInteger(magnitude, 16);
+        return negative ? value.negate() : value;
+    }
+
+    /** True iff every char is an ASCII hex digit (no sign, `0x` prefix, or whitespace). */
+    private static boolean isStrictHex(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean hex =
+                    (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!hex) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String kindName(int field) {

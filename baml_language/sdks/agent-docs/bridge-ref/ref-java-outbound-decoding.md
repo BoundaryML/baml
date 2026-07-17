@@ -297,14 +297,24 @@ descriptor when one is present, and otherwise delegates straight to
 > the error path (`ProtoReader.java:361-369`). So an `ok` value that is a bare
 > BAML type-reference is an error in Java but a silent `None` in Python.
 
-> ⚠ **Deviation from Python — bigint has no pre-allocation length cap:** Python
-> parses `bigint_value` "from strict hex with a pre-allocation length cap"
-> (`_parse_hex_bigint`). Java does a plain `new BigInteger(r.readString(), 16)`
-> (`ProtoReader.java:357`, and the literal channel at `:386`) with **no length
-> bound** — an adversarial multi-megabyte hex string would be parsed without the
-> DoS guard Python applies. This is a genuine gap with no Java reject path.
-> (Invalid hex still throws `NumberFormatException` from `BigInteger`, so
-> malformed — as opposed to oversized — input is rejected.)
+> ✔ **Deviation from Python — CLOSED (bigint pre-allocation length cap):**
+> Python parses `bigint_value` "from strict hex with a pre-allocation length
+> cap" (`_parse_hex_bigint`, `_MAX_BIGINT_HEX_LEN = (1 << 28) // 4 + 2`). Java
+> now mirrors this exactly via `ProtoReader.parseHexBigInt`
+> (`ProtoReader.java:1574`), gated on `MAX_BIGINT_HEX_LEN = (1 << 28) / 4 + 2`
+> (`ProtoReader.java:1562`) — byte-for-byte the Rust `MAX_BIGINT_HEX_LEN`
+> (`bridge_ctypes/src/value_decode.rs`) and the Python/TypeScript caps. All
+> three wire read sites route through it: the value channel
+> (`ProtoReader.java:357`), the literal channel (`:386`), and the
+> union-arm token channel (`:757`). An over-cap hex blob is rejected *before*
+> the `BigInteger` is built; strict-hex validation (single leading `-` only —
+> no `0x`, `+`, underscores, or whitespace) matches the encoders and the other
+> bridges. **Reject path deviation (intentional):** where Python raises
+> `ValueError` and Rust `CtypesError::InvalidBigint`, Java throws
+> `IllegalStateException` — the malformed-wire failure mode the rest of this
+> codec uses (`WireReader`: "truncated varint", "malformed varint", …), rather
+> than a bare `NumberFormatException`. Covered offline by `WireCodecTest`
+> (at-cap passes, over-cap rejects, malformed hex rejects, both read sites).
 
 The caller's Java return type does not, by itself, drive runtime decoding: the
 generated binding passes an explicit descriptor string. Decoding is driven by

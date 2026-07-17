@@ -47,6 +47,27 @@ filter = 'package(=sdk_test_java)'
 platform = { host = 'cfg(windows)' }
 setup = 'java_gradle_win'
 
+# The java sdk-test emits two gates per green fixture — `javac`
+# (compileTestJava) and `junit` (test) — and BOTH invoke `gradle` in the
+# same `<fixture>/generated/` project dir. Gradle takes an exclusive
+# project lock, so running a fixture's two gates concurrently would race
+# (one blocks on the lock and can time out). Serialize each fixture's
+# gates into a per-fixture test group with max-threads = 1; distinct
+# fixtures still run in parallel (different dirs — already proven safe by
+# the two javac gates). Add a group + override here when a fixture joins
+# GREEN_JUNIT_FIXTURES in sdk_tests/harness_setup/src/java.rs.
+[test-groups]
+java-fixture-type-shapes = { max-threads = 1 }
+java-fixture-function-calls = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_java) & test(/^type_shapes::/)'
+test-group = 'java-fixture-type-shapes'
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_java) & test(/^function_calls::/)'
+test-group = 'java-fixture-function-calls'
+
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel
