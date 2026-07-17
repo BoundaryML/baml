@@ -16,6 +16,10 @@ type BAMLType struct {
 	value *cffi.BamlTy
 }
 
+type resultOwner struct {
+	keys []uint64
+}
+
 type PrimitiveType int
 
 const (
@@ -168,7 +172,9 @@ func (value Value) UnionVariant() (BAMLType, Value, error) {
 	if !ok || envelope.UnionVariantValue == nil {
 		return BAMLType{}, Value{}, fmt.Errorf("expected BAML union variant, got %T", value.value.Value)
 	}
-	return validateUnionVariant(envelope.UnionVariantValue)
+	selected, payload, err := validateUnionVariant(envelope.UnionVariantValue)
+	payload.owner = value.owner
+	return selected, payload, err
 }
 
 // validateUnionVariant treats outbound union metadata as untrusted ABI input.
@@ -446,6 +452,7 @@ func (value Value) unwrapUnionVariants() (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
+		payload.owner = value.owner
 		value = payload
 	}
 	return Value{}, fmt.Errorf("BAML union variant nesting exceeds 64 levels")

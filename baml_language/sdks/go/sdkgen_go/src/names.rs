@@ -9,6 +9,7 @@ use std::{
     fmt,
 };
 
+use baml_base::MediaKind;
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
 use crate::{
@@ -647,6 +648,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Bool => "Bool".into(),
         GoTy::Null => "Null".into(),
         GoTy::Uint8Array => "Uint8Array".into(),
+        GoTy::Media(kind) => media_component(*kind).to_string(),
         GoTy::Literal(literal) => literal_component(literal),
         GoTy::Class(name) => names
             .project(
@@ -692,6 +694,7 @@ fn disambiguated_union_component(ty: &GoTy, base: &str) -> String {
         GoTy::Bool => "PrimitiveBool".into(),
         GoTy::Null => "PrimitiveNull".into(),
         GoTy::Uint8Array => "PrimitiveUint8Array".into(),
+        GoTy::Media(kind) => format!("Primitive{}", media_component(*kind)),
         GoTy::Class(name) => format!("Class{base}{}", nominal_type_hash(name, GoNameKind::Class)),
         GoTy::Enum(name) => format!("Enum{base}{}", nominal_type_hash(name, GoNameKind::Enum)),
         _ => {
@@ -711,6 +714,10 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         GoTy::Bool => hash.byte(4),
         GoTy::Null => hash.byte(5),
         GoTy::Uint8Array => hash.byte(6),
+        GoTy::Media(kind) => {
+            hash.byte(15);
+            hash.component(media_component(*kind));
+        }
         GoTy::Literal(literal) => {
             hash.byte(7);
             hash.component(&literal_component(literal));
@@ -749,7 +756,17 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
                 hash_go_ty(hash, member);
             }
         }
-        GoTy::Unsupported => hash.byte(15),
+        GoTy::Unsupported => hash.byte(16),
+    }
+}
+
+fn media_component(kind: MediaKind) -> &'static str {
+    match kind {
+        MediaKind::Image => "Image",
+        MediaKind::Audio => "Audio",
+        MediaKind::Video => "Video",
+        MediaKind::Pdf => "Pdf",
+        MediaKind::Generic => "Media",
     }
 }
 

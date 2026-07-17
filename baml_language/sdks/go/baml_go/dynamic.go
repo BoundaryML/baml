@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"sort"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
@@ -48,19 +49,30 @@ func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 	if payload.err != nil {
 		return payload
 	}
-	if payload.value == nil {
+	if payload.value == nil && payload.deferred == nil {
 		return InvalidInput("selected union payload is uninitialized")
 	}
 	if unionType.value == nil || selectedType.value == nil {
 		return InvalidInput("selected union type metadata is uninitialized")
 	}
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_UnionVariantValue{
-		UnionVariantValue: &cffi.InboundUnionVariantValue{
-			SelfType:     unionType.value,
-			SelectedType: selectedType.value,
-			Value:        payload.value,
-		},
-	}}}
+	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		value, err := payload.encodeValue(transaction)
+		if err != nil {
+			return nil, fmt.Errorf("selected union payload: %w", err)
+		}
+		return &cffi.InboundValue{Value: &cffi.InboundValue_UnionVariantValue{
+			UnionVariantValue: &cffi.InboundUnionVariantValue{
+				SelfType:     unionType.value,
+				SelectedType: selectedType.value,
+				Value:        value,
+			},
+		}}, nil
+	}
+	if payload.deferred == nil {
+		value, err := prepare(nil)
+		return Input{value: value, err: err}
+	}
+	return Input{deferred: &inputEncoder{encode: prepare}}
 }
 
 // Any converts an ordinary dynamic Go value into the generic ABI value tree.
@@ -76,20 +88,20 @@ type visit struct {
 }
 
 func anyList(values []Input, itemType *BAMLType) Input {
-	encoded := List(values, func(value Input) Input { return value })
-	if encoded.err == nil && encoded.value != nil && itemType != nil {
-		encoded.value.GetListValue().ItemType = itemType.value
-	}
-	return encoded
+	return listInput(values, itemType)
 }
 
 func anyMap(values map[string]Input, valueType *BAMLType) Input {
-	encoded := Map(values, func(value Input) Input { return value })
-	if encoded.err == nil && encoded.value != nil && valueType != nil {
-		encoded.value.GetMapValue().KeyType = PrimitiveBAMLType(StringType).value
-		encoded.value.GetMapValue().ValueType = valueType.value
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
 	}
-	return encoded
+	sort.Strings(keys)
+	inputs := make([]Input, 0, len(keys))
+	for _, key := range keys {
+		inputs = append(inputs, values[key])
+	}
+	return mapInput(keys, inputs, valueType)
 }
 
 func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {

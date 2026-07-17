@@ -102,8 +102,53 @@ func ensureNativeRuntime(ctx context.Context) error {
 
 // Input is a value supplied to a BAML callable.
 type Input struct {
-	value *cffi.InboundValue
-	err   error
+	value    *cffi.InboundValue
+	err      error
+	deferred *inputEncoder
+}
+
+// inputEncoder is indirect so exported Input retains its original comparable
+// Go representation even when it carries deferred transactional work.
+type inputEncoder struct {
+	encode func(*inputTransaction) (*cffi.InboundValue, error)
+}
+
+// inputTransaction owns native handles cloned while one call is encoded.
+// cleanup always attempts to release every key. The native call entry point
+// synchronously decodes arguments before returning: successfully decoded
+// handles have already been drained (so release harmlessly reports invalid),
+// while any handle after a decode failure remains in the table and is freed.
+type inputTransaction struct {
+	keys []uint64
+}
+
+func (transaction *inputTransaction) own(key uint64) {
+	transaction.keys = append(transaction.keys, key)
+}
+
+func (transaction *inputTransaction) rollback() {
+	if transaction == nil {
+		return
+	}
+	for _, key := range transaction.keys {
+		if key != 0 {
+			releaseInboundHandle(key)
+		}
+	}
+	transaction.keys = nil
+}
+
+func (input Input) encodeValue(transaction *inputTransaction) (*cffi.InboundValue, error) {
+	if input.err != nil {
+		return nil, input.err
+	}
+	if input.deferred != nil {
+		return input.deferred.encode(transaction)
+	}
+	if input.value == nil {
+		return nil, errors.New("uninitialized baml_go.Input")
+	}
+	return input.value, nil
 }
 
 // Null is the sole Go value corresponding to BAML's standalone null type.
@@ -180,6 +225,7 @@ func Uint8Array(value []byte) Input {
 // the wire value before exposing it to generated code.
 type Value struct {
 	value *cffi.BamlOutboundValue
+	owner *resultOwner
 }
 
 // Call invokes one fully-qualified BAML callable and blocks until it returns
@@ -207,11 +253,12 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 
-	encoded, err := encodeCall(engineCallID, args)
+	encoded, transaction, err := encodeCallForDispatch(engineCallID, args)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
 	}
+	defer transaction.rollback()
 	nativeCall(function, encoded, callbackID)
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -258,6 +305,22 @@ func reservePendingCall(call *pendingCall) uint32 {
 }
 
 func encodeCall(callID uint64, args map[string]Input) ([]byte, error) {
+	payload, transaction, err := encodeCallForDispatch(callID, args)
+	if transaction != nil {
+		transaction.rollback()
+	}
+	return payload, err
+}
+
+func encodeCallForDispatch(callID uint64, args map[string]Input) ([]byte, *inputTransaction, error) {
+	transaction := &inputTransaction{}
+	failed := true
+	defer func() {
+		if failed {
+			transaction.rollback()
+		}
+	}()
+
 	keys := make([]string, 0, len(args))
 	for key := range args {
 		keys = append(keys, key)
@@ -267,23 +330,22 @@ func encodeCall(callID uint64, args map[string]Input) ([]byte, error) {
 	kwargs := make([]*cffi.InboundMapEntry, 0, len(keys))
 	for _, key := range keys {
 		input := args[key]
-		if input.err != nil {
-			return nil, fmt.Errorf("argument %q: %w", key, input.err)
-		}
-		if input.value == nil {
-			return nil, fmt.Errorf("argument %q has an uninitialized baml_go.Input", key)
+		value, err := input.encodeValue(transaction)
+		if err != nil {
+			return nil, nil, fmt.Errorf("argument %q: %w", key, err)
 		}
 		kwargs = append(kwargs, &cffi.InboundMapEntry{
 			Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
-			Value: input.value,
+			Value: value,
 		})
 	}
 
 	payload, err := proto.Marshal(&cffi.CallFunctionArgs{CallId: callID, Kwargs: kwargs})
 	if err != nil {
-		return nil, fmt.Errorf("encode BAML call: %w", err)
+		return nil, nil, fmt.Errorf("encode BAML call: %w", err)
 	}
-	return payload, nil
+	failed = false
+	return payload, transaction, nil
 }
 
 func decodeResult(payload []byte) (Value, error) {
@@ -303,21 +365,27 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 		if item.Ok == nil {
 			return Value{}, errors.New("BAML returned an empty success value")
 		}
-		return Value{value: item.Ok}, nil
+		owner := ownOutboundHandles(item.Ok)
+		return Value{value: item.Ok, owner: owner}, nil
 	case *cffi.BamlOutboundResult_Error:
 		if item.Error == nil {
 			return Value{}, errors.New("BAML returned an empty error payload")
 		}
-		return Value{}, outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
+		failure := outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
+		releaseOutboundHandles(item.Error.GetValue())
+		return Value{}, failure
 	case *cffi.BamlOutboundResult_Panic:
 		if item.Panic == nil {
 			return Value{}, errors.New("BAML returned an empty panic payload")
 		}
 		if item.Panic.GetIsExitPanic() {
+			releaseOutboundHandles(item.Panic.GetValue())
 			processExit(processExitCode(item.Panic.GetExitCode()))
 			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
 		}
-		return Value{}, outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
+		failure := outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
+		releaseOutboundHandles(item.Panic.GetValue())
+		return Value{}, failure
 	default:
 		return Value{}, errors.New("BAML returned an empty result envelope")
 	}

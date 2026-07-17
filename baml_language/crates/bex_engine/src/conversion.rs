@@ -1912,6 +1912,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
         }
+        (
+            BexExternalValue::Adt(BexExternalAdt::Media(media)),
+            RuntimeTy::Media(expected_kind, _),
+        ) => *expected_kind == baml_type::MediaKind::Generic || media.kind == *expected_kind,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
         (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
@@ -1994,6 +1998,9 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
         | (T::Null { .. }, T::Null { .. })
         | (T::Bigint { .. }, T::Bigint { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        (T::Media(wire, _), T::Media(expected, _)) => {
+            *expected == baml_type::MediaKind::Generic || wire == expected
+        }
         // Distinct primitives: a positive mismatch.
         (
             T::Int { .. }
@@ -2042,6 +2049,7 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
         | (T::Bool { .. }, T::Bool { .. })
         | (T::Null { .. }, T::Null { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        (T::Media(left, _), T::Media(right, _)) => left == right,
         (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
         (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
         (
@@ -2965,7 +2973,10 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
 
 #[cfg(test)]
 mod union_container_selection_tests {
-    use baml_type::{Freshness, TyAttr};
+    use std::sync::Arc;
+
+    use baml_builtins2::{MediaContent, MediaValue};
+    use baml_type::{Freshness, MediaKind, TyAttr};
 
     use super::*;
 
@@ -2995,6 +3006,21 @@ mod union_container_selection_tests {
             Freshness::Regular,
             TyAttr::default(),
         )
+    }
+
+    fn media_ty(kind: MediaKind) -> RuntimeTy {
+        RuntimeTy::Media(kind, TyAttr::default())
+    }
+
+    fn media_value(kind: MediaKind) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
+            kind,
+            MediaContent::Url {
+                url: "https://example.test/asset".to_string(),
+                base64_data: None,
+            },
+            None,
+        ))))
     }
 
     #[test]
@@ -3050,6 +3076,51 @@ mod union_container_selection_tests {
             panic!("selected union metadata was lost")
         };
         assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn media_matching_is_kind_specific_and_generic_accepts_every_kind() {
+        let image = media_value(MediaKind::Image);
+        assert!(value_matches_type(&image, &media_ty(MediaKind::Image)));
+        assert!(value_matches_type(&image, &media_ty(MediaKind::Generic)));
+        assert!(!value_matches_type(&image, &media_ty(MediaKind::Audio)));
+
+        assert!(runtime_ty_compatible(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Generic)
+        ));
+        assert!(!runtime_ty_compatible(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Audio)
+        ));
+        assert!(runtime_ty_structurally_equal(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Image)
+        ));
+        assert!(!runtime_ty_structurally_equal(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Generic)
+        ));
+    }
+
+    #[test]
+    fn host_selected_media_arm_survives_argument_coercion() {
+        let image = media_ty(MediaKind::Image);
+        let audio = media_ty(MediaKind::Audio);
+        let declared = RuntimeTy::union([image.clone(), audio.clone()]);
+        let selected = BexExternalValue::union(
+            media_value(MediaKind::Image),
+            [image.clone(), audio],
+            image.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected media union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &image
+        ));
     }
 
     #[test]

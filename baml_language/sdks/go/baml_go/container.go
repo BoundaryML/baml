@@ -10,20 +10,34 @@ import (
 // List encodes a present BAML list. A nil Go slice is a present empty list;
 // nullable lists use Optional around ListEncoder to represent BAML null.
 func List[T any](values []T, encode func(T) Input) Input {
-	items := make([]*cffi.InboundValue, 0, len(values))
+	inputs := make([]Input, 0, len(values))
 	for _, value := range values {
-		encoded := encode(value)
-		if encoded.err != nil {
-			return encoded
-		}
-		if encoded.value == nil {
-			return Input{}
-		}
-		items = append(items, encoded.value)
+		inputs = append(inputs, encode(value))
 	}
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_ListValue{
-		ListValue: &cffi.InboundListValue{Values: items},
-	}}}
+	return listInput(inputs, nil)
+}
+
+func listInput(inputs []Input, itemType *BAMLType) Input {
+	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		items := make([]*cffi.InboundValue, 0, len(inputs))
+		for index, input := range inputs {
+			encoded, err := input.encodeValue(transaction)
+			if err != nil {
+				return nil, fmt.Errorf("list item %d: %w", index, err)
+			}
+			items = append(items, encoded)
+		}
+		list := &cffi.InboundListValue{Values: items}
+		if itemType != nil {
+			list.ItemType = itemType.value
+		}
+		return &cffi.InboundValue{Value: &cffi.InboundValue_ListValue{ListValue: list}}, nil
+	}
+	if inputsAreStatic(inputs) {
+		value, err := prepare(nil)
+		return Input{value: value, err: err}
+	}
+	return Input{deferred: &inputEncoder{encode: prepare}}
 }
 
 // ListEncoder adapts an element encoder into the shape used by nested and
@@ -42,23 +56,47 @@ func Map[T any](values map[string]T, encode func(T) Input) Input {
 	}
 	sort.Strings(keys)
 
-	entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+	inputs := make([]Input, 0, len(keys))
 	for _, key := range keys {
-		encoded := encode(values[key])
-		if encoded.err != nil {
-			return encoded
-		}
-		if encoded.value == nil {
-			return Input{}
-		}
-		entries = append(entries, &cffi.InboundMapEntry{
-			Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
-			Value: encoded.value,
-		})
+		inputs = append(inputs, encode(values[key]))
 	}
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_MapValue{
-		MapValue: &cffi.InboundMapValue{Entries: entries},
-	}}}
+	return mapInput(keys, inputs, nil)
+}
+
+func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
+	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+		for index, key := range keys {
+			encoded, err := inputs[index].encodeValue(transaction)
+			if err != nil {
+				return nil, fmt.Errorf("map entry %q: %w", key, err)
+			}
+			entries = append(entries, &cffi.InboundMapEntry{
+				Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
+				Value: encoded,
+			})
+		}
+		value := &cffi.InboundMapValue{Entries: entries}
+		if valueType != nil {
+			value.KeyType = PrimitiveBAMLType(StringType).value
+			value.ValueType = valueType.value
+		}
+		return &cffi.InboundValue{Value: &cffi.InboundValue_MapValue{MapValue: value}}, nil
+	}
+	if inputsAreStatic(inputs) {
+		value, err := prepare(nil)
+		return Input{value: value, err: err}
+	}
+	return Input{deferred: &inputEncoder{encode: prepare}}
+}
+
+func inputsAreStatic(inputs []Input) bool {
+	for _, input := range inputs {
+		if input.deferred != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // MapEncoder adapts a value encoder into the shape used by nested and
@@ -86,7 +124,7 @@ func DecodeList[T any](value Value, decode func(Value) (T, error)) ([]T, error) 
 		if encoded == nil {
 			return nil, fmt.Errorf("BAML list item %d is empty", index)
 		}
-		item, err := decode(Value{value: encoded})
+		item, err := decode(Value{value: encoded, owner: value.owner})
 		if err != nil {
 			return nil, fmt.Errorf("BAML list item %d: %w", index, err)
 		}
@@ -124,7 +162,7 @@ func DecodeMap[T any](value Value, decode func(Value) (T, error)) (map[string]T,
 		if _, duplicate := decoded[entry.Key]; duplicate {
 			return nil, fmt.Errorf("BAML map returned duplicate key %q", entry.Key)
 		}
-		mapValue, err := decode(Value{value: entry.Value})
+		mapValue, err := decode(Value{value: entry.Value, owner: value.owner})
 		if err != nil {
 			return nil, fmt.Errorf("BAML map entry %q: %w", entry.Key, err)
 		}

@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use baml_base::{Literal, Name as BaseName};
+use baml_base::{Literal, MediaKind, Name as BaseName};
 use baml_codegen_types::{Name, Symbol, SymbolPool, Ty};
 
 /// A canonical, attribute-free Go type identity.
@@ -24,6 +24,7 @@ pub(crate) enum GoTy {
     Bool,
     Null,
     Uint8Array,
+    Media(MediaKind),
     Literal(GoLiteral),
     Class(Name),
     Enum(Name),
@@ -133,6 +134,8 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Bool { .. } => GoTy::Bool,
             Ty::Null { .. } => GoTy::Null,
             Ty::Uint8Array { .. } => GoTy::Uint8Array,
+            Ty::Media(MediaKind::Generic, _) => GoTy::Unsupported,
+            Ty::Media(kind, _) => GoTy::Media(*kind),
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
@@ -376,6 +379,24 @@ mod tests {
         assert!(
             key.members()
                 .contains(&GoTy::Literal(GoLiteral::String("draft".into())))
+        );
+    }
+
+    #[test]
+    fn concrete_media_kinds_project_canonically_and_generic_media_is_deferred() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        for kind in [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+        ] {
+            assert_eq!(projection.project(&Ty::Media(kind, a())), GoTy::Media(kind));
+        }
+        assert_eq!(
+            projection.project(&Ty::Media(MediaKind::Generic, a())),
+            GoTy::Unsupported
         );
     }
 }

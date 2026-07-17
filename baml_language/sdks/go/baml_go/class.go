@@ -16,30 +16,38 @@ func Class(name string, fields map[string]Input) Input {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-
-	entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+	inputs := make([]Input, 0, len(keys))
 	for _, key := range keys {
-		field := fields[key]
-		if field.err != nil {
-			return field
-		}
-		if field.value == nil {
-			return Input{}
-		}
-		entries = append(entries, &cffi.InboundMapEntry{
-			Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
-			Value: field.value,
-		})
+		inputs = append(inputs, fields[key])
 	}
 
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_ClassValue{
-		ClassValue: &cffi.InboundClassValue{
-			Fields: entries,
-			ClassTy: &cffi.BamlTyClass{
-				Name: name,
+	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+		for index, key := range keys {
+			encoded, err := inputs[index].encodeValue(transaction)
+			if err != nil {
+				return nil, fmt.Errorf("class %q field %q: %w", name, key, err)
+			}
+			entries = append(entries, &cffi.InboundMapEntry{
+				Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
+				Value: encoded,
+			})
+		}
+
+		return &cffi.InboundValue{Value: &cffi.InboundValue_ClassValue{
+			ClassValue: &cffi.InboundClassValue{
+				Fields: entries,
+				ClassTy: &cffi.BamlTyClass{
+					Name: name,
+				},
 			},
-		},
-	}}}
+		}}, nil
+	}
+	if inputsAreStatic(inputs) {
+		value, err := prepare(nil)
+		return Input{value: value, err: err}
+	}
+	return Input{deferred: &inputEncoder{encode: prepare}}
 }
 
 // ClassValue is a validated non-generic class returned by BAML.
@@ -81,7 +89,7 @@ func (value Value) Class(name string) (ClassValue, error) {
 		if _, duplicate := fields[entry.Key]; duplicate {
 			return ClassValue{}, fmt.Errorf("BAML class %q returned duplicate field %q", name, entry.Key)
 		}
-		fields[entry.Key] = Value{value: entry.Value}
+		fields[entry.Key] = Value{value: entry.Value, owner: value.owner}
 	}
 	return ClassValue{name: name, fields: fields}, nil
 }

@@ -19,7 +19,7 @@ use std::{
 
 #[cfg(test)]
 use baml_base::Literal;
-use baml_base::Name as BaseName;
+use baml_base::{MediaKind, Name as BaseName};
 use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
@@ -1289,7 +1289,9 @@ fn add_projected_type_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null => imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE),
+        GoTy::Null | GoTy::Media(_) => {
+            imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
+        }
         GoTy::Literal(literal) => {
             add_projected_type_imports(&literal_surface(literal), context, imports, visited);
         }
@@ -1368,6 +1370,11 @@ fn render_projected_go_type(
         GoTy::Bool => GeneratorIdent::BoolType.to_string(),
         GoTy::Null => format!("{}.Null", GeneratorIdent::RuntimePackage),
         GoTy::Uint8Array => format!("[]{}", GeneratorIdent::ByteType),
+        GoTy::Media(kind) => format!(
+            "{}.{}",
+            GeneratorIdent::RuntimePackage,
+            media_go_type(*kind)
+        ),
         GoTy::Literal(literal) => render_projected_go_type(
             &literal_surface(literal),
             current_baml_package,
@@ -1415,6 +1422,16 @@ fn render_projected_go_type(
             .to_string(),
         GoTy::DynamicUnion { .. } => "any".to_string(),
         GoTy::Unsupported => unreachable!("unsupported Go type reached rendering"),
+    }
+}
+
+fn media_go_type(kind: MediaKind) -> &'static str {
+    match kind {
+        MediaKind::Image => "Image",
+        MediaKind::Audio => "Audio",
+        MediaKind::Video => "Video",
+        MediaKind::Pdf => "Pdf",
+        MediaKind::Generic => unreachable!("generic media is not a supported Go projection"),
     }
 }
 
@@ -1467,6 +1484,7 @@ fn projected_input_encoder(
         GoTy::Bool => format!("{runtime}.Bool"),
         GoTy::Null => format!("{runtime}.NullInput"),
         GoTy::Uint8Array => format!("{runtime}.Uint8Array"),
+        GoTy::Media(kind) => format!("{runtime}.{}Input", media_go_type(*kind)),
         GoTy::Literal(literal) => {
             projected_input_encoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -1531,6 +1549,7 @@ fn projected_output_decoder(
         GoTy::Bool => format!("{runtime}.Value.Bool"),
         GoTy::Null => format!("{runtime}.Value.Null"),
         GoTy::Uint8Array => format!("{runtime}.Value.Uint8Array"),
+        GoTy::Media(kind) => format!("{runtime}.Value.{}", media_go_type(*kind)),
         GoTy::Literal(literal) => {
             projected_output_decoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -1878,6 +1897,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Bool => format!("{runtime}.PrimitiveBAMLType({runtime}.BoolType)"),
         GoTy::Null => format!("{runtime}.PrimitiveBAMLType({runtime}.NullType)"),
         GoTy::Uint8Array => format!("{runtime}.PrimitiveBAMLType({runtime}.BytesType)"),
+        GoTy::Media(kind) => format!("{runtime}.{}BAMLType()", media_go_type(*kind)),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
         }
@@ -3447,7 +3467,7 @@ mod tests {
 
         assert!(
             primitive_kind(&ty_media(baml_base::MediaKind::Image)).is_none(),
-            "media is deliberately deferred to the resource-type stage"
+            "media is projected by GoTypeProjection rather than the primitive compatibility helper"
         );
     }
 
@@ -3556,6 +3576,41 @@ mod tests {
         assert!(functions.contains("func Large(ctx_ context.Context, value any) (any, error)"));
         assert!(functions.contains("Known BAML candidates: string | int64 | bool."));
         assert!(files[&PathBuf::from("types.go")].contains("type StringOrInt struct"));
+    }
+
+    #[test]
+    fn dynamic_media_union_signature_and_docs_preserve_all_concrete_candidates() {
+        let name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_all_media"),
+        );
+        let media = ty_union(vec![
+            ty_media(baml_base::MediaKind::Image),
+            ty_media(baml_base::MediaKind::Audio),
+            ty_media(baml_base::MediaKind::Video),
+            ty_media(baml_base::MediaKind::Pdf),
+        ]);
+        let pool = SymbolPool::from([round_trip_function(name, "value", media)]);
+        let files = to_source_code_with_bytecode_and_options(
+            &pool,
+            &[],
+            &GoGenOptions {
+                naming_convention: NamingConvention::Language,
+                sdk_import_path: "example.com/project/baml_sdk",
+                max_typed_union_arity: 3,
+            },
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(
+            functions
+                .contains("func RoundTripAllMedia(ctx_ context.Context, value any) (any, error)")
+        );
+        assert!(functions.contains(
+            "Known BAML candidates: baml_go.Image | baml_go.Audio | baml_go.Video | baml_go.Pdf."
+        ));
+        assert!(functions.contains("BAML validates this argument when the function is called"));
+        assert!(functions.contains("use a Go type switch to inspect them."));
     }
 
     #[test]
