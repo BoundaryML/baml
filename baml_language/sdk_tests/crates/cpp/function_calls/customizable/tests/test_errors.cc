@@ -74,6 +74,17 @@ BAML_TEST(union_throws_preserves_class_name) {
   }
 }
 
+BAML_TEST(async_sibling_throws_typed) {
+  // C++-specific: the Async sibling's get() surfaces the identical typed
+  // throw as the sync form (python covers this through await semantics).
+  try {
+    baml_sdk::throws_test::ThrowMyErrorAsync().get();
+    baml_test::Fail("ThrowMyErrorAsync did not throw");
+  } catch (const baml::BamlThrown<baml::Union<MyError>>& e) {
+    BAML_ASSERT((e.get<MyError>() == MyError{42, "boom"}));
+  }
+}
+
 BAML_TEST(typed_throw_is_still_a_baml_error) {
   // Backward compatibility: an untyped catch site sees the same throw.
   try {

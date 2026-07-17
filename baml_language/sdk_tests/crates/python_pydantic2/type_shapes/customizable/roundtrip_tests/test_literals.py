@@ -62,3 +62,13 @@ def test_round_trip_literals():
         literal_false=False,
     )
     assert round_trip_literals(l=lit) == lit
+
+
+def test_round_trip_flag_mixed_literal_union():
+    from baml_sdk.literals import round_trip_flag
+
+    assert round_trip_flag(f="active") == "active"
+    r_int = round_trip_flag(f=1)
+    assert r_int == 1 and not isinstance(r_int, bool)
+    r_bool = round_trip_flag(f=True)
+    assert r_bool is True

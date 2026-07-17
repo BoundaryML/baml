@@ -344,6 +344,14 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/errors.h"),
     ),
     (
+        "include/baml/future.h",
+        include_str!("../../bridge_cpp/include/baml/future.h"),
+    ),
+    (
+        "include/baml/lit.h",
+        include_str!("../../bridge_cpp/include/baml/lit.h"),
+    ),
+    (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
@@ -376,6 +384,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
 /// Member name of the synthesized per-callable opts struct within its
 /// callable's identity.
 const OPTS_MEMBER: &str = "opts";
+
+/// Member name of the synthesized async sibling within its callable's
+/// identity.
+const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
 /// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
@@ -419,6 +431,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 request_namespace_segments(&mut requests, name);
                 let fqn = BamlFqn::symbol(name);
                 requests.insert(function_request(name));
+                requests.insert(async_request(&fqn, function));
                 request_callable_members(&mut requests, &fqn, function);
             }
             // Non-recursive aliases emit a `using` declaration; recursive
@@ -515,6 +528,18 @@ fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
         // $opts never even mint a type); C++ needs a name only because the
         // struct must be constructible.
         &format!("{}Opts", function.name.as_str()),
+    )
+}
+
+/// The request for a callable's async sibling. Shared between collection
+/// and emission so the lookup key cannot drift. Verbatim source spelling +
+/// "Async" (probe -> probeAsync), following the opts-struct convention:
+/// user names are never re-cased, only suffixed.
+fn async_request(callable: &BamlFqn, function: &Function) -> NameRequest {
+    NameRequest::synthesized(
+        callable.child(ASYNC_MEMBER),
+        CppNameKind::Function,
+        &format!("{}Async", function.name.as_str()),
     )
 }
 
@@ -785,6 +810,8 @@ struct EmittedOptParam {
 
 struct EmittedFn {
     name: CppName,
+    /// The async sibling's allocated name (`{name}Async`).
+    async_name: CppName,
     /// The BAML FQN the runtime call dispatches on (the wire symbol);
     /// never derived from C++ spellings.
     call_fqn: String,
@@ -890,6 +917,7 @@ fn emit_callable(
     Ok(EmittedFn {
         call_fqn: name.wire().to_string(),
         name,
+        async_name: names.get(&async_request(fqn, function)).clone(),
         ret,
         params,
         opt_params,
@@ -948,15 +976,22 @@ fn translate_ty(
             return Translated::Unsupported("media type (post-step-8)".to_string());
         }
         Ty::Literal(lit, ..) => {
-            // Literal types widen to their base type (Python parity).
+            // Literal types are singleton ::baml::Lit types (each distinct
+            // value a distinct C++ type), spelled as char packs / typed
+            // scalars directly -- the BAML_LIT macro family is user-side
+            // sugar only. Float literals stay widened: float NTTPs are
+            // C++20 and BAML has no float literal types in practice.
             match lit {
-                baml_base::Literal::Int(_) => "int64_t".to_string(),
+                baml_base::Literal::Int(v) => format!("::baml::Lit<{}>", lit_int_spelling(*v)),
                 baml_base::Literal::Bigint(_) => {
                     return Translated::Unsupported("bigint literal (post-step-8)".to_string());
                 }
                 baml_base::Literal::Float(_) => "double".to_string(),
-                baml_base::Literal::String(_) => "std::string".to_string(),
-                baml_base::Literal::Bool(_) => "bool".to_string(),
+                baml_base::Literal::String(s) => {
+                    let chars: Vec<String> = s.bytes().map(lit_char_spelling).collect();
+                    format!("::baml::Lit<{}>", chars.join(", "))
+                }
+                baml_base::Literal::Bool(b) => format!("::baml::Lit<{b}>"),
             }
         }
         Ty::TypeVar(name, _) => {
@@ -999,9 +1034,7 @@ fn translate_ty(
                     .to_string(),
             );
         }
-        // An enum-variant type (`Sentiment.Positive`) widens to its enum
-        // (Python parity: the variant tag narrows values, not the C++ type).
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+        Ty::Enum(name, _) => {
             return if emitted_types.contains(name) {
                 Translated::Cpp(
                     names
@@ -1009,6 +1042,26 @@ fn translate_ty(
                         .identifier()
                         .to_string(),
                 )
+            } else {
+                Translated::NotYet
+            };
+        }
+        // An enum-variant type (`Sentiment.Positive`) is a singleton Lit
+        // over the enum value, so unions of variants dispatch and match
+        // per-variant at compile time.
+        Ty::EnumVariant(name, variant, _) => {
+            return if emitted_types.contains(name) {
+                let enum_path = names
+                    .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
+                    .identifier()
+                    .to_string();
+                let variant_name = names
+                    .get(&NameRequest::new(
+                        BamlFqn::member(name, variant.as_str()),
+                        CppNameKind::EnumVariant,
+                    ))
+                    .declared();
+                Translated::Cpp(format!("::baml::Lit<{enum_path}::{variant_name}>"))
             } else {
                 Translated::NotYet
             };
@@ -1114,6 +1167,26 @@ enum RenderPos {
     Def,
 }
 
+/// Which spelling of a callable renders: the synchronous form or the
+/// `{name}Async` sibling returning a `baml::Future`.
+#[derive(Clone, Copy)]
+enum FnVariant {
+    Sync,
+    Async,
+}
+
+const FN_VARIANTS: [FnVariant; 2] = [FnVariant::Sync, FnVariant::Async];
+
+/// The async sibling's return type: the sync return wrapped in
+/// `baml::Future`, with the declared throws union as the second parameter
+/// when the function has a typed throws set.
+fn future_ret(f: &EmittedFn) -> String {
+    match &f.thrown {
+        Some(u) => format!("::baml::Future<{}, {}>", f.ret, u),
+        None => format!("::baml::Future<{}>", f.ret),
+    }
+}
+
 fn push_doc(buf: &mut String, indent: &str, doc: Option<&String>, raises: &[String]) {
     if let Some(doc) = doc {
         for line in doc.lines() {
@@ -1142,13 +1215,43 @@ fn close_namespaces(buf: &mut String, ns: &[String]) {
 }
 
 fn by_value_or_cref(ty: &str) -> String {
+    // Lit types are empty unit structs: by value.
+    if ty.starts_with("::baml::Lit<") {
+        return ty.to_string();
+    }
     match ty {
         "int64_t" | "double" | "bool" | "std::monostate" => ty.to_string(),
         _ => format!("const {ty}&"),
     }
 }
 
-fn signature(f: &EmittedFn, pos: RenderPos) -> String {
+/// Spells one byte of a BAML string literal as a C++ char literal for a
+/// `::baml::Lit` char pack. Bytes, not code points: the pack mirrors the
+/// literal's UTF-8 encoding, matching what `BAML_LIT`'s sizeof-based
+/// expansion produces.
+fn lit_char_spelling(b: u8) -> String {
+    match b {
+        b'\'' => "'\\''".to_string(),
+        b'\\' => "'\\\\'".to_string(),
+        b'\n' => "'\\n'".to_string(),
+        b'\r' => "'\\r'".to_string(),
+        b'\t' => "'\\t'".to_string(),
+        0x20..=0x7e => format!("'{}'", b as char),
+        _ => format!("'\\x{b:02x}'"),
+    }
+}
+
+/// Spells an int literal's value as the canonical `int64_t{...}` template
+/// argument. `i64::MIN` has no valid literal spelling (the unary minus
+/// applies after the out-of-range positive literal), hence the subtraction.
+fn lit_int_spelling(v: i64) -> String {
+    if v == i64::MIN {
+        return "int64_t{-9223372036854775807 - 1}".to_string();
+    }
+    format!("int64_t{{{v}}}")
+}
+
+fn signature(f: &EmittedFn, pos: RenderPos, variant: FnVariant) -> String {
     let mut params: Vec<String> = f
         .params
         .iter()
@@ -1165,12 +1268,11 @@ fn signature(f: &EmittedFn, pos: RenderPos) -> String {
             opts = GeneratorIdent::OptsParam.token()
         ));
     }
-    format!(
-        "{ret} {name}({params})",
-        ret = f.ret,
-        name = f.name.declared(),
-        params = params.join(", ")
-    )
+    let (ret, name) = match variant {
+        FnVariant::Sync => (f.ret.clone(), f.name.declared()),
+        FnVariant::Async => (future_ret(f), f.async_name.declared()),
+    };
+    format!("{ret} {name}({params})", params = params.join(", "))
 }
 
 fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
@@ -1197,8 +1299,9 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
 }
 
 /// Emits one binding body: runtime init, required args, set optional args,
-/// then the synchronous call.
-fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
+/// then the call (blocking `CallSync`, or `StartCall` returning the
+/// in-flight `baml::Future` for the async sibling).
+fn render_body(buf: &mut String, indent: &str, f: &EmittedFn, variant: FnVariant) {
     let args = GeneratorIdent::ArgsLocal.token();
     let w = GeneratorIdent::WriterParam.token();
     let opts = GeneratorIdent::OptsParam.token();
@@ -1234,9 +1337,13 @@ fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
         Some(u) => format!(", {u}"),
         None => String::new(),
     };
+    let driver = match variant {
+        FnVariant::Sync => "CallSync",
+        FnVariant::Async => "StartCall",
+    };
     let _ = writeln!(
         buf,
-        "{indent}return ::baml::detail::CallSync<{ret}{thrown}>(\"{fqn}\", \
+        "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
          std::move({args}));",
         ret = f.ret,
         fqn = f.call_fqn,
@@ -1366,8 +1473,10 @@ fn render_header(
         open_namespaces(&mut buf, ns);
         for f in fns {
             render_opts_struct(&mut buf, "", f);
-            push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
-            let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl));
+            for variant in FN_VARIANTS {
+                push_doc(&mut buf, "", f.doc.as_ref(), &f.raises);
+                let _ = writeln!(buf, "{};", signature(f, RenderPos::Decl, variant));
+            }
         }
         close_namespaces(&mut buf, ns);
     }
@@ -1562,9 +1671,11 @@ fn render_bindings(fns_by_namespace: &BTreeMap<Vec<String>, Vec<EmittedFn>>) -> 
         buf.push('\n');
         open_namespaces(&mut buf, ns);
         for f in fns {
-            let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def));
-            render_body(&mut buf, "  ", f);
-            buf.push_str("}\n");
+            for variant in FN_VARIANTS {
+                let _ = writeln!(buf, "\n{} {{", signature(f, RenderPos::Def, variant));
+                render_body(&mut buf, "  ", f, variant);
+                buf.push_str("}\n");
+            }
         }
         close_namespaces(&mut buf, ns);
     }

@@ -37,6 +37,16 @@ BAML_TEST(optional_args_runtime_matrix) {
               (Probe{1, 8, 9}));
 }
 
+BAML_TEST(optional_args_async_samples) {
+  BAML_ASSERT(baml_sdk::optional_args_probeAsync(1).get() == (Probe{1, 5, 99}));
+  BAML_ASSERT(baml_sdk::optional_args_probeAsync(
+                  1, optional_args_probeOpts{}.set_opt1(std::nullopt))
+                  .get() == (Probe{1, std::nullopt, 99}));
+  BAML_ASSERT(baml_sdk::optional_args_probeAsync(
+                  1, optional_args_probeOpts{}.set_opt2(int64_t{9}))
+                  .get() == (Probe{1, 5, 9}));
+}
+
 BAML_TEST(unset_and_null_differ_in_one_call) {
   // unset means "omit this argument"; nullopt means "pass an explicit
   // null". The two must stay distinct within a single call.
