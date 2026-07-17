@@ -68,6 +68,11 @@ func MapEncoder[T any](encode func(T) Input) func(map[string]T) Input {
 }
 
 func DecodeList[T any](value Value, decode func(Value) (T, error)) ([]T, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return nil, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return nil, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -95,6 +100,11 @@ func ListDecoder[T any](decode func(Value) (T, error)) func(Value) ([]T, error) 
 }
 
 func DecodeMap[T any](value Value, decode func(Value) (T, error)) (map[string]T, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return nil, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return nil, fmt.Errorf("BAML value is uninitialized")
 	}

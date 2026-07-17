@@ -51,6 +51,11 @@ type ClassValue struct {
 // Class validates that value is the named non-generic BAML class and indexes
 // its fields for generated decoders.
 func (value Value) Class(name string) (ClassValue, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return ClassValue{}, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return ClassValue{}, fmt.Errorf("BAML value is uninitialized")
 	}

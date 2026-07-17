@@ -232,8 +232,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 }
 
-/// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the TypeScript target: symlinks would force every parallel
+/// Recursively copy `customizable_dir` into `dst_dir`. Used by the Go and
+/// TypeScript targets: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from
@@ -247,6 +247,16 @@ pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
         let file_name = entry.file_name();
         let dst = dst_dir.join(&file_name);
 
+        if src.is_dir() {
+            fs::create_dir_all(&dst).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create {} for customizable overlay: {e}",
+                    dst.display()
+                )
+            });
+            copy_customizable(&src, &dst);
+            continue;
+        }
         if !src.is_file() {
             continue;
         }

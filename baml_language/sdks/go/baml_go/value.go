@@ -9,6 +9,11 @@ import (
 )
 
 func (value Value) isNull() (bool, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return false, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return false, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -22,6 +27,11 @@ func (value Value) isNull() (bool, error) {
 }
 
 func (value Value) String() (string, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return "", err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return "", fmt.Errorf("BAML value is uninitialized")
 	}
@@ -40,6 +50,11 @@ func (value Value) String() (string, error) {
 }
 
 func (value Value) Int64() (int64, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return 0, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return 0, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -58,6 +73,11 @@ func (value Value) Int64() (int64, error) {
 }
 
 func (value Value) BigInt() (*big.Int, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return nil, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return nil, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -84,6 +104,11 @@ func (value Value) BigInt() (*big.Int, error) {
 }
 
 func (value Value) Float64() (float64, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return 0, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return 0, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -108,6 +133,11 @@ func (value Value) Float64() (float64, error) {
 }
 
 func (value Value) Bool() (bool, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return false, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return false, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -126,6 +156,11 @@ func (value Value) Bool() (bool, error) {
 }
 
 func (value Value) Null() (Null, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return Null{}, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return Null{}, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -139,6 +174,11 @@ func (value Value) Null() (Null, error) {
 }
 
 func (value Value) Uint8Array() ([]byte, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return nil, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return nil, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -147,4 +187,26 @@ func (value Value) Uint8Array() ([]byte, error) {
 		return nil, fmt.Errorf("expected BAML uint8array, got %T", value.value.Value)
 	}
 	return append([]byte(nil), item.Uint8ArrayValue...), nil
+}
+
+// unwrapUnionVariants removes the ABI's descriptive union envelopes before a
+// generated concrete decoder reads the chosen value. This is required even
+// for unions normalized by the compiler to a single host-language type (for
+// example `int | int`), while preserving general-union metadata for the
+// future generated union representation at the boundary above Value.
+func (value Value) unwrapUnionVariants() (Value, error) {
+	for depth := 0; depth < 64; depth++ {
+		if value.value == nil {
+			return Value{}, fmt.Errorf("BAML value is uninitialized")
+		}
+		item, ok := value.value.Value.(*cffi.BamlOutboundValue_UnionVariantValue)
+		if !ok {
+			return value, nil
+		}
+		if item.UnionVariantValue == nil || item.UnionVariantValue.Value == nil {
+			return Value{}, fmt.Errorf("BAML union variant has an empty value")
+		}
+		value = Value{value: item.UnionVariantValue.Value}
+	}
+	return Value{}, fmt.Errorf("BAML union variant nesting exceeds 64 levels")
 }

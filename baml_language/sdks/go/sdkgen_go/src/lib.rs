@@ -106,6 +106,33 @@ pub fn to_source_code_with_bytecode(
     files
 }
 
+#[cfg(test)]
+mod go_doc_comment_tests {
+    use super::render_go_doc_comment_indented;
+
+    #[test]
+    fn preserves_multiline_baml_docs_as_idiomatic_go_comments() {
+        let mut out = String::new();
+        render_go_doc_comment_indented(
+            &mut out,
+            "Example",
+            Some("First line.\r\nSecond line.\r\n\r\nFourth line."),
+            "\t",
+        );
+        assert_eq!(
+            out,
+            "\t// Example First line.\n\t// Second line.\n\t//\n\t// Fourth line.\n"
+        );
+    }
+
+    #[test]
+    fn omits_comments_for_missing_docs() {
+        let mut out = String::new();
+        render_go_doc_comment_indented(&mut out, "Example", None, "");
+        assert!(out.is_empty());
+    }
+}
+
 fn generated_functions<'a>(
     pool: &'a SymbolPool,
     names: &GoNames,
@@ -914,16 +941,18 @@ fn render_functions(
             ));
         }
 
+        out.push('\n');
+        render_go_doc_comment(
+            &mut out,
+            &go_name.to_string(),
+            function.docstring.as_deref(),
+        );
         if matches!(function.return_type, Ty::Void { .. }) {
-            let _ = writeln!(
-                out,
-                "\nfunc {go_name}({}) {error_type} {{",
-                params.join(", ")
-            );
+            let _ = writeln!(out, "func {go_name}({}) {error_type} {{", params.join(", "));
         } else {
             let _ = writeln!(
                 out,
-                "\nfunc {go_name}({}) ({}, {error_type}) {{",
+                "func {go_name}({}) ({}, {error_type}) {{",
                 params.join(", "),
                 function_go_type(&function.return_type, current_package, names, codecs)
             );
@@ -1736,12 +1765,23 @@ fn render_types(
     for generated in enums {
         debug_assert_eq!(generated.name, &generated.enum_.name);
         let enum_name = generated.go_name.identifier(context.current_package);
+        render_go_doc_comment(
+            &mut body,
+            &enum_name.to_string(),
+            generated.enum_.docstring.as_deref(),
+        );
         let _ = writeln!(body, "type {enum_name} string\n");
         if !generated.variants.is_empty() {
             body.push_str("const (\n");
-            for variant in &generated.variants {
+            for (variant, source) in generated.variants.iter().zip(&generated.enum_.variants) {
                 let variant_name = variant.go_name.identifier(context.current_package);
                 let wire_name = variant.go_name.wire().to_string();
+                render_go_doc_comment_indented(
+                    &mut body,
+                    &variant_name.to_string(),
+                    source.docstring.as_deref(),
+                    "\t",
+                );
                 let _ = writeln!(body, "\t{variant_name} {enum_name} = {wire_name:?}");
             }
             body.push_str(")\n\n");
@@ -1750,6 +1790,11 @@ fn render_types(
     for generated in classes {
         debug_assert_eq!(generated.name, &generated.class.name);
         let class_name = generated.go_name.identifier(context.current_package);
+        render_go_doc_comment(
+            &mut body,
+            &class_name.to_string(),
+            generated.class.docstring.as_deref(),
+        );
         let _ = writeln!(body, "type {class_name} struct {{");
         for field in &generated.fields {
             let field_name = field.go_name.identifier(context.current_package);
@@ -1757,6 +1802,12 @@ fn render_types(
                 .render(&field.property.ty, generated.name, false)
                 .expect("class was filtered to supported field types");
             let wire_name = field.go_name.wire().to_string();
+            render_go_doc_comment_indented(
+                &mut body,
+                &field_name.to_string(),
+                field.property.docstring.as_deref(),
+                "\t",
+            );
             let _ = writeln!(body, "\t{field_name} {field_type} `json:{wire_name:?}`");
         }
         body.push_str("}\n\n");
@@ -1767,6 +1818,36 @@ fn render_types(
     out.push_str(&type_renderer.imports.render());
     out.push_str(&body);
     out
+}
+
+/// Render a BAML `///` docstring as an idiomatic Go doc comment. The first
+/// line starts with the generated identifier so golint-style documentation
+/// checks understand which declaration it describes. Continuation lines are
+/// preserved verbatim apart from normalizing CRLF input.
+fn render_go_doc_comment(out: &mut String, identifier: &str, docstring: Option<&str>) {
+    render_go_doc_comment_indented(out, identifier, docstring, "");
+}
+
+fn render_go_doc_comment_indented(
+    out: &mut String,
+    identifier: &str,
+    docstring: Option<&str>,
+    indent: &str,
+) {
+    let Some(docstring) = docstring else {
+        return;
+    };
+    let normalized = docstring.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = normalized.lines();
+    let first = lines.next().unwrap_or_default();
+    let _ = writeln!(out, "{indent}// {identifier} {first}");
+    for line in lines {
+        if line.is_empty() {
+            let _ = writeln!(out, "{indent}//");
+        } else {
+            let _ = writeln!(out, "{indent}// {line}");
+        }
+    }
 }
 
 struct ClassTypeRenderer<'a> {

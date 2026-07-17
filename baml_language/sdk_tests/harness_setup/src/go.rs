@@ -1,10 +1,9 @@
 //! Go SDK test target build-side setup.
 //!
-//! The Go target stages the runtime `function_calls` fixture, the compile-first
-//! `type_shapes` fixture, an `unsupported_only` package proving deferred
-//! symbols leave valid Go behind, and a synthetic `package_edges` fixture for
-//! cross-package import collisions. Compile-time assertions pin the exact
-//! signatures and class shapes supported by this stage.
+//! The Go target stages the canonical SDK fixtures whose supported behavior is
+//! mirrored from the Python pydantic2 tests, an `unsupported_only` package
+//! proving deferred symbols leave valid Go behind, and a synthetic
+//! `package_edges` fixture for Go-specific cross-package import collisions.
 
 use std::{collections::HashMap, env, fs, path::PathBuf};
 
@@ -20,9 +19,15 @@ use crate::{
     load_fixture, watch_dir,
 };
 
-const SOURCE_FIXTURES: &[&str] = &["function_calls", "type_shapes", "unsupported_only"];
+const SOURCE_FIXTURES: &[&str] = &[
+    "docstrings_etc",
+    "function_calls",
+    "type_shapes",
+    "unsupported_only",
+];
 const RUNTIME_GO_SUM: &str = include_str!("../../../sdks/go/baml_go/go.sum");
 const FIXTURES: &[&str] = &[
+    "docstrings_etc",
     "function_calls",
     "type_shapes",
     "unsupported_only",
@@ -99,7 +104,22 @@ fn stage_output(manifest_dir: &std::path::Path, fixture: &str, output: HashMap<P
     let generated = fixture_root.join("generated");
     let sdk = generated.join("baml_sdk");
     if generated.exists() {
-        fs::remove_dir_all(&generated).unwrap();
+        // Runtime calls and direct Go validation may create `.baml/` state and
+        // `target/` cache directories in the generated module. They are not
+        // generator output and can carry platform metadata or read-only cache
+        // entries, so preserve them while clearing files owned by staging.
+        for entry in fs::read_dir(&generated).unwrap() {
+            let entry = entry.unwrap();
+            if matches!(entry.file_name().to_str(), Some(".baml" | "target")) {
+                continue;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path).unwrap();
+            } else {
+                fs::remove_file(path).unwrap();
+            }
+        }
     }
     fs::create_dir_all(&sdk).unwrap();
     for (relative, contents) in output {

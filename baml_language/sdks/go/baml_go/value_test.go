@@ -54,3 +54,25 @@ func TestFloat64RejectsInvalidLiteralSourceText(t *testing.T) {
 		t.Fatal("invalid float literal unexpectedly decoded")
 	}
 }
+
+func TestConcreteDecodersUnwrapUnionVariantEnvelopes(t *testing.T) {
+	wrapped := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_UnionVariantValue{
+		UnionVariantValue: &cffi.BamlValueUnionVariant{
+			IsSinglePattern: true,
+			Value:           &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_IntValue{IntValue: 7}},
+		},
+	}}}
+	got, err := wrapped.Int64()
+	if err != nil || got != 7 {
+		t.Fatalf("Int64() = %d, %v", got, err)
+	}
+}
+
+func TestConcreteDecodersRejectEmptyUnionVariantEnvelope(t *testing.T) {
+	wrapped := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_UnionVariantValue{
+		UnionVariantValue: &cffi.BamlValueUnionVariant{},
+	}}}
+	if _, err := wrapped.Int64(); err == nil {
+		t.Fatal("Int64() unexpectedly accepted an empty union variant")
+	}
+}
