@@ -1024,7 +1024,10 @@ pub fn execute_sap_parse_final(
         })?;
 
     // === Convert back to baml ===
-    Ok(::bex_sap::to_external::baml_value_to_external(&parsed))
+    Ok(::bex_sap::to_external::baml_value_to_external(
+        &parsed,
+        sap.db(),
+    ))
 }
 
 pub fn execute_sap_parse_partial(
@@ -1048,7 +1051,7 @@ pub fn execute_sap_parse_partial(
     // === Convert back to baml ===
     match parsed {
         Some(parsed) => {
-            let converted = ::bex_sap::to_external::baml_value_to_external(&parsed);
+            let converted = ::bex_sap::to_external::baml_value_to_external(&parsed, sap.db());
             Ok(Some(converted))
         }
         None => Ok(None),

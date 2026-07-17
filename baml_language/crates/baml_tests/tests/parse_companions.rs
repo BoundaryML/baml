@@ -115,3 +115,24 @@ async fn sap_parse_preserves_plain_llm_text() {
         Ok(BexExternalValue::String("Fred says hello".into()))
     );
 }
+
+#[tokio::test]
+async fn sap_parse_json_array_optional_matches_json_array_arm() {
+    let output = baml_test!(
+        r#"
+        class Envelope {
+            items: json[]?,
+        }
+
+        function main() -> bool {
+            let envelope = baml.sap.parse<Envelope>(`{"items":[{"id":"call-1"}]}`);
+            match (envelope.items) {
+                let items: json[] => items.length() == 1,
+                null => false,
+            }
+        }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
