@@ -1,8 +1,8 @@
 # C# implementation-entry external-run handoff
 
-Status: repository-local preparation is complete; the manual workflow has not
-been triggered. The exact local provenance commit must be reviewed and pushed
-before dispatch. B8 passes locally, but its
+Status: repository-local preparation is complete; the external workflow has
+not run. The exact local provenance commit and its matching one-shot gate tag
+must be reviewed and pushed before the first run. B8 passes locally, but its
 committed-source exact-package/trim reproduction is still pending. B11 also
 passes its complete local Linux trim/single-file matrix, while B4 remains
 blocked on the real eight-RID inputs and runners. `TASK/implementation.md`
@@ -10,10 +10,17 @@ must not be created yet.
 
 ## Exact workflow
 
-`.github/workflows/csharp-entry-gates.yml` is a manual, non-publishing caller.
-It freezes one source SHA and one Canary release-plan JSON, builds the existing
-language-neutral `bridge_cffi` matrix from those exact inputs, including
-separate unstripped diagnostic artifacts, and calls
+`.github/workflows/csharp-entry-gates.yml` is a non-publishing caller. It keeps
+`workflow_dispatch` for normal use once the file reaches the default branch
+and adds a narrowly filtered `csharp-entry-gates-*` tag-push trigger for the
+pre-merge first run, because GitHub's
+[manual-run documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+requires the workflow file to exist on the default branch. The plan job
+requires the bootstrap tag to be exactly
+`csharp-entry-gates-<full source SHA>`. It freezes that source SHA and one
+Canary release-plan JSON, builds the existing language-neutral `bridge_cffi`
+matrix from those exact inputs, including separate unstripped diagnostic
+artifacts, and calls
 `.github/workflows/verify-csharp-entry-gates.reusable.yaml`.
 
 The verifier:
@@ -81,13 +88,16 @@ publisher.
 
 ## Authorization and execution
 
-An authorized maintainer may dispatch **C# bridge - Manual entry gates** at the
-exact target branch/SHA after these repository changes have been reviewed,
-committed, and pushed through the normal process. Creating the local
-provenance commit is safe repository work; no agent should push it without the
-corresponding separate user authorization. Once that push is authorized, this
-explicitly non-publishing evidence dispatch is an in-scope verification step;
-it does not authorize any production release or publication.
+For the pre-merge first run, an authorized maintainer pushes the exact target
+branch plus the lightweight tag
+`csharp-entry-gates-<full source SHA>`. GitHub's manual-dispatch API returns
+404 until the workflow exists on the default branch, so the tag event is the
+only supported bootstrap path and the plan job rejects any mismatched tag.
+Creating the local provenance commit and tag is safe repository work; no agent
+should push either ref without the corresponding separate user authorization.
+Once that push is authorized, this explicitly non-publishing evidence run is
+an in-scope verification step; it does not authorize any production release
+or publication.
 
 ## Provenance preflight
 
@@ -310,6 +320,6 @@ Current source SHA-256 values:
 | C# protocol behavior source | `c901f15ffbff1b1106f959dc288b02e860ea31eac82f0cef0b60a31f80137524` |
 | call-ID source | `861a36ada5c864f4365020c007a7d2bd269f19ae67663c57c568e44c80f88d2e` |
 | shared Rust setup action | `2063428518629315d1d6bb67e4c864764466cfc6a9654469dec014d908c2713a` |
-| manual caller workflow | `e1165b47db350f28129d8314cda0516794dfed883c1ea8e7d78f99af8a11ce31` |
+| manual caller workflow | `cd3e45ef30ecd8789116e16a3c34212b35a905244020b417a57e70a35fc28f96` |
 | reusable verifier workflow | `9b4118773f3c2c397ab1b50270c97cd12a920631ee3f1df7ef803230a780619e` |
 | native builder workflow | `38f117d90015add19bdd0edc153b66d7339ba1b16cb621356ae3d4aac3782f41` |

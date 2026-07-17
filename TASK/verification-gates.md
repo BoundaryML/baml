@@ -363,6 +363,18 @@ The external workflow must still reproduce and promote B3/B4/B8/B11/B12 and
 C6 from one reviewed, committed source SHA. Until that result is recorded,
 `TASK/implementation.md` remains intentionally absent.
 
+The first remote dispatch attempt against the feature branch returned GitHub
+Actions `404` even though the file bytes were present at the remote commit.
+GitHub's
+[manual-run documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+requires `workflow_dispatch` files to exist on the default branch. The caller
+therefore retains manual dispatch for normal post-merge use and adds an
+exact-name tag-push bootstrap:
+`csharp-entry-gates-<full source SHA>`. The plan job verifies that the tag and
+checked-out SHA agree before producing any artifact. This is trigger
+availability hardening, not a relaxation of B4 provenance or publication
+authority.
+
 ## B. Compiled design evidence
 
 | ID | Status | Gate | Required outcome |

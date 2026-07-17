@@ -1,13 +1,18 @@
 name: C# bridge - Manual entry gates
 
-# Manual, non-publishing evidence run for the design gates that require native
-# release artifacts or a less restricted host than a development container.
+# Non-publishing evidence run for the design gates that require native release
+# artifacts or a less restricted host than a development container. The tag
+# trigger bootstraps this new workflow before it exists on the default branch;
+# GitHub only accepts workflow_dispatch for workflows already present there.
 # This workflow deliberately does not participate in the release graph. Once
 # its immutable evidence passes and is recorded, the production C# build and
 # publish workflows can be implemented from the settled design.
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "csharp-entry-gates-*"
 
 permissions:
   contents: read
@@ -39,6 +44,11 @@ jobs:
             --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           test "$source_sha" = "${{ github.sha }}"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            expected_tag="csharp-entry-gates-${source_sha}"
+            test "${GITHUB_REF_TYPE}" = "tag"
+            test "${GITHUB_REF_NAME}" = "$expected_tag"
+          fi
           {
             echo "release_plan_json<<EOF"
             jq -c . release-plan.json

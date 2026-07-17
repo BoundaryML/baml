@@ -293,8 +293,9 @@ distinct immutable release artifacts.
 ## Remaining closure
 
 B4 remains blocked, not passed. An authorized maintainer must execute the
-reviewed, committed manual workflow and record its immutable outputs. That run
-must:
+reviewed, committed non-publishing workflow through its exact-source tag
+bootstrap (or normal manual dispatch after the workflow reaches the default
+branch) and record its immutable outputs. That run must:
 
 1. supply all eight real immutable artifacts from the frozen release plan;
 2. inspect format, architecture, minimum OS/libc, dependencies, RPATH, exports,
