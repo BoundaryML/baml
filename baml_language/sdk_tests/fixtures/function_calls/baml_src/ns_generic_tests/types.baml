@@ -94,6 +94,25 @@ class GenericTriple<A, B, C> {
   third map<string, C>
 }
 
+// Go projection adversaries: the class and method/free-function TypeVars
+// normalize to the same exported identifier and must still share one
+// collision-safe helper/signature scope without changing their wire names.
+class GenericNameCollision<foo_bar> {
+  value foo_bar
+
+  function pair<fooBar>(self, other: fooBar) -> string {
+    reflect.type_of<foo_bar | fooBar>().to_string()
+  }
+
+  function make<fooBar>(value: fooBar) -> GenericNameCollision<fooBar> {
+    GenericNameCollision<fooBar> { value: value }
+  }
+}
+
+function generic_name_collision<foo_bar, fooBar>(left: foo_bar, right: fooBar) -> string {
+  reflect.type_of<foo_bar | fooBar>().to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Single TypeVar: infer the binding from a single argument value.
 // ---------------------------------------------------------------------------

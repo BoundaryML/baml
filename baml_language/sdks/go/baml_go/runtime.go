@@ -174,6 +174,12 @@ func (input Input) encodeValue(transaction *inputTransaction) (*cffi.InboundValu
 // Optional and union types use their own generated representations.
 type Null struct{}
 
+// BAMLInput and BAMLType let a standalone null participate in generic
+// parameters and reflectively encoded containers without losing its exact
+// wire descriptor.
+func (value Null) BAMLInput() Input { return NullInput(value) }
+func (Null) BAMLType() BAMLType     { return PrimitiveBAMLType(NullType) }
+
 func String(value string) Input {
 	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_StringValue{StringValue: value}}}
 }
@@ -259,6 +265,25 @@ type Value struct {
 // Call invokes one fully-qualified BAML callable and blocks until it returns
 // or the context is cancelled.
 func Call(ctx context.Context, function string, args map[string]Input) (Value, error) {
+	return callWithTypeArgs(ctx, function, args, nil)
+}
+
+// TypeArgument binds one BAML callable type parameter to a concrete runtime
+// type. Generated generic functions construct these from Go type arguments;
+// callers normally use the generated surface instead of this wire-level type.
+type TypeArgument struct {
+	Name string
+	Type BAMLType
+}
+
+// CallWithTypeArgs invokes a generic BAML callable with explicit, named type
+// bindings. Bindings use structured BAML descriptors so nested classes,
+// containers, and unions retain their complete runtime identity.
+func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
+	return callWithTypeArgs(ctx, function, args, typeArgs)
+}
+
+func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Call: nil context")
 	}
@@ -281,7 +306,7 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 
-	encoded, transaction, err := encodeCallForDispatch(engineCallID, args)
+	encoded, transaction, err := encodeCallForDispatchWithTypeArgs(engineCallID, args, typeArgs)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
@@ -342,6 +367,10 @@ func encodeCall(callID uint64, args map[string]Input) ([]byte, error) {
 }
 
 func encodeCallForDispatch(callID uint64, args map[string]Input) ([]byte, *inputTransaction, error) {
+	return encodeCallForDispatchWithTypeArgs(callID, args, nil)
+}
+
+func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typeArgs []TypeArgument) ([]byte, *inputTransaction, error) {
 	transaction := &inputTransaction{}
 	failed := true
 	defer func() {
@@ -369,7 +398,26 @@ func encodeCallForDispatch(callID uint64, args map[string]Input) ([]byte, *input
 		})
 	}
 
-	payload, err := proto.Marshal(&cffi.CallFunctionArgs{CallId: callID, Kwargs: kwargs})
+	encodedTypeArgs := make([]*cffi.BamlTyArg, 0, len(typeArgs))
+	seenTypeArgs := make(map[string]struct{}, len(typeArgs))
+	for index, binding := range typeArgs {
+		if binding.Name == "" {
+			return nil, nil, fmt.Errorf("type argument %d has an empty name", index)
+		}
+		if _, duplicate := seenTypeArgs[binding.Name]; duplicate {
+			return nil, nil, fmt.Errorf("duplicate type argument %q", binding.Name)
+		}
+		if err := validateBAMLType(binding.Type.value, 0); err != nil {
+			return nil, nil, fmt.Errorf("type argument %q: %w", binding.Name, err)
+		}
+		seenTypeArgs[binding.Name] = struct{}{}
+		encodedTypeArgs = append(encodedTypeArgs, &cffi.BamlTyArg{
+			TypeVar:   binding.Name,
+			TypeValue: binding.Type.value,
+		})
+	}
+
+	payload, err := proto.Marshal(&cffi.CallFunctionArgs{CallId: callID, Kwargs: kwargs, TypeArgs: encodedTypeArgs})
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode BAML call: %w", err)
 	}

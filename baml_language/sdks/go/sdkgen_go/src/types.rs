@@ -35,9 +35,14 @@ pub(crate) enum GoTy {
     /// Opaque Rust-managed state (`$rust_type`). The native handle table owns
     /// the underlying value; Go only holds a cloneable lifetime token.
     RustType,
+    /// A Go type parameter projected from the compiler-owned BAML `TypeVar`.
+    TypeVar(BaseName),
     Literal(GoLiteral),
-    Class(Name),
+    Class(Name, Box<[Self]>),
     Enum(Name),
+    /// A narrowed enum variant. It renders as the owning Go enum but remains
+    /// semantically distinct for descriptors and generic reifiability.
+    EnumVariant(Name, BaseName),
     List(Box<Self>),
     Map {
         key: Box<Self>,
@@ -259,8 +264,17 @@ impl<'a> GoTypeProjection<'a> {
                 Literal::Float(value) => GoLiteral::Float(value.clone()),
                 Literal::Bool(value) => GoLiteral::Bool(*value),
             }),
-            Ty::Class(name, arguments, _) if arguments.is_empty() => GoTy::Class(name.clone()),
-            Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => GoTy::Enum(name.clone()),
+            Ty::TypeVar(name, _) => GoTy::TypeVar(name.clone()),
+            Ty::Class(name, arguments, _) => GoTy::Class(
+                name.clone(),
+                arguments
+                    .iter()
+                    .map(|argument| self.project_inner(argument, aliases))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            ),
+            Ty::Enum(name, _) => GoTy::Enum(name.clone()),
+            Ty::EnumVariant(name, variant, _) => GoTy::EnumVariant(name.clone(), variant.clone()),
             Ty::List(inner, _) => GoTy::List(Box::new(self.project_inner(inner, aliases))),
             Ty::Map { key, value, .. } => GoTy::Map {
                 key: Box::new(self.project_inner(key, aliases)),
@@ -406,6 +420,7 @@ impl<'a> GoTypeProjection<'a> {
         // here would also make representation depend on implementation detail
         // and can recurse forever through cyclic class graphs.
         let contains_json = projected.contains(&GoTy::Json);
+        let contains_type_var = projected.iter().any(contains_type_var);
 
         let inner = match projected.len() {
             0 => GoTy::Null,
@@ -415,7 +430,9 @@ impl<'a> GoTypeProjection<'a> {
             // when its arity is below the configured threshold. Preserve the
             // canonical candidate metadata but use the established dynamic
             // `any` representation and let BAML validate assignability.
-            arity if arity <= self.max_typed_union_arity && !contains_json => {
+            arity
+                if arity <= self.max_typed_union_arity && !contains_json && !contains_type_var =>
+            {
                 GoTy::TypedUnion(GoUnionKey(projected.into_boxed_slice()))
             }
             _ => GoTy::DynamicUnion {
@@ -498,6 +515,11 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
                 collect_typed_unions(member, found);
             }
         }
+        GoTy::Class(_, arguments) => {
+            for argument in arguments {
+                collect_typed_unions(argument, found);
+            }
+        }
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
         GoTy::Function(key) => {
             for param in key.params() {
@@ -527,6 +549,11 @@ fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
                 }
             }
         }
+        GoTy::Class(_, arguments) => {
+            for argument in arguments {
+                collect_callback_options(argument, found);
+            }
+        }
         GoTy::List(inner) | GoTy::Optional(inner) => collect_callback_options(inner, found),
         GoTy::Map { key, value } => {
             collect_callback_options(key, found);
@@ -544,6 +571,7 @@ fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
 fn contains_unsupported(ty: &GoTy) -> bool {
     match ty {
         GoTy::Unsupported => true,
+        GoTy::Class(_, arguments) => arguments.iter().any(contains_unsupported),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_unsupported(inner),
         GoTy::Map { key, value } => contains_unsupported(key) || contains_unsupported(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -559,13 +587,33 @@ fn contains_unsupported(ty: &GoTy) -> bool {
     }
 }
 
+fn contains_type_var(ty: &GoTy) -> bool {
+    match ty {
+        GoTy::TypeVar(_) => true,
+        GoTy::Class(_, arguments) => arguments.iter().any(contains_type_var),
+        GoTy::List(inner) | GoTy::Optional(inner) => contains_type_var(inner),
+        GoTy::Map { key, value } => contains_type_var(key) || contains_type_var(value),
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            key.members().iter().any(contains_type_var)
+        }
+        GoTy::Function(key) => {
+            key.params()
+                .iter()
+                .any(|parameter| contains_type_var(parameter.ty()))
+                || key.ret().is_some_and(contains_type_var)
+        }
+        _ => false,
+    }
+}
+
 fn callback_component_is_unsupported(ty: &GoTy) -> bool {
-    contains_unsupported(ty) || contains_function(ty) || contains_union(ty)
+    contains_unsupported(ty) || contains_function(ty) || contains_union(ty) || contains_type_var(ty)
 }
 
 fn contains_function(ty: &GoTy) -> bool {
     match ty {
         GoTy::Function(_) => true,
+        GoTy::Class(_, arguments) => arguments.iter().any(contains_function),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_function(inner),
         GoTy::Map { key, value } => contains_function(key) || contains_function(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -578,6 +626,7 @@ fn contains_function(ty: &GoTy) -> bool {
 fn contains_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::TypedUnion(_) | GoTy::DynamicUnion { .. } => true,
+        GoTy::Class(_, arguments) => arguments.iter().any(contains_union),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_union(inner),
         GoTy::Map { key, value } => contains_union(key) || contains_union(value),
         GoTy::Function(key) => {

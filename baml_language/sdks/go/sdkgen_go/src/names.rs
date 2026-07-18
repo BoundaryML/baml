@@ -53,6 +53,7 @@ impl BamlFqn {
 pub(crate) enum GoNameKind {
     Function,
     Method,
+    GenericMethodHelper,
     FunctionOptionType,
     MethodOptionType,
     FunctionOptionSetter,
@@ -61,6 +62,9 @@ pub(crate) enum GoNameKind {
     Enum,
     EnumVariant,
     TypeAlias,
+    ClassTypeParameter,
+    CallableTypeParameter,
+    HelperTypeParameter,
     Parameter,
     Field,
 }
@@ -208,6 +212,7 @@ impl NameRequest {
     fn scope(&self) -> NameScope {
         match self.kind {
             GoNameKind::Function
+            | GoNameKind::GenericMethodHelper
             | GoNameKind::FunctionOptionType
             | GoNameKind::FunctionOptionSetter
             | GoNameKind::MethodOptionType
@@ -221,12 +226,14 @@ impl NameRequest {
                     .parent()
                     .expect("method FQN must include its owning class"),
             ),
-            GoNameKind::Parameter => NameScope::Function(
+            GoNameKind::Parameter
+            | GoNameKind::CallableTypeParameter
+            | GoNameKind::HelperTypeParameter => NameScope::Function(
                 self.fqn
                     .parent()
-                    .expect("parameter FQN must include its owning callable"),
+                    .expect("parameter FQN must include its owner"),
             ),
-            GoNameKind::Field => NameScope::Class(
+            GoNameKind::Field | GoNameKind::ClassTypeParameter => NameScope::Class(
                 self.fqn
                     .parent()
                     .expect("field FQN must include its owning class"),
@@ -383,6 +390,13 @@ impl GoNames {
             requests.push(NameRequest::new(fqn.clone(), kind, GoVisibility::Exported));
 
             if let Symbol::Function(function) = symbol {
+                requests.extend(function.generic_params.iter().map(|parameter| {
+                    NameRequest::new(
+                        fqn.member(parameter),
+                        GoNameKind::CallableTypeParameter,
+                        GoVisibility::Exported,
+                    )
+                }));
                 if function
                     .arguments
                     .iter()
@@ -416,6 +430,13 @@ impl GoNames {
                 );
             }
             if let Symbol::Class(class) = symbol {
+                requests.extend(class.generic_params.iter().map(|parameter| {
+                    NameRequest::new(
+                        fqn.member(parameter),
+                        GoNameKind::ClassTypeParameter,
+                        GoVisibility::Exported,
+                    )
+                }));
                 requests.extend(class.properties.iter().map(|property| {
                     NameRequest::new(
                         fqn.member(&property.name),
@@ -425,6 +446,26 @@ impl GoNames {
                 }));
                 for method in class.static_methods.iter().chain(&class.instance_methods) {
                     let method_fqn = fqn.member(&method.name);
+                    if !method.generic_params.is_empty() {
+                        requests.push(NameRequest::new(
+                            method_fqn.clone(),
+                            GoNameKind::GenericMethodHelper,
+                            GoVisibility::Exported,
+                        ));
+                        requests.extend(
+                            class
+                                .generic_params
+                                .iter()
+                                .chain(&method.generic_params)
+                                .map(|parameter| {
+                                    NameRequest::new(
+                                        method_fqn.member(parameter),
+                                        GoNameKind::HelperTypeParameter,
+                                        GoVisibility::Exported,
+                                    )
+                                }),
+                        );
+                    }
                     requests.push(NameRequest::new(
                         method_fqn.clone(),
                         GoNameKind::Method,
@@ -501,9 +542,19 @@ impl GoNames {
         visibility: GoVisibility,
     ) -> &GoName {
         let request = NameRequest::new(fqn.clone(), kind, visibility);
+        self.allocations.get(&request).unwrap_or_else(|| {
+            panic!("name request was not registered during allocation: {request:?}")
+        })
+    }
+
+    pub(crate) fn try_project(
+        &self,
+        fqn: &BamlFqn,
+        kind: GoNameKind,
+        visibility: GoVisibility,
+    ) -> Option<&GoName> {
         self.allocations
-            .get(&request)
-            .expect("name request was not registered during allocation")
+            .get(&NameRequest::new(fqn.clone(), kind, visibility))
     }
 
     pub(crate) fn union(&self, package: &baml_base::Name, key: &GoUnionKey) -> &GoUnionNames {
@@ -833,16 +884,23 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Json => "Json".into(),
         GoTy::ReflectedType => "Type".into(),
         GoTy::RustType => "RustType".into(),
+        GoTy::TypeVar(name) => format!("TypeVar{}", name.as_str()),
         GoTy::Literal(literal) => literal_component(literal),
-        GoTy::Class(name) => names
-            .project(
-                &BamlFqn::symbol(name),
-                GoNameKind::Class,
-                GoVisibility::Exported,
-            )
-            .canonical
-            .name
-            .to_string(),
+        GoTy::Class(name, arguments) => {
+            let mut component = names
+                .project(
+                    &BamlFqn::symbol(name),
+                    GoNameKind::Class,
+                    GoVisibility::Exported,
+                )
+                .canonical
+                .name
+                .to_string();
+            for argument in arguments {
+                component.push_str(&union_type_component(argument, names));
+            }
+            component
+        }
         GoTy::Enum(name) => names
             .project(
                 &BamlFqn::symbol(name),
@@ -852,6 +910,18 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
             .canonical
             .name
             .to_string(),
+        GoTy::EnumVariant(name, variant) => format!(
+            "{}{}",
+            names
+                .project(
+                    &BamlFqn::symbol(name),
+                    GoNameKind::Enum,
+                    GoVisibility::Exported,
+                )
+                .canonical
+                .name,
+            variant.as_str()
+        ),
         GoTy::List(inner) => format!("{}List", union_type_component(inner, names)),
         GoTy::Map { key, value } => format!(
             "{}To{}Map",
@@ -883,8 +953,20 @@ fn disambiguated_union_component(ty: &GoTy, base: &str) -> String {
         GoTy::Json => "StdlibJson".into(),
         GoTy::ReflectedType => "PrimitiveType".into(),
         GoTy::RustType => "PrimitiveRustType".into(),
-        GoTy::Class(name) => format!("Class{base}{}", nominal_type_hash(name, GoNameKind::Class)),
+        GoTy::TypeVar(_) => {
+            let mut hash = StableFnv::new();
+            hash_go_ty(&mut hash, ty);
+            format!("{base}Type{:016x}", hash.finish())
+        }
+        GoTy::Class(name, arguments) if arguments.is_empty() => {
+            format!("Class{base}{}", nominal_type_hash(name, GoNameKind::Class))
+        }
         GoTy::Enum(name) => format!("Enum{base}{}", nominal_type_hash(name, GoNameKind::Enum)),
+        GoTy::EnumVariant(name, variant) => format!(
+            "EnumVariant{base}{}{}",
+            nominal_type_hash(name, GoNameKind::Enum),
+            variant.as_str()
+        ),
         _ => {
             let mut hash = StableFnv::new();
             hash_go_ty(&mut hash, ty);
@@ -909,17 +991,29 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         GoTy::Json => hash.byte(18),
         GoTy::ReflectedType => hash.byte(19),
         GoTy::RustType => hash.byte(20),
+        GoTy::TypeVar(name) => {
+            hash.byte(21);
+            hash.component(name.as_str());
+        }
         GoTy::Literal(literal) => {
             hash.byte(7);
             hash.component(&literal_component(literal));
         }
-        GoTy::Class(name) => {
+        GoTy::Class(name, arguments) => {
             hash.byte(8);
             hash.component(&nominal_type_hash(name, GoNameKind::Class));
+            for argument in arguments {
+                hash_go_ty(hash, argument);
+            }
         }
         GoTy::Enum(name) => {
             hash.byte(9);
             hash.component(&nominal_type_hash(name, GoNameKind::Enum));
+        }
+        GoTy::EnumVariant(name, variant) => {
+            hash.byte(22);
+            hash.component(&nominal_type_hash(name, GoNameKind::Enum));
+            hash.component(variant.as_str());
         }
         GoTy::List(inner) => {
             hash.byte(10);
@@ -1030,6 +1124,15 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
         GoNameKind::Method => {
             push_upper_component(&mut value, request.fqn.leaf());
         }
+        GoNameKind::GenericMethodHelper => {
+            for segment in request.fqn.symbol.namespace() {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, request.fqn.symbol.name());
+            for member in &request.fqn.members {
+                push_upper_component(&mut value, member);
+            }
+        }
         GoNameKind::FunctionOptionType => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
@@ -1072,7 +1175,11 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             push_upper_component(&mut value, request.fqn.symbol.name());
             push_upper_component(&mut value, request.fqn.leaf());
         }
-        GoNameKind::Parameter | GoNameKind::Field => {
+        GoNameKind::ClassTypeParameter
+        | GoNameKind::CallableTypeParameter
+        | GoNameKind::HelperTypeParameter
+        | GoNameKind::Parameter
+        | GoNameKind::Field => {
             push_upper_component(&mut value, request.fqn.leaf());
         }
     }
@@ -1102,13 +1209,18 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         | GoNameKind::Class
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
-        GoNameKind::Method | GoNameKind::MethodOptionType => BamlWireName::Method {
-            owner: request.fqn.symbol.clone(),
-            method: request.fqn.leaf().clone(),
-        },
+        GoNameKind::Method | GoNameKind::GenericMethodHelper | GoNameKind::MethodOptionType => {
+            BamlWireName::Method {
+                owner: request.fqn.symbol.clone(),
+                method: request.fqn.leaf().clone(),
+            }
+        }
         GoNameKind::FunctionOptionSetter
         | GoNameKind::MethodOptionSetter
         | GoNameKind::EnumVariant
+        | GoNameKind::ClassTypeParameter
+        | GoNameKind::CallableTypeParameter
+        | GoNameKind::HelperTypeParameter
         | GoNameKind::Parameter
         | GoNameKind::Field => BamlWireName::Key(request.fqn.leaf().clone()),
     }
@@ -1153,10 +1265,14 @@ fn short_hash(request: &NameRequest) -> String {
     hash.byte(match request.kind {
         GoNameKind::Function => 0,
         GoNameKind::Method => 9,
+        GoNameKind::GenericMethodHelper => 14,
         GoNameKind::Class => 1,
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
         GoNameKind::Parameter => 4,
+        GoNameKind::ClassTypeParameter => 12,
+        GoNameKind::CallableTypeParameter => 13,
+        GoNameKind::HelperTypeParameter => 15,
         GoNameKind::Field => 5,
         GoNameKind::FunctionOptionType => 6,
         GoNameKind::FunctionOptionSetter => 7,

@@ -67,6 +67,14 @@ func EnumBAMLType(name string) BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Enum{Enum: &cffi.BamlTyEnum{Name: name}}}}
 }
 
+// EnumVariantBAMLType describes one narrowed enum variant while the Go value
+// continues to use the owning generated enum type.
+func EnumVariantBAMLType(name, variant string) BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_EnumVariant{EnumVariant: &cffi.BamlTyEnumVariant{
+		Name: name, Variant: variant,
+	}}}}
+}
+
 // TypeAliasBAMLType describes a named BAML type alias. Generated union
 // codecs use this when an alias is itself a selected arm; the native runtime
 // remains authoritative for resolving and validating the alias body.
