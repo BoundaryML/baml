@@ -132,16 +132,24 @@ message BamlValueEnum {
 }
 
 // A union value: the selected variant's value plus its `self_type` (the full
-// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-// `self_type` metadata is written for completeness but read by no host.
+// union type as a `BamlTy`) and `selected_type` (the exact selected arm).
 message BamlValueUnionVariant {
   // Optional union name; unions carry their full type in `self_type`.
   string name = 1;
   bool is_optional = 2;
   bool is_single_pattern = 3;
   BamlTy self_type = 4;
+  // Legacy display-only arm name. New consumers should use `selected_type`.
   string value_option_name = 5;
   BamlOutboundValue value = 6;
+  // The exact selected union arm. Unlike `value_option_name`, this preserves
+  // structural type identity for ambiguous arms such as int | float or
+  // string | "literal".
+  BamlTy selected_type = 7;
+  // Zero-based position of `selected_type` in `self_type`'s canonical union
+  // member order. Presence distinguishes the first arm from legacy envelopes
+  // that predate this discriminator.
+  optional uint32 selected_option_index = 8;
 }
 
 // -----------------------------------------------------------------------------

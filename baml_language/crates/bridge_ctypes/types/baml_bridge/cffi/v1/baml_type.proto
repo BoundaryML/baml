@@ -102,8 +102,8 @@ message BamlTyUnknown {}
 
 // Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 // strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-// its source string to preserve formatting). Literal types widen to their base
-// primitive at decode time.
+// its source string to preserve formatting). Decoders preserve literal
+// identity; widening here would make selected union arms ambiguous.
 message BamlTyLiteral {
   oneof literal {
     string string_value = 1;

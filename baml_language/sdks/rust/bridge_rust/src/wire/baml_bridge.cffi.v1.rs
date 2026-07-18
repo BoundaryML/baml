@@ -228,8 +228,8 @@ pub struct BamlTyUnknown {
 }
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-/// its source string to preserve formatting). Literal types widen to their base
-/// primitive at decode time.
+/// its source string to preserve formatting). Decoders preserve literal
+/// identity; widening here would make selected union arms ambiguous.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyLiteral {
     #[prost(oneof = "baml_ty_literal::Literal", tags = "1, 2, 3, 4, 5")]
@@ -479,15 +479,16 @@ impl BamlTyFunctionParamMode {
     }
 }
 // -----------------------------------------------------------------------------
-// Inbound values — host language to engine (value-only, no type metadata)
+// Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-/// Core value type. No type metadata because not every language has union/class
-/// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
-/// signatures.
+/// Core value type. Most values remain shape-only because not every language has
+/// union/class concepts. Containers may optionally carry host-known element
+/// types so empty values retain information that payload inspection cannot
+/// recover. The engine still validates against the function signature.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundValue {
-    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
 /// Nested message and enum types in `InboundValue`.
@@ -521,17 +522,41 @@ pub mod inbound_value {
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
+        /// A host-selected arm of a structural union. This is authoritative for
+        /// overlapping arms (for example `string | "draft"` or
+        /// `int\[\] | int?\[\]`) and avoids reconstructing identity from value shape.
+        #[prost(message, tag = "14")]
+        UnionVariantValue(::prost::alloc::boxed::Box<super::InboundUnionVariantValue>),
     }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InboundUnionVariantValue {
+    /// Full canonical union descriptor generated for the host surface.
+    #[prost(message, optional, tag = "1")]
+    pub self_type: ::core::option::Option<BamlTy>,
+    /// Exact arm selected by the host constructor.
+    #[prost(message, optional, tag = "2")]
+    pub selected_type: ::core::option::Option<BamlTy>,
+    #[prost(message, optional, boxed, tag = "3")]
+    pub value: ::core::option::Option<::prost::alloc::boxed::Box<InboundValue>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundListValue {
     #[prost(message, repeated, tag = "1")]
     pub values: ::prost::alloc::vec::Vec<InboundValue>,
+    /// Optional host-known element type. Absent keeps legacy shape inference.
+    #[prost(message, optional, tag = "2")]
+    pub item_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapValue {
     #[prost(message, repeated, tag = "1")]
     pub entries: ::prost::alloc::vec::Vec<InboundMapEntry>,
+    /// Optional host-known key/value types. Absent keeps legacy shape inference.
+    #[prost(message, optional, tag = "2")]
+    pub key_type: ::core::option::Option<BamlTy>,
+    #[prost(message, optional, tag = "3")]
+    pub value_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapEntry {
@@ -802,8 +827,7 @@ pub struct BamlValueEnum {
     pub is_dynamic: bool,
 }
 /// A union value: the selected variant's value plus its `self_type` (the full
-/// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-/// `self_type` metadata is written for completeness but read by no host.
+/// union type as a `BamlTy`) and `selected_type` (the exact selected arm).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlValueUnionVariant {
     /// Optional union name; unions carry their full type in `self_type`.
@@ -815,10 +839,21 @@ pub struct BamlValueUnionVariant {
     pub is_single_pattern: bool,
     #[prost(message, optional, tag = "4")]
     pub self_type: ::core::option::Option<BamlTy>,
+    /// Legacy display-only arm name. New consumers should use `selected_type`.
     #[prost(string, tag = "5")]
     pub value_option_name: ::prost::alloc::string::String,
     #[prost(message, optional, boxed, tag = "6")]
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<BamlOutboundValue>>,
+    /// The exact selected union arm. Unlike `value_option_name`, this preserves
+    /// structural type identity for ambiguous arms such as int | float or
+    /// string | "literal".
+    #[prost(message, optional, tag = "7")]
+    pub selected_type: ::core::option::Option<BamlTy>,
+    /// Zero-based position of `selected_type` in `self_type`'s canonical union
+    /// member order. Presence distinguishes the first arm from legacy envelopes
+    /// that predate this discriminator.
+    #[prost(uint32, optional, tag = "8")]
+    pub selected_option_index: ::core::option::Option<u32>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlValueMedia {

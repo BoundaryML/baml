@@ -15,12 +15,13 @@ option go_package = "./cffi";
 option optimize_for = LITE_RUNTIME;
 
 // -----------------------------------------------------------------------------
-// Inbound values — host language to engine (value-only, no type metadata)
+// Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-// Core value type. No type metadata because not every language has union/class
-// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
-// signatures.
+// Core value type. Most values remain shape-only because not every language has
+// union/class concepts. Containers may optionally carry host-known element
+// types so empty values retain information that payload inspection cannot
+// recover. The engine still validates against the function signature.
 message InboundValue {
   reserved 1;
   oneof value {
@@ -39,16 +40,33 @@ message InboundValue {
     // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
+    // A host-selected arm of a structural union. This is authoritative for
+    // overlapping arms (for example `string | "draft"` or
+    // `int[] | int?[]`) and avoids reconstructing identity from value shape.
+    InboundUnionVariantValue union_variant_value = 14;
   }
   // Absent oneof = null value.
 }
 
+message InboundUnionVariantValue {
+  // Full canonical union descriptor generated for the host surface.
+  BamlTy self_type = 1;
+  // Exact arm selected by the host constructor.
+  BamlTy selected_type = 2;
+  InboundValue value = 3;
+}
+
 message InboundListValue {
   repeated InboundValue values = 1;
+  // Optional host-known element type. Absent keeps legacy shape inference.
+  BamlTy item_type = 2;
 }
 
 message InboundMapValue {
   repeated InboundMapEntry entries = 1;
+  // Optional host-known key/value types. Absent keeps legacy shape inference.
+  BamlTy key_type = 2;
+  BamlTy value_type = 3;
 }
 
 message InboundMapEntry {

@@ -12,7 +12,8 @@ use prost::Message;
 use crate::{
     baml_bridge::cffi::{
         BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
+        InboundMapValue, InboundUnionVariantValue, InboundValue,
+        inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
@@ -57,6 +58,9 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
+            InboundValueVariant::UnionVariantValue(union) => {
+                convert_union_variant(*union, handle_table)
+            }
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -88,6 +92,42 @@ pub fn inbound_to_external(
     }
 }
 
+fn convert_union_variant(
+    variant: InboundUnionVariantValue,
+    handle_table: &CffiHandleTable,
+) -> Result<BexExternalValue, CtypesError> {
+    let self_type = variant
+        .self_type
+        .as_ref()
+        .ok_or_else(|| CtypesError::InternalError("inbound union is missing self_type".into()))
+        .and_then(crate::ty_decode::proto_ty_to_runtime_ty)?;
+    let selected = variant
+        .selected_type
+        .as_ref()
+        .ok_or_else(|| CtypesError::InternalError("inbound union is missing selected_type".into()))
+        .and_then(crate::ty_decode::proto_ty_to_runtime_ty)?;
+    let RuntimeTy::Union(members, _) = &self_type else {
+        return Err(CtypesError::UnionSelectedTypeNotMember {
+            selected: selected.to_string(),
+            union: self_type.to_string(),
+        });
+    };
+    if !members.iter().any(|member| member == &selected) {
+        return Err(CtypesError::UnionSelectedTypeNotMember {
+            selected: selected.to_string(),
+            union: self_type.to_string(),
+        });
+    }
+    let value = variant
+        .value
+        .ok_or_else(|| CtypesError::InternalError("inbound union is missing its value".into()))?;
+    Ok(BexExternalValue::union(
+        inbound_to_external(*value, handle_table)?,
+        members.clone(),
+        selected,
+    ))
+}
+
 /// Build the default "any scalar" union type for untyped inbound values.
 fn default_scalar_union_ty() -> RuntimeTy {
     let d = baml_type::TyAttr::default();
@@ -108,13 +148,19 @@ fn convert_list(
     list: InboundListValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
+    let element_type = list
+        .item_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(default_scalar_union_ty);
     let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
         .into_iter()
         .map(|v| inbound_to_external(v, handle_table))
         .collect();
     Ok(BexExternalValue::Array {
-        element_type: default_scalar_union_ty(),
+        element_type,
         items: items?,
     })
 }
@@ -123,6 +169,18 @@ fn convert_map(
     map: InboundMapValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
+    let key_type = map
+        .key_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(RuntimeTy::string);
+    let value_type = map
+        .value_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(default_scalar_union_ty);
     let mut entries = IndexMap::new();
     for entry in map.entries {
         let key = extract_string_key(&entry)?;
@@ -134,10 +192,8 @@ fn convert_map(
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type: RuntimeTy::String {
-            attr: baml_type::TyAttr::default(),
-        },
-        value_type: default_scalar_union_ty(),
+        key_type,
+        value_type,
         entries,
     })
 }
@@ -234,7 +290,85 @@ pub fn playground_run_args_to_bex_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{baml_bridge::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+    use crate::{
+        baml_bridge::cffi::{BamlHandle, InboundUnionVariantValue},
+        handle_table::CffiHandleTableEntry,
+    };
+
+    fn selected_union_input(selected: &RuntimeTy) -> InboundValue {
+        let union = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+        InboundValue {
+            value: Some(InboundValueVariant::UnionVariantValue(Box::new(
+                InboundUnionVariantValue {
+                    self_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&union)),
+                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(selected)),
+                    value: Some(Box::new(InboundValue {
+                        value: Some(InboundValueVariant::IntValue(7)),
+                    })),
+                },
+            ))),
+        }
+    }
+
+    #[test]
+    fn selected_union_envelope_preserves_authoritative_arm() {
+        let decoded = inbound_to_external(
+            selected_union_input(&RuntimeTy::int()),
+            &CffiHandleTable::new(),
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = decoded else {
+            panic!("expected selected union")
+        };
+        assert_eq!(*value, BexExternalValue::Int(7));
+        assert_eq!(metadata.selected_option, RuntimeTy::int());
+    }
+
+    #[test]
+    fn selected_union_envelope_rejects_arm_outside_self_type() {
+        let error = inbound_to_external(
+            selected_union_input(&RuntimeTy::bool()),
+            &CffiHandleTable::new(),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CtypesError::UnionSelectedTypeNotMember { .. }
+        ));
+    }
+
+    #[test]
+    fn typed_empty_containers_preserve_host_descriptors() {
+        let table = CffiHandleTable::new();
+        let string = RuntimeTy::string();
+        let int = RuntimeTy::int();
+        let list = InboundValue {
+            value: Some(InboundValueVariant::ListValue(InboundListValue {
+                values: vec![],
+                item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&string)),
+            })),
+        };
+        let decoded = inbound_to_external(list, &table).unwrap();
+        assert!(matches!(
+            decoded,
+            BexExternalValue::Array { element_type, items }
+                if element_type == string && items.is_empty()
+        ));
+
+        let map = InboundValue {
+            value: Some(InboundValueVariant::MapValue(InboundMapValue {
+                entries: vec![],
+                key_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&string)),
+                value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&int)),
+            })),
+        };
+        let decoded = inbound_to_external(map, &table).unwrap();
+        assert!(matches!(
+            decoded,
+            BexExternalValue::Map { key_type, value_type, entries }
+                if key_type == string && value_type == int && entries.is_empty()
+        ));
+    }
 
     #[test]
     fn decode_inbound_host_value_callable() {
