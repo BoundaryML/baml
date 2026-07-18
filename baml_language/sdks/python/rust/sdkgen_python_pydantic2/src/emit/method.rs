@@ -6,7 +6,7 @@
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
-use crate::emit::function::SyncAsync;
+use crate::emit::{TypeVarMap, function::SyncAsync};
 
 pub(crate) struct PyMethodBinding {
     /// Python identifier as it appears on the LHS of the binding. Sync
@@ -33,6 +33,10 @@ pub(crate) struct PyMethodBinding {
     /// methods. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Raw→emitted map for `generic_params` (the method's own `<…>` scope),
+    /// merged with the enclosing class's map for instance methods and threaded
+    /// into the `.pyi` signature `TranslateCtx`. Empty for non-generic methods.
+    pub(crate) type_var_map: TypeVarMap,
     /// Joined `///` doc-comment lines from the BAML method declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body, since
     /// `.py` factory bindings have no meaningful body.

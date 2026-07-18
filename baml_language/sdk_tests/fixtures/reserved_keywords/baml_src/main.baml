@@ -3,9 +3,10 @@
 //
 // Covers the 24 hard keywords BAML admits at source; the other 11 hard keywords
 // are also BAML keywords and are rejected by the grammar. NAME positions (class
-// / enum / type-alias names) use the three uppercase-initial keywords BAML
-// allows as type names: None, True, False. Python SOFT keywords (`case`, `type`)
-// are valid identifiers and appear as negative controls that must NOT be escaped.
+// / enum / type-alias names) admit those keywords too — both the uppercase-initial
+// None / True / False and lowercase ones like pass / import / lambda — all through
+// the same escape path. Python SOFT keywords (`case`, `type`) are valid
+// identifiers and appear as negative controls that must NOT be escaped.
 
 // (a) enum members — the headline #4059 case (`None` etc. would emit a bare
 //     `None = "None"` and fail to import).
@@ -65,6 +66,26 @@ enum True {
 // (e) keyword type-alias name.
 type False = int
 
+// (f) LOWERCASE keyword NAMES — the same escape path as the uppercase trio above.
+//     `class pass` is referenced by another class field so cross-reference
+//     escaping (`p: pass_`) is exercised, not just the definition site.
+class pass {
+  value int
+}
+
+class PassHolder {
+  p pass
+}
+
+// (g) lowercase keyword enum name.
+enum import {
+  A
+  B
+}
+
+// (h) lowercase keyword type-alias name.
+type lambda = int
+
 // Identity round-trips so the sdk-test pytest exercises encode + decode of
 // escaped enum members and class fields end-to-end through the engine.
 function round_trip_kw(k: Kw) -> Kw {
@@ -80,4 +101,11 @@ function round_trip_fields(f: Fields) -> Fields {
 // only in unit probes.
 function round_trip_none(n: None) -> None {
   n
+}
+
+// Lowercase NAME-position round-trip: same proof for `class pass` (raw wire FQN
+// `user.pass` -> escaped Python class `pass_`), covering the lowercase escape
+// path end-to-end through the engine.
+function round_trip_pass(p: pass) -> pass {
+  p
 }

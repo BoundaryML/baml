@@ -14,9 +14,14 @@ from baml_sdk import (
     None_,
     True_,
     False_,
+    pass_,
+    import_,
+    lambda_,
+    PassHolder,
     round_trip_kw,
     round_trip_fields,
     round_trip_none,
+    round_trip_pass,
 )
 
 
@@ -26,6 +31,28 @@ def test_keyword_named_types_import_cleanly():
     assert issubclass(None_, pydantic.BaseModel)
     assert True_.A.value == "A"
     assert False_ is int  # `type False = int` -> `False_: typing.TypeAlias = int`
+
+
+def test_lowercase_keyword_named_types_import_and_escape():
+    # Lowercase keyword NAMES (`class pass`, `enum import`, `type lambda`) escape
+    # through the identical path as the uppercase trio — refuting the old comment
+    # that only None/True/False are admissible in NAME position.
+    assert issubclass(pass_, pydantic.BaseModel)
+    assert import_.A.value == "A"
+    assert lambda_ is int  # `type lambda = int` -> `lambda_: typing.TypeAlias = int`
+    # Cross-reference escaping: PassHolder.p is typed as the escaped `pass_`.
+    assert "p" in PassHolder.model_fields
+
+
+def test_lowercase_keyword_named_class_round_trips_through_engine():
+    # NAME-position decode for a LOWERCASE keyword class: the engine returns the
+    # raw wire FQN "user.pass"; the bridge resolves it via the raw typemap key to
+    # the escaped Python class `pass_` and reconstructs it end-to-end.
+    p = pass_(value=1)
+    out = round_trip_pass(p=p)
+    assert isinstance(out, pass_)
+    assert out.value == 1
+    assert out == p
 
 
 def test_escaped_enum_member_keeps_wire_value():

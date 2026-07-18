@@ -57,9 +57,16 @@ def test_rust_keyword_list_matches_python_kwlist():
 
 
 class _EscapedFieldModel(pydantic.BaseModel):
-    """Mirrors generated codegen for a class with a keyword field `pass`."""
+    """Mirrors generated codegen for a class with a keyword field `pass`.
+
+    Codegen emits the escaped field with a `__baml_wire_names__` marker (a plain
+    unannotated class-body dunder assignment) recording the raw BAML name; that
+    marker is the sole signal the bridge consumes on encode (the `alias` remains
+    only for decode + `populate_by_name`).
+    """
 
     model_config = pydantic.ConfigDict(extra="forbid", populate_by_name=True)
+    __baml_wire_names__ = {"pass_": "pass"}
     pass_: int = pydantic.Field(alias="pass")
 
 
@@ -69,8 +76,14 @@ class _PlainModel(pydantic.BaseModel):
 
 
 class _KeywordEnum(str, enum.Enum):
-    """Mirrors generated codegen for an enum with a keyword member `None`."""
+    """Mirrors generated codegen for an enum with a keyword member `None`.
 
+    Codegen emits the escaped enum with a `__baml_wire_values__` marker (a plain
+    dunder dict, excluded from Enum membership by `EnumMeta`) recording the raw
+    BAML name; that marker is the sole signal the bridge consumes on encode.
+    """
+
+    __baml_wire_values__ = {"None_": "None"}
     None_ = "None"
     Ok = "Ok"
 
@@ -115,3 +128,49 @@ def test_escaped_enum_map_key_encodes_by_raw_value():
     entry = inbound.map_value.entries[0]
     assert entry.enum_key.value == "None"
     assert entry.value.int_value == 1
+
+
+class _MarkerFieldCollisionModel(pydantic.BaseModel):
+    """Mirrors generated codegen for a class whose own field is named exactly like
+    the wire-name marker (`__baml_wire_names__`) alongside a keyword field `pass`.
+
+    A model field cannot lead with `_` (pydantic raises at class creation), so the
+    generator projects the colliding field off the marker to `baml_wire_names___`
+    while the raw `__baml_wire_names__` stays the wire key via the alias and the
+    marker entry. The mere fact that this class body defines without raising is the
+    import-level proof: the pre-fix `__baml_wire_names___: T = pydantic.Field(...)`
+    shape raised `NameError` and broke import of the whole leaf module.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid", populate_by_name=True)
+    __baml_wire_names__ = {"pass_": "pass", "baml_wire_names___": "__baml_wire_names__"}
+    pass_: int = pydantic.Field(alias="pass")
+    baml_wire_names___: str = pydantic.Field(alias="__baml_wire_names__")
+
+
+def test_marker_field_collision_model_imports_and_keeps_both_wire_keys():
+    # Import-level: both are real pydantic fields and the marker is a plain dunder.
+    assert set(_MarkerFieldCollisionModel.model_fields) == {"pass_", "baml_wire_names___"}
+    assert isinstance(_MarkerFieldCollisionModel.__baml_wire_names__, dict)
+    inbound = baml_inbound_pb2.InboundValue()
+    _set_inbound_value(
+        inbound,
+        _MarkerFieldCollisionModel(**{"pass": 7, "__baml_wire_names__": "v"}),
+        kwarg_name="x",
+    )
+    cv = inbound.class_value
+    # Both fields wire under their raw BAML names, not the escaped/projected attrs.
+    assert {f.string_key for f in cv.fields} == {"pass", "__baml_wire_names__"}
+
+
+def test_marker_field_collision_leading_underscore_shape_would_crash():
+    # Negative control: documents WHY the projection is required. The naive
+    # trailing-underscore bump keeps the marker's leading `__`, which pydantic
+    # refuses for a model field at class creation.
+    import pytest
+
+    with pytest.raises(NameError):
+
+        class _Crashes(pydantic.BaseModel):
+            model_config = pydantic.ConfigDict(populate_by_name=True)
+            __baml_wire_names___: str = pydantic.Field(alias="__baml_wire_names__")

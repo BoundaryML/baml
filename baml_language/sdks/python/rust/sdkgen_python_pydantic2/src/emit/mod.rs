@@ -84,7 +84,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|p| p.name.as_str().to_string())
                     .collect();
                 let escaped_prop_names = escape_keywords_in_scope(&raw_prop_names);
-                let properties = c
+                let mut properties: Vec<PyClassProperty> = c
                     .properties
                     .iter()
                     .zip(escaped_prop_names)
@@ -104,21 +104,39 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                 // append `.<method_bare>`; companions further append
                 // `$<suffix>` per the existing free-function rule.
                 let class_fqn_root = key.to_string();
-                let static_methods =
+                let mut static_methods =
                     expand_methods(&c.static_methods, &class_fqn_root, MethodKind::Static);
-                let instance_methods =
+                let mut instance_methods =
                     expand_methods(&c.instance_methods, &class_fqn_root, MethodKind::Instance);
-                let generic_params = c
+                // Reserve the `__baml_wire_names__` marker name across the
+                // combined field+method member set when the marker will be
+                // emitted, so a user member of that name is bumped rather than
+                // clobbering the marker dict at class creation. Keyword-free
+                // classes emit no marker, so this is a no-op for them.
+                reserve_class_wire_marker(
+                    &mut properties,
+                    &mut static_methods,
+                    &mut instance_methods,
+                );
+                // TypeVar names are allocated LEAF-globally by
+                // `leaf::allocate_leaf_type_vars` after `group_and_sort`, so a
+                // bumped keyword TypeVar can never collide with a sibling
+                // class/enum/alias name and distinct raw TypeVar spellings never
+                // collapse onto one emitted name (identical spellings deliberately
+                // share one module-level TypeVar). Here we only carry
+                // the RAW names forward; `type_var_map` is filled by that pass.
+                let raw_generic_params: Vec<String> = c
                     .generic_params
                     .iter()
-                    .map(|n| escape_python_keyword(n.as_str().to_string()))
+                    .map(|n| n.as_str().to_string())
                     .collect();
                 out.push((
                     leaf,
                     EmittedSymbol::Class(PyClass {
                         py_name: escape_python_keyword(bare),
                         source: key.clone(),
-                        generic_params,
+                        generic_params: raw_generic_params,
+                        type_var_map: TypeVarMap::new(),
                         docstring: c.docstring.clone(),
                         properties,
                         static_methods,
@@ -139,16 +157,28 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|v| v.name.as_str().to_string())
                     .collect();
                 let escaped_idents = escape_keywords_in_scope(&raw_variant_idents);
-                let variants = e
+                let mut variants: Vec<PyEnumVariant> = e
                     .variants
                     .iter()
                     .zip(escaped_idents)
-                    .map(|(v, ident)| PyEnumVariant {
-                        ident,
-                        value: v.value.clone(),
-                        docstring: v.docstring.clone(),
+                    .map(|(v, ident)| {
+                        // `escaped_idents[i] != raw` exactly marks the keyword-
+                        // escaped members (escape_keywords_in_scope returns
+                        // non-keywords unchanged); carry the raw variant name as
+                        // the wire-value provenance for `__baml_wire_values__`.
+                        let raw = v.name.as_str();
+                        let wire_name = (ident != raw).then(|| raw.to_string());
+                        PyEnumVariant {
+                            ident,
+                            value: v.value.clone(),
+                            docstring: v.docstring.clone(),
+                            wire_name,
+                        }
                     })
                     .collect();
+                // Symmetric to the class marker: reserve `__baml_wire_values__`
+                // across the member idents when the enum marker will be emitted.
+                reserve_enum_wire_marker(&mut variants);
                 out.push((
                     leaf,
                     EmittedSymbol::Enum(PyEnum {
@@ -201,11 +231,14 @@ fn expand_function(
     // companion's bare identifier (`__<suffix>` or `_stream`).
     let fqn_root = key.to_string();
     let bare = bare_callable_name(key.name().as_str());
+    // Raw TypeVar names only; leaf-global allocation happens later in
+    // `leaf::allocate_leaf_type_vars`.
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
-        .map(|n| escape_python_keyword(n.as_str().to_string()))
+        .map(|n| n.as_str().to_string())
         .collect();
+    let func_type_var_map = TypeVarMap::new();
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref());
     expand_callable(
@@ -225,6 +258,7 @@ fn expand_function(
                     arg_tys,
                     return_ty,
                     generic_params: func_generic_params.clone(),
+                    type_var_map: func_type_var_map.clone(),
                     docstring: func_docstring.clone(),
                     raises_names: raises_names.clone(),
                 }),
@@ -279,11 +313,14 @@ fn expand_methods(
         let m_name = m.name.as_str();
         let bare = bare_callable_name(m_name);
         let fqn_root = format!("{class_fqn_root}.{m_name}");
+        // Raw TypeVar names only; leaf-global allocation happens later
+        // in `leaf::allocate_leaf_type_vars`.
         let method_generic_params: Vec<String> = m
             .generic_params
             .iter()
-            .map(|n| escape_python_keyword(n.as_str().to_string()))
+            .map(|n| n.as_str().to_string())
             .collect();
+        let method_type_var_map = TypeVarMap::new();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref());
         let (required_args, optional_args) = split_arguments(&m.arguments);
@@ -300,6 +337,7 @@ fn expand_methods(
                 kind,
                 return_ty: m.return_type.clone(),
                 generic_params: method_generic_params.clone(),
+                type_var_map: method_type_var_map.clone(),
                 docstring: method_docstring.clone(),
                 raises_names: raises_names.clone(),
             });
@@ -432,6 +470,136 @@ pub(crate) fn escape_keywords_in_scope(names: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// The synthetic wire-identity markers the generator stamps into a class / enum
+/// body when at least one member is keyword-escaped (`build_wire_names_marker` /
+/// `build_wire_values_marker`, `leaf.rs`). Python binds the marker as an ordinary
+/// (dunder) class attribute, so a user member that lands on the same spelling
+/// would clobber it at class-creation time (the later binding wins). These names
+/// are therefore reserved across the body's member namespace whenever the marker
+/// is emitted.
+const WIRE_NAMES_MARKER: &str = "__baml_wire_names__";
+const WIRE_VALUES_MARKER: &str = "__baml_wire_values__";
+
+/// Bump `name` past everything already in `reserved` by appending `_` (the same
+/// trailing-underscore rule [`escape_keywords_in_scope`] uses), then reserve and
+/// return the result.
+fn bump_past_reserved(name: &str, reserved: &mut std::collections::HashSet<String>) -> String {
+    let mut candidate = format!("{name}_");
+    while reserved.contains(&candidate) {
+        candidate.push('_');
+    }
+    reserved.insert(candidate.clone());
+    candidate
+}
+
+/// Project a class FIELD that collides with the `__baml_wire_names__` marker onto
+/// a pydantic-legal attribute spelling. A METHOD collision can keep the marker's
+/// leading underscores ([`bump_past_reserved`] appends one `_`) because it renders
+/// as a bare class-body assignment; a FIELD cannot. pydantic rejects a model field
+/// whose name begins with an underscore (`NameError: Fields must not use names with
+/// leading underscores`) at class creation, which fails `import` of the whole leaf
+/// module. So shed the leading underscores to form the base, then apply the same
+/// trailing-underscore disambiguation against `reserved`. The raw
+/// `__baml_wire_names__` is preserved as the field's `pydantic.Field(alias=…)` and
+/// as the marker's wire value, so wire identity is unchanged.
+fn project_field_off_marker(reserved: &mut std::collections::HashSet<String>) -> String {
+    let base = WIRE_NAMES_MARKER.trim_start_matches('_');
+    let mut candidate = format!("{base}_");
+    while reserved.contains(&candidate) {
+        candidate.push('_');
+    }
+    reserved.insert(candidate.clone());
+    candidate
+}
+
+/// Reserve the `__baml_wire_names__` marker identifier across a class's combined
+/// field + method member namespace, but ONLY when the marker will actually be
+/// emitted (>= 1 field carries an `alias`, i.e. was keyword-escaped). A METHOD
+/// whose emitted name equals the marker is bumped one trailing underscore past it
+/// (it renders as a bare class-body assignment, so leading underscores are fine).
+/// A FIELD named like the marker is instead projected onto a leading-underscore-
+/// free spelling by [`project_field_off_marker`], because pydantic refuses a model
+/// field whose name starts with `_` (a plain trailing-underscore bump would still
+/// lead with `__` and crash `import` at class creation); it records
+/// `alias = "__baml_wire_names__"` so the marker still lists it and its raw wire
+/// identity is preserved. Keyword-free classes emit no marker, so nothing is
+/// reserved and their output stays byte-identical (the digest gate enforces this).
+fn reserve_class_wire_marker(
+    properties: &mut [PyClassProperty],
+    static_methods: &mut [PyMethodBinding],
+    instance_methods: &mut [PyMethodBinding],
+) {
+    let marker_emitted = properties.iter().any(|p| p.alias.is_some());
+    if !marker_emitted {
+        return;
+    }
+    // Reserve every member name that is NOT itself the marker token (those keep
+    // their spelling), plus the marker token (the marker occupies it). Bumps
+    // search past this set.
+    let mut reserved: std::collections::HashSet<String> = properties
+        .iter()
+        .map(|p| p.name.clone())
+        .chain(static_methods.iter().map(|m| m.py_name.clone()))
+        .chain(instance_methods.iter().map(|m| m.py_name.clone()))
+        .filter(|n| n != WIRE_NAMES_MARKER)
+        .collect();
+    reserved.insert(WIRE_NAMES_MARKER.to_string());
+
+    for p in properties.iter_mut() {
+        if p.name == WIRE_NAMES_MARKER {
+            // Fields must not lead with `_` (pydantic raises at class creation),
+            // so project off the marker to a legal spelling rather than the plain
+            // trailing-underscore bump the method arm uses.
+            p.name = project_field_off_marker(&mut reserved);
+            // Preserve the raw wire key: the marker now maps projected-attr -> raw.
+            if p.alias.is_none() {
+                p.alias = Some(WIRE_NAMES_MARKER.to_string());
+            }
+        }
+    }
+    for m in static_methods.iter_mut().chain(instance_methods.iter_mut()) {
+        if m.py_name == WIRE_NAMES_MARKER {
+            m.py_name = bump_past_reserved(WIRE_NAMES_MARKER, &mut reserved);
+        }
+    }
+}
+
+/// Enum counterpart of [`reserve_class_wire_marker`]. BAML enums have no methods,
+/// so the only collision vector is a member literally named `__baml_wire_values__`;
+/// reserve the marker across the member idents whenever the enum marker is emitted
+/// (>= 1 escaped member). A bumped member records its raw wire name into the marker.
+/// Keyword-free enums emit no marker and stay byte-identical.
+fn reserve_enum_wire_marker(variants: &mut [PyEnumVariant]) {
+    let marker_emitted = variants.iter().any(|v| v.wire_name.is_some());
+    if !marker_emitted {
+        return;
+    }
+    let mut reserved: std::collections::HashSet<String> = variants
+        .iter()
+        .map(|v| v.ident.clone())
+        .filter(|n| n != WIRE_VALUES_MARKER)
+        .collect();
+    reserved.insert(WIRE_VALUES_MARKER.to_string());
+
+    for v in variants.iter_mut() {
+        if v.ident == WIRE_VALUES_MARKER {
+            let bumped = bump_past_reserved(WIRE_VALUES_MARKER, &mut reserved);
+            if v.wire_name.is_none() {
+                v.wire_name = Some(WIRE_VALUES_MARKER.to_string());
+            }
+            v.ident = bumped;
+        }
+    }
+}
+
+/// A generic scope's raw→emitted `TypeVar` name map. `translate_ty`
+/// (`Ty::TypeVar`) consults it so a reference resolves to the exact spelling the
+/// declaration site allocated — including when a `{None, None_}` twin forces one
+/// name past its natural stateless escape. Each scope's map is the restriction
+/// of the ONE leaf-global allocation (`leaf::allocate_leaf_type_vars`) to that
+/// scope's raw names. Empty for non-generic scopes and until that pass fills it.
+pub(crate) type TypeVarMap = std::collections::HashMap<String, String>;
+
 /// Shared fan-out for free functions and methods. Calls `emit` twice:
 /// once for the sync binding and once for the async binding. Companions
 /// arrive as their own callable; the suffix-aware `bare` value is
@@ -496,7 +664,7 @@ mod tests {
         // MUST equal `keyword.kwlist` on CPython 3.9–3.13. The Python bridge
         // test `test_reserved_keywords.py::test_rust_keyword_list_matches_python_kwlist`
         // anchors the same 35 to `keyword.kwlist` from the Python side, closing
-        // the cross-language loop the spec (§4) requires.
+        // the cross-language loop between the Rust and Python keyword lists.
         let mut got: Vec<&str> = PYTHON_HARD_KEYWORDS.to_vec();
         got.sort_unstable();
         let mut want: Vec<&str> = vec![

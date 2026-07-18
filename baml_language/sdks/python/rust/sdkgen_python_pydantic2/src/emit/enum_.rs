@@ -23,6 +23,13 @@ pub(crate) struct PyEnumVariant {
     pub(crate) ident: String,
     /// RHS string literal (IR's `EnumVariant.value`, verbatim).
     pub(crate) value: String,
+    /// `Some(raw)` when `ident` was escaped off a hard keyword — the raw BAML
+    /// variant name, which stays the wire spelling. Drives the enum's
+    /// `__baml_wire_values__` provenance marker so the bridge encoder
+    /// can recover the wire name without shape-guessing. `None` for the common
+    /// case (member renders byte-identically to today), mirroring
+    /// `PyClassProperty::alias`.
+    pub(crate) wire_name: Option<String>,
     /// Joined `///` doc-comment lines preceding the variant. Folded
     /// into the parent `PyEnum`'s `"""…"""` docstring under a
     /// `Members:` section — never rendered as an inline `# …` comment

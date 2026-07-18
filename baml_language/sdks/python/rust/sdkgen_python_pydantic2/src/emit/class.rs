@@ -7,7 +7,7 @@
 
 use baml_codegen_types::{Name, Ty};
 
-use crate::emit::method::PyMethodBinding;
+use crate::emit::{TypeVarMap, method::PyMethodBinding};
 
 /// Python class definition. G4 populates `properties`; 12b populates
 /// `static_methods` and `instance_methods`; §7 handle-backed
@@ -24,6 +24,10 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
+    /// Raw→emitted map for `generic_params`, threaded into the field-body
+    /// `TranslateCtx` so a `TypeVar` reference resolves to the same spelling the
+    /// declaration allocated. Empty for non-generic classes.
+    pub(crate) type_var_map: TypeVarMap,
     /// Joined `///` doc-comment lines from the BAML class declaration.
     /// Combined with `PyClassProperty.docstring` from each entry in
     /// `properties` to produce the `"""…"""` Python class docstring;

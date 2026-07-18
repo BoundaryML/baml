@@ -2,6 +2,8 @@
 
 use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
+use crate::emit::TypeVarMap;
+
 /// Async/sync marker carried by factory bindings. Each BAML
 /// `Function` (and each of its companions) fans out into one sync
 /// and one async binding.
@@ -50,6 +52,10 @@ pub(crate) struct PyFunction {
     /// functions. Surfaces only in `.pyi` rendering — the `.py` factory
     /// binding is type-erased.
     pub(crate) generic_params: Vec<String>,
+    /// Raw→emitted map for `generic_params`, threaded into the `.pyi`
+    /// signature `TranslateCtx` so a `TypeVar` reference resolves to the same
+    /// spelling the declaration allocated. Empty for non-generic functions.
+    pub(crate) type_var_map: TypeVarMap,
     /// Joined `///` doc-comment lines from the BAML function declaration.
     /// Surfaced only by `.pyi` rendering as a `"""..."""` body so
     /// `__doc__` resolves at runtime.
