@@ -17,7 +17,9 @@ func TestSupportedNamespacesReachable(t *testing.T) {
 	_ = baml_sdk.MapsResume{}
 	_ = baml_sdk.RecursionA{}
 	_ = baml_sdk.ForwardRefsOther{}
-	// Media, general unions, and generic declarations remain deferred.
+	_ = baml_sdk.GenericsWrapper[int64]{}
+	_ = baml_sdk.ComplexModelsComplexProfile{}
+	// Recursive aliases and host-created opaque handles remain deferred.
 }
 
 func TestRootFooReachable(t *testing.T)            { _ = baml_sdk.Foo{} }

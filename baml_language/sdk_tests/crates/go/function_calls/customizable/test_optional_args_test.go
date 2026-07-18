@@ -10,7 +10,7 @@ import (
 
 // Direct synchronous port of Python test_optional_args.py. Python's async
 // siblings are N/A because Go uses the same context-aware call in a goroutine.
-// OptBox cases remain deferred until generated methods are supported.
+// The OptBox method matrix is ported in test_methods_on_classes_test.go.
 func TestOptionalArgsRuntimeMatrix(t *testing.T) {
 	assertValues := func(label string, got []*int64, err error, want []*int64) {
 		t.Helper()
@@ -58,4 +58,4 @@ func TestUnsetAndNoneDifferInOneCall(t *testing.T) {
 	}
 }
 
-// Async and OptBox Python tests are deferred: Go uses goroutines and methods are not generated yet.
+// Python's async-only duplicates are N/A for Go's context-aware synchronous API.

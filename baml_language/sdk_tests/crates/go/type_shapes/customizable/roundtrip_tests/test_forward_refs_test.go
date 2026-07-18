@@ -2,14 +2,15 @@ package sdk_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
 )
 
 // Supported subset of the direct Python test_forward_refs.py port. Recursive
-// aliases and generic classes are deferred; the uninhabitable required
-// self-reference remains compile-only in both languages.
+// aliases are deferred; the uninhabitable required self-reference remains
+// compile-only in both languages.
 func TestRoundTripForwardRefOther(t *testing.T) {
 	want := baml_sdk.ForwardRefsOther{V: 7}
 	got, err := baml_sdk.ForwardRefsRoundTripOther(context.Background(), want)
@@ -20,4 +21,14 @@ func TestRoundTripForwardRefOther(t *testing.T) {
 
 var _ = baml_sdk.ForwardRefsNode{}
 
-// Python recursive-alias and generic forward-reference tests are deferred.
+func TestRoundTripForwardRefGNodeInt(t *testing.T) {
+	want := baml_sdk.ForwardRefsGNode[int64]{
+		Children: []baml_sdk.ForwardRefsGNode[int64]{{Children: []baml_sdk.ForwardRefsGNode[int64]{}}},
+	}
+	got, err := baml_sdk.ForwardRefsRoundTripGNodeInt(context.Background(), want)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("generic node = %#v, %v, want %#v", got, err, want)
+	}
+}
+
+// Python recursive-alias tests remain deferred with recursive unions.
