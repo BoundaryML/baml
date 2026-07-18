@@ -832,6 +832,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Media(kind) => media_component(*kind).to_string(),
         GoTy::Json => "Json".into(),
         GoTy::ReflectedType => "Type".into(),
+        GoTy::RustType => "RustType".into(),
         GoTy::Literal(literal) => literal_component(literal),
         GoTy::Class(name) => names
             .project(
@@ -881,6 +882,7 @@ fn disambiguated_union_component(ty: &GoTy, base: &str) -> String {
         GoTy::Media(kind) => format!("Primitive{}", media_component(*kind)),
         GoTy::Json => "StdlibJson".into(),
         GoTy::ReflectedType => "PrimitiveType".into(),
+        GoTy::RustType => "PrimitiveRustType".into(),
         GoTy::Class(name) => format!("Class{base}{}", nominal_type_hash(name, GoNameKind::Class)),
         GoTy::Enum(name) => format!("Enum{base}{}", nominal_type_hash(name, GoNameKind::Enum)),
         _ => {
@@ -906,6 +908,7 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         }
         GoTy::Json => hash.byte(18),
         GoTy::ReflectedType => hash.byte(19),
+        GoTy::RustType => hash.byte(20),
         GoTy::Literal(literal) => {
             hash.byte(7);
             hash.component(&literal_component(literal));

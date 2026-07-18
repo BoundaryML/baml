@@ -32,6 +32,9 @@ pub(crate) enum GoTy {
     /// A first-class reflected BAML type value (`type`). Its Go surface is the
     /// opaque runtime descriptor `baml_go.BAMLType`.
     ReflectedType,
+    /// Opaque Rust-managed state (`$rust_type`). The native handle table owns
+    /// the underlying value; Go only holds a cloneable lifetime token.
+    RustType,
     Literal(GoLiteral),
     Class(Name),
     Enum(Name),
@@ -248,6 +251,7 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Media(MediaKind::Generic, _) => GoTy::Unsupported,
             Ty::Media(kind, _) => GoTy::Media(*kind),
             Ty::Type { .. } => GoTy::ReflectedType,
+            Ty::RustType { .. } => GoTy::RustType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
@@ -680,6 +684,20 @@ mod tests {
             ])),
             GoTy::DynamicUnion { nullable: true, .. }
         ));
+    }
+
+    #[test]
+    fn rust_type_projects_as_one_canonical_opaque_leaf_while_resource_stays_deferred() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(
+            projection.project(&Ty::RustType { attr: a() }),
+            GoTy::RustType
+        );
+        assert_eq!(
+            projection.project(&Ty::Resource { attr: a() }),
+            GoTy::Unsupported
+        );
     }
 
     #[test]

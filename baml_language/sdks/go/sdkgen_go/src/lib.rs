@@ -1533,7 +1533,7 @@ fn add_projected_type_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType | GoTy::RustType => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Json => {}
@@ -1556,10 +1556,13 @@ fn add_projected_type_imports(
                     target.go_name(),
                     &target.import_path(context.sdk_import_path),
                 );
-            }
-            if visited.insert(name.clone())
+            } else if visited.insert(name.clone())
                 && let Symbol::Class(class) = &context.pool[name]
             {
+                // Cross-package classes own their transitive imports in their
+                // own types.go. Only recurse through a class rendered into the
+                // current file; otherwise opaque fields such as `$rust_type`
+                // can add an unused runtime import here.
                 for field in &class.properties {
                     add_projected_type_imports(
                         &context.projection.project(&field.ty),
@@ -1630,6 +1633,7 @@ fn render_projected_go_type(
         ),
         GoTy::Json => "any".to_string(),
         GoTy::ReflectedType => format!("{}.BAMLType", GeneratorIdent::RuntimePackage),
+        GoTy::RustType => format!("{}.RustType", GeneratorIdent::RuntimePackage),
         GoTy::Literal(literal) => render_projected_go_type(
             &literal_surface(literal),
             current_baml_package,
@@ -1790,6 +1794,7 @@ fn projected_input_encoder(
         GoTy::ReflectedType => {
             format!("{runtime}.{}", GeneratorIdent::ReflectedTypeInputMethod)
         }
+        GoTy::RustType => format!("{runtime}.RustTypeInput"),
         GoTy::Literal(literal) => {
             projected_input_encoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -1863,6 +1868,7 @@ fn projected_output_decoder(
             "{runtime}.Value.{}",
             GeneratorIdent::ReflectedTypeOutputMethod
         ),
+        GoTy::RustType => format!("{runtime}.Value.RustType"),
         GoTy::Literal(literal) => {
             projected_output_decoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -2230,7 +2236,10 @@ fn render_union_codecs(
         for member in key.members() {
             let descriptor = baml_type_descriptor(member, names);
             let member_decoder = projected_output_decoder(member, union_package, codecs);
-            let decoded_target = if matches!(member, GoTy::Literal(_)) {
+            // A closed typed literal arm uses a value-free constructor after
+            // validating the payload, but a dynamic union must return the
+            // decoded scalar itself.
+            let decoded_target = if is_typed && matches!(member, GoTy::Literal(_)) {
                 "_".to_string()
             } else {
                 decoded_local.to_string()
@@ -2488,6 +2497,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Media(kind) => format!("{runtime}.{}BAMLType()", media_go_type(*kind)),
         GoTy::Json => format!("{runtime}.TypeAliasBAMLType(\"baml.json.json\")"),
         GoTy::ReflectedType => format!("{runtime}.MetaTypeBAMLType()"),
+        GoTy::RustType => format!("{runtime}.RustTypeBAMLType()"),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
         }
@@ -3670,7 +3680,18 @@ mod tests {
         let widget = Name::new(BaseName::new("models"), vec![], BaseName::new("widget"));
         let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("holder"));
         let pool = SymbolPool::from([
-            class(widget.clone(), vec![("label", ty_string())]),
+            class(
+                widget.clone(),
+                vec![
+                    ("label", ty_string()),
+                    (
+                        "native",
+                        Ty::RustType {
+                            attr: TyAttr::default(),
+                        },
+                    ),
+                ],
+            ),
             class(holder, vec![("widget", ty_class(widget, vec![]))]),
         ]);
 
@@ -3683,7 +3704,10 @@ mod tests {
         let root = &files[&PathBuf::from("types.go")];
         assert!(root.contains("models \"example.com/project/baml_sdk/packages/models\""));
         assert!(root.contains("Widget models.Widget `json:\"widget\" baml:\"widget\"`"));
-        assert!(files.contains_key(&PathBuf::from("packages/models/types.go")));
+        assert!(!root.contains("github.com/boundaryml/baml-go"));
+        let models = &files[&PathBuf::from("packages/models/types.go")];
+        assert!(models.contains("github.com/boundaryml/baml-go"));
+        assert!(models.contains("Native baml_go.RustType"));
     }
 
     #[test]
@@ -4310,6 +4334,62 @@ mod tests {
         assert!(functions.contains("func Large(ctx_ context.Context, value any) (any, error)"));
         assert!(functions.contains("Known BAML candidates: string | int64 | bool."));
         assert!(files[&PathBuf::from("types.go")].contains("type StringOrInt struct"));
+    }
+
+    #[test]
+    fn rust_type_uses_only_the_opaque_runtime_surface_and_exact_codecs() {
+        let name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_rust_type"),
+        );
+        let rust_type = Ty::RustType {
+            attr: TyAttr::default(),
+        };
+        let pool = SymbolPool::from([round_trip_function(name, "value", rust_type)]);
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains(
+            "func RoundTripRustType(ctx_ context.Context, value baml_go.RustType) (baml_go.RustType, error)"
+        ));
+        assert!(functions.contains("baml_go.RustTypeInput(value)"));
+        assert!(functions.contains("baml_go.Value.RustType"));
+        assert!(!functions.contains("UNTAGGED_RUST_DATA"));
+    }
+
+    #[test]
+    fn dynamic_literal_union_decoder_returns_the_validated_scalar() {
+        let name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_literal_union"),
+        );
+        let literal_union = ty_union(vec![
+            ty_literal(Literal::String("left".to_string())),
+            ty_literal(Literal::String("right".to_string())),
+        ]);
+        let pool = SymbolPool::from([round_trip_function(name, "value", literal_union)]);
+        let files = to_source_code_with_bytecode_and_options(
+            &pool,
+            &[],
+            &GoGenOptions {
+                naming_convention: NamingConvention::Language,
+                sdk_import_path: "example.com/project/baml_sdk",
+                max_typed_union_arity: 0,
+            },
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("decoded_, err_ := baml_go.Value.String(payload_)"));
+        assert!(functions.contains("return decoded_, err_"));
+        assert!(!functions.lines().any(|line| {
+            line.trim_start()
+                .starts_with("_, err_ := baml_go.Value.String")
+        }));
     }
 
     #[test]
