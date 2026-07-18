@@ -30,6 +30,83 @@ fn realize_host_ty(ty: RuntimeTy) -> Result<baml_type::RealizedTy, EngineError> 
     })
 }
 
+fn host_call_parameter_types<'a>(
+    params: &[baml_type::RealizedFunctionParamTy],
+    positional_count: usize,
+    optional_names: impl IntoIterator<Item = &'a str>,
+) -> Result<(Vec<RuntimeTy>, indexmap::IndexMap<String, RuntimeTy>), String> {
+    let required = params
+        .iter()
+        .filter(|param| param.is_required())
+        .map(|param| RuntimeTy::from(&param.ty))
+        .collect::<Vec<_>>();
+    if positional_count != required.len() {
+        return Err(format!(
+            "host-call positional argument count {positional_count} does not match declared required count {}",
+            required.len()
+        ));
+    }
+    let mut optional = indexmap::IndexMap::new();
+    for name in optional_names {
+        let param = params
+            .iter()
+            .find(|param| {
+                param.is_optional()
+                    && param
+                        .name
+                        .as_ref()
+                        .is_some_and(|candidate| candidate.as_str() == name)
+            })
+            .ok_or_else(|| format!("host-call supplied unknown optional argument {name:?}"))?;
+        optional.insert(name.to_string(), RuntimeTy::from(&param.ty));
+    }
+    Ok((required, optional))
+}
+
+#[cfg(test)]
+mod host_call_parameter_type_tests {
+    use baml_type::{FunctionParamMode, Name, RealizedFunctionParamTy, RealizedTy, TyAttr};
+
+    use super::*;
+
+    fn param(name: &str, mode: FunctionParamMode, ty: RealizedTy) -> RealizedFunctionParamTy {
+        RealizedFunctionParamTy {
+            name: Some(Name::new(name)),
+            ty,
+            mode,
+        }
+    }
+
+    #[test]
+    fn resolves_required_and_exact_optional_wire_names() {
+        let union = RealizedTy::Union(
+            vec![RealizedTy::int(), RealizedTy::string()],
+            TyAttr::default(),
+        );
+        let params = vec![
+            param("value", FunctionParamMode::Required, union.clone()),
+            param("foo_bar", FunctionParamMode::Optional, union),
+        ];
+        let (required, optional) = host_call_parameter_types(&params, 1, ["foo_bar"]).unwrap();
+        assert!(matches!(required.as_slice(), [RuntimeTy::Union(..)]));
+        assert!(matches!(optional["foo_bar"], RuntimeTy::Union(..)));
+    }
+
+    #[test]
+    fn rejects_malformed_required_arity_and_optional_name() {
+        let params = vec![
+            param("value", FunctionParamMode::Required, RealizedTy::int()),
+            param("foo_bar", FunctionParamMode::Optional, RealizedTy::string()),
+        ];
+        let arity = host_call_parameter_types(&params, 0, std::iter::empty::<&str>()).unwrap_err();
+        assert!(arity.contains("count 0"));
+        assert!(arity.contains("required count 1"));
+
+        let name = host_call_parameter_types(&params, 1, ["fooBar"]).unwrap_err();
+        assert!(name.contains("unknown optional argument \"fooBar\""));
+    }
+}
+
 // ============================================================================
 // VM Value to External Conversion
 // ============================================================================
@@ -943,12 +1020,15 @@ impl BexEngine {
                 // admit an unvalidatable return. (This also rejects a genuine
                 // bare `-> void` host callable; such a callable must declare a
                 // concrete return type.)
-                if ret_ty_has_unvalidatable_position(&ret) {
+                // A top-level `void` callback has one canonical host wire
+                // representation: Null. Nested void positions remain invalid
+                // (they indicate an erased/unresolved type).
+                if !matches!(ret, RuntimeTy::Void { .. }) && ret_ty_has_unvalidatable_position(&ret)
+                {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
-                            "host callable cannot be bound: its return type `{ret}` is generic \
-                             or void, so the host's returned value cannot be validated; host \
-                             callables require a concrete return type",
+                            "host callable cannot be bound: its return type `{ret}` contains an \
+                             unresolved position, so the host's returned value cannot be validated",
                         ),
                     });
                 }
@@ -1024,6 +1104,98 @@ unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
 }
 
 impl BexEngine {
+    /// Convert the VM's `[required_args, optional_args]` host-call pack using
+    /// the callable's declared parameter types. Ordinary sys-op conversion is
+    /// intentionally type-erased, but host callbacks need the declared type to
+    /// preserve closed-union selected-arm metadata on the outbound wire.
+    pub(crate) fn convert_host_call_args_pack(
+        &self,
+        pack: Value,
+        params: &[baml_type::RealizedFunctionParamTy],
+        permit: PermitProof<'_>,
+    ) -> Result<BexExternalValue, EngineError> {
+        let malformed = |message: String| {
+            EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure { message })
+        };
+        let pack_ptr = pack
+            .as_object_ptr()
+            .ok_or_else(|| malformed("host-call argument pack is not a heap object".to_string()))?;
+        // SAFETY: `permit` witnesses that the VM heap cannot move while these
+        // pointers are inspected. Container snapshots release their locks
+        // before recursive conversion.
+        let Object::Array(pack_array) = (unsafe { pack_ptr.get() }) else {
+            return Err(malformed(
+                "host-call argument pack is not an array".to_string(),
+            ));
+        };
+        let pack_items = pack_array.to_vec();
+        if pack_items.len() != 2 {
+            return Err(malformed(format!(
+                "host-call argument pack has {} items, expected 2",
+                pack_items.len()
+            )));
+        }
+
+        let positional_ptr = pack_items[0].as_object_ptr().ok_or_else(|| {
+            malformed("host-call positional arguments are not a heap object".to_string())
+        })?;
+        // SAFETY: covered by the active heap permit above.
+        let Object::Array(positional_array) = (unsafe { positional_ptr.get() }) else {
+            return Err(malformed(
+                "host-call positional arguments are not an array".to_string(),
+            ));
+        };
+        let positional_values = positional_array.to_vec();
+        let optional_ptr = pack_items[1].as_object_ptr().ok_or_else(|| {
+            malformed("host-call optional arguments are not a heap object".to_string())
+        })?;
+        // SAFETY: covered by the active heap permit above.
+        let Object::Map(optional_map) = (unsafe { optional_ptr.get() }) else {
+            return Err(malformed(
+                "host-call optional arguments are not a map".to_string(),
+            ));
+        };
+        let optional_values = optional_map.to_index_map();
+        let (required_types, optional_types) = host_call_parameter_types(
+            params,
+            positional_values.len(),
+            optional_values
+                .keys()
+                .map(bex_external_types::BexStr::as_str),
+        )
+        .map_err(malformed)?;
+        let positional = positional_values
+            .into_iter()
+            .zip(required_types)
+            .map(|(value, ty)| self.convert_vm_value_to_external_with_type(value, &ty, permit))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut optional = indexmap::IndexMap::with_capacity(optional_values.len());
+        for (name, value) in optional_values {
+            let name = name.to_string();
+            let ty = &optional_types[&name];
+            optional.insert(
+                name,
+                self.convert_vm_value_to_external_with_type(value, ty, permit)?,
+            );
+        }
+
+        Ok(BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                BexExternalValue::Array {
+                    element_type: RuntimeTy::unknown(),
+                    items: positional,
+                },
+                BexExternalValue::Map {
+                    key_type: RuntimeTy::string(),
+                    value_type: RuntimeTy::unknown(),
+                    entries: optional,
+                },
+            ],
+        })
+    }
+
     pub(crate) fn vm_arg_to_bex_value(&self, value: Value) -> BexExternalValue {
         match value.kind() {
             ValueKind::OmittedArg => {
@@ -1670,10 +1842,11 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     }
 }
 
-/// Whether a host-callable's declared return type contains a position the
-/// host-return validator treats as "accept anything": a `RuntimeTy::Void` (the runtime
-/// form of an erased generic type variable, and also a bare `-> void`) or a
-/// `RuntimeTy::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
+/// Whether a host-callable's declared return type contains an unresolved
+/// position the host-return validator cannot check. A top-level
+/// `RuntimeTy::Void` is handled specially by the caller and accepts only the
+/// canonical Null wire value; a nested Void remains an erased/unresolved
+/// position. Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
 /// its returned value validated, so binding one is rejected.
@@ -1683,7 +1856,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // against these declared types (the host-return validator has no
         // positive discriminator for them), so a host could inject a value that
         // violates the declared type. Reject binding such a callable.
-        //   - `Void`/`BuiltinUnknown`: accept-anything tops.
+        //   - nested `Void`/`BuiltinUnknown`: unresolved positions.
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
@@ -1851,6 +2024,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // accepts any partial-stream payload as the `TStream` arm.
         (_, RuntimeTy::BuiltinUnknown { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
+        (BexExternalValue::Null, RuntimeTy::Void { .. }) => true,
         (BexExternalValue::Int(_), RuntimeTy::Int { .. }) => true,
         (BexExternalValue::Bigint(_), RuntimeTy::Bigint { .. }) => true,
         (BexExternalValue::Float(_), RuntimeTy::Float { .. }) => true,

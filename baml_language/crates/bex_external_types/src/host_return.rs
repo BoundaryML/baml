@@ -126,7 +126,12 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             value_satisfies_ty(inner, ty)
         }
 
-        RuntimeTy::Null { .. } => matches!(value, BexExternalValue::Null),
+        // A host bridge represents a completed `void` callback as Null on the
+        // wire. Void is valid only in this top-level return position; callback
+        // binding rejects nested/unresolved void positions separately.
+        RuntimeTy::Void { .. } | RuntimeTy::Null { .. } => {
+            matches!(value, BexExternalValue::Null)
+        }
         RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
         // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
         // `Float`, nor a `Float` value `Int`. The numeric-widening that
@@ -348,6 +353,24 @@ mod tests {
             .is_ok()
         );
         assert!(validate_host_return(&BexExternalValue::Null, &RuntimeTy::null()).is_ok());
+        assert!(
+            validate_host_return(
+                &BexExternalValue::Null,
+                &RuntimeTy::Void {
+                    attr: TyAttr::default()
+                }
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_host_return(
+                &BexExternalValue::Int(1),
+                &RuntimeTy::Void {
+                    attr: TyAttr::default()
+                }
+            )
+            .is_err()
+        );
         // Cross-tag rejections.
         assert!(
             validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::int()).is_err()

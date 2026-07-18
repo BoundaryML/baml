@@ -849,6 +849,29 @@ fn host_call_type_arg(
     }
 }
 
+/// Clone the realized parameter contract captured by a host closure while the
+/// VM heap permit is held. These types drive the operation-specific outbound
+/// conversion for callback arguments; in particular, a union-typed parameter
+/// must become `BexExternalValue::Union` before the shared wire encoder runs.
+fn host_call_params(
+    handle: Option<Value>,
+) -> Result<Vec<baml_type::RealizedFunctionParamTy>, bex_vm::errors::VmInternalError> {
+    let malformed = || bex_vm::errors::VmInternalError::BridgeFailure {
+        message: "call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
+            .to_string(),
+    };
+    let ptr = handle
+        .as_ref()
+        .and_then(Value::as_object_ptr)
+        .ok_or_else(malformed)?;
+    // SAFETY: the caller invokes this while holding the active VM heap permit,
+    // before the sys-op await can allow a moving collection.
+    match unsafe { ptr.get() } {
+        Object::HostClosure(closure) => Ok(closure.params.as_ref().clone()),
+        _ => Err(malformed()),
+    }
+}
+
 /// Convert a sysop `OpError`'s inner `VmRustFnError` into a heap-allocated
 /// VM exception `Value` using the VM's own conversion helpers — the same
 /// path a `$rust_function` error or `throw` opcode takes:
@@ -4581,8 +4604,56 @@ impl BexEngine {
                         Result(Result<BexExternalValue, OpError>),
                     }
 
+                    // Honor an already-cancelled call before traversing and
+                    // externalizing sys-op arguments. Host-call argument packs
+                    // can contain arbitrarily large value trees; cancellation
+                    // must remain an O(1) pre-check rather than paying that
+                    // conversion cost for an operation that will never run.
+                    if cancel.is_cancelled() {
+                        // Cancel-at-yield: spawned children settle as
+                        // Cancelled so the heap Future no longer hangs
+                        // at Pending; root threads surface the cancel
+                        // to the host.
+                        self.prof_end_sysop(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
+                        }
+                        return Err(cancelled_unhandled_throw());
+                    }
+
                     let bex_args: Vec<BexExternalValue> =
-                        args.iter().map(|v| self.vm_arg_to_bex_value(*v)).collect();
+                        if operation == SysOp::BamlHostCallHostValue {
+                            let params = host_call_params(args.first().copied())
+                                .map_err(EngineError::VmInternalError)?;
+                            if args.len() != 4 {
+                                return Err(EngineError::VmInternalError(
+                                    bex_vm::errors::VmInternalError::BridgeFailure {
+                                        message: format!(
+                                            "call_host_value: got {} sysop arguments, expected 4",
+                                            args.len()
+                                        ),
+                                    },
+                                ));
+                            }
+                            vec![
+                                self.vm_arg_to_bex_value(args[0]),
+                                self.convert_host_call_args_pack(args[1], &params, thread.proof())?,
+                                self.vm_arg_to_bex_value(args[2]),
+                                self.vm_arg_to_bex_value(args[3]),
+                            ]
+                        } else {
+                            args.iter()
+                                .map(|value| self.vm_arg_to_bex_value(*value))
+                                .collect()
+                        };
 
                     // Capture the host-call type args (`type_arg_0`/`args[2]`
                     // = return type `T`; `type_arg_1`/`args[3]` = throws
@@ -4618,26 +4689,6 @@ impl BexEngine {
                         } else {
                             None
                         };
-
-                    if cancel.is_cancelled() {
-                        // Cancel-at-yield: spawned children settle as
-                        // Cancelled so the heap Future no longer hangs
-                        // at Pending; root threads surface the cancel
-                        // to the host.
-                        self.prof_end_sysop(
-                            &mut thread.vm,
-                            bex_events::prof::record::FunctionEndStatus::Cancelled,
-                        );
-                        self.prof_drain_open_calls(
-                            &mut thread.vm,
-                            bex_events::prof::record::FunctionEndStatus::Cancelled,
-                        );
-                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
-                        }
-                        return Err(cancelled_unhandled_throw());
-                    }
 
                     let sys_op_result =
                         self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
