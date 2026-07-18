@@ -1,12 +1,15 @@
 # C# implementation-entry external-run handoff
 
-Status: repository-local preparation is complete; the external workflow has
-not run. The exact local provenance commit and its matching one-shot gate tag
-must be reviewed and pushed before the first run. B8 passes locally, but its
-committed-source exact-package/trim reproduction is still pending. B11 also
-passes its complete local Linux trim/single-file matrix, while B4 remains
-blocked on the real eight-RID inputs and runners. `TASK/implementation.md`
-must not be created yet.
+Status: the exact-source tag bootstrap ran the first atomic external attempt
+at commit `9d29c01928df7ce726c49286a3067129fc039115`. Its source/release-plan
+preflight and six non-Apple producer jobs passed, including every experimental
+target, but both Apple diagnostic verifiers failed before upload and the
+atomic verifier was skipped. The failure is recorded below and promotes no
+gate. B8 passes locally, but its committed-source exact-package/trim
+reproduction is still pending. B11 also passes its complete local Linux
+trim/single-file matrix, while B4 remains blocked on the verified atomic
+package and real eight-RID consumers. `TASK/implementation.md` must not be
+created yet.
 
 ## Exact workflow
 
@@ -99,15 +102,98 @@ Once that push is authorized, this explicitly non-publishing evidence run is
 an in-scope verification step; it does not authorize any production release
 or publication.
 
+## Remote builder-only diagnostic
+
+Before the exact tag bootstrap was pushed, the registered language-neutral
+builder was dispatched directly as a non-publishing diagnostic.
+[GitHub Actions run 29620985984](https://github.com/BoundaryML/baml/actions/runs/29620985984)
+completed successfully on attempt 1 at exact remote source
+`6d52aff1446c66be440771a14b85512c67214ca1`, release version `0.15.0`.
+The matrix job and every one of the eight target jobs concluded `success`;
+none of the three upstream-experimental targets was hidden by
+`continue-on-error`. Every target built, checksummed, and uploaded its
+shipping artifact. Native-host C/C++ ABI smoke tests also passed on Linux x64
+glibc, macOS ARM64, and both Windows targets where the workflow enables them.
+
+The downloaded artifacts' own identity sidecars all record the exact source
+SHA, run ID `29620985984`, attempt `1`, target, canonical asset, and release
+version. Their shipping primaries are:
+
+| Target | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `aarch64-apple-darwin` | 21,111,072 | `76c157a8c8b68d2607ba1ac00f0abb780a1080d88555d575b69bf2cb748f0ddc` |
+| `x86_64-apple-darwin` | 21,539,636 | `df4c64c8ae040e99d3f4a0b67ee52355107e5d1ef28aedc4770a907ff1d57991` |
+| `aarch64-unknown-linux-gnu` | 21,446,720 | `9410ac423d2f7a2d86282d7a8435e0b160c531f40e21ad9de23e8ce3f185cfdc` |
+| `aarch64-unknown-linux-musl` | 21,376,824 | `66b0ff4c0af3d393e295e8e5394fc5e39e59abf5c3a1518d09ef42384c0a00c4` |
+| `x86_64-unknown-linux-gnu` | 24,318,040 | `e545e6dca35bdb6c119961d088a65ce1f5ed12c9ab91db1177ca9e0a328e2e4f` |
+| `x86_64-unknown-linux-musl` | 24,170,528 | `f6fbe864eb4b994c7b3424b8a8e65e85208199882dd8bb61834776e147604fff` |
+| `x86_64-pc-windows-msvc` | 24,422,400 | `90b394181f0721bbe40c0a5db98af117b49e88c8537011f10d0b783234280c0b` |
+| `aarch64-pc-windows-msvc` | 22,409,728 | `f895081ac3d990ad823f28c6dee4de85fb2e8f5482d50acbc9842cda0e1de1fd` |
+
+This diagnostic deliberately left the C# entry-diagnostic condition false.
+It therefore produced no unstripped bundles, PDB/DWARF proof, normalized
+NuGet package, exact-package native consumers, protocol-host fan-in,
+trim/single-file executions, unsupported-RID/NativeAOT diagnostics, or atomic
+completeness manifest. It is useful cross-platform builder evidence only and
+does not promote B3, B4, B8, B11, B12, or C6.
+
+## First atomic attempt
+
+[GitHub Actions run 29626183183](https://github.com/BoundaryML/baml/actions/runs/29626183183)
+was triggered by the exact tag
+`csharp-entry-gates-9d29c01928df7ce726c49286a3067129fc039115`.
+Its event was `push`, its head SHA was
+`9d29c01928df7ce726c49286a3067129fc039115`, and attempt 1 froze the
+expected `0.15.0` release plan. The plan job and central target-matrix job
+passed. All six non-Apple producer jobs passed their shipping build,
+shipping-artifact upload, unstripped diagnostic build, platform-specific
+debug/symbol verification, and diagnostic upload. That includes all three
+upstream-experimental targets; no `continue-on-error` failure was hidden.
+
+Both `aarch64-apple-darwin` and `x86_64-apple-darwin` passed their shipping
+build/upload and unstripped diagnostic build, then failed
+`Verify Unix diagnostic contains debug information and symbols`. Their
+diagnostic upload steps did not run, and `Verify C# entry gates` was skipped
+because its complete producer dependency was not satisfied. No package,
+consumer, protocol-host, trim/single-file, unsupported-RID/NativeAOT, or
+completeness evidence was produced.
+
+The diagnostic build requests `debug=2` and `strip=false` but does not pin
+`split-debuginfo`. Cargo's
+[profile reference](https://doc.rust-lang.org/cargo/reference/profiles.html#split-debuginfo)
+documents `unpacked` as the macOS default when debug information is enabled;
+the
+[rustc reference](https://doc.rust-lang.org/rustc/codegen-options/index.html#split-debuginfo)
+states that this leaves macOS debug information in per-compilation object
+files. The verifier intentionally retains and accepts only the dylib itself
+or one UUID-matched `.dSYM`, so the default unpacked layout cannot satisfy the
+immutable diagnostic-bundle contract. Both Apple architectures failed the
+same step within seconds of their successful diagnostic builds. The focused
+repair is to request `split-debuginfo="packed"` only for Apple diagnostic
+builds, retain the generated `.dSYM`, and keep the existing UUID/DWARF and
+local-symbol assertions. That repair is implemented locally: `actionlint`,
+independent YAML parsing, shell syntax checks, Cargo profile-override parsing,
+and three-target argument expansion prove that only Apple receives the packed
+override. The Apple runner result and another complete exact-source attempt
+remain pending.
+
 ## Provenance preflight
 
-The final precommit temporary-index preview contains exactly the intended 120
-source/evidence files. `git diff --cached --check` passes, Git reports zero
-binary entries, and the scope contains zero paths under local `.codex/`,
-`.TASK.readonly-seed/`, `AGENTS.md`, or any excluded directory. The real index
-was not touched by the preview. The local provenance commit must match this
-scope exactly; its committed SHA becomes the workflow's `source_sha`. Later
-edits invalidate that identity rather than inheriting it.
+The first provenance commit's temporary-index preview contained exactly the
+intended 120 source/evidence files. `git diff --cached --check` passed, Git
+reported zero binary entries, and the scope contained zero paths under local
+`.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, or any excluded directory.
+That scope became commit
+`6d52aff1446c66be440771a14b85512c67214ca1`; trigger bootstrap commit
+`9d29c01928df7ce726c49286a3067129fc039115` was the first atomic attempt's
+source.
+
+The Apple packed-debug repair and post-run ledger updates require a new
+reviewed source commit and a new matching
+`csharp-entry-gates-<full source SHA>` tag. Its precommit scope must contain
+only the native-builder workflow plus these four continuously maintained
+ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and all
+excluded paths remain outside that commit.
 
 After the run, record in `verification-gates.md`:
 
@@ -322,4 +408,4 @@ Current source SHA-256 values:
 | shared Rust setup action | `2063428518629315d1d6bb67e4c864764466cfc6a9654469dec014d908c2713a` |
 | manual caller workflow | `cd3e45ef30ecd8789116e16a3c34212b35a905244020b417a57e70a35fc28f96` |
 | reusable verifier workflow | `9b4118773f3c2c397ab1b50270c97cd12a920631ee3f1df7ef803230a780619e` |
-| native builder workflow | `38f117d90015add19bdd0edc153b66d7339ba1b16cb621356ae3d4aac3782f41` |
+| native builder workflow | `966e45b3dbe0a140eb2fe5905d2924d8befe95a7f4fd83111b263cd1ace7128c` |

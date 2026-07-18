@@ -290,16 +290,26 @@ jobs:
           if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
           fi
+          split_debug_config=()
+          if [[ "$TARGET" == *-apple-darwin ]]; then
+            split_debug_config=(
+              --config
+              'profile.release-bridge-cffi.split-debuginfo="packed"'
+            )
+          fi
           # Use Cargo CLI controls rather than environment variables: `cross`
           # forwards only its configured environment allowlist into Linux
-          # build containers.
+          # build containers. Apple diagnostics use packed split debug so the
+          # immutable bundle retains one UUID-matched dSYM instead of referring
+          # to unpacked intermediate object files.
           ${CARGO} build \
             -p bridge_cffi \
             --profile release-bridge-cffi \
             --target "$TARGET" \
             --target-dir target/csharp-entry-unstripped \
             --config profile.release-bridge-cffi.strip=false \
-            --config profile.release-bridge-cffi.debug=2
+            --config profile.release-bridge-cffi.debug=2 \
+            "${split_debug_config[@]}"
 
       - name: Verify Unix diagnostic contains debug information and symbols
         if: inputs.include_csharp_entry_diagnostics && !contains(matrix._.target, 'windows')
@@ -326,42 +336,60 @@ jobs:
               test "$actual_arch" = "$expected_arch"
               echo "architecture=$actual_arch" \
                 >> "$outdir/diagnostic-inspection.txt"
-              dwarf_source="$outdir/$primary"
-              dsym_dwarf_count="$(find "$outdir" \
-                -path '*.dSYM/Contents/Resources/DWARF/*' \
+              # Cargo uplifts the cdylib dSYM through a top-level symlink while
+              # retaining its physical output under deps/. Materialize that
+              # canonical path so the manifest and uploaded artifact use the
+              # same stable name after GitHub strips symlink metadata.
+              dsym_bundle="$outdir/${primary}.dSYM"
+              if [[ -L "$dsym_bundle" ]]; then
+                materialized_dsym="${dsym_bundle}.materialized"
+                rm -rf "$materialized_dsym"
+                cp -R -L "$dsym_bundle" "$materialized_dsym"
+                rm "$dsym_bundle"
+                mv "$materialized_dsym" "$dsym_bundle"
+              fi
+              if [[ ! -d "$dsym_bundle" ]]; then
+                echo "missing packed dSYM bundle: $dsym_bundle" >&2
+                find "$outdir" -maxdepth 3 -name '*.dSYM' -print >&2
+                exit 1
+              fi
+              dsym_dwarf_root="$dsym_bundle/Contents/Resources/DWARF"
+              dsym_dwarf_count="$(find "$dsym_dwarf_root" \
                 -type f -print |
                 wc -l |
                 tr -d ' ')"
-              test "$dsym_dwarf_count" -le 1
-              dsym_dwarf="$(find "$outdir" \
-                -path '*.dSYM/Contents/Resources/DWARF/*' \
-                -type f -print |
-                sed -n '1p')"
-              if [[ -n "$dsym_dwarf" ]]; then
-                dwarf_source="$dsym_dwarf"
-                dylib_uuid="$(dwarfdump --uuid "$outdir/$primary" |
-                  awk '
-                    /^UUID:/ {
-                      arch = $3
-                      gsub(/[()]/, "", arch)
-                      print tolower($2) " " arch
-                    }
-                  ')"
-                dsym_uuid="$(dwarfdump --uuid "$dsym_dwarf" |
-                  awk '
-                    /^UUID:/ {
-                      arch = $3
-                      gsub(/[()]/, "", arch)
-                      print tolower($2) " " arch
-                    }
-                  ')"
-                test -n "$dylib_uuid"
-                test "$dylib_uuid" = "$dsym_uuid"
-                {
-                  echo "dylib_uuid_arch=$dylib_uuid"
-                  echo "dsym_uuid_arch=$dsym_uuid"
-                } >> "$outdir/diagnostic-inspection.txt"
+              if [[ "$dsym_dwarf_count" -ne 1 ]]; then
+                echo \
+                  "expected exactly one packed dSYM DWARF file for $TARGET; found $dsym_dwarf_count" \
+                  >&2
+                find "$dsym_dwarf_root" -type f -print >&2
+                exit 1
               fi
+              dsym_dwarf="$(find "$dsym_dwarf_root" -type f -print |
+                sed -n '1p')"
+              dwarf_source="$dsym_dwarf"
+              dylib_uuid="$(dwarfdump --uuid "$outdir/$primary" |
+                awk '
+                  /^UUID:/ {
+                    arch = $3
+                    gsub(/[()]/, "", arch)
+                    print tolower($2) " " arch
+                  }
+                ')"
+              dsym_uuid="$(dwarfdump --uuid "$dsym_dwarf" |
+                awk '
+                  /^UUID:/ {
+                    arch = $3
+                    gsub(/[()]/, "", arch)
+                    print tolower($2) " " arch
+                  }
+                ')"
+              test -n "$dylib_uuid"
+              test "$dylib_uuid" = "$dsym_uuid"
+              {
+                echo "dylib_uuid_arch=$dylib_uuid"
+                echo "dsym_uuid_arch=$dsym_uuid"
+              } >> "$outdir/diagnostic-inspection.txt"
               dwarfdump --debug-info "$dwarf_source" |
                 awk '
                   !found && /DW_TAG_compile_unit/ {
@@ -435,7 +463,9 @@ jobs:
                 "$primary" \
                 diagnostic-inspection.txt \
                 diagnostic-verification.txt
-              find . -path '*.dSYM/*' -type f -print
+              if [[ "$format" == "mach-o" ]]; then
+                find "./${primary}.dSYM" -type f -print
+              fi
               find . -maxdepth 1 -type f -name '*.dwp' -print
             } |
               sed 's#^\./##' |

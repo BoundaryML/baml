@@ -1,10 +1,12 @@
 # C# atomic-package feasibility evidence
 
-Status: B4 partially executed on 2026-07-17; blocked on all eight
-workflow-produced target artifacts and the required native runner matrix.
-Deterministic unsigned-package normalization and the current Linux x64 local
-baseline are proved. The workflow, fixtures, and contract edits are included
-in the local provenance change; the baseline SHA alone does not contain them.
+Status: B4 partially executed through the first exact-source atomic attempt on
+2026-07-18. All eight shipping targets built, and all six non-Apple paired
+unstripped diagnostics passed, but both Apple diagnostics failed retained
+DWARF verification before upload. The atomic verifier and native consumer
+matrix were therefore skipped. Deterministic unsigned-package normalization
+and the current Linux x64 local baseline are proved; no eight-RID package
+baseline is approved.
 
 ## Target and size authority
 
@@ -290,12 +292,43 @@ build diagnostics. Its normalized package was `60,964,748` bytes with SHA-256
 The real package baseline remains unset until the workflow consumes eight
 distinct immutable release artifacts.
 
+## Remote eight-target builder diagnostic
+
+The already registered language-neutral native builder was dispatched
+directly as a safe non-publishing diagnostic. [Run
+29620985984](https://github.com/BoundaryML/baml/actions/runs/29620985984)
+completed successfully at exact source
+`6d52aff1446c66be440771a14b85512c67214ca1`, attempt 1, release version
+`0.15.0`. All eight jobs, including the three targets marked experimental for
+other upstream uses, concluded `success`; each produced a distinct shipping
+binary, matching SHA-256 sidecar, and run/source/release identity sidecar.
+`TASK/csharp-entry-gates-handoff.md` records every binary's exact size and
+digest.
+
+This direct diagnostic did not request the unstripped native builds and did
+not invoke the C# verifier. It therefore produced no paired debug bundles,
+platform-native debug proof, normalized package, package size/baseline,
+consumer executions, or atomic completeness manifest. It proves that the
+current branch's eight shipping builders can complete on their registered
+runners; it is not B4 evidence for an atomic package and does not unblock C6.
+
+The first exact-source atomic attempt, [run
+29626183183](https://github.com/BoundaryML/baml/actions/runs/29626183183),
+used tag and source SHA
+`9d29c01928df7ce726c49286a3067129fc039115`. Its immutable plan and all six
+non-Apple shipping/diagnostic producers passed. Both Apple shipping and
+diagnostic builds also completed, but their diagnostic verification failed
+because the build left Cargo's macOS debug layout at the documented
+`split-debuginfo=unpacked` default while the immutable bundle contract accepts
+the dylib or one UUID-matched `.dSYM`. The diagnostic uploads and downstream
+atomic verifier were correctly skipped. No B4 or C6 promotion is claimed.
+
 ## Remaining closure
 
-B4 remains blocked, not passed. An authorized maintainer must execute the
-reviewed, committed non-publishing workflow through its exact-source tag
-bootstrap (or normal manual dispatch after the workflow reaches the default
-branch) and record its immutable outputs. That run must:
+B4 remains blocked, not passed. Neither the builder-only run nor the failed
+first atomic attempt satisfies the atomic package contract. The locally
+validated Apple-only packed-debug repair must be committed and executed from
+a new exact-source bootstrap tag; a passing attempt must:
 
 1. supply all eight real immutable artifacts from the frozen release plan;
 2. inspect format, architecture, minimum OS/libc, dependencies, RPATH, exports,
