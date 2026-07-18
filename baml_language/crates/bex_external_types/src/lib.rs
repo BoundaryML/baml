@@ -35,4 +35,4 @@ pub use bex_resource_types::{
 };
 pub use bex_str::BexStr;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
-pub use host_return::{HostReturnTypeError, validate_host_return};
+pub use host_return::{HostReturnTypeError, validate_host_return, value_satisfies_json};

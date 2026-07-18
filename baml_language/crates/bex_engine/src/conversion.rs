@@ -7,7 +7,9 @@
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
-use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata};
+use bex_external_types::{
+    BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata, value_satisfies_json,
+};
 use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError};
@@ -1685,8 +1687,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
-        //   - `EnumVariant`: a single variant can't be checked (the validator
-        //     only checks enum identity).
         //   - `Future`: the host cannot produce a VM future, and nothing
         //     validates one.
         RuntimeTy::Void { .. }
@@ -1694,7 +1694,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
-        | RuntimeTy::EnumVariant(..)
         | RuntimeTy::Future(..) => true,
 
         // Container positions are validated structurally; recurse so a nested
@@ -1716,6 +1715,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Uint8Array { .. }
         | RuntimeTy::Literal(..)
         | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
         | RuntimeTy::Media(..)
         | RuntimeTy::Function { .. } => false,
 
@@ -1784,10 +1784,16 @@ fn find_matching_member(
             return Ok(member.clone());
         }
     }
+    // A singleton enum-variant arm likewise outranks its broad enum type.
+    for member in members {
+        if matches!(member, RuntimeTy::EnumVariant(..)) && value_matches_type(value, member) {
+            return Ok(member.clone());
+        }
+    }
     for member in members {
         if !matches!(
             member,
-            RuntimeTy::Literal(..) | RuntimeTy::BuiltinUnknown { .. }
+            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) | RuntimeTy::BuiltinUnknown { .. }
         ) && value_matches_type(value, member)
         {
             return Ok(member.clone());
@@ -1912,6 +1918,20 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
         }
+        (
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            },
+            RuntimeTy::EnumVariant(tn, expected_variant, _),
+        ) => {
+            type_name_matches_external_name(enum_name, tn)
+                && variant_name == expected_variant.as_str()
+        }
+        (
+            BexExternalValue::Adt(BexExternalAdt::Media(media)),
+            RuntimeTy::Media(expected_kind, _),
+        ) => *expected_kind == baml_type::MediaKind::Generic || media.kind == *expected_kind,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
         (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
@@ -1920,7 +1940,17 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
                     && value_matches_type(value, member)
             })
         }
+        (BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name, _))
+            if name.display_name().as_str() == "baml.json.json" =>
+        {
+            false
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
+        (value, RuntimeTy::TypeAlias(name, _))
+            if name.display_name().as_str() == "baml.json.json" =>
+        {
+            value_satisfies_json(value)
+        }
         // Handle nested unions (including nullable `T | null`) in the type.
         (value, RuntimeTy::Union(members, _)) => {
             members.iter().any(|m| value_matches_type(value, m))
@@ -1994,6 +2024,9 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
         | (T::Null { .. }, T::Null { .. })
         | (T::Bigint { .. }, T::Bigint { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        (T::Media(wire, _), T::Media(expected, _)) => {
+            *expected == baml_type::MediaKind::Generic || wire == expected
+        }
         // Distinct primitives: a positive mismatch.
         (
             T::Int { .. }
@@ -2042,6 +2075,18 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
         | (T::Bool { .. }, T::Bool { .. })
         | (T::Null { .. }, T::Null { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        // Attribute-free marker/opaque types still have exact structural
+        // identity. These must participate in selected-union membership just
+        // like primitives; in particular, a host-selected `type` arm carries
+        // `RuntimeTy::Type` on both sides of the ABI.
+        (T::BuiltinUnknown { .. }, T::BuiltinUnknown { .. })
+        | (T::RustType { .. }, T::RustType { .. })
+        | (T::Type { .. }, T::Type { .. })
+        | (T::Resource { .. }, T::Resource { .. })
+        | (T::PromptAst { .. }, T::PromptAst { .. })
+        | (T::Void { .. }, T::Void { .. })
+        | (T::Never { .. }, T::Never { .. }) => true,
+        (T::Media(left, _), T::Media(right, _)) => left == right,
         (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
         (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
         (
@@ -2068,6 +2113,11 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
                     .all(|(left, right)| runtime_ty_structurally_equal(left, right))
         }
         (T::Enum(left, _), T::Enum(right, _)) => left == right,
+        (
+            T::EnumVariant(left_name, left_variant, _),
+            T::EnumVariant(right_name, right_variant, _),
+        ) => left_name == right_name && left_variant == right_variant,
+        (T::TypeAlias(left, _), T::TypeAlias(right, _)) => left == right,
         (T::Union(left, _), T::Union(right, _)) => {
             left.len() == right.len()
                 && left.iter().all(|left_member| {
@@ -2401,6 +2451,32 @@ impl BexEngine {
                 )),
             },
 
+            RuntimeTy::EnumVariant(tn, expected_variant, _) => match value {
+                BexExternalValue::Variant {
+                    enum_name,
+                    variant_name,
+                } => {
+                    if !type_name_matches_external_name(enum_name, tn) {
+                        return Err(format!(
+                            "host callable returned a variant of enum `{enum_name}` where enum \
+                             `{tn}` was declared",
+                        ));
+                    }
+                    if variant_name != expected_variant.as_str() {
+                        return Err(format!(
+                            "host callable returned enum variant `{enum_name}.{variant_name}` \
+                             where `{tn}.{expected_variant}` was declared",
+                        ));
+                    }
+                    Ok(())
+                }
+                other => Err(format!(
+                    "host callable returned `{}` where enum variant \
+                     `{tn}.{expected_variant}` was declared",
+                    other.type_name(),
+                )),
+            },
+
             // A function-typed return position is not supported yet. The host
             // call result is materialized by `convert_external_to_vm_value`
             // *without* a declared type, so a returned `HostValue` (the only
@@ -2513,9 +2589,21 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 Object::Variant(variant) => {
                     let enum_obj = unsafe { variant.enm.get() };
                     if let Object::Enum(enm) = enum_obj {
+                        let actual_variant = enm.variants.get(variant.index).map(|v| v.name.as_str());
                         members
                             .iter()
-                            .find(|m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name))
+                            .find(|m| {
+                                matches!(
+                                    (m, actual_variant),
+                                    (RuntimeTy::EnumVariant(tn, expected, _), Some(actual))
+                                        if *tn == enm.name && expected.as_str() == actual
+                                )
+                            })
+                            .or_else(|| {
+                                members.iter().find(
+                                    |m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name),
+                                )
+                            })
                     } else {
                         None
                     }
@@ -2965,7 +3053,12 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
 
 #[cfg(test)]
 mod union_container_selection_tests {
-    use baml_type::{Freshness, TyAttr};
+    use std::sync::Arc;
+
+    use baml_builtins2::{MediaContent, MediaValue};
+    use baml_type::{Freshness, MediaKind, Name, TyAttr, TypeName};
+    use bex_heap::{BexHeap, Tlab};
+    use bex_vm_types::{EnumVariant, Object, Value, types::Enum};
 
     use super::*;
 
@@ -2997,6 +3090,67 @@ mod union_container_selection_tests {
         )
     }
 
+    fn media_ty(kind: MediaKind) -> RuntimeTy {
+        RuntimeTy::Media(kind, TyAttr::default())
+    }
+
+    fn media_value(kind: MediaKind) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
+            kind,
+            MediaContent::Url {
+                url: "https://example.test/asset".to_string(),
+                base64_data: None,
+            },
+            None,
+        ))))
+    }
+
+    fn json_ty() -> RuntimeTy {
+        RuntimeTy::TypeAlias(
+            TypeName::from_dotted_path("baml.json.json"),
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn canonical_json_alias_matches_values_and_selected_union_arms() {
+        let json = json_ty();
+        let image = media_ty(MediaKind::Image);
+        let mut entries = indexmap::IndexMap::new();
+        entries.insert("value".to_string(), BexExternalValue::Int(7));
+        let object = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries,
+        };
+        assert!(value_matches_type(&object, &json));
+        assert!(!value_matches_type(
+            &BexExternalValue::Float(f64::INFINITY),
+            &json
+        ));
+        let forged = BexExternalValue::union(
+            BexExternalValue::String("json-shaped payload".into()),
+            [RuntimeTy::bigint(), RuntimeTy::string()],
+            RuntimeTy::bigint(),
+        );
+        assert!(!value_matches_type(&forged, &json));
+
+        let declared = RuntimeTy::union([json.clone(), image]);
+        let selected = BexExternalValue::union(
+            object,
+            [json.clone(), media_ty(MediaKind::Image)],
+            json.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected JSON union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &json
+        ));
+    }
+
     #[test]
     fn literal_matching_checks_value_and_prefers_exact_literal() {
         let draft = string_literal("draft");
@@ -3008,6 +3162,77 @@ mod union_container_selection_tests {
             find_matching_member(&value, &[RuntimeTy::string(), draft.clone()]).unwrap(),
             draft
         );
+    }
+
+    #[test]
+    fn enum_variant_matching_checks_value_and_prefers_exact_variant() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let sad = RuntimeTy::EnumVariant(mood.clone(), Name::new("SAD"), TyAttr::default());
+        let broad = RuntimeTy::Enum(mood.clone(), TyAttr::default());
+        let value = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+
+        assert!(value_matches_type(&value, &happy));
+        assert!(!value_matches_type(&value, &sad));
+        assert_eq!(
+            find_matching_member(&value, &[broad, sad, happy.clone()]).unwrap(),
+            happy
+        );
+    }
+
+    #[test]
+    fn vm_enum_variant_selection_prefers_exact_variant_then_broad_enum() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
+            name: mood.clone(),
+            variants: vec![
+                EnumVariant {
+                    name: "HAPPY".to_string(),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+                EnumVariant {
+                    name: "SAD".to_string(),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+            ],
+            description: None,
+            alias: None,
+            ty_attr: TyAttr::default(),
+        })));
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let broad = RuntimeTy::Enum(mood, TyAttr::default());
+        let members = [broad.clone(), happy.clone()];
+
+        let happy_value = Value::object(tlab.alloc_variant(enum_ptr, 0));
+        assert_eq!(
+            find_matching_union_member(happy_value, &members),
+            Some(&happy)
+        );
+
+        let sad_value = Value::object(tlab.alloc_variant(enum_ptr, 1));
+        assert_eq!(
+            find_matching_union_member(sad_value, &members),
+            Some(&broad)
+        );
+    }
+
+    #[test]
+    fn enum_variant_selected_arm_has_exact_structural_identity() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let another_happy =
+            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let sad = RuntimeTy::EnumVariant(mood, Name::new("SAD"), TyAttr::default());
+        assert!(runtime_ty_structurally_equal(&happy, &another_happy));
+        assert!(!runtime_ty_structurally_equal(&happy, &sad));
     }
 
     #[test]
@@ -3050,6 +3275,70 @@ mod union_container_selection_tests {
             panic!("selected union metadata was lost")
         };
         assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn media_matching_is_kind_specific_and_generic_accepts_every_kind() {
+        let image = media_value(MediaKind::Image);
+        assert!(value_matches_type(&image, &media_ty(MediaKind::Image)));
+        assert!(value_matches_type(&image, &media_ty(MediaKind::Generic)));
+        assert!(!value_matches_type(&image, &media_ty(MediaKind::Audio)));
+
+        assert!(runtime_ty_compatible(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Generic)
+        ));
+        assert!(!runtime_ty_compatible(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Audio)
+        ));
+        assert!(runtime_ty_structurally_equal(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Image)
+        ));
+        assert!(!runtime_ty_structurally_equal(
+            &media_ty(MediaKind::Image),
+            &media_ty(MediaKind::Generic)
+        ));
+    }
+
+    #[test]
+    fn host_selected_media_arm_survives_argument_coercion() {
+        let image = media_ty(MediaKind::Image);
+        let audio = media_ty(MediaKind::Audio);
+        let declared = RuntimeTy::union([image.clone(), audio.clone()]);
+        let selected = BexExternalValue::union(
+            media_value(MediaKind::Image),
+            [image.clone(), audio],
+            image.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected media union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &image
+        ));
+    }
+
+    #[test]
+    fn host_selected_metatype_arm_survives_argument_coercion() {
+        let metatype = RuntimeTy::type_type();
+        let declared = RuntimeTy::union([metatype.clone(), RuntimeTy::string()]);
+        let selected = BexExternalValue::union(
+            BexExternalValue::Adt(BexExternalAdt::Type(RuntimeTy::int())),
+            [metatype.clone(), RuntimeTy::string()],
+            metatype.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected metatype union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &metatype
+        ));
     }
 
     #[test]

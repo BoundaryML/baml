@@ -43,6 +43,8 @@ use baml_type::{Literal, RuntimeTy, TypeName};
 
 use crate::BexExternalValue;
 
+const BAML_JSON_JSON: &str = "baml.json.json";
+
 /// A host callable returned a value whose runtime shape cannot inhabit the
 /// declared return type.
 ///
@@ -110,6 +112,10 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             }
             _ => members.iter().any(|m| value_satisfies_ty(value, m)),
         },
+
+        RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() == BAML_JSON_JSON => {
+            value_satisfies_json(value)
+        }
 
         // A `Union`-wrapped value against a non-union declared type: validate
         // the inner value against the declared type.
@@ -179,6 +185,16 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             }
             _ => false,
         },
+        RuntimeTy::EnumVariant(tn, expected_variant, _) => match value {
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            } => {
+                type_name_matches_external_name(enum_name, tn)
+                    && variant_name == expected_variant.as_str()
+            }
+            _ => false,
+        },
 
         RuntimeTy::Media(..) => matches!(
             value,
@@ -200,6 +216,34 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // appear as concrete host-callable return types in practice.
         _ => true,
     }
+}
+
+/// Whether an external value is exactly in the recursive `baml.json.json`
+/// algebra. BAML extensions such as bigint, bytes, classes, enums, media,
+/// handles, and non-finite floats are intentionally rejected.
+pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
+    fn recurse(value: &BexExternalValue, depth: usize) -> bool {
+        if depth > 256 {
+            return false;
+        }
+        match value {
+            BexExternalValue::Null
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::String(_) => true,
+            BexExternalValue::Float(value) => value.is_finite(),
+            BexExternalValue::Array { items, .. } => {
+                items.iter().all(|item| recurse(item, depth + 1))
+            }
+            BexExternalValue::Map { entries, .. } => {
+                entries.values().all(|item| recurse(item, depth + 1))
+            }
+            BexExternalValue::Union { .. } => false,
+            _ => false,
+        }
+    }
+
+    recurse(value, 0)
 }
 
 /// Whether the value-tree class/enum name string matches the declared
@@ -226,6 +270,58 @@ mod tests {
 
     fn int_ty() -> RuntimeTy {
         RuntimeTy::int()
+    }
+
+    fn json_ty() -> RuntimeTy {
+        RuntimeTy::TypeAlias(
+            TypeName::from_dotted_path(BAML_JSON_JSON),
+            TyAttr::default(),
+        )
+    }
+
+    #[test]
+    fn canonical_json_alias_accepts_only_the_json_value_algebra() {
+        let mut nested = IndexMap::new();
+        nested.insert(
+            "items".to_string(),
+            BexExternalValue::Array {
+                element_type: RuntimeTy::unknown(),
+                items: vec![
+                    BexExternalValue::Null,
+                    BexExternalValue::Bool(true),
+                    BexExternalValue::Int(7),
+                    BexExternalValue::Float(1.5),
+                    BexExternalValue::String("ok".into()),
+                ],
+            },
+        );
+        let valid = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: nested,
+        };
+        assert!(validate_host_return(&valid, &json_ty()).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Float(f64::NAN), &json_ty()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Bigint(1.into()), &json_ty()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Uint8Array(vec![1]), &json_ty()).is_err());
+        assert!(
+            validate_host_return(
+                &BexExternalValue::Instance {
+                    class_name: "JsonLooking".to_string(),
+                    type_args: vec![],
+                    fields: IndexMap::new(),
+                },
+                &json_ty(),
+            )
+            .is_err()
+        );
+
+        let forged = BexExternalValue::union(
+            BexExternalValue::String("json-shaped payload".into()),
+            [RuntimeTy::bigint(), RuntimeTy::string()],
+            RuntimeTy::bigint(),
+        );
+        assert!(validate_host_return(&forged, &json_ty()).is_err());
     }
 
     #[test]
@@ -280,6 +376,62 @@ mod tests {
         assert!(validate_host_return(&BexExternalValue::Int(1), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::String("x".into()), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::Bool(true), &union).is_err());
+    }
+
+    #[test]
+    fn enum_variant_requires_exact_enum_and_variant() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let value = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+        assert!(validate_host_return(&value, &happy).is_ok());
+
+        let wrong_variant = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "SAD".to_string(),
+        };
+        assert!(validate_host_return(&wrong_variant, &happy).is_err());
+
+        let wrong_enum = BexExternalValue::Variant {
+            enum_name: "user.callbacks.OtherMood".to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+        assert!(validate_host_return(&wrong_enum, &happy).is_err());
+
+        let nested = RuntimeTy::list(happy.clone());
+        let nested_valid = BexExternalValue::Array {
+            element_type: happy.clone(),
+            items: vec![value],
+        };
+        assert!(validate_host_return(&nested_valid, &nested).is_ok());
+        let nested_invalid = BexExternalValue::Array {
+            element_type: happy,
+            items: vec![wrong_variant],
+        };
+        assert!(validate_host_return(&nested_invalid, &nested).is_err());
+
+        let nested_union = RuntimeTy::list(RuntimeTy::union([
+            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default()),
+            RuntimeTy::int(),
+        ]));
+        let nested_union_valid = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Variant {
+                enum_name: mood.to_string(),
+                variant_name: "HAPPY".to_string(),
+            }],
+        };
+        assert!(validate_host_return(&nested_union_valid, &nested_union).is_ok());
+        let nested_union_invalid = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Variant {
+                enum_name: mood.to_string(),
+                variant_name: "SAD".to_string(),
+            }],
+        };
+        assert!(validate_host_return(&nested_union_invalid, &nested_union).is_err());
     }
 
     #[test]
