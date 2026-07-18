@@ -87,6 +87,68 @@ func TestHostCallablePrimitiveAndMultipleArguments(t *testing.T) {
 	}
 }
 
+func optionalArgsCallback(
+	x int64,
+	options baml_sdk.CallbackIntWithYIntWithZIntOptions,
+) int64 {
+	return x*100 + options.Y.Or(8)*10 + options.Z.Or(9)
+}
+
+func TestHostCallableOptionalArguments(t *testing.T) {
+	ctx := context.Background()
+
+	unset, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllUnset(ctx, optionalArgsCallback, 5)
+	if err != nil || !reflect.DeepEqual(unset, []int64{589}) {
+		t.Fatalf("all-unset optional callback = %#v, %v; want [589]", unset, err)
+	}
+
+	partial, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsPartiallySet(ctx, optionalArgsCallback, 5)
+	if err != nil || !reflect.DeepEqual(partial, []int64{529, 583}) {
+		t.Fatalf("partially-set optional callback = %#v, %v; want [529 583]", partial, err)
+	}
+
+	all, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllSet(ctx, optionalArgsCallback, 5)
+	if err != nil || !reflect.DeepEqual(all, []int64{523}) {
+		t.Fatalf("all-set optional callback = %#v, %v; want [523]", all, err)
+	}
+}
+
+func TestHostCallableNullableOptionalDistinguishesAllThreeStates(t *testing.T) {
+	callback := func(x int64, options baml_sdk.CallbackIntWithValueOptionalIntOptions) int64 {
+		value, supplied := options.Value.Get()
+		if !supplied {
+			return x * 100
+		}
+		if value == nil {
+			return x*100 + 1
+		}
+		return x*100 + *value
+	}
+	got, err := baml_sdk.HostCallableTestsCallCallbackWithNullableOptionalStates(
+		context.Background(),
+		callback,
+		5,
+	)
+	if err != nil || !reflect.DeepEqual(got, []int64{500, 501, 507}) {
+		t.Fatalf("nullable optional states = %#v, %v; want [500 501 507]", got, err)
+	}
+}
+
+func TestHostCallableOptionalNamesAvoidGeneratedAndProjectionCollisions(t *testing.T) {
+	callback := func(options baml_sdk.CallbackWithCtxIntWithErrIntWithResultIntWithZeroIntWithBootstrapIntWithInitIntWithMainIntWithFooBarIntWithFooBarIntOptions) int64 {
+		return options.Ctx.Or(0) + options.Err.Or(0) + options.Result.Or(0) +
+			options.Zero.Or(0) + options.Bootstrap.Or(0) + options.Init.Or(0) +
+			options.Main.Or(0) + options.FooBar.Or(0)*10 + options.FooBar_.Or(0)
+	}
+	got, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalNameEdges(
+		context.Background(),
+		callback,
+	)
+	if err != nil || got != 117 {
+		t.Fatalf("optional callback name edges = %d, %v; want 117", got, err)
+	}
+}
+
 func TestHostCallableClassArgument(t *testing.T) {
 	person := baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 37}
 	got, err := baml_sdk.HostCallableTestsCallWithClassCallback(

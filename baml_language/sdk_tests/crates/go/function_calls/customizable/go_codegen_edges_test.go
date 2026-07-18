@@ -14,6 +14,8 @@ import (
 )
 
 var (
+	_ func(context.Context, func(int64, baml_sdk.CallbackIntWithYIntWithZIntOptions) int64, int64) ([]int64, error) = baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllUnset
+	_ func(context.Context, func(int64, baml_sdk.CallbackIntWithValueOptionalIntOptions) int64, int64) ([]int64, error) = baml_sdk.HostCallableTestsCallCallbackWithNullableOptionalStates
 	_ func(context.Context, int64, ...baml_sdk.OptionalArgsProbeOption) ([]*int64, error)                  = baml_sdk.OptionalArgsProbe
 	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                        = baml_sdk.WithOptionalArgsProbeOpt1
 	_ func(*int64) baml_sdk.OptionalArgsProbeOption                                                        = baml_sdk.WithOptionalArgsProbeOpt2

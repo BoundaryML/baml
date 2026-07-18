@@ -104,6 +104,40 @@ function call_callback_with_optional_args_all_set(callback: (x: int, y?: int, z?
     [callback(x, y = 2, z = 3)]
 }
 
+// An optional parameter whose value is itself nullable has three distinct
+// states at the host boundary: omitted, supplied null, and supplied value.
+function call_callback_with_nullable_optional_states(callback: (x: int, value?: int?) -> int, x: int) -> int[] {
+    [callback(x), callback(x, value = null), callback(x, value = 7)]
+}
+
+// Names resembling generator locals and names that normalize to the same Go
+// spelling must retain their exact wire identity in the generated adapter.
+function call_callback_with_optional_name_edges(
+    callback: (
+        ctx?: int,
+        err?: int,
+        result?: int,
+        zero?: int,
+        bootstrap?: int,
+        init?: int,
+        main?: int,
+        foo_bar?: int,
+        fooBar?: int,
+    ) -> int,
+) -> int {
+    callback(
+        ctx = 1,
+        err = 2,
+        result = 3,
+        zero = 4,
+        bootstrap = 5,
+        init = 6,
+        main = 7,
+        foo_bar = 8,
+        fooBar = 9,
+    )
+}
+
 // Loop that invokes the callback N times — exercises N round-trips
 // through SysOp::BamlHostCallHostValue.
 function call_repeatedly(callback: (int) -> string, n: int) -> string[] {

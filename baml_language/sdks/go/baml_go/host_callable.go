@@ -12,11 +12,36 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// HostCallArguments is the validated engine-to-Go callback argument split.
+// Required arguments retain declared positional order. Supplied optional
+// arguments are keyed by their canonical BAML parameter name; omitted optional
+// arguments are absent.
+type HostCallArguments struct {
+	required []Value
+	optional map[string]Value
+}
+
+// RequiredCount returns the number of required positional arguments.
+func (arguments HostCallArguments) RequiredCount() int { return len(arguments.required) }
+
+// Required returns a required positional argument. Generated adapters validate
+// the count before indexing.
+func (arguments HostCallArguments) Required(index int) Value { return arguments.required[index] }
+
+// Optional returns a supplied optional argument by its canonical BAML name.
+func (arguments HostCallArguments) Optional(name string) (Value, bool) {
+	value, ok := arguments.optional[name]
+	return value, ok
+}
+
+// OptionalCount returns the number of supplied optional arguments.
+func (arguments HostCallArguments) OptionalCount() int { return len(arguments.optional) }
+
 // HostCallableFunc is the wire-level adapter implemented by generated callback
-// codecs. Values are already decoded from the canonical BAML callback argument
-// list; the returned Input is validated against the callback's declared return
-// type by the BAML runtime.
-type HostCallableFunc func([]Value) (Input, error)
+// codecs. Arguments are already validated and partitioned according to the
+// canonical BAML callback calling convention; the returned Input is validated
+// against the callback's declared return type by the BAML runtime.
+type HostCallableFunc func(HostCallArguments) (Input, error)
 
 // HostCallableArityError reports malformed runtime dispatch without requiring
 // generated packages to import formatting helpers solely for adapter guards.
@@ -28,6 +53,18 @@ func HostCallableArityError(expected, actual int) error {
 // generated decoder rejected the runtime payload.
 func HostCallableArgumentError(index int, err error) error {
 	return fmt.Errorf("decode BAML host-call argument %d: %w", index, err)
+}
+
+// HostCallableOptionalArgumentError identifies a supplied named callback
+// argument whose generated decoder rejected the runtime payload.
+func HostCallableOptionalArgumentError(name string, err error) error {
+	return fmt.Errorf("decode BAML host-call optional argument %q: %w", name, err)
+}
+
+// HostCallableOptionalCountError reports optional names outside the generated
+// callback contract without exposing the runtime's internal argument map.
+func HostCallableOptionalCountError(expected, actual int) error {
+	return fmt.Errorf("BAML host callable recognized %d supplied optional arguments, got %d", expected, actual)
 }
 
 type hostValue struct {
@@ -134,21 +171,41 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte) {
 		return
 	}
 
-	values := make([]Value, len(call.Args))
+	required := make([]Value, 0, len(call.Args))
+	optional := make(map[string]Value)
+	seenOptional := false
 	for index, argument := range call.Args {
 		if argument == nil || argument.Value == nil {
 			completeHostCallFailure(callID, fmt.Errorf("BAML host-call argument %d is empty", index), "")
 			return
 		}
-		if argument.IsOptionalArg || argument.ArgName != "" {
-			completeHostCallFailure(callID, fmt.Errorf("BAML host-call argument %d is not required positional", index), "")
+		value := Value{value: argument.Value, owner: owner}
+		if argument.IsOptionalArg {
+			seenOptional = true
+			if argument.ArgName == "" {
+				completeHostCallFailure(callID, fmt.Errorf("BAML host-call optional argument %d has no name", index), "")
+				return
+			}
+			if _, duplicate := optional[argument.ArgName]; duplicate {
+				completeHostCallFailure(callID, fmt.Errorf("BAML host-call optional argument %q is duplicated", argument.ArgName), "")
+				return
+			}
+			optional[argument.ArgName] = value
+			continue
+		}
+		if argument.ArgName != "" {
+			completeHostCallFailure(callID, fmt.Errorf("BAML host-call required argument %d unexpectedly has name %q", index, argument.ArgName), "")
 			return
 		}
-		values[index] = Value{value: argument.Value, owner: owner}
+		if seenOptional {
+			completeHostCallFailure(callID, fmt.Errorf("BAML host-call required argument %d follows optional arguments", index), "")
+			return
+		}
+		required = append(required, value)
 	}
 
 	handedToAdapter = true
-	go runHostCall(callID, callable, values, owner)
+	go runHostCall(callID, callable, HostCallArguments{required: required, optional: optional}, owner)
 }
 
 func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
@@ -163,7 +220,7 @@ func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
 	return ownOutboundHandleKeys(allHandles)
 }
 
-func runHostCall(callID uint32, callable HostCallableFunc, values []Value, owner *resultOwner) {
+func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArguments, owner *resultOwner) {
 	finished := false
 	defer releaseResultOwner(owner)
 	defer func() {
@@ -182,7 +239,7 @@ func runHostCall(callID uint32, callable HostCallableFunc, values []Value, owner
 		// remain suspended forever.
 		completeHostCallFailure(callID, errors.New("Go host callable exited without returning"), string(debug.Stack()))
 	}()
-	result, err := callable(values)
+	result, err := callable(arguments)
 	// Generated adapters have finished decoding every argument, cloning any
 	// media handle that escapes into a typed Go value. Release the original
 	// engine-owned argument handles deterministically before completing.

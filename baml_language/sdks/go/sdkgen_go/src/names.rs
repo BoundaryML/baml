@@ -15,7 +15,7 @@ use baml_codegen_types::{Name, Symbol, SymbolPool};
 use crate::{
     packages::GoPackages,
     rendering::is_protected_go_identifier,
-    types::{GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
+    types::{GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
 };
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -81,6 +81,7 @@ pub(crate) enum BamlWireName {
     Key(baml_base::Name),
     /// Synthesized Go-only declarations have no independent BAML wire name.
     StructuralUnion,
+    StructuralCallback,
 }
 
 impl fmt::Display for BamlWireName {
@@ -90,6 +91,7 @@ impl fmt::Display for BamlWireName {
             Self::Method { owner, method } => write!(f, "{owner}.{method}"),
             Self::Key(name) => write!(f, "{name}"),
             Self::StructuralUnion => f.write_str("<structural union>"),
+            Self::StructuralCallback => f.write_str("<structural callback>"),
         }
     }
 }
@@ -292,6 +294,22 @@ impl GoScope {
 pub(crate) struct GoNames {
     allocations: HashMap<NameRequest, GoName>,
     unions: BTreeMap<(baml_base::Name, GoUnionKey), GoUnionNames>,
+    callback_options: BTreeMap<(baml_base::Name, GoFunctionKey), GoCallbackOptionNames>,
+}
+
+pub(crate) struct GoCallbackOptionNames {
+    type_name: GoName,
+    fields: BTreeMap<baml_base::Name, GoName>,
+}
+
+impl GoCallbackOptionNames {
+    pub(crate) fn type_name(&self) -> &GoName {
+        &self.type_name
+    }
+
+    pub(crate) fn field(&self, name: &baml_base::Name) -> &GoName {
+        &self.fields[name]
+    }
 }
 
 pub(crate) struct GoUnionNames {
@@ -471,6 +489,7 @@ impl GoNames {
             &wire_overrides,
         );
         names.allocate_unions(packages, projection);
+        names.allocate_callback_options(packages, projection);
         names
     }
 
@@ -491,6 +510,16 @@ impl GoNames {
         self.unions
             .get(&(package.clone(), key.clone()))
             .expect("typed union name was not registered during allocation")
+    }
+
+    pub(crate) fn callback_options(
+        &self,
+        package: &baml_base::Name,
+        key: &GoFunctionKey,
+    ) -> &GoCallbackOptionNames {
+        self.callback_options
+            .get(&(package.clone(), key.clone()))
+            .expect("callback option names were not registered during allocation")
     }
 
     #[cfg(test)]
@@ -567,6 +596,7 @@ impl GoNames {
         Self {
             allocations,
             unions: BTreeMap::new(),
+            callback_options: BTreeMap::new(),
         }
     }
 
@@ -693,6 +723,101 @@ impl GoNames {
             }
         }
     }
+
+    fn allocate_callback_options(
+        &mut self,
+        packages: &GoPackages,
+        projection: &GoTypeProjection<'_>,
+    ) {
+        let mut used = BTreeMap::<GoPackageName, BTreeSet<Box<str>>>::new();
+        for name in self.allocations.values() {
+            used.entry(name.canonical.package.clone())
+                .or_default()
+                .insert(name.canonical.name.clone());
+        }
+        for names in self.unions.values() {
+            let package = names.type_name.canonical.package.clone();
+            let package_used = used.entry(package).or_default();
+            package_used.insert(names.type_name.canonical.name.clone());
+            package_used.insert(names.variant_name.canonical.name.clone());
+            package_used.insert(names.kind_name.canonical.name.clone());
+            for arm in names.arms.values() {
+                package_used.insert(arm.wrapper.canonical.name.clone());
+                package_used.insert(arm.constructor.canonical.name.clone());
+                package_used.insert(arm.kind_constant.canonical.name.clone());
+            }
+        }
+
+        for package in packages.iter() {
+            let package_name = package.go_name().clone();
+            for key in projection.callback_options_in(package.baml_name()) {
+                let mut base = callback_options_component(key, self);
+                let package_used = used.entry(package_name.clone()).or_default();
+                while package_used.contains(base.as_str()) {
+                    base.push('_');
+                }
+                package_used.insert(base.clone().into());
+                let synthetic = |value: String, wire: BamlWireName| GoName {
+                    canonical: GoIdent::new(package_name.clone(), value),
+                    wire,
+                };
+                let mut field_used = BTreeSet::<String>::new();
+                let mut fields = BTreeMap::new();
+                for param in key.optional_params() {
+                    let wire_name = param
+                        .name()
+                        .expect("optional callback parameter must have a wire name")
+                        .clone();
+                    let mut projected = String::new();
+                    push_upper_component(&mut projected, &wire_name);
+                    if projected.is_empty() {
+                        projected.push_str("Value");
+                    }
+                    while is_go_keyword(&projected)
+                        || is_protected_go_identifier(&projected)
+                        || field_used.contains(&projected)
+                    {
+                        projected.push('_');
+                    }
+                    field_used.insert(projected.clone());
+                    fields.insert(
+                        wire_name.clone(),
+                        synthetic(projected, BamlWireName::Key(wire_name)),
+                    );
+                }
+                self.callback_options.insert(
+                    (package.baml_name().clone(), key.clone()),
+                    GoCallbackOptionNames {
+                        type_name: synthetic(base, BamlWireName::StructuralCallback),
+                        fields,
+                    },
+                );
+            }
+        }
+    }
+}
+
+fn callback_options_component(key: &GoFunctionKey, names: &GoNames) -> String {
+    let mut base = String::from("Callback");
+    for param in key.params() {
+        match param.mode() {
+            GoFunctionParamMode::Required => {
+                base.push_str(&union_type_component(param.ty(), names));
+            }
+            GoFunctionParamMode::Optional => {
+                base.push_str("With");
+                push_upper_component(
+                    &mut base,
+                    param
+                        .name()
+                        .expect("optional callback parameter must have a name"),
+                );
+                base.push_str(&union_type_component(param.ty(), names));
+            }
+        }
+    }
+    base.push_str("Options");
+    base
 }
 
 fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
@@ -823,7 +948,14 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
         GoTy::Function(key) => {
             hash.byte(17);
             for param in key.params() {
-                hash_go_ty(hash, param);
+                hash.byte(match param.mode() {
+                    GoFunctionParamMode::Required => 0,
+                    GoFunctionParamMode::Optional => 1,
+                });
+                if let Some(name) = param.name() {
+                    hash.component(name.as_str());
+                }
+                hash_go_ty(hash, param.ty());
             }
             hash.byte(u8::from(key.ret().is_some()));
             if let Some(ret) = key.ret() {

@@ -620,7 +620,13 @@ fn collect_projected_codec_types(
                 .callbacks
                 .insert((owner_package.clone(), key.clone()));
             for param in key.params() {
-                collect_projected_codec_types(param, owner_package, pool, projection, collected);
+                collect_projected_codec_types(
+                    param.ty(),
+                    owner_package,
+                    pool,
+                    projection,
+                    collected,
+                );
             }
             if let Some(ret) = key.ret() {
                 collect_projected_codec_types(ret, owner_package, pool, projection, collected);
@@ -995,11 +1001,14 @@ fn supported_function_argument(
     projection: &GoTypeProjection<'_>,
 ) -> bool {
     match projection.project(ty) {
-        GoTy::Function(key) => key
-            .params()
-            .iter()
-            .chain(key.ret())
-            .all(|part| supported_go_type(part, wireable_classes)),
+        GoTy::Function(key) => {
+            key.params()
+                .iter()
+                .all(|param| supported_go_type(param.ty(), wireable_classes))
+                && key
+                    .ret()
+                    .is_none_or(|ret| supported_go_type(ret, wireable_classes))
+        }
         projected => supported_go_type(&projected, wireable_classes),
     }
 }
@@ -1575,7 +1584,7 @@ fn add_projected_type_imports(
         }
         GoTy::Function(key) => {
             for param in key.params() {
-                add_projected_type_imports(param, context, imports, visited);
+                add_projected_type_imports(param.ty(), context, imports, visited);
             }
             if let Some(ret) = key.ret() {
                 add_projected_type_imports(ret, context, imports, visited);
@@ -1680,12 +1689,22 @@ fn render_callback_go_type(
     current_package: &GoPackageName,
     names: &GoNames,
 ) -> String {
-    let params = key
-        .params()
-        .iter()
-        .map(|param| render_projected_go_type(param, current_baml_package, current_package, names))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let mut params = key
+        .required_params()
+        .map(|param| {
+            render_projected_go_type(param.ty(), current_baml_package, current_package, names)
+        })
+        .collect::<Vec<_>>();
+    if key.has_optional_params() {
+        params.push(
+            names
+                .callback_options(current_baml_package, key)
+                .type_name()
+                .identifier(current_package)
+                .to_string(),
+        );
+    }
+    let params = params.join(", ");
     match (key.ret(), key.throws()) {
         (Some(ret), false) => format!(
             "func({params}) {}",
@@ -1726,7 +1745,9 @@ fn projected_type_uses_bigint(ty: &GoTy) -> bool {
             key.members().iter().any(projected_type_uses_bigint)
         }
         GoTy::Function(key) => {
-            key.params().iter().any(projected_type_uses_bigint)
+            key.params()
+                .iter()
+                .any(|param| projected_type_uses_bigint(param.ty()))
                 || key.ret().is_some_and(projected_type_uses_bigint)
         }
         _ => false,
@@ -2269,7 +2290,9 @@ fn projected_contains_class(ty: &GoTy) -> bool {
             key.members().iter().any(projected_contains_class)
         }
         GoTy::Function(key) => {
-            key.params().iter().any(projected_contains_class)
+            key.params()
+                .iter()
+                .any(|param| projected_contains_class(param.ty()))
                 || key.ret().is_some_and(projected_contains_class)
         }
         _ => false,
@@ -2290,12 +2313,35 @@ fn render_callback_codecs(
     let error = GeneratorIdent::ErrorLocal;
     let callback_error = GeneratorIdent::CallbackErrorLocal;
     let error_type = GeneratorIdent::ErrorType;
+    let options = GeneratorIdent::OptionsParameter;
+    let optional_count = GeneratorIdent::CallbackOptionalCountLocal;
+    let decoded_local = GeneratorIdent::DecodedLocal;
+    let ok_local = GeneratorIdent::UnionOkLocal;
     for (package, key) in &codecs.callback_keys {
         if package != current_baml_package {
             continue;
         }
         let encoder = codecs.callback_ident(package, key);
         let go_type = render_callback_go_type(key, package, current_package, names);
+        if key.has_optional_params() {
+            let option_names = names.callback_options(package, key);
+            let option_type = option_names.type_name().identifier(current_package);
+            let _ = writeln!(out, "type {option_type} struct {{");
+            for param in key.optional_params() {
+                let wire_name = param
+                    .name()
+                    .expect("optional callback parameter must have a wire name");
+                let field = option_names.field(wire_name).identifier(current_package);
+                let field_type =
+                    render_projected_go_type(param.ty(), package, current_package, names);
+                let _ = writeln!(
+                    out,
+                    "\t{field} {runtime}.OptionalArg[{field_type}] `baml:{:?}`",
+                    wire_name.as_str()
+                );
+            }
+            out.push_str("}\n\n");
+        }
         let _ = writeln!(out, "func {encoder}({value} {go_type}) {runtime}.Input {{");
         let _ = writeln!(out, "\tif {value} == nil {{");
         let _ = writeln!(
@@ -2305,28 +2351,82 @@ fn render_callback_codecs(
         out.push_str("\t}\n");
         let _ = writeln!(
             out,
-            "\treturn {runtime}.HostCallable(func({arguments} []{runtime}.Value) ({runtime}.Input, {error_type}) {{"
+            "\treturn {runtime}.HostCallable(func({arguments} {runtime}.HostCallArguments) ({runtime}.Input, {error_type}) {{"
         );
-        let _ = writeln!(out, "\t\tif len({arguments}) != {} {{", key.params().len());
+        let required_count = key.required_params().count();
         let _ = writeln!(
             out,
-            "\t\t\treturn {runtime}.InvalidInput(\"invalid BAML host-call arity\"), {runtime}.HostCallableArityError({}, len({arguments}))",
-            key.params().len()
+            "\t\tif {arguments}.RequiredCount() != {required_count} {{"
+        );
+        let _ = writeln!(
+            out,
+            "\t\t\treturn {runtime}.InvalidInput(\"invalid BAML host-call arity\"), {runtime}.HostCallableArityError({required_count}, {arguments}.RequiredCount())"
         );
         out.push_str("\t\t}\n");
-        let mut decoded = Vec::with_capacity(key.params().len());
-        for (index, param) in key.params().iter().enumerate() {
+        let mut decoded =
+            Vec::with_capacity(required_count + usize::from(key.has_optional_params()));
+        for (index, param) in key.required_params().enumerate() {
             let local = CallbackArgumentIdent::new(index);
             decoded.push(local.to_string());
-            let decoder = projected_output_decoder(param, package, codecs);
+            let decoder = projected_output_decoder(param.ty(), package, codecs);
             let _ = writeln!(
                 out,
-                "\t\t{local}, {error} := {decoder}({arguments}[{index}])"
+                "\t\t{local}, {error} := {decoder}({arguments}.Required({index}))"
             );
             let _ = writeln!(out, "\t\tif {error} != nil {{");
             let _ = writeln!(
                 out,
                 "\t\t\treturn {runtime}.InvalidInput(\"invalid BAML host-call argument\"), {runtime}.HostCallableArgumentError({index}, {error})"
+            );
+            out.push_str("\t\t}\n");
+        }
+        if key.has_optional_params() {
+            let option_names = names.callback_options(package, key);
+            let option_type = option_names.type_name().identifier(current_package);
+            let _ = writeln!(out, "\t\tvar {options} {option_type}");
+            let _ = writeln!(out, "\t\t{optional_count} := 0");
+            for (index, param) in key.optional_params().enumerate() {
+                let wire_name = param
+                    .name()
+                    .expect("optional callback parameter must have a wire name");
+                let field = option_names.field(wire_name).identifier(current_package);
+                let local = CallbackArgumentIdent::new(required_count + index);
+                let decoder = projected_output_decoder(param.ty(), package, codecs);
+                let _ = writeln!(
+                    out,
+                    "\t\tif {local}, {ok_local} := {arguments}.Optional({:?}); {ok_local} {{",
+                    wire_name.as_str()
+                );
+                let _ = writeln!(out, "\t\t\t{decoded_local}, {error} := {decoder}({local})");
+                let _ = writeln!(out, "\t\t\tif {error} != nil {{");
+                let _ = writeln!(
+                    out,
+                    "\t\t\t\treturn {runtime}.InvalidInput(\"invalid BAML host-call optional argument\"), {runtime}.HostCallableOptionalArgumentError({:?}, {error})",
+                    wire_name.as_str()
+                );
+                out.push_str("\t\t\t}\n");
+                let _ = writeln!(
+                    out,
+                    "\t\t\t{options}.{field} = {runtime}.NewOptionalArg({decoded_local})"
+                );
+                let _ = writeln!(out, "\t\t\t{optional_count}++");
+                out.push_str("\t\t}\n");
+            }
+            let _ = writeln!(
+                out,
+                "\t\tif {optional_count} != {arguments}.OptionalCount() {{"
+            );
+            let _ = writeln!(
+                out,
+                "\t\t\treturn {runtime}.InvalidInput(\"unknown BAML host-call optional argument\"), {runtime}.HostCallableOptionalCountError({optional_count}, {arguments}.OptionalCount())"
+            );
+            out.push_str("\t\t}\n");
+            decoded.push(options.to_string());
+        } else {
+            let _ = writeln!(out, "\t\tif {arguments}.OptionalCount() != 0 {{");
+            let _ = writeln!(
+                out,
+                "\t\t\treturn {runtime}.InvalidInput(\"unexpected BAML host-call optional argument\"), {runtime}.HostCallableOptionalCountError(0, {arguments}.OptionalCount())"
             );
             out.push_str("\t\t}\n");
         }
@@ -3128,6 +3228,26 @@ mod tests {
         }
     }
 
+    fn ty_callable_with_modes(
+        params: Vec<(&str, CodegenFunctionParamMode, Ty)>,
+        ret: Ty,
+        throws: Ty,
+    ) -> Ty {
+        Ty::Function {
+            params: params
+                .into_iter()
+                .map(|(name, mode, ty)| CallableParam {
+                    name: Some(BaseName::new(name)),
+                    ty,
+                    mode,
+                })
+                .collect(),
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+            attr: TyAttr::default(),
+        }
+    }
+
     fn origin() -> Origin {
         Origin {
             source_file_path: "main.baml".to_string(),
@@ -3612,6 +3732,62 @@ mod tests {
         );
         assert!(
             models.contains("func UseCallback(ctx_ context.Context, callback func(int64) string)")
+        );
+    }
+
+    #[test]
+    fn optional_callback_parameters_generate_presence_aware_options_and_named_dispatch() {
+        let callback = ty_callable_with_modes(
+            vec![
+                ("x", CodegenFunctionParamMode::Required, ty_int()),
+                ("y", CodegenFunctionParamMode::Optional, ty_int()),
+                ("z", CodegenFunctionParamMode::Optional, ty_int()),
+            ],
+            ty_int(),
+            ty_never(),
+        );
+        let function_name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("use_optional_callback"),
+        );
+        let pool = SymbolPool::from([(
+            function_name,
+            Symbol::Function(Function {
+                name: BaseName::new("use_optional_callback"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("callback"),
+                    docstring: None,
+                    ty: callback,
+                    default: None,
+                }],
+                return_type: ty_int(),
+                throws: None,
+                watchers: vec![],
+                origin: origin(),
+            }),
+        )]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = without_horizontal_whitespace(&files[&PathBuf::from("functions.go")]);
+        assert!(functions.contains("typeCallbackIntWithYIntWithZIntOptionsstruct{"));
+        assert!(functions.contains("Ybaml_go.OptionalArg[int64]`baml:\"y\"`"));
+        assert!(functions.contains("Zbaml_go.OptionalArg[int64]`baml:\"z\"`"));
+        assert!(functions.contains("callbackfunc(int64,CallbackIntWithYIntWithZIntOptions)int64"));
+        assert!(functions.contains("arguments_.Optional(\"y\")"));
+        assert!(functions.contains("arguments_.Optional(\"z\")"));
+        assert!(functions.contains("baml_go.NewOptionalArg(decoded_)"));
+        assert!(
+            functions.contains(
+                "HostCallableOptionalCountError(optionalCount_,arguments_.OptionalCount())"
+            )
         );
     }
 

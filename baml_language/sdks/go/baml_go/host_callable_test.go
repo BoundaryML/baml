@@ -61,7 +61,7 @@ func outboundHostCallableFailure(key uint64, extra *cffi.BamlOutboundValue) *cff
 }
 
 func TestHostCallableTransactionRollbackAndRuntimeReleaseAreExact(t *testing.T) {
-	input := HostCallable(func([]Value) (Input, error) { return String("ok"), nil })
+	input := HostCallable(func(HostCallArguments) (Input, error) { return String("ok"), nil })
 	transaction := &inputTransaction{}
 	encoded, err := input.encodeValue(transaction)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestHostCallableRegistrationIsConcurrent(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			keys <- registerHostValue(hostValue{callable: func([]Value) (Input, error) {
+			keys <- registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
 				return NullInput(Null{}), nil
 			}})
 		}()
@@ -152,12 +152,48 @@ func TestMalformedHostDispatchCompletesWithStructuredError(t *testing.T) {
 	dispatchHostCall(999_999, 1, nil)
 	assertHostCallableFailure(t, <-completed)
 
-	key := registerHostValue(hostValue{callable: func([]Value) (Input, error) {
+	key := registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
 		return String("unused"), nil
 	}})
 	t.Cleanup(func() { unregisterHostValue(key) })
 	dispatchHostCall(key, 2, []byte{0xff})
 	assertHostCallableFailure(t, <-completed)
+}
+
+func TestHostDispatchPartitionsRequiredAndOptionalArguments(t *testing.T) {
+	previous := completeNativeHostCall
+	t.Cleanup(func() { completeNativeHostCall = previous })
+	completed := make(chan bool, 1)
+	completeNativeHostCall = func(_ uint32, isError bool, _ []byte) { completed <- isError }
+
+	observed := make(chan HostCallArguments, 1)
+	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+		observed <- arguments
+		return String("ok"), nil
+	}})
+	t.Cleanup(func() { unregisterHostValue(key) })
+	dispatchHostCall(key, 1, marshalHostDispatch(t,
+		&cffi.BamlToHostArg{Value: outboundString("required")},
+		&cffi.BamlToHostArg{Value: outboundString("optional"), IsOptionalArg: true, ArgName: "named"},
+	))
+
+	select {
+	case arguments := <-observed:
+		if arguments.RequiredCount() != 1 || arguments.OptionalCount() != 1 {
+			t.Fatalf("argument counts = (%d, %d), want (1, 1)", arguments.RequiredCount(), arguments.OptionalCount())
+		}
+		if _, ok := arguments.Optional("named"); !ok {
+			t.Fatal("supplied optional argument is absent")
+		}
+		if _, ok := arguments.Optional("omitted"); ok {
+			t.Fatal("omitted optional argument is present")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("callback did not observe dispatched arguments")
+	}
+	if isError := <-completed; isError {
+		t.Fatal("valid required/optional dispatch completed with an error")
+	}
 }
 
 func assertHostCallableFailure(t *testing.T, completed struct {
@@ -194,12 +230,12 @@ func TestHostCallablePanicAndReturnedErrorCompleteOnce(t *testing.T) {
 		completed <- isError
 	}
 
-	runHostCall(1, func([]Value) (Input, error) { panic("boom") }, nil, nil)
-	runHostCall(2, func([]Value) (Input, error) { return Input{}, errors.New("failed") }, nil, nil)
-	go runHostCall(3, func([]Value) (Input, error) {
+	runHostCall(1, func(HostCallArguments) (Input, error) { panic("boom") }, HostCallArguments{}, nil)
+	runHostCall(2, func(HostCallArguments) (Input, error) { return Input{}, errors.New("failed") }, HostCallArguments{}, nil)
+	go runHostCall(3, func(HostCallArguments) (Input, error) {
 		runtime.Goexit()
 		return String("unreachable"), nil
-	}, nil, nil)
+	}, HostCallArguments{}, nil)
 	for range 3 {
 		select {
 		case isError := <-completed:
@@ -230,9 +266,9 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 	}
 	t.Cleanup(func() { completeNativeHostCall = previous })
 
-	callableKey := registerHostValue(hostValue{callable: func(values []Value) (Input, error) {
-		if len(values) != 1 {
-			return InvalidInput("bad arity"), HostCallableArityError(1, len(values))
+	callableKey := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+		if arguments.RequiredCount() != 1 {
+			return InvalidInput("bad arity"), HostCallableArityError(1, arguments.RequiredCount())
 		}
 		return String("ok"), nil
 	}})
@@ -249,9 +285,11 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 	}{
 		{name: "unknown callable deduplicates handles", key: ^uint64(0), args: []*cffi.BamlToHostArg{handle(101), handle(101)}, want: []uint64{101}},
 		{name: "empty argument releases later handles", key: callableKey, args: []*cffi.BamlToHostArg{{}, handle(102)}, want: []uint64{102}},
-		{name: "optional metadata", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(103), IsOptionalArg: true}}, want: []uint64{103}},
+		{name: "unnamed optional metadata", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(103), IsOptionalArg: true}}, want: []uint64{103}},
 		{name: "named metadata", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(104), ArgName: "value"}}, want: []uint64{104}},
 		{name: "adapter arity", key: callableKey, args: []*cffi.BamlToHostArg{handle(105), handle(106)}, want: []uint64{105, 106}},
+		{name: "duplicate optional name", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(108), IsOptionalArg: true, ArgName: "value"}, {Value: outboundMediaHandle(109), IsOptionalArg: true, ArgName: "value"}}, want: []uint64{108, 109}},
+		{name: "required after optional", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(110), IsOptionalArg: true, ArgName: "value"}, handle(111)}, want: []uint64{110, 111}},
 	}
 	for index, test := range tests {
 		*released = nil
@@ -284,7 +322,7 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 func TestFailureResultReleasesOnlyOpaqueHostIdentityAfterFormatting(t *testing.T) {
 	baseline := registeredHostValueCount()
 	opaqueKey := registerHostValue(hostValue{opaque: errors.New("native callback failed")})
-	callableKey := registerHostValue(hostValue{callable: func([]Value) (Input, error) {
+	callableKey := registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
 		return String("still live"), nil
 	}})
 	callableHandle := &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{

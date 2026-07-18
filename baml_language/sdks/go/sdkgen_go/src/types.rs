@@ -70,17 +70,65 @@ impl GoUnionKey {
     }
 }
 
-/// The structural identity of the required-only callback subset exposed to Go.
+/// The structural identity of a callback exposed to Go.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct GoFunctionKey {
-    params: Box<[GoTy]>,
+    params: Box<[GoFunctionParamKey]>,
     ret: Option<Box<GoTy>>,
     throws: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) enum GoFunctionParamMode {
+    Required,
+    Optional,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct GoFunctionParamKey {
+    /// Required parameters are positional and deliberately carry no name in
+    /// structural identity. Optional parameters are dispatched by this exact
+    /// compiler-owned BAML name (or the VM's canonical `arg{index}` fallback).
+    name: Option<BaseName>,
+    ty: GoTy,
+    mode: GoFunctionParamMode,
+}
+
+impl GoFunctionParamKey {
+    pub(crate) fn name(&self) -> Option<&BaseName> {
+        self.name.as_ref()
+    }
+
+    pub(crate) fn ty(&self) -> &GoTy {
+        &self.ty
+    }
+
+    pub(crate) fn mode(&self) -> GoFunctionParamMode {
+        self.mode
+    }
+}
+
 impl GoFunctionKey {
-    pub(crate) fn params(&self) -> &[GoTy] {
+    pub(crate) fn params(&self) -> &[GoFunctionParamKey] {
         &self.params
+    }
+
+    pub(crate) fn required_params(&self) -> impl Iterator<Item = &GoFunctionParamKey> {
+        self.params
+            .iter()
+            .filter(|param| param.mode == GoFunctionParamMode::Required)
+    }
+
+    pub(crate) fn optional_params(&self) -> impl Iterator<Item = &GoFunctionParamKey> {
+        self.params
+            .iter()
+            .filter(|param| param.mode == GoFunctionParamMode::Optional)
+    }
+
+    pub(crate) fn has_optional_params(&self) -> bool {
+        self.params
+            .iter()
+            .any(|param| param.mode == GoFunctionParamMode::Optional)
     }
 
     pub(crate) fn ret(&self) -> Option<&GoTy> {
@@ -98,6 +146,7 @@ pub(crate) struct GoTypeProjection<'a> {
     /// Typed unions used by each generated Go package. Placement is a usage
     /// property; identity is exclusively [`GoUnionKey`].
     typed_unions: BTreeMap<BaseName, BTreeSet<GoUnionKey>>,
+    callback_options: BTreeMap<BaseName, BTreeSet<GoFunctionKey>>,
 }
 
 impl<'a> GoTypeProjection<'a> {
@@ -106,6 +155,7 @@ impl<'a> GoTypeProjection<'a> {
             pool,
             max_typed_union_arity,
             typed_unions: BTreeMap::new(),
+            callback_options: BTreeMap::new(),
         };
         projection.collect();
         projection
@@ -120,6 +170,17 @@ impl<'a> GoTypeProjection<'a> {
             .get(package)
             .into_iter()
             .flat_map(|unions| unions.iter())
+    }
+
+    pub(crate) fn callback_options_in(
+        &self,
+        package: &BaseName,
+    ) -> impl Iterator<Item = &GoFunctionKey> {
+        self.callback_options
+            .get(package)
+            .into_iter()
+            .flat_map(|callbacks| callbacks.iter())
+            .filter(|key| key.has_optional_params())
     }
 
     fn collect(&mut self) {
@@ -158,13 +219,20 @@ impl<'a> GoTypeProjection<'a> {
                 Symbol::Enum(_) => Vec::new(),
             };
             let mut found = BTreeSet::new();
+            let mut callbacks = BTreeSet::new();
             for ty in tys {
-                collect_typed_unions(&self.project(ty), &mut found);
+                let projected = self.project(ty);
+                collect_typed_unions(&projected, &mut found);
+                collect_callback_options(&projected, &mut callbacks);
             }
             self.typed_unions
                 .entry(name.package().clone())
                 .or_default()
                 .extend(found);
+            self.callback_options
+                .entry(name.package().clone())
+                .or_default()
+                .extend(callbacks);
         }
     }
 
@@ -217,12 +285,6 @@ impl<'a> GoTypeProjection<'a> {
                 throws,
                 ..
             } => {
-                if params
-                    .iter()
-                    .any(|param| param.mode != CodegenFunctionParamMode::Required)
-                {
-                    return GoTy::Unsupported;
-                }
                 let throws = if matches!(throws.as_ref(), Ty::Never { .. }) {
                     false
                 } else if self.throws_accepts_host_callable(throws, aliases) {
@@ -235,13 +297,31 @@ impl<'a> GoTypeProjection<'a> {
                 };
                 let params = params
                     .iter()
-                    .map(|param| self.project_inner(&param.ty, aliases))
+                    .enumerate()
+                    .map(|(index, param)| {
+                        let mode = match param.mode {
+                            CodegenFunctionParamMode::Required => GoFunctionParamMode::Required,
+                            CodegenFunctionParamMode::Optional => GoFunctionParamMode::Optional,
+                        };
+                        GoFunctionParamKey {
+                            name: (mode == GoFunctionParamMode::Optional).then(|| {
+                                param
+                                    .name
+                                    .clone()
+                                    .unwrap_or_else(|| BaseName::new(format!("arg{index}")))
+                            }),
+                            ty: self.project_inner(&param.ty, aliases),
+                            mode,
+                        }
+                    })
                     .collect::<Vec<_>>();
                 let ret = match ret.as_ref() {
                     Ty::Void { .. } | Ty::Never { .. } => None,
                     ret => Some(Box::new(self.project_inner(ret, aliases))),
                 };
-                if params.iter().any(callback_component_is_unsupported)
+                if params
+                    .iter()
+                    .any(|param| callback_component_is_unsupported(&param.ty))
                     || ret
                         .as_deref()
                         .is_some_and(callback_component_is_unsupported)
@@ -417,7 +497,7 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
         GoTy::Function(key) => {
             for param in key.params() {
-                collect_typed_unions(param, found);
+                collect_typed_unions(param.ty(), found);
             }
             if let Some(ret) = key.ret() {
                 collect_typed_unions(ret, found);
@@ -426,6 +506,32 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
         GoTy::Map { key, value } => {
             collect_typed_unions(key, found);
             collect_typed_unions(value, found);
+        }
+        _ => {}
+    }
+}
+
+fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
+    match ty {
+        GoTy::Function(key) => {
+            if key.has_optional_params() && found.insert(key.clone()) {
+                for param in key.params() {
+                    collect_callback_options(param.ty(), found);
+                }
+                if let Some(ret) = key.ret() {
+                    collect_callback_options(ret, found);
+                }
+            }
+        }
+        GoTy::List(inner) | GoTy::Optional(inner) => collect_callback_options(inner, found),
+        GoTy::Map { key, value } => {
+            collect_callback_options(key, found);
+            collect_callback_options(value, found);
+        }
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
+            for member in key.members() {
+                collect_callback_options(member, found);
+            }
         }
         _ => {}
     }
@@ -440,7 +546,9 @@ fn contains_unsupported(ty: &GoTy) -> bool {
             key.members().iter().any(contains_unsupported)
         }
         GoTy::Function(key) => {
-            key.params().iter().any(contains_unsupported)
+            key.params()
+                .iter()
+                .any(|param| contains_unsupported(param.ty()))
                 || key.ret().is_some_and(contains_unsupported)
         }
         _ => false,
@@ -469,7 +577,8 @@ fn contains_union(ty: &GoTy) -> bool {
         GoTy::List(inner) | GoTy::Optional(inner) => contains_union(inner),
         GoTy::Map { key, value } => contains_union(key) || contains_union(value),
         GoTy::Function(key) => {
-            key.params().iter().any(contains_union) || key.ret().is_some_and(contains_union)
+            key.params().iter().any(|param| contains_union(param.ty()))
+                || key.ret().is_some_and(contains_union)
         }
         _ => false,
     }
@@ -516,6 +625,14 @@ mod tests {
     fn callable_param(mode: CodegenFunctionParamMode, ty: Ty) -> CallableParam {
         CallableParam {
             name: None,
+            ty,
+            mode,
+        }
+    }
+
+    fn named_callable_param(name: &str, mode: CodegenFunctionParamMode, ty: Ty) -> CallableParam {
+        CallableParam {
+            name: Some(BaseName::new(name)),
             ty,
             mode,
         }
@@ -775,28 +892,77 @@ mod tests {
         let GoTy::Function(key) = projected else {
             panic!("supported callback should project to a Go function")
         };
-        assert_eq!(
-            key.params(),
-            &[GoTy::Int, GoTy::List(Box::new(GoTy::String))]
-        );
+        assert_eq!(key.params()[0].ty(), &GoTy::Int);
+        assert_eq!(key.params()[1].ty(), &GoTy::List(Box::new(GoTy::String)));
         assert_eq!(key.ret(), Some(&GoTy::Bool));
         assert!(key.throws());
     }
 
     #[test]
-    fn callback_projection_omits_optional_generic_nested_and_union_shapes() {
+    fn callback_projection_preserves_optional_mode_and_wire_name() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let projected = projection.project(&callable(
+            vec![
+                named_callable_param(
+                    "ignored_required_name",
+                    CodegenFunctionParamMode::Required,
+                    Ty::Int { attr: a() },
+                ),
+                named_callable_param(
+                    "wire_name",
+                    CodegenFunctionParamMode::Optional,
+                    union(vec![Ty::String { attr: a() }, Ty::Null { attr: a() }]),
+                ),
+            ],
+            Ty::Bool { attr: a() },
+            Ty::Never { attr: a() },
+        ));
+        let GoTy::Function(key) = projected else {
+            panic!("optional callback should project to a Go function")
+        };
+        assert_eq!(key.params()[0].mode(), GoFunctionParamMode::Required);
+        assert_eq!(key.params()[0].name(), None);
+        assert_eq!(key.params()[1].mode(), GoFunctionParamMode::Optional);
+        assert_eq!(key.params()[1].name(), Some(&BaseName::new("wire_name")));
+        assert_eq!(
+            key.params()[1].ty(),
+            &GoTy::Optional(Box::new(GoTy::String))
+        );
+    }
+
+    #[test]
+    fn callback_identity_uses_optional_names_but_not_required_names() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let project = |required: &str, optional: &str| {
+            projection.project(&callable(
+                vec![
+                    named_callable_param(
+                        required,
+                        CodegenFunctionParamMode::Required,
+                        Ty::Int { attr: a() },
+                    ),
+                    named_callable_param(
+                        optional,
+                        CodegenFunctionParamMode::Optional,
+                        Ty::String { attr: a() },
+                    ),
+                ],
+                Ty::Bool { attr: a() },
+                Ty::Never { attr: a() },
+            ))
+        };
+        assert_eq!(project("left", "value"), project("right", "value"));
+        assert_ne!(project("left", "first"), project("left", "second"));
+    }
+
+    #[test]
+    fn callback_projection_omits_generic_nested_and_union_shapes() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
         let never = || Ty::Never { attr: a() };
         let unsupported = [
-            callable(
-                vec![callable_param(
-                    CodegenFunctionParamMode::Optional,
-                    Ty::Int { attr: a() },
-                )],
-                Ty::String { attr: a() },
-                never(),
-            ),
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
