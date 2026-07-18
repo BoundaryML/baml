@@ -504,6 +504,65 @@ function csv.$init_test_ns_csv_csv(registry: testing.TestCollector) -> null {
     return
 }
 
+function csv.$init_test_ns_csv_csv_smoke(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "parse_quoted_cells"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "decode_typed_rows"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "decode_user_enum_rows"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "reader_streaming_get"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "stringify_round_trip"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "record_error_resumes"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "on_error_skip"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_markdown_table"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "typed_returns_probe"
+    make_closure .<lambda($init_test_ns_csv_csv_smoke, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function csv.csv_blank_records() -> string {
     load_const "a\n\n1\n\n2\n"
     load_const null
@@ -4216,6 +4275,528 @@ function csv.csv_skip_mode_typed_decode() -> string {
     load_const ":"
     bin_op +
     load_var _15
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_decode_typed_rows() -> string {
+    load_type csv.CsvSmokeLead
+    load_const "company,score\nAcme,0.5\nGlobex,\n"
+    load_const <omitted>
+    call baml.csv.decode
+    store_var leads
+    load_type csv.CsvSmokeLead
+    load_var leads
+    load_const 1
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _4
+    store_var l
+    load_var l
+    load_field .score
+    store_var_load_var _8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _8
+    call baml.json.stringify
+    store_var _14
+    load_var l
+    load_field .company
+    load_const ":"
+    bin_op +
+    load_var _14
+    bin_op +
+    store_var second
+    jump L4
+
+  L2:
+    load_var l
+    load_field .company
+    load_const ":null"
+    bin_op +
+    store_var second
+    jump L4
+
+  L3:
+    load_const "missing"
+    store_var second
+
+  L4:
+    load_var leads
+    container_len
+    store_var _18
+    load_var _18
+    call baml.json.stringify
+    load_const ":"
+    bin_op +
+    load_var second
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_decode_user_enum_rows() -> string {
+    load_type csv.CsvSmokeEnumRow
+    load_const "name,color\nsky,Blue\ngrass,Green\n"
+    load_const <omitted>
+    call baml.csv.decode
+    load_const ""
+    store_var out
+    load_type baml.iter.Iterable<Item = csv.CsvSmokeEnumRow, Error = never>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Item = csv.CsvSmokeEnumRow, Error = never>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _6
+    store_var_load_var r
+    load_field .color
+    discriminant
+    load_const CsvSmokeColor.Red
+    cmp_int_op ==
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var r
+    load_field .color
+    discriminant
+    load_const CsvSmokeColor.Green
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "Blue"
+    store_var c
+    jump L6
+
+  L4:
+    load_const "Green"
+    store_var c
+    jump L6
+
+  L5:
+    load_const "Red"
+    store_var c
+
+  L6:
+    load_var2 1 4
+    load_field .name
+    bin_op +
+    load_const "="
+    bin_op +
+    load_var c
+    bin_op +
+    load_const ";"
+    bin_op +
+    store_var out
+    jump L0
+
+  L7:
+    load_var out
+    return
+}
+
+function csv.csv_smoke_on_error_skip() -> string {
+    load_const "a,b\n1,2\n3\n4,5\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "skip"
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const 0
+    store_var count
+    load_var r
+    load_type baml.iter.Iterable<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+
+  L0:
+    load_var _5
+    load_type baml.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _6
+    store_var rec
+    load_var count
+    load_const 1
+    add_int
+    store_var count
+    jump L0
+
+  L2:
+    load_var count
+    call baml.json.stringify
+    store_var _11
+    load_var r
+    call baml.csv.CsvReader.skipped_count
+    call baml.json.stringify
+    store_var _13
+    load_var _11
+    load_const ":"
+    bin_op +
+    load_var _13
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_parse_quoted_cells() -> string {
+    load_const "a,b\n1,\"x,\ny\"\n2,plain\n"
+    load_const <omitted>
+    call baml.csv.parse
+    store_var rows
+    load_var rows
+    container_len
+    store_var _4
+    load_var _4
+    call baml.json.stringify
+    load_const ":"
+    bin_op +
+    load_var rows
+    load_const 0
+    load_array_element
+    load_const 1
+    load_array_element
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_reader_streaming_get() -> int {
+    load_const "n\n1\n2\n3\n"
+    load_const <omitted>
+    call baml.csv.reader
+    load_const 0
+    store_var total
+    load_type baml.iter.Iterable<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_type int
+    load_var _5
+    load_const "n"
+    call baml.csv.CsvRecord.get
+    store_var _10
+    load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _10
+    jump L4
+
+  L3:
+    load_const 0
+
+  L4:
+    load_var total
+    add_int
+    store_var total
+    jump L0
+
+  L5:
+    load_var total
+    return
+}
+
+function csv.csv_smoke_record_error_resumes() -> string {
+    load_const "a,b\n1,2\n\"oops,9\n3,4\n"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "pad"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.csv.ReaderOptions .delimiter, .quote, .quoting, .escape, .has_header, .headers, .comment, .trim, .skip_lines, .skip_blank_records, .ragged, .null_values, .encoding, .bom, .on_error, .on_skip, .max_skipped, .limit
+    call baml.csv.reader
+    store_var r
+    load_const ""
+    store_var seen
+    load_const 0
+    store_var bad
+
+  L0:
+    load_const true
+    pop_jump_if_false L11
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _7
+    call baml.csv.CsvRecord.fields
+    jump L7
+    load_var _
+    is_type baml.csv.CsvError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    rethrow
+
+  L3:
+    load_var _
+    load_field .2
+    store_var line
+    load_var bad
+    load_const 1
+    add_int
+    store_var bad
+    load_var line
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var line
+    call baml.json.stringify
+    store_var _15
+    jump L6
+
+  L5:
+    load_const "?"
+    store_var _15
+
+  L6:
+    load_const "err@"
+    load_var _15
+    bin_op +
+    store_var step
+    jump L9
+
+  L7:
+    load_const 0
+    load_array_element
+    store_var step
+    jump L9
+
+  L8:
+    load_const "done"
+    store_var step
+
+  L9:
+    load_var step
+    load_const "done"
+    cmp_op ==
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var2 2 4
+    bin_op +
+    load_const ";"
+    bin_op +
+    store_var seen
+    jump L0
+
+  L11:
+    load_var seen
+    load_const "bad="
+    bin_op +
+    store_var _24
+    load_var bad
+    call baml.json.stringify
+    store_var _26
+    load_var2 9 10
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_stringify_round_trip() -> string {
+    load_type csv.CsvSmokeVerdict
+    load_const 1
+    load_const "ok, fine"
+    init_instance user.csv.CsvSmokeVerdict .id, .label
+    load_const 2
+    load_const "bad"
+    init_instance user.csv.CsvSmokeVerdict .id, .label
+    load_type csv.CsvSmokeVerdict
+    alloc_array 2
+    load_const <omitted>
+    call baml.csv.stringify
+    store_var text
+    load_type csv.CsvSmokeVerdict
+    load_var text
+    load_const <omitted>
+    call baml.csv.decode
+    container_len
+    store_var _12
+    load_var _12
+    call baml.json.stringify
+    store_var _11
+    load_var text
+    load_const "|"
+    bin_op +
+    load_var _11
+    bin_op +
+    return
+}
+
+function csv.csv_smoke_to_markdown_table() -> string {
+    load_type csv.CsvSmokeKpi
+    load_const "growth|rate"
+    load_const 1.5
+    init_instance user.csv.CsvSmokeKpi .metric, .q1
+    load_type csv.CsvSmokeKpi
+    alloc_array 1
+    load_const <omitted>
+    call baml.csv.to_markdown
+    return
+}
+
+function csv.csv_smoke_typed_returns_probe() -> string {
+    load_const "name,n\nalice,1\nbob,2\n"
+    load_const <omitted>
+    call baml.csv.reader
+    store_var r
+    load_var r
+    load_type baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    is_type baml.iter.Done
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type string
+    load_var _3
+    load_const "name"
+    call baml.csv.CsvRecord.get
+    store_var _6
+    load_var _6
+    store_var rec_name
+    load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const "<null>"
+    store_var rec_name
+    jump L2
+
+  L1:
+    load_const "none"
+    store_var rec_name
+
+  L2:
+    load_const 0
+    store_var total
+    load_type csv.CsvSmokeIntRow
+    load_var r
+    call baml.csv.CsvReader.rows
+    load_type baml.iter.Iterable<Item = csv.CsvSmokeIntRow, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _12
+
+  L3:
+    load_var _12
+    load_type baml.iter.Iterator<Item = csv.CsvSmokeIntRow, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _13
+    load_var _13
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var2 5 7
+    load_field .n
+    add_int
+    store_var total
+    jump L3
+
+  L5:
+    load_var rec_name
+    load_const ":"
+    bin_op +
+    store_var _18
+    load_var total
+    call baml.json.stringify
+    store_var _20
+    load_var2 8 9
     bin_op +
     return
 }
