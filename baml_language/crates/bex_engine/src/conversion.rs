@@ -30,6 +30,83 @@ fn realize_host_ty(ty: RuntimeTy) -> Result<baml_type::RealizedTy, EngineError> 
     })
 }
 
+fn host_call_parameter_types<'a>(
+    params: &[baml_type::RealizedFunctionParamTy],
+    positional_count: usize,
+    optional_names: impl IntoIterator<Item = &'a str>,
+) -> Result<(Vec<RuntimeTy>, indexmap::IndexMap<String, RuntimeTy>), String> {
+    let required = params
+        .iter()
+        .filter(|param| param.is_required())
+        .map(|param| RuntimeTy::from(&param.ty))
+        .collect::<Vec<_>>();
+    if positional_count != required.len() {
+        return Err(format!(
+            "host-call positional argument count {positional_count} does not match declared required count {}",
+            required.len()
+        ));
+    }
+    let mut optional = indexmap::IndexMap::new();
+    for name in optional_names {
+        let param = params
+            .iter()
+            .find(|param| {
+                param.is_optional()
+                    && param
+                        .name
+                        .as_ref()
+                        .is_some_and(|candidate| candidate.as_str() == name)
+            })
+            .ok_or_else(|| format!("host-call supplied unknown optional argument {name:?}"))?;
+        optional.insert(name.to_string(), RuntimeTy::from(&param.ty));
+    }
+    Ok((required, optional))
+}
+
+#[cfg(test)]
+mod host_call_parameter_type_tests {
+    use baml_type::{FunctionParamMode, Name, RealizedFunctionParamTy, RealizedTy, TyAttr};
+
+    use super::*;
+
+    fn param(name: &str, mode: FunctionParamMode, ty: RealizedTy) -> RealizedFunctionParamTy {
+        RealizedFunctionParamTy {
+            name: Some(Name::new(name)),
+            ty,
+            mode,
+        }
+    }
+
+    #[test]
+    fn resolves_required_and_exact_optional_wire_names() {
+        let union = RealizedTy::Union(
+            vec![RealizedTy::int(), RealizedTy::string()],
+            TyAttr::default(),
+        );
+        let params = vec![
+            param("value", FunctionParamMode::Required, union.clone()),
+            param("foo_bar", FunctionParamMode::Optional, union),
+        ];
+        let (required, optional) = host_call_parameter_types(&params, 1, ["foo_bar"]).unwrap();
+        assert!(matches!(required.as_slice(), [RuntimeTy::Union(..)]));
+        assert!(matches!(optional["foo_bar"], RuntimeTy::Union(..)));
+    }
+
+    #[test]
+    fn rejects_malformed_required_arity_and_optional_name() {
+        let params = vec![
+            param("value", FunctionParamMode::Required, RealizedTy::int()),
+            param("foo_bar", FunctionParamMode::Optional, RealizedTy::string()),
+        ];
+        let arity = host_call_parameter_types(&params, 0, std::iter::empty::<&str>()).unwrap_err();
+        assert!(arity.contains("count 0"));
+        assert!(arity.contains("required count 1"));
+
+        let name = host_call_parameter_types(&params, 1, ["fooBar"]).unwrap_err();
+        assert!(name.contains("unknown optional argument \"fooBar\""));
+    }
+}
+
 // ============================================================================
 // VM Value to External Conversion
 // ============================================================================
@@ -1027,6 +1104,98 @@ unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
 }
 
 impl BexEngine {
+    /// Convert the VM's `[required_args, optional_args]` host-call pack using
+    /// the callable's declared parameter types. Ordinary sys-op conversion is
+    /// intentionally type-erased, but host callbacks need the declared type to
+    /// preserve closed-union selected-arm metadata on the outbound wire.
+    pub(crate) fn convert_host_call_args_pack(
+        &self,
+        pack: Value,
+        params: &[baml_type::RealizedFunctionParamTy],
+        permit: PermitProof<'_>,
+    ) -> Result<BexExternalValue, EngineError> {
+        let malformed = |message: String| {
+            EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure { message })
+        };
+        let pack_ptr = pack
+            .as_object_ptr()
+            .ok_or_else(|| malformed("host-call argument pack is not a heap object".to_string()))?;
+        // SAFETY: `permit` witnesses that the VM heap cannot move while these
+        // pointers are inspected. Container snapshots release their locks
+        // before recursive conversion.
+        let Object::Array(pack_array) = (unsafe { pack_ptr.get() }) else {
+            return Err(malformed(
+                "host-call argument pack is not an array".to_string(),
+            ));
+        };
+        let pack_items = pack_array.to_vec();
+        if pack_items.len() != 2 {
+            return Err(malformed(format!(
+                "host-call argument pack has {} items, expected 2",
+                pack_items.len()
+            )));
+        }
+
+        let positional_ptr = pack_items[0].as_object_ptr().ok_or_else(|| {
+            malformed("host-call positional arguments are not a heap object".to_string())
+        })?;
+        // SAFETY: covered by the active heap permit above.
+        let Object::Array(positional_array) = (unsafe { positional_ptr.get() }) else {
+            return Err(malformed(
+                "host-call positional arguments are not an array".to_string(),
+            ));
+        };
+        let positional_values = positional_array.to_vec();
+        let optional_ptr = pack_items[1].as_object_ptr().ok_or_else(|| {
+            malformed("host-call optional arguments are not a heap object".to_string())
+        })?;
+        // SAFETY: covered by the active heap permit above.
+        let Object::Map(optional_map) = (unsafe { optional_ptr.get() }) else {
+            return Err(malformed(
+                "host-call optional arguments are not a map".to_string(),
+            ));
+        };
+        let optional_values = optional_map.to_index_map();
+        let (required_types, optional_types) = host_call_parameter_types(
+            params,
+            positional_values.len(),
+            optional_values
+                .keys()
+                .map(bex_external_types::BexStr::as_str),
+        )
+        .map_err(malformed)?;
+        let positional = positional_values
+            .into_iter()
+            .zip(required_types)
+            .map(|(value, ty)| self.convert_vm_value_to_external_with_type(value, &ty, permit))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut optional = indexmap::IndexMap::with_capacity(optional_values.len());
+        for (name, value) in optional_values {
+            let name = name.to_string();
+            let ty = &optional_types[&name];
+            optional.insert(
+                name,
+                self.convert_vm_value_to_external_with_type(value, ty, permit)?,
+            );
+        }
+
+        Ok(BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![
+                BexExternalValue::Array {
+                    element_type: RuntimeTy::unknown(),
+                    items: positional,
+                },
+                BexExternalValue::Map {
+                    key_type: RuntimeTy::string(),
+                    value_type: RuntimeTy::unknown(),
+                    entries: optional,
+                },
+            ],
+        })
+    }
+
     pub(crate) fn vm_arg_to_bex_value(&self, value: Value) -> BexExternalValue {
         match value.kind() {
             ValueKind::OmittedArg => {
@@ -1691,8 +1860,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
-        //   - `EnumVariant`: a single variant can't be checked (the validator
-        //     only checks enum identity).
         //   - `Future`: the host cannot produce a VM future, and nothing
         //     validates one.
         RuntimeTy::Void { .. }
@@ -1700,7 +1867,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
-        | RuntimeTy::EnumVariant(..)
         | RuntimeTy::Future(..) => true,
 
         // Container positions are validated structurally; recurse so a nested
@@ -1722,6 +1888,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Uint8Array { .. }
         | RuntimeTy::Literal(..)
         | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
         | RuntimeTy::Media(..)
         | RuntimeTy::Function { .. } => false,
 
@@ -1790,10 +1957,16 @@ fn find_matching_member(
             return Ok(member.clone());
         }
     }
+    // A singleton enum-variant arm likewise outranks its broad enum type.
+    for member in members {
+        if matches!(member, RuntimeTy::EnumVariant(..)) && value_matches_type(value, member) {
+            return Ok(member.clone());
+        }
+    }
     for member in members {
         if !matches!(
             member,
-            RuntimeTy::Literal(..) | RuntimeTy::BuiltinUnknown { .. }
+            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) | RuntimeTy::BuiltinUnknown { .. }
         ) && value_matches_type(value, member)
         {
             return Ok(member.clone());
@@ -1918,6 +2091,16 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         }
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
+        }
+        (
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            },
+            RuntimeTy::EnumVariant(tn, expected_variant, _),
+        ) => {
+            type_name_matches_external_name(enum_name, tn)
+                && variant_name == expected_variant.as_str()
         }
         (
             BexExternalValue::Adt(BexExternalAdt::Media(media)),
@@ -2104,6 +2287,10 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
                     .all(|(left, right)| runtime_ty_structurally_equal(left, right))
         }
         (T::Enum(left, _), T::Enum(right, _)) => left == right,
+        (
+            T::EnumVariant(left_name, left_variant, _),
+            T::EnumVariant(right_name, right_variant, _),
+        ) => left_name == right_name && left_variant == right_variant,
         (T::TypeAlias(left, _), T::TypeAlias(right, _)) => left == right,
         (T::Union(left, _), T::Union(right, _)) => {
             left.len() == right.len()
@@ -2438,6 +2625,32 @@ impl BexEngine {
                 )),
             },
 
+            RuntimeTy::EnumVariant(tn, expected_variant, _) => match value {
+                BexExternalValue::Variant {
+                    enum_name,
+                    variant_name,
+                } => {
+                    if !type_name_matches_external_name(enum_name, tn) {
+                        return Err(format!(
+                            "host callable returned a variant of enum `{enum_name}` where enum \
+                             `{tn}` was declared",
+                        ));
+                    }
+                    if variant_name != expected_variant.as_str() {
+                        return Err(format!(
+                            "host callable returned enum variant `{enum_name}.{variant_name}` \
+                             where `{tn}.{expected_variant}` was declared",
+                        ));
+                    }
+                    Ok(())
+                }
+                other => Err(format!(
+                    "host callable returned `{}` where enum variant \
+                     `{tn}.{expected_variant}` was declared",
+                    other.type_name(),
+                )),
+            },
+
             // A function-typed return position is not supported yet. The host
             // call result is materialized by `convert_external_to_vm_value`
             // *without* a declared type, so a returned `HostValue` (the only
@@ -2550,9 +2763,21 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 Object::Variant(variant) => {
                     let enum_obj = unsafe { variant.enm.get() };
                     if let Object::Enum(enm) = enum_obj {
+                        let actual_variant = enm.variants.get(variant.index).map(|v| v.name.as_str());
                         members
                             .iter()
-                            .find(|m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name))
+                            .find(|m| {
+                                matches!(
+                                    (m, actual_variant),
+                                    (RuntimeTy::EnumVariant(tn, expected, _), Some(actual))
+                                        if *tn == enm.name && expected.as_str() == actual
+                                )
+                            })
+                            .or_else(|| {
+                                members.iter().find(
+                                    |m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name),
+                                )
+                            })
                     } else {
                         None
                     }
@@ -3005,7 +3230,9 @@ mod union_container_selection_tests {
     use std::sync::Arc;
 
     use baml_builtins2::{MediaContent, MediaValue};
-    use baml_type::{Freshness, MediaKind, TyAttr, TypeName};
+    use baml_type::{Freshness, MediaKind, Name, TyAttr, TypeName};
+    use bex_heap::{BexHeap, Tlab};
+    use bex_vm_types::{EnumVariant, Object, Value, types::Enum};
 
     use super::*;
 
@@ -3109,6 +3336,77 @@ mod union_container_selection_tests {
             find_matching_member(&value, &[RuntimeTy::string(), draft.clone()]).unwrap(),
             draft
         );
+    }
+
+    #[test]
+    fn enum_variant_matching_checks_value_and_prefers_exact_variant() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let sad = RuntimeTy::EnumVariant(mood.clone(), Name::new("SAD"), TyAttr::default());
+        let broad = RuntimeTy::Enum(mood.clone(), TyAttr::default());
+        let value = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+
+        assert!(value_matches_type(&value, &happy));
+        assert!(!value_matches_type(&value, &sad));
+        assert_eq!(
+            find_matching_member(&value, &[broad, sad, happy.clone()]).unwrap(),
+            happy
+        );
+    }
+
+    #[test]
+    fn vm_enum_variant_selection_prefers_exact_variant_then_broad_enum() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
+            name: mood.clone(),
+            variants: vec![
+                EnumVariant {
+                    name: "HAPPY".to_string(),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+                EnumVariant {
+                    name: "SAD".to_string(),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+            ],
+            description: None,
+            alias: None,
+            ty_attr: TyAttr::default(),
+        })));
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let broad = RuntimeTy::Enum(mood, TyAttr::default());
+        let members = [broad.clone(), happy.clone()];
+
+        let happy_value = Value::object(tlab.alloc_variant(enum_ptr, 0));
+        assert_eq!(
+            find_matching_union_member(happy_value, &members),
+            Some(&happy)
+        );
+
+        let sad_value = Value::object(tlab.alloc_variant(enum_ptr, 1));
+        assert_eq!(
+            find_matching_union_member(sad_value, &members),
+            Some(&broad)
+        );
+    }
+
+    #[test]
+    fn enum_variant_selected_arm_has_exact_structural_identity() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let another_happy =
+            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let sad = RuntimeTy::EnumVariant(mood, Name::new("SAD"), TyAttr::default());
+        assert!(runtime_ty_structurally_equal(&happy, &another_happy));
+        assert!(!runtime_ty_structurally_equal(&happy, &sad));
     }
 
     #[test]

@@ -607,7 +607,10 @@ fn contains_type_var(ty: &GoTy) -> bool {
 }
 
 fn callback_component_is_unsupported(ty: &GoTy) -> bool {
-    contains_unsupported(ty) || contains_function(ty) || contains_union(ty) || contains_type_var(ty)
+    contains_unsupported(ty)
+        || contains_function(ty)
+        || contains_dynamic_union(ty)
+        || contains_type_var(ty)
 }
 
 fn contains_function(ty: &GoTy) -> bool {
@@ -623,15 +626,18 @@ fn contains_function(ty: &GoTy) -> bool {
     }
 }
 
-fn contains_union(ty: &GoTy) -> bool {
+fn contains_dynamic_union(ty: &GoTy) -> bool {
     match ty {
-        GoTy::TypedUnion(_) | GoTy::DynamicUnion { .. } => true,
-        GoTy::Class(_, arguments) => arguments.iter().any(contains_union),
-        GoTy::List(inner) | GoTy::Optional(inner) => contains_union(inner),
-        GoTy::Map { key, value } => contains_union(key) || contains_union(value),
+        GoTy::DynamicUnion { .. } => true,
+        GoTy::TypedUnion(key) => key.members().iter().any(contains_dynamic_union),
+        GoTy::Class(_, arguments) => arguments.iter().any(contains_dynamic_union),
+        GoTy::List(inner) | GoTy::Optional(inner) => contains_dynamic_union(inner),
+        GoTy::Map { key, value } => contains_dynamic_union(key) || contains_dynamic_union(value),
         GoTy::Function(key) => {
-            key.params().iter().any(|param| contains_union(param.ty()))
-                || key.ret().is_some_and(contains_union)
+            key.params()
+                .iter()
+                .any(|param| contains_dynamic_union(param.ty()))
+                || key.ret().is_some_and(contains_dynamic_union)
         }
         _ => false,
     }
@@ -1025,10 +1031,24 @@ mod tests {
     }
 
     #[test]
-    fn callback_projection_omits_generic_nested_and_union_shapes() {
+    fn callback_projection_supports_closed_unions_and_omits_unsound_shapes() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
         let never = || Ty::Never { attr: a() };
+        let closed_union = callable(
+            vec![callable_param(
+                CodegenFunctionParamMode::Required,
+                union(vec![Ty::Int { attr: a() }, Ty::String { attr: a() }]),
+            )],
+            union(vec![Ty::Bool { attr: a() }, Ty::String { attr: a() }]),
+            never(),
+        );
+        let GoTy::Function(closed_union) = projection.project(&closed_union) else {
+            panic!("concrete closed-union callback should project to a Go function")
+        };
+        assert!(matches!(closed_union.params()[0].ty(), GoTy::TypedUnion(_)));
+        assert!(matches!(closed_union.ret(), Some(GoTy::TypedUnion(_))));
+
         let unsupported = [
             callable(
                 vec![callable_param(
@@ -1046,10 +1066,18 @@ mod tests {
                 Ty::String { attr: a() },
                 never(),
             ),
+            // Arity above the configured threshold projects dynamically as
+            // `any`, which cannot preserve selected-arm identity in a host
+            // callback adapter.
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    union(vec![Ty::Int { attr: a() }, Ty::String { attr: a() }]),
+                    union(vec![
+                        Ty::Int { attr: a() },
+                        Ty::String { attr: a() },
+                        Ty::Bool { attr: a() },
+                        Ty::Float { attr: a() },
+                    ]),
                 )],
                 Ty::String { attr: a() },
                 never(),

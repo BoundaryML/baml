@@ -9,8 +9,8 @@ use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use baml_base::Name as BaseName;
 use baml_codegen_types::{
-    Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, NamingConvention,
-    Origin, Symbol, SymbolPool, Ty, TypeAlias,
+    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, Enum, EnumVariant, Function,
+    FunctionArgument, Name, NamingConvention, Origin, Symbol, SymbolPool, Ty, TypeAlias,
 };
 use baml_type::TyAttr;
 
@@ -64,6 +64,28 @@ fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
 
 fn ty_alias(name: Name) -> Ty {
     Ty::TypeAlias(name, TyAttr::default())
+}
+
+fn ty_union(members: Vec<Ty>) -> Ty {
+    Ty::Union(members, TyAttr::default())
+}
+
+fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {
+    Ty::Function {
+        params: params
+            .into_iter()
+            .map(|ty| CallableParam {
+                name: None,
+                ty,
+                mode: CodegenFunctionParamMode::Required,
+            })
+            .collect(),
+        ret: Box::new(ret),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    }
 }
 
 pub fn run_all() {
@@ -189,6 +211,11 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         vec![],
         BaseName::new("round_trip_thing_alias"),
     );
+    let union_callback = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("call_cross_package_union_callback"),
+    );
     let static_factory = Name::new(
         BaseName::new("user"),
         vec![],
@@ -287,7 +314,7 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                         default: None,
                     },
                 ],
-                return_type: ty_class(models, vec![]),
+                return_type: ty_class(models.clone(), vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -340,6 +367,41 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         ),
         round_trip_function(status_alias_round_trip, ty_alias(status_alias)),
         round_trip_function(thing_alias_round_trip, ty_alias(thing_alias)),
+        (
+            union_callback,
+            Symbol::Function(Function {
+                name: BaseName::new("call_cross_package_union_callback"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("callback"),
+                        docstring: None,
+                        ty: ty_callable(
+                            vec![ty_union(vec![
+                                ty_string(),
+                                ty_class(models.clone(), vec![]),
+                            ])],
+                            ty_union(vec![ty_string(), ty_class(models.clone(), vec![])]),
+                        ),
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("value"),
+                        docstring: None,
+                        ty: ty_union(vec![ty_string(), ty_class(models.clone(), vec![])]),
+                        default: None,
+                    },
+                ],
+                return_type: ty_union(vec![ty_string(), ty_class(models, vec![])]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        ),
         synthetic_class_with_methods(static_factory, vec![], static_methods),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(

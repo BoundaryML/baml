@@ -198,7 +198,140 @@ func TestHostCallableStructuredRoundTrips(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(gotMap, map[string]int64{"one": 1, "two": 2}) {
 		t.Fatalf("map round trip = %#v, %v", gotMap, err)
 	}
+}
 
+func TestHostCallableClosedUnionRoundTrips(t *testing.T) {
+	ctx := context.Background()
+	input := baml_sdk.NewStringOrIntFromInt(7)
+	got, err := baml_sdk.HostCallableTestsCallUnionRoundtripCallback(ctx, func(value baml_sdk.StringOrInt) baml_sdk.StringOrInt {
+		if integer, ok := value.AsInt(); !ok || integer != 7 {
+			t.Fatalf("union callback input = %#v", value)
+		}
+		return baml_sdk.NewStringOrIntFromString("seven")
+	}, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := got.AsString(); !ok || text != "seven" {
+		t.Fatalf("union callback output = %#v", got)
+	}
+
+	nullable, err := baml_sdk.HostCallableTestsCallNullableUnionRoundtripCallback(ctx, func(value *baml_sdk.StringOrInt) *baml_sdk.StringOrInt {
+		if value != nil {
+			t.Fatalf("nullable union input = %#v; want nil", value)
+		}
+		result := baml_sdk.NewStringOrIntFromInt(11)
+		return &result
+	}, nil)
+	if err != nil || nullable == nil {
+		t.Fatalf("nullable union output = %#v, %v", nullable, err)
+	}
+	if integer, ok := nullable.AsInt(); !ok || integer != 11 {
+		t.Fatalf("nullable union arm = %#v", nullable)
+	}
+	nullable, err = baml_sdk.HostCallableTestsCallNullableUnionRoundtripCallback(ctx, func(*baml_sdk.StringOrInt) *baml_sdk.StringOrInt {
+		return nil
+	}, nullable)
+	if err != nil || nullable != nil {
+		t.Fatalf("nullable union null return = %#v, %v", nullable, err)
+	}
+}
+
+func TestHostCallableClosedUnionContainersAndNominalArms(t *testing.T) {
+	ctx := context.Background()
+	listInput := []baml_sdk.StringOrInt{
+		baml_sdk.NewStringOrIntFromString("one"),
+		baml_sdk.NewStringOrIntFromInt(2),
+	}
+	list, err := baml_sdk.HostCallableTestsCallUnionListRoundtripCallback(ctx, func(values []baml_sdk.StringOrInt) []baml_sdk.StringOrInt {
+		return append(values, baml_sdk.NewStringOrIntFromString("three"))
+	}, listInput)
+	if err != nil || len(list) != 3 {
+		t.Fatalf("nested union list = %#v, %v", list, err)
+	}
+	if text, ok := list[2].AsString(); !ok || text != "three" {
+		t.Fatalf("nested union list arm = %#v", list[2])
+	}
+
+	unionMap, err := baml_sdk.HostCallableTestsCallUnionMapRoundtripCallback(ctx, func(values map[string]baml_sdk.StringOrInt) map[string]baml_sdk.StringOrInt {
+		values["answer"] = baml_sdk.NewStringOrIntFromInt(42)
+		return values
+	}, map[string]baml_sdk.StringOrInt{"label": baml_sdk.NewStringOrIntFromString("ok")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if integer, ok := unionMap["answer"].AsInt(); !ok || integer != 42 {
+		t.Fatalf("nested union map arm = %#v", unionMap["answer"])
+	}
+
+	person := baml_sdk.NewStringOrHostCallableTestsPersonOrHostCallableTestsCallbackMoodFromHostCallableTestsPerson(
+		baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 37},
+	)
+	nominal, err := baml_sdk.HostCallableTestsCallNominalUnionRoundtripCallback(ctx, func(value baml_sdk.StringOrHostCallableTestsPersonOrHostCallableTestsCallbackMood) baml_sdk.StringOrHostCallableTestsPersonOrHostCallableTestsCallbackMood {
+		if gotPerson, ok := value.AsHostCallableTestsPerson(); !ok || gotPerson.Name != "Ada" {
+			t.Fatalf("nominal union input = %#v", value)
+		}
+		return baml_sdk.NewStringOrHostCallableTestsPersonOrHostCallableTestsCallbackMoodFromHostCallableTestsCallbackMood(
+			baml_sdk.HostCallableTestsCallbackMoodHAPPY,
+		)
+	}, person)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mood, ok := nominal.AsHostCallableTestsCallbackMood(); !ok || mood != baml_sdk.HostCallableTestsCallbackMoodHAPPY {
+		t.Fatalf("nominal union output = %#v", nominal)
+	}
+}
+
+func TestHostCallableClosedUnionLiteralOptionalAndSelectedEmptyContainerArms(t *testing.T) {
+	ctx := context.Background()
+	literalInput := baml_sdk.NewIntOrStringLiteralcd322617OrStringLiteral6ca6c75cFromStringLiteralcd322617()
+	literal, err := baml_sdk.HostCallableTestsCallLiteralUnionRoundtripCallback(ctx, func(value baml_sdk.IntOrStringLiteralcd322617OrStringLiteral6ca6c75c) baml_sdk.IntOrStringLiteralcd322617OrStringLiteral6ca6c75c {
+		if text, ok := value.AsStringLiteralcd322617(); !ok || text != "first" {
+			t.Fatalf("literal union input = %#v", value)
+		}
+		return baml_sdk.NewIntOrStringLiteralcd322617OrStringLiteral6ca6c75cFromInt(9)
+	}, literalInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if integer, ok := literal.AsInt(); !ok || integer != 9 {
+		t.Fatalf("literal union output = %#v", literal)
+	}
+
+	states, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalUnionStates(ctx, func(options baml_sdk.CallbackWithValueOptionalStringOrIntOptions) int64 {
+		value, supplied := options.Value.Get()
+		if !supplied {
+			return 0
+		}
+		if value == nil {
+			return 1
+		}
+		if _, ok := value.AsString(); ok {
+			return 2
+		}
+		if _, ok := value.AsInt(); ok {
+			return 3
+		}
+		return -1
+	})
+	if err != nil || !reflect.DeepEqual(states, []int64{0, 1, 2, 3}) {
+		t.Fatalf("optional union states = %#v, %v", states, err)
+	}
+
+	emptyInts := baml_sdk.NewStringListOrIntListFromIntList([]int64{})
+	emptyStrings, err := baml_sdk.HostCallableTestsCallOverlappingContainerUnionCallback(ctx, func(value baml_sdk.StringListOrIntList) baml_sdk.StringListOrIntList {
+		if integers, ok := value.AsIntList(); !ok || len(integers) != 0 {
+			t.Fatalf("selected empty int-list arm = %#v", value)
+		}
+		return baml_sdk.NewStringListOrIntListFromStringList([]string{})
+	}, emptyInts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings, ok := emptyStrings.AsStringList(); !ok || len(strings) != 0 {
+		t.Fatalf("selected empty string-list arm = %#v", emptyStrings)
+	}
 }
 
 func TestHostCallableMediaRoundTrip(t *testing.T) {

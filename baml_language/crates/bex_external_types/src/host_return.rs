@@ -190,6 +190,16 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             }
             _ => false,
         },
+        RuntimeTy::EnumVariant(tn, expected_variant, _) => match value {
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            } => {
+                type_name_matches_external_name(enum_name, tn)
+                    && variant_name == expected_variant.as_str()
+            }
+            _ => false,
+        },
 
         RuntimeTy::Media(..) => matches!(
             value,
@@ -389,6 +399,62 @@ mod tests {
         assert!(validate_host_return(&BexExternalValue::Int(1), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::String("x".into()), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::Bool(true), &union).is_err());
+    }
+
+    #[test]
+    fn enum_variant_requires_exact_enum_and_variant() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let value = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+        assert!(validate_host_return(&value, &happy).is_ok());
+
+        let wrong_variant = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "SAD".to_string(),
+        };
+        assert!(validate_host_return(&wrong_variant, &happy).is_err());
+
+        let wrong_enum = BexExternalValue::Variant {
+            enum_name: "user.callbacks.OtherMood".to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+        assert!(validate_host_return(&wrong_enum, &happy).is_err());
+
+        let nested = RuntimeTy::list(happy.clone());
+        let nested_valid = BexExternalValue::Array {
+            element_type: happy.clone(),
+            items: vec![value],
+        };
+        assert!(validate_host_return(&nested_valid, &nested).is_ok());
+        let nested_invalid = BexExternalValue::Array {
+            element_type: happy,
+            items: vec![wrong_variant],
+        };
+        assert!(validate_host_return(&nested_invalid, &nested).is_err());
+
+        let nested_union = RuntimeTy::list(RuntimeTy::union([
+            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default()),
+            RuntimeTy::int(),
+        ]));
+        let nested_union_valid = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Variant {
+                enum_name: mood.to_string(),
+                variant_name: "HAPPY".to_string(),
+            }],
+        };
+        assert!(validate_host_return(&nested_union_valid, &nested_union).is_ok());
+        let nested_union_invalid = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::Variant {
+                enum_name: mood.to_string(),
+                variant_name: "SAD".to_string(),
+            }],
+        };
+        assert!(validate_host_return(&nested_union_invalid, &nested_union).is_err());
     }
 
     #[test]
