@@ -105,6 +105,9 @@ func anyMap(values map[string]Input, valueType *BAMLType) Input {
 }
 
 func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
+	if typ == reflect.TypeOf(BAMLType{}) {
+		return MetaTypeBAMLType(), true
+	}
 	bigIntPointer := reflect.TypeOf((*big.Int)(nil))
 	if typ == bigIntPointer {
 		return PrimitiveBAMLType(BigintType), true
@@ -183,6 +186,9 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 		return NullInput(Null{})
 	}
 	if value.CanInterface() {
+		if reflectedType, ok := value.Interface().(BAMLType); ok {
+			return Type(reflectedType)
+		}
 		if marshaler, ok := value.Interface().(InputMarshaler); ok {
 			return marshaler.BAMLInput()
 		}

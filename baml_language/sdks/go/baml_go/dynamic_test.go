@@ -85,7 +85,10 @@ func TestBAMLTypeEqualityPreservesNestedOptionality(t *testing.T) {
 	if MapBAMLType(stringType, integer).Equal(MapBAMLType(stringType, optionalInteger)) {
 		t.Fatal("map<string,int> compared equal to map<string,int?>")
 	}
-	if !integer.Equal(optionalInteger) {
+	if integer.Equal(optionalInteger) {
+		t.Fatal("exact equality erased top-level optionality")
+	}
+	if !integer.MatchesUnionArm(optionalInteger) {
 		t.Fatal("selected top-level optional wrapper did not compare equal to its non-null arm")
 	}
 	if !optionalInteger.Equal(OptionalBAMLType(integer)) {

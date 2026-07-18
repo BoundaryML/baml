@@ -2,6 +2,7 @@ package baml_go
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 
@@ -9,9 +10,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BAMLType is a typed wire descriptor used to dispatch closed union results.
-// Its protobuf representation remains private so generated code cannot depend
-// on wire implementation details or parse diagnostic type strings.
+// BAMLType is the opaque Go representation of a first-class BAML `type` value.
+// Generated union codecs also use it to dispatch selected arms. Its protobuf
+// representation remains private so generated code cannot depend on wire
+// implementation details or parse diagnostic type strings.
 type BAMLType struct {
 	value *cffi.BamlTy
 }
@@ -53,8 +55,12 @@ func PrimitiveBAMLType(kind PrimitiveType) BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Primitive{Primitive: &cffi.BamlTyPrimitive{Kind: protoKind}}}}
 }
 
-func ClassBAMLType(name string) BAMLType {
-	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Name: name}}}}
+func ClassBAMLType(name string, typeArgs ...BAMLType) BAMLType {
+	encoded := make([]*cffi.BamlTy, len(typeArgs))
+	for index, argument := range typeArgs {
+		encoded[index] = argument.value
+	}
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{ClassTy: &cffi.BamlTyClass{Name: name, TypeArgs: encoded}}}}
 }
 
 func EnumBAMLType(name string) BAMLType {
@@ -108,7 +114,22 @@ func BoolLiteralBAMLType(value bool) BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Literal{Literal: &cffi.BamlTyLiteral{Literal: &cffi.BamlTyLiteral_BoolValue{BoolValue: value}}}}}
 }
 
+// MetaTypeBAMLType describes BAML's `type` metatype. A BAMLType value itself
+// is a runtime instance of this metatype.
+func MetaTypeBAMLType() BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_MetaType{MetaType: &cffi.BamlTyMetaType{}}}}
+}
+
+// Equal compares complete BAML type descriptors. Optionality is significant
+// at every level, while union member order is not.
 func (value BAMLType) Equal(other BAMLType) bool {
+	return equalBAMLType(value.value, other.value, false)
+}
+
+// MatchesUnionArm implements the native runtime's legacy selected-arm rule:
+// a single Optional wrapper at the selected arm's root is ignored. Generated
+// union decoders use this method; application code normally wants Equal.
+func (value BAMLType) MatchesUnionArm(other BAMLType) bool {
 	return equalBAMLType(value.value, other.value, true)
 }
 
@@ -121,34 +142,27 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 	// the selected arm's root. Recursive calls deliberately pass false so
 	// list<int> remains distinct from list<int?>.
 	if allowTopLevelOptional {
-		leftOptional, leftIsOptional := left.Ty.(*cffi.BamlTy_Optional)
-		rightOptional, rightIsOptional := right.Ty.(*cffi.BamlTy_Optional)
+		leftInner, leftIsOptional := soleNonNullBAMLType(left)
+		rightInner, rightIsOptional := soleNonNullBAMLType(right)
 		switch {
-		case leftIsOptional && rightIsOptional && leftOptional.Optional != nil && rightOptional.Optional != nil:
-			return equalBAMLType(leftOptional.Optional.Inner, rightOptional.Optional.Inner, false)
-		case leftIsOptional && leftOptional.Optional != nil:
-			return equalBAMLType(leftOptional.Optional.Inner, right, false)
-		case rightIsOptional && rightOptional.Optional != nil:
-			return equalBAMLType(left, rightOptional.Optional.Inner, false)
+		case leftIsOptional && rightIsOptional:
+			return equalBAMLType(leftInner, rightInner, false)
+		case leftIsOptional:
+			return equalBAMLType(leftInner, right, false)
+		case rightIsOptional:
+			return equalBAMLType(left, rightInner, false)
 		}
 	}
-	switch leftValue := left.Ty.(type) {
-	case *cffi.BamlTy_List:
-		rightValue, ok := right.Ty.(*cffi.BamlTy_List)
-		return ok && leftValue.List != nil && rightValue.List != nil && equalBAMLType(leftValue.List.Item, rightValue.List.Item, false)
-	case *cffi.BamlTy_Map:
-		rightValue, ok := right.Ty.(*cffi.BamlTy_Map)
-		return ok && leftValue.Map != nil && rightValue.Map != nil &&
-			equalBAMLType(leftValue.Map.Key, rightValue.Map.Key, false) && equalBAMLType(leftValue.Map.Value, rightValue.Map.Value, false)
-	case *cffi.BamlTy_Union:
-		rightValue, ok := right.Ty.(*cffi.BamlTy_Union)
-		if !ok || leftValue.Union == nil || rightValue.Union == nil || len(leftValue.Union.Options) != len(rightValue.Union.Options) {
+	leftOptions, leftIsUnion := semanticUnionOptions(left)
+	rightOptions, rightIsUnion := semanticUnionOptions(right)
+	if leftIsUnion || rightIsUnion {
+		if !leftIsUnion || !rightIsUnion || len(leftOptions) != len(rightOptions) {
 			return false
 		}
-		matched := make([]bool, len(rightValue.Union.Options))
-		for _, leftOption := range leftValue.Union.Options {
+		matched := make([]bool, len(rightOptions))
+		for _, leftOption := range leftOptions {
 			found := false
-			for index, rightOption := range rightValue.Union.Options {
+			for index, rightOption := range rightOptions {
 				if !matched[index] && equalBAMLType(leftOption, rightOption, false) {
 					matched[index] = true
 					found = true
@@ -160,6 +174,15 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 			}
 		}
 		return true
+	}
+	switch leftValue := left.Ty.(type) {
+	case *cffi.BamlTy_List:
+		rightValue, ok := right.Ty.(*cffi.BamlTy_List)
+		return ok && leftValue.List != nil && rightValue.List != nil && equalBAMLType(leftValue.List.Item, rightValue.List.Item, false)
+	case *cffi.BamlTy_Map:
+		rightValue, ok := right.Ty.(*cffi.BamlTy_Map)
+		return ok && leftValue.Map != nil && rightValue.Map != nil &&
+			equalBAMLType(leftValue.Map.Key, rightValue.Map.Key, false) && equalBAMLType(leftValue.Map.Value, rightValue.Map.Value, false)
 	default:
 		// Optionality is semantically significant at every nested position:
 		// list<int> must not compare equal to list<int?>. Selected union arms
@@ -167,6 +190,273 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 		// needed here.
 		return proto.Equal(left, right)
 	}
+}
+
+func semanticUnionOptions(value *cffi.BamlTy) ([]*cffi.BamlTy, bool) {
+	var raw []*cffi.BamlTy
+	switch item := value.Ty.(type) {
+	case *cffi.BamlTy_Optional:
+		if item.Optional == nil || item.Optional.Inner == nil {
+			return nil, false
+		}
+		raw = []*cffi.BamlTy{item.Optional.Inner, PrimitiveBAMLType(NullType).value}
+	case *cffi.BamlTy_Union:
+		if item.Union == nil {
+			return nil, false
+		}
+		raw = item.Union.Options
+	default:
+		return nil, false
+	}
+	flat := make([]*cffi.BamlTy, 0, len(raw))
+	for _, option := range raw {
+		if option == nil {
+			flat = append(flat, option)
+			continue
+		}
+		if nested, ok := semanticUnionOptions(option); ok {
+			flat = append(flat, nested...)
+		} else {
+			flat = append(flat, option)
+		}
+	}
+	unique := flat[:0]
+	for _, option := range flat {
+		duplicate := false
+		for _, existing := range unique {
+			if equalBAMLType(option, existing, false) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			unique = append(unique, option)
+		}
+	}
+	return unique, true
+}
+
+func soleNonNullBAMLType(value *cffi.BamlTy) (*cffi.BamlTy, bool) {
+	options, ok := semanticUnionOptions(value)
+	if !ok {
+		return nil, false
+	}
+	var nonNull *cffi.BamlTy
+	seenNull := false
+	for _, option := range options {
+		if option == nil {
+			return nil, false
+		}
+		primitive, isPrimitive := option.Ty.(*cffi.BamlTy_Primitive)
+		if isPrimitive && primitive.Primitive != nil && primitive.Primitive.Kind == cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_NULL {
+			seenNull = true
+			continue
+		}
+		if nonNull != nil {
+			return nil, false
+		}
+		nonNull = option
+	}
+	return nonNull, seenNull && nonNull != nil
+}
+
+func validateBAMLType(value *cffi.BamlTy, depth int) error {
+	if depth > 256 {
+		return fmt.Errorf("descriptor nesting exceeds 256 levels")
+	}
+	if value == nil || value.Ty == nil {
+		return fmt.Errorf("descriptor is missing its type")
+	}
+	validateMany := func(values []*cffi.BamlTy) error {
+		for index, item := range values {
+			if err := validateBAMLType(item, depth+1); err != nil {
+				return fmt.Errorf("type argument %d: %w", index, err)
+			}
+		}
+		return nil
+	}
+	switch item := value.Ty.(type) {
+	case *cffi.BamlTy_Primitive:
+		if item.Primitive == nil || item.Primitive.Kind == cffi.BamlTyPrimitiveKind_BAML_TY_PRIMITIVE_UNSPECIFIED {
+			return fmt.Errorf("primitive descriptor has no kind")
+		}
+		if _, known := cffi.BamlTyPrimitiveKind_name[int32(item.Primitive.Kind)]; !known {
+			return fmt.Errorf("primitive descriptor has unknown kind %d", item.Primitive.Kind)
+		}
+	case *cffi.BamlTy_ClassTy:
+		if item.ClassTy == nil || item.ClassTy.Name == "" {
+			return fmt.Errorf("class descriptor has no name")
+		}
+		return validateMany(item.ClassTy.TypeArgs)
+	case *cffi.BamlTy_Enum:
+		if item.Enum == nil || item.Enum.Name == "" {
+			return fmt.Errorf("enum descriptor has no name")
+		}
+	case *cffi.BamlTy_List:
+		if item.List == nil {
+			return fmt.Errorf("list descriptor is missing")
+		}
+		return validateBAMLType(item.List.Item, depth+1)
+	case *cffi.BamlTy_Map:
+		if item.Map == nil {
+			return fmt.Errorf("map descriptor is missing")
+		}
+		if err := validateBAMLType(item.Map.Key, depth+1); err != nil {
+			return fmt.Errorf("map key: %w", err)
+		}
+		if err := validateBAMLType(item.Map.Value, depth+1); err != nil {
+			return fmt.Errorf("map value: %w", err)
+		}
+	case *cffi.BamlTy_Optional:
+		if item.Optional == nil {
+			return fmt.Errorf("optional descriptor is missing")
+		}
+		return validateBAMLType(item.Optional.Inner, depth+1)
+	case *cffi.BamlTy_Union:
+		if item.Union == nil || len(item.Union.Options) == 0 {
+			return fmt.Errorf("union descriptor has no options")
+		}
+		return validateMany(item.Union.Options)
+	case *cffi.BamlTy_Literal:
+		if item.Literal == nil || item.Literal.Literal == nil {
+			return fmt.Errorf("literal descriptor has no value")
+		}
+		switch literal := item.Literal.Literal.(type) {
+		case *cffi.BamlTyLiteral_BigintValue:
+			if _, ok := new(big.Int).SetString(literal.BigintValue, 10); !ok {
+				return fmt.Errorf("bigint literal descriptor is not decimal")
+			}
+		case *cffi.BamlTyLiteral_FloatValue:
+			parsed, err := strconv.ParseFloat(literal.FloatValue, 64)
+			if err != nil {
+				numberError, rangeError := err.(*strconv.NumError)
+				if !rangeError || numberError.Err != strconv.ErrRange || math.IsInf(parsed, 0) {
+					return fmt.Errorf("float literal descriptor is not finite decimal source")
+				}
+			}
+			if math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+				return fmt.Errorf("float literal descriptor is not finite decimal source")
+			}
+		}
+	case *cffi.BamlTy_TypeAlias:
+		if item.TypeAlias == nil || item.TypeAlias.Name == "" {
+			return fmt.Errorf("type alias descriptor has no name")
+		}
+		if len(item.TypeAlias.TypeArgs) != 0 {
+			return fmt.Errorf("type alias descriptor carries unsupported generic arguments")
+		}
+	case *cffi.BamlTy_Unknown:
+		if item.Unknown == nil {
+			return fmt.Errorf("unknown descriptor is missing")
+		}
+	case *cffi.BamlTy_Media:
+		if item.Media == nil || item.Media.Kind == cffi.BamlTyMediaKind_BAML_TY_MEDIA_KIND_UNSPECIFIED {
+			return fmt.Errorf("media descriptor has no kind")
+		}
+		if _, known := cffi.BamlTyMediaKind_name[int32(item.Media.Kind)]; !known {
+			return fmt.Errorf("media descriptor has unknown kind %d", item.Media.Kind)
+		}
+	case *cffi.BamlTy_Interface:
+		if item.Interface == nil || item.Interface.Name == "" {
+			return fmt.Errorf("interface descriptor has no name")
+		}
+		if err := validateMany(item.Interface.TypeArgs); err != nil {
+			return err
+		}
+		for index, binding := range item.Interface.Bindings {
+			if binding == nil || binding.Name == "" {
+				return fmt.Errorf("associated binding %d has no name", index)
+			}
+			if err := validateBAMLType(binding.Ty, depth+1); err != nil {
+				return fmt.Errorf("associated binding %q: %w", binding.Name, err)
+			}
+		}
+	case *cffi.BamlTy_EnumVariant:
+		if item.EnumVariant == nil || item.EnumVariant.Name == "" || item.EnumVariant.Variant == "" {
+			return fmt.Errorf("enum variant descriptor is incomplete")
+		}
+	case *cffi.BamlTy_Function:
+		if item.Function == nil {
+			return fmt.Errorf("function descriptor is missing")
+		}
+		for index, parameter := range item.Function.Params {
+			if parameter == nil {
+				return fmt.Errorf("function parameter %d is missing", index)
+			}
+			if err := validateBAMLType(parameter.Ty, depth+1); err != nil {
+				return fmt.Errorf("function parameter %d: %w", index, err)
+			}
+			if parameter.Mode == cffi.BamlTyFunctionParamMode_BAML_TY_FUNCTION_PARAM_MODE_UNSPECIFIED {
+				return fmt.Errorf("function parameter %d has no mode", index)
+			}
+			if _, known := cffi.BamlTyFunctionParamMode_name[int32(parameter.Mode)]; !known {
+				return fmt.Errorf("function parameter %d has unknown mode %d", index, parameter.Mode)
+			}
+		}
+		if err := validateBAMLType(item.Function.Ret, depth+1); err != nil {
+			return fmt.Errorf("function return: %w", err)
+		}
+		if err := validateBAMLType(item.Function.Throws, depth+1); err != nil {
+			return fmt.Errorf("function throws: %w", err)
+		}
+	case *cffi.BamlTy_Future:
+		if item.Future == nil {
+			return fmt.Errorf("future descriptor is missing")
+		}
+		if err := validateBAMLType(item.Future.Value, depth+1); err != nil {
+			return fmt.Errorf("future value: %w", err)
+		}
+		if err := validateBAMLType(item.Future.Error, depth+1); err != nil {
+			return fmt.Errorf("future error: %w", err)
+		}
+	case *cffi.BamlTy_RustType:
+		if item.RustType == nil {
+			return fmt.Errorf("rust type descriptor is missing")
+		}
+	case *cffi.BamlTy_MetaType:
+		if item.MetaType == nil {
+			return fmt.Errorf("metatype descriptor is missing")
+		}
+	case *cffi.BamlTy_Resource:
+		if item.Resource == nil {
+			return fmt.Errorf("resource descriptor is missing")
+		}
+	case *cffi.BamlTy_PromptAst:
+		if item.PromptAst == nil {
+			return fmt.Errorf("prompt AST descriptor is missing")
+		}
+	case *cffi.BamlTy_Void:
+		if item.Void == nil {
+			return fmt.Errorf("void descriptor is missing")
+		}
+	case *cffi.BamlTy_TypeVar:
+		if item.TypeVar == nil || item.TypeVar.Name == "" {
+			return fmt.Errorf("type variable descriptor has no name")
+		}
+	case *cffi.BamlTy_AssociatedTypeProjection:
+		if item.AssociatedTypeProjection == nil || item.AssociatedTypeProjection.Member == "" {
+			return fmt.Errorf("associated type projection is incomplete")
+		}
+		if err := validateBAMLType(item.AssociatedTypeProjection.Base, depth+1); err != nil {
+			return fmt.Errorf("associated type projection base: %w", err)
+		}
+		if item.AssociatedTypeProjection.Interface == nil {
+			return fmt.Errorf("associated type projection has no interface")
+		}
+		if _, ok := item.AssociatedTypeProjection.Interface.Ty.(*cffi.BamlTy_Interface); !ok {
+			return fmt.Errorf("associated type projection interface is not an interface descriptor")
+		}
+		if err := validateBAMLType(item.AssociatedTypeProjection.Interface, depth+1); err != nil {
+			return fmt.Errorf("associated type projection interface: %w", err)
+		}
+	case *cffi.BamlTy_Never:
+		if item.Never == nil {
+			return fmt.Errorf("never descriptor is missing")
+		}
+	default:
+		return fmt.Errorf("unsupported descriptor variant %T", value.Ty)
+	}
+	return nil
 }
 
 // UnionVariant returns the typed selected arm and its payload without guessing
@@ -439,6 +729,27 @@ func (value Value) Uint8Array() ([]byte, error) {
 		return nil, fmt.Errorf("expected BAML uint8array, got %T", value.value.Value)
 	}
 	return append([]byte(nil), item.Uint8ArrayValue...), nil
+}
+
+// Type decodes a reflected BAML type value. The returned descriptor is owned
+// entirely by Go and may be compared or sent back through another BAML call.
+func (value Value) Type() (BAMLType, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return BAMLType{}, err
+	}
+	value = unwrapped
+	if value.value == nil {
+		return BAMLType{}, fmt.Errorf("BAML value is uninitialized")
+	}
+	item, ok := value.value.Value.(*cffi.BamlOutboundValue_TyValue)
+	if !ok {
+		return BAMLType{}, fmt.Errorf("expected BAML type value, got %T", value.value.Value)
+	}
+	if err := validateBAMLType(item.TyValue, 0); err != nil {
+		return BAMLType{}, fmt.Errorf("invalid BAML type value: %w", err)
+	}
+	return BAMLType{value: proto.Clone(item.TyValue).(*cffi.BamlTy)}, nil
 }
 
 // unwrapUnionVariants removes the ABI's descriptive union envelopes before a

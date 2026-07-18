@@ -2066,6 +2066,17 @@ fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
         | (T::Bool { .. }, T::Bool { .. })
         | (T::Null { .. }, T::Null { .. })
         | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        // Attribute-free marker/opaque types still have exact structural
+        // identity. These must participate in selected-union membership just
+        // like primitives; in particular, a host-selected `type` arm carries
+        // `RuntimeTy::Type` on both sides of the ABI.
+        (T::BuiltinUnknown { .. }, T::BuiltinUnknown { .. })
+        | (T::RustType { .. }, T::RustType { .. })
+        | (T::Type { .. }, T::Type { .. })
+        | (T::Resource { .. }, T::Resource { .. })
+        | (T::PromptAst { .. }, T::PromptAst { .. })
+        | (T::Void { .. }, T::Void { .. })
+        | (T::Never { .. }, T::Never { .. }) => true,
         (T::Media(left, _), T::Media(right, _)) => left == right,
         (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
         (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
@@ -3184,6 +3195,25 @@ mod union_container_selection_tests {
         assert!(runtime_ty_structurally_equal(
             &metadata.selected_option,
             &image
+        ));
+    }
+
+    #[test]
+    fn host_selected_metatype_arm_survives_argument_coercion() {
+        let metatype = RuntimeTy::type_type();
+        let declared = RuntimeTy::union([metatype.clone(), RuntimeTy::string()]);
+        let selected = BexExternalValue::union(
+            BexExternalValue::Adt(BexExternalAdt::Type(RuntimeTy::int())),
+            [metatype.clone(), RuntimeTy::string()],
+            metatype.clone(),
+        );
+        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected metatype union metadata was lost")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &metatype
         ));
     }
 

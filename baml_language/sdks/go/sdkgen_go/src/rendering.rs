@@ -41,6 +41,9 @@ pub(crate) enum GeneratorIdent {
     ErrorType,
     ClassNameMethod,
     InputMethod,
+    ReflectedTypeInputMethod,
+    ReflectedTypeOutputMethod,
+    UnionArmMatchMethod,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +200,9 @@ impl GeneratorIdent {
         Self::ErrorType,
         Self::ClassNameMethod,
         Self::InputMethod,
+        Self::ReflectedTypeInputMethod,
+        Self::ReflectedTypeOutputMethod,
+        Self::UnionArmMatchMethod,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -232,6 +238,8 @@ impl GeneratorIdent {
             Self::ErrorType => "error",
             Self::ClassNameMethod => "BAMLClassName",
             Self::InputMethod => "BAMLInput",
+            Self::ReflectedTypeInputMethod | Self::ReflectedTypeOutputMethod => "Type",
+            Self::UnionArmMatchMethod => "MatchesUnionArm",
         }
     }
 }

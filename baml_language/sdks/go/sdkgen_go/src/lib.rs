@@ -1524,7 +1524,7 @@ fn add_projected_type_imports(
 ) {
     match ty {
         GoTy::Bigint => imports.add_generator(GeneratorIdent::BigPackage, "math/big"),
-        GoTy::Null | GoTy::Media(_) => {
+        GoTy::Null | GoTy::Media(_) | GoTy::ReflectedType => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
         }
         GoTy::Json => {}
@@ -1620,6 +1620,7 @@ fn render_projected_go_type(
             media_go_type(*kind)
         ),
         GoTy::Json => "any".to_string(),
+        GoTy::ReflectedType => format!("{}.BAMLType", GeneratorIdent::RuntimePackage),
         GoTy::Literal(literal) => render_projected_go_type(
             &literal_surface(literal),
             current_baml_package,
@@ -1765,6 +1766,9 @@ fn projected_input_encoder(
         GoTy::Uint8Array => format!("{runtime}.Uint8Array"),
         GoTy::Media(kind) => format!("{runtime}.{}Input", media_go_type(*kind)),
         GoTy::Json => format!("{runtime}.JSON"),
+        GoTy::ReflectedType => {
+            format!("{runtime}.{}", GeneratorIdent::ReflectedTypeInputMethod)
+        }
         GoTy::Literal(literal) => {
             projected_input_encoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -1834,6 +1838,10 @@ fn projected_output_decoder(
         GoTy::Uint8Array => format!("{runtime}.Value.Uint8Array"),
         GoTy::Media(kind) => format!("{runtime}.Value.{}", media_go_type(*kind)),
         GoTy::Json => format!("{runtime}.Value.JSON"),
+        GoTy::ReflectedType => format!(
+            "{runtime}.Value.{}",
+            GeneratorIdent::ReflectedTypeOutputMethod
+        ),
         GoTy::Literal(literal) => {
             projected_output_decoder(&literal_surface(literal), current_baml_package, codecs)
         }
@@ -2206,7 +2214,11 @@ fn render_union_codecs(
             } else {
                 decoded_local.to_string()
             };
-            let _ = writeln!(out, "\tif {selected_local}.Equal({descriptor}) {{");
+            let _ = writeln!(
+                out,
+                "\tif {selected_local}.{}({descriptor}) {{",
+                GeneratorIdent::UnionArmMatchMethod
+            );
             let _ = writeln!(
                 out,
                 "\t\t{decoded_target}, {error_local} := {member_decoder}({payload_local})"
@@ -2375,6 +2387,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Uint8Array => format!("{runtime}.PrimitiveBAMLType({runtime}.BytesType)"),
         GoTy::Media(kind) => format!("{runtime}.{}BAMLType()", media_go_type(*kind)),
         GoTy::Json => format!("{runtime}.TypeAliasBAMLType(\"baml.json.json\")"),
+        GoTy::ReflectedType => format!("{runtime}.MetaTypeBAMLType()"),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
         }

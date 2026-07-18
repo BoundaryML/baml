@@ -230,6 +230,15 @@ func Bool(value bool) Input {
 	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_BoolValue{BoolValue: value}}}
 }
 
+// Type encodes a reflected BAML type value. The descriptor remains opaque to
+// callers and is validated before it crosses the ABI.
+func Type(value BAMLType) Input {
+	if err := validateBAMLType(value.value, 0); err != nil {
+		return InvalidInput("invalid BAML type value: " + err.Error())
+	}
+	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyValue{TyValue: value.value}}}
+}
+
 func NullInput(_ Null) Input {
 	return Input{value: &cffi.InboundValue{}}
 }

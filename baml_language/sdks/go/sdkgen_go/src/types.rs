@@ -29,6 +29,9 @@ pub(crate) enum GoTy {
     /// `any`, but unlike a dynamic union its wire decoder accepts only the
     /// canonical JSON value algebra.
     Json,
+    /// A first-class reflected BAML type value (`type`). Its Go surface is the
+    /// opaque runtime descriptor `baml_go.BAMLType`.
+    ReflectedType,
     Literal(GoLiteral),
     Class(Name),
     Enum(Name),
@@ -176,6 +179,7 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Uint8Array { .. } => GoTy::Uint8Array,
             Ty::Media(MediaKind::Generic, _) => GoTy::Unsupported,
             Ty::Media(kind, _) => GoTy::Media(*kind),
+            Ty::Type { .. } => GoTy::ReflectedType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
