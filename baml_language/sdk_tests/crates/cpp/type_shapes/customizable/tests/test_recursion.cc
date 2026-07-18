@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk::recursion - recursive classes / SCCs.
 // Port of roundtrip_tests/test_recursion.py. Recursive children are
-// baml::OptionalBox<T>; finite values terminate with std::nullopt.
+// baml::optional_box<T>; finite values terminate with std::nullopt.
 #include <baml_sdk.h>
 #include <baml_test.h>
 

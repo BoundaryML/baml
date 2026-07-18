@@ -3,7 +3,7 @@
 // Non-recursive aliases emit `using` declarations; recursive aliases emit
 // named wrapper structs whose self-references are boxed, so
 // `RecList = int | RecList[]` is
-// `struct RecList { baml::Union<int64_t, vector<Box<RecList>>> value; }`.
+// `struct RecList { baml::variant<int64_t, vector<Box<RecList>>> value; }`.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
@@ -15,7 +15,7 @@ namespace aliases = baml_sdk::aliases;
 using aliases::AliasContainer;
 using aliases::MaybeRec;
 using aliases::RecList;
-using RecChildren = std::vector<baml::Box<RecList>>;
+using RecChildren = std::vector<baml::box<RecList>>;
 
 BAML_TEST(round_trip_string_list) {
   // StringList is a generated `using` alias; the codegen pool preserves
@@ -34,10 +34,10 @@ BAML_TEST(round_trip_rec_list) {
 
   // [1, [2, 3]]
   const RecList nested{RecChildren{
-      baml::Box<RecList>(RecList{int64_t{1}}),
-      baml::Box<RecList>(RecList{RecChildren{
-          baml::Box<RecList>(RecList{int64_t{2}}),
-          baml::Box<RecList>(RecList{int64_t{3}}),
+      baml::box<RecList>(RecList{int64_t{1}}),
+      baml::box<RecList>(RecList{RecChildren{
+          baml::box<RecList>(RecList{int64_t{2}}),
+          baml::box<RecList>(RecList{int64_t{3}}),
       }}),
   }};
   BAML_ASSERT(aliases::round_trip_rec_list(nested) == nested);
@@ -47,9 +47,9 @@ BAML_TEST(round_trip_alias_container) {
   const AliasContainer c{
       {"x"},  // list_field: StringList
       RecList{RecChildren{
-          baml::Box<RecList>(RecList{int64_t{1}}),
-          baml::Box<RecList>(RecList{RecChildren{
-              baml::Box<RecList>(RecList{int64_t{2}}),
+          baml::box<RecList>(RecList{int64_t{1}}),
+          baml::box<RecList>(RecList{RecChildren{
+              baml::box<RecList>(RecList{int64_t{2}}),
           }}),
       }},  // rec_field: [1, [2]]
   };
@@ -58,9 +58,9 @@ BAML_TEST(round_trip_alias_container) {
 
 BAML_TEST(round_trip_maybe_rec) {
   // C++-specific: a nullable recursive-alias reference folds the null into
-  // the box (OptionalBox<RecList>; optional<Box<T>> needs a complete T).
+  // the box (optional_box<RecList>; optional<Box<T>> needs a complete T).
   const MaybeRec none{{}};
   BAML_ASSERT(aliases::round_trip_maybe_rec(none) == none);
-  const MaybeRec some{baml::OptionalBox<RecList>(RecList{int64_t{6}})};
+  const MaybeRec some{baml::optional_box<RecList>(RecList{int64_t{6}})};
   BAML_ASSERT(aliases::round_trip_maybe_rec(some) == some);
 }

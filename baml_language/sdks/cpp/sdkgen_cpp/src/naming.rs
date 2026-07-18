@@ -306,7 +306,7 @@ impl GeneratorIdent {
             GeneratorIdent::WriterParam => "w",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
-            GeneratorIdent::EnsureRuntime => "EnsureRuntime",
+            GeneratorIdent::EnsureRuntime => "ensure_runtime",
             GeneratorIdent::DetailNamespace => "detail",
         }
     }

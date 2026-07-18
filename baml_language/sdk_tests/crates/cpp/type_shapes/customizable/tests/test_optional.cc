@@ -26,7 +26,7 @@ BAML_TEST(round_trip_resume) {
 }
 
 BAML_TEST(round_trip_optional_union) {
-  using U = baml::Union<int64_t, std::string>;
+  using U = baml::variant<int64_t, std::string>;
   BAML_ASSERT(baml_sdk::optional::round_trip_optional_union(U{int64_t{3}}) ==
               U{int64_t{3}});
   BAML_ASSERT(baml_sdk::optional::round_trip_optional_union(
@@ -37,9 +37,9 @@ BAML_TEST(round_trip_optional_union) {
 
 BAML_TEST(round_trip_optional_container) {
   const OptionalContainer c{
-      std::nullopt,                                         // optional_int
-      Resume{"x"},                                          // optional_class
-      baml::Union<int64_t, std::string>{std::string("y")},  // optional_union
+      std::nullopt,                                           // optional_int
+      Resume{"x"},                                            // optional_class
+      baml::variant<int64_t, std::string>{std::string("y")},  // optional_union
   };
   BAML_ASSERT(baml_sdk::optional::round_trip_optional_container(c) == c);
 }
