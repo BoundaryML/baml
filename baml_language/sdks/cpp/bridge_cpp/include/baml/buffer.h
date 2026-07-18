@@ -10,14 +10,14 @@ namespace baml {
 namespace detail {
 
 // RAII owner for a BamlBuffer returned by the C ABI. Frees with free_buffer().
-class OwnedBuffer {
+class owned_buffer {
  public:
-  explicit OwnedBuffer(BamlBuffer buf) : buf_(buf) {}
+  explicit owned_buffer(BamlBuffer buf) : buf_(buf) {}
 
-  OwnedBuffer(OwnedBuffer&& other) noexcept : buf_(other.buf_) {
+  owned_buffer(owned_buffer&& other) noexcept : buf_(other.buf_) {
     other.buf_ = BamlBuffer{nullptr, 0};
   }
-  OwnedBuffer& operator=(OwnedBuffer&& other) noexcept {
+  owned_buffer& operator=(owned_buffer&& other) noexcept {
     if (this != &other) {
       Release();
       buf_ = other.buf_;
@@ -25,10 +25,10 @@ class OwnedBuffer {
     }
     return *this;
   }
-  OwnedBuffer(const OwnedBuffer&) = delete;
-  OwnedBuffer& operator=(const OwnedBuffer&) = delete;
+  owned_buffer(const owned_buffer&) = delete;
+  owned_buffer& operator=(const owned_buffer&) = delete;
 
-  ~OwnedBuffer() { Release(); }
+  ~owned_buffer() { Release(); }
 
   bool empty() const { return buf_.ptr == nullptr || buf_.len == 0; }
 
@@ -41,7 +41,7 @@ class OwnedBuffer {
  private:
   void Release() {
     if (buf_.ptr != nullptr) {
-      Api().free_buffer(buf_);
+      api().free_buffer(buf_);
       buf_ = BamlBuffer{nullptr, 0};
     }
   }

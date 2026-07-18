@@ -211,6 +211,7 @@ prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
 ratatui = "0.29"
+rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
@@ -372,9 +373,12 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-# Salsa dominates our compile times, so we disable it in dev mode.
+# Salsa is the compiler's query engine: it only recompiles on a lockfile or
+# toolchain bump, but it executes on every compile. At opt-level 0 a debug
+# `baml-cli` takes 10-30s to cold-compile a one-function project, which the
+# spawned-CLI e2e suites (exit_code_e2e and friends) pay per test.
 [profile.dev.package.salsa]
-opt-level = 0
+opt-level = 3
 
 # This profile is meant to mimic the `release` profile as closely as
 # possible, but using settings that are more beneficial for iterative

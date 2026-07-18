@@ -41,6 +41,9 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
+    // Share the bytecode cache across the suite so only the first invocation
+    // pays the stdlib compile; see `common::shared_cache_dir`.
+    cmd.env("BAML_CACHE_DIR", common::shared_cache_dir());
     for arg in pack_args {
         cmd.arg(arg);
     }
@@ -115,6 +118,7 @@ fn pack_e2e_omits_compile_file_status() {
 
     let output = Command::new(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
         .arg("--from")
         .arg(tmp.path())
@@ -166,6 +170,7 @@ fn pack_e2e_hermetic_baml_file() {
     std::fs::write(&src, "function main() -> string { \"hermetic\" }\n").unwrap();
     let out_bin = tmp.path().join("out");
     let status = Command::new(&built.baml_cli)
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
         .arg("--file")
         .arg(&src)

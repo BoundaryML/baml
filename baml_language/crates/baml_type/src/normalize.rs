@@ -243,6 +243,30 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
+        // Reflexivity fast path: structurally identical spellings canonicalize
+        // to the same form (canonicalization is deterministic and attr-erasure
+        // applies to both sides), and `is_subtype_of` starts with a `self == sup`
+        // fast path — so the two allocation-heavy canonicalization walks below
+        // would only rediscover `true`.
+        if sub == sup {
+            return true;
+        }
+        // Narrow definite-mismatch filter. Unlike `equivalent`, differing heads
+        // do NOT generally refute subtyping (a literal is a subtype of its base,
+        // a member of its union, a class of an interface it implements) — but
+        // those pairs are different `Ty` *variants*, for which
+        // `heads_definitely_differ` already answers `false`. Of the same-variant
+        // nominal pairs it does claim, only interface-to-interface can still be
+        // a subtype under different names (`A <: B` iff `A` requires `B`), so it
+        // is excluded. For the rest the canonical walk below is a foregone
+        // `false`: class heads are preserved by canonicalization and the class
+        // subtype rule requires equal names (generic args are invariant), while
+        // enums and enum variants are nominal with no cross-name rule at all.
+        if !matches!((sub, sup), (Ty::Interface(..), Ty::Interface(..)))
+            && heads_definitely_differ(sub, sup)
+        {
+            return false;
+        }
         let sub = NormalTy::canonical(sub, self);
         let sup = NormalTy::canonical(sup, self);
         sub.is_subtype_of(&sup, self, &mut HashSet::new())

@@ -56,13 +56,24 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
+  # CI executes the compiler thousands of times per job — in-process in
+  # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
+  # test runtime dwarfs compile time here (opt-level 0 test execution was
+  # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
+  # debug-assertions on and costs one sccache-cold rebuild after this change
+  # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
+  # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
+  # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
+  # windows job.
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
 
   cargo-test-linux:
     name: "cargo test (linux)"
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
       - uses: useblacksmith/checkout@v1
@@ -103,29 +114,19 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
+      # `baml_tests`, `baml_cli`, and `baml_lsp2_actions` already run on linux
+      # with `--all-features` in the dedicated `snapshot-tests` job, so this
+      # job neither builds nor runs them — their test binaries are also the
+      # heaviest links in the workspace. (A nextest `-E` filter would only
+      # skip *running* them; the cargo-level `--exclude` skips building them
+      # too.) The `sdk_test_*` crates need uv and run in the dedicated
+      # `sdk-tests` matrix below.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
-      # `pack_e2e` is excluded here and run as its own step below: its harness
-      # builds `baml-pack-host` once and shares it across the suite via a
-      # process-global OnceLock, which nextest's process-per-test model would
-      # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not package(=baml_bridge)'
-        working-directory: baml_language
-
-      # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
-      # team develops on macOS, where libsui takes the Mach-O path, so an ELF
-      # writer bug (see crates/baml_cli/src/pack_elf.rs) shipped uncaught. The
-      # bug lives in ELF layout, not codegen, so it reproduces in debug too —
-      # running here (reusing the build above) keeps the gate cheap. `cargo
-      # test`, not nextest, lets the harness build the host once.
-      - name: "Run pack e2e tests (linux)"
-        run: cargo test -p baml_cli --test pack_e2e --all-features
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -209,15 +210,17 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
-        working-directory: baml_language
-
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
-      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here —
+      # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
+      # test binaries (the heaviest links in the workspace) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not package(=baml_bridge)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Show sccache stats"
@@ -323,20 +326,22 @@ jobs:
           echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
         working-directory: baml_language
 
-      - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings
-        working-directory: baml_language
-
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here. Profiling-specific
-      # test binaries opt in explicitly; keeping it off for the general suite
-      # avoids filling the Windows runner with incidental `.bamlprof` files.
-      # Run the two binaries that need `baml-pack-host` separately so their
-      # process-global OnceLocks build and share it instead of relinking it for
-      # every nextest case.
+      # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
+      # level (`--exclude`), not a nextest `-E` filter, so their test binaries
+      # (the heaviest links, and on Windows the largest PDBs) aren't built.
+      - name: "Build tests with --timings"
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        working-directory: baml_language
+
+      # Profiling-specific test binaries opt in explicitly; keeping
+      # BAML_PROFILE off for the general suite avoids filling the Windows
+      # runner with incidental `.bamlprof` files. Run the two binaries that
+      # need `baml-pack-host` separately so their process-global OnceLocks
+      # build and share it instead of relinking it for every nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e) and not binary(=exit_code_e2e) and not package(=baml_bridge)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e)'
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
@@ -995,7 +1000,7 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: useblacksmith/checkout@v1
@@ -1038,6 +1043,13 @@ jobs:
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
         working-directory: baml_language
 
+      # This job is the only linux coverage of `baml_tests`, `baml_cli`, and
+      # `baml_lsp2_actions` — `cargo test (linux)` excludes all three to avoid
+      # running them twice; keep its `--exclude` list in sync with the package
+      # list here. That includes `pack_e2e`, the only linux exercise of `baml
+      # pack`'s ELF embed/extract path (the team develops on macOS, where
+      # libsui takes the Mach-O path, so an ELF writer bug — see
+      # crates/baml_cli/src/pack_elf.rs — once shipped uncaught).
       - name: "Run snapshot tests"
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language

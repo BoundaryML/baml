@@ -152,6 +152,18 @@ function glob.$init_test_ns_glob_glob(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "glob_scan_throws_on_broken_symlink_when_opted_in"
+    make_closure .<lambda($init_test_ns_glob_glob, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "glob_scan_propagates_permission_errors"
+    make_closure .<lambda($init_test_ns_glob_glob, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -704,6 +716,97 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     return
 }
 
+function glob.scan_propagates_permission_errors_fn() -> bool {
+    load_const "perm_err"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/ok.txt"
+    bin_op +
+    load_const "ok"
+    sys_op baml.fs.write
+    pop 1
+    load_var root
+    load_const "/locked"
+    bin_op +
+    store_var_load_var locked
+    load_const false
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var locked
+    load_const "/inner.txt"
+    bin_op +
+    load_const "x"
+    sys_op baml.fs.write
+    pop 1
+    load_const "chmod 000 "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "ls "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    call baml.sys.ShellOutput.ok
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_const "**/*.txt"
+    sys_op baml.glob.new
+    load_var root
+    sys_op baml.glob.Glob.scan
+    pop 1
+    jump L3
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const true
+    store_var threw
+    jump L5
+
+  L3:
+    load_const false
+    store_var threw
+    jump L5
+
+  L4:
+    load_const true
+    store_var threw
+
+  L5:
+    load_const "chmod 755 "
+    load_var locked
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var threw
+    return
+}
+
 function glob.scan_returns_empty_for_no_match() -> string[] {
     load_const "scan_empty"
     call user.glob.glob_tmp
@@ -786,5 +889,74 @@ function glob.scan_skips_broken_symlinks_by_default() -> string[] {
     sys_op baml.sys.shell
     pop 1
     load_var result
+    return
+}
+
+function glob.scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
+    load_const "broken_throw"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var root
+    load_const "/real.txt"
+    bin_op +
+    load_const "content"
+    sys_op baml.fs.write
+    pop 1
+    load_const "ln -s "
+    load_var root
+    bin_op +
+    load_const "/missing.txt "
+    bin_op +
+    load_var root
+    bin_op +
+    load_const "/dangling.txt"
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_const "*.txt"
+    sys_op baml.glob.new
+    store_var g
+    load_var2 2 1
+    load_const null
+    load_const null
+    load_const true
+    load_const true
+    load_const null
+    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
+    sys_op baml.glob.Glob.scan
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const true
+    store_var threw
+    jump L3
+
+  L2:
+    load_const false
+    store_var threw
+
+  L3:
+    load_const "rm -rf "
+    load_var root
+    bin_op +
+    load_const null
+    sys_op baml.sys.shell
+    pop 1
+    load_var threw
     return
 }
