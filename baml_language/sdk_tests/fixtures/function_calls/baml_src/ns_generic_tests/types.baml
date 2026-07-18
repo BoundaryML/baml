@@ -44,6 +44,17 @@ class GenericBox<T> {
   function new<V>(value: V) -> GenericBox<V> {
     GenericBox<V> { value: value }
   }
+
+  // A receiver-free method may still reference an enclosing class TypeVar.
+  // Go exposes that binding as an inferred helper type parameter and sends it
+  // as a named structured type argument.
+  function static_echo(value: T) -> T {
+    value
+  }
+
+  function static_pair<U>(left: T, right: U) -> string {
+    reflect.type_of<T | U>().to_string()
+  }
 }
 
 // Static method whose TypeVar names differ from the enclosing class's params

@@ -1,8 +1,8 @@
 // Adversarial host-SDK coverage for class instance methods and `Self`.
 // The methods intentionally exercise nested type positions, nullable defaults,
 // transparent aliases, generator-owned local names, and Go name projection
-// collisions. Static methods are covered separately once Go's public static
-// method shape is decided.
+// collisions. Receiver-free static methods are covered by
+// `ns_static_method_edges` through package-level Go helpers.
 
 class MethodSelfEdges {
   round_trip string

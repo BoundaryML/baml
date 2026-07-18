@@ -53,7 +53,7 @@ impl BamlFqn {
 pub(crate) enum GoNameKind {
     Function,
     Method,
-    GenericMethodHelper,
+    MethodHelper,
     FunctionOptionType,
     MethodOptionType,
     FunctionOptionSetter,
@@ -212,7 +212,7 @@ impl NameRequest {
     fn scope(&self) -> NameScope {
         match self.kind {
             GoNameKind::Function
-            | GoNameKind::GenericMethodHelper
+            | GoNameKind::MethodHelper
             | GoNameKind::FunctionOptionType
             | GoNameKind::FunctionOptionSetter
             | GoNameKind::MethodOptionType
@@ -444,18 +444,29 @@ impl GoNames {
                         GoVisibility::Exported,
                     )
                 }));
-                for method in class.static_methods.iter().chain(&class.instance_methods) {
+                for (method, is_static) in class
+                    .static_methods
+                    .iter()
+                    .map(|method| (method, true))
+                    .chain(class.instance_methods.iter().map(|method| (method, false)))
+                {
                     let method_fqn = fqn.member(&method.name);
-                    if !method.generic_params.is_empty() {
+                    if is_static || !method.generic_params.is_empty() {
                         requests.push(NameRequest::new(
                             method_fqn.clone(),
-                            GoNameKind::GenericMethodHelper,
+                            GoNameKind::MethodHelper,
                             GoVisibility::Exported,
                         ));
                         requests.extend(
                             class
                                 .generic_params
                                 .iter()
+                                .filter(|parameter| {
+                                    !is_static
+                                        || crate::method_references_type_var(
+                                            method, parameter, projection,
+                                        )
+                                })
                                 .chain(&method.generic_params)
                                 .map(|parameter| {
                                     NameRequest::new(
@@ -466,11 +477,13 @@ impl GoNames {
                                 }),
                         );
                     }
-                    requests.push(NameRequest::new(
-                        method_fqn.clone(),
-                        GoNameKind::Method,
-                        GoVisibility::Exported,
-                    ));
+                    if !is_static {
+                        requests.push(NameRequest::new(
+                            method_fqn.clone(),
+                            GoNameKind::Method,
+                            GoVisibility::Exported,
+                        ));
+                    }
                     if method
                         .arguments
                         .iter()
@@ -1124,7 +1137,7 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
         GoNameKind::Method => {
             push_upper_component(&mut value, request.fqn.leaf());
         }
-        GoNameKind::GenericMethodHelper => {
+        GoNameKind::MethodHelper => {
             for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
@@ -1209,7 +1222,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         | GoNameKind::Class
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
-        GoNameKind::Method | GoNameKind::GenericMethodHelper | GoNameKind::MethodOptionType => {
+        GoNameKind::Method | GoNameKind::MethodHelper | GoNameKind::MethodOptionType => {
             BamlWireName::Method {
                 owner: request.fqn.symbol.clone(),
                 method: request.fqn.leaf().clone(),
@@ -1265,7 +1278,7 @@ fn short_hash(request: &NameRequest) -> String {
     hash.byte(match request.kind {
         GoNameKind::Function => 0,
         GoNameKind::Method => 9,
-        GoNameKind::GenericMethodHelper => 14,
+        GoNameKind::MethodHelper => 14,
         GoNameKind::Class => 1,
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
@@ -1661,6 +1674,86 @@ mod tests {
                 GoVisibility::Exported,
             )),
             "WithMethodEdgesEdgeBoxRoundTripValue"
+        );
+    }
+
+    #[test]
+    fn method_helpers_collide_in_package_scope_without_losing_wire_identity() {
+        let free_function = symbol(&["static_method_edges"], "edge_round_trip");
+        let edge = symbol(&["static_method_edges"], "edge");
+        let edge_method = edge.member(&BaseName::new("round_trip"));
+        let edge_round = symbol(&["static_method_edges"], "edge_round");
+        let edge_round_method = edge_round.member(&BaseName::new("trip"));
+        let colliding_type = symbol(&["static_method"], "edges_edge_round_trip");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(
+                    free_function.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    edge_method.clone(),
+                    GoNameKind::MethodHelper,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    edge_round_method.clone(),
+                    GoNameKind::MethodHelper,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    colliding_type.clone(),
+                    GoNameKind::Class,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let projected = [
+            names.project(&free_function, GoNameKind::Function, GoVisibility::Exported),
+            names.project(
+                &edge_method,
+                GoNameKind::MethodHelper,
+                GoVisibility::Exported,
+            ),
+            names.project(
+                &edge_round_method,
+                GoNameKind::MethodHelper,
+                GoVisibility::Exported,
+            ),
+            names.project(&colliding_type, GoNameKind::Class, GoVisibility::Exported),
+        ];
+        assert_eq!(
+            projected
+                .iter()
+                .map(|name| identifier(name))
+                .collect::<BTreeSet<_>>()
+                .len(),
+            4
+        );
+        assert_eq!(
+            projected[0].wire(),
+            &BamlWireName::Symbol(free_function.symbol.clone())
+        );
+        assert_eq!(
+            projected[1].wire(),
+            &BamlWireName::Method {
+                owner: edge.symbol,
+                method: BaseName::new("round_trip"),
+            }
+        );
+        assert_eq!(
+            projected[2].wire(),
+            &BamlWireName::Method {
+                owner: edge_round.symbol,
+                method: BaseName::new("trip"),
+            }
+        );
+        assert_eq!(
+            projected[3].wire(),
+            &BamlWireName::Symbol(colliding_type.symbol.clone())
         );
     }
 

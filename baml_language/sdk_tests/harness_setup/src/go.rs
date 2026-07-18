@@ -189,6 +189,42 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         vec![],
         BaseName::new("round_trip_thing_alias"),
     );
+    let static_factory = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("StaticFactory"),
+    );
+    let static_methods = vec![
+        synthetic_method(
+            "round_trip_model",
+            vec![("value", ty_class(models.clone(), vec![]), false)],
+            ty_class(models.clone(), vec![]),
+        ),
+        synthetic_method(
+            "round_trip_alias",
+            vec![("value", ty_alias(thing_alias.clone()), false)],
+            ty_alias(thing_alias.clone()),
+        ),
+        synthetic_method(
+            "round_trip_enum",
+            vec![("value", ty_alias(status_alias.clone()), true)],
+            ty_alias(status_alias.clone()),
+        ),
+        synthetic_method(
+            "round_trip_nested",
+            vec![("value", ty_class(envelope.clone(), vec![]), false)],
+            ty_class(envelope.clone(), vec![]),
+        ),
+        synthetic_method(
+            "unsupported_media",
+            vec![(
+                "value",
+                Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
+                false,
+            )],
+            Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
+        ),
+    ];
     let pool = SymbolPool::from([
         synthetic_class(context.clone(), vec![("value", ty_string())]),
         synthetic_class(dashed.clone(), vec![("value", ty_int())]),
@@ -304,6 +340,7 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         ),
         round_trip_function(status_alias_round_trip, ty_alias(status_alias)),
         round_trip_function(thing_alias_round_trip, ty_alias(thing_alias)),
+        synthetic_class_with_methods(static_factory, vec![], static_methods),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
         &pool,
@@ -316,6 +353,14 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
 }
 
 fn synthetic_class(name: Name, properties: Vec<(&str, Ty)>) -> (Name, Symbol) {
+    synthetic_class_with_methods(name, properties, vec![])
+}
+
+fn synthetic_class_with_methods(
+    name: Name,
+    properties: Vec<(&str, Ty)>,
+    static_methods: Vec<Function>,
+) -> (Name, Symbol) {
     let class = Class {
         name: name.clone(),
         generic_params: vec![],
@@ -328,7 +373,7 @@ fn synthetic_class(name: Name, properties: Vec<(&str, Ty)>) -> (Name, Symbol) {
                 ty,
             })
             .collect(),
-        static_methods: vec![],
+        static_methods,
         instance_methods: vec![],
         origin: Origin {
             source_file_path: "synthetic.baml".to_string(),
@@ -336,6 +381,32 @@ fn synthetic_class(name: Name, properties: Vec<(&str, Ty)>) -> (Name, Symbol) {
         },
     };
     (name, Symbol::Class(class))
+}
+
+fn synthetic_method(name: &str, arguments: Vec<(&str, Ty, bool)>, return_type: Ty) -> Function {
+    Function {
+        name: BaseName::new(name),
+        generic_params: vec![],
+        docstring: None,
+        arguments: arguments
+            .into_iter()
+            .map(|(name, ty, defaulted)| FunctionArgument {
+                name: BaseName::new(name),
+                docstring: None,
+                ty,
+                default: defaulted.then_some(
+                    baml_codegen_types::FunctionArgumentDefault::Expression { source: None },
+                ),
+            })
+            .collect(),
+        return_type,
+        throws: None,
+        watchers: vec![],
+        origin: Origin {
+            source_file_path: "synthetic.baml".to_string(),
+            span_start: 0,
+        },
+    }
 }
 
 fn synthetic_enum(name: Name, variants: &[&str]) -> (Name, Symbol) {

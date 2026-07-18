@@ -4,8 +4,10 @@
 //! and alias-typed functions over primitives, transparent non-recursive type
 //! aliases, enums, classes, lists, string-keyed maps, and nullable wrappers at
 //! any position; defaulted function arguments via typed functional options;
-//! non-generic class declarations composed from the same shapes; and instance
-//! methods on user classes, including `Self` nested anywhere in their types.
+//! non-generic class declarations composed from the same shapes; instance
+//! methods on user classes, including `Self` nested anywhere in their types;
+//! and receiver-free class methods as package helpers because Go has no
+//! associated-function syntax.
 //! Nullable and container class edges support finite recursive values, while
 //! impossible required-only direct class cycles remain omitted. A BAML package
 //! becomes one Go package. BAML namespaces stay within that Go package and
@@ -241,6 +243,8 @@ fn generated_functions<'a>(
             GeneratedFunction {
                 function,
                 fqn: fqn.clone(),
+                owner_name: None,
+                owner_type_parameters: vec![],
                 receiver: None,
                 method_syntax: false,
                 method_helper: false,
@@ -290,8 +294,7 @@ fn generated_functions<'a>(
                 if name.package() == package.baml_name()
                     // Stdlib classes use native/handle codecs rather than the
                     // ordinary field codecs used by user-authored classes.
-                    && name.package().as_str() == RESERVED_USER_PACKAGE
-                    && wireable_classes.contains(name) =>
+                    && name.package().as_str() == RESERVED_USER_PACKAGE =>
             {
                 Some((name, class))
             }
@@ -304,7 +307,8 @@ fn generated_functions<'a>(
             .instance_methods
             .iter()
             .filter(|method| {
-                supported_function(method, pool, wireable_classes, projection)
+                wireable_classes.contains(owner_name)
+                    && supported_function(method, pool, wireable_classes, projection)
                     && !method.arguments.iter().any(|argument| {
                         argument.default.is_some()
                             && projected_contains_type_var(&projection.project(&argument.ty))
@@ -322,6 +326,8 @@ fn generated_functions<'a>(
             generated.push(GeneratedFunction {
                 function: method,
                 fqn: method_fqn.clone(),
+                owner_name: Some(owner_name),
+                owner_type_parameters: class.generic_params.iter().collect(),
                 receiver: Some(GeneratedReceiver {
                     owner_name,
                     class,
@@ -337,7 +343,7 @@ fn generated_functions<'a>(
                         if method.generic_params.is_empty() {
                             GoNameKind::Method
                         } else {
-                            GoNameKind::GenericMethodHelper
+                            GoNameKind::MethodHelper
                         },
                         GoVisibility::Exported,
                     )
@@ -385,8 +391,11 @@ fn generated_functions<'a>(
             .static_methods
             .iter()
             .filter(|method| {
-                !method.generic_params.is_empty()
-                    && supported_function(method, pool, wireable_classes, projection)
+                supported_function(method, pool, wireable_classes, projection)
+                    && !method.arguments.iter().any(|argument| {
+                        argument.default.is_some()
+                            && projected_contains_type_var(&projection.project(&argument.ty))
+                    })
             })
             .collect::<Vec<_>>();
         static_methods.sort_by(|left, right| {
@@ -396,20 +405,39 @@ fn generated_functions<'a>(
         });
         for method in static_methods {
             let method_fqn = class_fqn.member(&method.name);
+            let owner_type_parameters = class
+                .generic_params
+                .iter()
+                .filter(|parameter| method_references_type_var(method, parameter, projection))
+                .collect();
             generated.push(GeneratedFunction {
                 function: method,
                 fqn: method_fqn.clone(),
+                owner_name: Some(owner_name),
+                owner_type_parameters,
                 receiver: None,
                 method_syntax: false,
                 method_helper: true,
                 go_name: names
                     .project(
                         &method_fqn,
-                        GoNameKind::GenericMethodHelper,
+                        GoNameKind::MethodHelper,
                         GoVisibility::Exported,
                     )
                     .clone(),
-                option_type: None,
+                option_type: method
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.default.is_some())
+                    .then(|| {
+                        names
+                            .project(
+                                &method_fqn,
+                                GoNameKind::MethodOptionType,
+                                GoVisibility::Exported,
+                            )
+                            .clone()
+                    }),
                 arguments: method
                     .arguments
                     .iter()
@@ -422,7 +450,15 @@ fn generated_functions<'a>(
                                 GoVisibility::Exported,
                             )
                             .clone(),
-                        option_setter: None,
+                        option_setter: argument.default.as_ref().map(|_| {
+                            names
+                                .project(
+                                    &method_fqn.member(&argument.name),
+                                    GoNameKind::MethodOptionSetter,
+                                    GoVisibility::Exported,
+                                )
+                                .clone()
+                        }),
                     })
                     .collect(),
             });
@@ -434,6 +470,8 @@ fn generated_functions<'a>(
 struct GeneratedFunction<'a> {
     function: &'a Function,
     fqn: BamlFqn,
+    owner_name: Option<&'a Name>,
+    owner_type_parameters: Vec<&'a BaseName>,
     receiver: Option<GeneratedReceiver<'a>>,
     method_syntax: bool,
     method_helper: bool,
@@ -1435,14 +1473,11 @@ fn render_functions(
     );
 
     for routed in functions {
-        let receiver_class_fqn = routed
-            .receiver
-            .as_ref()
-            .map(|receiver| BamlFqn::symbol(receiver.owner_name));
+        let owner_class_fqn = routed.owner_name.map(BamlFqn::symbol);
         let type_var_scope = TypeVarScope {
             helper: routed.method_helper.then_some(&routed.fqn),
             callable: Some(&routed.fqn),
-            class: receiver_class_fqn.as_ref(),
+            class: owner_class_fqn.as_ref(),
         };
         let codec_context = CodecRenderContext {
             current_baml_package,
@@ -1456,32 +1491,16 @@ fn render_functions(
         let function = routed.function;
         let go_name = routed.go_name.identifier(current_package);
         let mut type_parameters = routed
-            .receiver
+            .owner_type_parameters
             .iter()
             .filter(|_| !routed.method_syntax)
-            .flat_map(|receiver| receiver.class.generic_params.iter())
             .map(|parameter| {
                 format!(
                     "{} any",
                     names
                         .project(
-                            &if routed.method_helper {
-                                routed.fqn.member(parameter)
-                            } else {
-                                BamlFqn::symbol(
-                                    routed
-                                        .receiver
-                                        .as_ref()
-                                        .expect("receiver exists")
-                                        .owner_name,
-                                )
-                                .member(parameter)
-                            },
-                            if routed.method_helper {
-                                GoNameKind::HelperTypeParameter
-                            } else {
-                                GoNameKind::ClassTypeParameter
-                            },
+                            &routed.fqn.member(parameter),
+                            GoNameKind::HelperTypeParameter,
                             GoVisibility::Exported,
                         )
                         .identifier(current_package)
@@ -1717,16 +1736,12 @@ fn render_functions(
             out.push_str("\t\t}\n\t}\n");
         }
 
-        let call_name = if function.generic_params.is_empty()
-            && routed
-                .receiver
-                .as_ref()
-                .is_none_or(|receiver| receiver.class.generic_params.is_empty())
-        {
-            "Call"
-        } else {
-            "CallWithTypeArgs"
-        };
+        let call_name =
+            if function.generic_params.is_empty() && routed.owner_type_parameters.is_empty() {
+                "Call"
+            } else {
+                "CallWithTypeArgs"
+            };
         if function_returns_only_error(&function.return_type) {
             let _ = write!(
                 out,
@@ -1785,10 +1800,7 @@ fn render_functions(
             }
             out.push('}');
         }
-        let receiver_type_arguments = routed
-            .receiver
-            .iter()
-            .flat_map(|receiver| receiver.class.generic_params.iter());
+        let receiver_type_arguments = routed.owner_type_parameters.iter().copied();
         let callable_type_arguments = function.generic_params.iter();
         let type_arguments = receiver_type_arguments
             .chain(callable_type_arguments)
@@ -3191,6 +3203,62 @@ fn projected_contains_type_var(ty: &GoTy) -> bool {
     }
 }
 
+fn method_references_type_var(
+    method: &Function,
+    parameter: &BaseName,
+    projection: &GoTypeProjection<'_>,
+) -> bool {
+    method.arguments.iter().any(|argument| {
+        projected_contains_named_type_var(&projection.project(&argument.ty), parameter)
+    }) || projected_contains_named_type_var(&projection.project(&method.return_type), parameter)
+        || method.throws.as_ref().is_some_and(|throws| {
+            projected_contains_named_type_var(&projection.project(throws), parameter)
+        })
+}
+
+fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
+    match ty {
+        GoTy::TypeVar(name) => name == parameter,
+        GoTy::Class(_, arguments) => arguments
+            .iter()
+            .any(|argument| projected_contains_named_type_var(argument, parameter)),
+        GoTy::List(inner) | GoTy::Optional(inner) => {
+            projected_contains_named_type_var(inner, parameter)
+        }
+        GoTy::Map { key, value } => {
+            projected_contains_named_type_var(key, parameter)
+                || projected_contains_named_type_var(value, parameter)
+        }
+        GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => key
+            .members()
+            .iter()
+            .any(|member| projected_contains_named_type_var(member, parameter)),
+        GoTy::Function(key) => {
+            key.params()
+                .iter()
+                .any(|argument| projected_contains_named_type_var(argument.ty(), parameter))
+                || key
+                    .ret()
+                    .is_some_and(|ret| projected_contains_named_type_var(ret, parameter))
+        }
+        GoTy::Unsupported
+        | GoTy::String
+        | GoTy::Int
+        | GoTy::Bigint
+        | GoTy::Float
+        | GoTy::Bool
+        | GoTy::Null
+        | GoTy::Uint8Array
+        | GoTy::Json
+        | GoTy::ReflectedType
+        | GoTy::RustType
+        | GoTy::Media(_)
+        | GoTy::Literal(_)
+        | GoTy::Enum(_)
+        | GoTy::EnumVariant(..) => false,
+    }
+}
+
 fn projected_contains_type_var_dynamic_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::DynamicUnion { .. } => projected_contains_type_var(ty),
@@ -4558,6 +4626,171 @@ mod tests {
         );
         assert!(functions.contains("return baml_go.DecodeAs[Box[T]](result_)"));
         assert!(!functions.contains("func LiteralBox"));
+    }
+
+    #[test]
+    fn emits_non_generic_static_methods_as_package_helpers_with_options() {
+        let owner = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("static_edges")],
+            BaseName::new("box"),
+        );
+        let method = Function {
+            name: BaseName::new("make"),
+            generic_params: vec![],
+            docstring: Some("Constructs a value without a receiver.".to_string()),
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: ty_string(),
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("suffix"),
+                    docstring: None,
+                    ty: ty_string(),
+                    default: Some(FunctionArgumentDefault::Expression { source: None }),
+                },
+            ],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let unsupported_method = Function {
+            name: BaseName::new("unsupported_media"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: ty_media(baml_base::MediaKind::Generic),
+                default: None,
+            }],
+            return_type: ty_media(baml_base::MediaKind::Generic),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let static_echo = Function {
+            name: BaseName::new("static_echo"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: ty_type_var(BaseName::new("T")),
+                default: None,
+            }],
+            return_type: ty_type_var(BaseName::new("T")),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let defaulted_owner_type = Function {
+            name: BaseName::new("defaulted_owner_type"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: ty_type_var(BaseName::new("T")),
+                default: Some(FunctionArgumentDefault::Expression { source: None }),
+            }],
+            return_type: ty_type_var(BaseName::new("T")),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let class = Class {
+            name: owner.clone(),
+            generic_params: vec![BaseName::new("T")],
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: ty_type_var(BaseName::new("T")),
+            }],
+            static_methods: vec![
+                method,
+                static_echo,
+                defaulted_owner_type,
+                unsupported_method,
+            ],
+            instance_methods: vec![],
+            origin: origin(),
+        };
+        let hidden_owner = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("static_edges")],
+            BaseName::new("hidden"),
+        );
+        let hidden_class = Class {
+            name: hidden_owner.clone(),
+            generic_params: vec![],
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("unsupported"),
+                docstring: None,
+                ty: ty_media(baml_base::MediaKind::Generic),
+            }],
+            static_methods: vec![Function {
+                name: BaseName::new("ping"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: ty_string(),
+                    default: None,
+                }],
+                return_type: ty_string(),
+                throws: None,
+                watchers: vec![],
+                origin: origin(),
+            }],
+            instance_methods: vec![],
+            origin: origin(),
+        };
+        let pool = SymbolPool::from([
+            (owner, Symbol::Class(class)),
+            (hidden_owner, Symbol::Class(hidden_class)),
+        ]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("type StaticEdgesBoxMakeOption func(map[string]baml_go.Input)"));
+        assert!(
+            functions.contains(
+                "func WithStaticEdgesBoxMakeSuffix(value_ string) StaticEdgesBoxMakeOption"
+            )
+        );
+        assert!(functions.contains(
+            "func StaticEdgesBoxMake(ctx_ context.Context, value string, options_ ...StaticEdgesBoxMakeOption) (string, error)"
+        ));
+        assert!(
+            functions.contains("baml_go.Call(ctx_, \"user.static_edges.box.make\", arguments_)")
+        );
+        assert!(!functions.contains("func (receiver_"));
+        assert!(!functions.contains("StaticEdgesBoxMake[T any]"));
+        assert!(functions.contains(
+            "func StaticEdgesBoxStaticEcho[T any](ctx_ context.Context, value T) (T, error)"
+        ));
+        assert!(
+            functions.contains("[]baml_go.TypeArgument{{Name: \"T\", Type: baml_go.TypeOf[T]()}}")
+        );
+        assert!(functions.contains(
+            "func StaticEdgesHiddenPing(ctx_ context.Context, value string) (string, error)"
+        ));
+        assert!(!files[&PathBuf::from("types.go")].contains("type StaticEdgesHidden struct"));
+        assert!(!functions.contains("DefaultedOwnerType"));
+        assert!(!functions.contains("UnsupportedMedia"));
     }
 
     #[test]

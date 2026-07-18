@@ -30,7 +30,10 @@ var (
 // instance-method round trips. Go has one context-aware synchronous surface.
 func TestInstanceMethodsOnClassesRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	greeter := baml_sdk.MethodsOnClassesGreeter{Name: "hopper"}
+	greeter, err := baml_sdk.MethodsOnClassesGreeterCreate(ctx, "hopper")
+	if err != nil || greeter.Name != "hopper" {
+		t.Fatalf("GreeterCreate() = %#v, %v", greeter, err)
+	}
 	if got, err := greeter.Who(ctx); err != nil || got != "hopper" {
 		t.Fatalf("Who() = %q, %v", got, err)
 	}
@@ -39,12 +42,20 @@ func TestInstanceMethodsOnClassesRoundTrip(t *testing.T) {
 	}
 }
 
-// Direct port of the instance-method half of Python test_opt_box_method_matrix.
-// The static OptBox.make call remains deferred until Go's static-method public
-// shape is decided; constructing the same value proves receiver/default wiring.
+// Direct port of Python test_opt_box_method_matrix. Go exposes the static BAML
+// method as a package helper because Go has no associated functions.
 func TestInstanceMethodOptionalArguments(t *testing.T) {
 	ctx := context.Background()
-	box := baml_sdk.OptBox{Base: 10}
+	box, err := baml_sdk.OptBoxMake(ctx, 3)
+	if err != nil || box.Base != 10 {
+		t.Fatalf("OptBoxMake(default) = %#v, %v", box, err)
+	}
+	override := int64(4)
+	box, err = baml_sdk.OptBoxMake(ctx, 3, baml_sdk.WithOptBoxMakeOpt1(&override))
+	if err != nil || box.Base != 7 {
+		t.Fatalf("OptBoxMake(override) = %#v, %v", box, err)
+	}
+	box = baml_sdk.OptBox{Base: 10}
 	want := []*int64{int64Pointer(10), int64Pointer(1), int64Pointer(5)}
 	if got, err := box.Probe(ctx, 1); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("Probe(default) = %#v, %v, want %#v", got, err, want)

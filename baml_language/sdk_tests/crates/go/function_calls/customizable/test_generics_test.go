@@ -153,6 +153,14 @@ func TestGenericReceiverAndStaticHelpers(t *testing.T) {
 	if err != nil || created.Value != 9 {
 		t.Fatalf("static new = %#v, %v", created, err)
 	}
+	echoed, err := baml_sdk.GenericTestsGenericBoxStaticEcho(ctx, int64(11))
+	if err != nil || echoed != 11 {
+		t.Fatalf("static class TypeVar = %#v, %v", echoed, err)
+	}
+	pairStatic, err := baml_sdk.GenericTestsGenericBoxStaticPair(ctx, int64(11), "text")
+	if err != nil || pairStatic != "int | string" {
+		t.Fatalf("static class + method TypeVars = %#v, %v", pairStatic, err)
+	}
 	static, err := baml_sdk.GenericTestsNamedStaticMake(ctx, int64(1), "x")
 	if err != nil || static != "int | string" {
 		t.Fatalf("named static = %q, %v", static, err)
