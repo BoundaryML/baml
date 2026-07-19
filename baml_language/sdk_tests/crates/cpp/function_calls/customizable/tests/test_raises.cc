@@ -20,6 +20,18 @@ static std::string header_text() {
   return out.str();
 }
 
+BAML_TEST(imports_symbols_reachable) {
+  // Port of python's test_imports: every raises_test symbol is reachable
+  // at its qualified path. Compile-level analog of the import assertions -
+  // the header scrapes below are namespace-blind, so without this a
+  // wrong-namespace regression would pass them.
+  (void)sizeof(baml_sdk::raises_test::DocLoader);
+  (void)&baml_sdk::raises_test::InferredThrow;
+  (void)&baml_sdk::raises_test::LoadDoc;
+  (void)&baml_sdk::raises_test::PureLen;
+  (void)&baml_sdk::raises_test::Reparse;
+}
+
 BAML_TEST(union_throws_lists_all_names) {
   // A multi-member throws union lists every member, unqualified.
   BAML_ASSERT(header_text().find("/// Raises: ParseError, TimeoutError\n"
@@ -54,6 +66,16 @@ BAML_TEST(async_sibling_also_has_raises) {
                   "::baml::variant<::baml_sdk::raises_test::ParseError, "
                   "::baml_sdk::raises_test::TimeoutError>> LoadDoc_async(") !=
               std::string::npos);
+}
+
+BAML_TEST(method_raises_blocks) {
+  // Methods carry `Raises:` in the header exactly like free functions
+  // (python's .pyi-stub analog): both flavors, both variants.
+  BAML_ASSERT(header_text().find("  /// Raises: ParseError\n"
+                                 "  std::string load(") != std::string::npos);
+  BAML_ASSERT(header_text().find("  /// Raises: TimeoutError\n"
+                                 "  static ::baml_sdk::raises_test::DocLoader "
+                                 "create(") != std::string::npos);
 }
 
 BAML_TEST(non_throwing_function_has_no_raises_block) {
