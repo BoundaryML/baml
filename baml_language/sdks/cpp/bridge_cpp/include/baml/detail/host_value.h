@@ -480,10 +480,6 @@ void encode_callable(pb::InboundValue& value_msg, std::function<R(Ps...)> fn,
 extern "C" inline void baml_cpp_host_dispatch_trampoline(
     uint64_t host_value_key, uint32_t call_id, const uint8_t* args,
     size_t length) {
-  std::vector<uint8_t> bytes;
-  if (args != nullptr && length != 0) {
-    bytes.assign(args, args + length);
-  }
   // Bridge-layer faults (not user exceptions) also complete through
   // complete_host_call -- the C ABI's only completion channel -- as a
   // HostCallable error whose _handle carries a synthesized baml::error
@@ -496,26 +492,46 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
         call_id, baml::detail::build_host_callable_inbound("BridgeFailure",
                                                            message, key));
   };
-  auto dispatcher =
-      baml::detail::host_value_registry::instance().find_dispatcher(
-          host_value_key);
-  if (!dispatcher) {
-    // The engine knows a handle this registry does not: a bridge fault.
-    bridge_failure("no host callable registered for key " +
-                   std::to_string(host_value_key));
-    return;
-  }
-  // Fire-and-return: the engine awaits the completion, so the user
-  // callable runs on its own thread (the analog of Python's spawned tokio
-  // task). run_host_callable completes the call on every exit path.
-  std::thread([dispatcher = std::move(dispatcher), bridge_failure, call_id,
-               bytes = std::move(bytes)]() mutable {
-    try {
-      dispatcher(call_id, std::move(bytes));
-    } catch (...) {
-      bridge_failure("host callable dispatch failed outside the user callable");
+  // No C++ exception may cross the C ABI (bridge contract), and every
+  // setup fault must still complete the call or the engine awaits forever:
+  // bytes.assign can throw bad_alloc, the registry lock can throw, and the
+  // std::thread constructor throws system_error under thread exhaustion.
+  try {
+    std::vector<uint8_t> bytes;
+    if (args != nullptr && length != 0) {
+      bytes.assign(args, args + length);
     }
-  }).detach();
+    auto dispatcher =
+        baml::detail::host_value_registry::instance().find_dispatcher(
+            host_value_key);
+    if (!dispatcher) {
+      // The engine knows a handle this registry does not: a bridge fault.
+      bridge_failure("no host callable registered for key " +
+                     std::to_string(host_value_key));
+      return;
+    }
+    // Fire-and-return: the engine awaits the completion, so the user
+    // callable runs on its own thread (the analog of Python's spawned
+    // tokio task). run_host_callable completes the call on every exit
+    // path.
+    std::thread([dispatcher = std::move(dispatcher), bridge_failure, call_id,
+                 bytes = std::move(bytes)]() mutable {
+      try {
+        dispatcher(call_id, std::move(bytes));
+      } catch (...) {
+        bridge_failure(
+            "host callable dispatch failed outside the user callable");
+      }
+    }).detach();
+  } catch (...) {
+    try {
+      bridge_failure("host callable dispatch could not be spawned");
+    } catch (...) {
+      // Even the failure path failed (e.g. allocation): swallowing is all
+      // the ABI permits -- that call hangs rather than the process
+      // hitting UB.
+    }
+  }
 }
 
 extern "C" inline void baml_cpp_host_release_trampoline(
