@@ -20,6 +20,18 @@ static std::string header_text() {
   return out.str();
 }
 
+BAML_TEST(imports_symbols_reachable) {
+  // Port of python's test_imports: every raises_test symbol is reachable
+  // at its qualified path. Compile-level analog of the import assertions -
+  // the header scrapes below are namespace-blind, so without this a
+  // wrong-namespace regression would pass them.
+  (void)sizeof(baml_sdk::raises_test::DocLoader);
+  (void)&baml_sdk::raises_test::InferredThrow;
+  (void)&baml_sdk::raises_test::LoadDoc;
+  (void)&baml_sdk::raises_test::PureLen;
+  (void)&baml_sdk::raises_test::Reparse;
+}
+
 BAML_TEST(union_throws_lists_all_names) {
   // A multi-member throws union lists every member, unqualified.
   BAML_ASSERT(header_text().find("/// Raises: ParseError, TimeoutError\n"
