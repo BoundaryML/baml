@@ -56,6 +56,16 @@ BAML_TEST(async_sibling_also_has_raises) {
               std::string::npos);
 }
 
+BAML_TEST(method_raises_blocks) {
+  // Methods carry `Raises:` in the header exactly like free functions
+  // (python's .pyi-stub analog): both flavors, both variants.
+  BAML_ASSERT(header_text().find("  /// Raises: ParseError\n"
+                                 "  std::string load(") != std::string::npos);
+  BAML_ASSERT(header_text().find("  /// Raises: TimeoutError\n"
+                                 "  static ::baml_sdk::raises_test::DocLoader "
+                                 "create(") != std::string::npos);
+}
+
 BAML_TEST(non_throwing_function_has_no_raises_block) {
   // The summary line abuts the declaration: no Raises line in between.
   BAML_ASSERT(header_text().find("/// A pure function that never throws.\n"
