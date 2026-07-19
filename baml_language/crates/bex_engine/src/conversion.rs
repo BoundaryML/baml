@@ -516,8 +516,17 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
                 SynthTy::Known(RuntimeTy::prompt_ast())
             }
-            // Peel the FFI union wrapper and synthesize the carried value.
-            BexExternalValue::Union { value, .. } => self.synth_ty_from_value(value),
+            // A typed inbound value carries stronger evidence than payload
+            // shape alone (for example a literal rather than `string`, or the
+            // element type of an empty list). Actual union wrappers retain the
+            // existing payload-based inference behavior.
+            BexExternalValue::Union { value, metadata } => {
+                if metadata.is_inbound_typed_value {
+                    SynthTy::Known(metadata.selected_option.clone())
+                } else {
+                    self.synth_ty_from_value(value)
+                }
+            }
             // Opaque host values (Case 2) and other non-BAML-typed carriers.
             // (Every `Adt` variant is handled explicitly above, so there is no
             // `Adt(_)` fallthrough — a new `BexExternalAdt` variant will surface
@@ -917,10 +926,10 @@ impl BexEngine {
                 )
             }
             BexExternalValue::Union { value, metadata } => {
-                // A typed host union carries an authoritative selected arm.
-                // Materialize against that arm so container/class realized
-                // types retain the host's exact choice rather than re-guessing
-                // from an overlapping payload shape.
+                // A typed host value carries an authoritative exact type.
+                // Materialize against it so literals and container/class
+                // realized types retain the host's exact choice rather than
+                // re-guessing from payload shape.
                 return self.convert_external_to_vm_value_with_ty(
                     holder,
                     *value,
@@ -2987,21 +2996,25 @@ pub(crate) fn coerce_arg_to_declared_type(
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
         (BexExternalValue::Union { value, metadata }, declared @ RuntimeTy::Union(members, _)) => {
-            members
+            let value_type = &metadata.selected_option;
+            let selected_type = members
                 .iter()
-                .find(|member| selected_arm_equal(member, &metadata.selected_option))
+                .find(|member| selected_arm_equal(member, value_type))
+                .or_else(|| {
+                    members
+                        .iter()
+                        .find(|member| value_type.is_subtype_of(member))
+                })
                 .ok_or_else(|| EngineError::TypeMismatch {
                     message: format!(
-                        "host-selected arm `{}` is not a member of declared union `{declared}`",
-                        metadata.selected_option
+                        "host value type `{value_type}` is not a member of declared union `{declared}`"
                     ),
                 })?;
-            let selected_type = &metadata.selected_option;
-            let coerced = coerce_arg_to_declared_type(*value, selected_type)?;
-            if !value_matches_type(&coerced, selected_type) {
+            let coerced = coerce_arg_to_declared_type(*value, value_type)?;
+            if !value_matches_type(&coerced, value_type) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
-                        "host-selected union payload `{}` does not inhabit arm `{selected_type}`",
+                        "host-typed payload `{}` does not inhabit `{value_type}`",
                         coerced.type_name()
                     ),
                 });
@@ -3009,6 +3022,31 @@ pub(crate) fn coerce_arg_to_declared_type(
             Ok(BexExternalValue::Union {
                 value: Box::new(coerced),
                 metadata: UnionMetadata::new(declared.clone(), selected_type.clone()),
+            })
+        }
+        (BexExternalValue::Union { value, metadata }, declared)
+            if metadata.is_inbound_typed_value =>
+        {
+            let value_type = &metadata.selected_option;
+            if !value_type.is_subtype_of(declared) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host value type `{value_type}` is not assignable to declared type `{declared}`"
+                    ),
+                });
+            }
+            let coerced = coerce_arg_to_declared_type(*value, value_type)?;
+            if !value_matches_type(&coerced, value_type) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host-typed payload `{}` does not inhabit `{value_type}`",
+                        coerced.type_name()
+                    ),
+                });
+            }
+            Ok(BexExternalValue::Union {
+                value: Box::new(coerced),
+                metadata,
             })
         }
         // ── Class / enum naming (incoming only) ──────────────────────────
@@ -3436,18 +3474,69 @@ mod union_container_selection_tests {
     }
 
     #[test]
-    fn host_selected_overlapping_arm_survives_argument_coercion() {
+    fn host_typed_overlapping_arm_uses_contextual_union() {
         let draft = string_literal("draft");
-        let declared = RuntimeTy::union([RuntimeTy::string(), draft.clone()]);
-        let selected = BexExternalValue::union(
+        let declared = RuntimeTy::union([RuntimeTy::string(), draft]);
+        // The inbound wire carries only the exact value type. Its transient
+        // carrier therefore has no copy of `declared`; coercion must validate
+        // the type against the contextual union and reconstruct that union.
+        let selected = BexExternalValue::typed(
             BexExternalValue::String("draft".into()),
-            [RuntimeTy::string(), draft],
             RuntimeTy::string(),
         );
         let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
         let BexExternalValue::Union { metadata, .. } = coerced else {
             panic!("selected union metadata was lost")
         };
+        assert_eq!(metadata.union_type, declared);
+        assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn host_typed_value_rejects_type_outside_contextual_union() {
+        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+        let typed = BexExternalValue::typed(BexExternalValue::Bool(true), RuntimeTy::bool());
+        let error = coerce_arg_to_declared_type(typed, &declared).unwrap_err();
+        assert!(matches!(
+            error,
+            EngineError::TypeMismatch { message }
+                if message.contains("bool") && message.contains("declared union")
+        ));
+    }
+
+    #[test]
+    fn host_typed_literal_is_assignable_to_non_union_primitive() {
+        let draft = string_literal("draft");
+        let typed =
+            BexExternalValue::typed(BexExternalValue::String("draft".into()), draft.clone());
+        let coerced = coerce_arg_to_declared_type(typed, &RuntimeTy::string()).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("typed-value metadata was lost")
+        };
+        assert_eq!(metadata.selected_option, draft);
+    }
+
+    #[test]
+    fn host_typed_value_rejects_wrong_non_union_type() {
+        let typed = BexExternalValue::typed(BexExternalValue::Int(7), RuntimeTy::int());
+        let error = coerce_arg_to_declared_type(typed, &RuntimeTy::string()).unwrap_err();
+        assert!(matches!(
+            error,
+            EngineError::TypeMismatch { message }
+                if message.contains("int") && message.contains("string")
+        ));
+    }
+
+    #[test]
+    fn host_typed_literal_selects_broader_contextual_union_arm() {
+        let draft = string_literal("draft");
+        let declared = RuntimeTy::union([RuntimeTy::string(), RuntimeTy::int()]);
+        let typed = BexExternalValue::typed(BexExternalValue::String("draft".into()), draft);
+        let coerced = coerce_arg_to_declared_type(typed, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected union metadata was lost")
+        };
+        assert_eq!(metadata.union_type, declared);
         assert_eq!(metadata.selected_option, RuntimeTy::string());
     }
 

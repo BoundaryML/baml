@@ -9,7 +9,7 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class InboundValue(_message.Message):
-    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "union_variant_value")
+    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "typed_value")
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     FLOAT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -22,7 +22,7 @@ class InboundValue(_message.Message):
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_VALUE_FIELD_NUMBER: _ClassVar[int]
-    UNION_VARIANT_VALUE_FIELD_NUMBER: _ClassVar[int]
+    TYPED_VALUE_FIELD_NUMBER: _ClassVar[int]
     string_value: str
     int_value: int
     float_value: float
@@ -35,18 +35,16 @@ class InboundValue(_message.Message):
     uint8array_value: bytes
     bigint_value: str
     ty_value: _baml_type_pb2.BamlTy
-    union_variant_value: InboundUnionVariantValue
-    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., union_variant_value: _Optional[_Union[InboundUnionVariantValue, _Mapping]] = ...) -> None: ...
+    typed_value: InboundTypedValue
+    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., typed_value: _Optional[_Union[InboundTypedValue, _Mapping]] = ...) -> None: ...
 
-class InboundUnionVariantValue(_message.Message):
-    __slots__ = ("self_type", "selected_type", "value")
-    SELF_TYPE_FIELD_NUMBER: _ClassVar[int]
-    SELECTED_TYPE_FIELD_NUMBER: _ClassVar[int]
+class InboundTypedValue(_message.Message):
+    __slots__ = ("value_type", "value")
+    VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
-    self_type: _baml_type_pb2.BamlTy
-    selected_type: _baml_type_pb2.BamlTy
+    value_type: _baml_type_pb2.BamlTy
     value: InboundValue
-    def __init__(self, self_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., selected_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value: _Optional[_Union[InboundValue, _Mapping]] = ...) -> None: ...
+    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value: _Optional[_Union[InboundValue, _Mapping]] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
     __slots__ = ("values", "item_type")

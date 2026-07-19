@@ -12,7 +12,7 @@ use prost::Message;
 use crate::{
     baml_bridge::cffi::{
         BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundUnionVariantValue, InboundValue,
+        InboundMapValue, InboundTypedValue, InboundValue,
         inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
@@ -58,9 +58,7 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
-            InboundValueVariant::UnionVariantValue(union) => {
-                convert_union_variant(*union, handle_table)
-            }
+            InboundValueVariant::TypedValue(typed) => convert_typed_value(*typed, handle_table),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -92,39 +90,24 @@ pub fn inbound_to_external(
     }
 }
 
-fn convert_union_variant(
-    variant: InboundUnionVariantValue,
+fn convert_typed_value(
+    typed: InboundTypedValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
-    let self_type = variant
-        .self_type
+    let value_type = typed
+        .value_type
         .as_ref()
-        .ok_or_else(|| CtypesError::InternalError("inbound union is missing self_type".into()))
+        .ok_or_else(|| {
+            CtypesError::InternalError("inbound typed value is missing value_type".into())
+        })
         .and_then(crate::ty_decode::proto_ty_to_runtime_ty)?;
-    let selected = variant
-        .selected_type
-        .as_ref()
-        .ok_or_else(|| CtypesError::InternalError("inbound union is missing selected_type".into()))
-        .and_then(crate::ty_decode::proto_ty_to_runtime_ty)?;
-    let RuntimeTy::Union(members, _) = &self_type else {
-        return Err(CtypesError::UnionSelectedTypeNotMember {
-            selected: selected.to_string(),
-            union: self_type.to_string(),
-        });
-    };
-    if !members.iter().any(|member| member == &selected) {
-        return Err(CtypesError::UnionSelectedTypeNotMember {
-            selected: selected.to_string(),
-            union: self_type.to_string(),
-        });
-    }
-    let value = variant
-        .value
-        .ok_or_else(|| CtypesError::InternalError("inbound union is missing its value".into()))?;
-    Ok(BexExternalValue::union(
+    let value = typed.value.ok_or_else(|| {
+        CtypesError::InternalError("inbound typed value is missing its value".into())
+    })?;
+
+    Ok(BexExternalValue::typed(
         inbound_to_external(*value, handle_table)?,
-        members.clone(),
-        selected,
+        value_type,
     ))
 }
 
@@ -291,50 +274,98 @@ pub fn playground_run_args_to_bex_values(
 mod tests {
     use super::*;
     use crate::{
-        baml_bridge::cffi::{BamlHandle, InboundUnionVariantValue},
+        baml_bridge::cffi::{BamlHandle, InboundTypedValue},
         handle_table::CffiHandleTableEntry,
     };
 
-    fn selected_union_input(selected: &RuntimeTy) -> InboundValue {
-        let union = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+    fn typed_input(value_type: &RuntimeTy, value: InboundValueVariant) -> InboundValue {
         InboundValue {
-            value: Some(InboundValueVariant::UnionVariantValue(Box::new(
-                InboundUnionVariantValue {
-                    self_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&union)),
-                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(selected)),
-                    value: Some(Box::new(InboundValue {
-                        value: Some(InboundValueVariant::IntValue(7)),
-                    })),
+            value: Some(InboundValueVariant::TypedValue(Box::new(
+                InboundTypedValue {
+                    value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
+                    value: Some(Box::new(InboundValue { value: Some(value) })),
                 },
             ))),
         }
     }
 
     #[test]
-    fn selected_union_envelope_preserves_authoritative_arm() {
+    fn typed_value_preserves_authoritative_type() {
         let decoded = inbound_to_external(
-            selected_union_input(&RuntimeTy::int()),
+            typed_input(&RuntimeTy::int(), InboundValueVariant::IntValue(7)),
             &CffiHandleTable::new(),
         )
         .unwrap();
         let BexExternalValue::Union { value, metadata } = decoded else {
-            panic!("expected selected union")
+            panic!("expected typed-value carrier")
         };
         assert_eq!(*value, BexExternalValue::Int(7));
+        assert!(metadata.is_inbound_typed_value);
         assert_eq!(metadata.selected_option, RuntimeTy::int());
     }
 
     #[test]
-    fn selected_union_envelope_rejects_arm_outside_self_type() {
+    fn typed_value_requires_value_type() {
         let error = inbound_to_external(
-            selected_union_input(&RuntimeTy::bool()),
+            InboundValue {
+                value: Some(InboundValueVariant::TypedValue(Box::new(
+                    InboundTypedValue {
+                        value_type: None,
+                        value: Some(Box::new(InboundValue {
+                            value: Some(InboundValueVariant::BoolValue(true)),
+                        })),
+                    },
+                ))),
+            },
             &CffiHandleTable::new(),
         )
         .unwrap_err();
-        assert!(matches!(
-            error,
-            CtypesError::UnionSelectedTypeNotMember { .. }
-        ));
+        assert!(
+            matches!(error, CtypesError::InternalError(message) if message.contains("value_type"))
+        );
+    }
+
+    #[test]
+    fn typed_literal_preserves_identity_beyond_payload_shape() {
+        let literal = RuntimeTy::Literal(
+            baml_type::Literal::String("draft".to_string()),
+            baml_type::Freshness::Regular,
+            baml_type::TyAttr::default(),
+        );
+        let decoded = inbound_to_external(
+            typed_input(
+                &literal,
+                InboundValueVariant::StringValue("draft".to_string()),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = decoded else {
+            panic!("expected typed-value carrier")
+        };
+        assert_eq!(*value, BexExternalValue::String("draft".into()));
+        assert_eq!(metadata.selected_option, literal);
+    }
+
+    #[test]
+    fn typed_empty_container_preserves_exact_value_type() {
+        let list_type = RuntimeTy::list(RuntimeTy::int());
+        let decoded = inbound_to_external(
+            typed_input(
+                &list_type,
+                InboundValueVariant::ListValue(InboundListValue {
+                    values: vec![],
+                    item_type: None,
+                }),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = decoded else {
+            panic!("expected typed-value carrier")
+        };
+        assert!(matches!(*value, BexExternalValue::Array { items, .. } if items.is_empty()));
+        assert_eq!(metadata.selected_option, list_type);
     }
 
     #[test]

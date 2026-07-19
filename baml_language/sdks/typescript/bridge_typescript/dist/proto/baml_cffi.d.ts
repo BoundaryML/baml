@@ -55,8 +55,8 @@ export namespace baml_bridge {
                 /** InboundValue tyValue */
                 tyValue?: (baml_bridge.cffi.v1.IBamlTy|null);
 
-                /** InboundValue unionVariantValue */
-                unionVariantValue?: (baml_bridge.cffi.v1.IInboundUnionVariantValue|null);
+                /** InboundValue typedValue */
+                typedValue?: (baml_bridge.cffi.v1.IInboundTypedValue|null);
             }
 
             /** Represents an InboundValue. */
@@ -104,11 +104,11 @@ export namespace baml_bridge {
                 /** InboundValue tyValue. */
                 public tyValue?: (baml_bridge.cffi.v1.IBamlTy|null);
 
-                /** InboundValue unionVariantValue. */
-                public unionVariantValue?: (baml_bridge.cffi.v1.IInboundUnionVariantValue|null);
+                /** InboundValue typedValue. */
+                public typedValue?: (baml_bridge.cffi.v1.IInboundTypedValue|null);
 
                 /** InboundValue value. */
-                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"unionVariantValue");
+                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"typedValue");
 
                 /**
                  * Creates a new InboundValue instance using the specified properties.
@@ -188,109 +188,103 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of an InboundUnionVariantValue. */
-            interface IInboundUnionVariantValue {
+            /** Properties of an InboundTypedValue. */
+            interface IInboundTypedValue {
 
-                /** InboundUnionVariantValue selfType */
-                selfType?: (baml_bridge.cffi.v1.IBamlTy|null);
+                /** InboundTypedValue valueType */
+                valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
-                /** InboundUnionVariantValue selectedType */
-                selectedType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundUnionVariantValue value */
+                /** InboundTypedValue value */
                 value?: (baml_bridge.cffi.v1.IInboundValue|null);
             }
 
-            /** Represents an InboundUnionVariantValue. */
-            class InboundUnionVariantValue implements IInboundUnionVariantValue {
+            /** Represents an InboundTypedValue. */
+            class InboundTypedValue implements IInboundTypedValue {
 
                 /**
-                 * Constructs a new InboundUnionVariantValue.
+                 * Constructs a new InboundTypedValue.
                  * @param [properties] Properties to set
                  */
-                constructor(properties?: baml_bridge.cffi.v1.IInboundUnionVariantValue);
+                constructor(properties?: baml_bridge.cffi.v1.IInboundTypedValue);
 
-                /** InboundUnionVariantValue selfType. */
-                public selfType?: (baml_bridge.cffi.v1.IBamlTy|null);
+                /** InboundTypedValue valueType. */
+                public valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
-                /** InboundUnionVariantValue selectedType. */
-                public selectedType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundUnionVariantValue value. */
+                /** InboundTypedValue value. */
                 public value?: (baml_bridge.cffi.v1.IInboundValue|null);
 
                 /**
-                 * Creates a new InboundUnionVariantValue instance using the specified properties.
+                 * Creates a new InboundTypedValue instance using the specified properties.
                  * @param [properties] Properties to set
-                 * @returns InboundUnionVariantValue instance
+                 * @returns InboundTypedValue instance
                  */
-                public static create(properties?: baml_bridge.cffi.v1.IInboundUnionVariantValue): baml_bridge.cffi.v1.InboundUnionVariantValue;
+                public static create(properties?: baml_bridge.cffi.v1.IInboundTypedValue): baml_bridge.cffi.v1.InboundTypedValue;
 
                 /**
-                 * Encodes the specified InboundUnionVariantValue message. Does not implicitly {@link baml_bridge.cffi.v1.InboundUnionVariantValue.verify|verify} messages.
-                 * @param message InboundUnionVariantValue message or plain object to encode
+                 * Encodes the specified InboundTypedValue message. Does not implicitly {@link baml_bridge.cffi.v1.InboundTypedValue.verify|verify} messages.
+                 * @param message InboundTypedValue message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encode(message: baml_bridge.cffi.v1.IInboundUnionVariantValue, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encode(message: baml_bridge.cffi.v1.IInboundTypedValue, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Encodes the specified InboundUnionVariantValue message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InboundUnionVariantValue.verify|verify} messages.
-                 * @param message InboundUnionVariantValue message or plain object to encode
+                 * Encodes the specified InboundTypedValue message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InboundTypedValue.verify|verify} messages.
+                 * @param message InboundTypedValue message or plain object to encode
                  * @param [writer] Writer to encode to
                  * @returns Writer
                  */
-                public static encodeDelimited(message: baml_bridge.cffi.v1.IInboundUnionVariantValue, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IInboundTypedValue, writer?: $protobuf.Writer): $protobuf.Writer;
 
                 /**
-                 * Decodes an InboundUnionVariantValue message from the specified reader or buffer.
+                 * Decodes an InboundTypedValue message from the specified reader or buffer.
                  * @param reader Reader or buffer to decode from
                  * @param [length] Message length if known beforehand
-                 * @returns InboundUnionVariantValue
+                 * @returns InboundTypedValue
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.InboundUnionVariantValue;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.InboundTypedValue;
 
                 /**
-                 * Decodes an InboundUnionVariantValue message from the specified reader or buffer, length delimited.
+                 * Decodes an InboundTypedValue message from the specified reader or buffer, length delimited.
                  * @param reader Reader or buffer to decode from
-                 * @returns InboundUnionVariantValue
+                 * @returns InboundTypedValue
                  * @throws {Error} If the payload is not a reader or valid buffer
                  * @throws {$protobuf.util.ProtocolError} If required fields are missing
                  */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.InboundUnionVariantValue;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.InboundTypedValue;
 
                 /**
-                 * Verifies an InboundUnionVariantValue message.
+                 * Verifies an InboundTypedValue message.
                  * @param message Plain object to verify
                  * @returns `null` if valid, otherwise the reason why it is not
                  */
                 public static verify(message: { [k: string]: any }): (string|null);
 
                 /**
-                 * Creates an InboundUnionVariantValue message from a plain object. Also converts values to their respective internal types.
+                 * Creates an InboundTypedValue message from a plain object. Also converts values to their respective internal types.
                  * @param object Plain object
-                 * @returns InboundUnionVariantValue
+                 * @returns InboundTypedValue
                  */
-                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.InboundUnionVariantValue;
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.InboundTypedValue;
 
                 /**
-                 * Creates a plain object from an InboundUnionVariantValue message. Also converts values to other types if specified.
-                 * @param message InboundUnionVariantValue
+                 * Creates a plain object from an InboundTypedValue message. Also converts values to other types if specified.
+                 * @param message InboundTypedValue
                  * @param [options] Conversion options
                  * @returns Plain object
                  */
-                public static toObject(message: baml_bridge.cffi.v1.InboundUnionVariantValue, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public static toObject(message: baml_bridge.cffi.v1.InboundTypedValue, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
                 /**
-                 * Converts this InboundUnionVariantValue to JSON.
+                 * Converts this InboundTypedValue to JSON.
                  * @returns JSON object
                  */
                 public toJSON(): { [k: string]: any };
 
                 /**
-                 * Gets the default type url for InboundUnionVariantValue
+                 * Gets the default type url for InboundTypedValue
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

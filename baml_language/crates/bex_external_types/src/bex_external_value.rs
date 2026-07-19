@@ -32,6 +32,12 @@ use indexmap::IndexMap;
 /// easy serialization for FFI consumers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionMetadata {
+    /// Whether this is the transient engine carrier for an inbound
+    /// `InboundTypedValue`, rather than a value produced from a declared union.
+    /// The inbound wire intentionally carries only `selected_option`; the
+    /// contextual declared type supplies any enclosing union.
+    pub is_inbound_typed_value: bool,
+
     /// Name of the union type (for named type aliases like `type Result = Success | Failure`).
     pub name: Option<String>,
 
@@ -66,6 +72,7 @@ impl UnionMetadata {
         };
 
         Self {
+            is_inbound_typed_value: false,
             name: None,
             is_optional,
             is_single_pattern,
@@ -376,6 +383,22 @@ impl BexExternalAdt {
 }
 
 impl BexExternalValue {
+    /// Construct the transient carrier for an inbound value paired with its
+    /// exact host-known type. This reuses the external union representation so
+    /// existing type-directed VM materialization can honor `value_type`, while
+    /// explicitly distinguishing it from an actual declared union.
+    pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
+        let mut metadata = UnionMetadata::new(
+            RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
+            value_type,
+        );
+        metadata.is_inbound_typed_value = true;
+        BexExternalValue::Union {
+            value: Box::new(value),
+            metadata,
+        }
+    }
+
     /// Construct a union value (`A | B | ...`) with metadata.
     ///
     /// ```ignore

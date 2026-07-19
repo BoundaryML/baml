@@ -229,7 +229,8 @@ pub struct BamlTyUnknown {
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
 /// its source string to preserve formatting). Decoders preserve literal
-/// identity; widening here would make selected union arms ambiguous.
+/// identity so `InboundTypedValue.value_type` remains exact rather than being
+/// widened to the corresponding primitive payload shape.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyLiteral {
     #[prost(oneof = "baml_ty_literal::Literal", tags = "1, 2, 3, 4, 5")]
@@ -522,22 +523,20 @@ pub mod inbound_value {
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
-        /// A host-selected arm of a structural union. This is authoritative for
-        /// overlapping arms (for example `string | "draft"` or
-        /// `int\[\] | int?\[\]`) and avoids reconstructing identity from value shape.
+        /// A value paired with its exact host-known BAML type. This preserves type
+        /// identity that payload shape alone cannot recover, including literals,
+        /// empty containers, and a selected arm of an overlapping union. The
+        /// engine validates `value_type` against the contextual declared type.
         #[prost(message, tag = "14")]
-        UnionVariantValue(::prost::alloc::boxed::Box<super::InboundUnionVariantValue>),
+        TypedValue(::prost::alloc::boxed::Box<super::InboundTypedValue>),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundUnionVariantValue {
-    /// Full canonical union descriptor generated for the host surface.
+pub struct InboundTypedValue {
+    /// Exact type of `value`, such as the literal `"draft"` or `int\[\]`.
     #[prost(message, optional, tag = "1")]
-    pub self_type: ::core::option::Option<BamlTy>,
-    /// Exact arm selected by the host constructor.
-    #[prost(message, optional, tag = "2")]
-    pub selected_type: ::core::option::Option<BamlTy>,
-    #[prost(message, optional, boxed, tag = "3")]
+    pub value_type: ::core::option::Option<BamlTy>,
+    #[prost(message, optional, boxed, tag = "2")]
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<InboundValue>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

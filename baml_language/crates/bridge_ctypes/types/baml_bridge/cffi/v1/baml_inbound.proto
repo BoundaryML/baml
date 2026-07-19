@@ -40,20 +40,19 @@ message InboundValue {
     // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
-    // A host-selected arm of a structural union. This is authoritative for
-    // overlapping arms (for example `string | "draft"` or
-    // `int[] | int?[]`) and avoids reconstructing identity from value shape.
-    InboundUnionVariantValue union_variant_value = 14;
+    // A value paired with its exact host-known BAML type. This preserves type
+    // identity that payload shape alone cannot recover, including literals,
+    // empty containers, and a selected arm of an overlapping union. The
+    // engine validates `value_type` against the contextual declared type.
+    InboundTypedValue typed_value = 14;
   }
   // Absent oneof = null value.
 }
 
-message InboundUnionVariantValue {
-  // Full canonical union descriptor generated for the host surface.
-  BamlTy self_type = 1;
-  // Exact arm selected by the host constructor.
-  BamlTy selected_type = 2;
-  InboundValue value = 3;
+message InboundTypedValue {
+  // Exact type of `value`, such as the literal `"draft"` or `int[]`.
+  BamlTy value_type = 1;
+  InboundValue value = 2;
 }
 
 message InboundListValue {

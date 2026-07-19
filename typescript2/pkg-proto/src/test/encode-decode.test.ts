@@ -143,6 +143,52 @@ describe('encodeCallArgs', () => {
     }
   });
 
+  it('preserves an exact literal type through the general typed-value envelope', () => {
+    const draft = {
+      toBaml() {
+        return {
+          value: {
+            $case: 'typedValue' as const,
+            typedValue: {
+              valueType: {
+                ty: {
+                  $case: 'literal' as const,
+                  literal: {
+                    literal: {
+                      $case: 'stringValue' as const,
+                      stringValue: 'draft',
+                    },
+                  },
+                },
+              },
+              value: {
+                value: {
+                  $case: 'stringValue' as const,
+                  stringValue: 'draft',
+                },
+              },
+            },
+          },
+        };
+      },
+    };
+
+    const decoded = CallFunctionArgs.decode(encodeCallArgs({ status: draft }, 131));
+    const value = decoded.kwargs[0].value?.value;
+    expect(value?.$case).toBe('typedValue');
+    if (value?.$case !== 'typedValue') return;
+    expect(value.typedValue.valueType?.ty).toEqual({
+      $case: 'literal',
+      literal: {
+        literal: { $case: 'stringValue', stringValue: 'draft' },
+      },
+    });
+    expect(value.typedValue.value?.value).toEqual({
+      $case: 'stringValue',
+      stringValue: 'draft',
+    });
+  });
+
   it('encodes a $baml enum marker as an enumValue', () => {
     const bytes = encodeCallArgs(
       { c: { $baml: { enum: 'user.Color', value: 'Red' } } },
