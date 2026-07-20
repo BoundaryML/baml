@@ -25,6 +25,7 @@ base64 = { workspace = true }
 bytes = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }
 futures = { workspace = true }
+getrandom_03 = { workspace = true }
 indexmap = { workspace = true }
 js-sys = { workspace = true }
 log = { workspace = true }

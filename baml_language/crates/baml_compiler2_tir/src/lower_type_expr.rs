@@ -3364,6 +3364,63 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn generic_sysop_method_in_implements_block_is_rejected() {
+        // A `$rust_io_function` override with method-level generics is only reachable
+        // through interface dispatch, which cannot supply the sys-op's synthetic
+        // type-argument slots — rejected at the declaration (E0153). (`$rust_io_function`
+        // outside a builtin file also draws the builtin-only-syntax diagnostic, but that
+        // travels the HIR channel and does not gate body lowering, so the impl-conformance
+        // guard under test still sees a sys-op body here.)
+        let diags = impl_diagnostics(
+            "interface Codec {\n  function decode<T>(self, raw: string) -> T throws never\n}\n\
+             class Wire {\n  implements Codec {\n    \
+             function decode<T>(self, raw: string) -> T throws never { $rust_io_function }\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::GenericSysOpMethodInInterfaceImpl { method, .. }
+                    if method.as_str() == "decode"
+            )),
+            "expected GenericSysOpMethodInInterfaceImpl for `decode`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn non_generic_sysop_method_in_implements_block_is_accepted() {
+        // A sys-op override with no method-level generics dispatches fine virtually
+        // (its arity already counts the receiver) — e.g. `SystemRandom`'s `Rng` impl.
+        let diags = impl_diagnostics(
+            "interface Source {\n  function read(self, n: int) -> string throws never\n}\n\
+             class Device {\n  implements Source {\n    \
+             function read(self, n: int) -> string throws never { $rust_io_function }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::GenericSysOpMethodInInterfaceImpl { .. })),
+            "a non-generic sys-op override must not be rejected, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn generic_vm_builtin_method_in_implements_block_is_not_flagged_as_sysop() {
+        // The guard is specific to `$rust_io_function` (sys-ops); a `$rust_function`
+        // VM builtin with method generics is a different dispatch mechanism.
+        let diags = impl_diagnostics(
+            "interface Codec {\n  function decode<T>(self, raw: string) -> T throws never\n}\n\
+             class Wire {\n  implements Codec {\n    \
+             function decode<T>(self, raw: string) -> T throws never { $rust_function }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::GenericSysOpMethodInInterfaceImpl { .. })),
+            "a $rust_function override must not draw the sys-op diagnostic, got {diags:?}"
+        );
+    }
+
+    #[test]
     fn out_of_body_impl_of_field_interface_is_reported() {
         // A field-bearing interface can only be implemented in the class body (E0126). A simple
         // `implement HasField for Holder` is merged onto `Holder` for resolution but is written

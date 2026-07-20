@@ -34,6 +34,7 @@ mod map;
 mod media;
 mod ops;
 mod ops_math;
+mod random;
 mod resolve;
 pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;

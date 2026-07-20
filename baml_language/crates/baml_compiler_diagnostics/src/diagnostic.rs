@@ -233,7 +233,7 @@ pub enum DiagnosticId {
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
 
-    // Interface diagnostics (BEP-044; E0112-E0120)
+    // Interface diagnostics (BEP-044)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
     /// A class is missing the body of a required interface method.
@@ -253,6 +253,11 @@ pub enum DiagnosticId {
     /// A method body in `implements I {}` has a signature that doesn't match
     /// the interface's declared signature for that method.
     InterfaceMethodSignatureMismatch,
+    /// A `$rust_io_function` (sys-op) method in an `implements` block declares
+    /// its own generic parameters. Such a method is reached only through
+    /// interface (virtual) dispatch, which cannot carry the sys-op's
+    /// method-level type arguments.
+    GenericSysOpMethodInInterfaceImpl,
     /// Two `implements` blocks on the same class declare methods with the
     /// same name — unqualified calls would be ambiguous (BEP-044
     /// §"Method Disambiguation").
@@ -548,6 +553,7 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
             // Aliasing lints
             DiagnosticId::ArrayFilledAliasing => "E0148",
