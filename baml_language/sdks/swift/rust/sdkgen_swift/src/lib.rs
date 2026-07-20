@@ -24,6 +24,7 @@
 //! `BamlRuntime.shared.callSync(...)` / `call(...)` from the
 //! `BamlBridge` runtime package.
 
+mod diagnostics;
 mod emit;
 mod translate_ty;
 
@@ -66,6 +67,11 @@ pub fn to_source_code_with_bytecode(
     let mut sorted_pool: Vec<(&Name, &Symbol)> = pool.iter().collect();
     sorted_pool.sort_by_key(|(key, _)| *key);
 
+    // Every skip is recorded with the type that failed translation and
+    // surfaced in the generated `_BamlSkipped.swift` manifest — absent
+    // API must never be silent.
+    let mut skips: Vec<diagnostics::Skip> = Vec::new();
+
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
@@ -83,13 +89,28 @@ pub fn to_source_code_with_bytecode(
         }
         let rendered = match symbol {
             Symbol::Function(function) => {
-                render_callable(&key.to_string(), function, FnKind::Free, &ctx)
+                let rendered = render_callable(&key.to_string(), function, FnKind::Free, &ctx);
+                if rendered.is_none() {
+                    skips.push(diagnostics::Skip {
+                        fqn: fqn.clone(),
+                        kind: "function",
+                        reason: diagnostics::callable_skip_reason(function, &ctx),
+                        is_user: key.package().as_str() == "user",
+                    });
+                }
+                rendered
             }
             Symbol::Class(class) => {
                 if !ctx.supported_classes.contains(&fqn) {
+                    skips.push(diagnostics::Skip {
+                        fqn: fqn.clone(),
+                        kind: "class",
+                        reason: diagnostics::class_skip_reason(class, &ctx),
+                        is_user: key.package().as_str() == "user",
+                    });
                     None
                 } else {
-                    render_supported_class(class, key, &ctx, &boxed_fields)
+                    render_supported_class(class, key, &ctx, &boxed_fields, &mut skips)
                 }
             }
             Symbol::Enum(enum_) => Some(render_enum(enum_, key)),
@@ -97,6 +118,12 @@ pub fn to_source_code_with_bytecode(
                 if ctx.supported_aliases.contains(&fqn) {
                     render_alias(alias, key, &ctx)
                 } else {
+                    skips.push(diagnostics::Skip {
+                        fqn: fqn.clone(),
+                        kind: "type alias",
+                        reason: diagnostics::alias_skip_reason(alias, &ctx),
+                        is_user: key.package().as_str() == "user",
+                    });
                     None
                 }
             }
@@ -134,9 +161,26 @@ pub fn to_source_code_with_bytecode(
         }
         let (parent, seg) = (path[..path.len() - 1].to_vec(), &path[path.len() - 1]);
         if let Some(decls) = namespaces.get_mut(&parent) {
-            decls.remove(&format!("3:{seg}"));
+            if decls.remove(&format!("3:{seg}")).is_some() {
+                skips.push(diagnostics::Skip {
+                    fqn: path.join("."),
+                    kind: "function",
+                    is_user: !matches!(path[0].as_str(), "baml" | "vendor"),
+                    reason: format!(
+                        "name collides with the `{}` child namespace — in Swift \
+                         both occupy one scope, and the namespace wins",
+                        path.join(".")
+                    ),
+                });
+            }
         }
     }
+
+    skips.sort_by(|a, b| a.fqn.cmp(&b.fqn));
+    out.insert(
+        PathBuf::from("_BamlSkipped.swift"),
+        diagnostics::render_manifest(&skips),
+    );
 
     let root_decls = namespaces.remove(&Vec::new()).unwrap_or_default();
     // Named `BamlRoot.swift`, NOT `Baml.swift`: the stdlib namespace
@@ -323,6 +367,7 @@ fn render_supported_class(
     key: &Name,
     ctx: &TranslateCtx,
     boxed_fields: &BTreeSet<(String, String)>,
+    skips: &mut Vec<diagnostics::Skip>,
 ) -> Option<String> {
     let fqn = key.to_string();
     let mut fields = Vec::new();
@@ -344,12 +389,26 @@ fn render_supported_class(
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
         if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Static, ctx) {
             methods.push(rendered);
+        } else {
+            skips.push(diagnostics::Skip {
+                fqn: method_fqn,
+                kind: "static method",
+                reason: diagnostics::callable_skip_reason(method, ctx),
+                is_user: key.package().as_str() == "user",
+            });
         }
     }
     for method in &class.instance_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
         if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Instance, ctx) {
             methods.push(rendered);
+        } else {
+            skips.push(diagnostics::Skip {
+                fqn: method_fqn,
+                kind: "instance method",
+                reason: diagnostics::callable_skip_reason(method, ctx),
+                is_user: key.package().as_str() == "user",
+            });
         }
     }
 
@@ -361,7 +420,7 @@ fn render_supported_class(
 /// arms after normalization — the shape that gets a nominal
 /// family-surface enum. Null-bearing recursive union aliases are
 /// unsupported (the nominal enum can't carry the `?`; no fixture).
-fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, bool)> {
+pub(crate) fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, bool)> {
     if !alias.recursive {
         return None;
     }

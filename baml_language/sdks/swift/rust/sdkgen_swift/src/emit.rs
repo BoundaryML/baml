@@ -445,7 +445,7 @@ pub(crate) fn render_callable(
 /// callables are opaque handles, so their parameter/return types carry
 /// no inferable value (Python's `apply<T, R>` needs `_types=` for the
 /// same reason).
-fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
+pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
         Ty::TypeVar(v, _) => v.as_str() == name,
         Ty::List(inner, _) => ty_contains_type_var(inner, name),
