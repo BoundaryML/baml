@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function errorcontext.$init_test_ns_errorcontext_errorcontext(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.errorcontext"
     load_const "single_error_root_cause_is_self"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "nested_catch_chains_to_handled_error"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "hazard_a_nested_construct_in_catch_arm_chains_to_outer_error"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "no_match_rethrow_does_not_self_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "throw_after_catch_in_layout_gap_does_not_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "sibling_defers_that_throw_chain_to_root_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "hazard_b_unused_binding_slot_liveness_preserves_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_on_unwind_preserves_cause_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_on_unwind_preserves_to_string_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_with_body_preserves_cause_chain"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "nested_defers_nonthrowing_preserve_cause"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.errorcontext"
     load_const "defer_that_throws_still_chains_through_wrap"
     make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

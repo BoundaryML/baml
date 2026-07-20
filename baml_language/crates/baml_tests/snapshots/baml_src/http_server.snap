@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function http_server.$init_test_ns_http_server_http_server(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.http_server"
     load_const "server_roundtrip"
     make_closure .<lambda($init_test_ns_http_server_http_server, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_status_code"
     make_closure .<lambda($init_test_ns_http_server_http_server, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_response_headers"
     make_closure .<lambda($init_test_ns_http_server_http_server, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_strips_framing_headers"
     make_closure .<lambda($init_test_ns_http_server_http_server, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_rejects_oversized_body"
     make_closure .<lambda($init_test_ns_http_server_http_server, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_isolates_handler_panic"
     make_closure .<lambda($init_test_ns_http_server_http_server, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_bind_resolves_ephemeral_port"
     make_closure .<lambda($init_test_ns_http_server_http_server, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_reserve_after_cancel"
     make_closure .<lambda($init_test_ns_http_server_http_server, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_bound_method_handler"
     make_closure .<lambda($init_test_ns_http_server_http_server, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "tls_config_new_default_arg"
     make_closure .<lambda($init_test_ns_http_server_http_server, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "server_custom_config"
     make_closure .<lambda($init_test_ns_http_server_http_server, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.http_server"
     load_const "tls_config_handshake_timeout_arg"
     make_closure .<lambda($init_test_ns_http_server_http_server, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

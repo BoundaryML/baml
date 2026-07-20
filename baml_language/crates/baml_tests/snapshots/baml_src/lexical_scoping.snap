@@ -3,106 +3,123 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function lexical_scoping.$init_test_ns_lexical_scoping_lexical_scoping(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "same_scope_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "outer_restored"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "initializer_uses_previous"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "shadow_param"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "for_loop_restores_outer"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "nested_outer_restored"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "capture_before_after_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule1_while_no_leakage"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule1_while_observed_inner_shadow"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_block_outer_mutation_escapes"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_for_outer_mutation_escapes"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule3_block_shadow_then_assign_inner_does_not_escape"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "rule2_pre_shadow_mutation_escapes_post_shadow_does_not"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "declared_type_restored_across_scope"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "lambdas_capture_match_and_catch_pattern_bindings"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "match_and_catch_pattern_bindings_restore_outer_locals"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.lexical_scoping"
     load_const "multi_clause_catch_uses_clause_local_binding"
     make_closure .<lambda($init_test_ns_lexical_scoping_lexical_scoping, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

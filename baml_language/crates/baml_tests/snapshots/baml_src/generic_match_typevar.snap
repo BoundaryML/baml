@@ -3,64 +3,74 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match_typevar(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_matches_realized_int"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_rejects_non_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_arm_dynamic_first_match_capture"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_matches_realized_element"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_rejects_other_element"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_list_arm_dynamic_first_match_capture"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_map_arm_matches_realized_value_type"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "typevar_map_arm_rejects_other_value_type"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "is_typevar_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_typevar"
     load_const "is_typevar_non_member"
     make_closure .<lambda($init_test_ns_generic_match_typevar_generic_match_typevar, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
