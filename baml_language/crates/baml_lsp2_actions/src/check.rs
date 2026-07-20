@@ -429,7 +429,8 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let parameter_defaults =
                 baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
             builder.check_function_parameter_defaults(
-                &func_data.params,
+                &baml_compiler2_ppir::item_data::function_data(db, func_loc).params,
+                &baml_compiler2_ppir::item_data::function_source_map(db, func_loc).param_spans,
                 &parameter_defaults,
                 &param_types,
             );
@@ -594,13 +595,8 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // `validate_impl_signatures(loc)` (type conformance) each yield
     // `(TirTypeError, ImplDiagnosticLocation)` pairs anchored via the same source
     // map; a `Method` / field-link / binding location may mark several sites.
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    for impl_id in item_tree.impls.keys() {
-        let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
-        let Some(sm) = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc).as_ref()
-        else {
-            continue;
-        };
+    for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
+        let sm = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc);
         // `impl_data` owns an impl's structural diagnostics whether or not it
         // fully resolves: an unresolved interface target still carries the
         // diagnostics it lowered (the bad target, the for-target, the bounds). A
