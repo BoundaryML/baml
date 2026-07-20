@@ -210,10 +210,13 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // callable (`HostValue`) or a BAML function reference (`FunctionRef`).
         // No other value can inhabit a function type, so reject it rather than
         // let it fall through to the accept-anything opaque tail below.
-        RuntimeTy::Function { .. } => matches!(
-            value,
-            BexExternalValue::HostValue(_) | BexExternalValue::FunctionRef { .. }
-        ),
+        RuntimeTy::Function { .. } => {
+            matches!(
+                value,
+                BexExternalValue::HostValue(host)
+                    if host.kind == crate::HostValueKind::Callable
+            ) || matches!(value, BexExternalValue::FunctionRef { .. })
+        }
 
         // Opaque / compiler-only / otherwise-unhandled `RuntimeTy` shapes (e.g.
         // `Opaque`, `Future`): accept rather than risk a false rejection of a
@@ -585,6 +588,10 @@ mod tests {
             crate::HostValueKind::Callable,
         ));
         assert!(validate_host_return(&host, &fn_ty).is_ok());
+        // An opaque host value has the same wire carrier but is not callable.
+        let opaque =
+            BexExternalValue::HostValue(crate::HostValueArc::new(2, crate::HostValueKind::Opaque));
+        assert!(validate_host_return(&opaque, &fn_ty).is_err());
         // A BAML function reference satisfies it too.
         assert!(
             validate_host_return(&BexExternalValue::FunctionRef { global_index: 0 }, &fn_ty)

@@ -1830,16 +1830,13 @@ fn resolve_related_location<'db>(
                 .map(|range| (func_loc.file(db).file_id(db), range))
         }
         RelatedLocation::ClassField(class_loc, field_name) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let source_map = baml_compiler2_hir::file_item_tree_source_map(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
             let field_index = class_data
                 .fields
                 .iter()
                 .position(|field| &field.name == field_name)?;
-            let range = source_map
-                .class_field_spans
-                .get(&class_loc.id(db))?
+            let range = baml_compiler2_ppir::item_data::class_source_map(db, *class_loc)
+                .field_name_spans
                 .get(field_index)
                 .copied()?;
             Some((class_loc.file(db).file_id(db), range))

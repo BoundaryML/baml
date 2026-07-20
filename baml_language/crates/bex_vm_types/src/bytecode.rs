@@ -1744,12 +1744,12 @@ pub struct ExceptionTableEntry {
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
-    /// `usize::MAX` means no stack trace binding (catch (e) without second param).
+    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
     pub stack_trace_slot: usize,
 }
 
 impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = usize::MAX;
+    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
 
     pub fn has_stack_trace_slot(&self) -> bool {
         self.stack_trace_slot != Self::NO_STACK_TRACE

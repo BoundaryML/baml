@@ -41,12 +41,13 @@ type InterfaceClosureQueueEntry<'db> = (
 struct InterfaceTypeAssocLowering<'a, 'db> {
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &'a baml_compiler2_hir::item_tree::Interface,
+    iface: &'a baml_compiler2_ppir::item_data::InterfaceData<'db>,
     interface_args: &'a [Ty],
-    explicit_associated_bindings: &'a [baml_compiler2_ast::AssociatedTypeBinding],
-    iface_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
+    explicit_associated_bindings: &'a [baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
+    /// The arena the explicit bindings' `ty` ids index — the *requiring* item's
+    /// `type_refs` (the bindings are written at the `requires` site).
+    binding_type_refs: &'a baml_compiler2_hir::type_ref::TypeRefStore,
     binding_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
-    iface_namespace_path: &'a [Name],
     binding_namespace_path: &'a [Name],
     outer_bindings: &'a TypeBindings,
     /// The requiring interface as a constraint (its associated types pinned to the realized
@@ -138,10 +139,13 @@ fn carried_bound_satisfies(
 fn lower_interface_associated_bindings<'db>(
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &baml_compiler2_hir::item_tree::Interface,
+    iface: &baml_compiler2_ppir::item_data::InterfaceData<'db>,
     interface_args: &[Ty],
     self_ty: &Ty,
-    block_associated_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
+    // The arena the block bindings' `type_ref` ids index — the impl block's own
+    // `type_refs` (the bindings are written in the block's source).
+    binding_type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
+    block_associated_bindings: &[baml_compiler2_ppir::item_data::AssociatedTypeBindingData],
     binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     binding_namespace_path: &[Name],
     generic_params: &[Name],
@@ -177,7 +181,7 @@ fn lower_interface_associated_bindings<'db>(
             let ty = if let Some(binding) = block_associated_bindings
                 .iter()
                 .find(|binding| binding.name == assoc.name)
-                && let Some(type_expr) = &binding.type_expr
+                && let Some(type_ref) = binding.type_ref
             {
                 let mut bounds = caller_bounds.clone();
                 if let Some(qtn) = &iface_qtn {
@@ -191,8 +195,9 @@ fn lower_interface_associated_bindings<'db>(
                     );
                 }
                 crate::generics::substitute_ty(
-                    &crate::lower_type_expr::lower_type_expr(
-                        type_expr,
+                    &crate::lower_type_expr::lower_type_ref(
+                        binding_type_refs,
+                        type_ref,
                         &crate::lower_type_expr::ScopeCtx {
                             db,
                             package_items: binding_pkg_items,
@@ -228,7 +233,7 @@ fn lower_interface_associated_bindings<'db>(
 fn complete_interface_associated_bindings_from_tys<'db>(
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &baml_compiler2_hir::item_tree::Interface,
+    iface: &baml_compiler2_ppir::item_data::InterfaceData<'db>,
     interface_args: &[Ty],
     associated_bindings: &[(Name, Ty)],
     // When false, an unbound associated type is left absent rather than filled
@@ -312,10 +317,9 @@ pub(crate) fn interface_associated_type_default<'db>(
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     name: Name,
 ) -> Option<(Ty, Vec<crate::infer_context::TirTypeError>)> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let iface = item_tree.interfaces.get(&iface_loc.id(db))?;
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
     let assoc = iface.associated_types.iter().find(|a| a.name == name)?;
-    let default = assoc.default.as_ref()?;
+    let default = assoc.default?;
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
     let pkg_items =
@@ -343,7 +347,8 @@ pub(crate) fn interface_associated_type_default<'db>(
         .collect();
 
     let mut diagnostics = Vec::new();
-    let lowered = crate::lower_type_expr::lower_type_expr(
+    let lowered = crate::lower_type_expr::lower_type_ref(
+        &iface.type_refs,
         default,
         &crate::lower_type_expr::ScopeCtx {
             db,
@@ -397,8 +402,7 @@ pub(crate) fn existential_associated_default(
         return None;
     };
     let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
-    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let iface = item_tree.interfaces.get(&iface_loc.id(db))?;
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
     Some(realize_associated_default(
         &default,
         &iface.generic_params,
@@ -417,13 +421,8 @@ fn lower_interface_type_associated_bindings(
     }
     // The interface's declared parameter bounds, so a `T.member` projection in a
     // binding value or default resolves `T`'s declaring interface.
-    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
-        ctx.db,
-        ctx.iface_pkg_items,
-        ctx.iface_namespace_path,
-        &ctx.iface.generic_params,
-        &ctx.iface.generic_param_bounds,
-    );
+    let iface_bounds =
+        crate::lower_type_expr::interface_generic_param_bounds(ctx.db, ctx.iface_loc);
 
     ctx.iface
         .associated_types
@@ -454,20 +453,26 @@ fn lower_interface_type_associated_bindings(
                         self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
                     };
                     generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(&binding.ty, &scope, diagnostics),
+                        &crate::lower_type_expr::lower_type_ref(
+                            ctx.binding_type_refs,
+                            binding.ty,
+                            &scope,
+                            diagnostics,
+                        ),
                         &bindings,
                     )
                 } else {
                     let generic_params: Vec<_> = bindings.keys().cloned().collect();
                     crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(
-                            &binding.ty,
+                        &crate::lower_type_expr::lower_type_ref(
+                            ctx.binding_type_refs,
+                            binding.ty,
                             &crate::lower_type_expr::ScopeCtx {
                                 db: ctx.db,
                                 package_items: ctx.binding_pkg_items,
                                 ns_context: ctx.binding_namespace_path,
                                 generic_params: &generic_params,
-                                bounds: &iface_bounds,
+                                bounds: iface_bounds,
                                 self_ty: None,
                             },
                             diagnostics,
@@ -765,7 +770,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let Ty::Interface(qtn, _, _, _) = crate::lower_type_expr::lower_type_expr(
+    let ty = crate::lower_type_expr::lower_type_expr(
         target,
         &crate::lower_type_expr::ScopeCtx {
             db,
@@ -776,7 +781,44 @@ pub fn resolve_path_to_interface_identity<'db>(
             self_ty: None,
         },
         &mut diagnostics,
-    ) else {
+    );
+    resolved_interface_from_ty(db, ty)
+}
+
+/// The `TypeRef`-arena twin of [`resolve_path_to_interface_identity`], for
+/// callers holding firewall data (`class_data(…).type_refs` + a `TypeRefId`)
+/// rather than an AST node. Identical resolution — it lowers through
+/// [`lower_type_ref`](crate::lower_type_expr::lower_type_ref) instead of
+/// `lower_type_expr`.
+pub fn resolve_ref_to_interface_identity<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Option<ResolvedInterface<'db>> {
+    let mut diagnostics = Vec::new();
+    let ty = crate::lower_type_expr::lower_type_ref(
+        store,
+        target,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context: current_ns,
+            generic_params: &[],
+            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
+        &mut diagnostics,
+    );
+    resolved_interface_from_ty(db, ty)
+}
+
+/// Shared tail of the two `resolve_*_to_interface_identity` functions: a lowered
+/// type is an interface reference iff it lowered to `Ty::Interface`, whose `qtn`
+/// then resolves to a declaration.
+fn resolved_interface_from_ty(db: &dyn crate::Db, ty: Ty) -> Option<ResolvedInterface<'_>> {
+    let Ty::Interface(qtn, _, _, _) = ty else {
         return None;
     };
     let pkg_id = PackageId::new(db, qtn.package().clone());
@@ -800,6 +842,18 @@ pub fn resolve_path_to_interface<'db>(
         .map(|resolved| resolved.loc)
 }
 
+/// The `TypeRef`-arena twin of [`resolve_path_to_interface`].
+pub fn resolve_ref_to_interface<'db>(
+    db: &'db dyn crate::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    current_ns: &[Name],
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    resolve_ref_to_interface_identity(db, store, target, pkg_items, current_ns)
+        .map(|resolved| resolved.loc)
+}
+
 /// If `root`'s transitive `requires` graph cycles back to `root`, return the name chain
 /// `[root, …, root]` witnessing it; else `None`. A plain worklist walk (resolving each
 /// `requires` target to an [`InterfaceLoc`](baml_compiler2_hir::loc::InterfaceLoc)) with a
@@ -811,25 +865,22 @@ pub(crate) fn interface_requires_cycle<'db>(
     root: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Option<Vec<Name>> {
     let iface_name = |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Name {
-        baml_compiler2_hir::file_item_tree(db, loc.file(db))
-            .interfaces
-            .get(&loc.id(db))
-            .map(|i| i.name.clone())
-            .unwrap_or_default()
+        baml_compiler2_ppir::item_data::interface_data(db, loc)
+            .name
+            .clone()
     };
     let required_locs =
         |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-            let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
-                return Vec::new();
-            };
+            let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
             let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
             let pkg_items =
                 baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg.package.clone()));
             iface
                 .requires
                 .iter()
-                .filter_map(|p| resolve_path_to_interface(db, p, pkg_items, &pkg.namespace_path))
+                .filter_map(|&p| {
+                    resolve_ref_to_interface(db, &iface.type_refs, p, pkg_items, &pkg.namespace_path)
+                })
                 .collect()
         };
     let root_name = iface_name(root);
@@ -874,17 +925,18 @@ pub fn interface_closure_locs<'db>(
             continue;
         }
         out.push(loc);
-        let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-        let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
-            continue;
-        };
+        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        for parent in &iface.requires {
-            if let Some(parent_loc) =
-                resolve_path_to_interface(db, parent, parent_pkg_items, &pkg_info.namespace_path)
-            {
+        for &parent in &iface.requires {
+            if let Some(parent_loc) = resolve_ref_to_interface(
+                db,
+                &iface.type_refs,
+                parent,
+                parent_pkg_items,
+                &pkg_info.namespace_path,
+            ) {
                 queue.push_back(parent_loc);
             }
         }
@@ -926,10 +978,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         if ancestors.contains(&loc) {
             continue;
         }
-        let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-        let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
-            continue;
-        };
+        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
@@ -963,21 +1012,26 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         // interface.
         let iface_bounds = crate::lower_type_expr::interface_generic_param_bounds(db, loc);
 
-        for parent in &iface.requires {
-            let Some(parent_loc) =
-                resolve_path_to_interface(db, parent, parent_pkg_items, &pkg_info.namespace_path)
-            else {
+        for &parent in &iface.requires {
+            let Some(parent_loc) = resolve_ref_to_interface(
+                db,
+                &iface.type_refs,
+                parent,
+                parent_pkg_items,
+                &pkg_info.namespace_path,
+            ) else {
                 continue;
             };
-            let parent_args = match &parent.kind {
-                baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => {
+            let parent_args = match &iface.type_refs[parent].kind {
+                baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => {
                     let mut diags = Vec::new();
                     generic_args
                         .iter()
-                        .map(|arg| {
+                        .map(|&arg| {
                             let generic_params: Vec<_> = bindings.keys().cloned().collect();
                             crate::generics::substitute_ty(
-                                &crate::lower_type_expr::lower_type_expr(
+                                &crate::lower_type_expr::lower_type_ref(
+                                    &iface.type_refs,
                                     arg,
                                     &crate::lower_type_expr::ScopeCtx {
                                         db,
@@ -996,26 +1050,15 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                 }
                 _ => Vec::new(),
             };
-            let parent_tree = baml_compiler2_hir::file_item_tree(db, parent_loc.file(db));
-            let Some(parent_iface) = parent_tree.interfaces.get(&parent_loc.id(db)) else {
-                continue;
-            };
-            let parent_pkg =
-                baml_compiler2_hir::file_package::file_package(db, parent_loc.file(db));
-            let parent_iface_pkg_id = PackageId::new(db, parent_pkg.package.clone());
-            let parent_iface_pkg_items =
-                baml_compiler2_ppir::package_items(db, parent_iface_pkg_id);
+            let parent_iface = baml_compiler2_ppir::item_data::interface_data(db, parent_loc);
             let (parent_explicit_assoc, parent_binding_ns): (
-                &[baml_compiler2_ast::AssociatedTypeBinding],
+                &[baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
                 &[Name],
-            ) = match &parent.kind {
-                baml_compiler2_ast::TypeExprKind::Path {
+            ) = match &iface.type_refs[parent].kind {
+                baml_compiler2_hir::type_ref::TypeRefKind::Path {
                     associated_type_bindings,
                     ..
-                } => (
-                    associated_type_bindings.as_slice(),
-                    &pkg_info.namespace_path,
-                ),
+                } => (associated_type_bindings, &pkg_info.namespace_path),
                 _ => (&[][..], &pkg_info.namespace_path),
             };
             let parent_assoc = lower_interface_type_associated_bindings(
@@ -1025,9 +1068,8 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                     iface: parent_iface,
                     interface_args: &parent_args,
                     explicit_associated_bindings: parent_explicit_assoc,
-                    iface_pkg_items: parent_iface_pkg_items,
+                    binding_type_refs: &iface.type_refs,
                     binding_pkg_items: parent_pkg_items,
-                    iface_namespace_path: &parent_pkg.namespace_path,
                     binding_namespace_path: parent_binding_ns,
                     outer_bindings: &bindings,
                     self_bound: self_bound.clone(),
@@ -1087,10 +1129,7 @@ pub fn interface_requires<'db>(
         &sub.associated_types,
         true,
     ) {
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-        let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-            continue;
-        };
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
         let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
         if iface_qtn == sup.name
             && iface_args.len() == sup.generics.len()

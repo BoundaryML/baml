@@ -45,9 +45,13 @@ use std::{
 
 mod error;
 mod handle;
-mod host_value;
 mod registry;
-mod send_wrapper;
+mod host_value {
+    pub(crate) use sys_wasm::WasmHost;
+}
+mod send_wrapper {
+    pub(crate) use sys_wasm::{SendFuture, SendWrapper};
+}
 mod wasm_env;
 mod wasm_fs;
 mod wasm_http;
@@ -92,9 +96,12 @@ pub use bridge_ctypes::{
     HANDLE_TABLE, baml_bridge, external_to_outbound, playground_run_args_to_bex_values,
 };
 pub use error::BridgeError;
-pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
 use serde::Deserialize;
+pub use sys_wasm::{
+    complete_host_call, mint_host_value_key, register_host_callable,
+    register_host_value_release_callback, release_host_callable,
+};
 use wasm_bindgen::prelude::*;
 pub use wasm_lsp::LspNotification;
 
@@ -755,6 +762,7 @@ impl BamlWasmRuntime {
             // runtime clobber the first's).
             .with_host_instance(std::sync::Arc::new(host_value::WasmHost::new(
                 host_dispatch_fn,
+                false,
             )))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);

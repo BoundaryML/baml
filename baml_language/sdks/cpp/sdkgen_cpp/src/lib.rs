@@ -30,7 +30,9 @@ use std::{
     path::PathBuf,
 };
 
-use baml_codegen_types::{Class, Enum, Function, Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{
+    CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
+};
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
 
@@ -411,6 +413,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
     (
         "include/baml/detail/call.h",
         include_str!("../../bridge_cpp/include/baml/detail/call.h"),
+    ),
+    (
+        "include/baml/detail/host_value.h",
+        include_str!("../../bridge_cpp/include/baml/detail/host_value.h"),
     ),
     (
         "include/baml/detail/loader.h",
@@ -898,6 +904,11 @@ fn emit_alias_using(
 struct EmittedParam {
     name: CppName,
     ty: String,
+    /// For callable-typed parameters: the callable's declared BAML param
+    /// names in declared order ("" for unnamed required params). Switches
+    /// the binding to `encode_callable` (host-callable registration) and
+    /// keys supplied optional args on dispatch.
+    callable_names: Option<Vec<String>>,
 }
 
 /// An optional parameter, rendered as an `Arg<type>` field on the opts
@@ -941,13 +952,43 @@ fn emit_callable(
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
     for arg in &function.arguments {
-        let ty = match translate_ty(pool, names, &arg.ty, emitted_types, &BTreeSet::new()) {
-            Translated::Cpp(ty) => ty,
-            Translated::NotYet | Translated::Unsupported(_) => {
+        // Top-level callable parameters cross as host callables
+        // (std::function); callables nested in other types stay
+        // unsupported (translate_ty rejects them).
+        let mut callable_names = None;
+        let ty = if let Ty::Function {
+            params: callable_params,
+            ret,
+            ..
+        } = &arg.ty
+        {
+            if arg.default.is_some() {
                 return Err(format!(
-                    "argument `{}` has unsupported type {}",
-                    arg.name, arg.ty
+                    "optional argument `{}` has a callable type (unsupported)",
+                    arg.name
                 ));
+            }
+            match translate_callable_ty(pool, names, callable_params, ret, emitted_types) {
+                Ok((ty, wire_names)) => {
+                    callable_names = Some(wire_names);
+                    ty
+                }
+                Err(reason) => {
+                    return Err(format!(
+                        "argument `{}` has unsupported type {} ({reason})",
+                        arg.name, arg.ty
+                    ));
+                }
+            }
+        } else {
+            match translate_ty(pool, names, &arg.ty, emitted_types, &BTreeSet::new()) {
+                Translated::Cpp(ty) => ty,
+                Translated::NotYet | Translated::Unsupported(_) => {
+                    return Err(format!(
+                        "argument `{}` has unsupported type {}",
+                        arg.name, arg.ty
+                    ));
+                }
             }
         };
         let param_name = names
@@ -966,6 +1007,7 @@ fn emit_callable(
             params.push(EmittedParam {
                 name: param_name,
                 ty,
+                callable_names,
             });
         }
     }
@@ -1038,6 +1080,53 @@ fn emit_callable(
         raises,
         thrown,
     })
+}
+
+/// A callable-typed parameter as `std::function<Ret(Slots...)>` plus its
+/// declared BAML param names ("" for unnamed). Optional callable params
+/// (`y?: int`) become `arg` slots, so an argument BAML omits materializes
+/// as an unset `arg` and the host's own default applies.
+fn translate_callable_ty(
+    pool: &SymbolPool,
+    names: &CppNames,
+    callable_params: &[CallableParam],
+    ret: &Ty,
+    emitted_types: &BTreeSet<Name>,
+) -> Result<(String, Vec<String>), String> {
+    let mut slots = Vec::new();
+    let mut wire_names = Vec::new();
+    for p in callable_params {
+        let slot = match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => t,
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("callable param type {}", p.ty));
+            }
+        };
+        slots.push(match p.mode {
+            CodegenFunctionParamMode::Required => slot,
+            CodegenFunctionParamMode::Optional => format!("::baml::arg<{slot}>"),
+        });
+        wire_names.push(
+            p.name
+                .as_ref()
+                .map(|n| n.as_str().to_string())
+                .unwrap_or_default(),
+        );
+    }
+    let ret_ty = if matches!(ret, Ty::Void { .. }) {
+        "void".to_string()
+    } else {
+        match translate_ty(pool, names, ret, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => t,
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("callable return type {ret}"));
+            }
+        }
+    };
+    Ok((
+        format!("std::function<{ret_ty}({})>", slots.join(", ")),
+        wire_names,
+    ))
 }
 
 fn unqualified_leaf_name(ty: &Ty) -> String {
@@ -1469,6 +1558,23 @@ fn render_body(
         );
     }
     for p in &f.params {
+        if let Some(callable_names) = &p.callable_names {
+            let names_array = callable_names
+                .iter()
+                .map(|n| format!("std::string(\"{n}\")"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(
+                buf,
+                "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
+                 ::baml::detail::encode_callable({w}, {value}, \
+                 std::array<std::string, {n}>{{{{{names_array}}}}}); }});",
+                wire = p.name.wire(),
+                value = p.name.identifier(),
+                n = callable_names.len(),
+            );
+            continue;
+        }
         let _ = writeln!(
             buf,
             "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
@@ -1516,7 +1622,9 @@ fn render_header(
         "// Generated by sdkgen_cpp - do not edit.\n\
          #ifndef BAML_SDK_H_\n\
          #define BAML_SDK_H_\n\n\
+         #include <array>\n\
          #include <cstdint>\n\
+         #include <functional>\n\
          #include <unordered_map>\n\
          #include <optional>\n\
          #include <string>\n\

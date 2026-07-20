@@ -1,18 +1,27 @@
 import "./baml_sdk/index.js";
+import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBytecode } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
+import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
 import {
   Person,
+  ValidationError,
   call_callback_with_optional_args_all_set_async,
   call_callback_with_optional_args_all_unset_async,
   call_callback_with_optional_args_partially_set_async,
   call_int_callback_async,
   call_repeatedly_async,
+  call_returned_callback_async,
+  call_returned_callback_in_list_async,
   call_with_callback,
   call_with_callback_async,
   call_with_class_callback_async,
   call_with_throwing_async,
+  call_with_throwing_propagating_async,
+  call_with_typed_throws_async,
+  call_with_typed_throws_propagating_async,
   call_with_two_args_async,
 } from "./baml_sdk/host_callable_tests/index.js";
+import { isTestRuntime } from "./test_runtime.js";
 
 describe("function_calls — generated SDK host callables", () => {
   it("passes a plain function callback and returns a string", async () => {
@@ -40,11 +49,182 @@ describe("function_calls — generated SDK host callables", () => {
       throw new Error("nope");
     };
 
-    await expect(call_with_callback_async(cb, 1)).rejects.toThrow(
-      /nope|Error/,
-    );
+    await expect(call_with_callback_async(cb, 1)).rejects.toThrow(/nope|Error/);
   });
 
+  it("preserves same-realm thrown object identity", async () => {
+    const thrown = new Error("same object");
+    const callback = (): string => { throw thrown; };
+    await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
+  });
+
+  it("preserves arbitrary thrown JS values without hanging", async () => {
+    const values: unknown[] = [
+      new Error("ordinary error"),
+      "string failure",
+      73,
+      null,
+      { reason: "plain object" },
+    ];
+
+    for (const thrown of values) {
+      const callback = (): string => { throw thrown; };
+      try {
+        await call_with_throwing_propagating_async(callback, 1);
+        expect.unreachable("the throwing callback unexpectedly resolved");
+      } catch (caught) {
+        expect(caught).toBe(thrown);
+      }
+    }
+  });
+
+  it("preserves an Error whose stack is not a string", async () => {
+    const thrown = new Error("non-string stack");
+    Object.defineProperty(thrown, "stack", { value: { frames: ["host"] } });
+    const callback = (): string => { throw thrown; };
+
+    await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
+  });
+
+  it("completes through the metadata fallback for a hostile thrown object", async () => {
+    const thrown = new Proxy({}, {
+      get(_target, property) {
+        if (property === "constructor" || property === "toString") throw new Error("hostile getter");
+        return undefined;
+      },
+    });
+    const callback = (): string => { throw thrown; };
+
+    await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBeInstanceOf(BamlError);
+  });
+
+  it("preserves a rejected Promise reason by identity", async () => {
+    const thrown = { reason: "rejected Promise" };
+    const callback = ((_value: number) => Promise.reject(thrown)) as unknown as (value: number) => string;
+
+    await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
+  });
+
+  it("round-trips a typed BamlError through typed catch and propagation", async () => {
+    const typedValue = new ValidationError({ code: 422, message: "invalid profile", fields: ["name"] });
+    const callback = (): string => { throw new BamlError("validation failed", { value: typedValue }); };
+
+    await expect(call_with_typed_throws_async(callback, 1)).resolves.toBe("caught: invalid profile");
+    try {
+      await call_with_typed_throws_propagating_async(callback, 1);
+      expect.unreachable("the typed throw unexpectedly resolved");
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(BamlError);
+      expect((caught as BamlError).value).toBeInstanceOf(ValidationError);
+      expect((caught as BamlError).value).toEqual(typedValue);
+    }
+  });
+
+  it("surfaces a wrong callback return type as HostContractViolation", async () => {
+    const callback = ((_value: number) => "not an int") as unknown as (value: number) => number;
+
+    try {
+      await call_int_callback_async(callback, 1);
+      expect.unreachable("the wrong-type callback unexpectedly resolved");
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(BamlPanic);
+      expect((caught as BamlPanic).className).toBe("baml.panics.HostContractViolation");
+    }
+  });
+
+  it("adopts a custom thenable exactly once", async () => {
+    let settlements = 0;
+    const callback = (value: number): string => ({
+      then(resolve: (result: string) => void, reject: (reason: unknown) => void) {
+        settlements += 1;
+        resolve(`thenable-${value}`);
+        reject(new Error("late rejection"));
+      },
+    }) as unknown as string;
+    await expect(call_with_callback_async(callback, 8)).resolves.toBe("thenable-8");
+    expect(settlements).toBe(1);
+  });
+
+  it.runIf(isTestRuntime("web"))("adopts a Promise from a separate browser realm", async () => {
+    type ForeignIframe = { contentWindow: { Promise: PromiseConstructor } | null; remove(): void };
+    type BrowserDocument = { createElement(name: "iframe"): ForeignIframe; body: { append(value: ForeignIframe): void } };
+    const browserDocument = (globalThis as unknown as { document: BrowserDocument }).document;
+    const iframe = browserDocument.createElement("iframe");
+    browserDocument.body.append(iframe);
+    try {
+      const ForeignPromise = iframe.contentWindow?.Promise;
+      if (ForeignPromise === undefined) throw new Error("iframe Promise realm unavailable");
+      const callback = ((value: number) => new ForeignPromise<string>((resolve: (result: string) => void) => resolve(`foreign-${value}`))) as unknown as (value: number) => string;
+      await expect(call_with_callback_async(callback, 9)).resolves.toBe("foreign-9");
+    } finally {
+      iframe.remove();
+    }
+  });
+
+  it("returns and invokes a nested host callable", async () => {
+    const factory = () => (value: number) => `nested-${value}`;
+    await expect(call_returned_callback_async(factory, 6)).resolves.toBe("nested-6");
+  });
+
+  it("returns and invokes a host callable nested in a list", async () => {
+    const factory = () => [(value: number) => `nested-list-${value}`];
+    await expect(call_returned_callback_in_list_async(factory, 7)).resolves.toBe("nested-list-7");
+  });
+
+  it("completes a pending host call after runtime replacement", async () => {
+    let resolveResult!: (value: string) => void;
+    let dispatched!: () => void;
+    const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
+    const callback = ((_value: number) => new Promise<string>((resolve) => {
+      resolveResult = resolve;
+      dispatched();
+    })) as unknown as (value: number) => string;
+
+    const pending = call_with_callback_async(callback, 9);
+    await wasDispatched;
+    initializeRuntimeFromBytecode(BYTECODE);
+    resolveResult("after-replacement");
+    await expect(pending).resolves.toBe("after-replacement");
+  });
+
+  it("ignores a host Promise settlement after its outer call is cancelled", async () => {
+    const ctx = new BamlCallContext();
+    let settle!: (value: string) => void;
+    let dispatched!: () => void;
+    const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
+    const callback = ((_value: number) => new Promise<string>((resolve) => {
+      settle = resolve;
+      dispatched();
+    })) as unknown as (value: number) => string;
+
+    const pending = call_with_callback_async(callback, 10, { $ctx: ctx });
+    await wasDispatched;
+    ctx.abort();
+    await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+    settle("too late");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(call_with_callback_async((value) => `later-${value}`, 11)).resolves.toBe("later-11");
+  });
+
+  it("cancels through the originating runtime after runtime replacement", async () => {
+    const ctx = new BamlCallContext();
+    let settle!: (value: string) => void;
+    let dispatched!: () => void;
+    const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
+    const callback = ((_value: number) => new Promise<string>((resolve) => {
+      settle = resolve;
+      dispatched();
+    })) as unknown as (value: number) => string;
+
+    const pending = call_with_callback_async(callback, 12, { $ctx: ctx });
+    await wasDispatched;
+    initializeRuntimeFromBytecode(BYTECODE);
+    ctx.abort();
+    await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
+    settle("late after replacement");
+  });
+
+  // FinalizationRegistry scheduling is nondeterministic and the runners do not expose forced GC; deterministic registry release is covered by the raw Web bridge tests.
   it.skip("releases callable objects after the engine drops the HostClosure", async () => {
     async function callAndDrop(): Promise<WeakRef<object>> {
       let cb: ((x: number) => string) | undefined = (x: number) => `${x}`;
@@ -72,10 +252,7 @@ describe("function_calls — generated SDK host callables", () => {
     };
 
     await expect(
-      call_with_callback_async(
-        cb as unknown as (arg0: number) => string,
-        4,
-      ),
+      call_with_callback_async(cb as unknown as (arg0: number) => string, 4),
     ).resolves.toBe("async-4");
   });
 
@@ -150,7 +327,7 @@ describe("function_calls — generated SDK host callables", () => {
 });
 
 describe("function_calls — generated SDK sync guard for host callables", () => {
-  it("rejects callable args on the generated sync path instead of hanging", () => {
+  it("rejects callable args on the generated sync path instead of hanging", { timeout: 2_000 }, () => {
     expect(() => call_with_callback((x: number) => `got ${x}`, 5)).toThrow(
       /host callable/i,
     );
