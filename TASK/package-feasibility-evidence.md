@@ -1,12 +1,12 @@
 # C# atomic-package feasibility evidence
 
-Status: B4 partially executed through the first exact-source atomic attempt on
-2026-07-18. All eight shipping targets built, and all six non-Apple paired
-unstripped diagnostics passed, but both Apple diagnostics failed retained
-DWARF verification before upload. The atomic verifier and native consumer
-matrix were therefore skipped. Deterministic unsigned-package normalization
-and the current Linux x64 local baseline are proved; no eight-RID package
-baseline is approved.
+Status: B4 partially executed through the second exact-source atomic attempt
+on 2026-07-20. All eight shipping and paired diagnostic producers passed,
+including packed dSYM and PDB verification. The package job staged all eight
+shipping assets and accepted all six Unix diagnostic bundles, then rejected a
+Windows CRLF identity file before package construction. The focused canonical
+LF repair is local; no native consumer execution or eight-RID package baseline
+is approved.
 
 ## Target and size authority
 
@@ -323,12 +323,28 @@ because the build left Cargo's macOS debug layout at the documented
 the dylib or one UUID-matched `.dSYM`. The diagnostic uploads and downstream
 atomic verifier were correctly skipped. No B4 or C6 promotion is claimed.
 
+The second exact-source atomic attempt, [run
+29784081881](https://github.com/BoundaryML/baml/actions/runs/29784081881),
+used tag and source SHA
+`c44ac516a6f71fac143c4ff239beae424b042222`. All eight shipping and
+diagnostic producers passed, including the repaired packed dSYM checks on
+both Apple architectures and the existing PE/PDB checks on both Windows
+architectures. Package assembly validated the current-attempt shipping
+identities/checksums, staged one native per RID, and accepted both Apple plus
+all four Linux diagnostic manifests. It stopped on the first exact identity
+line in the Windows x64 diagnostic verification file because PowerShell had
+written CRLF and the Linux consumer uses exact whole-line matching. The
+downloaded Windows x64 artifact confirms that its DLL/PDB manifest, PE/PDB
+debug evidence, sizes, and distinct shipping/diagnostic digests are valid;
+only the cross-host text encoding violated the immutable contract. No package
+or consumer output was produced, so no B4 or C6 promotion is claimed.
+
 ## Remaining closure
 
-B4 remains blocked, not passed. Neither the builder-only run nor the failed
-first atomic attempt satisfies the atomic package contract. The locally
-validated Apple-only packed-debug repair must be committed and executed from
-a new exact-source bootstrap tag; a passing attempt must:
+B4 remains blocked, not passed. The builder-only run and two failed atomic
+attempts do not satisfy the complete package contract. The locally validated
+Windows canonical-LF repair must be committed and executed from a new
+exact-source bootstrap tag; a passing attempt must:
 
 1. supply all eight real immutable artifacts from the frozen release plan;
 2. inspect format, architecture, minimum OS/libc, dependencies, RPATH, exports,

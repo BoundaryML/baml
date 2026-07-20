@@ -1,15 +1,16 @@
 # C# implementation-entry external-run handoff
 
-Status: the exact-source tag bootstrap ran the first atomic external attempt
-at commit `9d29c01928df7ce726c49286a3067129fc039115`. Its source/release-plan
-preflight and six non-Apple producer jobs passed, including every experimental
-target, but both Apple diagnostic verifiers failed before upload and the
-atomic verifier was skipped. The failure is recorded below and promotes no
-gate. B8 passes locally, but its committed-source exact-package/trim
-reproduction is still pending. B11 also passes its complete local Linux
-trim/single-file matrix, while B4 remains blocked on the verified atomic
-package and real eight-RID consumers. `TASK/implementation.md` must not be
-created yet.
+Status: the second exact-source atomic attempt at commit
+`c44ac516a6f71fac143c4ff239beae424b042222` proved the repaired Apple
+packed-dSYM path and passed all eight shipping/diagnostic producers. The
+downstream verifier staged all eight shipping assets and accepted all six
+Unix diagnostic bundles, then rejected the first Windows identity file
+because PowerShell emitted CRLF while the Linux verifier requires exact LF
+lines. The package and consumer fan-out did not run. This portability defect
+is repaired locally and promotes no gate until another exact-source attempt
+passes. B8 and B11 retain their local status; B4 remains blocked on the
+verified atomic package and real eight-RID consumers.
+`TASK/implementation.md` must not be created yet.
 
 ## Exact workflow
 
@@ -174,8 +175,38 @@ builds, retain the generated `.dSYM`, and keep the existing UUID/DWARF and
 local-symbol assertions. That repair is implemented locally: `actionlint`,
 independent YAML parsing, shell syntax checks, Cargo profile-override parsing,
 and three-target argument expansion prove that only Apple receives the packed
-override. The Apple runner result and another complete exact-source attempt
-remain pending.
+override. The second attempt below proves that repair on both Apple runners.
+
+## Second atomic attempt
+
+[GitHub Actions run 29784081881](https://github.com/BoundaryML/baml/actions/runs/29784081881)
+was triggered by exact tag
+`csharp-entry-gates-c44ac516a6f71fac143c4ff239beae424b042222` at source
+SHA `c44ac516a6f71fac143c4ff239beae424b042222`, event `push`, attempt 1,
+release version `0.15.0`. The immutable-plan and central-matrix jobs passed.
+All eight producer jobs passed shipping build/upload, diagnostic build,
+platform-specific debug/symbol verification, and diagnostic upload. Both
+Apple architectures therefore prove the packed dSYM repair, including exact
+architecture, dylib/dSYM UUID equality, a DWARF compile unit, local symbols,
+and canonical manifest/upload paths. Both Windows PDB verifiers also passed.
+
+The verifier's native-consumer matrix computation passed. Package assembly
+downloaded the current-attempt artifacts, validated every shipping
+checksum/identity, staged exactly one asset for each of the eight RIDs, and
+accepted both Apple plus all four Linux diagnostic manifests. It then failed
+while consuming
+`x86_64-pc-windows-msvc/diagnostic-verification.txt`. The producer wrote
+PowerShell's CRLF line endings; the Linux assembly job's exact `grep -Fxq`
+identity checks correctly rejected the trailing carriage return. Downloaded
+evidence reproduces the failure and independently proves that the Windows x64
+DLL/PDB manifest, PE/PDB identity, procedure symbols, sizes, and distinct
+shipping/diagnostic digests all pass. No normalized package, native consumer,
+protocol-host, semantic/deployment, or completeness artifact was produced.
+
+The focused local repair writes this cross-platform identity file as explicit
+BOM-free LF text on Windows before hashing it into the immutable manifest. It
+does not weaken any identity or debug assertion. A new reviewed commit and
+matching exact-source tag must prove the repair.
 
 ## Provenance preflight
 
@@ -188,8 +219,8 @@ That scope became commit
 `9d29c01928df7ce726c49286a3067129fc039115` was the first atomic attempt's
 source.
 
-The Apple packed-debug repair and post-run ledger updates require a new
-reviewed source commit and a new matching
+The Windows canonical-line-ending repair and post-run ledger updates require
+a new reviewed source commit and a new matching
 `csharp-entry-gates-<full source SHA>` tag. Its precommit scope must contain
 only the native-builder workflow plus these four continuously maintained
 ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and all
@@ -408,4 +439,4 @@ Current source SHA-256 values:
 | shared Rust setup action | `2063428518629315d1d6bb67e4c864764466cfc6a9654469dec014d908c2713a` |
 | manual caller workflow | `cd3e45ef30ecd8789116e16a3c34212b35a905244020b417a57e70a35fc28f96` |
 | reusable verifier workflow | `9b4118773f3c2c397ab1b50270c97cd12a920631ee3f1df7ef803230a780619e` |
-| native builder workflow | `966e45b3dbe0a140eb2fe5905d2924d8befe95a7f4fd83111b263cd1ace7128c` |
+| native builder workflow | `bca7fcbcc696aa2a65e405cf3942a563d878d4b83b88dfd9d81eb3dbb54b2101` |

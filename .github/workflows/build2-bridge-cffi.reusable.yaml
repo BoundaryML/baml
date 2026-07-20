@@ -594,7 +594,7 @@ jobs:
             "pdb_procedure_symbol_count=$procedureSymbolCount"
           ) | Add-Content `
             (Join-Path $outdir "diagnostic-inspection.txt") -Encoding ascii
-          @(
+          $verificationLines = @(
             "target=$env:TARGET"
             "source_sha=${{ inputs.source_sha || github.sha }}"
             "workflow_run_id=${{ github.run_id }}"
@@ -607,14 +607,22 @@ jobs:
             "unstripped=true"
             "pdb=present"
             "pdb_bytes=$($pdb.Length)"
-          ) | Set-Content `
-            (Join-Path $outdir "diagnostic-verification.txt") -Encoding ascii
+          )
+          # This identity file is consumed with exact whole-line matching on
+          # Linux. Write canonical BOM-free LF text instead of PowerShell's
+          # platform-default CRLF so the immutable bytes are portable.
+          $verificationPath = Join-Path $outdir "diagnostic-verification.txt"
+          $verificationText = ($verificationLines -join "`n") + "`n"
+          [System.IO.File]::WriteAllText(
+            $verificationPath,
+            $verificationText,
+            [System.Text.UTF8Encoding]::new($false))
 
           $manifestFiles = @(
             (Get-Item $primary)
             $pdb
             (Get-Item (Join-Path $outdir "diagnostic-inspection.txt"))
-            (Get-Item (Join-Path $outdir "diagnostic-verification.txt"))
+            (Get-Item $verificationPath)
           )
           $manifest = foreach ($file in $manifestFiles) {
             $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
