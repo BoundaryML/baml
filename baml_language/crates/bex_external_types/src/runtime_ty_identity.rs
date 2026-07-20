@@ -69,14 +69,7 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
                 && runtime_ty_structurally_equal(left_ret, right_ret)
                 && runtime_ty_structurally_equal(left_throws, right_throws)
         }
-        (T::Union(left, _), T::Union(right, _)) => {
-            left.len() == right.len()
-                && left.iter().all(|left_member| {
-                    right.iter().any(|right_member| {
-                        runtime_ty_structurally_equal(left_member, right_member)
-                    })
-                })
-        }
+        (T::Union(left, _), T::Union(right, _)) => structurally_equal_unordered_slices(left, right),
         _ => false,
     }
 }
@@ -87,6 +80,23 @@ fn structurally_equal_slices(left: &[RuntimeTy], right: &[RuntimeTy]) -> bool {
             .iter()
             .zip(right)
             .all(|(left, right)| runtime_ty_structurally_equal(left, right))
+}
+
+fn structurally_equal_unordered_slices(left: &[RuntimeTy], right: &[RuntimeTy]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+
+    let mut matched_right = vec![false; right.len()];
+    left.iter().all(|left_member| {
+        let Some(index) = right.iter().enumerate().position(|(index, right_member)| {
+            !matched_right[index] && runtime_ty_structurally_equal(left_member, right_member)
+        }) else {
+            return false;
+        };
+        matched_right[index] = true;
+        true
+    })
 }
 
 /// Compare a selected union arm while tolerating the legacy root-level
@@ -109,4 +119,41 @@ fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     let mut non_null = members.iter().filter(|member| !member.is_null());
     let only = non_null.next()?;
     non_null.next().is_none().then_some(only)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{RuntimeTy, TyAttr};
+
+    use super::runtime_ty_structurally_equal;
+
+    fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
+        RuntimeTy::Union(members, TyAttr::default())
+    }
+
+    #[test]
+    fn union_structural_equality_ignores_member_order() {
+        let left = union(vec![RuntimeTy::string(), RuntimeTy::int()]);
+        let right = union(vec![RuntimeTy::int(), RuntimeTy::string()]);
+
+        assert!(runtime_ty_structurally_equal(&left, &right));
+        assert!(runtime_ty_structurally_equal(&right, &left));
+    }
+
+    #[test]
+    fn union_structural_equality_preserves_duplicate_multiplicity() {
+        let left = union(vec![
+            RuntimeTy::string(),
+            RuntimeTy::string(),
+            RuntimeTy::int(),
+        ]);
+        let right = union(vec![
+            RuntimeTy::string(),
+            RuntimeTy::int(),
+            RuntimeTy::int(),
+        ]);
+
+        assert!(!runtime_ty_structurally_equal(&left, &right));
+        assert!(!runtime_ty_structurally_equal(&right, &left));
+    }
 }
