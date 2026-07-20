@@ -112,9 +112,6 @@ pub fn external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
-                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
-                        &metadata.selected_option,
-                    )),
                     selected_option_index: Some(selected_option_index),
                 },
             )))
@@ -292,9 +289,6 @@ pub(crate) fn artifact_safe_external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
-                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
-                        &metadata.selected_option,
-                    )),
                     selected_option_index: Some(selected_option_index),
                 },
             )))
@@ -572,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn outbound_union_encodes_exact_selected_type_for_ambiguous_numeric_arms() {
+    fn outbound_union_encodes_selected_index_for_ambiguous_numeric_arms() {
         let options = CffiHandleTableOptions::for_in_process();
         let int = ambiguous_numeric_union(RuntimeTy::int(), BexExternalValue::Int(1));
         let float = ambiguous_numeric_union(RuntimeTy::float(), BexExternalValue::Float(1.0));
@@ -580,28 +574,15 @@ mod tests {
         let encoded_int = extract_union(external_to_outbound(&int, &options).unwrap());
         let encoded_float = extract_union(external_to_outbound(&float, &options).unwrap());
 
-        assert_eq!(
-            encoded_int.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::int()))
-        );
-        assert_eq!(
-            encoded_float.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::float()))
-        );
-        assert_ne!(encoded_int.selected_type, encoded_float.selected_type);
         assert_eq!(encoded_int.selected_option_index, Some(0));
         assert_eq!(encoded_float.selected_option_index, Some(1));
     }
 
     #[test]
-    fn artifact_safe_union_encodes_exact_selected_type() {
+    fn artifact_safe_union_encodes_selected_index() {
         let value = ambiguous_numeric_union(RuntimeTy::float(), BexExternalValue::Float(1.0));
         let encoded = extract_union(artifact_safe_external_to_outbound(&value).unwrap());
 
-        assert_eq!(
-            encoded.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::float()))
-        );
         assert_eq!(encoded.selected_option_index, Some(1));
     }
 
@@ -611,10 +592,6 @@ mod tests {
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
-        assert_eq!(
-            encoded.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::null()))
-        );
         // RuntimeTy::optional preserves [inner, null] order.
         assert_eq!(encoded.selected_option_index, Some(1));
     }

@@ -1758,7 +1758,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         let _ = writeln!(
             buf,
-            "    cls->mutable_class_ty()->set_name(\"{fqn}\");\n  }}",
+            "    value_msg.mutable_value_type()->mutable_class_ty()->set_name(\"{fqn}\");\n  }}",
         );
         // Decode: strict field mapping (extra field or missing field = error,
         // pydantic extra="forbid" parity), FQN-checked for precise

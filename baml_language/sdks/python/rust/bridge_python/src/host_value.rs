@@ -51,8 +51,9 @@ use std::{
 
 use bridge_cffi::complete_host_call;
 use bridge_ctypes::baml_bridge::cffi::{
-    BamlHandle, BamlHandleType, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
-    inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+    BamlHandle, BamlHandleType, BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry,
+    InboundValue, baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
+    inbound_value::Value as InboundValueVariant,
 };
 use prost::Message;
 use pyo3::{
@@ -488,6 +489,7 @@ fn build_host_callable_inbound(
         InboundMapEntry {
             key: Some(InboundMapKey::StringKey(key.to_string())),
             value: Some(InboundValue {
+                value_type: None,
                 value: Some(InboundValueVariant::StringValue(value.to_string())),
             }),
         }
@@ -495,6 +497,7 @@ fn build_host_callable_inbound(
     let handle_field = InboundMapEntry {
         key: Some(InboundMapKey::StringKey("_handle".to_string())),
         value: Some(InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: handle_key,
                 handle_type: BamlHandleType::HostValueOpaque as i32,
@@ -511,12 +514,14 @@ fn build_host_callable_inbound(
     }
     fields.push(handle_field);
     InboundValue {
-        value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-            fields,
-            class_ty: Some(BamlTyClass {
+        value_type: Some(BamlTy {
+            ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
                 name: "baml.errors.HostCallable".to_string(),
                 type_args: vec![],
-            }),
+            })),
+        }),
+        value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+            fields,
         })),
     }
 }

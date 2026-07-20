@@ -52,12 +52,18 @@ use internal::__BamlValuePrivate;
 
 /// Shorthand for building an inbound value from a oneof arm.
 fn inbound(value: In) -> wire::InboundValue {
-    wire::InboundValue { value: Some(value) }
+    wire::InboundValue {
+        value_type: None,
+        value: Some(value),
+    }
 }
 
 /// The inbound null value (absent oneof = null on the wire).
 fn inbound_null() -> wire::InboundValue {
-    wire::InboundValue { value: None }
+    wire::InboundValue {
+        value_type: None,
+        value: None,
+    }
 }
 
 /// Bounded name of the wire variant that arrived, for `WrongType` errors.
@@ -220,7 +226,6 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     fn to_baml(&self) -> wire::InboundValue {
         inbound(In::ListValue(wire::InboundListValue {
             values: self.iter().map(__BamlValuePrivate::to_baml).collect(),
-            item_type: None,
         }))
     }
 
@@ -267,8 +272,6 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
                     value: Some(v.to_baml()),
                 })
                 .collect(),
-            key_type: None,
-            value_type: None,
         }))
     }
 
@@ -303,8 +306,6 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
                     value: Some(v.to_baml()),
                 })
                 .collect(),
-            key_type: None,
-            value_type: None,
         }))
     }
 

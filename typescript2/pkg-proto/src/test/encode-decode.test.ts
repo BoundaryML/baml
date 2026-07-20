@@ -119,10 +119,15 @@ describe('encodeCallArgs', () => {
     const custom = {
       toBaml() {
         return {
+          valueType: {
+            ty: {
+              $case: 'classTy' as const,
+              classTy: { name: 'MyClass', typeArgs: [] },
+            },
+          },
           value: {
             $case: 'classValue',
             classValue: {
-              classTy: { name: 'MyClass', typeArgs: [] },
               fields: [
                 {
                   key: { $case: 'stringKey', stringKey: 'x' },
@@ -138,52 +143,44 @@ describe('encodeCallArgs', () => {
     const decoded = CallFunctionArgs.decode(bytes);
     const val = decoded.kwargs[0].value;
     expect(val?.value?.$case).toBe('classValue');
-    if (val?.value?.$case === 'classValue') {
-      expect(val.value.classValue.classTy?.name).toBe('MyClass');
-    }
+    expect(val?.valueType?.ty).toEqual({
+      $case: 'classTy',
+      classTy: { name: 'MyClass', typeArgs: [] },
+    });
   });
 
-  it('preserves an exact literal type through the general typed-value envelope', () => {
+  it('preserves a sparse exact literal type on the value node', () => {
     const draft = {
       toBaml() {
         return {
-          value: {
-            $case: 'typedValue' as const,
-            typedValue: {
-              valueType: {
-                ty: {
-                  $case: 'literal' as const,
-                  literal: {
-                    literal: {
-                      $case: 'stringValue' as const,
-                      stringValue: 'draft',
-                    },
-                  },
-                },
-              },
-              value: {
-                value: {
+          valueType: {
+            ty: {
+              $case: 'literal' as const,
+              literal: {
+                literal: {
                   $case: 'stringValue' as const,
                   stringValue: 'draft',
                 },
               },
             },
           },
+          value: {
+            $case: 'stringValue' as const,
+            stringValue: 'draft',
+          },
         };
       },
     };
 
     const decoded = CallFunctionArgs.decode(encodeCallArgs({ status: draft }, 131));
-    const value = decoded.kwargs[0].value?.value;
-    expect(value?.$case).toBe('typedValue');
-    if (value?.$case !== 'typedValue') return;
-    expect(value.typedValue.valueType?.ty).toEqual({
+    const value = decoded.kwargs[0].value;
+    expect(value?.valueType?.ty).toEqual({
       $case: 'literal',
       literal: {
         literal: { $case: 'stringValue', stringValue: 'draft' },
       },
     });
-    expect(value.typedValue.value?.value).toEqual({
+    expect(value?.value).toEqual({
       $case: 'stringValue',
       stringValue: 'draft',
     });
@@ -378,7 +375,6 @@ describe('decodeCallResult', () => {
           selfType: undefined,
           valueOptionName: 'stringValue',
           value: { value: { $case: 'stringValue', stringValue: 'hi' } },
-          selectedType: undefined,
         },
       },
     });

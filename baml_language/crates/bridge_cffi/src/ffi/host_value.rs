@@ -304,26 +304,29 @@ mod tests {
 
     fn host_callable_throw_payload(key: u64) -> Vec<u8> {
         use bridge_ctypes::baml_bridge::cffi::{
-            BamlHandle, BamlHandleType, BamlTyClass, InboundClassValue, InboundMapEntry,
-            InboundValue, inbound_map_entry::Key as InboundMapKey,
+            BamlHandle, BamlHandleType, BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry,
+            InboundValue, baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
             inbound_value::Value as InboundValueVariant,
         };
 
         InboundValue {
+            value_type: Some(BamlTy {
+                ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
+                    name: "baml.errors.HostCallable".to_string(),
+                    type_args: vec![],
+                })),
+            }),
             value: Some(InboundValueVariant::ClassValue(InboundClassValue {
                 fields: vec![InboundMapEntry {
                     key: Some(InboundMapKey::StringKey("_handle".to_string())),
                     value: Some(InboundValue {
+                        value_type: None,
                         value: Some(InboundValueVariant::Handle(BamlHandle {
                             key,
                             handle_type: BamlHandleType::HostValueOpaque.into(),
                         })),
                     }),
                 }],
-                class_ty: Some(BamlTyClass {
-                    name: "baml.errors.HostCallable".to_string(),
-                    type_args: vec![],
-                }),
             })),
         }
         .encode_to_vec()
@@ -378,8 +381,9 @@ mod tests {
     #[tokio::test]
     async fn complete_host_call_throw_payload_delivers_external_value() {
         use bridge_ctypes::baml_bridge::cffi::{
-            BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
-            inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+            BamlTy, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
+            baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
+            inbound_value::Value as InboundValueVariant,
         };
         use prost::Message;
         use sys_types::{SysOp, SysOpResult};
@@ -390,16 +394,19 @@ mod tests {
         let message_entry = InboundMapEntry {
             key: Some(InboundMapKey::StringKey("message".to_string())),
             value: Some(InboundValue {
+                value_type: None,
                 value: Some(InboundValueVariant::StringValue("bad input".to_string())),
             }),
         };
         let inbound = InboundValue {
-            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-                fields: vec![message_entry],
-                class_ty: Some(BamlTyClass {
+            value_type: Some(BamlTy {
+                ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
                     name: "baml.errors.HostCallable".to_string(),
                     type_args: vec![],
-                }),
+                })),
+            }),
+            value: Some(InboundValueVariant::ClassValue(InboundClassValue {
+                fields: vec![message_entry],
             })),
         };
         let encoded = inbound.encode_to_vec();

@@ -9,7 +9,8 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class InboundValue(_message.Message):
-    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "typed_value")
+    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value")
+    VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     FLOAT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -22,7 +23,7 @@ class InboundValue(_message.Message):
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_VALUE_FIELD_NUMBER: _ClassVar[int]
-    TYPED_VALUE_FIELD_NUMBER: _ClassVar[int]
+    value_type: _baml_type_pb2.BamlTy
     string_value: str
     int_value: int
     float_value: float
@@ -35,34 +36,19 @@ class InboundValue(_message.Message):
     uint8array_value: bytes
     bigint_value: str
     ty_value: _baml_type_pb2.BamlTy
-    typed_value: InboundTypedValue
-    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., typed_value: _Optional[_Union[InboundTypedValue, _Mapping]] = ...) -> None: ...
-
-class InboundTypedValue(_message.Message):
-    __slots__ = ("value_type", "value")
-    VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
-    VALUE_FIELD_NUMBER: _ClassVar[int]
-    value_type: _baml_type_pb2.BamlTy
-    value: InboundValue
-    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value: _Optional[_Union[InboundValue, _Mapping]] = ...) -> None: ...
+    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
-    __slots__ = ("values", "item_type")
+    __slots__ = ("values",)
     VALUES_FIELD_NUMBER: _ClassVar[int]
-    ITEM_TYPE_FIELD_NUMBER: _ClassVar[int]
     values: _containers.RepeatedCompositeFieldContainer[InboundValue]
-    item_type: _baml_type_pb2.BamlTy
-    def __init__(self, values: _Optional[_Iterable[_Union[InboundValue, _Mapping]]] = ..., item_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
+    def __init__(self, values: _Optional[_Iterable[_Union[InboundValue, _Mapping]]] = ...) -> None: ...
 
 class InboundMapValue(_message.Message):
-    __slots__ = ("entries", "key_type", "value_type")
+    __slots__ = ("entries",)
     ENTRIES_FIELD_NUMBER: _ClassVar[int]
-    KEY_TYPE_FIELD_NUMBER: _ClassVar[int]
-    VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     entries: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    key_type: _baml_type_pb2.BamlTy
-    value_type: _baml_type_pb2.BamlTy
-    def __init__(self, entries: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., key_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
+    def __init__(self, entries: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
 
 class InboundMapEntry(_message.Message):
     __slots__ = ("string_key", "int_key", "bool_key", "enum_key", "value")
@@ -79,12 +65,10 @@ class InboundMapEntry(_message.Message):
     def __init__(self, string_key: _Optional[str] = ..., int_key: _Optional[int] = ..., bool_key: bool = ..., enum_key: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., value: _Optional[_Union[InboundValue, _Mapping]] = ...) -> None: ...
 
 class InboundClassValue(_message.Message):
-    __slots__ = ("fields", "class_ty")
+    __slots__ = ("fields",)
     FIELDS_FIELD_NUMBER: _ClassVar[int]
-    CLASS_TY_FIELD_NUMBER: _ClassVar[int]
     fields: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    class_ty: _baml_type_pb2.BamlTyClass
-    def __init__(self, fields: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., class_ty: _Optional[_Union[_baml_type_pb2.BamlTyClass, _Mapping]] = ...) -> None: ...
+    def __init__(self, fields: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
 
 class InboundEnumValue(_message.Message):
     __slots__ = ("name", "value")

@@ -216,20 +216,20 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { classTy: { name: fqn }, fields: classFields };
+                iv.valueType = { classTy: { name: fqn } };
+                iv.classValue = { fields: classFields };
                 return;
             }
         }
-        // Generic class instance → a FQN-tagged `class_value` carrying the
-        // value-level class type-args channel (`class_ty`). Unlike a non-generic
-        // class instance (which encodes as a bare `map_value` for the engine to
-        // reshape against the declared param type), a generic instance MUST send
-        // its concrete type args: the engine strictly rejects coercing a bare map
-        // into a generic class slot ("a bare map carries no class type
-        // arguments"). The args come from the optional `$types` instance field;
+        // Generic class instance → a `class_value` carrying a sparse node-level
+        // `value_type`. Unlike a non-generic class instance (which encodes as a
+        // bare `map_value` for the engine to reshape against the declared param
+        // type), a generic instance sends its concrete type args so inference
+        // does not depend on payload fields being present. The args come from
+        // the optional `$types` instance field;
         // an absent binding lowers to the unknown/top type. Mirrors
         // bridge_python's pydantic-generic-metadata path in proto.py, which sets
-        // `class_value.class_ty` for a generic instance.
+        // `InboundValue.value_type` for a generic instance.
         if (isClassInstance) {
             const params = genericParamNames(value);
             if (params) {
@@ -239,14 +239,15 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
                 const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
                     // Skip method bindings (behavior, not state) and the synthetic
-                    // `$types` carrier (it rides `class_ty`, not the field list).
+                    // `$types` carrier (it rides `value_type`, not the field list).
                     if (typeof v === 'function') continue;
                     if (k === '$types') continue;
                     const childVal: baml_bridge.cffi.v1.IInboundValue = {};
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { classTy: { name: fqn, typeArgs }, fields: classFields };
+                iv.valueType = { classTy: { name: fqn, typeArgs } };
+                iv.classValue = { fields: classFields };
                 return;
             }
         }
@@ -497,7 +498,7 @@ function decodeClass(
             // Repopulate a generic instance's `$types` from the wire's positional
             // `type_args` (the value-level type channel), keyed by the class's
             // static `$generic` param names — the decode-side mirror of the
-            // encoder's `class_ty`. Defined non-enumerable so it neither perturbs
+            // encoder's sparse `value_type`. Defined non-enumerable so it neither perturbs
             // structural equality (`toEqual`) nor re-encodes as a data field,
             // while still being readable by a later generic instance-method call.
             const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
@@ -871,8 +872,8 @@ function buildHostCallableInbound(
     }
     fields.push(handleField);
     return InboundValue.create({
+        valueType: { classTy: { name: 'baml.errors.HostCallable' } },
         classValue: InboundClassValue.create({
-            classTy: { name: 'baml.errors.HostCallable' },
             fields,
         }),
     });
@@ -933,7 +934,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
                 // registrations its nested fields triggered and fall through
                 // to the opaque-handle path below. The fall-through is
                 // intentional: the throw must still reach the engine even if
-                // the typed-value encode broke, so we never leave the call
+                // the sparse typed-node encode broke, so we never leave the call
                 // hanging. Each release is wrapped in its own try/catch so
                 // a single bad entry doesn't abort the rest of the rollback
                 // and leak the remaining registrations (mirrors the other

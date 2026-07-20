@@ -19,6 +19,9 @@ export namespace baml_bridge {
             /** Properties of an InboundValue. */
             interface IInboundValue {
 
+                /** InboundValue valueType */
+                valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
+
                 /** InboundValue stringValue */
                 stringValue?: (string|null);
 
@@ -54,9 +57,6 @@ export namespace baml_bridge {
 
                 /** InboundValue tyValue */
                 tyValue?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundValue typedValue */
-                typedValue?: (baml_bridge.cffi.v1.IInboundTypedValue|null);
             }
 
             /** Represents an InboundValue. */
@@ -67,6 +67,9 @@ export namespace baml_bridge {
                  * @param [properties] Properties to set
                  */
                 constructor(properties?: baml_bridge.cffi.v1.IInboundValue);
+
+                /** InboundValue valueType. */
+                public valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /** InboundValue stringValue. */
                 public stringValue?: (string|null);
@@ -104,11 +107,8 @@ export namespace baml_bridge {
                 /** InboundValue tyValue. */
                 public tyValue?: (baml_bridge.cffi.v1.IBamlTy|null);
 
-                /** InboundValue typedValue. */
-                public typedValue?: (baml_bridge.cffi.v1.IInboundTypedValue|null);
-
                 /** InboundValue value. */
-                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"typedValue");
+                public value?: ("stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue");
 
                 /**
                  * Creates a new InboundValue instance using the specified properties.
@@ -188,117 +188,11 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
-            /** Properties of an InboundTypedValue. */
-            interface IInboundTypedValue {
-
-                /** InboundTypedValue valueType */
-                valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundTypedValue value */
-                value?: (baml_bridge.cffi.v1.IInboundValue|null);
-            }
-
-            /** Represents an InboundTypedValue. */
-            class InboundTypedValue implements IInboundTypedValue {
-
-                /**
-                 * Constructs a new InboundTypedValue.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml_bridge.cffi.v1.IInboundTypedValue);
-
-                /** InboundTypedValue valueType. */
-                public valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundTypedValue value. */
-                public value?: (baml_bridge.cffi.v1.IInboundValue|null);
-
-                /**
-                 * Creates a new InboundTypedValue instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns InboundTypedValue instance
-                 */
-                public static create(properties?: baml_bridge.cffi.v1.IInboundTypedValue): baml_bridge.cffi.v1.InboundTypedValue;
-
-                /**
-                 * Encodes the specified InboundTypedValue message. Does not implicitly {@link baml_bridge.cffi.v1.InboundTypedValue.verify|verify} messages.
-                 * @param message InboundTypedValue message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml_bridge.cffi.v1.IInboundTypedValue, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified InboundTypedValue message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InboundTypedValue.verify|verify} messages.
-                 * @param message InboundTypedValue message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml_bridge.cffi.v1.IInboundTypedValue, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes an InboundTypedValue message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns InboundTypedValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.InboundTypedValue;
-
-                /**
-                 * Decodes an InboundTypedValue message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns InboundTypedValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.InboundTypedValue;
-
-                /**
-                 * Verifies an InboundTypedValue message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates an InboundTypedValue message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns InboundTypedValue
-                 */
-                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.InboundTypedValue;
-
-                /**
-                 * Creates a plain object from an InboundTypedValue message. Also converts values to other types if specified.
-                 * @param message InboundTypedValue
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml_bridge.cffi.v1.InboundTypedValue, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this InboundTypedValue to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for InboundTypedValue
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
             /** Properties of an InboundListValue. */
             interface IInboundListValue {
 
                 /** InboundListValue values */
                 values?: (baml_bridge.cffi.v1.IInboundValue[]|null);
-
-                /** InboundListValue itemType */
-                itemType?: (baml_bridge.cffi.v1.IBamlTy|null);
             }
 
             /** Represents an InboundListValue. */
@@ -312,9 +206,6 @@ export namespace baml_bridge {
 
                 /** InboundListValue values. */
                 public values: baml_bridge.cffi.v1.IInboundValue[];
-
-                /** InboundListValue itemType. */
-                public itemType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /**
                  * Creates a new InboundListValue instance using the specified properties.
@@ -399,12 +290,6 @@ export namespace baml_bridge {
 
                 /** InboundMapValue entries */
                 entries?: (baml_bridge.cffi.v1.IInboundMapEntry[]|null);
-
-                /** InboundMapValue keyType */
-                keyType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundMapValue valueType */
-                valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
             }
 
             /** Represents an InboundMapValue. */
@@ -418,12 +303,6 @@ export namespace baml_bridge {
 
                 /** InboundMapValue entries. */
                 public entries: baml_bridge.cffi.v1.IInboundMapEntry[];
-
-                /** InboundMapValue keyType. */
-                public keyType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /** InboundMapValue valueType. */
-                public valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /**
                  * Creates a new InboundMapValue instance using the specified properties.
@@ -632,9 +511,6 @@ export namespace baml_bridge {
 
                 /** InboundClassValue fields */
                 fields?: (baml_bridge.cffi.v1.IInboundMapEntry[]|null);
-
-                /** InboundClassValue classTy */
-                classTy?: (baml_bridge.cffi.v1.IBamlTyClass|null);
             }
 
             /** Represents an InboundClassValue. */
@@ -648,9 +524,6 @@ export namespace baml_bridge {
 
                 /** InboundClassValue fields. */
                 public fields: baml_bridge.cffi.v1.IInboundMapEntry[];
-
-                /** InboundClassValue classTy. */
-                public classTy?: (baml_bridge.cffi.v1.IBamlTyClass|null);
 
                 /**
                  * Creates a new InboundClassValue instance using the specified properties.
@@ -5308,9 +5181,6 @@ export namespace baml_bridge {
                 /** BamlValueUnionVariant value */
                 value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
 
-                /** BamlValueUnionVariant selectedType */
-                selectedType?: (baml_bridge.cffi.v1.IBamlTy|null);
-
                 /** BamlValueUnionVariant selectedOptionIndex */
                 selectedOptionIndex?: (number|null);
             }
@@ -5341,9 +5211,6 @@ export namespace baml_bridge {
 
                 /** BamlValueUnionVariant value. */
                 public value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
-
-                /** BamlValueUnionVariant selectedType. */
-                public selectedType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /** BamlValueUnionVariant selectedOptionIndex. */
                 public selectedOptionIndex?: (number|null);

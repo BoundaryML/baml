@@ -3908,7 +3908,6 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
     kValueOptionNameFieldNumber = 5,
     kSelfTypeFieldNumber = 4,
     kValueFieldNumber = 6,
-    kSelectedTypeFieldNumber = 7,
     kIsOptionalFieldNumber = 2,
     kIsSinglePatternFieldNumber = 3,
     kSelectedOptionIndexFieldNumber = 8,
@@ -3973,21 +3972,6 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NONNULL _internal_mutable_value();
 
   public:
-  // .baml_bridge.cffi.v1.BamlTy selected_type = 7;
-  bool has_selected_type() const;
-  void clear_selected_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& selected_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_selected_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_selected_type();
-  void set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_selected_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_selected_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_selected_type();
-
-  public:
   // bool is_optional = 2;
   void clear_is_optional() ;
   bool is_optional() const;
@@ -4023,8 +4007,8 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 8,
-                                   3, 79,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   2, 71,
                                    2>
       _table_;
 
@@ -4049,7 +4033,6 @@ class BamlValueUnionVariant final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::ArenaStringPtr value_option_name_;
     ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE self_type_;
     ::baml_bridge::cffi::v1::BamlOutboundValue* PROTOBUF_NULLABLE value_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE selected_type_;
     bool is_optional_;
     bool is_single_pattern_;
     ::uint32_t selected_option_index_;
@@ -8166,7 +8149,7 @@ inline void BamlValueUnionVariant::set_allocated_name(::std::string* PROTOBUF_NU
 inline void BamlValueUnionVariant::clear_is_optional() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_optional_ = false;
-  _impl_._has_bits_[0] &= ~0x00000020u;
+  _impl_._has_bits_[0] &= ~0x00000010u;
 }
 inline bool BamlValueUnionVariant::is_optional() const {
   // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueUnionVariant.is_optional)
@@ -8174,7 +8157,7 @@ inline bool BamlValueUnionVariant::is_optional() const {
 }
 inline void BamlValueUnionVariant::set_is_optional(bool value) {
   _internal_set_is_optional(value);
-  _impl_._has_bits_[0] |= 0x00000020u;
+  _impl_._has_bits_[0] |= 0x00000010u;
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlValueUnionVariant.is_optional)
 }
 inline bool BamlValueUnionVariant::_internal_is_optional() const {
@@ -8190,7 +8173,7 @@ inline void BamlValueUnionVariant::_internal_set_is_optional(bool value) {
 inline void BamlValueUnionVariant::clear_is_single_pattern() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_single_pattern_ = false;
-  _impl_._has_bits_[0] &= ~0x00000040u;
+  _impl_._has_bits_[0] &= ~0x00000020u;
 }
 inline bool BamlValueUnionVariant::is_single_pattern() const {
   // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueUnionVariant.is_single_pattern)
@@ -8198,7 +8181,7 @@ inline bool BamlValueUnionVariant::is_single_pattern() const {
 }
 inline void BamlValueUnionVariant::set_is_single_pattern(bool value) {
   _internal_set_is_single_pattern(value);
-  _impl_._has_bits_[0] |= 0x00000040u;
+  _impl_._has_bits_[0] |= 0x00000020u;
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlValueUnionVariant.is_single_pattern)
 }
 inline bool BamlValueUnionVariant::_internal_is_single_pattern() const {
@@ -8466,108 +8449,15 @@ inline void BamlValueUnionVariant::set_allocated_value(::baml_bridge::cffi::v1::
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlValueUnionVariant.value)
 }
 
-// .baml_bridge.cffi.v1.BamlTy selected_type = 7;
-inline bool BamlValueUnionVariant::has_selected_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000010u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.selected_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlValueUnionVariant::_internal_selected_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.selected_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& BamlValueUnionVariant::selected_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_type)
-  return _internal_selected_type();
-}
-inline void BamlValueUnionVariant::unsafe_arena_set_allocated_selected_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.selected_type_);
-  }
-  _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000010u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000010u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlValueUnionVariant::release_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000010u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.selected_type_;
-  _impl_.selected_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE BamlValueUnionVariant::unsafe_arena_release_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_type)
-
-  _impl_._has_bits_[0] &= ~0x00000010u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.selected_type_;
-  _impl_.selected_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlValueUnionVariant::_internal_mutable_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.selected_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.selected_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL BamlValueUnionVariant::mutable_selected_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000010u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_selected_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_type)
-  return _msg;
-}
-inline void BamlValueUnionVariant::set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.selected_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000010u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000010u;
-  }
-
-  _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_type)
-}
-
 // optional uint32 selected_option_index = 8;
 inline bool BamlValueUnionVariant::has_selected_option_index() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000080u) != 0;
+  bool value = (_impl_._has_bits_[0] & 0x00000040u) != 0;
   return value;
 }
 inline void BamlValueUnionVariant::clear_selected_option_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.selected_option_index_ = 0u;
-  _impl_._has_bits_[0] &= ~0x00000080u;
+  _impl_._has_bits_[0] &= ~0x00000040u;
 }
 inline ::uint32_t BamlValueUnionVariant::selected_option_index() const {
   // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_option_index)
@@ -8575,7 +8465,7 @@ inline ::uint32_t BamlValueUnionVariant::selected_option_index() const {
 }
 inline void BamlValueUnionVariant::set_selected_option_index(::uint32_t value) {
   _internal_set_selected_option_index(value);
-  _impl_._has_bits_[0] |= 0x00000080u;
+  _impl_._has_bits_[0] |= 0x00000040u;
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlValueUnionVariant.selected_option_index)
 }
 inline ::uint32_t BamlValueUnionVariant::_internal_selected_option_index() const {

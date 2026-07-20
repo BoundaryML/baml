@@ -229,7 +229,7 @@ pub struct BamlTyUnknown {
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
 /// its source string to preserve formatting). Decoders preserve literal
-/// identity so `InboundTypedValue.value_type` remains exact rather than being
+/// identity so `InboundValue.value_type` remains exact rather than being
 /// widened to the corresponding primitive payload shape.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlTyLiteral {
@@ -483,13 +483,16 @@ impl BamlTyFunctionParamMode {
 // Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-/// Core value type. Most values remain shape-only because not every language has
-/// union/class concepts. Containers may optionally carry host-known element
-/// types so empty values retain information that payload inspection cannot
-/// recover. The engine still validates against the function signature.
+/// Core value type. `value_type` is a sparse exact-type annotation for this
+/// node, never a copy of the enclosing union. Most values omit it and are
+/// decoded from the declared contextual type plus payload shape. Hosts set it
+/// only when shape/context cannot preserve their choice (for example an empty
+/// container, an overlapping union arm, or a literal-vs-primitive selection).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundValue {
-    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
+    #[prost(message, optional, tag = "1")]
+    pub value_type: ::core::option::Option<BamlTy>,
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
 /// Nested message and enum types in `InboundValue`.
@@ -523,39 +526,17 @@ pub mod inbound_value {
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
-        /// A value paired with its exact host-known BAML type. This preserves type
-        /// identity that payload shape alone cannot recover, including literals,
-        /// empty containers, and a selected arm of an overlapping union. The
-        /// engine validates `value_type` against the contextual declared type.
-        #[prost(message, tag = "14")]
-        TypedValue(::prost::alloc::boxed::Box<super::InboundTypedValue>),
     }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundTypedValue {
-    /// Exact type of `value`, such as the literal `"draft"` or `int\[\]`.
-    #[prost(message, optional, tag = "1")]
-    pub value_type: ::core::option::Option<BamlTy>,
-    #[prost(message, optional, boxed, tag = "2")]
-    pub value: ::core::option::Option<::prost::alloc::boxed::Box<InboundValue>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundListValue {
     #[prost(message, repeated, tag = "1")]
     pub values: ::prost::alloc::vec::Vec<InboundValue>,
-    /// Optional host-known element type. Absent keeps legacy shape inference.
-    #[prost(message, optional, tag = "2")]
-    pub item_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapValue {
     #[prost(message, repeated, tag = "1")]
     pub entries: ::prost::alloc::vec::Vec<InboundMapEntry>,
-    /// Optional host-known key/value types. Absent keeps legacy shape inference.
-    #[prost(message, optional, tag = "2")]
-    pub key_type: ::core::option::Option<BamlTy>,
-    #[prost(message, optional, tag = "3")]
-    pub value_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapEntry {
@@ -582,11 +563,6 @@ pub mod inbound_map_entry {
 pub struct InboundClassValue {
     #[prost(message, repeated, tag = "2")]
     pub fields: ::prost::alloc::vec::Vec<InboundMapEntry>,
-    /// The instance's class as a nominal type: `class_ty.name` is the FQN used to
-    /// bind the class, and `class_ty.type_args` carries a generic instance's
-    /// concrete args. Always set for a well-formed class value.
-    #[prost(message, optional, tag = "3")]
-    pub class_ty: ::core::option::Option<BamlTyClass>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InboundEnumValue {
@@ -826,7 +802,7 @@ pub struct BamlValueEnum {
     pub is_dynamic: bool,
 }
 /// A union value: the selected variant's value plus its `self_type` (the full
-/// union type as a `BamlTy`) and `selected_type` (the exact selected arm).
+/// union type as a `BamlTy`) and the selected arm's canonical index.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlValueUnionVariant {
     /// Optional union name; unions carry their full type in `self_type`.
@@ -838,19 +814,15 @@ pub struct BamlValueUnionVariant {
     pub is_single_pattern: bool,
     #[prost(message, optional, tag = "4")]
     pub self_type: ::core::option::Option<BamlTy>,
-    /// Legacy display-only arm name. New consumers should use `selected_type`.
+    /// Display-only arm name. Consumers must use `selected_option_index` for
+    /// canonical selected-arm identity.
     #[prost(string, tag = "5")]
     pub value_option_name: ::prost::alloc::string::String,
     #[prost(message, optional, boxed, tag = "6")]
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<BamlOutboundValue>>,
-    /// The exact selected union arm. Unlike `value_option_name`, this preserves
-    /// structural type identity for ambiguous arms such as int | float or
-    /// string | "literal".
-    #[prost(message, optional, tag = "7")]
-    pub selected_type: ::core::option::Option<BamlTy>,
-    /// Zero-based position of `selected_type` in `self_type`'s canonical union
-    /// member order. Presence distinguishes the first arm from legacy envelopes
-    /// that predate this discriminator.
+    /// Zero-based position of the selected arm in `self_type`'s canonical union
+    /// member order. Presence distinguishes the first arm from an absent
+    /// discriminator. The selected type is derived from this index.
     #[prost(uint32, optional, tag = "8")]
     pub selected_option_index: ::core::option::Option<u32>,
 }

@@ -32,11 +32,11 @@ use indexmap::IndexMap;
 /// easy serialization for FFI consumers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionMetadata {
-    /// Whether this is the transient engine carrier for an inbound
-    /// `InboundTypedValue`, rather than a value produced from a declared union.
-    /// The inbound wire intentionally carries only `selected_option`; the
+    /// Whether this is the transient engine carrier for a sparse inbound
+    /// `InboundValue.value_type` annotation, rather than a value produced from
+    /// a declared union. The annotation carries only `selected_option`; the
     /// contextual declared type supplies any enclosing union.
-    pub is_inbound_typed_value: bool,
+    pub is_inbound_type_annotation: bool,
 
     /// Name of the union type (for named type aliases like `type Result = Success | Failure`).
     pub name: Option<String>,
@@ -72,7 +72,7 @@ impl UnionMetadata {
         };
 
         Self {
-            is_inbound_typed_value: false,
+            is_inbound_type_annotation: false,
             name: None,
             is_optional,
             is_single_pattern,
@@ -173,8 +173,8 @@ pub enum BexExternalValue {
         /// `GenericBox<int>` instance's `[int]` across the FFI boundary (the
         /// value-level type channel — distinct from a call's
         /// `CallFunctionArgs.type_args`). Populated inbound from
-        /// `InboundClassValue.class_ty`; landed into the VM
-        /// `Object::Instance::class_type_args` in Phase 3.
+        /// the sparse `InboundValue.value_type`; landed into the VM
+        /// `Object::Instance::class_type_args` during contextual materialization.
         type_args: Vec<RuntimeTy>,
         fields: IndexMap<String, BexExternalValue>,
     },
@@ -392,7 +392,7 @@ impl BexExternalValue {
             RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
             value_type,
         );
-        metadata.is_inbound_typed_value = true;
+        metadata.is_inbound_type_annotation = true;
         BexExternalValue::Union {
             value: Box::new(value),
             metadata,

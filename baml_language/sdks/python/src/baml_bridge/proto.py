@@ -258,7 +258,9 @@ def _set_inbound_value(
     # typemap's reverse-map seeded overrides (25b2 §"reverse map").
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(type(value))
+        inbound_value.value_type.class_ty.name = (
+            get_type_map().py_type_to_baml_type(type(value))
+        )
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
@@ -293,11 +295,12 @@ def _set_inbound_value(
 
     if _is_pydantic_model(value):
         cv = inbound_value.class_value
-        # Bind the class via `class_ty`. Pydantic generic subclasses (`Box[int]`)
-        # keep `__module__` from the base, but we still want the *base* `Box`'s
-        # FQN on the wire — `13b` §2.1. The Rust-side type checker already knows
-        # the declared parameter type from the function signature.
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(
+        # Bind the class via the sparse node-level `value_type`. Pydantic
+        # generic subclasses (`Box[int]`) keep `__module__` from the base, but
+        # we still want the *base* `Box`'s FQN on the wire — `13b` §2.1. The
+        # Rust-side type checker already knows the declared parameter type from
+        # the function signature.
+        inbound_value.value_type.class_ty.name = get_type_map().py_type_to_baml_type(
             _base_class_for_fqn(type(value))
         )
         # For a *generic* instance (`Box[int]`), also carry its concrete class
@@ -306,7 +309,7 @@ def _set_inbound_value(
         # Pydantic's generic metadata, in declaration order; empty for
         # non-generic instances (no metadata args).
         for arg in pydantic_instance_type_args(value):
-            _fill_inner(cv.class_ty.type_args.add(), arg)
+            _fill_inner(inbound_value.value_type.class_ty.type_args.add(), arg)
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into

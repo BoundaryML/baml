@@ -12,8 +12,7 @@ use prost::Message;
 use crate::{
     baml_bridge::cffi::{
         BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundTypedValue, InboundValue,
-        inbound_value::Value as InboundValueVariant,
+        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
@@ -26,7 +25,12 @@ pub fn inbound_to_external(
     value: InboundValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
-    match value.value {
+    let value_type = value
+        .value_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?;
+    let decoded = match value.value {
         None => Ok(BexExternalValue::Null),
         Some(variant) => match variant {
             InboundValueVariant::StringValue(s) => Ok(BexExternalValue::String(s.into())),
@@ -58,7 +62,6 @@ pub fn inbound_to_external(
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
-            InboundValueVariant::TypedValue(typed) => convert_typed_value(*typed, handle_table),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -87,28 +90,11 @@ pub fn inbound_to_external(
                 Ok(BexExternalValue::from((*value).clone()))
             }
         },
-    }
-}
-
-fn convert_typed_value(
-    typed: InboundTypedValue,
-    handle_table: &CffiHandleTable,
-) -> Result<BexExternalValue, CtypesError> {
-    let value_type = typed
-        .value_type
-        .as_ref()
-        .ok_or_else(|| {
-            CtypesError::InternalError("inbound typed value is missing value_type".into())
-        })
-        .and_then(crate::ty_decode::proto_ty_to_runtime_ty)?;
-    let value = typed.value.ok_or_else(|| {
-        CtypesError::InternalError("inbound typed value is missing its value".into())
-    })?;
-
-    Ok(BexExternalValue::typed(
-        inbound_to_external(*value, handle_table)?,
-        value_type,
-    ))
+    }?;
+    Ok(match value_type {
+        Some(value_type) => BexExternalValue::typed(decoded, value_type),
+        None => decoded,
+    })
 }
 
 /// Build the default "any scalar" union type for untyped inbound values.
@@ -131,19 +117,13 @@ fn convert_list(
     list: InboundListValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
-    let element_type = list
-        .item_type
-        .as_ref()
-        .map(crate::ty_decode::proto_ty_to_runtime_ty)
-        .transpose()?
-        .unwrap_or_else(default_scalar_union_ty);
     let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
         .into_iter()
         .map(|v| inbound_to_external(v, handle_table))
         .collect();
     Ok(BexExternalValue::Array {
-        element_type,
+        element_type: default_scalar_union_ty(),
         items: items?,
     })
 }
@@ -152,18 +132,6 @@ fn convert_map(
     map: InboundMapValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
-    let key_type = map
-        .key_type
-        .as_ref()
-        .map(crate::ty_decode::proto_ty_to_runtime_ty)
-        .transpose()?
-        .unwrap_or_else(RuntimeTy::string);
-    let value_type = map
-        .value_type
-        .as_ref()
-        .map(crate::ty_decode::proto_ty_to_runtime_ty)
-        .transpose()?
-        .unwrap_or_else(default_scalar_union_ty);
     let mut entries = IndexMap::new();
     for entry in map.entries {
         let key = extract_string_key(&entry)?;
@@ -175,8 +143,8 @@ fn convert_map(
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type,
-        value_type,
+        key_type: RuntimeTy::string(),
+        value_type: default_scalar_union_ty(),
         entries,
     })
 }
@@ -195,24 +163,9 @@ fn convert_class(
             .unwrap_or(BexExternalValue::Null);
         fields.insert(key, value);
     }
-    // The class binds via `class_ty`: `class_ty.name` is the FQN and
-    // `class_ty.type_args` (De Bruijn order) a generic instance's concrete
-    // args. A well-formed class value always sets `class_ty`; an absent one
-    // decodes to an unnamed class with no type args.
-    let (class_name, type_args) = match class.class_ty {
-        Some(ty_class) => {
-            let args = ty_class
-                .type_args
-                .iter()
-                .map(crate::ty_decode::proto_ty_to_runtime_ty)
-                .collect::<Result<Vec<_>, _>>()?;
-            (ty_class.name, args)
-        }
-        None => (String::new(), vec![]),
-    };
     Ok(BexExternalValue::Instance {
-        class_name,
-        type_args,
+        class_name: String::new(),
+        type_args: vec![],
         fields,
     })
 }
@@ -273,24 +226,17 @@ pub fn playground_run_args_to_bex_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        baml_bridge::cffi::{BamlHandle, InboundTypedValue},
-        handle_table::CffiHandleTableEntry,
-    };
+    use crate::{baml_bridge::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
 
     fn typed_input(value_type: &RuntimeTy, value: InboundValueVariant) -> InboundValue {
         InboundValue {
-            value: Some(InboundValueVariant::TypedValue(Box::new(
-                InboundTypedValue {
-                    value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
-                    value: Some(Box::new(InboundValue { value: Some(value) })),
-                },
-            ))),
+            value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
+            value: Some(value),
         }
     }
 
     #[test]
-    fn typed_value_preserves_authoritative_type() {
+    fn sparse_value_type_preserves_authoritative_type() {
         let decoded = inbound_to_external(
             typed_input(&RuntimeTy::int(), InboundValueVariant::IntValue(7)),
             &CffiHandleTable::new(),
@@ -300,29 +246,21 @@ mod tests {
             panic!("expected typed-value carrier")
         };
         assert_eq!(*value, BexExternalValue::Int(7));
-        assert!(metadata.is_inbound_typed_value);
+        assert!(metadata.is_inbound_type_annotation);
         assert_eq!(metadata.selected_option, RuntimeTy::int());
     }
 
     #[test]
-    fn typed_value_requires_value_type() {
-        let error = inbound_to_external(
+    fn value_type_is_optional() {
+        let decoded = inbound_to_external(
             InboundValue {
-                value: Some(InboundValueVariant::TypedValue(Box::new(
-                    InboundTypedValue {
-                        value_type: None,
-                        value: Some(Box::new(InboundValue {
-                            value: Some(InboundValueVariant::BoolValue(true)),
-                        })),
-                    },
-                ))),
+                value_type: None,
+                value: Some(InboundValueVariant::BoolValue(true)),
             },
             &CffiHandleTable::new(),
         )
-        .unwrap_err();
-        assert!(
-            matches!(error, CtypesError::InternalError(message) if message.contains("value_type"))
-        );
+        .unwrap();
+        assert_eq!(decoded, BexExternalValue::Bool(true));
     }
 
     #[test]
@@ -353,10 +291,7 @@ mod tests {
         let decoded = inbound_to_external(
             typed_input(
                 &list_type,
-                InboundValueVariant::ListValue(InboundListValue {
-                    values: vec![],
-                    item_type: None,
-                }),
+                InboundValueVariant::ListValue(InboundListValue { values: vec![] }),
             ),
             &CffiHandleTable::new(),
         )
@@ -369,35 +304,30 @@ mod tests {
     }
 
     #[test]
-    fn typed_empty_containers_preserve_host_descriptors() {
+    fn untyped_empty_containers_remain_shape_only() {
         let table = CffiHandleTable::new();
-        let string = RuntimeTy::string();
-        let int = RuntimeTy::int();
         let list = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::ListValue(InboundListValue {
                 values: vec![],
-                item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&string)),
             })),
         };
         let decoded = inbound_to_external(list, &table).unwrap();
         assert!(matches!(
             decoded,
-            BexExternalValue::Array { element_type, items }
-                if element_type == string && items.is_empty()
+            BexExternalValue::Array { items, .. } if items.is_empty()
         ));
 
         let map = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::MapValue(InboundMapValue {
                 entries: vec![],
-                key_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&string)),
-                value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(&int)),
             })),
         };
         let decoded = inbound_to_external(map, &table).unwrap();
         assert!(matches!(
             decoded,
-            BexExternalValue::Map { key_type, value_type, entries }
-                if key_type == string && value_type == int && entries.is_empty()
+            BexExternalValue::Map { entries, .. } if entries.is_empty()
         ));
     }
 
@@ -409,6 +339,7 @@ mod tests {
             handle_type: BamlHandleType::HostValueCallable as i32,
         };
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::Handle(handle)),
         };
         let result = inbound_to_external(inbound, &table).expect("decode succeeds");
@@ -434,6 +365,7 @@ mod tests {
             handle_type: BamlHandleType::HostValueOpaque as i32,
         };
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::Handle(handle)),
         };
         let result = inbound_to_external(inbound, &table).expect("decode succeeds");
@@ -456,6 +388,7 @@ mod tests {
         let table = CffiHandleTable::new();
         let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 7 });
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key,
                 handle_type: 0,
@@ -476,6 +409,7 @@ mod tests {
     fn inbound_handle_missing_key_errors() {
         let table = CffiHandleTable::new();
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: 9999,
                 handle_type: 0,
@@ -501,6 +435,7 @@ mod tests {
             other => panic!("expected outbound BigintValue, got {other:?}"),
         };
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::BigintValue(s)),
         };
         let table = CffiHandleTable::new();
@@ -538,6 +473,7 @@ mod tests {
     #[test]
     fn test_bigint_decode_invalid() {
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::BigintValue("not-a-number".into())),
         };
         let table = CffiHandleTable::new();
@@ -554,6 +490,7 @@ mod tests {
         let blob = "f".repeat((1 << 28) / 4 + 3);
         let blob_len = blob.len();
         let inbound = InboundValue {
+            value_type: None,
             value: Some(InboundValueVariant::BigintValue(blob)),
         };
         let table = CffiHandleTable::new();
@@ -571,65 +508,32 @@ mod tests {
         assert!(message.len() < 200);
     }
 
-    /// Phase 2 gate: a generic class instance carries its concrete class type
-    /// args over the wire in `InboundClassValue.class_ty`, and `convert_class`
-    /// lands them in `BexExternalValue::Instance::type_args`.
+    /// A sparse node annotation carries nominal generic class identity without
+    /// duplicating it on the class payload.
     #[test]
-    fn convert_class_decodes_generic_type_args() {
-        use crate::baml_bridge::cffi::{
-            BamlTy, BamlTyClass, BamlTyPrimitive, BamlTyPrimitiveKind, InboundClassValue,
-            baml_ty::Ty as TyVariant,
+    fn class_value_type_annotation_preserves_generic_identity() {
+        use crate::baml_bridge::cffi::InboundClassValue;
+        let class_type = RuntimeTy::Class(
+            baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
+            vec![RuntimeTy::int()],
+            baml_type::TyAttr::default(),
+        );
+        let decoded = inbound_to_external(
+            typed_input(
+                &class_type,
+                InboundValueVariant::ClassValue(InboundClassValue { fields: vec![] }),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .expect("decode succeeds");
+        let BexExternalValue::Union { value, metadata } = decoded else {
+            panic!("expected sparse type carrier")
         };
-        let int_ty = BamlTy {
-            ty: Some(TyVariant::Primitive(BamlTyPrimitive {
-                kind: BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32,
-            })),
-        };
-        let class = InboundClassValue {
-            fields: vec![],
-            class_ty: Some(BamlTyClass {
-                name: "generic_tests.GenericBox".to_string(),
-                type_args: vec![int_ty],
-            }),
-        };
-        let table = CffiHandleTable::new();
-        let result = convert_class(class, &table).expect("decode succeeds");
-        match result {
-            BexExternalValue::Instance {
-                class_name,
-                type_args,
-                ..
-            } => {
-                assert_eq!(class_name, "generic_tests.GenericBox");
-                assert_eq!(type_args, vec![RuntimeTy::int()]);
-            }
-            other => panic!("expected Instance, got: {other:?}"),
-        }
-    }
-
-    /// A non-generic instance binds its FQN from `class_ty` with empty `type_args`.
-    #[test]
-    fn convert_class_non_generic_has_empty_type_args() {
-        use crate::baml_bridge::cffi::{BamlTyClass, InboundClassValue};
-        let class = InboundClassValue {
-            fields: vec![],
-            class_ty: Some(BamlTyClass {
-                name: "user.Plain".to_string(),
-                type_args: vec![],
-            }),
-        };
-        let table = CffiHandleTable::new();
-        let result = convert_class(class, &table).expect("decode succeeds");
-        match result {
-            BexExternalValue::Instance {
-                class_name,
-                type_args,
-                ..
-            } => {
-                assert_eq!(class_name, "user.Plain");
-                assert!(type_args.is_empty());
-            }
-            other => panic!("expected Instance, got: {other:?}"),
-        }
+        assert_eq!(metadata.selected_option, class_type);
+        assert!(matches!(
+            *value,
+            BexExternalValue::Instance { class_name, type_args, .. }
+                if class_name.is_empty() && type_args.is_empty()
+        ));
     }
 }
