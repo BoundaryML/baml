@@ -10,12 +10,15 @@ experimental = ["setup-scripts"]
 # the cold build of the shared stack before tests fan out.
 [test-groups]
 rust-sdk-fixture = { max-threads = 2 }
-# Java: each fixture's javac+junit gates share one gradle project dir and its
-# exclusive lock — serialize per fixture (see comment above the java overrides).
-java-fixture-type-shapes = { max-threads = 1 }
-java-fixture-function-calls = { max-threads = 1 }
-java-fixture-llm-functions = { max-threads = 1 }
-java-fixture-docstrings-etc = { max-threads = 1 }
+# Java: every fixture's javac+junit gate invokes `gradle` against the SAME
+# shared GRADLE_USER_HOME (target/gradle-home). Gradle's daemon registry and
+# file-lock port reservation live under that home, so two concurrent `gradle`
+# launches race on it even when their project dirs differ. On Windows that race
+# is fatal ("Timeout waiting to connect to the Gradle daemon" / "Cannot start
+# managing file contention because this handler has been closed"); POSIX is more
+# forgiving but not immune under CI load. Funnel the whole package through one
+# in-flight gradle at a time (see the package-wide override below).
+java-gradle-serial = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
@@ -127,30 +130,17 @@ platform = { host = 'cfg(windows)' }
 setup = 'java_gradle_win'
 
 # The java sdk-test emits two gates per green fixture — `javac`
-# (compileTestJava) and `junit` (test) — and BOTH invoke `gradle` in the
-# same `<fixture>/generated/` project dir. Gradle takes an exclusive
-# project lock, so running a fixture's two gates concurrently would race
-# (one blocks on the lock and can time out). Serialize each fixture's
-# gates into a per-fixture test group with max-threads = 1; distinct
-# fixtures still run in parallel (different dirs — already proven safe by
-# the two javac gates). Add a group + override here when a fixture joins
-# GREEN_JUNIT_FIXTURES in sdk_tests/harness_setup/src/java.rs.
-
+# (compileTestJava) and `junit` (test) — and every one shells out to `gradle`
+# against the shared GRADLE_USER_HOME. Two gates race two ways: within a fixture
+# on the project lock, and across fixtures on the shared daemon registry (the
+# latter is what broke the Windows leg — 4 concurrent gradle launches, one timed
+# out connecting to its forked daemon). A single package-wide override funnels
+# the entire sdk_test_java suite through the one-slot `java-gradle-serial` group,
+# which closes both races; it subsumes the old per-fixture groups. The two
+# non-gradle gates (`build_diagnostics`, `setup_guard`) ride along harmlessly.
 [[profile.default.overrides]]
-filter = 'package(=sdk_test_java) & test(/^type_shapes::/)'
-test-group = 'java-fixture-type-shapes'
-
-[[profile.default.overrides]]
-filter = 'package(=sdk_test_java) & test(/^function_calls::/)'
-test-group = 'java-fixture-function-calls'
-
-[[profile.default.overrides]]
-filter = 'package(=sdk_test_java) & test(/^llm_functions::/)'
-test-group = 'java-fixture-llm-functions'
-
-[[profile.default.overrides]]
-filter = 'package(=sdk_test_java) & test(/^docstrings_etc::/)'
-test-group = 'java-fixture-docstrings-etc'
+filter = 'package(=sdk_test_java)'
+test-group = 'java-gradle-serial'
 
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
