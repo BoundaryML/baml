@@ -375,6 +375,16 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-java-sdk:
+    name: Build Java SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-java-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   build-web-sdk:
     name: Build Web SDK
     needs: [plan]
@@ -471,6 +481,7 @@ jobs:
       - build-python-sdk
       - build-nodejs-sdk
       - build-web-sdk
+      - build-java-sdk
       # The engine cdylib is required — it is the shared artifact every
       # dylib-loader SDK depends on.
       - build-bridge-cffi
@@ -546,6 +557,147 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
       channel: ${{ needs.plan.outputs.channel }}
+
+  publish-maven:
+    name: Publish Java Maven Central
+    needs: [plan, build-java-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # Maven Central is its own registry (like PyPI/npm/crates.io): a leaf
+    # publisher that does not feed the pkg.boundaryml.com manifest, so it is not
+    # in that aggregator's needs. It gates on all-builds like every sibling
+    # publisher — a failure anywhere in the release build blocks the Maven push.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+      - name: Resolve Maven version
+        id: ver
+        run: |
+          set -euo pipefail
+          # Maven version = the plan's canonical string, Maven-legal as-is
+          # (canary → 0.15.0, nightly → 0.15.0-nightly.YYYYMMDD.a).
+          version="$(jq -r .canonical_version release-plan.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Skip if this version is already on Maven Central
+        id: exists
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          # IDEMPOTENCY: a published Central version is immutable; if the version
+          # dir already exists on Maven Central, this is a re-run — skip cleanly.
+          url="https://repo1.maven.org/maven2/com/boundaryml/baml-bridge/${VERSION}/"
+          code="$(curl -s -o /dev/null -w '%{http_code}' -I "$url" || echo 000)"
+          if [[ "$code" == "200" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "baml-bridge ${VERSION} already on Maven Central; skipping"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "baml-bridge ${VERSION} not on Maven Central (HTTP ${code}); will publish"
+          fi
+      - name: Setup mise (JDK + gradle)
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+      - name: Download native jars
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          # The 8 per-target natives-<platform> jars (fewer if an experimental
+          # target's build failed — continue-on-error — which never blocks).
+          pattern: java-sdk-natives-*
+          path: dist/natives
+          merge-multiple: true
+      - name: Stage the signed Central layout
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        working-directory: baml_language/sdks/java/baml_bridge
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          # In-memory PGP signing path in build.gradle.kts keys on GPG_PRIVATE_KEY.
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            exit 1
+          fi
+          # One staging run produces the full main+sources+javadoc+pom+module
+          # layout, attaches every downloaded natives-<platform> jar as a
+          # classifier artifact (bamlNativeJarsDir), and signs + checksums all of
+          # them with the in-memory key.
+          mise exec -- gradle --no-daemon publishMavenPublicationToStagingRepository \
+            -PbamlVersion="$VERSION" \
+            -PbamlNativeJarsDir="$GITHUB_WORKSPACE/dist/natives"
+      - name: Upload the Central bundle to the portal (publish automatically)
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          staging="baml_language/sdks/java/baml_bridge/build/staging-deploy"
+          # Central rejects a maven-metadata.xml inside the bundle (it owns that);
+          # strip it and its checksum/signature sidecars.
+          find "$staging" -name 'maven-metadata.xml*' -delete
+          # Sanity: the Maven-layout dir the bundle needs must exist.
+          if [[ ! -d "$staging/com/boundaryml/baml-bridge/$VERSION" ]]; then
+            echo "::error::staging layout missing com/boundaryml/baml-bridge/$VERSION"
+            find "$staging" -maxdepth 4 -type d || true
+            exit 1
+          fi
+          ( cd "$staging" && zip -q -r "$GITHUB_WORKSPACE/central-bundle.zip" com )
+          echo "bundle contents:"
+          unzip -l "$GITHUB_WORKSPACE/central-bundle.zip"
+
+          # Portal auth: Bearer <base64(username:password)> (env → shell var, never
+          # interpolated into this script body).
+          token="$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')"
+
+          # publishingType=AUTOMATIC: Central validates then publishes to Maven
+          # Central with no Portal-UI click. The response body is the deployment
+          # UUID.
+          deployment_id="$(curl -fsS -X POST \
+            -H "Authorization: Bearer $token" \
+            -F "bundle=@$GITHUB_WORKSPACE/central-bundle.zip" \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=baml-bridge-$VERSION")"
+          echo "central deployment id: $deployment_id"
+
+          # Poll the deployment until it validates + starts publishing (AUTOMATIC),
+          # or fails.
+          for attempt in $(seq 1 80); do
+            body="$(curl -fsS -X POST -H "Authorization: Bearer $token" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")"
+            state="$(printf '%s' "$body" | jq -r '.deploymentState // empty')"
+            echo "attempt ${attempt}: deploymentState=${state:-<none>}"
+            case "$state" in
+              PUBLISHED|PUBLISHING)
+                echo "baml-bridge $VERSION accepted by Maven Central (state: $state)"
+                exit 0
+                ;;
+              FAILED)
+                echo "::error::Central deployment $deployment_id FAILED"
+                printf '%s\n' "$body" | jq . 2>/dev/null || printf '%s\n' "$body"
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+          echo "::error::timed out waiting for deployment $deployment_id (last state: ${state:-<none>})"
+          exit 1
 
   publish-toolchain-release:
     name: Publish toolchain release assets

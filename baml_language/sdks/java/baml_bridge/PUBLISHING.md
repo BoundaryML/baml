@@ -78,7 +78,7 @@ gradle publishToMavenLocal \
 caches, matching how the sdk_test_java fixtures build.)
 
 This publishes, under
-`~/.m2/repository/com/boundaryml/baml/baml-bridge/<version>/`:
+`~/.m2/repository/com/boundaryml/baml-bridge/<version>/`:
 
 - `baml-bridge-<version>.jar` — main jar,
 - `baml-bridge-<version>-natives-linux-x86_64.jar` — native jar containing

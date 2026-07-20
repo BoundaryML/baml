@@ -52,6 +52,15 @@ val nativePlatform = (project.findProperty("bamlNativePlatform") as String?)?.ta
     ?: "linux-x86_64"
 val nativeLibPath = (project.findProperty("bamlNativeLib") as String?)?.takeIf { it.isNotBlank() }
 
+// Publish-job path: a directory of prebuilt `natives-<platform>` jars (one per
+// target, downloaded from the 8 build-natives jobs). When set, every
+// `*-natives-*.jar` in it is attached to the publication as a classifier
+// artifact, so a single `publishMavenPublicationToStagingRepository` stages —
+// and, when signing is on, signs + checksums — the full
+// main+sources+javadoc+8-natives Central bundle. Distinct from `bamlNativeLib`,
+// which packages ONE freshly built cdylib in the per-target build jobs.
+val nativeJarsDir = (project.findProperty("bamlNativeJarsDir") as String?)?.takeIf { it.isNotBlank() }
+
 // Map a platform token (linux-*/macos-*/windows-*) to the OS-appropriate cdylib
 // file name. Cross-target, so it can't use System.mapLibraryName (host-only).
 fun mappedNativeLibName(platform: String): String = when {
@@ -107,6 +116,16 @@ tasks.withType<JavaCompile> {
     options.release.set(17)
 }
 
+tasks.withType<Javadoc> {
+    // Maven Central requires a javadoc jar, but it is a packaging requirement,
+    // not reference documentation. The boilerplate `Union<N>` generics (and
+    // other generated wrappers) trip doclint's strict missing-@param checks,
+    // which otherwise fail `javadoc` (non-zero exit) and block the release.
+    // Disable doclint and don't fail the release build on lint warnings.
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+    isFailOnError = false
+}
+
 tasks.jar {
     // The sdk_test_java fixtures link this by exact name via
     // `implementation(files(".../build/libs/baml-bridge.jar"))`, so the plain
@@ -143,6 +162,24 @@ publishing {
             // `publishToMavenLocal` with no -PbamlNativeLib still works.
             if (nativeLibPath != null) {
                 artifact(nativeJar)
+            }
+
+            // Publish job: attach every prebuilt natives-<platform> jar so a
+            // single staging run signs + checksums all 8 classifier artifacts.
+            // The classifier is parsed from the file name
+            // (baml-bridge-<version>-<classifier>.jar).
+            if (nativeJarsDir != null) {
+                val prefix = "baml-bridge-$bamlVersion-"
+                file(nativeJarsDir).listFiles()
+                    ?.filter { it.isFile && it.name.startsWith(prefix) && it.name.endsWith(".jar") && it.name.contains("-natives-") }
+                    ?.sortedBy { it.name }
+                    ?.forEach { jar ->
+                        val jarClassifier = jar.name.removePrefix(prefix).removeSuffix(".jar")
+                        artifact(jar) {
+                            classifier = jarClassifier
+                            extension = "jar"
+                        }
+                    }
             }
 
             pom {
@@ -203,12 +240,32 @@ publishing {
     }
 }
 
-// Signing for Maven Central (skipped unless -PbamlSign=true so local
-// dev/test publishes stay friction-free). Uses the local gpg agent.
-if (providers.gradleProperty("bamlSign").isPresent) {
-    signing {
-        useGpgCmd()
-        sign(publishing.publications["maven"])
+// Signing for Maven Central. Two mutually exclusive paths, in priority order:
+//
+//   1. CI in-memory key (env-gated): when GPG_PRIVATE_KEY is present the
+//      publish-maven job has injected the ASCII-armored secret key (and
+//      GPG_PASSPHRASE) as secrets, so sign with an in-memory key —
+//      `useInMemoryPgpKeys(GPG_PRIVATE_KEY, GPG_PASSPHRASE)`. No gpg binary or
+//      keyring on the runner, and nothing to configure per-runner.
+//   2. Local gpg agent (`-PbamlSign=true`): unchanged developer path, signs
+//      via the local gpg (pin the key with `-Psigning.gnupg.keyName=<KEYID>`;
+//      see PUBLISHING.md — the BoundaryML key is A5006CD3995646B6).
+//
+// With neither, signing is off so `publishToMavenLocal` and staging dry-runs
+// stay friction-free (Central rejects unsigned uploads, but the local flows
+// don't need signatures). The env path takes precedence so a CI runner that
+// also happens to pass -PbamlSign still uses the injected key.
+run {
+    val inMemoryPgpKey = System.getenv("GPG_PRIVATE_KEY")?.takeIf { it.isNotBlank() }
+    when {
+        inMemoryPgpKey != null -> signing {
+            useInMemoryPgpKeys(inMemoryPgpKey, System.getenv("GPG_PASSPHRASE"))
+            sign(publishing.publications["maven"])
+        }
+        providers.gradleProperty("bamlSign").isPresent -> signing {
+            useGpgCmd()
+            sign(publishing.publications["maven"])
+        }
     }
 }
 

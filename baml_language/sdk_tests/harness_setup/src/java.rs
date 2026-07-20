@@ -55,8 +55,10 @@ use crate::{
 const BUILD_GRADLE_KTS: &str = include_str!("templates/build.gradle.kts");
 
 /// Per-fixture settings.gradle.kts. `__PROJECT_NAME__` is substituted
-/// per fixture. Carries the foojay toolchain resolver so Gradle can
-/// provision a JDK 17 on machines without one.
+/// per fixture. No toolchain auto-provisioning: the JDK is the ambient
+/// one from the repo-root `mise.toml` (`java = temurin-23`), and
+/// `build.gradle.kts` pins `--release 17` against it — so every runner
+/// (Linux/macOS/Windows) must have `java` on its mise install set.
 const SETTINGS_GRADLE_KTS_TEMPLATE: &str = include_str!("templates/settings.gradle.kts");
 
 /// Shared Gradle home (`<workspace>/target/<CACHE_SUBDIR>`) —

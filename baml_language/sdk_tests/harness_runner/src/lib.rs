@@ -46,9 +46,11 @@ use std::{
 ///
 /// If `uv` is managed by mise but its shim isn't on PATH, the
 /// helper falls back to `mise which uv` before giving up. On Windows,
-/// `pnpm` is commonly exposed as `pnpm.cmd`; Rust's process launcher
-/// does not consistently apply shell-style `PATHEXT` expansion when
-/// asked to spawn `pnpm`, so the helper retries the explicit shim.
+/// `pnpm` is commonly exposed as `pnpm.cmd` and `gradle` as
+/// `gradle.bat` (there is no bare `gradle.exe`); Rust's process
+/// launcher does not consistently apply shell-style `PATHEXT`
+/// expansion when asked to spawn `pnpm` / `gradle`, so the helper
+/// retries the explicit shim (`pnpm.cmd` / `gradle.bat`).
 pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
@@ -442,6 +444,21 @@ fn run_test_process(
         #[cfg(windows)]
         Err(err) if err.kind() == ErrorKind::NotFound && prog == "pnpm" => {
             let mut fallback = Command::new("pnpm.cmd");
+            fallback
+                .args(args)
+                .current_dir(dir)
+                .env(cache_env_var, cache_dir);
+            for (k, v) in extra_env {
+                fallback.env(k, v);
+            }
+            fallback.output()
+        }
+        // Gradle ships as `gradle.bat` on Windows (no bare `gradle.exe`),
+        // and Rust's launcher doesn't reliably apply PATHEXT (see the
+        // `pnpm.cmd` note above), so retry the explicit batch launcher.
+        #[cfg(windows)]
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "gradle" => {
+            let mut fallback = Command::new("gradle.bat");
             fallback
                 .args(args)
                 .current_dir(dir)

@@ -444,11 +444,19 @@ inherits = "release"
 # contract mandates `panic = "unwind"` for a library loaded into a user's
 # server).
 #
+# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
+# process. Its `catch_unwind` boundary turns an engine panic into a catchable
+# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
+# recover), so it needs `panic = "unwind"` for exactly the same reason as
+# `bridge_cffi` — the 8-target Java native matrix selects
+# `--profile release-bridge-java`.
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
 # binary can't mix strategies), so these artifacts need their own profile rather
 # than a package override. maturin (`--profile release-bridge-python`), napi
-# (`--profile release-bridge-node`), and the standalone cdylib matrix
-# (`--profile release-bridge-cffi`) select these at build time. The CLI and wasm
+# (`--profile release-bridge-node`), the standalone cdylib matrix
+# (`--profile release-bridge-cffi`), and the Java native matrix
+# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -460,5 +468,9 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-java]
 inherits = "release"
 panic = "unwind"

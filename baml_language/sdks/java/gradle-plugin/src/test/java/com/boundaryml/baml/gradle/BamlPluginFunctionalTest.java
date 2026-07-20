@@ -28,7 +28,10 @@ import org.junit.jupiter.api.io.TempDir;
  *       references the generated {@code baml_sdk} compiles, and a second build
  *       reports {@code generateBaml} as {@code UP-TO-DATE};
  *   <li>(c) a missing executable fails the task at execution with the install
- *       hint (never at configuration).
+ *       hint (never at configuration);
+ *   <li>(d) the generated source root is backed by the {@code generateBaml} task
+ *       provider — the source set carries the task as a build dependency (the
+ *       edge IntelliJ reads to generate on sync).
  * </ul>
  */
 class BamlPluginFunctionalTest {
@@ -164,6 +167,62 @@ class BamlPluginFunctionalTest {
         assertTrue(
             result.getOutput().contains("curl -fsSL https://pkg.boundaryml.com/install.sh"),
             () -> "failure should carry the install hint; output:\n" + result.getOutput());
+    }
+
+    // ---- (d) generated source root is wired to the task provider -------------
+
+    /**
+     * The generated source root is registered via the {@code generateBaml} task
+     * provider ({@code srcDir(generateBaml)}), so Gradle infers the
+     * generate→compile dependency from the source set itself — which is what
+     * makes IntelliJ generate the sources on Gradle <em>sync</em> (it reads the
+     * source-set model, not the task graph of a specific build). Full sync
+     * behaviour can't be driven from TestKit, so this asserts the observable
+     * model invariant: (1) the generated dir is a Java source root, and (2) the
+     * Java source set carries {@code generateBaml} as a build dependency — the
+     * edge that a bare-directory {@code srcDir} would NOT create.
+     *
+     * <p>No {@code baml} CLI and no {@code baml_src} are needed: the wiring
+     * exists at configuration time regardless of whether the CLI is present
+     * (the task is never executed here).
+     */
+    @Test
+    void generatedSourceRootIsBackedByGenerateBamlTask() throws IOException {
+        writeSettings("consumer");
+        writeFile("build.gradle.kts", """
+            plugins {
+                id("com.boundaryml.baml")
+            }
+
+            tasks.register("printBamlWiring") {
+                val javaSrc = sourceSets["main"].java
+                val genDir = layout.buildDirectory
+                    .dir("generated/sources/baml/java/main").get().asFile
+                doLast {
+                    println("BAML_SRC_HAS_GENERATED=" + javaSrc.srcDirs.contains(genDir))
+                    val depNames = javaSrc.buildDependencies.getDependencies(null)
+                        .map { it.name }.toSortedSet()
+                    println("BAML_SRC_TASK_BACKED=" + depNames.contains("generateBaml"))
+                    println("BAML_SRC_BUILD_DEPS=" + depNames)
+                }
+            }
+            """);
+
+        BuildResult result = runner("printBamlWiring", "--stacktrace").build();
+
+        assertEquals(
+            TaskOutcome.SUCCESS,
+            result.task(":printBamlWiring").getOutcome(),
+            () -> "printBamlWiring should succeed; output:\n" + result.getOutput());
+        assertTrue(
+            result.getOutput().contains("BAML_SRC_HAS_GENERATED=true"),
+            () -> "the generated dir should be a registered java source root; output:\n"
+                + result.getOutput());
+        assertTrue(
+            result.getOutput().contains("BAML_SRC_TASK_BACKED=true"),
+            () -> "the java source set should carry generateBaml as an inferred build "
+                + "dependency (srcDir(taskProvider)) so IntelliJ generates on sync; output:\n"
+                + result.getOutput());
     }
 
     // ---- helpers -------------------------------------------------------------

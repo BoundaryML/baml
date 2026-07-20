@@ -77,8 +77,17 @@ public class BamlPlugin implements Plugin<Project> {
         SourceSet main = java.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME);
 
         // Generated `.java` (under <outputDir>/baml_sdk/, package baml_sdk) — the
-        // source root is the parent of baml_sdk/, i.e. <outputDir>.
-        main.getJava().srcDir(outputDir);
+        // source root is the parent of baml_sdk/, i.e. <outputDir>. Register the
+        // TASK PROVIDER (not the bare directory) so Gradle infers the
+        // generateBaml→compile dependency from the source set itself: `srcDir`
+        // resolves a `TaskProvider` to its `@OutputDirectory` and carries that
+        // task as the directory's build dependency. This is what makes IntelliJ
+        // generate the sources on Gradle *sync* (it reads the source-set model,
+        // which now points at a task output), where a plain directory provider
+        // would leave the generated root empty until an explicit build. The
+        // explicit `compileJava.dependsOn(generateBaml)` below is kept as a
+        // belt-and-suspenders (now redundant, harmless).
+        main.getJava().srcDir(generateBaml);
 
         // The bytecode resource (baml_sdk/inlinedbaml.b64) must ride on the
         // runtime classpath at /baml_sdk/inlinedbaml.b64. Scope the include to
