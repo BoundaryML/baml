@@ -97,7 +97,7 @@ fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
     reason = "the `_state` view accessor is generated from the private BAML field"
 )]
 impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
-    fn new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
+    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = XoshiroRng::from_seed(seed_array(seed)?);
         let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
         Ok(copy::random::Xoshiro256PlusPlus { _state: state }.to_value(vm))
@@ -126,7 +126,7 @@ impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
     reason = "the `_state` view accessor is generated from the private BAML field"
 )]
 impl BamlClassRandomChaCha20 for PackageBamlImpl {
-    fn new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
+    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
         let rng = ChaCha20Rng::from_seed(seed_array(seed)?);
         let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
         Ok(copy::random::ChaCha20 { _state: state }.to_value(vm))

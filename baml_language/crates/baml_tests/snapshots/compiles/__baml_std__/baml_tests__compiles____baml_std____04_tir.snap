@@ -2824,8 +2824,18 @@ function baml.random.SystemRandom.get() -> baml.random.SystemRandom throws never
 class baml.random.Xoshiro256PlusPlus {
   _state: $rust_type
 }
+function baml.random.Xoshiro256PlusPlus.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.Xoshiro256PlusPlus throws never {
+  { : baml.random.Xoshiro256PlusPlus
+    Xoshiro256PlusPlus._new(seed) : baml.random.Xoshiro256PlusPlus
+  }
+}
 class baml.random.ChaCha20 {
   _state: $rust_type
+}
+function baml.random.ChaCha20.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.ChaCha20 throws never {
+  { : baml.random.ChaCha20
+    ChaCha20._new(seed) : baml.random.ChaCha20
+  }
 }
 class baml.random.SystemRandom$stream {
 }

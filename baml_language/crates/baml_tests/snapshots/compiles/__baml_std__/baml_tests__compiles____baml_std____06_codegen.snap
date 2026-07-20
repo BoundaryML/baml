@@ -6021,7 +6021,25 @@ function baml.random.ChaCha20.Rng.random(self: baml.random.ChaCha20, bytes: int)
 function baml.random.ChaCha20.Rng.random_int(self: baml.random.ChaCha20) -> int {
 }
 
+function baml.random.ChaCha20._new(seed: uint8array) -> baml.random.ChaCha20 {
+}
+
 function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
+    load_var seed
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var seed
+
+  L0:
+    load_var seed
+    call baml.random.ChaCha20._new
+    return
 }
 
 function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
@@ -6121,7 +6139,25 @@ function baml.random.Xoshiro256PlusPlus.Rng.random(self: baml.random.Xoshiro256P
 function baml.random.Xoshiro256PlusPlus.Rng.random_int(self: baml.random.Xoshiro256PlusPlus) -> int {
 }
 
+function baml.random.Xoshiro256PlusPlus._new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+}
+
 function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+    load_var seed
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var seed
+
+  L0:
+    load_var seed
+    call baml.random.Xoshiro256PlusPlus._new
+    return
 }
 
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {

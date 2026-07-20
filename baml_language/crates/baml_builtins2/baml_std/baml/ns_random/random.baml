@@ -78,11 +78,18 @@ class Xoshiro256PlusPlus {
     ///
     /// ## Panics
     /// If `seed` is shorter than 32 bytes.
+    function new(
+        seed: uint8array = SystemRandom.get().random(32),
+    ) -> Xoshiro256PlusPlus throws never {
+        // A `$rust_function` builtin can't fill omitted default args, so this
+        // thin wrapper resolves the default seed and forwards to `_new` (whose
+        // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.
+        Xoshiro256PlusPlus._new(seed)
+    }
+
     //baml:mut_vm
     //baml:fallible
-    function new(
-        seed: uint8array = Rng.random(SystemRandom.get(), 32),
-    ) -> Xoshiro256PlusPlus throws never {
+    function _new(seed: uint8array) -> Xoshiro256PlusPlus throws never {
         $rust_function
     }
 
@@ -117,11 +124,18 @@ class ChaCha20 {
     ///
     /// ## Panics
     /// If `seed` is shorter than 32 bytes.
+    function new(
+        seed: uint8array = SystemRandom.get().random(32),
+    ) -> ChaCha20 throws never {
+        // A `$rust_function` builtin can't fill omitted default args, so this
+        // thin wrapper resolves the default seed and forwards to `_new` (whose
+        // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.
+        ChaCha20._new(seed)
+    }
+
     //baml:mut_vm
     //baml:fallible
-    function new(
-        seed: uint8array = Rng.random(SystemRandom.get(), 32),
-    ) -> ChaCha20 throws never {
+    function _new(seed: uint8array) -> ChaCha20 throws never {
         $rust_function
     }
 

@@ -94,16 +94,12 @@ function main() -> int {
     .unwrap();
 }
 
-// IGNORED: native (`$rust_function`) builtins don't yet substitute parameter
-// defaults. The `seed` default-arg prologue is only generated for bytecode
-// function bodies (`lower_default_parameter_prologue`), so `new()` reaches the
-// native constructor with `seed = OmittedArg`. Re-enable once native builtins
-// support parameter defaults (needed for `int.random(rng: Rng = ...)` too).
-#[ignore = "native builtins don't substitute parameter defaults yet"]
 #[tokio::test]
 async fn new_without_seed_uses_system_entropy() {
-    // No explicit seed → the default arg `Rng.random(SystemRandom.get(), 32)`
-    // runs, exercising the IO seeding path through interface dispatch.
+    // No explicit seed → `ChaCha20.new`'s BAML wrapper fills the default arg
+    // `Rng.random(SystemRandom.get(), 32)` (the native `$rust_function` `_new`
+    // it forwards to takes a required seed), exercising the IO seeding path
+    // through interface dispatch.
     let source = r#"
 function main() -> int {
     baml.random.ChaCha20.new().random(8).length()

@@ -8539,6 +8539,10 @@ fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
 
 fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
 
+fn baml.random.ChaCha20._new = builtin(vm)
+
+fn baml.random.Xoshiro256PlusPlus._new = builtin(vm)
+
 fn baml.random.SystemRandom.get() -> baml.random.SystemRandom {
     // Locals:
     let _0: baml.random.SystemRandom // _0 // return
@@ -8553,9 +8557,63 @@ fn baml.random.SystemRandom.get() -> baml.random.SystemRandom {
     }
 }
 
-fn baml.random.ChaCha20.new = builtin(vm)
+fn baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
+    // Locals:
+    let _0: baml.random.ChaCha20 // _0 // return
+    let _1: uint8array // seed // param
+    let _2: bool
+    let _3: baml.random.SystemRandom
 
-fn baml.random.Xoshiro256PlusPlus.new = builtin(vm)
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb3];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _1 = virtual_call random as baml.random.Rng(copy _3, const 32_i64) -> [bb3];
+    }
+
+    bb3: {
+        _0 = call const fn baml.random.ChaCha20._new(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+    // Locals:
+    let _0: baml.random.Xoshiro256PlusPlus // _0 // return
+    let _1: uint8array // seed // param
+    let _2: bool
+    let _3: baml.random.SystemRandom
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb3];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _1 = virtual_call random as baml.random.Rng(copy _3, const 32_i64) -> [bb3];
+    }
+
+    bb3: {
+        _0 = call const fn baml.random.Xoshiro256PlusPlus._new(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.random.ChaCha20.Rng.random = builtin(vm)
 
@@ -8564,8 +8622,6 @@ fn baml.random.Xoshiro256PlusPlus.Rng.random = builtin(vm)
 fn baml.random.SystemRandom.Rng.random = builtin(io)
 
 fn baml.random.Xoshiro256PlusPlus.Rng.random_int = builtin(vm)
-
-fn baml.random.SystemRandom.Rng.random_int = builtin(io)
 
 fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     // Locals:
@@ -8687,6 +8743,8 @@ fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
         return;
     }
 }
+
+fn baml.random.SystemRandom.Rng.random_int = builtin(io)
 
 fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
 
