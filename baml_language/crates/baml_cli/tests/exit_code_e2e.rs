@@ -852,7 +852,7 @@ testset "suite" with AlwaysFail {
 
 #[test]
 fn test_fail_fast_does_not_report_skipped_leaf_as_passed() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
@@ -888,7 +888,7 @@ testset "suite" with testing.FailFast() {
 
 #[test]
 fn test_legacy_custom_runner_does_not_invent_identity_for_skipped_leaf() {
-    let built = common::ensure_built();
+    let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(
