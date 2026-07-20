@@ -1,12 +1,13 @@
 # C# atomic-package feasibility evidence
 
-Status: B4 partially executed through the second exact-source atomic attempt
-on 2026-07-20. All eight shipping and paired diagnostic producers passed,
-including packed dSYM and PDB verification. The package job staged all eight
-shipping assets and accepted all six Unix diagnostic bundles, then rejected a
-Windows CRLF identity file before package construction. The focused canonical
-LF repair is local; no native consumer execution or eight-RID package baseline
-is approved.
+Status: B4 partially executed through the third exact-source atomic attempt on
+2026-07-20. All eight producers and deterministic package assembly passed,
+producing a measured exact eight-RID package under the ceiling. Four native
+consumer jobs passed; both Windows consumers executed successfully and failed
+only post-run checksum parsing, while both musl jobs failed before restore on
+a missing Docker environment forward. The focused verifier repairs are local;
+the package baseline is measured but not approved until all eight consumers
+and final completeness pass atomically.
 
 ## Target and size authority
 
@@ -339,12 +340,71 @@ debug evidence, sizes, and distinct shipping/diagnostic digests are valid;
 only the cross-host text encoding violated the immutable contract. No package
 or consumer output was produced, so no B4 or C6 promotion is claimed.
 
+The third exact-source atomic attempt, [run
+29785957216](https://github.com/BoundaryML/baml/actions/runs/29785957216),
+used tag and source SHA
+`ccf3bcfadd5a919b2cbee205ace07a1ac9cd565c`. All eight producers and
+package assembly passed. The immutable package evidence is:
+
+| Property | Exact result |
+| --- | --- |
+| Package bytes | `68,548,097` |
+| Package SHA-256 | `9195e1dd1cf8886c68d4f07bfa2ee87049537cb2787f73b04d6655036883b029` |
+| Pack/normalize time | `36` seconds |
+| Exact inventory | `15` entries: managed assembly, metadata/build files, and eight runtime natives |
+| Shipping native total | `180,794,948` bytes |
+| Diagnostic total | `2,458,529,632` bytes |
+| Reproducible compressed diagnostics | `536,208,515` bytes |
+| Bytecode | `683,918` bytes / `44ec354587d912e222d0263e3bc8a944514195da2c134e9e1db6ce4e202d66f2` |
+| Package ceiling | `200,000,000` bytes, passed |
+
+Per-target shipping and diagnostic-primary measurements:
+
+| Target | Shipping bytes | Shipping SHA-256 | Diagnostic primary bytes | Diagnostic primary SHA-256 |
+| --- | ---: | --- | ---: | --- |
+| `aarch64-apple-darwin` | 21,111,072 | `76c157a8c8b68d2607ba1ac00f0abb780a1080d88555d575b69bf2cb748f0ddc` | 32,335,928 | `d152f08f331cd855937178122dc77553ff0b527bacbbedfdf5f786b73d177e7f` |
+| `x86_64-apple-darwin` | 21,539,636 | `df4c64c8ae040e99d3f4a0b67ee52355107e5d1ef28aedc4770a907ff1d57991` | 32,699,296 | `5ae418eb827d68151a02480d5f829dedf6949f9ed3233599bffdab066665218c` |
+| `aarch64-unknown-linux-gnu` | 21,446,720 | `9410ac423d2f7a2d86282d7a8435e0b160c531f40e21ad9de23e8ce3f185cfdc` | 327,083,656 | `aa155d0a9ab135b9b42217f4083e4fabe8537ec0181b6cf1984803408d9e7a3b` |
+| `aarch64-unknown-linux-musl` | 21,376,824 | `66b0ff4c0af3d393e295e8e5394fc5e39e59abf5c3a1518d09ef42384c0a00c4` | 327,747,632 | `ef3f17c0ecffd9b18a315cc8a4650dc3de96b21817abaf8d0482426f99c2919e` |
+| `x86_64-unknown-linux-gnu` | 24,318,040 | `e545e6dca35bdb6c119961d088a65ce1f5ed12c9ab91db1177ca9e0a328e2e4f` | 320,241,312 | `57af4bb42e6b96ad11ff668f1a1804c45d10cc005cdfee3c32428a9eb0e574de` |
+| `x86_64-unknown-linux-musl` | 24,170,528 | `f6fbe864eb4b994c7b3424b8a8e65e85208199882dd8bb61834776e147604fff` | 320,745,912 | `9184ac223533920b934aedcc3e2f7c38b89dc3ba9c1b4470d2079be919afae93` |
+| `x86_64-pc-windows-msvc` | 24,422,400 | `52443df0eb1efbfd9427f4f904ed31059fdaddbc9ddf74784eb37f715029ab41` | 24,429,568 | `0b61624f7f5860b525b07a6d70f8361d8ef591371e74ad2c12fe02796c907d87` |
+| `aarch64-pc-windows-msvc` | 22,409,728 | `0f5aa78d83c8a881e78eccd7f726076547889d20e0d4a2d0a706fc5fe6cef8d2` | 22,403,072 | `ae3eb9efd8a43ac8d4e58fc9ef9669ffed659112e3fb4cd909ffa99fa2b0cd79` |
+
+Per-target complete diagnostic-bundle measurements:
+
+| Target | Bundle bytes/files | Archive bytes | Archive SHA-256 |
+| --- | ---: | ---: | --- |
+| `aarch64-apple-darwin` | 272,942,143 / 7 | 69,393,492 | `21e019e9f78568827b58606f853e5587db5f25db269bef878fa6dc5a67a69ed4` |
+| `x86_64-apple-darwin` | 274,457,341 / 7 | 71,112,946 | `d2c58b04d365a33193e01622373b65257f58703653a33b6acea6aba16beb9368` |
+| `aarch64-unknown-linux-gnu` | 327,089,363 / 4 | 66,354,045 | `6fdee77549e05aaee555c7dc71c6b49205acfd0c940f27e7d46647bddf6e06e4` |
+| `aarch64-unknown-linux-musl` | 327,753,012 / 4 | 66,683,036 | `44a48abb74a3c6b0e40675871e083aa0289d596e4a78ecd357d498fd796abe81` |
+| `x86_64-unknown-linux-gnu` | 320,246,954 / 4 | 67,770,900 | `8932ebe353b585dc6cc770739a4b8877b6dbe515fa08d3604bae7bfb39a15643` |
+| `x86_64-unknown-linux-musl` | 320,751,587 / 4 | 67,983,801 | `581d9ab4faa7253471d4d315adb88bedb4266c856c41f602c8e924950b540ecd` |
+| `x86_64-pc-windows-msvc` | 329,403,797 / 5 | 64,826,527 | `a8c3b29249853c8457687973022d11b8a4cef749bedd3d829a1b8fbd7268ece4` |
+| `aarch64-pc-windows-msvc` | 285,885,435 / 5 | 62,083,768 | `c5d6020165efc3532a108deafaa91f7683525abaed8aef9725238eb145f1700b` |
+
+The package artifact itself has Actions artifact digest
+`sha256:a96470dd11d710cbd8dd60efc2d821e0a48194e5e7708189e06f5087de90a66d`;
+the retained diagnostic-archive artifact has digest
+`sha256:76df7c677a23c1b5650ec71cc35e58fbd7359f54e6649fc22fc4461616087287`.
+
+Four consumers (`linux-arm64`, `linux-x64`, `osx-arm64`, `osx-x64`) passed
+completely. Both Windows consumers passed restore, exact package recovery,
+publish, sole-native selection, ABI/lifetime behavior, ordinary calls, and
+RID policy before the checksum parser retained GNU's leading escape marker.
+Both musl containers failed before restore because the workflow did not
+forward the already-required `BamlNativeProbeMode=Package`. Protocol
+generation and semantic/deployment evidence passed, but completeness skipped;
+no B4 or C6 promotion is claimed.
+
 ## Remaining closure
 
-B4 remains blocked, not passed. The builder-only run and two failed atomic
-attempts do not satisfy the complete package contract. The locally validated
-Windows canonical-LF repair must be committed and executed from a new
-exact-source bootstrap tag; a passing attempt must:
+B4 remains blocked, not passed. The measured package is a valid feasibility
+baseline but the third attempt did not complete all consumers or the final
+digest. The locally validated musl environment/checksum-parser repairs must
+be committed and executed from a new exact-source bootstrap tag; a passing
+attempt must:
 
 1. supply all eight real immutable artifacts from the frozen release plan;
 2. inspect format, architecture, minimum OS/libc, dependencies, RPATH, exports,

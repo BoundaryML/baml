@@ -1,15 +1,15 @@
 # C# implementation-entry external-run handoff
 
-Status: the second exact-source atomic attempt at commit
-`c44ac516a6f71fac143c4ff239beae424b042222` proved the repaired Apple
-packed-dSYM path and passed all eight shipping/diagnostic producers. The
-downstream verifier staged all eight shipping assets and accepted all six
-Unix diagnostic bundles, then rejected the first Windows identity file
-because PowerShell emitted CRLF while the Linux verifier requires exact LF
-lines. The package and consumer fan-out did not run. This portability defect
-is repaired locally and promotes no gate until another exact-source attempt
-passes. B8 and B11 retain their local status; B4 remains blocked on the
-verified atomic package and real eight-RID consumers.
+Status: the third exact-source atomic attempt at commit
+`ccf3bcfadd5a919b2cbee205ace07a1ac9cd565c` passed all eight producers,
+assembled and normalized the exact eight-RID package, passed four native
+consumer jobs, all three protocol builders and their fan-in, and the complete
+semantic/deployment lane. Two musl jobs failed before restore because the
+workflow omitted one required environment variable at the Docker boundary;
+both Windows jobs executed the package successfully but failed a post-run
+checksum comparison because GNU `sha256sum` escaped their absolute paths.
+The focused verifier repairs are local. No gate is promoted until another
+exact-source attempt passes completely; B4 and C6 remain blocked and
 `TASK/implementation.md` must not be created yet.
 
 ## Exact workflow
@@ -208,6 +208,62 @@ BOM-free LF text on Windows before hashing it into the immutable manifest. It
 does not weaken any identity or debug assertion. A new reviewed commit and
 matching exact-source tag must prove the repair.
 
+## Third atomic attempt
+
+[GitHub Actions run 29785957216](https://github.com/BoundaryML/baml/actions/runs/29785957216)
+was triggered by exact tag
+`csharp-entry-gates-ccf3bcfadd5a919b2cbee205ace07a1ac9cd565c` at source
+SHA `ccf3bcfadd5a919b2cbee205ace07a1ac9cd565c`, event `push`, attempt 1,
+release version `0.15.0`. All eight shipping/diagnostic producers and the
+package assembly job passed. The normalized 15-entry package is `68,548,097`
+bytes, SHA-256
+`9195e1dd1cf8886c68d4f07bfa2ee87049537cb2787f73b04d6655036883b029`,
+and was built/normalized twice in 36 seconds under the exact
+`200,000,000`-byte ceiling. It contains eight distinct shipping natives
+totalling `180,794,948` bytes. The unstripped diagnostic bundles total
+`2,458,529,632` bytes and normalize reproducibly to `536,208,515` bytes.
+`TASK/package-feasibility-evidence.md` records every per-target measurement
+and digest.
+
+Four real native consumers concluded success: `linux-arm64`, `linux-x64`,
+`osx-arm64`, and `osx-x64`. Each restored the exact package from a cold private
+feed, published exactly one selected native with the package digest, executed
+the ABI/lifetime and representative ordinary-call probe, passed the exact
+eight-RID policy, inspected architecture/dependencies/minimum platform and
+the 26-symbol allowlist, and uploaded current-attempt evidence. Both Windows
+consumers also completed restore, publish, ABI/lifetime execution, and RID
+policy. Their final digest comparison failed only because Git-for-Windows
+`sha256sum` prefixes a backslash when escaping an absolute filename; the
+64-hex digest following that marker exactly matched the manifest on x64 and
+ARM64. The local repair removes only that optional marker, validates exactly
+64 lowercase hex digits, and retains exact manifest comparison.
+
+Both real-musl jobs failed earlier: the outer workflow environment set
+`BamlNativeProbeMode=Package`, but `docker run` forwarded only RID, canonical
+asset, architecture, and version. The fail-closed MSBuild target therefore
+rejected restore before any package execution. The local repair forwards the
+existing mode unchanged into the pinned Alpine .NET container.
+
+All three protocol builders passed, and their consistency fan-in proved four
+generated files byte-identical across Linux x64, macOS ARM64, and Windows x64.
+The exact generated-source digests are:
+
+| Generated source | SHA-256 |
+| --- | --- |
+| `BamlHandle.g.cs` | `cc5110d0e1e781657c1c4f50c33ce20e67b8ed1dd08fcdaca2dd5e353d25eeb2` |
+| `BamlInbound.g.cs` | `14990178481898ef75b5308f5bc7f669baabeb2df4ba8231251f978b04ef275a` |
+| `BamlOutbound.g.cs` | `df127ff0b8358a26f03da5b6df9dedcbf835e04284790b19eae7fcd46ff216a6` |
+| `BamlType.g.cs` | `24c75222a3d23fee4bdb68df97299a5b77905eb39f73b5b3f76b92f9989ff7a9` |
+
+The semantic/deployment job passed the exact package's stream fixture,
+trimmed ABI/media/stream/managed/reflection/RID probes, all four untrimmed or
+trimmed sidecar/self-extract shapes, four byte-identical native copies,
+`BAML0010`, and `BAML0019`. The stream retained 789 UTF-8 bytes with SHA-256
+`2e950ddbdb0c2e12f64c09bc6e4a72f687367894cdea17d632529fd6719d2ef2`.
+The final completeness job correctly skipped because four consumer jobs did
+not conclude success. No package was published and no release or registry
+state changed.
+
 ## Provenance preflight
 
 The first provenance commit's temporary-index preview contained exactly the
@@ -219,12 +275,12 @@ That scope became commit
 `9d29c01928df7ce726c49286a3067129fc039115` was the first atomic attempt's
 source.
 
-The Windows canonical-line-ending repair and post-run ledger updates require
-a new reviewed source commit and a new matching
+The musl environment/checksum-parser repairs and post-run ledger updates
+require a new reviewed source commit and a new matching
 `csharp-entry-gates-<full source SHA>` tag. Its precommit scope must contain
-only the native-builder workflow plus these four continuously maintained
-ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and all
-excluded paths remain outside that commit.
+only the reusable verifier workflow plus these four continuously maintained
+ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and
+all excluded paths remain outside that commit.
 
 After the run, record in `verification-gates.md`:
 
@@ -438,5 +494,5 @@ Current source SHA-256 values:
 | call-ID source | `861a36ada5c864f4365020c007a7d2bd269f19ae67663c57c568e44c80f88d2e` |
 | shared Rust setup action | `2063428518629315d1d6bb67e4c864764466cfc6a9654469dec014d908c2713a` |
 | manual caller workflow | `cd3e45ef30ecd8789116e16a3c34212b35a905244020b417a57e70a35fc28f96` |
-| reusable verifier workflow | `9b4118773f3c2c397ab1b50270c97cd12a920631ee3f1df7ef803230a780619e` |
+| reusable verifier workflow | `d21a9a2d95ef991e65084b66ed02d7bfb4861a05f1a1d24acde8d21b798f4a93` |
 | native builder workflow | `bca7fcbcc696aa2a65e405cf3942a563d878d4b83b88dfd9d81eb3dbb54b2101` |

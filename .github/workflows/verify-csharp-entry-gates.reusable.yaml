@@ -566,17 +566,34 @@ jobs:
             -p:NuGetAudit=false -- \
             "$RID" |
             tee consumer-evidence/rid-policy.txt
-          if command -v sha256sum >/dev/null 2>&1; then
-            digest="$(sha256sum "$native_file" | cut -d ' ' -f 1)"
-            package_digest="$(sha256sum \
-              "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" |
-              cut -d ' ' -f 1)"
-          else
-            digest="$(shasum -a 256 "$native_file" | cut -d ' ' -f 1)"
-            package_digest="$(shasum -a 256 \
-              "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg" |
-              cut -d ' ' -f 1)"
-          fi
+          canonical_sha256() {
+            local path="$1"
+            local output
+            local value
+            if command -v sha256sum >/dev/null 2>&1; then
+              if ! output="$(sha256sum "$path")"; then
+                echo "sha256sum failed for $path" >&2
+                return 1
+              fi
+            else
+              if ! output="$(shasum -a 256 "$path")"; then
+                echo "shasum failed for $path" >&2
+                return 1
+              fi
+            fi
+            value="${output%% *}"
+            # GNU coreutils prefixes a backslash when it escapes a Windows
+            # filename in checksum output. It is not part of the digest.
+            value="${value#\\}"
+            if [[ ! "$value" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "invalid SHA-256 output for $path: $value" >&2
+              return 1
+            fi
+            printf '%s\n' "$value"
+          }
+          digest="$(canonical_sha256 "$native_file")"
+          package_digest="$(canonical_sha256 \
+            "$feed/Baml.Bridge.MultiRidPackageProbe.0.0.0-b4.nupkg")"
           printf '%s  %s\n' \
             "$digest" \
             "runtimes/$RID/native/$CANONICAL" |
@@ -619,6 +636,7 @@ jobs:
             -e CANONICAL \
             -e ARCH \
             -e BAML_EXPECTED_VERSION \
+            -e BamlNativeProbeMode \
             mcr.microsoft.com/dotnet/sdk@sha256:fac7cce841f78faa4bca416fb4c636d1a129c09abd9b50e9b45664b95fd008a0 \
             sh -c '
               set -eu
