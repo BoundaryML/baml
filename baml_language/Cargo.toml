@@ -90,7 +90,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_cache = { path = "crates/bex_cache" }
+bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }

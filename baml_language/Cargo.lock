@@ -1269,6 +1269,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "reqwest",
+ "rustls",
  "sha2",
  "tempfile",
 ]
