@@ -2372,10 +2372,9 @@ use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, SysOpContext, SysOpOutput,
-    VmBamlError, VmRustFnError,
+    VmBamlError, VmPanic, VmRustFnError,
 };
 pub use io::SysOps;
-use sys_types::VmPanic;
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///

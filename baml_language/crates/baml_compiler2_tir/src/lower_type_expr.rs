@@ -3367,7 +3367,7 @@ function needs<T extends Marker>(x: T) -> int throws never {
     fn generic_sysop_method_in_implements_block_is_rejected() {
         // A `$rust_io_function` override with method-level generics is only reachable
         // through interface dispatch, which cannot supply the sys-op's synthetic
-        // type-argument slots — rejected at the declaration (E0146). (`$rust_io_function`
+        // type-argument slots — rejected at the declaration (E0153). (`$rust_io_function`
         // outside a builtin file also draws the builtin-only-syntax diagnostic, but that
         // travels the HIR channel and does not gate body lowering, so the impl-conformance
         // guard under test still sees a sys-op body here.)

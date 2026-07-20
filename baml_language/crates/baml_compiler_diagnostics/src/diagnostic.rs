@@ -233,7 +233,7 @@ pub enum DiagnosticId {
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
 
-    // Interface diagnostics (BEP-044; E0112-E0120)
+    // Interface diagnostics (BEP-044)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
     /// A class is missing the body of a required interface method.
@@ -553,7 +553,7 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
-            DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0146",
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
             // Aliasing lints
             DiagnosticId::ArrayFilledAliasing => "E0148",

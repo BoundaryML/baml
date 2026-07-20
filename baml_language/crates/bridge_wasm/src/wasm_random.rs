@@ -22,11 +22,19 @@ impl io::IoClassRandomSystemRandom for WasmRandom {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         let Ok(n) = usize::try_from(bytes) else {
-            return SysOpOutput::err(VmPanic::AllocFailure {
-                message: "Cannot allocate negative size array".to_string(),
+            return SysOpOutput::err(VmPanic::UserPanic {
+                message: format!("Rng.random: byte count must be non-negative, got {bytes}"),
             });
         };
-        let mut buf = vec![0u8; n];
+        // Allocate fallibly so an unsatisfiable request is a catchable
+        // `AllocFailure` panic, not a wasm-instance trap.
+        let mut buf = Vec::new();
+        if buf.try_reserve(n).is_err() {
+            return SysOpOutput::err(VmPanic::AllocFailure {
+                message: format!("Rng.random: allocation of {n} bytes failed"),
+            });
+        }
+        buf.resize(n, 0u8);
         match getrandom_03::fill(&mut buf) {
             Ok(()) => SysOpOutput::ok(buf),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {

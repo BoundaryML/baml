@@ -288,6 +288,10 @@ wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
 getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+# Pinned to the rand 0.8-era ecosystem (rand_core 0.6) to share the `RngCore`
+# trait with `num-bigint`'s `rand` feature below, so the `baml.random`
+# generators can drive `num-bigint` sampling (future `bigint.random`). Bumping
+# to rand_core 0.9 would fork that trait and is deliberately avoided.
 rand_core = "0.6"
 rand_chacha = "0.3"
 rand_xoshiro = "0.6"

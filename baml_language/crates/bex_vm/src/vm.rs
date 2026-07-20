@@ -4226,13 +4226,16 @@ impl BexVm {
     /// shared by the dedicated `OpCode::SysOp` handler (a statically-known
     /// direct call) and the general call funnel
     /// ([`Self::execute_call_from_locals_offset`], reached when a sys-op is
-    /// invoked as a callable value — virtual/interface dispatch or a
-    /// bound-method value). Both present the op's `arity` arguments as the top
-    /// of the stack, so a sys-op is dispatched identically however it is
-    /// reached.
+    /// invoked as a callable value — virtual/interface dispatch, a bound-method
+    /// value, or a callback handed to a native higher-order builtin). Both
+    /// present the op's `arity` arguments as the top of the stack, so a sys-op
+    /// is dispatched identically however it is reached.
     ///
     /// `callee_fn_ptr` must point at an `Object::Function` whose kind is
-    /// [`FunctionKind::SysOp`]; the mismatch arms are defensive.
+    /// [`FunctionKind::SysOp`]. The kind check below is genuinely load-bearing
+    /// for the `OpCode::SysOp` caller (its `as_object_ptr` does not verify the
+    /// kind — see there); the funnel caller has already matched on the kind, so
+    /// for it the check is redundant. Do not delete it.
     fn dispatch_sysop_yield(
         &mut self,
         callee_fn_ptr: HeapPtr,
@@ -4714,13 +4717,37 @@ impl BexVm {
 
             FunctionKind::SysOp(_) => {
                 // A sys-op reached as a callable value — virtual/interface
-                // dispatch or a bound-method value — runs through the same
-                // engine yield as a direct `OpCode::SysOp`: drain its args and
-                // suspend. The resolved sys-op `Function`'s arity already counts
-                // the receiver, so the top-of-stack args are exactly what the
-                // op's glue expects. On resume the engine pushes the result and
-                // the caller's post-call store binds it, identically to a
-                // returning bytecode callee.
+                // dispatch, a bound-method value, or a callback handed to a
+                // native higher-order builtin — runs through the same engine
+                // yield as a direct `OpCode::SysOp`: drain its args and suspend.
+                // The resolved sys-op `Function`'s arity already counts the
+                // receiver, so the top-of-stack args are exactly what the op's
+                // glue expects. On resume the engine pushes the result and the
+                // caller's post-call store binds it, identically to a returning
+                // bytecode callee.
+                //
+                // `dispatch_sysop_yield` drains `stack.len() - arity`; every
+                // funnel caller positions the args as the exact top of stack, so
+                // that window is `locals_offset`. Assert it rather than thread
+                // `locals_offset` through the shared helper.
+                debug_assert_eq!(
+                    self.stack.len().checked_sub(callee_arity),
+                    Some(locals_offset.raw()),
+                    "sysop dispatch: args must be the top {callee_arity} stack slots \
+                     (len {}, locals_offset {})",
+                    self.stack.len(),
+                    locals_offset.raw(),
+                );
+                // Sys-ops do not thread type arguments: a method-level-generic
+                // sys-op is rejected at compile time (E0153), and class/interface
+                // generics are type-erased for the op's glue. Any type args here
+                // would be silently dropped, so fail closed in debug.
+                debug_assert!(
+                    closure_type_args.is_empty()
+                        && bound_method_class_type_args.is_empty()
+                        && gf_type_args.is_empty(),
+                    "sysop dispatch received type args, which it cannot thread to the op",
+                );
                 return Ok(Some(self.dispatch_sysop_yield(
                     callee_fn_ptr,
                     runtime_id,
@@ -5990,8 +6017,11 @@ impl BexVm {
                     };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee);
-                    // `as_object_ptr` asserts the global is a `FunctionType::SysOp`
-                    // function; `dispatch_sysop_yield` drains the args and yields.
+                    // `as_object_ptr` only unwraps the value to a heap pointer
+                    // (the `FunctionType` argument is error-message metadata, not
+                    // an assertion). `dispatch_sysop_yield`'s own kind check is
+                    // therefore the load-bearing validation on this path — it
+                    // rejects a non-sys-op global before draining and yields.
                     let callee_ptr =
                         self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
                     return Ok(Some(

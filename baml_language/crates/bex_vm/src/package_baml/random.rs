@@ -57,13 +57,21 @@ fn byte_count(bytes: i64) -> Result<usize, VmRustFnError> {
 }
 
 /// Draw `n` random bytes from a locked generator.
-fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Vec<u8> {
-    let mut buf = vec![0u8; n];
+///
+/// Allocates fallibly (`try_reserve`) so an unsatisfiable request surfaces as a
+/// catchable [`VmPanic::AllocFailure`] rather than aborting the host process via
+/// the global allocator's OOM handler.
+fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError> {
+    let mut buf = Vec::new();
+    buf.try_reserve(n).map_err(|_| VmPanic::AllocFailure {
+        message: format!("Rng.random: allocation of {n} bytes failed"),
+    })?;
+    buf.resize(n, 0u8);
     mutex
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .fill_bytes(&mut buf);
-    buf
+    Ok(buf)
 }
 
 /// Draw a uniformly random BAML `int` (i63) from a locked generator.
@@ -101,7 +109,7 @@ impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        Ok(fill(rng._state::<Mutex<XoshiroRng>>(vm), n))
+        fill(rng._state::<Mutex<XoshiroRng>>(vm), n)
     }
 
     fn random_int(vm: &BexVm, rng: &view::random::Xoshiro256PlusPlus<'_>) -> i64 {
@@ -130,7 +138,7 @@ impl BamlClassRandomChaCha20 for PackageBamlImpl {
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        Ok(fill(rng._state::<Mutex<ChaCha20Rng>>(vm), n))
+        fill(rng._state::<Mutex<ChaCha20Rng>>(vm), n)
     }
 
     fn random_int(vm: &BexVm, rng: &view::random::ChaCha20<'_>) -> i64 {
