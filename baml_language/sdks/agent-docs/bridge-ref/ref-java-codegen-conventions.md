@@ -79,19 +79,32 @@ rules digest, not the rationale log).
   positional generic cannot reference itself); their arms follow the
   same record-naming scheme as before.
 - **Type-directed decode descriptors** **[decided]** (shipped): every
-  generated binding passes a descriptor string for its declared return
-  type as the last non-`ctx` argument of `BamlFfi.callSync/callAsync`
-  (`emit.rs:429`, threaded at `emit.rs:486`), and `registerClass` gains
-  a parallel `String[] fieldDescs`. Descriptor grammar (one tokenizer,
-  shared with the emitter): primitives `int|bigint|float|string|bool|
-  null|uint8array|void|unknown`; class/enum/named-recursive-alias →
-  canonical BAML FQN (registry resolves the kind); `list<D>`;
-  `map<D,D>`; ordered anonymous union `union[D;D;...]`;
-  `lit:<base>:<value>`; unresolved type vars `tv:<name>` (decoder
-  falls back to wire-driven `self_type` decode). Decode without a
-  descriptor, or on any descriptor/value mismatch that has a
-  self-describing wire form, falls back to the wire-driven path
-  (error/panic values stay wire-driven).
+  generated binding passes a typed `baml_bridge.BamlType` for its
+  declared return type as the last non-`ctx` argument of
+  `BamlFfi.callSync/callAsync`, and `registerClass` gains a parallel
+  `baml_bridge.BamlType[] fieldDescs`. The descriptor is a **data
+  structure, not a string** — the emitter renders `BamlType` builder
+  expressions (`descriptor_expr`, translate_ty.rs), pooled into a
+  per-holder `private static final baml_bridge.BamlType $RET{n}`
+  constant and referenced by name. Spelling: primitives
+  `BamlType.INT|STRING|BOOL|FLOAT`; a class/enum/named-recursive-alias →
+  `BamlType.classByFqn("<baml fqn>")` (bare FQN — the registry resolves
+  the kind); `BamlType.list(D)`; `BamlType.map(BamlType.STRING, D)`; an
+  ordered anonymous union `BamlType.union(D, D, …)` (declaration order);
+  a literal `BamlType.literalString("…")` / `literalInt(…L)` / … (raw
+  value — no escaping); a TypeVar `BamlType.typeVar("<name>")` and the
+  wildcard `BamlType.UNKNOWN` are **decode-only** hints (they throw on
+  `toWireTy` — never encoded) and decode wire-driven. A wholly
+  wire-driven return passes the literal `null` (also the streaming
+  mode). Registration keys the union registry structurally on the
+  **arm set** (a sorted, distinct `List<BamlType>` — value equality, no
+  rendered key); the runtime derives the equal arm set from the wire
+  `self_type` (`ProtoReader.wireArmType`). Decode without a descriptor,
+  or on any descriptor/value mismatch with a self-describing wire form,
+  falls back to the wire-driven path (error/panic values stay
+  wire-driven). *(History: this replaced an earlier stringly-typed
+  descriptor grammar — `union[a;b]` / `list<int>` / `lit:string:draft`
+  with percent-escaping — and its hand-rolled parser, killed 2026-07.)*
 - **Optional args** **[decided]** (shipped, TestOptionalArgs 4/4):
   AWS-SDK-v2-style trailing configurator overload:
   `Fns.optional_args_probe(1)` omits everything (engine evaluates BAML

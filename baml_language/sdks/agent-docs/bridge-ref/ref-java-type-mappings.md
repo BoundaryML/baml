@@ -11,8 +11,8 @@ Java answer here.
 
 **Ground truth.** The Java type translation lives in
 `sdks/java/sdkgen_java/src/translate_ty.rs` (`translate_ty` / `translate_union` /
-`translate_callable` / `descriptor_token` / `union_arm_token` / `collect_type_vars`) and the
-shared `signature_token` in `sdks/java/sdkgen_java/src/lib.rs`. Rows cite line ranges. Every
+`translate_callable` / `descriptor_expr` / `registry_arm_expr` / `union_arm_token` /
+`collect_type_vars`) and `sdks/java/sdkgen_java/src/lib.rs`. Rows cite line ranges. Every
 mapping was cross-checked against real generated output under
 `sdk_tests/crates/java/*/generated/baml_sdk/**`.
 
@@ -27,10 +27,13 @@ mapping was cross-checked against real generated output under
   not), because no `@Nullable` annotation dependency has been decided yet (translate_ty.rs:11–16,
   `primitive` at :166–171). Where the two positions render identically (already-reference types),
   the columns show the same value.
-- **descriptor token** = the type-directed decode grammar string the generated binding hands to
-  `BamlFfi.callSync/callAsync` (last positional arg) and that `registerClass` carries per field.
-  Produced by `descriptor_token` (translate_ty.rs:304–347), which delegates to `signature_token`
-  (lib.rs:356–409) for everything except unions / lists / maps / non-recursive aliases.
+- **descriptor** = the type-directed decode descriptor the generated binding hands to
+  `BamlFfi.callSync/callAsync` (last positional arg) and that `registerClass` carries per field —
+  a typed `baml_bridge.BamlType` **data structure** (not a string), produced by `descriptor_expr`
+  (translate_ty.rs) as a builder expression. A wholly wire-driven type (bigint / uint8array / null /
+  void / media / callable / handle / the `unknown`-family) passes the literal **`null`** (decode
+  wire-driven); a `TypeVar` passes `BamlType.typeVar("T")` and the union-with-a-TypeVar-arm case
+  passes `null`.
 - `> ⚠ **Deviation from Python:** …` flags every divergence from the Python bridge.
 - `**NOT YET IMPLEMENTED IN JAVA**` marks a mapping that is not built yet, with the decided/open
   status pulled from `thoughts/antonio/java-function-calls-decisions.md`.
@@ -148,50 +151,50 @@ as Python. The first column names the upstream TIR shape; the second names the c
 companion (see GAP B above).
 
 Column key: **Java @ TopLevel** = field/param/return; **Java @ Boxed** = generic type-arg /
-nullable slot; **descriptor** = the decode-grammar token.
+nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wire-driven).
 
-| tir-ty | codegen-ty | Example BAML | Java @ TopLevel | Java @ Boxed (type-arg / nullable) | descriptor token | translate_ty.rs |
+| tir-ty | codegen-ty | Example BAML | Java @ TopLevel | Java @ Boxed (type-arg / nullable) | descriptor (BamlType) | translate_ty.rs |
 | --- | --- | --- | --- | --- | --- | --- |
-| `Ty::Primitive(Int)` | `Ty::Int` | `age int` | `long` | `java.lang.Long` | `int` | :85 |
-| `Ty::Primitive(Bigint)` | `Ty::Bigint` | `value bigint` | `java.math.BigInteger` | `java.math.BigInteger` | `bigint` | :86 |
-| `Ty::Primitive(Float)` | `Ty::Float` | `score float` | `double` | `java.lang.Double` | `float` | :87 |
-| `Ty::Primitive(String)` | `Ty::String` | `name string` | `java.lang.String` | `java.lang.String` | `string` | :88 |
-| `Ty::Primitive(Bool)` | `Ty::Bool` | `active bool` | `boolean` | `java.lang.Boolean` | `bool` | :89 |
-| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void` | `java.lang.Void` | `null` | :91 |
-| `Ty::Primitive(Uint8Array)` | `Ty::Uint8Array` | `data uint8array` | `byte[]` | `byte[]` | `uint8array` | :100 |
-| `Ty::Primitive(Image)` | `Ty::Media(Image)` | `photo image` | `baml_sdk.baml.media.Image` | (same) | `media:image` | :102 |
-| `Ty::Primitive(Audio)` | `Ty::Media(Audio)` | `clip audio` | `baml_sdk.baml.media.Audio` | (same) | `media:audio` | :103 |
-| `Ty::Primitive(Video)` | `Ty::Media(Video)` | `clip video` | `baml_sdk.baml.media.Video` | (same) | `media:video` | :104 |
-| `Ty::Primitive(Pdf)` | `Ty::Media(Pdf)` | `doc pdf` | `baml_sdk.baml.media.Pdf` | (same) | `media:pdf` | :105 |
-| generic media source type | `Ty::Media(Generic)` | `media` / any media shape | `java.lang.Object` | (same) | `media:generic` | :107 |
-| `Ty::Literal(Int(v), …)` | `Ty::Literal(Int(v))` | `answer 42` | `long` | `java.lang.Long` | `lit:int:42` | :94 |
-| `Ty::Literal(Bigint(v), …)` | `Ty::Literal(Bigint(v))` | `answer 42n` | `java.math.BigInteger` | `java.math.BigInteger` | `lit:bigint:42` | :95 |
-| `Ty::Literal(Float(_), …)` | `Ty::Literal(Float(_))` | float literal type | `double` | `java.lang.Double` | `lit:float:<v>` | :96 |
-| `Ty::Literal(String(v), …)` | `Ty::Literal(String(v))` | `status "draft"` | `java.lang.String` | `java.lang.String` | `lit:string:draft` | :97 |
-| `Ty::Literal(Bool(v), …)` | `Ty::Literal(Bool(v))` | `flag true` | `boolean` | `java.lang.Boolean` | `lit:bool:true` | :98 |
-| `Ty::EnumVariant(qtn, variant, …)` | `Ty::Enum(qtn)` | specific enum variant type | enum FQN `baml_sdk.<ns>.<Enum>` | (same) | BAML FQN `user.<ns>.<Enum>` | :125 |
-| `Ty::Class(qtn, args, …)` | `Ty::Class(name, args)` | `resume Resume` | `baml_sdk.lorem.Resume`, `baml_sdk.generics.Wrapper<java.lang.Long>` | (same; args always boxed) | BAML FQN (args dropped) | :109–121 |
-| `Ty::Enum(qtn, …)` | `Ty::Enum(name)` | `sentiment Sentiment` | `baml_sdk.ipsum.Sentiment` (generated Java `enum`) | (same) | BAML FQN | :125 |
-| `Ty::TypeAlias(qtn, …)` | `Ty::TypeAlias(name)` | `items StringList` | erases to resolved type; **recursive** → nominal FQN `baml_sdk.<ns>.<Alias>` | (same) | resolved's descriptor; **recursive** → BAML FQN | :126–134 |
-| `Ty::TypeVar(name, …)` | `Ty::TypeVar(name)` | generic type parameter `T` | bare `T` (java identifier) | (same) | `tv:T` | :135 |
-| `Ty::Optional(T, …)` | `Ty::Union([T, Null])` | `name string?` | boxed inner `T` (e.g. `int?` → `java.lang.Long`) | (same) | inner descriptor (null collapses) | :199–208 |
-| `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `list<D>` | :136–139 |
-| `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `map<Dkey,Dval>` (declared key preserved) | :142–145 |
-| `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `union[a;b;…]` ordered | :146, :198–233 |
-| `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `unknown` | :147 |
-| `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → `java.lang.Object` | (same) | `callable` | :148, :407–435 |
-| `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `void` | :149–152 |
+| `Ty::Primitive(Int)` | `Ty::Int` | `age int` | `long` | `java.lang.Long` | `BamlType.INT` | :85 |
+| `Ty::Primitive(Bigint)` | `Ty::Bigint` | `value bigint` | `java.math.BigInteger` | `java.math.BigInteger` | `null` (wire-driven) | :86 |
+| `Ty::Primitive(Float)` | `Ty::Float` | `score float` | `double` | `java.lang.Double` | `BamlType.FLOAT` | :87 |
+| `Ty::Primitive(String)` | `Ty::String` | `name string` | `java.lang.String` | `java.lang.String` | `BamlType.STRING` | :88 |
+| `Ty::Primitive(Bool)` | `Ty::Bool` | `active bool` | `boolean` | `java.lang.Boolean` | `BamlType.BOOL` | :89 |
+| `Ty::Primitive(Null)` | `Ty::Null` | `null` in a union | `java.lang.Void` | `java.lang.Void` | `null` (wire-driven) | :91 |
+| `Ty::Primitive(Uint8Array)` | `Ty::Uint8Array` | `data uint8array` | `byte[]` | `byte[]` | `null` (wire-driven) | :100 |
+| `Ty::Primitive(Image)` | `Ty::Media(Image)` | `photo image` | `baml_sdk.baml.media.Image` | (same) | `null` (wire-driven) | :102 |
+| `Ty::Primitive(Audio)` | `Ty::Media(Audio)` | `clip audio` | `baml_sdk.baml.media.Audio` | (same) | `null` (wire-driven) | :103 |
+| `Ty::Primitive(Video)` | `Ty::Media(Video)` | `clip video` | `baml_sdk.baml.media.Video` | (same) | `null` (wire-driven) | :104 |
+| `Ty::Primitive(Pdf)` | `Ty::Media(Pdf)` | `doc pdf` | `baml_sdk.baml.media.Pdf` | (same) | `null` (wire-driven) | :105 |
+| generic media source type | `Ty::Media(Generic)` | `media` / any media shape | `java.lang.Object` | (same) | `null` (wire-driven) | :107 |
+| `Ty::Literal(Int(v), …)` | `Ty::Literal(Int(v))` | `answer 42` | `long` | `java.lang.Long` | `BamlType.literalInt(42L)` | :94 |
+| `Ty::Literal(Bigint(v), …)` | `Ty::Literal(Bigint(v))` | `answer 42n` | `java.math.BigInteger` | `java.math.BigInteger` | `BamlType.literalBigint(new java.math.BigInteger("42"))` | :95 |
+| `Ty::Literal(Float(_), …)` | `Ty::Literal(Float(_))` | float literal type | `double` | `java.lang.Double` | `BamlType.literalFloat("<v>")` | :96 |
+| `Ty::Literal(String(v), …)` | `Ty::Literal(String(v))` | `status "draft"` | `java.lang.String` | `java.lang.String` | `BamlType.literalString("draft")` | :97 |
+| `Ty::Literal(Bool(v), …)` | `Ty::Literal(Bool(v))` | `flag true` | `boolean` | `java.lang.Boolean` | `BamlType.literalBool(true)` | :98 |
+| `Ty::EnumVariant(qtn, variant, …)` | `Ty::Enum(qtn)` | specific enum variant type | enum FQN `baml_sdk.<ns>.<Enum>` | (same) | `BamlType.classByFqn("user.<ns>.<Enum>")` | :125 |
+| `Ty::Class(qtn, args, …)` | `Ty::Class(name, args)` | `resume Resume` | `baml_sdk.lorem.Resume`, `baml_sdk.generics.Wrapper<java.lang.Long>` | (same; args always boxed) | `BamlType.classByFqn("<fqn>")` (args dropped) | :109–121 |
+| `Ty::Enum(qtn, …)` | `Ty::Enum(name)` | `sentiment Sentiment` | `baml_sdk.ipsum.Sentiment` (generated Java `enum`) | (same) | `BamlType.classByFqn("<fqn>")` | :125 |
+| `Ty::TypeAlias(qtn, …)` | `Ty::TypeAlias(name)` | `items StringList` | erases to resolved type; **recursive** → nominal FQN `baml_sdk.<ns>.<Alias>` | (same) | resolved's descriptor; **recursive** → `BamlType.classByFqn("<fqn>")` | :126–134 |
+| `Ty::TypeVar(name, …)` | `Ty::TypeVar(name)` | generic type parameter `T` | bare `T` (java identifier) | (same) | `BamlType.typeVar("T")` | :135 |
+| `Ty::Optional(T, …)` | `Ty::Union([T, Null])` | `name string?` | boxed inner `T` (e.g. `int?` → `java.lang.Long`) | (same) | inner descriptor (`T?` collapses to inner) | :199–208 |
+| `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `BamlType.list(D)` | :136–139 |
+| `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
+| `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
+| `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
+| `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → `java.lang.Object` | (same) | `null` (wire-driven) | :148, :407–435 |
+| `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
-| `Ty::RustType { … }` | `Ty::RustType` | opaque builtin state | `baml_bridge.BamlHandle` | (same) | `handle` | :153 |
-| `Ty::Type { … }` | `Ty::Type` | `type` metatype keyword | `java.lang.Object` | (same) | `unknown` | :157–162 |
-| `Ty::Never { … }` | `Ty::Never` | divergent expr / `throws never` | `java.lang.Object` | (same) | `unknown` | :157–162 |
-| `Ty::Future(value, error, …)` | `Ty::Future` | `spawn { … }` before `await` | `java.lang.Object` | (same) | `unknown` | :157–162 |
-| (no TIR row in Python) | `Ty::Interface` | interface type | `java.lang.Object` | (same) | `unknown` | :157–162 |
-| (no TIR row in Python) | `Ty::Resource` | resource type | `java.lang.Object` | (same) | `unknown` | :157–162 |
-| (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `unknown` | :157–162 |
+| `Ty::RustType { … }` | `Ty::RustType` | opaque builtin state | `baml_bridge.BamlHandle` | (same) | `null` (wire-driven) | :153 |
+| `Ty::Type { … }` | `Ty::Type` | `type` metatype keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
+| `Ty::Never { … }` | `Ty::Never` | divergent expr / `throws never` | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
+| `Ty::Future(value, error, …)` | `Ty::Future` | `spawn { … }` before `await` | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
+| (no TIR row in Python) | `Ty::Interface` | interface type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
+| (no TIR row in Python) | `Ty::Resource` | resource type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
+| (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
-| `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `list<D>` | n/a |
+| `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `BamlType.list(D)` | n/a |
 | `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `map<…>` | n/a |
 
 Per-row deviation flags:
@@ -209,15 +212,16 @@ Per-row deviation flags:
 > (translate_ty.rs:93–99, `common_literal_base` :239–259). Python emits `typing.Literal[…]`. As a
 > side benefit Java has no float-literal hole: a `Ty::Literal(Float)` becomes `double`, whereas
 > Python must fall back to `typing.Any` because `typing.Literal` rejects floats. The **descriptor**
-> for a standalone literal still preserves the value (`lit:int:42`, `lit:string:draft`,
-> signature_token lib.rs:389–395); a *same-base literal union* descriptor collapses to the base
-> token (`string`/`int`/…, descriptor_token :315–325).
+> for a standalone literal still preserves the value (`BamlType.literalInt(42L)`,
+> `BamlType.literalString("draft")`); a *same-base literal union* descriptor collapses to the base
+> primitive (`BamlType.STRING` / `.INT` / …, `descriptor_union_expr`).
 
 > ⚠ **Deviation from Python (map keys):** the Java map type is **always
 > `java.util.Map<java.lang.String, V>`** — every BAML map key (str/int/bool/enum) is stringified
 > engine-side, so the key slot is hard-coded to `String` (translate_ty.rs:140–145). Python emits
 > `typing.Dict[K, V]` preserving `K`. Note the **descriptor** does preserve the declared key token
-> (`map<int,string>`), since `descriptor_token` recurses on the real key (:340–344) for the decoder.
+> (`BamlType.map(BamlType.STRING, …)`), since `descriptor_expr` recurses on the real key (in
+> practice `String`) — a map union arm matches on it.
 
 > ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::BuiltinUnknown`, and the
 > not-yet-modeled `Ty::Type` / `Ty::Never` / `Ty::Future` / `Ty::Interface` / `Ty::Resource` /
@@ -252,7 +256,7 @@ Per-row deviation flags:
   retained only because `translate_ty`'s signatures still thread `&mut UnionSink`;
   translate_ty.rs:54–68).
 - **Same-base literal unions erase to the base type** (`"draft" | "sent"` → `java.lang.String`),
-  descriptor collapses to the base token (translate_ty.rs:213–215, descriptor_token :315–325).
+  descriptor collapses to the base primitive (`descriptor_union_expr`).
 - **`T | null` collapses to boxed `T`** — nullability by boxing, never a union type
   (translate_ty.rs:204–208).
 - **Arity > 10 falls back to `java.lang.Object`** — the `Union2..Union10` family is exhausted.
@@ -272,21 +276,26 @@ Per-row deviation flags:
   }
   ```
 
-**Descriptor grammar for unions** (`descriptor_token`, translate_ty.rs:304–347):
-- ordered anonymous union → `union[a;b;…]` (declaration order — the decoder matches arms in this
-  order; verified `"union[baml.csv.CsvRecord;baml.iter.Done]"`).
-- `T | null` → the inner descriptor (nullability never affects decode, :313).
-- same-base literal union → the erased base token (`string`, `int`, …, :315–325).
-- unresolved type var arm → `tv:<name>` (decoder falls back to wire-driven `self_type` decode).
+**Descriptor for unions** (`descriptor_expr` / `descriptor_union_expr`, translate_ty.rs):
+- ordered anonymous union → `BamlType.union(a, b, …)` (declaration order — the decoder matches
+  arms structurally in this order).
+- `T | null` → the inner descriptor (nullability never affects decode).
+- same-base literal union → the erased base primitive (`BamlType.STRING`, `.INT`, …).
+- a union carrying an unresolved type-var arm → `null` (wire-driven `self_type` decode).
 
-**Registry side of a union** (`union_registration` / `signature_token`, lib.rs:350–441): a union's
-registry key is the **lexically-sorted, `|`-joined, dedup'd** list of its arms' `signature_token`s
-(null arms excluded on both sides — order- and duplicate-insensitive so engine-side normalization
-can't cause a mismatch). Arm record binary names come from `union_arm_token` (translate_ty.rs:354–401):
+**Registry side of a union** (`registerUnion` / `registry_arm_expr`, lib.rs / translate_ty.rs): a
+union's registry key is its **arm SET** — a sorted, distinct `List<BamlType>` (null arms excluded;
+`List.equals` over `BamlType` value equality is order- and duplicate-insensitive, so engine-side
+normalization can't cause a mismatch — no rendered string, so no crafted-literal collision). The
+runtime derives the equal arm set from the wire `self_type` (`ProtoReader.wireArmType`); a recursive
+alias registers a second time under its FQN (`registerUnionAlias`). Arm tokens are typed
+`BamlType`s (`registry_arm_expr`). Arm record binary names come from `union_arm_token` (translate_ty.rs):
 class/enum/alias arms → the identifier + `Value`; container arms → `{token}ListValue` / `{token}MapValue`;
 **literal arms use a `K`-prefixed token** (legacy Go precedent) — `"draft"` → `Kdraft`, `1` → `IntK1`,
-`true` → `BoolKTrue`. Verified `registerUnion("baml.json.json", …, {"bool","int","float","string",
-"list<baml.json.json>","map<string,baml.json.json>"}, {"…json$BooleanValue","…json$IntValue", …})`.
+`true` → `BoolKTrue`. Verified `registerUnion("baml_sdk.baml.json.json", new baml_bridge.BamlType[]
+{BamlType.BOOL, BamlType.INT, BamlType.FLOAT, BamlType.STRING, BamlType.list(BamlType.classByFqn(
+"baml.json.json")), BamlType.map(BamlType.STRING, BamlType.classByFqn("baml.json.json"))}, {
+"…json$BooleanValue", "…json$IntValue", …})` plus a `registerUnionAlias("baml.json.json", …)`.
 
 ### Callables — `java.util.function` by arity
 
@@ -353,14 +362,18 @@ Notes:
   sibling returning `java.util.concurrent.CompletableFuture<T>`, plus trailing `BamlCallContext`
   overloads. `$`-companions keep the BAML name verbatim — no `__` / `_stream` mangling.
 - **`TypeRegistry.registerClass / registerEnum / registerUnion`** at init map BAML FQN ⇄ generated
-  Java class and carry the per-field / per-arm **descriptor tokens** (the type-directed decode
-  side-table). Each generated binding passes its return-type descriptor as the **last positional
-  arg** of `BamlFfi.callSync/callAsync` (verified `…, "bigint")`, `…, "union[…;…]")`, `…, "tv:T")`).
-- **Descriptor grammar** (one shared tokenizer — `signature_token` / `descriptor_token`;
-  lib.rs:356–409, translate_ty.rs:304–347): primitives `int | bigint | float | string | bool | null |
-  uint8array | void | unknown`; class/enum/named-recursive-alias → canonical **BAML** FQN (registry
-  resolves the kind); `list<D>`; `map<D,D>`; ordered union `union[D;D;…]`; `lit:<base>:<value>`;
-  `media:<kind>`; `callable`; `handle`; type var `tv:<name>`. Decode without a descriptor, or on any
+  Java class and carry the per-field / per-arm **typed `baml_bridge.BamlType` descriptors** (the
+  type-directed decode side-table; a union is keyed structurally by its arm set). Each generated
+  binding passes its return-type descriptor as the **last positional arg** of
+  `BamlFfi.callSync/callAsync` — a per-holder `private static final BamlType $RET{n}` constant, or
+  the literal `null` for a wire-driven return.
+- **Descriptor** (a typed `baml_bridge.BamlType` data structure — `descriptor_expr`, translate_ty.rs):
+  primitives `BamlType.INT | FLOAT | STRING | BOOL`; class/enum/named-recursive-alias →
+  `BamlType.classByFqn("<baml fqn>")` (registry resolves the kind); `BamlType.list(D)`;
+  `BamlType.map(BamlType.STRING, D)`; ordered union `BamlType.union(D, D, …)`; a literal
+  `BamlType.literalString("…")` / `literalInt(…L)` / …; a type var `BamlType.typeVar("<name>")`.
+  Everything wire-driven (bigint / uint8array / null / void / media / callable / handle / the
+  `unknown`-family) passes the literal `null`. Decode without a descriptor, or on any
   descriptor/value mismatch that has a self-describing wire form, falls back to the wire-driven path
   (error/panic values are always wire-driven).
 

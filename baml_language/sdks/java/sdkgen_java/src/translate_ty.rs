@@ -330,72 +330,185 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
     }
 }
 
-/// Type-directed decode descriptor for a declared type (the string a
-/// generated binding passes to `BamlFfi.callSync/callAsync`, and the
-/// per-field entries `registerClass` carries). Same token vocabulary
-/// as [`signature_token`] except anonymous unions render ORDERED as
-/// `union[a;b;...]` (declaration order — the decoder matches arms in
-/// this order) and `T | null` collapses to the inner descriptor
-/// (nullability never affects decode).
-pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
+/// The Java `baml_bridge.BamlType` wildcard — a decode-only "decode this value
+/// wire-driven / match any arm" hint. A wholly decode-inert descriptor renders
+/// as this; [`descriptor_expr_opt`] collapses it to a `null` argument.
+const BAMLTYPE_UNKNOWN: &str = "baml_bridge.BamlType.UNKNOWN";
+
+/// Render a type-directed decode descriptor as a Java `baml_bridge.BamlType`
+/// builder expression — the typed replacement for the old stringly grammar. This
+/// is the never-`null` form used for the children of list/map/union descriptors;
+/// the top-level entry point is [`descriptor_expr_opt`], which collapses a wholly
+/// wire-driven descriptor to the literal `null` (the runtime's wire-driven mode).
+///
+/// A class/enum/recursive-alias renders as a BARE `classByFqn(<fqn>)` (decode
+/// resolves the FQN via the registry — the class-decode path is by FQN, never by
+/// generic-args identity); `T?` collapses to its inner (nullability never affects
+/// decode); an anonymous union renders as `BamlType.union(<arms…>)` in
+/// declaration order (a union with a `TypeVar` arm, or a same-base literal union,
+/// degenerates to the base / `UNKNOWN`, matching [`translate_union`]'s Java type);
+/// a decode-inert leaf (bigint / uint8array / null / void / media / callable /
+/// handle / unknown / unmodeled) renders as `UNKNOWN`.
+pub(crate) fn descriptor_expr(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
-        Ty::Union(items, _) => {
-            let non_null: Vec<&Ty> = items
-                .iter()
-                .filter(|t| !matches!(t, Ty::Null { .. }))
-                .collect();
-            match non_null.len() {
-                0 => "null".to_string(),
-                1 => descriptor_token(non_null[0], aliases),
-                _ => {
-                    if common_literal_base(&non_null).is_some() {
-                        // Erased literal union: decodes as its base type.
-                        if let Ty::Literal(lit, ..) = non_null[0] {
-                            return match lit {
-                                baml_base::Literal::Int(_) => "int".to_string(),
-                                baml_base::Literal::Bigint(_) => "bigint".to_string(),
-                                baml_base::Literal::Float(_) => "float".to_string(),
-                                baml_base::Literal::String(_) => "string".to_string(),
-                                baml_base::Literal::Bool(_) => "bool".to_string(),
-                            };
-                        }
-                    }
-                    // A union with a TypeVar arm renders as `java.lang.Object`
-                    // (see `translate_union`); there is no arity family to build,
-                    // so decode must yield the bare wire value. `unknown` is the
-                    // wire-driven passthrough descriptor (no union wrapping) —
-                    // keep it in lockstep with the Java type choice.
-                    if non_null.iter().any(|arm| {
-                        let mut tvs = Vec::new();
-                        collect_type_vars(arm, &mut tvs);
-                        !tvs.is_empty()
-                    }) {
-                        return "unknown".to_string();
-                    }
-                    let arms: Vec<String> = non_null
-                        .iter()
-                        .map(|a| descriptor_token(a, aliases))
-                        .collect();
-                    format!("union[{}]", arms.join(";"))
-                }
-            }
+        Ty::Int { .. } => "baml_bridge.BamlType.INT".to_string(),
+        Ty::Float { .. } => "baml_bridge.BamlType.FLOAT".to_string(),
+        Ty::String { .. } => "baml_bridge.BamlType.STRING".to_string(),
+        Ty::Bool { .. } => "baml_bridge.BamlType.BOOL".to_string(),
+        Ty::List(inner, _) => {
+            format!(
+                "baml_bridge.BamlType.list({})",
+                descriptor_expr(inner, aliases)
+            )
+        }
+        // The declared key token is preserved (the decoder ignores it — map keys
+        // are stringified engine-side — but a map union arm matches on it); in
+        // practice the codegen key is always `String`.
+        Ty::Map { key, value, .. } => format!(
+            "baml_bridge.BamlType.map({}, {})",
+            descriptor_expr(key, aliases),
+            descriptor_expr(value, aliases)
+        ),
+        // A class descriptor is the BARE FQN — decode resolves the class by FQN
+        // (`TypeRegistry.isClass`); the generic-args identity is for union-arm /
+        // registry keying only ([`registry_arm_expr`]), not the class-decode path.
+        Ty::Class(name, _, _) => class_by_fqn_expr(&crate::baml_fqn(name)),
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+            class_by_fqn_expr(&crate::baml_fqn(name))
         }
         Ty::TypeAlias(name, _) => match aliases.get(name) {
-            Some((resolved, false)) => descriptor_token(resolved, aliases),
-            _ => crate::signature_token(ty, aliases),
+            Some((resolved, false)) => descriptor_expr(resolved, aliases),
+            _ => class_by_fqn_expr(&crate::baml_fqn(name)),
         },
-        // A class descriptor is the BARE FQN — decode resolves the class by FQN
-        // (`TypeRegistry.isClass`), so it must NOT carry the generic-args
-        // identity `signature_token` now adds (that identity is for union-arm /
-        // registry keying, not the class-decode path).
-        Ty::Class(name, _, _) => crate::baml_fqn(name),
-        Ty::List(inner, _) => format!("list<{}>", descriptor_token(inner, aliases)),
+        Ty::TypeVar(name, _) => {
+            format!("baml_bridge.BamlType.typeVar({:?})", name.as_str())
+        }
+        Ty::Literal(lit, ..) => literal_expr(lit),
+        Ty::Union(items, _) => descriptor_union_expr(items, aliases),
+        _ => BAMLTYPE_UNKNOWN.to_string(),
+    }
+}
+
+/// The top-level decode descriptor: [`descriptor_expr`], or `None` when the whole
+/// type is wire-driven (renders as `UNKNOWN`) — the emitter then passes the
+/// literal `null` (the runtime's wire-driven decode mode, also used for streaming).
+pub(crate) fn descriptor_expr_opt(ty: &Ty, aliases: &AliasTable) -> Option<String> {
+    let e = descriptor_expr(ty, aliases);
+    if e == BAMLTYPE_UNKNOWN { None } else { Some(e) }
+}
+
+/// The union arm of [`descriptor_expr`]: `T | null` collapses to boxed-inner; a
+/// same-base literal union erases to the base primitive; a union carrying a
+/// `TypeVar` arm degenerates to `UNKNOWN` (wire-driven); otherwise a
+/// `BamlType.union(<arms…>)` in declaration order.
+fn descriptor_union_expr(items: &[Ty], aliases: &AliasTable) -> String {
+    let non_null: Vec<&Ty> = items
+        .iter()
+        .filter(|t| !matches!(t, Ty::Null { .. }))
+        .collect();
+    match non_null.len() {
+        0 => BAMLTYPE_UNKNOWN.to_string(),
+        1 => descriptor_expr(non_null[0], aliases),
+        _ => {
+            if common_literal_base(&non_null).is_some() {
+                if let Ty::Literal(lit, ..) = non_null[0] {
+                    return match lit {
+                        baml_base::Literal::Int(_) => "baml_bridge.BamlType.INT".to_string(),
+                        baml_base::Literal::Float(_) => "baml_bridge.BamlType.FLOAT".to_string(),
+                        baml_base::Literal::String(_) => "baml_bridge.BamlType.STRING".to_string(),
+                        baml_base::Literal::Bool(_) => "baml_bridge.BamlType.BOOL".to_string(),
+                        // bigint has no BamlType primitive → wire-driven.
+                        baml_base::Literal::Bigint(_) => BAMLTYPE_UNKNOWN.to_string(),
+                    };
+                }
+            }
+            if non_null.iter().any(|arm| {
+                let mut tvs = Vec::new();
+                collect_type_vars(arm, &mut tvs);
+                !tvs.is_empty()
+            }) {
+                return BAMLTYPE_UNKNOWN.to_string();
+            }
+            let arms: Vec<String> = non_null
+                .iter()
+                .map(|a| descriptor_expr(a, aliases))
+                .collect();
+            format!("baml_bridge.BamlType.union({})", arms.join(", "))
+        }
+    }
+}
+
+/// A union-arm identity as a `baml_bridge.BamlType` (the arm token
+/// `registerUnion` / `registerUnionAlias` carry). Full fidelity, mirroring
+/// [`signature_token`]: named types render as `classByFqn` (kind-agnostic —
+/// decode matches by FQN), a generic class carries its args so two
+/// instantiations get distinct registry keys, and it never collapses (a union
+/// arm is an individual type). The runtime derives the equal `BamlType` from the
+/// wire `self_type` (`ProtoReader.wireArmType`), so a wire union's arm set equals
+/// the registered one.
+pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
+    match ty {
+        Ty::Int { .. } => "baml_bridge.BamlType.INT".to_string(),
+        Ty::Float { .. } => "baml_bridge.BamlType.FLOAT".to_string(),
+        Ty::String { .. } => "baml_bridge.BamlType.STRING".to_string(),
+        Ty::Bool { .. } => "baml_bridge.BamlType.BOOL".to_string(),
+        Ty::List(inner, _) => {
+            format!(
+                "baml_bridge.BamlType.list({})",
+                registry_arm_expr(inner, aliases)
+            )
+        }
         Ty::Map { key, value, .. } => format!(
-            "map<{},{}>",
-            descriptor_token(key, aliases),
-            descriptor_token(value, aliases)
+            "baml_bridge.BamlType.map({}, {})",
+            registry_arm_expr(key, aliases),
+            registry_arm_expr(value, aliases)
         ),
-        _ => crate::signature_token(ty, aliases),
+        Ty::Class(name, args, _) => {
+            let fqn = crate::baml_fqn(name);
+            if args.is_empty() {
+                class_by_fqn_expr(&fqn)
+            } else {
+                let inner: Vec<String> =
+                    args.iter().map(|a| registry_arm_expr(a, aliases)).collect();
+                format!(
+                    "baml_bridge.BamlType.classByFqn({fqn:?}, {})",
+                    inner.join(", ")
+                )
+            }
+        }
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+            class_by_fqn_expr(&crate::baml_fqn(name))
+        }
+        Ty::TypeAlias(name, _) => match aliases.get(name) {
+            Some((resolved, false)) => registry_arm_expr(resolved, aliases),
+            _ => class_by_fqn_expr(&crate::baml_fqn(name)),
+        },
+        Ty::TypeVar(name, _) => {
+            format!("baml_bridge.BamlType.typeVar({:?})", name.as_str())
+        }
+        Ty::Literal(lit, ..) => literal_expr(lit),
+        _ => BAMLTYPE_UNKNOWN.to_string(),
+    }
+}
+
+fn class_by_fqn_expr(fqn: &str) -> String {
+    format!("baml_bridge.BamlType.classByFqn({fqn:?})")
+}
+
+fn literal_expr(lit: &baml_base::Literal) -> String {
+    match lit {
+        baml_base::Literal::Int(v) => format!("baml_bridge.BamlType.literalInt({v}L)"),
+        baml_base::Literal::Bool(v) => format!("baml_bridge.BamlType.literalBool({v})"),
+        baml_base::Literal::String(s) => {
+            format!("baml_bridge.BamlType.literalString({s:?})")
+        }
+        baml_base::Literal::Float(s) => {
+            format!("baml_bridge.BamlType.literalFloat({s:?})")
+        }
+        baml_base::Literal::Bigint(v) => format!(
+            "baml_bridge.BamlType.literalBigint(new java.math.BigInteger({:?}))",
+            v.to_string()
+        ),
     }
 }
 
@@ -1044,24 +1157,34 @@ mod tests {
     fn descriptor_union_return_is_ordered() {
         let aliases = AliasTable::new();
         let u = union(vec![int(), string()]);
-        assert_eq!(descriptor_token(&u, &aliases), "union[int;string]");
+        assert_eq!(
+            descriptor_expr(&u, &aliases),
+            "baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING)"
+        );
     }
 
     #[test]
     fn descriptor_nullable_collapses_to_inner() {
         let aliases = AliasTable::new();
         let opt_int = union(vec![int(), null()]);
-        assert_eq!(descriptor_token(&opt_int, &aliases), "int");
+        assert_eq!(
+            descriptor_expr(&opt_int, &aliases),
+            "baml_bridge.BamlType.INT"
+        );
     }
 
     #[test]
     fn descriptor_union_with_typevar_is_unknown() {
         // A union with a TypeVar arm renders as Object and must decode to the
         // bare wire value (no arity family) — its descriptor degenerates to the
-        // `unknown` passthrough, in lockstep with `translate_union`.
+        // wire-driven passthrough (`descriptor_expr_opt` → None / `null` arg).
         let aliases = AliasTable::new();
         let u = union(vec![typevar(BaseName::new("T")), string(), null()]);
-        assert_eq!(descriptor_token(&u, &aliases), "unknown");
+        assert_eq!(
+            descriptor_expr(&u, &aliases),
+            "baml_bridge.BamlType.UNKNOWN"
+        );
+        assert_eq!(descriptor_expr_opt(&u, &aliases), None);
     }
 
     #[test]
@@ -1071,14 +1194,15 @@ mod tests {
             literal(baml_base::Literal::String("draft".into())),
             literal(baml_base::Literal::String("sent".into())),
         ]);
-        assert_eq!(descriptor_token(&u, &aliases), "string");
+        assert_eq!(descriptor_expr(&u, &aliases), "baml_bridge.BamlType.STRING");
     }
 
     #[test]
     fn signature_token_carries_class_generic_args() {
-        // A generic class's identity token includes its concrete args, so two
+        // A generic class's registry arm token includes its concrete args, so two
         // distinct instantiations no longer collide (silently first-winning in a
-        // union / the registry).
+        // union / the registry). `signature_token` (kept for the callback dedup
+        // key) and `registry_arm_expr` (the typed arm token) both carry them.
         let aliases = AliasTable::new();
         let w_int = class_ty(name("user", &["g"], "Wrapper"), vec![int()]);
         let w_str = class_ty(name("user", &["g"], "Wrapper"), vec![string()]);
@@ -1087,42 +1211,41 @@ mod tests {
             "user.g.Wrapper<int>"
         );
         assert_eq!(
-            crate::signature_token(&w_str, &aliases),
-            "user.g.Wrapper<string>"
+            registry_arm_expr(&w_int, &aliases),
+            "baml_bridge.BamlType.classByFqn(\"user.g.Wrapper\", baml_bridge.BamlType.INT)"
         );
         assert_ne!(
-            crate::signature_token(&w_int, &aliases),
-            crate::signature_token(&w_str, &aliases)
+            registry_arm_expr(&w_int, &aliases),
+            registry_arm_expr(&w_str, &aliases)
         );
         // The class DESCRIPTOR stays the bare FQN (decode resolves by FQN via
         // TypeRegistry.isClass), so the class-decode path is unaffected.
-        assert_eq!(descriptor_token(&w_int, &aliases), "user.g.Wrapper");
+        assert_eq!(
+            descriptor_expr(&w_int, &aliases),
+            "baml_bridge.BamlType.classByFqn(\"user.g.Wrapper\")"
+        );
     }
 
     #[test]
-    fn descriptor_and_signature_escape_literal_structural_chars() {
+    fn descriptor_literal_rides_raw_value_no_escaping() {
+        // With a typed descriptor there is no grammar to collide with, so a
+        // literal value carrying structural characters rides RAW (no escaping) —
+        // the value is a `literalString` argument, matched by value equality.
         let aliases = AliasTable::new();
-        // A `;` in a string literal is percent-escaped so it can't be mistaken
-        // for a `union[...]` arm separator.
-        assert_eq!(
-            crate::signature_token(&literal(baml_base::Literal::String("a;b".into())), &aliases),
-            "lit:string:a%3Bb"
-        );
         let u = union(vec![
             literal(baml_base::Literal::String("a;b".into())),
             literal(baml_base::Literal::Int(1)),
         ]);
         assert_eq!(
-            descriptor_token(&u, &aliases),
-            "union[lit:string:a%3Bb;lit:int:1]"
+            descriptor_expr(&u, &aliases),
+            "baml_bridge.BamlType.union(baml_bridge.BamlType.literalString(\"a;b\"), \
+             baml_bridge.BamlType.literalInt(1L))"
         );
-        // Byte-compat: a literal with no structural chars is unchanged.
+        // The retained `signature_token` (callback dedup key only) also drops the
+        // old percent-escaping.
         assert_eq!(
-            crate::signature_token(
-                &literal(baml_base::Literal::String("draft".into())),
-                &aliases
-            ),
-            "lit:string:draft"
+            crate::signature_token(&literal(baml_base::Literal::String("a;b".into())), &aliases),
+            "lit:string:a;b"
         );
     }
 

@@ -7,10 +7,12 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -62,10 +64,16 @@ public final class TypeRegistry {
     private static final ConcurrentHashMap<String, ClassEntry> classesByJavaName = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, EnumEntry> enumsByJavaName = new ConcurrentHashMap<>();
 
-    // Unions. Forward index (decode): the sorted arm-token signature -> entry.
-    // Reverse index (encode): each generated union RECORD binary name -> a
-    // reflective unwrapper for its single {@code value()} accessor.
-    private static final ConcurrentHashMap<String, UnionEntry> unionsBySignature = new ConcurrentHashMap<>();
+    // Unions. Forward index (decode): keyed structurally by the union's arm set
+    // normalized to a sorted, distinct {@code List<BamlType>} ({@code List.equals}
+    // rides {@code BamlType} value equality — order- and duplicate-insensitive,
+    // exactly the union-identity semantics, with no string derivation) for a
+    // resolved-union {@code self_type}, and by alias FQN for a recursive alias
+    // whose {@code self_type} arrives as the alias node. Reverse index (encode):
+    // each generated union RECORD binary name -> a reflective unwrapper for its
+    // single {@code value()} accessor.
+    private static final ConcurrentHashMap<List<BamlType>, UnionEntry> unionsByArms = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, UnionEntry> unionsByFqn = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, UnionRecordEntry> unionRecordsByJavaName =
             new ConcurrentHashMap<>();
 
@@ -103,15 +111,16 @@ public final class TypeRegistry {
 
     /**
      * Register a generated class, carrying a parallel {@code fieldDescs} array —
-     * one type-directed decode descriptor per {@code fieldOrder} entry (see
-     * {@code ref-java-codegen-conventions.md} "Type-directed decode descriptors").
-     * When present, decode reifies each field's value through its descriptor
-     * (so e.g. a union-typed field lands on the {@code Union{k}} arm family rather
-     * than the wire-driven fallback); when {@code null}, field decode stays
-     * wire-driven. Idempotent: the first registration of {@code bamlFqn} wins.
+     * one type-directed decode descriptor ({@link BamlType}) per
+     * {@code fieldOrder} entry (see {@code ref-java-codegen-conventions.md}
+     * "Type-directed decode descriptors"). A non-null entry reifies that field's
+     * value through it (so e.g. a union-typed field lands on the {@code Union{k}}
+     * arm family rather than the wire-driven fallback); a {@code null} entry (or a
+     * {@code null} array) leaves that field's decode wire-driven. Idempotent: the
+     * first registration of {@code bamlFqn} wins.
      */
     public static void registerClass(
-            String bamlFqn, String javaClassName, String[] fieldOrder, String[] fieldDescs) {
+            String bamlFqn, String javaClassName, String[] fieldOrder, BamlType[] fieldDescs) {
         if (fieldDescs != null && fieldDescs.length != fieldOrder.length) {
             throw new IllegalArgumentException(
                     "class field descriptor length mismatch for " + bamlFqn + ": "
@@ -143,43 +152,74 @@ public final class TypeRegistry {
     }
 
     /**
-     * Register a generated union. {@code signature} is the union's arm tokens
-     * sorted and joined with {@code |} (the same tokenizer the wire decoder runs
-     * over the union's {@code self_type}); {@code sealedInterfaceName} the binary
-     * name of the generated sealed interface (retained for completeness);
-     * {@code armTokens} the per-arm tokens in <em>declaration</em> order; and
-     * {@code recordNames} the parallel binary names of the wrapper records
-     * (one {@code record ...Value(T value)} per arm). Decode resolves an arm from
-     * the inner value's shape (see {@link #constructUnion}); encode unwraps a
-     * record instance back to its bare inner value (see {@link #unionRecordInner}).
-     *
-     * <p>Idempotent for a re-registration under the SAME {@code sealedInterfaceName}
-     * (the first registration wins). A re-registration of an already-bound
-     * {@code signature} under a <em>different</em> {@code sealedInterfaceName} is a
-     * genuine identity conflict — two distinct unions sharing one signature key,
-     * so decode would silently reify onto whichever won the slot — and throws
-     * {@link IllegalStateException} rather than first-winning silently.
+     * Register a generated union, keyed structurally by its arm SET.
+     * {@code armTokens} are the per-arm {@link BamlType} tokens in
+     * <em>declaration</em> order; the registry key is the {@code Set} of them
+     * ({@link BamlType} has value equality, so the set is order- and
+     * duplicate-insensitive — exactly what the wire decoder derives from the
+     * union's resolved {@code self_type}, no string round-trip).
+     * {@code sealedInterfaceName} is the binary name of the generated sealed
+     * interface; {@code recordNames} the parallel binary names of the wrapper
+     * records (one {@code record ...Value(T value)} per arm). Decode resolves an
+     * arm from the inner value's shape (see {@link #constructUnionForArms});
+     * encode unwraps a record instance back to its bare inner value (see
+     * {@link #unionRecordInner}).
      */
     public static void registerUnion(
-            String signature, String sealedInterfaceName, String[] armTokens, String[] recordNames) {
+            String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
+        UnionEntry entry = newUnionEntry(sealedInterfaceName, armTokens, recordNames);
+        putUnion(unionsByArms, armKey(List.of(armTokens)), entry);
+    }
+
+    /** Normalize an arm collection to the registry key: sorted (structural order) + distinct. */
+    private static List<BamlType> armKey(Collection<BamlType> arms) {
+        return List.copyOf(new TreeSet<>(arms));
+    }
+
+    /**
+     * Register a generated union under an explicit alias-FQN key (a second key for
+     * the same union). A recursive alias registers twice — once by its arm set
+     * ({@link #registerUnion}) and once under its own FQN — because the engine may
+     * send {@code self_type} either as the resolved member union or as the alias
+     * node. An FQN is a name, not a rendered type grammar.
+     */
+    public static void registerUnionAlias(
+            String aliasFqn, String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
+        UnionEntry entry = newUnionEntry(sealedInterfaceName, armTokens, recordNames);
+        putUnion(unionsByFqn, aliasFqn, entry);
+    }
+
+    /** Build a {@link UnionEntry} and register its records (unconditional — encode must unwrap any). */
+    private static UnionEntry newUnionEntry(
+            String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
         if (armTokens.length != recordNames.length) {
             throw new IllegalArgumentException(
-                    "union arrays length mismatch for " + signature + ": "
+                    "union arrays length mismatch for " + sealedInterfaceName + ": "
                             + armTokens.length + " arm tokens vs " + recordNames.length + " records");
         }
-        UnionEntry entry = new UnionEntry(signature, sealedInterfaceName, armTokens, recordNames);
-        UnionEntry existing = unionsBySignature.putIfAbsent(signature, entry);
-        if (existing != null && !existing.sealedInterfaceName.equals(sealedInterfaceName)) {
-            throw new IllegalStateException(
-                    "conflicting union registration for signature '" + signature
-                            + "': already bound to " + existing.sealedInterfaceName
-                            + ", refused rebind to " + sealedInterfaceName);
-        }
-        // Record-name registration is unconditional: encode must be able to
-        // unwrap ANY registered record class, independent of which
-        // registration won the signature slot.
+        // Record-name registration is unconditional: encode must be able to unwrap
+        // ANY registered record class, independent of which registration wins a key.
         for (String recordName : recordNames) {
             unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName));
+        }
+        return new UnionEntry(sealedInterfaceName, armTokens, recordNames);
+    }
+
+    /**
+     * Insert {@code entry} under {@code key}. Idempotent for a re-registration
+     * under the SAME {@code sealedInterfaceName} (the first wins). A re-registration
+     * of an already-bound key under a <em>different</em> {@code sealedInterfaceName}
+     * is a genuine identity conflict — two distinct unions sharing one key, so
+     * decode would silently reify onto whichever won the slot — and throws
+     * {@link IllegalStateException} rather than first-winning.
+     */
+    private static <K> void putUnion(ConcurrentHashMap<K, UnionEntry> map, K key, UnionEntry entry) {
+        UnionEntry existing = map.putIfAbsent(key, entry);
+        if (existing != null && !existing.sealedInterfaceName.equals(entry.sealedInterfaceName)) {
+            throw new IllegalStateException(
+                    "conflicting union registration for key '" + key
+                            + "': already bound to " + existing.sealedInterfaceName
+                            + ", refused rebind to " + entry.sealedInterfaceName);
         }
     }
 
@@ -202,13 +242,12 @@ public final class TypeRegistry {
     }
 
     /**
-     * Whether {@code key} is a registered union — anonymous unions are keyed by
-     * their sorted arm-token signature, named recursive aliases by their FQN.
-     * The type-directed FQN decode path uses this to route an FQN descriptor
-     * that names a recursive alias to {@link #constructUnion}.
+     * Whether {@code fqn} names a registered union by FQN — a named recursive
+     * alias. The type-directed FQN decode path uses this to route an FQN
+     * descriptor that names a recursive alias to {@link #constructUnionForFqn}.
      */
-    public static boolean isUnionKey(String key) {
-        return unionsBySignature.containsKey(key);
+    public static boolean isUnionKey(String fqn) {
+        return unionsByFqn.containsKey(fqn);
     }
 
     /**
@@ -222,11 +261,13 @@ public final class TypeRegistry {
     }
 
     /**
-     * The per-field type-directed decode descriptors of the registered class
-     * {@code bamlFqn} (parallel to {@link #classFieldOrder}), or {@code null} when
-     * it is not registered or was registered without descriptors.
+     * The per-field type-directed decode descriptors ({@link BamlType}, parallel
+     * to {@link #classFieldOrder}) of the registered class {@code bamlFqn}, or
+     * {@code null} when it is not registered or was registered without
+     * descriptors. Individual entries may be {@code null} (that field is decoded
+     * wire-driven).
      */
-    public static String[] classFieldDescs(String bamlFqn) {
+    public static BamlType[] classFieldDescs(String bamlFqn) {
         ClassEntry entry = classesByFqn.get(bamlFqn);
         return entry == null ? null : entry.fieldDescs;
     }
@@ -243,32 +284,44 @@ public final class TypeRegistry {
     }
 
     /**
-     * Construct the generated union record for a wire union value. {@code signature}
-     * is the union's sorted arm-token signature; {@code discriminator} the token
-     * describing the inner value's shape (a primitive/FQN token, {@code "list"} /
-     * {@code "map"} for a container arm, or {@code "lit:<base>:<value>"} for a
-     * literal); {@code inner} the already-decoded inner value. Returns the wrapper
-     * record, or {@code null} when the signature is not a registered union or no
-     * arm matches the discriminator — the caller then keeps the bare inner value
-     * (literal-over-one-base unions are erased in codegen and never registered).
+     * Construct the generated union record for a resolved-union wire value.
+     * {@code arms} are the union's arm {@link BamlType}s read from the wire
+     * {@code self_type} (normalized here to the arm-set key); {@code valueBytes}
+     * the raw {@code BamlOutboundValue} (its shape picks the arm structurally, see
+     * {@link ProtoReader#armMatchesValue}); {@code inner} the already-decoded inner
+     * value. Returns the wrapper record, or {@code null} when the arm set is not a
+     * registered union or no arm matches — the caller then keeps the bare inner
+     * value (literal-over-one-base unions are erased in codegen and never
+     * registered).
      */
-    public static Object constructUnion(String signature, String discriminator, Object inner) {
-        UnionEntry entry = unionsBySignature.get(signature);
-        return entry == null ? null : entry.instantiate(discriminator, inner);
+    public static Object constructUnionForArms(List<BamlType> arms, byte[] valueBytes, Object inner) {
+        UnionEntry entry = unionsByArms.get(armKey(arms));
+        return entry == null ? null : entry.instantiate(valueBytes, inner);
     }
 
     /**
-     * The registered arm token the discriminator selects for {@code key}, or
-     * {@code null} when the key is unregistered / no arm matches. Lets the
-     * decoder reuse the arm token as a type-directed descriptor for the arm's
-     * inner value (recursive aliases: nested items must reify too).
+     * Construct the generated union record for a union named by {@code fqn} (a
+     * recursive alias — the descriptor names it, or the wire {@code self_type}
+     * arrived as the alias node). Otherwise as {@link #constructUnionForArms}.
      */
-    public static String unionArmToken(String key, String discriminator) {
-        UnionEntry entry = unionsBySignature.get(key);
+    public static Object constructUnionForFqn(String fqn, byte[] valueBytes, Object inner) {
+        UnionEntry entry = unionsByFqn.get(fqn);
+        return entry == null ? null : entry.instantiate(valueBytes, inner);
+    }
+
+    /**
+     * The registered arm {@link BamlType} the wire value {@code valueBytes} selects
+     * for the union named {@code fqn}, or {@code null} when {@code fqn} is not a
+     * registered union / no arm matches. Lets the decoder reuse the arm token as a
+     * type-directed descriptor for the arm's inner value (recursive aliases: nested
+     * items must reify too).
+     */
+    public static BamlType unionArmTokenForFqn(String fqn, byte[] valueBytes) {
+        UnionEntry entry = unionsByFqn.get(fqn);
         if (entry == null) {
             return null;
         }
-        int idx = entry.pickArm(discriminator);
+        int idx = entry.pickArm(valueBytes);
         return idx < 0 ? null : entry.armTokens[idx];
     }
 
@@ -469,8 +522,9 @@ public final class TypeRegistry {
         final String javaClassName;
         final String[] fieldOrder;
         // Per-field type-directed decode descriptors (parallel to fieldOrder), or
-        // null when the class was registered without them (wire-driven decode).
-        final String[] fieldDescs;
+        // null when the class was registered without them (wire-driven decode). An
+        // individual entry may be null (that field is decoded wire-driven).
+        final BamlType[] fieldDescs;
 
         // Lazily resolved (decode/encode reflection). Benign races only re-resolve
         // to the same value; volatile publishes the resolved object safely.
@@ -478,7 +532,7 @@ public final class TypeRegistry {
         private volatile Constructor<?> ctor;
         private volatile Method[] accessors;
 
-        ClassEntry(String bamlFqn, String javaClassName, String[] fieldOrder, String[] fieldDescs) {
+        ClassEntry(String bamlFqn, String javaClassName, String[] fieldOrder, BamlType[] fieldDescs) {
             this.bamlFqn = bamlFqn;
             this.javaClassName = javaClassName;
             this.fieldOrder = fieldOrder;
@@ -634,25 +688,23 @@ public final class TypeRegistry {
     }
 
     private static final class UnionEntry {
-        final String signature;
         final String sealedInterfaceName;
-        final String[] armTokens;
+        final BamlType[] armTokens;
         final String[] recordNames;
 
         // Lazily resolved per-arm single-arg record constructors. Benign races
         // only re-resolve a slot to an equal Constructor.
         private volatile Constructor<?>[] ctors;
 
-        UnionEntry(String signature, String sealedInterfaceName, String[] armTokens, String[] recordNames) {
-            this.signature = signature;
+        UnionEntry(String sealedInterfaceName, BamlType[] armTokens, String[] recordNames) {
             this.sealedInterfaceName = sealedInterfaceName;
             this.armTokens = armTokens;
             this.recordNames = recordNames;
         }
 
-        /** Build the wrapper record for {@code discriminator}, or null if no arm matches. */
-        Object instantiate(String discriminator, Object inner) {
-            int idx = pickArm(discriminator);
+        /** Build the wrapper record for the wire value {@code valueBytes}, or null if no arm matches. */
+        Object instantiate(byte[] valueBytes, Object inner) {
+            int idx = pickArm(valueBytes);
             if (idx < 0) {
                 return null;
             }
@@ -666,64 +718,21 @@ public final class TypeRegistry {
         }
 
         /**
-         * The declaration-order index of the arm matching {@code discriminator}, or
-         * -1. A container discriminator ({@code "list"} / {@code "map"} or a typed
-         * {@code "list<int>"} / {@code "map<string,int>"}) picks the first arm the
-         * {@link ProtoReader#containerTokenMatches} lattice accepts — a typed wire
-         * token matches only a same-typed (or bare) arm, so an empty {@code int[]}
-         * no longer lands on a {@code string[]} arm declared first, while a bare
-         * (pre-typed) wire still matches any container arm of that base; a
-         * {@code "lit:<base>:..."} discriminator prefers an exact literal token
-         * then the first literal arm of that base; every other discriminator
-         * (primitives and class/enum FQNs) matches an arm token exactly.
+         * The declaration-order index of the first arm whose {@link BamlType}
+         * structurally matches the wire value {@code valueBytes} (see
+         * {@link ProtoReader#armMatchesValue}), or -1. A typed container arm
+         * matches only a same-typed (or bare/imprecise) wire container, so an empty
+         * {@code int[]} no longer lands on a {@code string[]} arm declared first,
+         * while a bare (pre-typed) wire still matches any container arm of that
+         * base; primitives / class-enum FQNs / literals match by shape.
          */
-        private int pickArm(String discriminator) {
-            if (isContainerDiscriminator(discriminator)) {
-                for (int i = 0; i < armTokens.length; i++) {
-                    if (ProtoReader.containerTokenMatches(armTokens[i], discriminator)) {
-                        return i;
-                    }
-                }
-                return -1;
-            }
-            if (discriminator.startsWith("lit:")) {
-                for (int i = 0; i < armTokens.length; i++) {
-                    if (armTokens[i].equals(discriminator)) {
-                        return i;
-                    }
-                }
-                int base = discriminator.indexOf(':', 4); // after "lit:<base>"
-                String prefix = base < 0 ? discriminator : discriminator.substring(0, base + 1);
-                return firstWithPrefix(prefix);
-            }
+        int pickArm(byte[] valueBytes) {
             for (int i = 0; i < armTokens.length; i++) {
-                if (armTokens[i].equals(discriminator)) {
+                if (ProtoReader.armMatchesValue(armTokens[i], valueBytes)) {
                     return i;
                 }
             }
             return -1;
-        }
-
-        private int firstWithPrefix(String prefix) {
-            for (int i = 0; i < armTokens.length; i++) {
-                if (armTokens[i].startsWith(prefix)) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        /**
-         * Whether {@code discriminator} is a container token — bare
-         * {@code "list"} / {@code "map"} or a typed {@code "list<...>"} /
-         * {@code "map<...>"} — routed through the {@code containerTokenMatches}
-         * lattice rather than exact-arm matching.
-         */
-        private static boolean isContainerDiscriminator(String discriminator) {
-            return discriminator.equals("list")
-                    || discriminator.equals("map")
-                    || discriminator.startsWith("list<")
-                    || discriminator.startsWith("map<");
         }
 
         private Constructor<?> constructor(int idx) {

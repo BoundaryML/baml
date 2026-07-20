@@ -275,7 +275,7 @@ public final class BamlFfi {
      * <p>Result decode is wire-driven (no return-type descriptor): a union result
      * reifies via the wire's {@code self_type} onto its registered nominal record.
      * Generated bindings that know their declared return type call the four-arg
-     * {@link #callSync(String, String[], Object[], String)} instead.
+     * {@link #callSync(String, String[], Object[], BamlType)} instead.
      */
     public static Object callSync(String fqn, String[] names, Object[] args) {
         return callSync(fqn, names, args, null, null);
@@ -285,17 +285,17 @@ public final class BamlFfi {
      * As {@link #callSync(String, String[], Object[])}, but threads a
      * type-directed decode descriptor for the declared return type (see
      * {@code ref-java-codegen-conventions.md}). The generated SDK passes the
-     * descriptor string as this last argument so a union result lands on the
+     * descriptor {@link BamlType} as this last argument so a union result lands on the
      * {@code Union{k}} arm family (arm chosen from the declared arm order) and
      * nested class/list/map/union results decode against their declared shape.
      * A {@code null} descriptor is exactly the three-arg (wire-driven) behavior.
      */
-    public static Object callSync(String fqn, String[] names, Object[] args, String returnDesc) {
+    public static Object callSync(String fqn, String[] names, Object[] args, BamlType returnDesc) {
         return callSync(fqn, names, args, returnDesc, null);
     }
 
     /**
-     * As {@link #callSync(String, String[], Object[], String)}, but bound to an
+     * As {@link #callSync(String, String[], Object[], BamlType)}, but bound to an
      * optional {@link BamlCallContext} for cancellation: the minted
      * {@code call_id} is attached to {@code ctx} for the duration of the call and
      * detached in a {@code finally}, so a concurrent {@link BamlCallContext#abort()}
@@ -306,13 +306,13 @@ public final class BamlFfi {
      * is exactly the four-arg behavior.
      */
     public static Object callSync(
-            String fqn, String[] names, Object[] args, String returnDesc, BamlCallContext ctx) {
+            String fqn, String[] names, Object[] args, BamlType returnDesc, BamlCallContext ctx) {
         return callSync(fqn, names, args, returnDesc, ctx, null);
     }
 
     /**
      * Explicit-generics variant of
-     * {@link #callSync(String, String[], Object[], String, BamlCallContext)}:
+     * {@link #callSync(String, String[], Object[], BamlType, BamlCallContext)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
      * {@code CallFunctionArgs.type_args} so a generic function/method's TypeVars
      * are bound at the call. Reached from the generated explicit-generics
@@ -323,7 +323,7 @@ public final class BamlFfi {
             String fqn,
             String[] names,
             Object[] args,
-            String returnDesc,
+            BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
         long callId = newCallId();
@@ -343,7 +343,7 @@ public final class BamlFfi {
 
     /**
      * Asynchronous sibling of {@link #callSync(String, String[], Object[])}. See
-     * {@link #callAsync(String, String[], Object[], String)}.
+     * {@link #callAsync(String, String[], Object[], BamlType)}.
      */
     public static CompletableFuture<Object> callAsync(String fqn, String[] names, Object[] args) {
         return callAsync(fqn, names, args, null, null);
@@ -351,11 +351,11 @@ public final class BamlFfi {
 
     /**
      * Asynchronous sibling of
-     * {@link #callSync(String, String[], Object[], String)}. See
-     * {@link #callAsync(String, String[], Object[], String, BamlCallContext)}.
+     * {@link #callSync(String, String[], Object[], BamlType)}. See
+     * {@link #callAsync(String, String[], Object[], BamlType, BamlCallContext)}.
      */
     public static CompletableFuture<Object> callAsync(
-            String fqn, String[] names, Object[] args, String returnDesc) {
+            String fqn, String[] names, Object[] args, BamlType returnDesc) {
         return callAsync(fqn, names, args, returnDesc, null);
     }
 
@@ -384,13 +384,13 @@ public final class BamlFfi {
      * exceptionally with {@link BamlError} / {@link BamlPanic} unchanged.
      */
     public static CompletableFuture<Object> callAsync(
-            String fqn, String[] names, Object[] args, String returnDesc, BamlCallContext ctx) {
+            String fqn, String[] names, Object[] args, BamlType returnDesc, BamlCallContext ctx) {
         return callAsync(fqn, names, args, returnDesc, ctx, null);
     }
 
     /**
      * Explicit-generics variant of
-     * {@link #callAsync(String, String[], Object[], String, BamlCallContext)}:
+     * {@link #callAsync(String, String[], Object[], BamlType, BamlCallContext)}:
      * threads a {@link BamlTypes} bag of TypeVar bindings into
      * {@code CallFunctionArgs.type_args}. Reached from the generated
      * explicit-generics overloads; a {@code null} bag is exactly the five-arg
@@ -401,7 +401,7 @@ public final class BamlFfi {
             String fqn,
             String[] names,
             Object[] args,
-            String returnDesc,
+            BamlType returnDesc,
             BamlCallContext ctx,
             BamlTypes typeArgs) {
         long callId = newCallId();
@@ -808,14 +808,14 @@ public final class BamlFfi {
     /**
      * The single result decode shared by {@link #callSync} and {@link #callAsync}:
      * the wire-and-descriptor-driven
-     * {@link ProtoReader#decodeOutboundResult(byte[], String)} that turns the
+     * {@link ProtoReader#decodeOutboundResult(byte[], BamlType)} that turns the
      * {@code BamlOutboundResult} envelope into the decoded value, or throws
      * {@link BamlError} / {@link BamlPanic}. Factored so the sync and async paths
      * cannot diverge in how they interpret an identical envelope. The async path's
      * Cancelled remap ({@link #mapAsyncFailure}) is layered on top of this shared
      * decode, not baked into it, so sync keeps the raw {@link BamlPanic}.
      */
-    private static Object decodeResult(byte[] response, String returnDesc) {
+    private static Object decodeResult(byte[] response, BamlType returnDesc) {
         return ProtoReader.decodeOutboundResult(response, returnDesc);
     }
 

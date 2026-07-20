@@ -455,32 +455,30 @@ class WireCodecTest {
         // Idempotent, so running once per suite is enough.
         TypeRegistry.registerClass(
                 RESUME_FQN, Resume.class.getName(), new String[] {"name", "age"});
-        // 4-arg overload: a parallel fieldDescs array (one descriptor per field).
+        // 4-arg overload: a parallel typed fieldDescs array (one BamlType per field).
         TypeRegistry.registerClass(
                 BOX_FQN,
                 Box.class.getName(),
                 new String[] {"payload"},
-                new String[] {"union[int;string]"});
+                new BamlType[] {BamlType.union(BamlType.INT, BamlType.STRING)});
         TypeRegistry.registerEnum(
                 SENTIMENT_FQN,
                 Sentiment.class.getName(),
                 new String[] {"Positive", "new$"}, // Java constants
                 new String[] {"Positive", "new"}); // wire variants
-        // Signature = sorted arm tokens joined with `|`; arm tokens + record
-        // names in declaration order (int|string).
+        // Keyed structurally by the arm SET; arm tokens + record names in
+        // declaration order (int, string).
         TypeRegistry.registerUnion(
-                "int|string",
                 IntOrString.class.getName(),
-                new String[] {"int", "string"},
+                new BamlType[] {BamlType.INT, BamlType.STRING},
                 new String[] {
                     IntOrString.IntValue.class.getName(), IntOrString.StringValue.class.getName()
                 });
-        // Signature = sorted arm tokens (`list<int>` < `list<string>`); arm
-        // tokens + records in declaration order (int[] = arm0, string[] = arm1).
+        // Arm set {list<int>, list<string>}; arm tokens + records in declaration
+        // order (int[] = arm0, string[] = arm1).
         TypeRegistry.registerUnion(
-                "list<int>|list<string>",
                 ListUnion.class.getName(),
-                new String[] {"list<int>", "list<string>"},
+                new BamlType[] {BamlType.list(BamlType.INT), BamlType.list(BamlType.STRING)},
                 new String[] {
                     ListUnion.IntListValue.class.getName(),
                     ListUnion.StrListValue.class.getName()
@@ -817,7 +815,7 @@ class WireCodecTest {
     @Test
     void decode_desc_union_bare_int_arm0() {
         Object decoded =
-                ProtoReader.decodeOutboundResult(okEnvelope(ovInt(1)), "union[int;string]");
+                ProtoReader.decodeOutboundResult(okEnvelope(ovInt(1)), BamlType.union(BamlType.INT, BamlType.STRING));
         Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
         assertEquals(1L, arm.value());
     }
@@ -826,7 +824,7 @@ class WireCodecTest {
     @Test
     void decode_desc_union_bare_string_arm1() {
         Object decoded =
-                ProtoReader.decodeOutboundResult(okEnvelope(ovString("hi")), "union[int;string]");
+                ProtoReader.decodeOutboundResult(okEnvelope(ovString("hi")), BamlType.union(BamlType.INT, BamlType.STRING));
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
         assertEquals("hi", arm.value());
     }
@@ -841,7 +839,7 @@ class WireCodecTest {
         // self_type deliberately unregistered/irrelevant — the desc wins.
         byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
         Object decoded = ProtoReader.decodeOutboundResult(
-                okEnvelope(ovUnion(selfType, ovInt(7))), "union[int;string]");
+                okEnvelope(ovUnion(selfType, ovInt(7))), BamlType.union(BamlType.INT, BamlType.STRING));
         Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
         assertEquals(7L, arm.value());
     }
@@ -851,7 +849,7 @@ class WireCodecTest {
     void decode_desc_union_variant_wrapped_string_arm1() {
         byte[] selfType = tyUnion(tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING));
         Object decoded = ProtoReader.decodeOutboundResult(
-                okEnvelope(ovUnion(selfType, ovString("yo"))), "union[int;string]");
+                okEnvelope(ovUnion(selfType, ovString("yo"))), BamlType.union(BamlType.INT, BamlType.STRING));
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
         assertEquals("yo", arm.value());
     }
@@ -859,20 +857,20 @@ class WireCodecTest {
     /** T|null collapses in codegen to just T: desc "int", a bare int → the bare Long. */
     @Test
     void decode_desc_optional_collapses_to_base() {
-        assertEquals(42L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(42)), "int"));
+        assertEquals(42L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(42)), BamlType.INT));
     }
 
     /** T|null collapse: desc "int", a null wire value → null. */
     @Test
     void decode_desc_optional_null_is_null() {
-        assertNull(ProtoReader.decodeOutboundResult(okEnvelope(ovNull()), "int"));
+        assertNull(ProtoReader.decodeOutboundResult(okEnvelope(ovNull()), BamlType.INT));
     }
 
     /** A class-arm union via FQN desc: the class_value lands on the FQN arm. */
     @Test
     void decode_desc_union_class_arm_via_fqn() {
         Object decoded = ProtoReader.decodeOutboundResult(
-                okEnvelope(ovResume("Alice", 30L)), "union[" + RESUME_FQN + ";string]");
+                okEnvelope(ovResume("Alice", 30L)), BamlType.union(BamlType.classByFqn(RESUME_FQN), BamlType.STRING));
         Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
         Resume r = assertInstanceOf(Resume.class, arm.value());
         assertEquals("Alice", r.name());
@@ -884,14 +882,14 @@ class WireCodecTest {
     void decode_desc_union_no_arm_match_throws() {
         assertThrows(
                 BamlError.class,
-                () -> ProtoReader.decodeOutboundResult(okEnvelope(ovBool(true)), "union[int;string]"));
+                () -> ProtoReader.decodeOutboundResult(okEnvelope(ovBool(true)), BamlType.union(BamlType.INT, BamlType.STRING)));
     }
 
     /** A registered class FQN desc constructs the generated class (fieldDescs unused here). */
     @Test
     void decode_desc_fqn_constructs_registered_class() {
         Object decoded =
-                ProtoReader.decodeOutboundResult(okEnvelope(ovResume("Bob", 40L)), RESUME_FQN);
+                ProtoReader.decodeOutboundResult(okEnvelope(ovResume("Bob", 40L)), BamlType.classByFqn(RESUME_FQN));
         Resume r = assertInstanceOf(Resume.class, decoded);
         assertEquals("Bob", r.name());
         assertEquals(40L, r.age());
@@ -918,8 +916,9 @@ class WireCodecTest {
         ov.writeMessage(OV_CLASS, cls.toByteArray());
 
         // Return the Box directly by its FQN desc; its `payload` field carries the
-        // union[int;string] descriptor, so a bare string lands on Union2.Arm1.
-        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()), BOX_FQN);
+        // int|string union descriptor, so a bare string lands on Union2.Arm1.
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ov.toByteArray()), BamlType.classByFqn(BOX_FQN));
         Box box = assertInstanceOf(Box.class, decoded);
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, box.payload());
         assertEquals("wrapped", arm.value());
@@ -944,56 +943,53 @@ class WireCodecTest {
         assertEquals(3L, b.value());
     }
 
-    /** An unparseable / tv: / unknown descriptor falls back to the wire-driven path. */
+    /** A TypeVar / UNKNOWN (decode-only) descriptor falls back to the wire-driven path. */
     @Test
-    void decode_unparseable_desc_falls_back_to_wire_driven() {
+    void decode_wildcard_desc_falls_back_to_wire_driven() {
         byte[] envelope = okEnvelope(ovInt(9));
-        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "tv:T"));
-        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "unknown"));
-        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, "union[")); // malformed
+        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, BamlType.typeVar("T")));
+        assertEquals(9L, ProtoReader.decodeOutboundResult(envelope, BamlType.UNKNOWN));
     }
 
     /**
-     * A string literal carrying a descriptor separator (`;`) survives the
-     * `union[...]` grammar: the emitter percent-escapes it in the descriptor
-     * (`lit:string:a%3Bb`) and the wire tokenizer escapes identically, so the
-     * literal arm still matches and the raw value round-trips.
+     * A string literal carrying what used to be a grammar separator (`;`) rides
+     * RAW through the typed descriptor — there is no grammar to collide with, so
+     * no escaping. The literal arm is matched by value and the raw value
+     * round-trips.
      */
     @Test
-    void decode_desc_union_literal_with_structural_char_matches_escaped() {
+    void decode_desc_union_literal_with_structural_char_matches_raw() {
         Object decoded = ProtoReader.decodeOutboundResult(
-                okEnvelope(ovLiteralString("a;b")), "union[lit:string:a%3Bb;int]");
+                okEnvelope(ovLiteralString("a;b")),
+                BamlType.union(BamlType.literalString("a;b"), BamlType.INT));
         Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
         assertEquals("a;b", arm.value());
     }
 
     /**
-     * Registering the same union signature under a DIFFERENT sealed interface is
-     * an identity conflict (two unions sharing one key — decode would silently
-     * reify onto whichever won the slot) and throws, rather than first-winning.
-     * A re-registration under the SAME interface stays idempotent.
+     * Registering the same union arm SET under a DIFFERENT sealed interface is an
+     * identity conflict (two unions sharing one key — decode would silently reify
+     * onto whichever won the slot) and throws, rather than first-winning. A
+     * re-registration under the SAME interface stays idempotent.
      */
     @Test
     void register_union_conflicting_sealed_interface_throws() {
         TypeRegistry.registerUnion(
-                "conflict-sig",
                 "baml_sdk.x.UnionA",
-                new String[] {"int"},
+                new BamlType[] {BamlType.INT},
                 new String[] {"baml_sdk.x.UnionA$IntValue"});
-        // Same signature + same interface: idempotent no-op (no throw).
+        // Same arm set + same interface: idempotent no-op (no throw).
         TypeRegistry.registerUnion(
-                "conflict-sig",
                 "baml_sdk.x.UnionA",
-                new String[] {"int"},
+                new BamlType[] {BamlType.INT},
                 new String[] {"baml_sdk.x.UnionA$IntValue"});
-        // Same signature + DIFFERENT interface: conflict.
+        // Same arm set {int} + DIFFERENT interface: conflict.
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
                 () -> TypeRegistry.registerUnion(
-                        "conflict-sig",
                         "baml_sdk.x.UnionB",
-                        new String[] {"string"},
-                        new String[] {"baml_sdk.x.UnionB$StringValue"}));
+                        new BamlType[] {BamlType.INT},
+                        new String[] {"baml_sdk.x.UnionB$IntValue"}));
         assertTrue(ex.getMessage().contains("conflicting union registration"), ex.getMessage());
     }
 
@@ -1055,7 +1051,7 @@ class WireCodecTest {
     void decode_desc_union_empty_typed_int_list_picks_int_arm() {
         byte[] env = okEnvelope(ovListTyped(tyPrimitive(PRIM_INT))); // empty int[]
         Object decoded =
-                ProtoReader.decodeOutboundResult(env, "union[list<string>;list<int>]");
+                ProtoReader.decodeOutboundResult(env, BamlType.union(BamlType.list(BamlType.STRING), BamlType.list(BamlType.INT)));
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
         assertEquals(List.of(), arm.value());
     }
@@ -1068,7 +1064,7 @@ class WireCodecTest {
     void decode_desc_union_empty_typed_string_list_picks_string_arm_regardless_of_order() {
         byte[] env = okEnvelope(ovListTyped(tyPrimitive(PRIM_STRING))); // empty string[]
         Object decoded =
-                ProtoReader.decodeOutboundResult(env, "union[list<int>;list<string>]");
+                ProtoReader.decodeOutboundResult(env, BamlType.union(BamlType.list(BamlType.INT), BamlType.list(BamlType.STRING)));
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
         assertEquals(List.of(), arm.value());
     }
@@ -1078,7 +1074,7 @@ class WireCodecTest {
     void decode_desc_union_untyped_list_falls_back_to_first_list_arm() {
         byte[] env = okEnvelope(ovListUntyped(ovInt(1))); // [1], no item_type
         Object decoded =
-                ProtoReader.decodeOutboundResult(env, "union[list<string>;list<int>]");
+                ProtoReader.decodeOutboundResult(env, BamlType.union(BamlType.list(BamlType.STRING), BamlType.list(BamlType.INT)));
         // Bare "list" is an element-type wildcard → the FIRST list arm (Arm0),
         // even though the sole element is an int. This is the back-compat lane.
         Union2.Arm0<?, ?> arm = assertInstanceOf(Union2.Arm0.class, decoded);
@@ -1090,7 +1086,7 @@ class WireCodecTest {
     void decode_desc_union_empty_typed_map_picks_matching_value_type_arm() {
         byte[] env = okEnvelope(ovMapTyped(tyPrimitive(PRIM_STRING), tyPrimitive(PRIM_INT)));
         Object decoded = ProtoReader.decodeOutboundResult(
-                env, "union[map<string,string>;map<string,int>]");
+                env, BamlType.union(BamlType.map(BamlType.STRING, BamlType.STRING), BamlType.map(BamlType.STRING, BamlType.INT)));
         Union2.Arm1<?, ?> arm = assertInstanceOf(Union2.Arm1.class, decoded);
         assertEquals(Map.of(), arm.value());
     }

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.internal.WireWriter;
 
@@ -187,5 +189,56 @@ class BamlTypeTest {
         media.writeMessage(TY_MEDIA, new byte[0]);
         byte[] wire = classTyWire("foo.Bar", media.toByteArray());
         assertNull(BamlType.fromWireTy(wire));
+    }
+
+    // -- decode-only hints (typeVar / UNKNOWN / classByFqn) ------------------
+
+    @Test
+    void decode_only_hints_never_encode() {
+        // TypeVar and UNKNOWN are host-side decode descriptors, not values — they
+        // must never ride the encode wire.
+        IllegalStateException tv = assertThrows(
+                IllegalStateException.class, () -> BamlType.typeVar("T").toWireTy());
+        assertTrue(tv.getMessage().contains("decode-only"), tv.getMessage());
+        IllegalStateException uk = assertThrows(
+                IllegalStateException.class, BamlType.UNKNOWN::toWireTy);
+        assertTrue(uk.getMessage().contains("decode-only"), uk.getMessage());
+        // They are wildcards in structural matching (match any wire token).
+        assertTrue(BamlType.UNKNOWN.matchesStructural(BamlType.INT));
+        assertTrue(BamlType.typeVar("T").matchesStructural(BamlType.list(BamlType.STRING)));
+    }
+
+    @Test
+    void class_by_fqn_needs_no_registration_and_has_value_semantics() {
+        // classByFqn names a type by BAML FQN without a TypeRegistry lookup (so it
+        // spells runtime-owned / not-yet-loaded types too).
+        BamlType a = BamlType.classByFqn("baml.llm.Stream");
+        assertEquals(BamlType.classByFqn("baml.llm.Stream"), a);
+        assertEquals("baml.llm.Stream", a.fqn());
+        // A generic-args form is distinct from the bare form (distinct registry keys).
+        BamlType g = BamlType.classByFqn("user.g.Wrapper", BamlType.INT);
+        assertNotEquals(BamlType.classByFqn("user.g.Wrapper"), g);
+        assertNotEquals(g, BamlType.classByFqn("user.g.Wrapper", BamlType.STRING));
+    }
+
+    @Test
+    void compare_to_is_structural_and_consistent_with_equals() {
+        // A total order over the same fields equals() rides — 0 iff equal.
+        assertEquals(0, BamlType.INT.compareTo(BamlType.INT));
+        assertNotEquals(0, BamlType.INT.compareTo(BamlType.STRING));
+        assertEquals(
+                -BamlType.STRING.compareTo(BamlType.INT),
+                BamlType.INT.compareTo(BamlType.STRING));
+        // Distinct literal values order deterministically (no rendered-string key).
+        assertNotEquals(0, BamlType.literalInt(1).compareTo(BamlType.literalInt(2)));
+        // A sorted+distinct arm list is a stable structural key.
+        java.util.List<BamlType> a = new java.util.ArrayList<>(
+                java.util.List.of(BamlType.STRING, BamlType.INT, BamlType.INT));
+        java.util.List<BamlType> b = new java.util.ArrayList<>(
+                java.util.List.of(BamlType.INT, BamlType.STRING));
+        a = a.stream().distinct().sorted().toList();
+        b = b.stream().distinct().sorted().toList();
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
     }
 }

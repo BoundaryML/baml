@@ -78,13 +78,15 @@ Sync and async generated functions share the same outbound decoder:
 diverge in how they interpret an identical envelope" (`BamlFfi.java:459-471`).
 
 > ⚠ **Deviation from Python:** Java threads a **type-directed return
-> descriptor** (`returnDesc`) alongside the envelope bytes. The generated
-> binding passes a descriptor string for its declared return type; a `null`
-> descriptor is the pre-descriptor, wire-driven behavior. Python has no such
-> channel — "the caller's Python return annotation does not drive runtime
-> decoding." This descriptor is what lands a union result on the generic
-> `Union{k}.Arm{i}` family and reifies nested class/list/map fields against the
-> declared shape. See **Decoder Implementation Details**.
+> descriptor** (`returnDesc`, a typed `baml_bridge.BamlType`) alongside the
+> envelope bytes. The generated binding passes a `BamlType` data structure for
+> its declared return type (built with the public builders — `BamlType.union(…)`,
+> `BamlType.list(…)`, `BamlType.classByFqn("…")`, …); a `null` descriptor is the
+> pre-descriptor, wire-driven behavior. Python has no such channel — "the
+> caller's Python return annotation does not drive runtime decoding." This
+> descriptor is what lands a union result on the generic `Union{k}.Arm{i}` family
+> and reifies nested class/list/map fields against the declared shape. See
+> **Decoder Implementation Details**.
 
 ## Outbound Result Envelope
 
@@ -118,7 +120,7 @@ message BamlOutboundPanic {
 
 | Envelope arm | Java behavior |
 | --- | --- |
-| `ok` (field 1) | Decodes with `decodeWithDesc(okBytes, parseDesc(returnDesc), lenient=false)` and returns it (`ProtoReader.java:217`). |
+| `ok` (field 1) | Decodes with `decodeWithDesc(okBytes, returnDesc, lenient=false)` — `returnDesc` is a typed `BamlType`, no parse step — and returns it. |
 | absent oneof | Returns `null` (an all-default envelope is a null `ok`; `ProtoReader.java:219`). Pinned by `WireCodecTest.decode_ok_absent_oneof_is_null`. |
 | `error` (`baml.errors.TypeMismatch`) | Throws a native `IllegalArgumentException` (message from the decoded value, BAML trace spliced in), **not** a `BamlError` (`ProtoReader.java:248-251`). |
 | `error` (other) | Decodes `error.value` and throws `BamlError(value, trace, className)`, with BAML frames spliced onto the stack (`ProtoReader.java:252`). |
@@ -317,9 +319,9 @@ descriptor when one is present, and otherwise delegates straight to
 > (at-cap passes, over-cap rejects, malformed hex rejects, both read sites).
 
 The caller's Java return type does not, by itself, drive runtime decoding: the
-generated binding passes an explicit descriptor string. Decoding is driven by
-the outbound wire payload plus that descriptor plus the installed
-`TypeRegistry`.
+generated binding passes an explicit descriptor (a typed `baml_bridge.BamlType`).
+Decoding is driven by the outbound wire payload plus that descriptor plus the
+installed `TypeRegistry`.
 
 ## Decoder Implementation Details
 
@@ -353,37 +355,36 @@ public static Object decodeValue(WireReader r, boolean lenient) {
 ### Type-directed decode (the Java-specific overlay)
 
 > ⚠ **Deviation from Python:** Java has an entire descriptor-driven decode path
-> (`ProtoReader.java:916-1233`) with no Python counterpart. A generated binding
-> passes a descriptor string for its declared return type (grammar in the `Desc`
-> class, `:1296-1363`, and `parseDesc` `:1369-1382`); `decodeWithDesc`
-> dispatches on it:
+> with no Python counterpart. A generated binding passes a typed
+> `baml_bridge.BamlType` for its declared return type — a **data structure, not a
+> parsed string** (there is no `Desc`/`parseDesc`; the descriptor is the
+> `BamlType` itself); `decodeWithDesc` dispatches on `desc.kind()`:
 >
-> - `list<D>` → `decodeListWithDesc` (recurses element decode through `D`; `:965-984`)
-> - `map<K,D>` → `decodeMapWithDesc` (recurses value decode through `D`; `:987-1018`)
-> - an FQN → `decodeFqnWithDesc` (`:1026-1060`)
-> - `union[D;D;…]` → `decodeUnionWithDesc` (`:1141-1170`)
-> - a primitive / literal / `tv:` / `unknown` / unparseable descriptor → falls
->   straight back to the wire-driven `decodeValue` (`:952-961`; `parseDesc`
->   returns `null` on trailing garbage, `:1381`)
+> - `LIST` → `decodeListWithDesc` (recurses element decode through `desc.listItem()`)
+> - `MAP` → `decodeMapWithDesc` (recurses value decode through `desc.mapValue()`)
+> - `CLASS` / `ENUM` (a named type by FQN) → `decodeFqnWithDesc`
+> - `UNION` → `decodeUnionWithDesc` (matches the wire value against the arms
+>   structurally via `armMatchesValue`, in declaration order)
+> - a primitive / literal / `TYPEVAR` / `UNKNOWN` descriptor → falls straight back
+>   to the wire-driven `decodeValue`
 >
 > A `null` descriptor is exactly the pre-descriptor wire-driven behavior, so the
 > three-arg `callSync` / one-arg `decodeOutboundResult` overloads keep Python's
-> shape. Pinned by `WireCodecTest.decode_desc_*` and the regression
+> shape. Pinned by `WireCodecTest.decode_desc_*` and the regressions
 > `decode_null_desc_keeps_wire_driven_registered_record` /
-> `decode_unparseable_desc_falls_back_to_wire_driven`.
+> `decode_wildcard_desc_falls_back_to_wire_driven`.
 
 `decodeFqnWithDesc` (`ProtoReader.java:1026-1060`) is where the descriptor
 decides the kind — this is the piece the task calls out as **type-directed
 `decodeFqnWithDesc` vs Python's registry-only** lookup:
 
 - `TypeRegistry.isClass(fqn)` → `decodeClassWithDesc`, reifying each field
-  through its **per-field descriptor** (`registerClass(..., fieldDescs)`,
-  `TypeRegistry.java:97-108`; decode at `ProtoReader.java:1068-1130`). Pinned by
-  `WireCodecTest.decode_desc_class_field_uses_field_descs`.
+  through its **per-field descriptor** (`registerClass(..., BamlType[] fieldDescs)`).
+  Pinned by `WireCodecTest.decode_desc_class_field_uses_field_descs`.
 - `TypeRegistry.isUnionKey(fqn)` (a **named recursive alias**) → unwrap any
   union wrapper, then reify onto the registered nominal record via
-  `constructUnion`, recursing the arm's inner value through the arm's own token
-  as a descriptor (`:1034-1057`).
+  `constructUnionForFqn`, recursing the arm's inner value through the matched
+  arm's own `BamlType` as a descriptor.
 - an enum, or an unresolved FQN → wire-driven `decodeValue` (`:1058-1059`).
 
 > ⚠ **Deviation from Python:** Python's outbound decode is **registry-only** —
@@ -515,19 +516,19 @@ and `value` (field 6). It **deliberately ignores `value_option_name` (field 5)**
 the Javadoc states it plainly: *"its `value_option_name` is unreliable, so the
 arm is resolved structurally."* The resolution is:
 
-1. inner null (absent `value`, or a `null_value` arm) → `null` (`:465-472`;
-   pinned by `decode_union_null_inner_is_null`).
-2. `signature = unionSignature(self_type)` — tokenize the `self_type` `BamlTy`
-   into arm tokens, drop `null`, sort, dedup, `|`-join (`:485-529`).
-3. `discriminator = innerDiscriminator(inner)` — a token describing the inner
-   value's own shape (primitive kind, class/enum FQN, `list`/`map` sentinel, or
-   `lit:base:value`; `:694-743`).
-4. `record = TypeRegistry.constructUnion(signature, discriminator, inner)`
-   (`:476`) — a registered signature whose arm matches yields the generated
-   nominal wrapper record; the arm is chosen from the inner value's shape, not
-   its wire position.
-5. **fallback (load-bearing):** the bare decoded inner value, when the signature
-   is unregistered or no arm matches (`:481-482`).
+1. inner null (absent `value`, or a `null_value` arm) → `null` (pinned by
+   `decode_union_null_inner_is_null`).
+2. read the `self_type` `BamlTy` into its arm `BamlType`s — `wireArmType` per
+   option, dropping `null` / unrepresentable arms. A **resolved union** yields
+   the arm set (keyed structurally, a sorted+distinct `List<BamlType>`); a
+   recursive-alias **node** yields its FQN (`selfTypeArms` / `selfTypeFqn`).
+3. `record = TypeRegistry.constructUnionForArms(arms, valueBytes, inner)` (or
+   `constructUnionForFqn(fqn, …)`) — the arm is picked **structurally** from the
+   inner value's own shape (`armMatchesValue`, not the wire position); a
+   registered union whose arm matches yields the generated nominal wrapper
+   record.
+4. **fallback (load-bearing):** the bare decoded inner value, when the arm set /
+   FQN is unregistered or no arm matches.
 
 > ⚠ **Deviation from Python — precise contrast on union metadata.** The Python
 > doc says the `union_variant_value` arm returns the "recursively decoded inner
@@ -537,7 +538,8 @@ arm is resolved structurally."* The resolution is:
 > but rather than discarding the metadata it uses `self_type` (field 4)
 > *structurally* — tokenized and matched against the inner value's own shape — to
 > **reconstruct a typed wrapper**: a registered nominal record via
-> `constructUnion`, or (on the descriptor path) a generic `Union{k}.Arm{i}`.
+> `constructUnionForArms` / `constructUnionForFqn`, or (on the descriptor path) a
+> generic `Union{k}.Arm{i}`.
 > So the two bridges agree on distrusting `value_option_name`, but diverge on the
 > result: Python returns the bare inner; Java preserves the union as a generated
 > Java type when it can, and only *falls back* to the bare inner (Python's
@@ -548,13 +550,12 @@ arm is resolved structurally."* The resolution is:
 > `…_literal_arms_fall_back_to_bare_inner` (a literal-over-one-base union is
 > erased in codegen, never registered → bare inner).
 
-On the **descriptor** path, `decodeUnionWithDesc` (`ProtoReader.java:1141-1170`)
-is even more explicit that the wire arm order is untrusted: it unwraps any
-`union_variant_value`, then matches the (unwrapped) wire value against the
-**declared arms in order** by wire kind, wrapping the first match in
-`baml_bridge.Union{k}.Arm{i}` (`wrapArm` reflectively constructs the record,
-`:1214-1233`). No arm match throws `BamlError` (`:1165-1169`; pinned by
-`decode_desc_union_no_arm_match_throws`). The comment is decisive: *"the wire
+On the **descriptor** path, `decodeUnionWithDesc` is even more explicit that the
+wire arm order is untrusted: it unwraps any `union_variant_value`, then matches
+the (unwrapped) wire value against the **declared arms in order** structurally
+(`armMatchesValue`), wrapping the first match in `baml_bridge.Union{k}.Arm{i}`
+(`wrapArm` reflectively constructs the record). No arm match throws `BamlError`
+(pinned by `decode_desc_union_no_arm_match_throws`). The comment is decisive: *"the wire
 carries no trustworthy arm order."* Pinned by `decode_desc_union_bare_int_arm0`,
 `…_bare_string_arm1`, `…_variant_wrapped_int_arm0`, `…_class_arm_via_fqn`.
 
@@ -916,10 +917,11 @@ Java decoding proceeds mechanically over the same outbound tree:
    `decodeClass`.
 6. **Unions** are where the Java decode diverges most, and how they decode
    depends on whether the caller supplied a return descriptor:
-   - **Wire-driven** (no descriptor): `decodeUnionVariant` tokenizes `self_type`,
-     matches the arm from the inner value's shape, and constructs the registered
-     nominal wrapper record — or falls back to the bare inner
-     (`ProtoReader.java:452-483`). `Invoice.payment` (`CardPayment | WirePayment
+   - **Wire-driven** (no descriptor): `decodeUnionVariant` reads `self_type` into
+     its arm `BamlType`s (structural registry key), matches the arm from the inner
+     value's shape (`armMatchesValue`), and constructs the registered nominal
+     wrapper record — or falls back to the bare inner. `Invoice.payment`
+     (`CardPayment | WirePayment
      | null`) reifies to a registered union record whose arm is chosen by the
      inner class FQN; the `null` case decodes to bare `null`. `featured`
      (`Invoice | PostalAddress | string | null`) likewise. `flags`

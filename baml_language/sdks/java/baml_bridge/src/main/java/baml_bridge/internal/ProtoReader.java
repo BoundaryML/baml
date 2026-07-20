@@ -13,7 +13,6 @@ import baml_sdk.baml.media.Video;
 import java.lang.reflect.Constructor;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,7 +181,7 @@ public final class ProtoReader {
     /**
      * Decode a {@code BamlOutboundResult} envelope with no return-type descriptor
      * (wire-driven decode — the pre-descriptor behavior). Equivalent to
-     * {@link #decodeOutboundResult(byte[], String)} with a {@code null} descriptor.
+     * {@link #decodeOutboundResult(byte[], BamlType)} with a {@code null} descriptor.
      */
     public static Object decodeOutboundResult(byte[] data) {
         return decodeOutboundResult(data, null);
@@ -196,14 +195,14 @@ public final class ProtoReader {
      * {@link baml_bridge.BamlFfi#runExitFlushHooks() exit-flush hooks} and then
      * terminates the process via {@code Runtime.getRuntime().halt(exit_code)}.
      *
-     * <p>{@code returnDesc} is the type-directed decode descriptor for the
-     * declared return type (see {@code ref-java-codegen-conventions.md}); when
-     * non-null it drives the {@code ok}-arm decode against the declared shape
+     * <p>{@code returnDesc} is the type-directed decode descriptor ({@link BamlType})
+     * for the declared return type (see {@code ref-java-codegen-conventions.md});
+     * when non-null it drives the {@code ok}-arm decode against the declared shape
      * (unions land on the {@code Union{k}} arm family, chosen from the declared
      * arm order). {@code error}/{@code panic} values always stay wire-driven — a
      * thrown BAML value is self-describing and carries no host return type.
      */
-    public static Object decodeOutboundResult(byte[] data, String returnDesc) {
+    public static Object decodeOutboundResult(byte[] data, BamlType returnDesc) {
         WireReader r = new WireReader(data);
         int arm = 0;
         byte[] okBytes = null;
@@ -232,7 +231,7 @@ public final class ProtoReader {
         return switch (arm) {
             case RESULT_ERROR -> throw decodeError(errBytes);
             case RESULT_PANIC -> throw decodePanic(panicBytes);
-            case RESULT_OK -> decodeWithDesc(okBytes, parseDesc(returnDesc), false);
+            case RESULT_OK -> decodeWithDesc(okBytes, returnDesc, false);
             // Absent oneof: an all-default envelope is a null `ok`.
             default -> null;
         };
@@ -593,12 +592,14 @@ public final class ProtoReader {
      * union variant for a union of &ge;2 non-null arms (a {@code T|null} optional
      * arrives as the bare value/null), and its {@code value_option_name} is
      * unreliable, so the arm is resolved structurally: the {@code self_type}
-     * ({@code BamlTy}) is tokenized (dropping {@code null}) into the sorted
-     * signature the {@link TypeRegistry} keys on, and the arm within it is picked
-     * from the inner value's own shape. A registered signature whose arm matches
-     * yields the generated wrapper record; an unregistered signature or an
-     * unmatched arm falls back to the bare decoded inner value — literal-over-one-
-     * base unions are erased to that base in codegen and never registered.
+     * ({@code BamlTy}) is read into its arm {@link BamlType}s — a resolved union
+     * keys the registry by its arm set, a recursive-alias node by its FQN — and the
+     * arm within it is picked from the inner value's own shape
+     * ({@link TypeRegistry#unionArmTokenForFqn} / the arm-set entry's pick). A
+     * registered union whose arm matches yields the generated wrapper record; an
+     * unregistered union or an unmatched arm falls back to the bare decoded inner
+     * value — literal-over-one-base unions are erased to that base in codegen and
+     * never registered.
      */
     private static Object decodeUnionVariant(WireReader r, boolean lenient) {
         byte[] selfTypeBytes = null;
@@ -622,9 +623,16 @@ public final class ProtoReader {
             return null;
         }
         if (selfTypeBytes != null) {
-            String signature = unionSignature(selfTypeBytes);
-            String discriminator = innerDiscriminator(new WireReader(innerValueBytes));
-            Object record = TypeRegistry.constructUnion(signature, discriminator, inner);
+            List<BamlType> arms = selfTypeArms(new WireReader(selfTypeBytes));
+            Object record;
+            if (arms != null) {
+                record = TypeRegistry.constructUnionForArms(arms, innerValueBytes, inner);
+            } else {
+                String fqn = selfTypeFqn(new WireReader(selfTypeBytes));
+                record = fqn == null
+                        ? null
+                        : TypeRegistry.constructUnionForFqn(fqn, innerValueBytes, inner);
+            }
             if (record != null) {
                 return record;
             }
@@ -633,133 +641,90 @@ public final class ProtoReader {
         return inner;
     }
 
-    /** The sorted {@code |}-joined arm-token signature of a union's {@code self_type}. */
-    private static String unionSignature(byte[] selfTypeBytes) {
-        List<String> arms = tyArms(new WireReader(selfTypeBytes));
-        arms.removeIf("null"::equals);
-        Collections.sort(arms);
-        // Duplicate-insensitive: the engine's runtime union type keeps
-        // duplicate arms (e.g. `int | int | string`) that the emitter-side
-        // registration (TIR, dedup'd) never sees.
-        java.util.List<String> distinct = arms.stream().distinct().toList();
-        return String.join("|", distinct);
-    }
-
     /**
-     * The arm tokens of a {@code self_type} {@code BamlTy}: a union expands to one
-     * token per option; an optional to {@code token(inner)} plus an implicit
-     * {@code "null"} (dropped later); anything else is a single-arm token.
+     * The arm {@link BamlType}s of a resolved-union {@code self_type} (declaration
+     * order; {@code null} / unrepresentable arms dropped, exactly as the emitter
+     * strips the null arm before registration), or {@code null} when the
+     * {@code self_type} is not a union — the caller then tries the alias-FQN path.
      */
-    private static List<String> tyArms(WireReader ty) {
-        List<String> arms = new ArrayList<>();
+    private static List<BamlType> selfTypeArms(WireReader ty) {
         while (ty.hasRemaining()) {
             int tag = ty.readTag();
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
             if (field == TY_UNION) {
+                List<BamlType> arms = new ArrayList<>();
                 WireReader u = ty.readMessage();
                 while (u.hasRemaining()) {
                     int t = u.readTag();
                     if (WireReader.fieldOf(t) == TY_UNION_OPTIONS) {
-                        arms.add(tyToken(u.readMessage()));
+                        BamlType arm = wireArmType(u.readMessage());
+                        if (arm != null) {
+                            arms.add(arm);
+                        }
                     } else {
                         u.skipField(WireReader.wireOf(t));
                     }
                 }
-            } else if (field == TY_OPTIONAL) {
-                arms.add(tyToken(subTy(ty.readMessage(), TY_OPTIONAL_INNER)));
-                arms.add("null");
-            } else {
-                String t = tyTokenForArm(field, wire, ty);
-                if (t != null) {
-                    arms.add(t);
-                }
+                return arms;
             }
+            ty.skipField(wire);
         }
-        return arms;
+        return null;
     }
 
-    /** The single arm token for a {@code BamlTy} message (reads its oneof arm). */
-    private static String tyToken(WireReader ty) {
-        if (ty == null) {
-            return "?";
-        }
-        String token = "?";
+    /**
+     * The FQN of a {@code self_type} that is a single named node
+     * (class / enum / recursive-alias), or {@code null} otherwise.
+     */
+    private static String selfTypeFqn(WireReader ty) {
         while (ty.hasRemaining()) {
             int tag = ty.readTag();
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
-            String t = tyTokenForArm(field, wire, ty);
-            if (t != null) {
-                token = t;
+            if (field == TY_CLASS || field == TY_ENUM || field == TY_TYPE_ALIAS) {
+                return nameField(ty.readMessage());
             }
+            ty.skipField(wire);
         }
-        return token;
+        return null;
     }
 
     /**
-     * The token for a single {@code BamlTy} oneof arm whose tag was already read.
-     * Consumes the arm's value; returns null for an unrecognized field (skipped),
-     * leaving the caller's running token untouched.
+     * Read one {@code BamlTy} into its {@link BamlType}, or {@code null} when it is
+     * outside the token grammar (media / function / rust_type / void / unknown, and
+     * the {@code null} / {@code bytes} / {@code bigint} primitive kinds). Named
+     * types (class / enum / type_alias) become a bare {@link BamlType#classByFqn}
+     * (matching the emitter's arm rendering — a wire optional unwraps to its inner,
+     * type args are dropped); this is the wire counterpart of the emitter's arm
+     * builder, so a wire union's arm set equals the registered one.
      */
-    private static String tyTokenForArm(int field, int wire, WireReader r) {
-        switch (field) {
-            case TY_PRIMITIVE:
-                return primitiveToken(r.readMessage());
-            case TY_CLASS, TY_ENUM, TY_TYPE_ALIAS:
-                // Class/enum arms token as their canonical FQN; a type_alias
-                // node does too (recursive aliases keep a nominal identity —
-                // the emitter registers them under the same FQN token).
-                return nameField(r.readMessage());
-            case TY_LIST:
-                return "list<" + tyToken(subTy(r.readMessage(), TY_LIST_ITEM)) + ">";
-            case TY_MAP:
-                return mapToken(r.readMessage());
-            case TY_OPTIONAL:
-                // A nested optional (inside a list/map arm) contributes its inner
-                // token; a mismatch here only forces the safe bare-inner fallback.
-                return tyToken(subTy(r.readMessage(), TY_OPTIONAL_INNER));
-            case TY_LITERAL:
-                return literalTyToken(r.readMessage());
-            case TY_MEDIA:
-                return mediaToken(r.readMessage());
-            case TY_UNKNOWN:
-                r.skipField(wire);
-                return "unknown";
-            case TY_FUNCTION:
-                r.skipField(wire);
-                return "callable";
-            case TY_RUST_TYPE:
-                r.skipField(wire);
-                return "handle";
-            case TY_VOID:
-                r.skipField(wire);
-                return "void";
-            default:
-                r.skipField(wire);
-                return null;
+    private static BamlType wireArmType(WireReader ty) {
+        if (ty == null) {
+            return null;
         }
-    }
-
-    private static String mapToken(WireReader map) {
-        String key = "?";
-        String value = "?";
-        while (map.hasRemaining()) {
-            int tag = map.readTag();
+        BamlType result = null;
+        while (ty.hasRemaining()) {
+            int tag = ty.readTag();
             int field = WireReader.fieldOf(tag);
             int wire = WireReader.wireOf(tag);
-            if (field == TY_MAP_KEY) {
-                key = tyToken(map.readMessage());
-            } else if (field == TY_MAP_VALUE) {
-                value = tyToken(map.readMessage());
-            } else {
-                map.skipField(wire);
+            switch (field) {
+                case TY_PRIMITIVE -> result = wirePrimitiveType(ty.readMessage());
+                case TY_CLASS, TY_ENUM, TY_TYPE_ALIAS -> result = BamlType.classByFqn(nameField(ty.readMessage()));
+                case TY_LIST -> {
+                    BamlType item = wireArmType(subTy(ty.readMessage(), TY_LIST_ITEM));
+                    result = item == null ? null : BamlType.list(item);
+                }
+                case TY_MAP -> result = wireMapType(ty.readMessage());
+                case TY_OPTIONAL -> result = wireArmType(subTy(ty.readMessage(), TY_OPTIONAL_INNER));
+                case TY_LITERAL -> result = wireLiteralType(ty.readMessage());
+                default -> ty.skipField(wire);
             }
         }
-        return "map<" + key + "," + value + ">";
+        return result;
     }
 
-    private static String primitiveToken(WireReader msg) {
+    private static BamlType wirePrimitiveType(WireReader msg) {
         long kind = 0;
         while (msg.hasRemaining()) {
             int tag = msg.readTag();
@@ -770,35 +735,50 @@ public final class ProtoReader {
             }
         }
         return switch ((int) kind) {
-            case PRIM_STRING -> "string";
-            case PRIM_INT -> "int";
-            case PRIM_FLOAT -> "float";
-            case PRIM_BOOL -> "bool";
-            case PRIM_NULL -> "null";
-            case PRIM_BYTES -> "uint8array";
-            case PRIM_BIGINT -> "bigint";
-            default -> "?";
+            case PRIM_STRING -> BamlType.STRING;
+            case PRIM_INT -> BamlType.INT;
+            case PRIM_FLOAT -> BamlType.FLOAT;
+            case PRIM_BOOL -> BamlType.BOOL;
+            // null / bytes / bigint are outside the token grammar → dropped from the arm set.
+            default -> null;
         };
     }
 
-    private static String mediaToken(WireReader msg) {
-        long kind = 0;
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            if (WireReader.fieldOf(tag) == TY_MEDIA_KIND) {
-                kind = msg.readVarint();
+    private static BamlType wireMapType(WireReader map) {
+        BamlType key = null;
+        BamlType value = null;
+        while (map.hasRemaining()) {
+            int tag = map.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == TY_MAP_KEY) {
+                key = wireArmType(map.readMessage());
+            } else if (field == TY_MAP_VALUE) {
+                value = wireArmType(map.readMessage());
             } else {
-                msg.skipField(WireReader.wireOf(tag));
+                map.skipField(wire);
             }
         }
-        return switch ((int) kind) {
-            case MEDIA_IMAGE -> "media:image";
-            case MEDIA_AUDIO -> "media:audio";
-            case MEDIA_VIDEO -> "media:video";
-            case MEDIA_PDF -> "media:pdf";
-            case MEDIA_GENERIC -> "media:generic";
-            default -> "?";
-        };
+        return (key == null || value == null) ? null : BamlType.map(key, value);
+    }
+
+    private static BamlType wireLiteralType(WireReader msg) {
+        BamlType result = null;
+        while (msg.hasRemaining()) {
+            int tag = msg.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case LIT_STRING -> result = BamlType.literalString(msg.readString());
+                case LIT_INT -> result = BamlType.literalInt(msg.readVarint());
+                case LIT_BOOL -> result = BamlType.literalBool(msg.readVarint() != 0);
+                // A BamlTyLiteral bigint rides as a decimal string.
+                case LIT_BIGINT -> result = BamlType.literalBigint(new BigInteger(msg.readString()));
+                case LIT_FLOAT -> result = BamlType.literalFloat(msg.readString());
+                default -> msg.skipField(wire);
+            }
+        }
+        return result;
     }
 
     /** Read a {@code name} (field 1) string from a class/enum {@code BamlTy} sub-message. */
@@ -813,229 +793,6 @@ public final class ProtoReader {
             }
         }
         return name == null ? "?" : name;
-    }
-
-    /** Tokenize a {@code BamlTyLiteral} (its bigint/float are decimal/source strings). */
-    private static String literalTyToken(WireReader msg) {
-        String token = "?";
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            switch (field) {
-                case LIT_STRING -> token = "lit:string:" + escapeLiteralValue(msg.readString());
-                case LIT_INT -> token = "lit:int:" + msg.readVarint();
-                case LIT_BOOL -> token = "lit:bool:" + (msg.readVarint() != 0);
-                case LIT_BIGINT -> token = "lit:bigint:" + msg.readString(); // decimal
-                case LIT_FLOAT -> token = "lit:float:" + escapeLiteralValue(msg.readString());
-                default -> msg.skipField(wire);
-            }
-        }
-        return token;
-    }
-
-    /**
-     * A discriminator token for the inner {@code BamlOutboundValue}: a primitive
-     * kind, a class/enum FQN, a <em>typed</em> container token
-     * ({@code "list<int>"} / {@code "map<string,int>"}, read from the wire
-     * {@code item_type} / {@code key_type}+{@code value_type}) — falling back to
-     * the bare {@code "list"} / {@code "map"} sentinel only when that type is
-     * absent or untokenizable — or a {@code "lit:<base>:<value>"} token. The
-     * typed container tokens let a union tell {@code string[]} from {@code int[]}
-     * even when the list is EMPTY (the element type is the only evidence). The
-     * inner {@code bigint} literal channel is hex on the wire but normalized to
-     * decimal here so it matches the arm token's decimal spelling.
-     */
-    private static String innerDiscriminator(WireReader r) {
-        String token = "?";
-        while (r.hasRemaining()) {
-            int tag = r.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            switch (field) {
-                case OV_STRING -> {
-                    r.skipField(wire);
-                    token = "string";
-                }
-                case OV_INT -> {
-                    r.skipField(wire);
-                    token = "int";
-                }
-                case OV_FLOAT -> {
-                    r.skipField(wire);
-                    token = "float";
-                }
-                case OV_BOOL -> {
-                    r.skipField(wire);
-                    token = "bool";
-                }
-                case OV_BIGINT -> {
-                    r.skipField(wire);
-                    token = "bigint";
-                }
-                case OV_UINT8ARRAY -> {
-                    r.skipField(wire);
-                    token = "uint8array";
-                }
-                case OV_NULL -> {
-                    r.skipField(wire);
-                    token = "null";
-                }
-                case OV_CLASS, OV_ENUM -> token = nameField(r.readMessage());
-                case OV_LITERAL -> token = literalValueToken(r.readMessage());
-                case OV_LIST -> token = listDiscriminator(r.readMessage());
-                case OV_MAP -> token = mapDiscriminator(r.readMessage());
-                default -> r.skipField(wire);
-            }
-        }
-        return token;
-    }
-
-    /**
-     * The container discriminator token for a wire {@code list_value}: {@code
-     * "list<" + tyToken(item_type) + ">"} when the list carries a <em>precise</em>
-     * element type ({@code BamlValueList.item_type} — the engine populates it even
-     * for an empty list, so it is the sole evidence for arm selection), or the
-     * bare {@code "list"} sentinel when {@code item_type} is absent (a pre-typed
-     * wire) or {@link #impreciseInner imprecise}. The {@code list<D>} spelling
-     * matches the descriptor grammar (see {@link Desc}) so a typed list arm is
-     * told apart from a differently-typed one.
-     */
-    private static String listDiscriminator(WireReader list) {
-        WireReader itemType = null;
-        while (list.hasRemaining()) {
-            int tag = list.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            if (field == LIST_ITEM_TYPE && itemType == null) {
-                itemType = list.readMessage();
-            } else {
-                list.skipField(wire); // items and any unknown fields
-            }
-        }
-        if (itemType == null) {
-            return "list";
-        }
-        String inner = tyToken(itemType);
-        return impreciseInner(inner) ? "list" : "list<" + inner + ">";
-    }
-
-    /**
-     * Whether a container element token is <em>imprecise</em> — it proves nothing
-     * about the element type, so the container falls back to its bare base token
-     * (a wildcard that stays compatible with any same-base arm). Covers {@code "?"}
-     * (an unrecognized {@code BamlTy}) and {@code "null"} (the placeholder element
-     * type the engine emits for a recursive-alias / heterogeneous container, e.g.
-     * a {@code RecList[]} whose {@code item_type} arrives as the {@code null}
-     * primitive). Only a concrete, non-null element token (e.g. {@code "string"},
-     * {@code "int"}, an FQN) is trusted to <em>reject</em> a differently-typed arm.
-     */
-    private static boolean impreciseInner(String inner) {
-        return inner.equals("?") || inner.equals("null");
-    }
-
-    /**
-     * The container discriminator token for a wire {@code map_value}: {@code
-     * "map<" + tyToken(key_type) + "," + tyToken(value_type) + ">"} when the map
-     * carries both its key and value types ({@code BamlValueMap.key_type} /
-     * {@code value_type}), or the bare {@code "map"} sentinel when either is
-     * absent or untokenizable ({@code "?"}). The {@code map<K,V>} spelling
-     * matches the descriptor grammar (see {@link #mapToken} / {@link Desc}).
-     */
-    private static String mapDiscriminator(WireReader map) {
-        WireReader keyType = null;
-        WireReader valueType = null;
-        while (map.hasRemaining()) {
-            int tag = map.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            if (field == MAP_KEY_TYPE && keyType == null) {
-                keyType = map.readMessage();
-            } else if (field == MAP_VALUE_TYPE && valueType == null) {
-                valueType = map.readMessage();
-            } else {
-                map.skipField(wire); // entries and any unknown fields
-            }
-        }
-        if (keyType == null || valueType == null) {
-            return "map";
-        }
-        String k = tyToken(keyType);
-        String v = tyToken(valueType);
-        return (impreciseInner(k) || impreciseInner(v)) ? "map" : "map<" + k + "," + v + ">";
-    }
-
-    /**
-     * Whether a wire container discriminator token ({@code wireToken}, from
-     * {@link #innerDiscriminator}) matches a container <em>arm</em> token
-     * ({@code armToken} — a {@code list<...>} / {@code map<...>} descriptor
-     * token, or a bare {@code "list"} / {@code "map"}). Shared by both arm-picking
-     * paths (the descriptor-driven {@link #armMatchesToken} and the wire-driven
-     * {@code TypeRegistry.UnionEntry.pickArm}).
-     *
-     * <h3>Compat lattice (chosen deliberately)</h3>
-     * <ul>
-     *   <li><b>Exact</b> — identical tokens match ({@code list<int>} ≡
-     *       {@code list<int>}; bare {@code list} ≡ bare {@code list}).</li>
-     *   <li><b>Bare is an element-type wildcard</b> — if EITHER side is bare
-     *       ({@code "list"} / {@code "map"}), they match by base kind alone
-     *       ({@code list} ↔ {@code list<int>}; {@code map} ↔ {@code map<K,V>}).
-     *       A bare wire token is what a pre-typed engine (or an item type we
-     *       could not tokenize) produces; a bare arm token is a base-only
-     *       container arm. Both mean "some list/map, element type unproven", so
-     *       they stay compatible with any typed arm of the same base — preserving
-     *       the pre-fix behavior for old wires.</li>
-     *   <li><b>Typed vs differently-typed does NOT match</b> — two typed tokens
-     *       that differ are incompatible ({@code list<string>} ≠ {@code list<int>};
-     *       {@code map<string,int>} ≠ {@code map<string,string>}). This is the
-     *       correctness fix: an empty {@code int[]} no longer lands on a
-     *       {@code string[]} arm just because it was declared first.</li>
-     *   <li><b>Different base never matches</b> — {@code list<...>} ≠
-     *       {@code map<...>}.</li>
-     * </ul>
-     */
-    public static boolean containerTokenMatches(String armToken, String wireToken) {
-        if (armToken.equals(wireToken)) {
-            return true; // exact: bare≡bare or typed≡same-typed
-        }
-        String base = containerBase(wireToken);
-        if (!base.equals(containerBase(armToken))) {
-            return false; // list vs map (or a non-container token)
-        }
-        // Same base kind, tokens differ ⇒ match iff at least one is bare (an
-        // unproven-element wildcard); two differing typed tokens are rejected.
-        return isBareContainer(wireToken) || isBareContainer(armToken);
-    }
-
-    /** Whether {@code token} is a bare (base-only) container discriminator. */
-    private static boolean isBareContainer(String token) {
-        return token.equals("list") || token.equals("map");
-    }
-
-    /** The base kind of a container token ({@code "list<int>"} → {@code "list"}). */
-    private static String containerBase(String token) {
-        int lt = token.indexOf('<');
-        return lt < 0 ? token : token.substring(0, lt);
-    }
-
-    /** Tokenize a {@code BamlLiteralValue} (outbound); its bigint channel is hex. */
-    private static String literalValueToken(WireReader msg) {
-        String token = "?";
-        while (msg.hasRemaining()) {
-            int tag = msg.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            switch (field) {
-                case LIT_STRING -> token = "lit:string:" + escapeLiteralValue(msg.readString());
-                case LIT_INT -> token = "lit:int:" + msg.readVarint();
-                case LIT_BOOL -> token = "lit:bool:" + (msg.readVarint() != 0);
-                // Hex on the wire → decimal, matching the arm token's spelling.
-                case LIT_BIGINT -> token = "lit:bigint:" + parseHexBigInt(msg.readString());
-                case LIT_FLOAT -> token = "lit:float:" + escapeLiteralValue(msg.readString());
-                default -> msg.skipField(wire);
-            }
-        }
-        return token;
     }
 
     /** The first {@code wantField} sub-message of {@code msg} as a reader, or null. */
@@ -1198,53 +955,56 @@ public final class ProtoReader {
     // ========================================================================
     // Type-directed decode (descriptor-driven).
     //
-    // A generated binding passes a descriptor string for its declared return
-    // type (and per-field descriptors on registerClass). The descriptor drives
-    // decode against the *declared* shape — most importantly it lands a union
-    // result on the generic `baml_bridge.Union{k}.Arm{i}` family, picking the arm
-    // from the DECLARED arm order (the wire carries no trustworthy arm order).
-    // A null / `tv:` / `unknown` / unparseable descriptor falls back to the
-    // wire-driven `decodeValue` path, which stays fully intact.
+    // A generated binding passes a typed decode descriptor ({@link BamlType}) for
+    // its declared return type (and per-field descriptors on registerClass). The
+    // descriptor drives decode against the *declared* shape — most importantly it
+    // lands a union result on the generic `baml_bridge.Union{k}.Arm{i}` family,
+    // picking the arm from the DECLARED arm order (the wire carries no trustworthy
+    // arm order). A null descriptor (or a TypeVar / UNKNOWN / bare primitive /
+    // literal one) falls back to the wire-driven `decodeValue` path, intact.
     // ========================================================================
 
     /**
-     * Decode a {@code BamlOutboundValue} ({@code valueBytes}) against a parsed
-     * descriptor. A null descriptor (or a {@code tv:} / {@code unknown} / bare
-     * primitive / literal one) decodes wire-driven; a {@code list<>} / {@code map<>}
-     * recurses element/value decode through the descriptor; an FQN reifies the
-     * named class/enum/recursive-alias; a {@code union[...]} matches the wire
-     * value against the declared arms in order and wraps the arm.
+     * Decode a {@code BamlOutboundValue} ({@code valueBytes}) against a descriptor
+     * {@link BamlType}. A null descriptor (or a TypeVar / UNKNOWN / bare primitive
+     * / literal one) decodes wire-driven; a list / map recurses element/value
+     * decode through the descriptor; a named type (CLASS / ENUM) reifies the
+     * class / enum / recursive-alias; a union matches the wire value against the
+     * declared arms in order and wraps the arm.
      */
-    static Object decodeWithDesc(byte[] valueBytes, Desc desc, boolean lenient) {
+    static Object decodeWithDesc(byte[] valueBytes, BamlType desc, boolean lenient) {
         if (valueBytes == null) {
             return null;
         }
         if (desc == null) {
             return decodeValue(new WireReader(valueBytes), lenient);
         }
-        switch (desc.kind) {
+        switch (desc.kind()) {
             case LIST:
-                return decodeListWithDesc(valueBytes, desc.children.get(0), lenient);
+                return decodeListWithDesc(valueBytes, desc.listItem(), lenient);
             case MAP:
-                return decodeMapWithDesc(valueBytes, desc.children.get(1), lenient);
-            case FQN:
-                return decodeFqnWithDesc(valueBytes, desc.text, lenient);
+                return decodeMapWithDesc(valueBytes, desc.mapValue(), lenient);
+            case CLASS:
+            case ENUM:
+                return decodeFqnWithDesc(valueBytes, desc.fqn(), lenient);
             case UNION:
                 return decodeUnionWithDesc(valueBytes, desc, lenient);
-            case PRIM:
-            case LIT:
-            case TV:
+            case OPTIONAL:
+                return decodeWithDesc(valueBytes, desc.optionalInner(), lenient);
+            case PRIMITIVE:
+            case LITERAL:
+            case TYPEVAR:
             case UNKNOWN:
             default:
                 // A scalar/literal descriptor carries no structural recursion; the
-                // self-describing wire form already yields the right value. `tv:` /
-                // `unknown` are the explicit wire-driven fallbacks.
+                // self-describing wire form already yields the right value. TypeVar /
+                // UNKNOWN are the explicit wire-driven fallbacks.
                 return decodeValue(new WireReader(valueBytes), lenient);
         }
     }
 
     /** Decode a {@code list_value}, reifying each element through {@code elemDesc}. */
-    private static Object decodeListWithDesc(byte[] valueBytes, Desc elemDesc, boolean lenient) {
+    private static Object decodeListWithDesc(byte[] valueBytes, BamlType elemDesc, boolean lenient) {
         byte[] listBytes = outboundSub(valueBytes, OV_LIST);
         if (listBytes == null) {
             // Descriptor says list but the wire is not one (e.g. null) → wire-driven.
@@ -1266,7 +1026,7 @@ public final class ProtoReader {
     }
 
     /** Decode a {@code map_value}, reifying each entry value through {@code valueDesc}. */
-    private static Object decodeMapWithDesc(byte[] valueBytes, Desc valueDesc, boolean lenient) {
+    private static Object decodeMapWithDesc(byte[] valueBytes, BamlType valueDesc, boolean lenient) {
         byte[] mapBytes = outboundSub(valueBytes, OV_MAP);
         if (mapBytes == null) {
             return decodeValue(new WireReader(valueBytes), lenient);
@@ -1300,10 +1060,10 @@ public final class ProtoReader {
     }
 
     /**
-     * Decode against an FQN descriptor. The registry decides the kind: a class
-     * reifies with per-field descriptors; a named recursive-alias union routes to
-     * the wire-driven {@link TypeRegistry#constructUnion} (its minted nominal
-     * records); an enum (or an unresolved FQN) decodes wire-driven.
+     * Decode against a named-type (FQN) descriptor. The registry decides the kind:
+     * a class reifies with per-field descriptors; a named recursive-alias union
+     * routes to the wire-driven {@link TypeRegistry#constructUnionForFqn} (its
+     * minted nominal records); an enum (or an unresolved FQN) decodes wire-driven.
      */
     private static Object decodeFqnWithDesc(byte[] valueBytes, String fqn, boolean lenient) {
         if (TypeRegistry.isClass(fqn)) {
@@ -1324,17 +1084,16 @@ public final class ProtoReader {
                 }
                 effective = inner;
             }
-            String discriminator = innerDiscriminator(new WireReader(effective));
-            String armToken = TypeRegistry.unionArmToken(fqn, discriminator);
+            BamlType armType = TypeRegistry.unionArmTokenForFqn(fqn, effective);
             // Decode the arm's inner value type-directed via the arm token
             // (nested recursive-alias contents must reify, not decode bare).
-            Object inner = armToken != null
-                    ? decodeWithDesc(effective, parseDesc(armToken), lenient)
+            Object inner = armType != null
+                    ? decodeWithDesc(effective, armType, lenient)
                     : decodeValue(new WireReader(effective), lenient);
             if (inner == null) {
                 return null;
             }
-            Object record = TypeRegistry.constructUnion(fqn, discriminator, inner);
+            Object record = TypeRegistry.constructUnionForFqn(fqn, effective, inner);
             return record != null ? record : inner;
         }
         // Enum or unresolved FQN: the wire form is self-describing.
@@ -1385,14 +1144,14 @@ public final class ProtoReader {
             }
         }
         String[] order = TypeRegistry.classFieldOrder(fqn);
-        String[] descs = TypeRegistry.classFieldDescs(fqn);
+        BamlType[] descs = TypeRegistry.classFieldDescs(fqn);
         Map<String, Object> fields = new LinkedHashMap<>();
         for (int i = 0; i < keys.size(); i++) {
-            Desc fieldDesc = null;
+            BamlType fieldDesc = null;
             if (order != null && descs != null) {
                 int idx = indexOf(order, keys.get(i));
                 if (idx >= 0 && idx < descs.length) {
-                    fieldDesc = parseDesc(descs[idx]);
+                    fieldDesc = descs[idx];
                 }
             }
             byte[] vb = vals.get(i);
@@ -1412,15 +1171,15 @@ public final class ProtoReader {
     }
 
     /**
-     * Decode against a {@code union[...]} descriptor onto the generic
-     * {@code Union{k}} arm family. A {@code union_variant_value} wrapper is
-     * unwrapped first (the descriptor is preferred over the wire {@code self_type}),
-     * then the (unwrapped) wire value is matched against the declared arms IN
-     * ORDER by its wire kind; the first matching arm's inner value is decoded with
-     * that arm's descriptor and wrapped in {@code baml_bridge.Union{k}.Arm{i}}. A
+     * Decode against a union descriptor onto the generic {@code Union{k}} arm
+     * family. A {@code union_variant_value} wrapper is unwrapped first (the
+     * descriptor is preferred over the wire {@code self_type}), then the
+     * (unwrapped) wire value is matched against the declared arms IN ORDER by its
+     * shape ({@link #armMatchesValue}); the first matching arm's inner value is
+     * decoded with that arm and wrapped in {@code baml_bridge.Union{k}.Arm{i}}. A
      * null wire value decodes to null; no arm match throws {@link BamlError}.
      */
-    private static Object decodeUnionWithDesc(byte[] valueBytes, Desc unionDesc, boolean lenient) {
+    private static Object decodeUnionWithDesc(byte[] valueBytes, BamlType unionDesc, boolean lenient) {
         byte[] effective = valueBytes;
         if (outboundArm(valueBytes) == OV_UNION) {
             byte[] inner = extractUnionInner(valueBytes);
@@ -1433,79 +1192,177 @@ public final class ProtoReader {
         if (effArm == 0 || effArm == OV_NULL) {
             return null;
         }
-        String token = innerDiscriminator(new WireReader(effective));
-        if (token.equals("null")) {
-            return null;
-        }
-        int k = unionDesc.children.size();
+        List<BamlType> arms = unionDesc.unionOptions();
+        int k = arms.size();
         for (int i = 0; i < k; i++) {
-            if (armMatchesToken(unionDesc.children.get(i), token)) {
-                Object inner = decodeWithDesc(effective, unionDesc.children.get(i), lenient);
+            if (armMatchesValue(arms.get(i), effective)) {
+                Object inner = decodeWithDesc(effective, arms.get(i), lenient);
                 return wrapArm(k, i, inner);
             }
         }
         throw new BamlError(
-                "type-directed union decode: no declared arm matched wire value (kind '"
-                        + token + "') for descriptor " + unionDesc,
+                "type-directed union decode: no declared arm matched the wire value"
+                        + " for descriptor " + unionDesc,
                 List.of(),
                 null);
     }
 
+    // -- structural arm matching (shared by both arm-picking paths) -----------
+
     /**
-     * Whether a union arm descriptor matches a wire discriminator token (from
-     * {@link #innerDiscriminator}). Primitives/FQNs match their token exactly;
-     * {@code list<>} / {@code map<>} match a wire container token under the
-     * {@link #containerTokenMatches} lattice (typed-vs-same-typed or bare on
-     * either side — so {@code list<string>} no longer swallows an {@code int[]});
-     * a literal arm matches an exact {@code lit:base:value} token, else its base
-     * (a same-base literal union is erased in codegen, so at most one literal arm
-     * per base survives — base match cannot be ambiguous); a nested union matches
-     * if any of its arms match; {@code tv:} / {@code unknown} are wildcards
-     * (wire-driven).
+     * Whether a union arm {@link BamlType} matches the shape of a wire
+     * {@code BamlOutboundValue} ({@code valueBytes}). Shared by the descriptor
+     * path ({@link #decodeUnionWithDesc}) and the wire-driven registry path
+     * ({@code TypeRegistry.UnionEntry.pickArm}).
+     *
+     * <h3>Rules (structural — the compat lattice)</h3>
+     * <ul>
+     *   <li>a wildcard arm (TypeVar / UNKNOWN) matches anything;</li>
+     *   <li>a nested union matches if any of its arms match;</li>
+     *   <li>a primitive matches the same wire scalar kind;</li>
+     *   <li>a named type (CLASS / ENUM) matches a class/enum value of the same
+     *       FQN, or — when it names a registered recursive-alias union — a value
+     *       that union recognizes (the FQN + recursive-alias registry fallback);</li>
+     *   <li>a literal matches a wire literal of the same base (a same-base literal
+     *       union is erased in codegen, so at most one literal arm per base
+     *       survives — base match cannot be ambiguous), or a bare scalar of that
+     *       base;</li>
+     *   <li>a list / map matches a wire container of the same base whose element /
+     *       key+value type is <em>structurally</em> the same (via
+     *       {@link BamlType#matchesStructural}), or whose type is absent / imprecise
+     *       — a bare wire container is an element-type wildcard, so an empty
+     *       typed {@code int[]} lands on the {@code int[]} arm, not a
+     *       {@code string[]} one declared first.</li>
+     * </ul>
      */
-    private static boolean armMatchesToken(Desc arm, String token) {
-        switch (arm.kind) {
-            case PRIM:
-                return arm.text.equals(token);
-            case FQN:
-                if (arm.text.equals(token)) {
+    public static boolean armMatchesValue(BamlType arm, byte[] valueBytes) {
+        if (arm.isWildcard()) {
+            return true;
+        }
+        if (arm.kind() == BamlType.Kind.UNION) {
+            for (BamlType opt : arm.unionOptions()) {
+                if (armMatchesValue(opt, valueBytes)) {
                     return true;
                 }
-                // A registered recursive-alias union arm: the wire discriminator
-                // is the STRUCTURAL token of the inner value (e.g. `int`,
-                // `list<int>`, a member class FQN), not the alias FQN itself, so
-                // an exact FQN compare misses it. Match when the union named by
-                // `arm.text` recognizes that token as one of its arms (the same
-                // isUnionKey / unionArmToken helpers the FQN decode path uses).
-                return TypeRegistry.isUnionKey(arm.text)
-                        && TypeRegistry.unionArmToken(arm.text, token) != null;
-            case LIST:
-            case MAP:
-                // arm.toString() renders the descriptor container token
-                // (list<D> / map<K,V>); the lattice tells a typed wire arm from a
-                // differently-typed one while keeping bare-token compatibility.
-                return containerTokenMatches(arm.toString(), token);
-            case LIT: {
-                if (token.startsWith("lit:")) {
-                    String exact = "lit:" + arm.text + ":" + arm.litValue;
-                    return token.equals(exact) || token.startsWith("lit:" + arm.text + ":");
-                }
-                // A bare scalar of the literal's base type also matches the base.
-                return token.equals(arm.text);
             }
-            case UNION:
-                for (Desc child : arm.children) {
-                    if (armMatchesToken(child, token)) {
-                        return true;
-                    }
-                }
-                return false;
-            case TV:
-            case UNKNOWN:
-                return true;
-            default:
-                return false;
+            return false;
         }
+        int ov = outboundArm(valueBytes);
+        return switch (arm.kind()) {
+            case PRIMITIVE -> (arm.isInt() && ov == OV_INT)
+                    || (arm.isString() && ov == OV_STRING)
+                    || (arm.isBool() && ov == OV_BOOL)
+                    || (arm.isFloat() && ov == OV_FLOAT);
+            case CLASS, ENUM -> namedArmMatches(arm, ov, valueBytes);
+            case LITERAL -> literalArmMatches(arm, ov, valueBytes);
+            case LIST -> ov == OV_LIST && containerItemMatches(arm.listItem(), valueBytes, OV_LIST, LIST_ITEM_TYPE);
+            case MAP -> ov == OV_MAP && mapArmMatches(arm, valueBytes);
+            case OPTIONAL -> ov == OV_NULL || armMatchesValue(arm.optionalInner(), valueBytes);
+            default -> false;
+        };
+    }
+
+    /** Whether a CLASS / ENUM arm matches a class/enum value FQN, or a recursive-alias union it names. */
+    private static boolean namedArmMatches(BamlType arm, int ov, byte[] valueBytes) {
+        if (ov == OV_CLASS || ov == OV_ENUM) {
+            String name = namedValueFqn(valueBytes);
+            if (arm.fqn().equals(name)) {
+                return true;
+            }
+        }
+        // Recursive-alias union arm: the arm names a registered union; match when
+        // that union recognizes the wire value's shape as one of its arms.
+        return TypeRegistry.isUnionKey(arm.fqn())
+                && TypeRegistry.unionArmTokenForFqn(arm.fqn(), valueBytes) != null;
+    }
+
+    /** The FQN of a class/enum {@code BamlOutboundValue} (name field), or null. */
+    private static String namedValueFqn(byte[] valueBytes) {
+        byte[] sub = outboundSub(valueBytes, OV_CLASS);
+        if (sub == null) {
+            sub = outboundSub(valueBytes, OV_ENUM);
+        }
+        return sub == null ? null : classNameOf(new WireReader(sub));
+    }
+
+    /** Whether a LITERAL arm matches a wire literal of the same base, or a bare scalar of that base. */
+    private static boolean literalArmMatches(BamlType arm, int ov, byte[] valueBytes) {
+        String base = arm.literalBase();
+        if (ov == OV_LITERAL) {
+            return base.equals(literalValueBase(valueBytes));
+        }
+        return switch (base) {
+            case "string" -> ov == OV_STRING;
+            case "int" -> ov == OV_INT;
+            case "bool" -> ov == OV_BOOL;
+            case "float" -> ov == OV_FLOAT;
+            case "bigint" -> ov == OV_BIGINT;
+            default -> false;
+        };
+    }
+
+    /** The base name of a wire {@code literal_value} ({@code string} / {@code int} / …), or {@code "?"}. */
+    private static String literalValueBase(byte[] valueBytes) {
+        byte[] lit = outboundSub(valueBytes, OV_LITERAL);
+        if (lit == null) {
+            return "?";
+        }
+        WireReader r = new WireReader(lit);
+        String base = "?";
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case LIT_STRING -> { r.skipField(wire); base = "string"; }
+                case LIT_INT -> { r.skipField(wire); base = "int"; }
+                case LIT_BOOL -> { r.skipField(wire); base = "bool"; }
+                case LIT_BIGINT -> { r.skipField(wire); base = "bigint"; }
+                case LIT_FLOAT -> { r.skipField(wire); base = "float"; }
+                default -> r.skipField(wire);
+            }
+        }
+        return base;
+    }
+
+    /**
+     * Whether a container arm's inner type {@code armInner} matches a wire
+     * container's element type — the {@code typeField} ({@code item_type} /
+     * {@code key_type} / {@code value_type}) {@code BamlTy} of the {@code ovField}
+     * sub-message, via {@link BamlType#matchesStructural}. An absent or imprecise
+     * (unrepresentable / alias) wire type is an element-type wildcard (matches).
+     */
+    private static boolean containerItemMatches(
+            BamlType armInner, byte[] valueBytes, int ovField, int typeField) {
+        byte[] container = outboundSub(valueBytes, ovField);
+        if (container == null) {
+            return false;
+        }
+        byte[] itemTy = outboundSub(container, typeField);
+        if (itemTy == null) {
+            return true; // bare / pre-typed wire → element-type wildcard
+        }
+        BamlType wireItem = BamlType.fromWireTy(itemTy);
+        return wireItem == null || armInner.matchesStructural(wireItem);
+    }
+
+    /** Whether a MAP arm matches a wire map by both key and value type (bare/imprecise → wildcard). */
+    private static boolean mapArmMatches(BamlType arm, byte[] valueBytes) {
+        byte[] mapBytes = outboundSub(valueBytes, OV_MAP);
+        if (mapBytes == null) {
+            return false;
+        }
+        byte[] keyTy = outboundSub(mapBytes, MAP_KEY_TYPE);
+        byte[] valTy = outboundSub(mapBytes, MAP_VALUE_TYPE);
+        if (keyTy == null || valTy == null) {
+            return true; // bare → wildcard
+        }
+        BamlType wireKey = BamlType.fromWireTy(keyTy);
+        BamlType wireVal = BamlType.fromWireTy(valTy);
+        if (wireKey == null || wireVal == null) {
+            return true; // imprecise → wildcard
+        }
+        return arm.mapKey().matchesStructural(wireKey) && arm.mapValue().matchesStructural(wireVal);
     }
 
     /** Reflectively build {@code baml_bridge.Union{k}.Arm{idx}} around {@code inner}. */
@@ -1579,260 +1436,6 @@ public final class ProtoReader {
             }
         }
         return -1;
-    }
-
-    /**
-     * Percent-escape the descriptor-grammar structural characters (and the
-     * {@code %} escape sentinel) in a literal token value, byte-for-byte
-     * matching the Rust emitter's {@code escape_literal_value} (sdkgen_java).
-     *
-     * <p>A literal arm token ({@code lit:string:<value>}) is a MATCH KEY, never
-     * decoded back to the raw value — the real value rides the wire value bytes.
-     * Both sides escape identically, so a value carrying a {@code union[...]} /
-     * {@code list<>} / {@code map<>} separator (e.g. {@code "a;b"} →
-     * {@code lit:string:a%3Bb}) can't be mistaken for grammar structure, and a
-     * plain value ({@code "draft"}) is returned unchanged (byte-compat).
-     */
-    static String escapeLiteralValue(String s) {
-        boolean needs = false;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '%' || c == '<' || c == '>' || c == '[' || c == ']' || c == ';' || c == ',') {
-                needs = true;
-                break;
-            }
-        }
-        if (!needs) {
-            return s;
-        }
-        StringBuilder out = new StringBuilder(s.length() + 4);
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '%' -> out.append("%25");
-                case '<' -> out.append("%3C");
-                case '>' -> out.append("%3E");
-                case '[' -> out.append("%5B");
-                case ']' -> out.append("%5D");
-                case ';' -> out.append("%3B");
-                case ',' -> out.append("%2C");
-                default -> out.append(c);
-            }
-        }
-        return out.toString();
-    }
-
-    // -- descriptor grammar (one tokenizer, shared with the emitter) ----------
-
-    /**
-     * A parsed type-directed decode descriptor. Grammar (per
-     * {@code ref-java-codegen-conventions.md}): primitives
-     * {@code int|bigint|float|string|bool|null|uint8array|void|unknown}; an FQN
-     * (class/enum/named recursive alias); {@code list<D>}; {@code map<D,D>};
-     * ordered {@code union[D;D;...]}; {@code lit:<base>:<value>}; and {@code tv:<name>}.
-     */
-    static final class Desc {
-        enum Kind { PRIM, FQN, LIST, MAP, UNION, LIT, TV, UNKNOWN }
-
-        final Kind kind;
-        final String text; // PRIM: name; FQN: fqn; TV: var name; LIT: base
-        final String litValue; // LIT only
-        final List<Desc> children; // LIST: [elem]; MAP: [key, value]; UNION: arms
-
-        private Desc(Kind kind, String text, String litValue, List<Desc> children) {
-            this.kind = kind;
-            this.text = text;
-            this.litValue = litValue;
-            this.children = children;
-        }
-
-        static Desc prim(String name) {
-            return new Desc(Kind.PRIM, name, null, null);
-        }
-
-        static Desc fqn(String name) {
-            return new Desc(Kind.FQN, name, null, null);
-        }
-
-        static Desc tv(String name) {
-            return new Desc(Kind.TV, name, null, null);
-        }
-
-        static Desc unknown() {
-            return new Desc(Kind.UNKNOWN, "unknown", null, null);
-        }
-
-        static Desc lit(String base, String value) {
-            return new Desc(Kind.LIT, base, value, null);
-        }
-
-        static Desc list(Desc elem) {
-            return new Desc(Kind.LIST, null, null, List.of(elem));
-        }
-
-        static Desc map(Desc key, Desc value) {
-            return new Desc(Kind.MAP, null, null, List.of(key, value));
-        }
-
-        static Desc union(List<Desc> arms) {
-            return new Desc(Kind.UNION, null, null, arms);
-        }
-
-        @Override
-        public String toString() {
-            return switch (kind) {
-                case PRIM, TV, UNKNOWN -> text;
-                case FQN -> text;
-                case LIT -> "lit:" + text + ":" + litValue;
-                case LIST -> "list<" + children.get(0) + ">";
-                case MAP -> "map<" + children.get(0) + "," + children.get(1) + ">";
-                case UNION -> {
-                    StringBuilder sb = new StringBuilder("union[");
-                    for (int i = 0; i < children.size(); i++) {
-                        if (i > 0) {
-                            sb.append(';');
-                        }
-                        sb.append(children.get(i));
-                    }
-                    yield sb.append(']').toString();
-                }
-            };
-        }
-    }
-
-    /**
-     * Parse a descriptor string, or return null for a null / empty / unparseable
-     * descriptor (the caller then decodes wire-driven).
-     */
-    static Desc parseDesc(String s) {
-        if (s == null || s.isEmpty()) {
-            return null;
-        }
-        int[] p = {0};
-        Desc d;
-        try {
-            d = parseNode(s, p);
-        } catch (RuntimeException e) {
-            return null; // unparseable → wire-driven fallback
-        }
-        skipWs(s, p);
-        return p[0] == s.length() ? d : null; // trailing garbage → fallback
-    }
-
-    private static Desc parseNode(String s, int[] p) {
-        skipWs(s, p);
-        if (consume(s, p, "list<")) {
-            Desc elem = parseNode(s, p);
-            expect(s, p, '>');
-            return Desc.list(elem);
-        }
-        if (consume(s, p, "map<")) {
-            Desc key = parseNode(s, p);
-            expect(s, p, ',');
-            Desc value = parseNode(s, p);
-            expect(s, p, '>');
-            return Desc.map(key, value);
-        }
-        if (consume(s, p, "union[")) {
-            List<Desc> arms = new ArrayList<>();
-            arms.add(parseNode(s, p));
-            skipWs(s, p);
-            while (p[0] < s.length() && s.charAt(p[0]) == ';') {
-                p[0]++;
-                arms.add(parseNode(s, p));
-                skipWs(s, p);
-            }
-            expect(s, p, ']');
-            return Desc.union(arms);
-        }
-        if (consume(s, p, "lit:")) {
-            int bs = p[0];
-            while (p[0] < s.length() && s.charAt(p[0]) != ':') {
-                p[0]++;
-            }
-            String base = s.substring(bs, p[0]);
-            expect(s, p, ':');
-            // The literal value is a leaf read to the next structural terminator.
-            // The emitter percent-escapes the grammar-structural characters
-            // (`< > [ ] ; ,` and the `%` sentinel — see the emitter's
-            // `escape_literal_value` / this file's `escapeLiteralValue`), so a
-            // raw terminator here is always a genuine separator, never part of
-            // the value. The captured value stays ESCAPED: it is only ever a
-            // match key compared against the (identically-escaped) wire token,
-            // never decoded back — the real value rides the wire value bytes.
-            int vs = p[0];
-            while (p[0] < s.length()) {
-                char c = s.charAt(p[0]);
-                if (c == ';' || c == ']' || c == '>' || c == ',') {
-                    break;
-                }
-                p[0]++;
-            }
-            return Desc.lit(base, s.substring(vs, p[0]));
-        }
-        String tok = readLeaf(s, p);
-        if (tok.isEmpty()) {
-            throw new IllegalArgumentException("empty descriptor token at " + p[0]);
-        }
-        return classifyLeaf(tok);
-    }
-
-    private static Desc classifyLeaf(String tok) {
-        switch (tok) {
-            case "int":
-            case "bigint":
-            case "float":
-            case "string":
-            case "bool":
-            case "null":
-            case "uint8array":
-            case "void":
-                return Desc.prim(tok);
-            case "unknown":
-                return Desc.unknown();
-            default:
-                if (tok.startsWith("tv:")) {
-                    return Desc.tv(tok.substring(3));
-                }
-                return Desc.fqn(tok);
-        }
-    }
-
-    /** Read a leaf bareword (primitive / FQN / tv) up to a delimiter or whitespace. */
-    private static String readLeaf(String s, int[] p) {
-        int start = p[0];
-        while (p[0] < s.length()) {
-            char c = s.charAt(p[0]);
-            if (c == '<' || c == '>' || c == '[' || c == ']' || c == ';' || c == ','
-                    || Character.isWhitespace(c)) {
-                break;
-            }
-            p[0]++;
-        }
-        return s.substring(start, p[0]);
-    }
-
-    /** Consume {@code lit} if it is the exact prefix at {@code p}; else leave {@code p}. */
-    private static boolean consume(String s, int[] p, String lit) {
-        if (s.regionMatches(p[0], lit, 0, lit.length())) {
-            p[0] += lit.length();
-            return true;
-        }
-        return false;
-    }
-
-    private static void expect(String s, int[] p, char c) {
-        skipWs(s, p);
-        if (p[0] >= s.length() || s.charAt(p[0]) != c) {
-            throw new IllegalArgumentException("expected '" + c + "' at " + p[0] + " in " + s);
-        }
-        p[0]++;
-    }
-
-    private static void skipWs(String s, int[] p) {
-        while (p[0] < s.length() && Character.isWhitespace(s.charAt(p[0]))) {
-            p[0]++;
-        }
     }
 
     /**

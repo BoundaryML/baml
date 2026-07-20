@@ -19,12 +19,13 @@
 //! }
 //! ```
 //!
-//! Decode is type-directed: every binding passes a descriptor string
-//! for its declared return type (see [`crate::translate_ty::descriptor_token`])
-//! as the last argument, so the decoder resolves union arm order and
-//! element types without trusting the wire shape. Generated bodies then
-//! cast the decoded `Object` to the declared type; primitives unbox
-//! implicitly on return.
+//! Decode is type-directed: every binding passes a typed
+//! `baml_bridge.BamlType` for its declared return type (see
+//! [`crate::translate_ty::descriptor_expr`]) as the last argument — pooled into
+//! a per-holder `private static final $RET{n}` constant, or the literal `null`
+//! for a wire-driven return — so the decoder resolves union arm order and
+//! element types without trusting the wire shape. Generated bodies then cast the
+//! decoded `Object` to the declared type; primitives unbox implicitly on return.
 //!
 //! Class static and instance methods render as sibling bindings on the
 //! value class itself: static methods as `static` bindings (same shape
@@ -52,6 +53,46 @@ use crate::{
     routing::java_identifier,
     translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
+
+/// Per-holder pool of return-type decode descriptors. Each distinct descriptor
+/// `BamlType` builder expression is emitted once as a `private static final
+/// baml_bridge.BamlType $RET{n}` constant (allocated at class load, not per
+/// call), and a binding references it by name; identical descriptors within a
+/// holder share one constant. A wire-driven descriptor is not pooled — the
+/// binding passes the literal `null`.
+#[derive(Default)]
+pub(crate) struct DescriptorPool {
+    /// Distinct descriptor expressions, in first-seen order; index → `$RET{i}`.
+    exprs: Vec<String>,
+}
+
+impl DescriptorPool {
+    /// Intern a descriptor builder expression, returning the constant name that
+    /// references it (`$RET{n}`).
+    fn intern(&mut self, expr: String) -> String {
+        let idx = self
+            .exprs
+            .iter()
+            .position(|e| *e == expr)
+            .unwrap_or_else(|| {
+                self.exprs.push(expr);
+                self.exprs.len() - 1
+            });
+        format!("$RET{idx}")
+    }
+
+    /// The `private static final baml_bridge.BamlType $RET{n} = …;` declarations,
+    /// in constant order (empty when nothing was pooled).
+    fn constants(&self) -> String {
+        let mut out = String::new();
+        for (i, expr) in self.exprs.iter().enumerate() {
+            out.push_str(&format!(
+                "    private static final baml_bridge.BamlType $RET{i} = {expr};\n"
+            ));
+        }
+        out
+    }
+}
 
 /// The `_async` sibling name for a callable `ident`, escaped past a collision:
 /// if the enclosing group (package for free functions, class for methods)
@@ -350,20 +391,24 @@ pub(crate) fn render_class(
     // functions) render as `static` bindings; instance methods are
     // non-static and prepend the receiver (`self` / `this`) to the
     // runtime call. Sorted by `(span, name)` for deterministic output,
-    // matching the free-function fan-out.
+    // matching the free-function fan-out. The method bodies are buffered so the
+    // return-descriptor constants they pool can be emitted ahead of them.
+    let mut pool = DescriptorPool::default();
+    let mut methods = String::new();
     let mut statics: Vec<&Function> = class.static_methods.iter().collect();
     statics.sort_by(|a, b| {
         (a.origin.span_start, a.name.as_str()).cmp(&(b.origin.span_start, b.name.as_str()))
     });
     for m in statics {
         let fqn = format!("{class_fqn}.{}", m.name.as_str());
-        out.push_str(&render_callable_pair(
+        methods.push_str(&render_callable_pair(
             &fqn,
             m,
             Receiver::None,
             true,
             &class.generic_params,
             &method_idents,
+            &mut pool,
             ctx,
             sink,
         ));
@@ -378,17 +423,20 @@ pub(crate) fn render_class(
         // `static`, so they are not re-declared at method level (that guard is
         // `is_static`), but a generic class drives the explicit-bag receiver
         // guard (a reified receiver is required to recover the class TypeVars).
-        out.push_str(&render_callable_pair(
+        methods.push_str(&render_callable_pair(
             &fqn,
             m,
             Receiver::This,
             false,
             &class.generic_params,
             &method_idents,
+            &mut pool,
             ctx,
             sink,
         ));
     }
+    out.push_str(&pool.constants());
+    out.push_str(&methods);
 
     // Deep value equality. `instanceof` narrowing keeps this correct
     // for generic classes (erasure makes a parameterized check
@@ -540,9 +588,17 @@ pub(crate) fn render_fns_holder(
         .iter()
         .map(|(_, f)| java_identifier(f.name.as_str()))
         .collect();
+    // Buffer the bindings so their pooled return-descriptor constants can be
+    // emitted ahead of them.
+    let mut pool = DescriptorPool::default();
+    let mut methods = String::new();
     for (fqn, function) in functions {
-        out.push_str(&render_function_pair(fqn, function, &fn_idents, ctx, sink));
+        methods.push_str(&render_function_pair(
+            fqn, function, &fn_idents, &mut pool, ctx, sink,
+        ));
     }
+    out.push_str(&pool.constants());
+    out.push_str(&methods);
     out.push_str("}\n");
     out
 }
@@ -563,6 +619,7 @@ fn render_function_pair(
     fqn: &str,
     function: &Function,
     sibling_idents: &BTreeSet<String>,
+    pool: &mut DescriptorPool,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -573,6 +630,7 @@ fn render_function_pair(
         true,
         &[],
         sibling_idents,
+        pool,
         ctx,
         sink,
     )
@@ -595,6 +653,7 @@ fn render_callable_pair(
     is_static: bool,
     class_generic_params: &[baml_base::Name],
     sibling_idents: &BTreeSet<String>,
+    pool: &mut DescriptorPool,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -661,10 +720,16 @@ fn render_callable_pair(
     let ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
     let ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
 
-    // Type-directed decode descriptor for the declared return type,
-    // passed as the LAST runtime-call argument so the decoder can resolve
-    // union arm order / element types without trusting the wire shape.
-    let descriptor = crate::translate_ty::descriptor_token(&function.return_type, ctx.aliases);
+    // Type-directed decode descriptor for the declared return type, passed as the
+    // LAST runtime-call argument so the decoder resolves union arm order / element
+    // types without trusting the wire shape. It is a typed `baml_bridge.BamlType`,
+    // pooled into a per-holder `private static final` constant referenced by name;
+    // a wholly wire-driven return passes the literal `null`.
+    let descriptor =
+        match crate::translate_ty::descriptor_expr_opt(&function.return_type, ctx.aliases) {
+            None => "null".to_string(),
+            Some(expr) => pool.intern(expr),
+        };
 
     let names_literal = format!("new java.lang.String[] {{{}}}", param_names_java.join(", "));
     let args_literal = format!("new java.lang.Object[] {{{}}}", arg_exprs.join(", "));
@@ -958,7 +1023,7 @@ fn render_method_pair(
     };
 
     let sync_call = format!(
-        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{call_suffix})"
+        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
     );
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
@@ -966,7 +1031,7 @@ fn render_method_pair(
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
     let async_body = format!(
-        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor:?}{call_suffix});"
+        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix});"
     );
 
     format!(

@@ -38,7 +38,7 @@ pub use baml_codegen_types::{NamingConvention, OutputType};
 use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_union},
     routing::{PackagePath, java_identifier, route},
-    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_token},
+    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
 };
 
 /// A user BAML source file as it should appear in the emitter's
@@ -83,9 +83,17 @@ const RUNTIME_OWNED_FQNS: &[&str] = &[
 /// (java const ident, wire name)).
 type EnumRegistration = (String, String, Vec<(String, String)>);
 
-/// One union typemap entry: (arm-token signature, union binary name,
-/// per-arm (arm token, record binary name)).
-type UnionRegistration = (String, String, Vec<(String, String)>);
+/// One union typemap registration. `alias_fqn` is `None` for the structural
+/// registration (keyed by the arm set, derived runtime-side from the arms) and
+/// `Some(fqn)` for a recursive alias's second registration under its own FQN.
+/// `arms` is per-arm `(arm-token BamlType expression, record binary name)` in
+/// declaration order.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct UnionReg {
+    alias_fqn: Option<String>,
+    union_binary: String,
+    arms: Vec<(String, String)>,
+}
 
 /// Build the Java SDK output tree for `pool`. Returned paths are
 /// relative to the `baml_sdk/` output root.
@@ -135,7 +143,7 @@ pub fn to_source_code(
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
-    let mut union_registry: Vec<UnionRegistration> = Vec::new();
+    let mut union_registry: Vec<UnionReg> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -176,7 +184,10 @@ pub fn to_source_code(
                     class
                         .properties
                         .iter()
-                        .map(|prop| descriptor_token(&prop.ty, &aliases))
+                        .map(|prop| {
+                            descriptor_expr_opt(&prop.ty, &aliases)
+                                .unwrap_or_else(|| "null".to_string())
+                        })
                         .collect(),
                 ));
                 type_files.push((
@@ -278,12 +289,21 @@ pub fn to_source_code(
                 .filter(|t| !matches!(t, Ty::Null { .. }))
                 .cloned()
                 .collect();
-            let (_, union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
-            // Structural signature AND the alias's own FQN: the engine may
-            // send self_type either resolved (the member union) or as the
-            // alias node, depending on how the declared type was spelled.
-            union_registry.push(union_registration(&pkg, &ident, &arms, &aliases));
-            union_registry.push((alias_fqn.clone(), union_binary, arm_entries));
+            let (union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
+            // Two registrations — by the arm SET (structural, derived runtime-side)
+            // AND by the alias's own FQN: the engine may send self_type either
+            // resolved (the member union) or as the alias node, depending on how
+            // the declared type was spelled.
+            union_registry.push(UnionReg {
+                alias_fqn: None,
+                union_binary: union_binary.clone(),
+                arms: arm_entries.clone(),
+            });
+            union_registry.push(UnionReg {
+                alias_fqn: Some(alias_fqn.clone()),
+                union_binary,
+                arms: arm_entries,
+            });
             render_union(&ident, &arms, &ctx, &mut sink)
         } else {
             format!(
@@ -326,22 +346,34 @@ pub fn to_source_code(
     union_registry.sort();
     union_registry.dedup();
     let mut registrations = String::new();
-    for (signature, union_binary, arm_entries) in &union_registry {
-        let tokens: Vec<String> = arm_entries.iter().map(|(t, _)| format!("{t:?}")).collect();
-        let records: Vec<String> = arm_entries.iter().map(|(_, r)| format!("{r:?}")).collect();
-        registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerUnion({signature:?}, {union_binary:?}, new java.lang.String[] {{{}}}, new java.lang.String[] {{{}}});\n",
-            tokens.join(", "),
-            records.join(", ")
-        ));
+    for reg in &union_registry {
+        // Arm tokens are BamlType builder EXPRESSIONS (emitted raw); record binary
+        // names are strings. The structural key is derived runtime-side from the
+        // arms, so the emitter renders no grammar string.
+        let tokens: Vec<String> = reg.arms.iter().map(|(t, _)| t.clone()).collect();
+        let records: Vec<String> = reg.arms.iter().map(|(_, r)| format!("{r:?}")).collect();
+        let union_binary = &reg.union_binary;
+        match &reg.alias_fqn {
+            None => registrations.push_str(&format!(
+                "        baml_bridge.TypeRegistry.registerUnion({union_binary:?}, new baml_bridge.BamlType[] {{{}}}, new java.lang.String[] {{{}}});\n",
+                tokens.join(", "),
+                records.join(", ")
+            )),
+            Some(alias_fqn) => registrations.push_str(&format!(
+                "        baml_bridge.TypeRegistry.registerUnionAlias({alias_fqn:?}, {union_binary:?}, new baml_bridge.BamlType[] {{{}}}, new java.lang.String[] {{{}}});\n",
+                tokens.join(", "),
+                records.join(", ")
+            )),
+        }
     }
     for (fqn, java_name, fields, descriptors) in &class_registry {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
-        let desc_list: Vec<String> = descriptors.iter().map(|d| format!("{d:?}")).collect();
+        // Field descriptors are BamlType builder expressions (or the literal
+        // `null` for a wire-driven field) — emitted raw.
         registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new java.lang.String[] {{{}}});\n",
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}});\n",
             field_list.join(", "),
-            desc_list.join(", ")
+            descriptors.join(", ")
         ));
     }
     for (fqn, java_name, variants) in &enum_registry {
@@ -392,12 +424,15 @@ pub fn to_source_code_with_bytecode(
     to_source_code(pool, baml_bytecode, naming_convention)
 }
 
-/// Canonical signature token for one union arm. The Java runtime
-/// derives the same token from the wire `self_type` (`BamlTy`), and a
-/// union's registry key is the `|`-join of its arms' tokens sorted
-/// lexically (null arms excluded on both sides) — order-insensitive so
-/// engine-side normalization can't cause a mismatch. Keep in lockstep
-/// with `baml_bridge.TypeRegistry`'s `BamlTy` tokenizer.
+/// A structural string token for a type, used ONLY as the emitter-internal
+/// dedup key for a minted host-callable functional interface
+/// ([`crate::translate_ty::callback_signature_key`]) — it never crosses to the
+/// Java runtime. A generic class carries its concrete args (`Wrapper<int>` vs
+/// `Wrapper<string>`) so distinct instantiations get distinct keys. (Union arm
+/// tokens and decode descriptors are typed `BamlType`s now — see
+/// `crate::translate_ty::registry_arm_expr` / `descriptor_expr`; this token no
+/// longer feeds any registry key or wire comparison, so it carries the raw
+/// literal value with no escaping.)
 pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
         Ty::Int { .. } => "int".to_string(),
@@ -410,10 +445,10 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Void { .. } => "void".to_string(),
         Ty::BuiltinUnknown { .. } => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
-        // (`Wrapper<int>` vs `Wrapper<string>`): without them two distinct
-        // instantiations collapse to the same token and a union / registry keyed
-        // on it silently first-wins. (The class-FQN *descriptor* path stays bare
-        // — see `descriptor_token`'s explicit `Class` arm — so class decode still
+        // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
+        // `registry_arm_expr`, which distinguishes two instantiations so a union /
+        // registry key can't silently first-win. (The class *descriptor* path
+        // stays bare — see `descriptor_expr`'s `Class` arm — so class decode still
         // resolves by FQN.)
         Ty::Class(name, args, _) => {
             let base = baml_fqn(name);
@@ -439,8 +474,8 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::Int(v) => format!("lit:int:{v}"),
             baml_base::Literal::Bigint(v) => format!("lit:bigint:{v}"),
-            baml_base::Literal::Float(v) => format!("lit:float:{}", escape_literal_value(v)),
-            baml_base::Literal::String(v) => format!("lit:string:{}", escape_literal_value(v)),
+            baml_base::Literal::Float(v) => format!("lit:float:{v}"),
+            baml_base::Literal::String(v) => format!("lit:string:{v}"),
             baml_base::Literal::Bool(v) => format!("lit:bool:{v}"),
         },
         Ty::Media(kind, _) => format!("media:{}", format!("{kind:?}").to_lowercase()),
@@ -459,7 +494,8 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
 }
 
 /// The canonical dotted BAML FQN of a named type (`pkg.namespace….Name`),
-/// shared by [`signature_token`] and [`crate::translate_ty::descriptor_token`].
+/// shared by [`signature_token`] and the typed decode-descriptor builders in
+/// [`crate::translate_ty`].
 pub(crate) fn baml_fqn(name: &baml_codegen_types::Name) -> String {
     let mut s = String::from(name.package().as_str());
     for seg in name.namespace() {
@@ -471,48 +507,18 @@ pub(crate) fn baml_fqn(name: &baml_codegen_types::Name) -> String {
     s
 }
 
-/// Percent-escape the descriptor-grammar structural characters (and the `%`
-/// escape sentinel) in a literal value so it survives the `union[…]` / `list<>`
-/// / `map<>` separators when embedded in a compound descriptor token. A no-op
-/// for values without any of these characters, so a plain literal renders
-/// byte-identically (`"draft"` → `lit:string:draft`); a value carrying a
-/// separator (`"a;b"`) survives round-trip (`lit:string:a%3Bb`). The Java wire
-/// tokenizers apply the identical escape (`ProtoReader.escapeLiteralValue`), so
-/// literal arm tokens compare escaped-to-escaped on both sides (the token is a
-/// match key, never decoded back — the value itself rides the wire bytes).
-pub(crate) fn escape_literal_value(s: &str) -> String {
-    if !s
-        .bytes()
-        .any(|b| matches!(b, b'%' | b'<' | b'>' | b'[' | b']' | b';' | b','))
-    {
-        return s.to_string();
-    }
-    let mut out = String::with_capacity(s.len() + 4);
-    for ch in s.chars() {
-        match ch {
-            '%' => out.push_str("%25"),
-            '<' => out.push_str("%3C"),
-            '>' => out.push_str("%3E"),
-            '[' => out.push_str("%5B"),
-            ']' => out.push_str("%5D"),
-            ';' => out.push_str("%3B"),
-            ',' => out.push_str("%2C"),
-            _ => out.push(ch),
-        }
-    }
-    out
-}
-
-/// Build one union registry entry: the sorted-token signature, the
-/// sealed interface's binary name, and (arm token, record binary name)
-/// pairs in declaration order. Record binary names use the `$` nested
-/// separator (`baml_sdk.unions.UnionIntOrString$IntValue`).
+/// Build one union registry entry: the sealed interface's binary name and
+/// per-arm `(arm-token BamlType expression, record binary name)` pairs in
+/// declaration order. Record binary names use the `$` nested separator
+/// (`baml_sdk.unions.UnionIntOrString$IntValue`). The registry key is derived
+/// runtime-side from the arm set (sorted + distinct `List<BamlType>`), so the
+/// emitter renders no signature string.
 fn union_registration(
     pkg: &PackagePath,
     ident: &str,
     arms: &[Ty],
     aliases: &AliasTable,
-) -> UnionRegistration {
+) -> (String, Vec<(String, String)>) {
     let union_binary = format!("{}.{}", pkg.java_package(), ident);
     let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
     let arm_entries: Vec<(String, String)> = arms
@@ -520,18 +526,12 @@ fn union_registration(
         .zip(&arm_tokens)
         .map(|(arm, token)| {
             (
-                signature_token(arm, aliases),
+                registry_arm_expr(arm, aliases),
                 format!("{union_binary}${token}Value"),
             )
         })
         .collect();
-    let mut tokens: Vec<String> = arm_entries.iter().map(|(t, _)| t.clone()).collect();
-    tokens.sort();
-    // The engine's runtime union_type is not fully normalized (duplicate
-    // arms survive, e.g. `int | int | string`), while TIR-side arms are
-    // dedup'd — the signature must be duplicate-insensitive on both sides.
-    tokens.dedup();
-    (tokens.join("|"), union_binary, arm_entries)
+    (union_binary, arm_entries)
 }
 
 /// The root runtime-anchor class name: `Baml`, or `Baml$` when a user BAML type
@@ -886,7 +886,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains(", \"string\", ctx$);"),
+            file.contains(", $RET0, ctx$);"),
             "escaped name must thread to the runtime call: {file}"
         );
         // The plain pair keeps the user's `ctx` untouched.
@@ -904,9 +904,16 @@ mod tests {
         let file = &out[&PathBuf::from("lorem/Fns.java")];
         assert!(file.contains("public final class Fns {"));
         assert!(file.contains("public static long extract_resume(long x) {"));
-        // The return-type decode descriptor (`"int"`) is the last call arg.
+        // The return-type decode descriptor is a typed `baml_bridge.BamlType`,
+        // pooled into a per-holder constant and passed by name as the last call arg.
+        assert!(
+            file.contains(
+                "private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.INT;"
+            ),
+            "{file}"
+        );
         assert!(file.contains(
-            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
+            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
@@ -916,7 +923,7 @@ mod tests {
         // wildcard-bridge cast — no `thenApply` stage.
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
             ),
             "{file}"
         );
@@ -932,7 +939,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\", ctx);"
+                "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
             ),
             "{file}"
         );
@@ -942,7 +949,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\", ctx);"
+                "return (java.util.concurrent.CompletableFuture<java.lang.Long>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, ctx);"
             ),
             "{file}"
         );
@@ -1043,7 +1050,7 @@ mod tests {
         // free function, bound to `<class fqn>.<method>`.
         assert!(file.contains("public static java.lang.String create(java.lang.String name) {"));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name}, \"string\");"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.create\", new java.lang.String[] {\"name\"}, new java.lang.Object[] {name}, $RET0);"
         ));
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.String> create_async(java.lang.String name) {"
@@ -1054,14 +1061,14 @@ mod tests {
         assert!(file.contains("public java.lang.String greet(java.lang.String greeting) {"));
         assert!(!file.contains("public static java.lang.String greet("));
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\");"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
         ));
         assert!(file.contains(
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
         ));
         assert!(!file.contains("thenApply"), "{file}");
         assert!(file.contains(
-            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\");"
+            "return (java.util.concurrent.CompletableFuture<java.lang.String>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0);"
         ), "{file}");
 
         // Trailing-`ctx` overloads land on both the static and instance methods.
@@ -1072,7 +1079,7 @@ mod tests {
             "public java.lang.String greet(java.lang.String greeting, baml_bridge.BamlCallContext ctx) {"
         ), "{file}");
         assert!(file.contains(
-            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, \"string\", ctx);"
+            "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, ctx);"
         ), "{file}");
     }
 
@@ -1125,7 +1132,7 @@ mod tests {
         // required arg, so untouched optionals are absent (engine defaults).
         assert!(file.contains("public static long optional_args_probe(long x) {"));
         assert!(file.contains(
-            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\");"
+            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
         ));
 
         // The configurator overload pair: a trailing Consumer<...$Opts>.
@@ -1141,7 +1148,7 @@ mod tests {
         assert!(file.contains("optional_args_probe$Opts $opts = new optional_args_probe$Opts();"));
         assert!(file.contains("$cfg.accept($opts);"));
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"int\");"
+            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0);"
         ));
 
         // The configurator overload gains its own trailing-`ctx` pair, with
@@ -1153,7 +1160,7 @@ mod tests {
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> optional_args_probe_async(long x, java.util.function.Consumer<optional_args_probe$Opts> $cfg, baml_bridge.BamlCallContext ctx) {"
         ), "{file}");
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"int\", ctx);"
+            "baml_bridge.BamlFfi.callSync(\"user.optional_args_probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx);"
         ), "{file}");
 
         // Nested opts class with BOXED fluent setters (null must be passable).
@@ -1212,7 +1219,7 @@ mod tests {
             "public long probe(long arg0, java.util.function.Consumer<probe$Opts> $cfg) {"
         ));
         assert!(file.contains(
-            "baml_bridge.BamlFfi.callSync(\"user.OptBox.probe\", $opts.$names(new java.lang.String[] {\"self\", \"arg0\"}), $opts.$args(new java.lang.Object[] {this, arg0}), \"int\");"
+            "baml_bridge.BamlFfi.callSync(\"user.OptBox.probe\", $opts.$names(new java.lang.String[] {\"self\", \"arg0\"}), $opts.$args(new java.lang.Object[] {this, arg0}), $RET0);"
         ));
         // The nested opts class is static (instantiable from an instance method).
         assert!(file.contains("public static final class probe$Opts {"));
@@ -1348,11 +1355,11 @@ mod tests {
         );
         assert!(!out.contains_key(&PathBuf::from("unions$/UnionIntOrString.java")));
         // registerClass carries a parallel per-field decode-descriptor
-        // array as its fourth argument.
+        // array (typed `baml_bridge.BamlType[]`) as its fourth argument.
         let anchor = &out[&PathBuf::from("Baml.java")];
         assert!(anchor.contains(
-            "baml_bridge.TypeRegistry.registerClass(\"user.unions.UnionContainer\", \"baml_sdk.unions.UnionContainer\", new java.lang.String[] {\"value\"}, new java.lang.String[] {\"union[int;string]\"});"
-        ));
+            "baml_bridge.TypeRegistry.registerClass(\"user.unions.UnionContainer\", \"baml_sdk.unions.UnionContainer\", new java.lang.String[] {\"value\"}, new baml_bridge.BamlType[] {baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING)});"
+        ), "{anchor}");
     }
 
     #[test]
@@ -1373,14 +1380,16 @@ mod tests {
         assert!(file.contains("record IntValue(java.lang.Long value) implements RecList {}"));
 
         let anchor = &out[&PathBuf::from("Baml.java")];
-        // Structural signature registration.
+        // Structural registration: keyed runtime-side by the arm SET, so the
+        // emitter passes the sealed name + the typed arm tokens (no signature
+        // string). Arms: `int` and `list<RecList>` (the alias's self-reference).
         assert!(anchor.contains(
-            "baml_bridge.TypeRegistry.registerUnion(\"int|list<user.aliases.RecList>\", \"baml_sdk.aliases.RecList\","
-        ));
+            "baml_bridge.TypeRegistry.registerUnion(\"baml_sdk.aliases.RecList\", new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.classByFqn(\"user.aliases.RecList\"))},"
+        ), "{anchor}");
         // Alias-FQN registration (the engine may send self_type either way).
         assert!(anchor.contains(
-            "baml_bridge.TypeRegistry.registerUnion(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\","
-        ));
+            "baml_bridge.TypeRegistry.registerUnionAlias(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\", new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.classByFqn(\"user.aliases.RecList\"))},"
+        ), "{anchor}");
     }
 
     #[test]
@@ -1504,7 +1513,7 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"tv:T\", null, types);"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
             ),
             "{file}"
         );
@@ -1517,7 +1526,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains("new java.lang.Object[] {x}, \"tv:T\", ctx, types);"),
+            file.contains("new java.lang.Object[] {x}, $RET0, ctx, types);"),
             "{file}"
         );
 
@@ -1596,7 +1605,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), \"tv:T\", ctx, types);"
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, ctx, types);"
             ),
             "{file}"
         );

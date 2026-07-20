@@ -33,7 +33,21 @@ import java.util.stream.Collectors;
  * </ul>
  *
  * <p>Value semantics: two tokens are {@link #equals equal} when their kind, and
- * (per kind) primitive kind / FQN / nested tokens / literal arm+value match.
+ * (per kind) primitive kind / FQN / nested tokens / literal arm+value match, with
+ * a <em>structural</em> total order ({@link #compareTo}) over those same fields.
+ * So a union's arm set keys the registry directly — a sorted, distinct
+ * {@code List<BamlType>} whose {@link java.util.List#equals} rides {@code BamlType}
+ * value equality — with no string derivation (and thus no
+ * literal-value-collision hazard a rendered key would carry).
+ *
+ * <h2>Decode-only hints</h2>
+ * Two kinds exist purely to drive host-side decode and never ride the encode
+ * wire: {@link #UNKNOWN} (decode this value wire-driven, matches any arm) and
+ * {@link #typeVar} (a bound TypeVar's decode placeholder). {@link #toWireTy} on
+ * either throws {@link IllegalStateException} — they are decode descriptors, not
+ * values. {@link #classByFqn} builds a named-type token straight from a BAML FQN
+ * (no {@link TypeRegistry} lookup, so it names runtime-owned / not-yet-loaded
+ * types too); decode resolves the FQN against the registry.
  *
  * <h2>Wire {@code BamlTy} ({@code baml_type.proto})</h2>
  * A token renders to the shared {@code BamlTy} oneof:
@@ -57,7 +71,7 @@ import java.util.stream.Collectors;
  * grammar — a partial token would misalign positions, so the whole token is
  * poisoned.
  */
-public final class BamlType {
+public final class BamlType implements Comparable<BamlType> {
     // BamlTy oneof field numbers (baml_type.proto).
     private static final int TY_PRIMITIVE = 1;
     private static final int TY_CLASS = 2;
@@ -92,8 +106,12 @@ public final class BamlType {
     private static final int PRIM_FLOAT = 3;
     private static final int PRIM_BOOL = 4;
 
-    /** How this token renders on the wire (which {@code BamlTy} oneof arm). */
-    private enum Kind {
+    /**
+     * The token's shape. The first eight render on the wire (a {@code BamlTy}
+     * oneof arm); {@link #TYPEVAR} and {@link #UNKNOWN} are decode-only hints
+     * (they throw on {@link #toWireTy}).
+     */
+    public enum Kind {
         PRIMITIVE,
         CLASS,
         ENUM,
@@ -101,13 +119,24 @@ public final class BamlType {
         MAP,
         OPTIONAL,
         UNION,
-        LITERAL
+        LITERAL,
+        /** A bound TypeVar's decode placeholder (name in {@link #fqn}); wildcard in matching. */
+        TYPEVAR,
+        /** Decode-this-value-wire-driven; a wildcard that matches any arm. */
+        UNKNOWN
     }
 
     public static final BamlType STRING = primitive(PRIM_STRING);
     public static final BamlType INT = primitive(PRIM_INT);
     public static final BamlType BOOL = primitive(PRIM_BOOL);
     public static final BamlType FLOAT = primitive(PRIM_FLOAT);
+
+    /**
+     * The decode-only "decode wire-driven / match any arm" hint. Never encodes
+     * ({@link #toWireTy} throws) — it is a decode descriptor, not a value.
+     */
+    public static final BamlType UNKNOWN =
+            new BamlType(Kind.UNKNOWN, 0, null, List.of(), 0, null);
 
     private final Kind kind;
     private final int primitiveKind; // PRIMITIVE only (a BamlTyPrimitiveKind value)
@@ -175,6 +204,41 @@ public final class BamlType {
                             + " (only registered classes can be reified with type arguments)");
         }
         return new BamlType(Kind.CLASS, 0, classFqn, copyChildren("type argument", typeArgs), 0, null);
+    }
+
+    /**
+     * A named-type token built straight from a BAML FQN (no {@link TypeRegistry}
+     * lookup) — used to spell a decode descriptor / union-arm token for a
+     * class, enum, or recursive-alias union. Decode resolves the FQN against the
+     * registry ({@code isClass} / {@code isUnionKey}), so an FQN that names no
+     * registered type is harmless (that value decodes wire-driven). Unlike
+     * {@link #of(Class)} this names runtime-owned or not-yet-loaded types too.
+     */
+    public static BamlType classByFqn(String bamlFqn) {
+        Objects.requireNonNull(bamlFqn, "bamlFqn");
+        return new BamlType(Kind.CLASS, 0, bamlFqn, List.of(), 0, null);
+    }
+
+    /**
+     * A named-type token by BAML FQN carrying reified type args (declaration
+     * order) — the generic counterpart of {@link #classByFqn(String)}, used for a
+     * generic class's union-arm identity so two instantiations do not collide in
+     * the registry.
+     */
+    public static BamlType classByFqn(String bamlFqn, BamlType... typeArgs) {
+        Objects.requireNonNull(bamlFqn, "bamlFqn");
+        Objects.requireNonNull(typeArgs, "typeArgs");
+        return new BamlType(Kind.CLASS, 0, bamlFqn, copyChildren("type argument", typeArgs), 0, null);
+    }
+
+    /**
+     * A decode-only TypeVar placeholder (BAML {@code T}). A decode hint: it never
+     * encodes ({@link #toWireTy} throws) and matches any arm — a value bound to
+     * this TypeVar decodes wire-driven. Its {@code name} is retained for fidelity.
+     */
+    public static BamlType typeVar(String name) {
+        Objects.requireNonNull(name, "name");
+        return new BamlType(Kind.TYPEVAR, 0, name, List.of(), 0, null);
     }
 
     /** A list type token {@code T[]} carrying its element token. */
@@ -301,6 +365,9 @@ public final class BamlType {
                 ty.writeMessage(TY_UNION, un.toByteArray());
             }
             case LITERAL -> ty.writeMessage(TY_LITERAL, literalToWire());
+            case TYPEVAR, UNKNOWN -> throw new IllegalStateException(
+                    "cannot encode a decode-only BamlType to the wire: " + this
+                            + " (" + kind + " is a host-side decode hint, never an encoded value)");
             default -> throw new IllegalStateException("unreachable BamlType kind: " + kind);
         }
         return ty.toByteArray();
@@ -544,6 +611,67 @@ public final class BamlType {
         return Objects.hash(kind, primitiveKind, fqn, children, literalArm, literalValue);
     }
 
+    /**
+     * A structural total order, consistent with {@link #equals} (returns 0 iff
+     * equal): by {@link Kind} ordinal, then primitive kind, then FQN / TypeVar
+     * name, then literal arm + value, then children lexicographically. It exists
+     * only to normalize a union's arm list (sort + distinct) into a stable
+     * registry key — never a rendered string, so a crafted literal value can never
+     * alias two distinct arm sets.
+     */
+    @Override
+    public int compareTo(BamlType o) {
+        int c = Integer.compare(kind.ordinal(), o.kind.ordinal());
+        if (c != 0) {
+            return c;
+        }
+        c = Integer.compare(primitiveKind, o.primitiveKind);
+        if (c != 0) {
+            return c;
+        }
+        c = compareNullable(fqn, o.fqn);
+        if (c != 0) {
+            return c;
+        }
+        c = Integer.compare(literalArm, o.literalArm);
+        if (c != 0) {
+            return c;
+        }
+        c = compareLiteralValue(literalValue, o.literalValue);
+        if (c != 0) {
+            return c;
+        }
+        int n = Math.min(children.size(), o.children.size());
+        for (int i = 0; i < n; i++) {
+            c = children.get(i).compareTo(o.children.get(i));
+            if (c != 0) {
+                return c;
+            }
+        }
+        return Integer.compare(children.size(), o.children.size());
+    }
+
+    private static int compareNullable(String a, String b) {
+        if (a == null) {
+            return b == null ? 0 : -1;
+        }
+        return b == null ? 1 : a.compareTo(b);
+    }
+
+    private static int compareLiteralValue(Object a, Object b) {
+        if (a == null) {
+            return b == null ? 0 : -1;
+        }
+        if (b == null) {
+            return 1;
+        }
+        // A matching literalArm (compared first) implies a matching runtime type
+        // (String / Long / Boolean — all Comparable), so this compare is total.
+        @SuppressWarnings("unchecked")
+        Comparable<Object> ca = (Comparable<Object>) a;
+        return ca.compareTo(b);
+    }
+
     @Override
     public String toString() {
         return switch (kind) {
@@ -569,6 +697,123 @@ public final class BamlType {
             case LITERAL -> literalArm == LIT_STRING
                     ? "\"" + literalValue + "\""
                     : String.valueOf(literalValue);
+            case TYPEVAR -> fqn;
+            case UNKNOWN -> "unknown";
+        };
+    }
+
+    // -- structural matching (decode-side arm selection) ----------------------
+
+    /** This token's shape. */
+    public Kind kind() {
+        return kind;
+    }
+
+    /** The BAML FQN (CLASS / ENUM), or the TypeVar name (TYPEVAR); else {@code null}. */
+    public String fqn() {
+        return fqn;
+    }
+
+    /** Whether this is the {@code int} primitive token. */
+    public boolean isInt() {
+        return kind == Kind.PRIMITIVE && primitiveKind == PRIM_INT;
+    }
+
+    /** Whether this is the {@code string} primitive token. */
+    public boolean isString() {
+        return kind == Kind.PRIMITIVE && primitiveKind == PRIM_STRING;
+    }
+
+    /** Whether this is the {@code bool} primitive token. */
+    public boolean isBool() {
+        return kind == Kind.PRIMITIVE && primitiveKind == PRIM_BOOL;
+    }
+
+    /** Whether this is the {@code float} primitive token. */
+    public boolean isFloat() {
+        return kind == Kind.PRIMITIVE && primitiveKind == PRIM_FLOAT;
+    }
+
+    /** Whether this token is a decode-side wildcard (TYPEVAR / UNKNOWN). */
+    public boolean isWildcard() {
+        return kind == Kind.TYPEVAR || kind == Kind.UNKNOWN;
+    }
+
+    /** The element token of a LIST. */
+    public BamlType listItem() {
+        return children.get(0);
+    }
+
+    /** The key token of a MAP. */
+    public BamlType mapKey() {
+        return children.get(0);
+    }
+
+    /** The value token of a MAP. */
+    public BamlType mapValue() {
+        return children.get(1);
+    }
+
+    /** The inner token of an OPTIONAL. */
+    public BamlType optionalInner() {
+        return children.get(0);
+    }
+
+    /** The option tokens of a UNION (declaration order). */
+    public List<BamlType> unionOptions() {
+        return children;
+    }
+
+    /** The literal base name ({@code string} / {@code int} / {@code bool} / {@code bigint} / {@code float}). */
+    public String literalBase() {
+        return switch (literalArm) {
+            case LIT_STRING -> "string";
+            case LIT_INT -> "int";
+            case LIT_BOOL -> "bool";
+            case LIT_BIGINT -> "bigint";
+            case LIT_FLOAT -> "float";
+            default -> "?";
+        };
+    }
+
+    /**
+     * Whether this token (a declared type or union arm) matches a
+     * <em>precise</em> wire token {@code wire} — the {@link #fromWireTy} of a
+     * container's element / key / value type. Both sides are precise (no bare /
+     * imprecise inners — those surface as a {@code null} {@code wire} handled by
+     * the caller as a wildcard), so this is a structural compatibility check:
+     * primitives by kind, named types by FQN (kind- and type-arg-agnostic — the
+     * class-generic-args safe bare-inner fallback), containers recursively, and a
+     * wire optional unwrapped to its inner (wire {@code BamlTy} tokenizer parity).
+     * A wildcard arm ({@link #isWildcard}) matches anything.
+     */
+    public boolean matchesStructural(BamlType wire) {
+        // A wire optional contributes its inner (mirrors the wire tokenizer,
+        // which unwraps an optional element to its inner token).
+        if (wire != null && wire.kind == Kind.OPTIONAL) {
+            return matchesStructural(wire.children.get(0));
+        }
+        if (isWildcard()) {
+            return true;
+        }
+        if (wire == null) {
+            return false;
+        }
+        return switch (kind) {
+            case PRIMITIVE -> wire.kind == Kind.PRIMITIVE && primitiveKind == wire.primitiveKind;
+            case CLASS, ENUM -> (wire.kind == Kind.CLASS || wire.kind == Kind.ENUM)
+                    && Objects.equals(fqn, wire.fqn);
+            case LIST -> wire.kind == Kind.LIST
+                    && children.get(0).matchesStructural(wire.children.get(0));
+            case MAP -> wire.kind == Kind.MAP
+                    && children.get(0).matchesStructural(wire.children.get(0))
+                    && children.get(1).matchesStructural(wire.children.get(1));
+            case OPTIONAL -> children.get(0).matchesStructural(wire);
+            case LITERAL -> wire.kind == Kind.LITERAL
+                    && literalArm == wire.literalArm
+                    && Objects.equals(literalValue, wire.literalValue);
+            case UNION -> children.stream().anyMatch(opt -> opt.matchesStructural(wire));
+            default -> false;
         };
     }
 }
