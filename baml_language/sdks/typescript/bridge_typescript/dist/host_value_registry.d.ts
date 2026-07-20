@@ -21,6 +21,8 @@ import { type HandleKey } from './native.js';
  * encode correctly through the `IInboundValue.handle.key` field).
  */
 export declare function registerHostOpaque(value: unknown): HandleKey;
+/** Roll back an opaque registration that was never transferred to Rust. */
+export declare function releaseHostOpaque(key: HandleKey): void;
 /**
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);

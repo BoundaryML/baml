@@ -8,6 +8,11 @@ import {
     setTypeMap,
     getTypeMap,
     BamlError,
+    BamlAudio,
+    BamlImage,
+    BamlPdf,
+    BamlStream,
+    BamlVideo,
 } from '../dist/index.js';
 
 describe('BamlTypeMap', () => {
@@ -42,5 +47,24 @@ describe('BamlTypeMap', () => {
         const m = new BamlTypeMap();
         setTypeMap(m);
         expect(getTypeMap()).toBe(m);
+    });
+
+    test('runtime-owned builtin resolvers preserve constructor identity', () => {
+        const entries = {
+            'baml.media.Image': BamlImage,
+            'baml.media.Audio': BamlAudio,
+            'baml.media.Video': BamlVideo,
+            'baml.media.Pdf': BamlPdf,
+            'baml.llm.Stream': BamlStream,
+        } as const;
+        const m = BamlTypeMap.fromLazyEntries({
+            classes: Object.fromEntries(Object.entries(entries).map(([fqn, ctor]) => [fqn, () => ctor])),
+            enums: {},
+            typeAliases: {},
+        });
+        for (const [fqn, ctor] of Object.entries(entries)) {
+            expect(m.getClass(fqn)).toBe(ctor);
+            expect(m.getClass(fqn)).toBe(ctor);
+        }
     });
 });

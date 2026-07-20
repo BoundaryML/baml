@@ -84,6 +84,10 @@ export function registerHostOpaque(value) {
     hostValueMap.set(handleKeyToBigint(key), value);
     return key;
 }
+/** Roll back an opaque registration that was never transferred to Rust. */
+export function releaseHostOpaque(key) {
+    hostValueMap.delete(handleKeyToBigint(key));
+}
 /**
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
