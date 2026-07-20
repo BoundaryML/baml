@@ -4765,8 +4765,15 @@ impl BexEngine {
                                 // this sys-op call is a normal `store_var`
                                 // / projection / whatever the surrounding
                                 // expression expected — no implicit await.
-                                let value =
-                                    self.convert_external_to_vm_value(&mut thread, external)?;
+                                let value = if operation == SysOp::BamlHostCallHostValue {
+                                    self.convert_external_to_vm_value_with_ty(
+                                        &mut thread,
+                                        external,
+                                        host_ret_ty.as_ref(),
+                                    )?
+                                } else {
+                                    self.convert_external_to_vm_value(&mut thread, external)?
+                                };
                                 if let Some((call_id, mask)) = sysop_origin_capture {
                                     thread
                                         .vm

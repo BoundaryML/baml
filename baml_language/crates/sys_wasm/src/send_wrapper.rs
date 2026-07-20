@@ -17,7 +17,7 @@ use std::{
 ///
 /// wasm32-unknown-unknown is single-threaded, so this is safe.
 /// This wrapper should only be used on WASM targets.
-pub(crate) struct SendFuture<F>(pub F);
+pub struct SendFuture<F>(pub F);
 
 // SAFETY: wasm32-unknown-unknown is single-threaded
 unsafe impl<F> Send for SendFuture<F> {}
@@ -38,7 +38,7 @@ impl<F: Future> Future for SendFuture<F> {
 /// wasm32-unknown-unknown is single-threaded, so this is safe.
 /// This wrapper should only be used on WASM targets.
 #[derive(Clone)]
-pub(crate) struct SendWrapper<T>(pub T);
+pub struct SendWrapper<T>(pub T);
 
 // SAFETY: wasm32-unknown-unknown is single-threaded
 unsafe impl<T> Send for SendWrapper<T> {}
@@ -46,17 +46,17 @@ unsafe impl<T> Sync for SendWrapper<T> {}
 
 impl<T> SendWrapper<T> {
     /// Create a new `SendWrapper`.
-    pub(crate) fn new(value: T) -> Self {
+    pub fn new(value: T) -> Self {
         Self(value)
     }
 
     /// Get a reference to the inner value.
-    pub(crate) fn inner(&self) -> &T {
+    pub fn inner(&self) -> &T {
         self
     }
 
     /// Take the inner value (for use when the wrapper is stored in a container).
-    pub(crate) fn into_inner(self) -> T {
+    pub fn into_inner(self) -> T {
         self.0
     }
 }

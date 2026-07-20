@@ -12,8 +12,8 @@
 namespace baml {
 
 // Canonical BAML version of the loaded native runtime.
-inline std::string Version() {
-  detail::OwnedBuffer buf{detail::Api().version()};
+inline std::string version() {
+  detail::owned_buffer buf{detail::api().version()};
   return buf.to_string();
 }
 
@@ -21,14 +21,14 @@ inline std::string Version() {
 // payload generated SDKs embed). Registers this bridge (language + SDK
 // canonical version) first -- the contract-required ordering -- then boots.
 // Replaces any previously initialized runtime.
-inline void InitializeRuntimeFromBytecode(const uint8_t* bytecode,
-                                          size_t length,
-                                          const char* sdk_version) {
-  detail::EnsureRegistered(sdk_version);
-  detail::OwnedBuffer error{
-      detail::Api().initialize_runtime_from_bytecode(bytecode, length)};
-  if (!error.empty()) {
-    throw BamlError("BAML_RUNTIME_INITIALIZATION_FAILED: " + error.to_string());
+inline void initialize_runtime_from_bytecode(const uint8_t* bytecode,
+                                             size_t length,
+                                             const char* sdk_version) {
+  detail::ensure_registered(sdk_version);
+  detail::owned_buffer failure{
+      detail::api().initialize_runtime_from_bytecode(bytecode, length)};
+  if (!failure.empty()) {
+    throw error("BAML_RUNTIME_INITIALIZATION_FAILED: " + failure.to_string());
   }
 }
 

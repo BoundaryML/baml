@@ -20,6 +20,7 @@ bridge_ctypes = { workspace = true }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
+sys_wasm = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }

@@ -1954,6 +1954,21 @@ impl IoSysOpsBuilder {
         self
     }
 
+    /// Override only `baml.fs.read`, leaving every other filesystem operation unsupported.
+    #[must_use]
+    pub fn with_fs_read_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_fs_read = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
     /// Override the `fs` namespace with a default-constructible type.
     #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
@@ -2081,6 +2096,42 @@ impl IoSysOpsBuilder {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_server__serve(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the non-streaming HTTP client operations only.
+    ///
+    /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
+    /// leaving SSE, server, TLS, and response-construction slots unsupported.
+    #[must_use]
+    pub fn with_http_fetch_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_http__fetch = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__fetch(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http__send = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_text = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_bytes = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
         self

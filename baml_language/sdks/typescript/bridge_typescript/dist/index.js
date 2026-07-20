@@ -10,6 +10,7 @@ import { BamlRuntime, Collector as NativeCollector, cancelFunctionCall as native
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
+import { attachCallContext } from './call_context.js';
 export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents, } from './native.js';
 export { Timing, Usage } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
@@ -42,20 +43,12 @@ export function initializeRuntime(srcDir, files) {
 export function initializeRuntimeFromBytecode(bytecode) {
     BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
 }
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
+export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
 }
 export function cancelFunctionCall(callId) {
     return nativeCancelFunctionCall(callId.toString());
-}
-function attachCallContext(ctx, callId) {
-    ctx?._attachCallId(callId.toString());
-    return {
-        detach() {
-            ctx?._detachCallId(callId.toString());
-        },
-    };
 }
 export class FunctionResult {
     _value;
@@ -123,17 +116,19 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, call
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
-    let resultBytes;
     try {
-        resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors);
-    }
-    catch (err) {
-        throw wrapNativeError(err);
+        let resultBytes;
+        try {
+            resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors);
+        }
+        catch (err) {
+            throw wrapNativeError(err);
+        }
+        return new FunctionResult(decodeCallResult(resultBytes));
     }
     finally {
         callCtxBinding.detach();
     }
-    return new FunctionResult(decodeCallResult(resultBytes));
 }
 export async function callFunction(rt, functionName, kwargs, ctx, collectors, callCtx) {
     const callId = newFunctionCall();
@@ -145,17 +140,19 @@ export async function callFunction(rt, functionName, kwargs, ctx, collectors, ca
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
     // original JS exception from the host-callable rehydration path)
     // already carry the right type and must propagate by identity.
-    let resultBytes;
     try {
-        resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors);
-    }
-    catch (err) {
-        throw wrapNativeError(err);
+        let resultBytes;
+        try {
+            resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors);
+        }
+        catch (err) {
+            throw wrapNativeError(err);
+        }
+        return new FunctionResult(decodeCallResult(resultBytes));
     }
     finally {
         callCtxBinding.detach();
     }
-    return new FunctionResult(decodeCallResult(resultBytes));
 }
 // Register flush on process exit (single registration; see exit_hook.ts).
 installFlushOnExit();

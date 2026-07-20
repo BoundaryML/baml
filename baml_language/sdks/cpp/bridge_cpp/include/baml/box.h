@@ -12,54 +12,54 @@ namespace baml {
 // copyable, and unlike std::optional it may hold an incomplete type.
 // Never null except in the moved-from state.
 template <typename T>
-class Box {
+class box {
  public:
-  Box(T value) : ptr_(new T(std::move(value))) {}
+  box(T value) : ptr_(new T(std::move(value))) {}
 
-  Box(const Box& other) : ptr_(new T(*other.ptr_)) {}
-  Box(Box&&) noexcept = default;
-  Box& operator=(const Box& other) {
+  box(const box& other) : ptr_(new T(*other.ptr_)) {}
+  box(box&&) noexcept = default;
+  box& operator=(const box& other) {
     if (this != &other) {
       ptr_ = std::unique_ptr<T>(new T(*other.ptr_));
     }
     return *this;
   }
-  Box& operator=(Box&&) noexcept = default;
+  box& operator=(box&&) noexcept = default;
 
   T& operator*() { return *ptr_; }
   const T& operator*() const { return *ptr_; }
   T* operator->() { return ptr_.get(); }
   const T* operator->() const { return ptr_.get(); }
 
-  friend bool operator==(const Box& a, const Box& b) {
+  friend bool operator==(const box& a, const box& b) {
     return *a.ptr_ == *b.ptr_;
   }
-  friend bool operator!=(const Box& a, const Box& b) { return !(a == b); }
+  friend bool operator!=(const box& a, const box& b) { return !(a == b); }
 
  private:
   std::unique_ptr<T> ptr_;
 };
 
 // Nullable deep-copying heap box: the spelling of `T | null` when T is a
-// recursive class (std::optional requires a complete T; OptionalBox, like
-// Box, only needs the forward declaration). Empty = BAML null.
+// recursive class (std::optional requires a complete T; optional_box, like
+// box, only needs the forward declaration). Empty = BAML null.
 template <typename T>
-class OptionalBox {
+class optional_box {
  public:
-  OptionalBox() = default;
-  OptionalBox(std::nullopt_t) {}
-  OptionalBox(T value) : ptr_(new T(std::move(value))) {}
+  optional_box() = default;
+  optional_box(std::nullopt_t) {}
+  optional_box(T value) : ptr_(new T(std::move(value))) {}
 
-  OptionalBox(const OptionalBox& other)
+  optional_box(const optional_box& other)
       : ptr_(other.ptr_ ? new T(*other.ptr_) : nullptr) {}
-  OptionalBox(OptionalBox&&) noexcept = default;
-  OptionalBox& operator=(const OptionalBox& other) {
+  optional_box(optional_box&&) noexcept = default;
+  optional_box& operator=(const optional_box& other) {
     if (this != &other) {
       ptr_ = other.ptr_ ? std::unique_ptr<T>(new T(*other.ptr_)) : nullptr;
     }
     return *this;
   }
-  OptionalBox& operator=(OptionalBox&&) noexcept = default;
+  optional_box& operator=(optional_box&&) noexcept = default;
 
   bool has_value() const { return ptr_ != nullptr; }
   explicit operator bool() const { return has_value(); }
@@ -68,13 +68,13 @@ class OptionalBox {
   T* operator->() { return ptr_.get(); }
   const T* operator->() const { return ptr_.get(); }
 
-  friend bool operator==(const OptionalBox& a, const OptionalBox& b) {
+  friend bool operator==(const optional_box& a, const optional_box& b) {
     if (a.has_value() != b.has_value()) {
       return false;
     }
     return !a.has_value() || *a.ptr_ == *b.ptr_;
   }
-  friend bool operator!=(const OptionalBox& a, const OptionalBox& b) {
+  friend bool operator!=(const optional_box& a, const optional_box& b) {
     return !(a == b);
   }
 

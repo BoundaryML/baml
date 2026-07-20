@@ -23,18 +23,21 @@ function generatedSdkFile(relPath: string): string | null {
   return readFileSync(path, "utf8");
 }
 
-describe.runIf(isTestRuntime("node"))(
-  "function_calls — stdlib entry points",
-  () => {
-    // `baml.sys.now_ms() -> int` is a native `$rust_function`
-    // (FunctionKind::Native). Calling it as an entry point should run the native
-    // and return a positive millisecond timestamp, not reject with
-    // `NotInvokableAsEntry`.
-    it("native baml.sys.now_ms is callable as an entry point", async () => {
-      expect(now_ms()).toBeGreaterThan(0);
-      expect(await now_ms_async()).toBeGreaterThan(0);
-    });
+describe("function_calls — portable stdlib entry points", () => {
+  // `baml.sys.now_ms() -> int` is a native `$rust_function`
+  // (FunctionKind::Native). Calling it as an entry point should run the native
+  // and return a positive millisecond timestamp, not reject with
+  // `NotInvokableAsEntry`.
+  it("native baml.sys.now_ms is callable as an entry point", async () => {
+    expect(now_ms()).toBeGreaterThan(0);
+    expect(await now_ms_async()).toBeGreaterThan(0);
+  });
+});
 
+// The positive exists case depends on Node's local filesystem capability.
+describe.runIf(isTestRuntime("node"))(
+  "function_calls — Node filesystem stdlib entry points",
+  () => {
     // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function`
     // (FunctionKind::SysOp). Calling it as an entry point should run the
     // filesystem sysop and return a bool. `.` is the generated fixture
@@ -43,7 +46,13 @@ describe.runIf(isTestRuntime("node"))(
       expect(exists(".")).toBe(true);
       expect(await exists_async(".")).toBe(true);
     });
+  },
+);
 
+// Inspecting generated TypeScript source requires Node's local filesystem APIs.
+describe.runIf(isTestRuntime("node"))(
+  "function_calls — compiler intrinsic source surface",
+  () => {
     it("compiler intrinsics are not emitted as entry points", () => {
       const forbidden: Array<[string, string]> = [
         ["vendor/log/index.ts", '"log.info"'],
