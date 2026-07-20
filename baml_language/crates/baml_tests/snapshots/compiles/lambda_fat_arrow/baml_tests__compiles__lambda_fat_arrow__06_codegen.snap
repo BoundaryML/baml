@@ -72,6 +72,13 @@ function user.test_multi_param() -> int {
     return
 }
 
+function user.test_top_level_fat_arrow(x: int) -> int {
+    load_var x
+    load_const 1
+    add_int
+    return
+}
+
 function user.test_zero_param() -> int {
     make_closure .<lambda(test_zero_param, 0)>, 0
     call_indirect

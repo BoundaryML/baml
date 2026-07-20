@@ -1115,10 +1115,11 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                             format!("=== STRONG AST ERROR ===\n{}", e)
                         }
                     };
-                    with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                        assert_snapshot!(#snapshot_name, output);
-                    });
-                    return;
+                    panic!(
+                        "Formatter rejected compiler-test input that reaches the formatter tier ({}):\n{}",
+                        #relative_path,
+                        output
+                    );
                 }
             };
 
