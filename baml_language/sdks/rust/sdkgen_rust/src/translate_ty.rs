@@ -164,6 +164,13 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::Class(name, args, _) => {
+            // The builtin opaque host-error class is the Rust surface of an
+            // opaque host throw: it maps to `baml_bridge::HostCallable` (the
+            // erased default), not an emitted class — it never appears in the
+            // generated crate.
+            if name.to_string() == "baml.errors.HostCallable" {
+                return Ok(quote! { ::baml_bridge::HostCallable });
+            }
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),

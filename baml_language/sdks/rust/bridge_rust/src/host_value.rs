@@ -602,6 +602,12 @@ fn slot_args(
 ///
 /// and the async (`Future`-returning) forms of all three.
 pub trait HostCallback<Args, Ret, Marker>: Send + Sync + 'static {
+    /// The BAML-level error type this closure surfaces: `Infallible` for an
+    /// infallible closure, the declared `E` for a typed-throw closure, or
+    /// [`HostCallable`] for an opaque host error. A generated binding whose
+    /// BAML `throws` is the callback's inferred error param realizes that
+    /// param as this type, so its result is `Error<Cb::Throws>`.
+    type Throws: BamlValue;
     #[doc(hidden)]
     fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable>;
 }
@@ -655,6 +661,7 @@ macro_rules! impl_host_callback {
             R: BamlValue,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = std::convert::Infallible;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -674,6 +681,7 @@ macro_rules! impl_host_callback {
             E: BamlValue,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = E;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -695,6 +703,7 @@ macro_rules! impl_host_callback {
             E: std::error::Error + Send + Sync + 'static,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = HostCallable;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -716,6 +725,7 @@ macro_rules! impl_host_callback {
             R: BamlValue,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = std::convert::Infallible;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -736,6 +746,7 @@ macro_rules! impl_host_callback {
             E: BamlValue,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = E;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -761,6 +772,7 @@ macro_rules! impl_host_callback {
             E: std::error::Error + Send + Sync + 'static,
             $($A: BamlValue + Send + 'static,)*
         {
+            type Throws = HostCallable;
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();

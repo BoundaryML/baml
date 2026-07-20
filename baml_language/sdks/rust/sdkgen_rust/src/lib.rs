@@ -35,6 +35,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 mod analyze;
+mod effect_rename;
 mod emit;
 mod idents;
 mod routing;
@@ -155,6 +156,11 @@ pub fn to_source_code_with_bytecode(
         matches!(options.naming_convention, NamingConvention::PreserveCase),
         "only NamingConvention::PreserveCase is supported"
     );
+
+    // Give each callback's synthetic effect param a readable Rust name before
+    // anything else looks at the pool, so the generic, its error union, and
+    // that union's variant all read `CbError` rather than `__effect_param_0`.
+    let pool = &effect_rename::rename_effect_params(pool);
 
     let (analysis, mut warnings) = analyze::analyze(pool);
     let union_registry = unions::collect(pool, &analysis);

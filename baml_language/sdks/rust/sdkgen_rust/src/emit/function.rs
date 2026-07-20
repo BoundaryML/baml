@@ -114,9 +114,28 @@ fn emit_binding(
         own_params.iter().all(|own| !class_params.contains(own)),
         "method type param shadows a class type param in {fqn}"
     );
-    let scope: Vec<String> = class_params.iter().chain(&own_params).cloned().collect();
+    // A callback parameter with an inferred `throws` carries a synthetic
+    // effect-param typevar (the type system desugars `foo(cb: () -> void)` to
+    // `foo<E>(cb: () -> void throws E) -> … throws E`). It is deliberately NOT
+    // in `generic_params` — kept off the language-agnostic surface so erasing
+    // SDKs are unaffected — but the Rust binding realizes it as an explicit
+    // generic tied to the callback's associated `Throws`, so the inferred
+    // outer `throws` (which references it) resolves.
+    let effect_params = collect_effect_params(function, class_params, &own_params);
+    // Translation scope: class params, the callee's own params, then the
+    // effect params — a `Ty::TypeVar` naming any of them resolves.
+    let translation_scope: Vec<String> = class_params
+        .iter()
+        .chain(&own_params)
+        .chain(&effect_params)
+        .cloned()
+        .collect();
+    // Wire type-args cover only the named generics the engine expects (class +
+    // own, De Bruijn order); effect params are realized from the callback at
+    // dispatch, never sent.
+    let type_args_scope: Vec<String> = class_params.iter().chain(&own_params).cloned().collect();
     let gctx = TyCtx {
-        generic_params: scope.as_slice(),
+        generic_params: translation_scope.as_slice(),
         ..*ctx
     };
 
@@ -131,6 +150,11 @@ fn emit_binding(
     let mut params = Vec::new();
     let mut converts = Vec::new();
     let mut kwarg_entries = Vec::new();
+    // Callable parameters contribute two generic parameters each — the
+    // closure type and its `HostCallback` marker — merged into the binding's
+    // generics, and are registered as host closures rather than sent by value.
+    let mut callable_generic_decls: Vec<TokenStream> = Vec::new();
+    let mut callable_index = 0usize;
     if matches!(receiver, Receiver::RefSelf) {
         // The receiver rides the wire as an ordinary kwarg named `self`,
         // deep-copied like every other argument (no bridge special-casing;
@@ -147,6 +171,48 @@ fn emit_binding(
     for arg in &function.arguments {
         let arg_name = arg.name.as_str();
         let param = idents::ident(arg_name);
+        // A direct callable parameter (`(…) -> R`) is registered as a host
+        // closure rather than sent as a value: the binding takes it as a
+        // generic bound by `HostCallback`, erases it via `callable_handle`,
+        // and sends the resulting handle on the wire. Only a *direct*,
+        // non-defaulted callable is handled here; one nested in a
+        // union/optional or behind a default falls through to `translate_ty`
+        // and skips (fail closed) — "callables only in direct parameter
+        // position".
+        if arg.default.is_none() && matches!(&arg.ty, baml_codegen_types::Ty::Function { .. }) {
+            let CallableParts {
+                args_tuple,
+                ret,
+                throws: cb_throws,
+                host_params,
+            } = translate_callable(&arg.ty, &gctx)
+                .map_err(|u| skip(format!("callback `{arg_name}`: {}", u.reason)))?;
+            let cb_ident = format_ident!("__BamlCb{callable_index}");
+            let marker_ident = format_ident!("__BamlCbMarker{callable_index}");
+            callable_index += 1;
+            // The BAML callable type's `throws` is the closure's error
+            // contract, realized as the callback's associated `Throws`. The
+            // outer binding's `throws` names the same type (the effect param),
+            // so this ties the two together — the caller's closure determines
+            // both.
+            callable_generic_decls.push(quote! {
+                #cb_ident: ::baml_bridge::HostCallback<
+                    #args_tuple, #ret, #marker_ident, Throws = #cb_throws
+                >
+            });
+            callable_generic_decls.push(quote! { #marker_ident });
+            params.push(quote! { #param: #cb_ident });
+            converts.push(quote! {
+                let #param = ::baml_bridge::host_value::callable_handle(
+                    #param,
+                    &[#(#host_params),*],
+                );
+            });
+            kwarg_entries.push(quote! {
+                (#arg_name, ::std::option::Option::Some(#param))
+            });
+            continue;
+        }
         let ty = translate_ty::translate(&arg.ty, &gctx)
             .map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
         if arg.default.is_some() {
@@ -225,19 +291,27 @@ fn emit_binding(
     // method's class params are declared by the enclosing `impl` header —
     // but the wire bindings cover the whole scope, class params first
     // (the De Bruijn order the engine expects).
-    let generics_decl = if own_params.is_empty() {
-        TokenStream::new()
-    } else {
-        let bounded = own_params.iter().map(|param| {
+    // User generics and synthetic effect params are both emitted as
+    // `<T: BamlValue>`: the effect param is inferred from its callback's
+    // `Throws`, but it is a first-class generic in the Rust signature.
+    let mut generic_decls: Vec<TokenStream> = own_params
+        .iter()
+        .chain(&effect_params)
+        .map(|param| {
             let ident = idents::ident(param);
             quote! { #ident: ::baml_bridge::BamlValue }
-        });
-        quote! { <#(#bounded),*> }
+        })
+        .collect();
+    generic_decls.extend(callable_generic_decls);
+    let generics_decl = if generic_decls.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! { <#(#generic_decls),*> }
     };
-    let type_args_expr = if scope.is_empty() {
+    let type_args_expr = if type_args_scope.is_empty() {
         quote! { ::std::vec![] }
     } else {
-        let entries = scope.iter().map(|param| {
+        let entries = type_args_scope.iter().map(|param| {
             let ident = idents::ident(param);
             quote! {
                 (
@@ -274,6 +348,129 @@ fn emit_binding(
             )
             .await
         }
+    })
+}
+
+/// The Rust pieces a `(…) -> R` callable parameter contributes: the
+/// closure's argument-tuple and return types for the [`HostCallback`] bound
+/// (`::baml_bridge::HostCallback`), plus one [`HostParam`] descriptor per
+/// callable parameter that the dispatcher slots incoming BAML args against.
+struct CallableParts {
+    /// `(A1, A2, …)` — the closure's argument tuple (`(A,)` for one arg,
+    /// `()` for none).
+    args_tuple: TokenStream,
+    /// The closure's return type.
+    ret: TokenStream,
+    /// The closure's error type, for the `HostCallback::Throws` binding
+    /// (`Infallible` for a `never`-throwing callable).
+    throws: TokenStream,
+    /// One `HostParam { name, optional }` initializer per callable parameter,
+    /// in declaration order.
+    host_params: Vec<TokenStream>,
+}
+
+/// Collect the synthetic effect-param typevars a function's direct callback
+/// parameters carry in their inferred `throws` (the implicit `throws E`
+/// generics), in declaration order and deduped. A callback whose `throws`
+/// names a class or a *user* generic is already declared, so those are
+/// excluded — only the synthetic ones (absent from `generic_params`) surface
+/// here.
+fn collect_effect_params(
+    function: &Function,
+    class_params: &[String],
+    own_params: &[String],
+) -> Vec<String> {
+    let mut effect_params: Vec<String> = Vec::new();
+    for arg in &function.arguments {
+        if arg.default.is_none()
+            && let baml_codegen_types::Ty::Function { throws, .. } = &arg.ty
+            && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()
+        {
+            let name = name.as_str();
+            let already = class_params.iter().any(|p| p == name)
+                || own_params.iter().any(|p| p == name)
+                || effect_params.iter().any(|p| p == name);
+            if !already {
+                effect_params.push(name.to_string());
+            }
+        }
+    }
+    effect_params
+}
+
+/// Translate a callable's declared `throws` for its `HostCallback::Throws`
+/// binding: `never` (the callable throws nothing) maps to `Infallible`;
+/// anything else is an ordinary type (a synthetic/user throws generic, a BAML
+/// error class, or the opaque `baml.errors.HostCallable`).
+fn translate_throws(
+    ty: &baml_codegen_types::Ty,
+    ctx: &TyCtx<'_>,
+) -> Result<TokenStream, translate_ty::Unsupported> {
+    match ty {
+        baml_codegen_types::Ty::Never { .. } => Ok(quote! { ::core::convert::Infallible }),
+        _ => translate_ty::translate(ty, ctx),
+    }
+}
+
+/// Translate a `Ty::Function` in direct parameter position into the pieces a
+/// host-callable binding needs. The callable's declared `throws` does not
+/// appear: the `HostCallback` bound leaves the closure's error type free (a
+/// marker disambiguates infallible / typed-throw / opaque-throw closures), so
+/// any error family is accepted and the BAML-declared contract governs only
+/// the wire at runtime.
+fn translate_callable(
+    func: &baml_codegen_types::Ty,
+    ctx: &TyCtx<'_>,
+) -> Result<CallableParts, translate_ty::Unsupported> {
+    let baml_codegen_types::Ty::Function {
+        params,
+        ret,
+        throws,
+        ..
+    } = func
+    else {
+        unreachable!("translate_callable is only called on Ty::Function");
+    };
+    let mut arg_types = Vec::with_capacity(params.len());
+    let mut host_params = Vec::with_capacity(params.len());
+    for param in params {
+        let inner = translate_ty::translate(&param.ty, ctx)?;
+        // An optional callable parameter is delivered to the closure as
+        // `Option<T>` — a BAML-omitted optional arrives as `None`, matching
+        // the dispatcher's null-fill; a required one as `T`.
+        let optional = matches!(
+            param.mode,
+            baml_codegen_types::CodegenFunctionParamMode::Optional
+        );
+        arg_types.push(if optional {
+            quote! { ::std::option::Option<#inner> }
+        } else {
+            inner
+        });
+        // The name is load-bearing only for optionals (matched against the
+        // wire arg name); a required param's name rides only in the
+        // dispatcher's "missing argument" diagnostic.
+        let name = param.name.as_ref().map_or("", baml_base::Name::as_str);
+        host_params.push(quote! {
+            ::baml_bridge::HostParam { name: #name, optional: #optional }
+        });
+    }
+    // A one-element tuple needs its trailing comma; the parenthesized form
+    // `(A)` is just `A`, not `(A,)`.
+    let args_tuple = match arg_types.as_slice() {
+        [] => quote! { () },
+        [one] => quote! { (#one,) },
+        many => quote! { (#(#many),*) },
+    };
+    let ret_ty: &baml_codegen_types::Ty = ret;
+    let ret = translate_ty::translate(ret_ty, ctx)?;
+    let throws_ty: &baml_codegen_types::Ty = throws;
+    let throws = translate_throws(throws_ty, ctx)?;
+    Ok(CallableParts {
+        args_tuple,
+        ret,
+        throws,
+        host_params,
     })
 }
 
