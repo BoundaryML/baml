@@ -110,6 +110,10 @@ fn dispatch(
     let name = CString::new(fqn)
         .map_err(|_| SdkError::new("function name contains an interior NUL byte"))?;
     let receiver = completion::register(api);
+    // Host-callable dispatch must be installed before the engine can hold
+    // a callable handle; every handle rides a call that passes through
+    // here first.
+    crate::host_value::ensure_callbacks_registered(api);
     // SAFETY: takes no arguments; allocates an id inside the engine.
     #[expect(unsafe_code)]
     let call_id = unsafe { (api.new_function_call)() };

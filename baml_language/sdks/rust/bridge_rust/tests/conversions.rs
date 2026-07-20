@@ -57,6 +57,23 @@ function rt_opt_union(u: int | string | null) -> int | string | null { u }
 function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
 function rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T> { w }
 function rt_mixed<T>(m: Mixed<T>) -> Mixed<T> { m }
+function hc_call(callback: (int) -> string, x: int) -> string {
+    callback(x)
+}
+function hc_optionals(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x), callback(x, y = 2), callback(x, z = 3), callback(x, y = 2, z = 3)]
+}
+function hc_typed_throws(
+    callback: (int) -> string throws Point,
+    x: int,
+) -> string throws Point {
+    callback(x)
+}
+function hc_catches(callback: (int) -> string throws baml.errors.HostCallable, x: int) -> string {
+    callback(x) catch (e) {
+        _ => "caught:" + e.class_name
+    }
+}
 "#;
 
 fn ensure_runtime() {
@@ -630,6 +647,272 @@ fn round_trips_generic_union_field() {
         .expect("rt_mixed<int> succeeds");
         assert_eq!(out, m);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Host callables: closures crossing into BAML, exactly as the Rust SDK
+// generator will emit them (the executable spec for that emission).
+// ---------------------------------------------------------------------------
+
+/// The param spec the generated binding describes a `(int) -> string`
+/// callable with: one required (positional) parameter.
+static HC_ONE_INT: &[baml_bridge::HostParam] = &[baml_bridge::HostParam {
+    name: "x",
+    optional: false,
+}];
+
+#[test]
+fn host_callable_round_trips_sync_and_async() {
+    ensure_runtime();
+    let call = |handle: wire::InboundValue, x: i64| {
+        runtime::invoke_sync::<String, Infallible>(
+            "user.hc_call",
+            encode::kwargs(vec![("callback", Some(handle)), ("x", Some(x.to_baml()))]),
+            vec![],
+        )
+    };
+
+    let sync_cb = |x: i64| format!("got {x}");
+    assert_eq!(
+        call(
+            baml_bridge::host_value::callable_handle(sync_cb, HC_ONE_INT),
+            5
+        )
+        .unwrap(),
+        "got 5"
+    );
+
+    // A future-returning closure is driven on the bridge's dispatch
+    // runtime, even on the sync call path.
+    let async_cb = |x: i64| async move { format!("async {x}") };
+    assert_eq!(
+        call(
+            baml_bridge::host_value::callable_handle(async_cb, HC_ONE_INT),
+            7
+        )
+        .unwrap(),
+        "async 7"
+    );
+}
+
+#[test]
+fn host_callable_optionals_deliver_by_name() {
+    static PARAMS: &[baml_bridge::HostParam] = &[
+        baml_bridge::HostParam {
+            name: "x",
+            optional: false,
+        },
+        baml_bridge::HostParam {
+            name: "y",
+            optional: true,
+        },
+        baml_bridge::HostParam {
+            name: "z",
+            optional: true,
+        },
+    ];
+    ensure_runtime();
+    // An omitted optional arrives as `None`; the host default fills it.
+    let cb =
+        |x: i64, y: Option<i64>, z: Option<i64>| x * 100 + y.unwrap_or(8) * 10 + z.unwrap_or(9);
+    let result = runtime::invoke_sync::<Vec<i64>, Infallible>(
+        "user.hc_optionals",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, PARAMS)),
+            ),
+            ("x", Some(5i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect("hc_optionals succeeds");
+    assert_eq!(result, [589, 529, 583, 523]);
+}
+
+#[test]
+fn host_callable_typed_throw_propagates_as_the_declared_class() {
+    ensure_runtime();
+    // The closure's error type IS the declared BAML throws class — it
+    // crosses as that real class and lands in `Error::Thrown`.
+    let cb = |_x: i64| -> Result<String, Point> {
+        Err(Point {
+            x: 1,
+            y: 2,
+            tag: Some("thrown".to_string()),
+        })
+    };
+    let err = runtime::invoke_sync::<String, Point>(
+        "user.hc_typed_throws",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the typed host throw must propagate");
+    match err {
+        Error::Thrown { value, .. } => {
+            assert_eq!(
+                *value,
+                Point {
+                    x: 1,
+                    y: 2,
+                    tag: Some("thrown".to_string()),
+                }
+            );
+        }
+        other => panic!("expected the typed throw, got {other}"),
+    }
+}
+
+/// An arbitrary host error with no BAML representation.
+#[derive(Debug, Clone, PartialEq)]
+struct Boom(String);
+
+impl std::fmt::Display for Boom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for Boom {}
+
+#[test]
+fn host_callable_opaque_throw_rehydrates_the_original() {
+    ensure_runtime();
+    let raised = Boom("nope".to_string());
+    let cb = {
+        let raised = raised.clone();
+        move |_x: i64| -> Result<String, Boom> { Err(raised.clone()) }
+    };
+    // `baml.errors.HostCallable` is a normal throws member: decode with
+    // `E = HostCallable` and the throw arrives as `Error::Thrown` like any
+    // other declared error class — metadata 1:1 with the BAML instance,
+    // plus the rehydrated original the BAML side holds only as a handle.
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    let Error::Thrown { value, .. } = err else {
+        panic!("expected the HostCallable throw, got {err}");
+    };
+    assert_eq!(value.message, "nope");
+    // Erased in BAML; retained on the Rust side. The original comes back
+    // both by borrow (`downcast_ref`) and owned (`original` → `Arc::downcast`)
+    // — the concrete type stands in for the erased `class_name` metadata.
+    assert_eq!(value.downcast_ref::<Boom>(), Some(&raised));
+    assert_eq!(*value.original().downcast::<Boom>().unwrap(), raised);
+}
+
+/// A second host-error type, distinct from [`Boom`].
+#[derive(Debug)]
+struct Splat;
+
+impl std::fmt::Display for Splat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "splat")
+    }
+}
+
+impl std::error::Error for Splat {}
+
+#[test]
+fn host_callable_opaque_throw_decodes_into_typed_hostcallable() {
+    ensure_runtime();
+    let raised = Boom("nope".to_string());
+    let cb = {
+        let raised = raised.clone();
+        move |_x: i64| -> Result<String, Boom> { Err(raised.clone()) }
+    };
+    // A caller that statically knows the host-error type decodes straight
+    // into `HostCallable<Boom>`: `from_baml` validates the rehydrated
+    // original really is a `Boom`, so `original()` is a `Arc<Boom>` with no
+    // runtime downcast at the use site.
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Boom>>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    let Error::Thrown { value, .. } = err else {
+        panic!("expected the typed HostCallable throw, got {err}");
+    };
+    assert_eq!(value.message, "nope");
+    let original: std::sync::Arc<Boom> = value.original();
+    assert_eq!(*original, raised);
+}
+
+#[test]
+fn host_callable_typed_decode_rejects_wrong_type() {
+    ensure_runtime();
+    // The callback throws a `Boom`, but the caller optimistically decodes as
+    // `HostCallable<Splat>`. The rehydrated original is not a `Splat`, so
+    // `from_baml`'s validating downcast fails and `decode_result` folds it
+    // into `Error::Runtime` — the same fallback as any non-declared throw.
+    let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("wrong type".to_string())) };
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Splat>>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    match err {
+        Error::Runtime { class_name, .. } => {
+            assert_eq!(class_name.as_deref(), Some("baml.errors.HostCallable"));
+        }
+        other => panic!("expected the Runtime fallback for a wrong-typed decode, got {other}"),
+    }
+}
+
+#[test]
+fn host_callable_opaque_throw_is_catchable_in_baml() {
+    ensure_runtime();
+    // BAML's `catch (e)` intercepts the `baml.errors.HostCallable` throw
+    // and can read its `class_name` metadata (`hc_catches` returns
+    // `"caught:" + e.class_name`).
+    let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("boom from host".to_string())) };
+    let result = runtime::invoke_sync::<String, Infallible>(
+        "user.hc_catches",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect("the BAML catch must recover");
+    // `class_name` is the full, compiler-dependent `type_name` — assert the
+    // catch fired and read the field, not the exact string.
+    assert!(
+        result.starts_with("caught:") && result.contains("Boom"),
+        "{result}"
+    );
 }
 
 #[test]

@@ -18,6 +18,17 @@ use crate::{
 /// the synchronous duration of the call — implementations must copy.
 pub(crate) type CallbackFn = extern "C" fn(call_id: u32, content: *const c_char, length: usize);
 
+/// The engine's BAML→host dispatch callback: BAML invoked a host-owned
+/// callable. `args` (a protobuf `BamlToHostCall`) is borrowed only for the
+/// synchronous duration of the call — implementations must copy, return
+/// promptly, and eventually complete via [`Api::complete_host_call`].
+pub(crate) type HostDispatchFn =
+    extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
+
+/// The engine's host-value release callback: the engine dropped its last
+/// reference to a host-owned value.
+pub(crate) type HostReleaseFn = extern "C" fn(host_value_key: u64);
+
 /// Owned byte buffer returned by the engine. Must be released exactly once
 /// with [`Api::free_buffer`]. Layout-identical to `bridge_cffi::Buffer`.
 #[repr(C)]
@@ -39,6 +50,13 @@ pub(crate) struct Api {
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
     pub(crate) call_function: unsafe extern "C" fn(*const c_char, *const u8, usize, u32),
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
+    pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
+    pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
+    /// Complete one outstanding BAML→host call. `is_error` is 0 or 1;
+    /// `content` is a protobuf `InboundValue`, borrowed only for the call.
+    /// An empty (`length == 0`) error payload is the bridge-failure signal:
+    /// the engine surfaces it as an SDK panic instead of a catchable throw.
+    pub(crate) complete_host_call: unsafe extern "C" fn(u32, i32, *const c_char, usize),
 }
 
 impl Api {
@@ -123,6 +141,12 @@ struct BamlApiV1 {
     register_callback: unsafe extern "C" fn(CallbackFn),
     call_function: unsafe extern "C" fn(*const c_char, *const u8, usize, u32),
     new_function_call: unsafe extern "C" fn() -> u64,
+    /// Layout placeholder: sits between `new_function_call` and the
+    /// host-value entries in ABI order. Unused until cancellation lands.
+    cancel_function_call: unsafe extern "C" fn(u64) -> i32,
+    register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
+    register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
+    complete_host_call: unsafe extern "C" fn(u32, i32, *const c_char, usize),
 }
 
 fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
@@ -181,6 +205,9 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         new_function_call: table.new_function_call,
         call_function: table.call_function,
         free_buffer: table.free_buffer,
+        register_host_dispatch_callback: table.register_host_dispatch_callback,
+        register_host_release_callback: table.register_host_release_callback,
+        complete_host_call: table.complete_host_call,
     };
 
     // SAFETY: `version` returns an engine-owned buffer freed via the same
