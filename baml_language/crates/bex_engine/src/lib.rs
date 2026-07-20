@@ -2420,8 +2420,7 @@ impl BexEngine {
             .enumerate()
             .map(|(idx, arg)| match arg {
                 BexCallArg::Provided(value) => {
-                    let coerced =
-                        crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
+                    let coerced = self.coerce_inbound_arg(*value, &param_types[idx])?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,
@@ -2873,7 +2872,7 @@ impl BexEngine {
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
-                Some(ty) => crate::conversion::coerce_arg_to_declared_type(arg, ty),
+                Some(ty) => self.coerce_inbound_arg(arg, ty),
                 None => Ok(arg),
             })
             .collect::<Result<_, _>>()?;

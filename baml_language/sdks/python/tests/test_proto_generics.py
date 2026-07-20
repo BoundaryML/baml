@@ -405,6 +405,15 @@ def test_generic_instance_carries_sparse_value_type():
     assert inbound.value_type.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
 
 
+def test_unbound_generic_instance_carries_nominal_sparse_value_type():
+    """An erased generic keeps nominal identity while omitting unknown args."""
+    inbound = baml_inbound_pb2.InboundValue()
+    _set_inbound_value(inbound, Box(item=5), kwarg_name="x")
+    assert inbound.WhichOneof("value") == "class_value"
+    assert inbound.HasField("value_type")
+    assert len(inbound.value_type.class_ty.type_args) == 0
+
+
 def test_non_generic_instance_value_type_has_no_type_args():
     """A non-generic instance still binds its class via `value_type` (the FQN
     channel, now the sole class-name source) but carries no type args."""

@@ -154,13 +154,12 @@ function setInboundValue(iv, value, ctx) {
         iv.listValue = { values: listVal };
     }
     else if (value !== null && typeof value === 'object') {
-        // Any remaining object — a plain object OR a codegen-emitted class
-        // instance (e.g. `new Resume({...})`) — encodes as `map_value` with
-        // no FQN tag. The Rust side's `coerce_arg_to_declared_type` reshapes
-        // it against the function's declared parameter type (the 10a
-        // typemap-free encode simplification). `Object.entries` yields the
-        // class's own enumerable fields, set by the constructor's
-        // `Object.assign(this, init)`. The specific built-in wrappers
+        // Any remaining object is either a plain object or a codegen-emitted
+        // class instance. Plain objects encode as `map_value` and are reshaped
+        // against contextual types; generated instances carry a sparse nominal
+        // annotation when the typemap identifies their constructor.
+        // `Object.entries` yields the class's own enumerable fields, set by the
+        // constructor's `Object.assign(this, init)`. The specific built-in wrappers
         // (BamlHandle/BamlStream/media) are handled by the instanceof
         // branches above, so they never reach here.
         //
@@ -196,21 +195,18 @@ function setInboundValue(iv, value, ctx) {
                 return;
             }
         }
-        // Generic class instance → a `class_value` carrying a sparse node-level
-        // `value_type`. Unlike a non-generic class instance (which encodes as a
-        // bare `map_value` for the engine to reshape against the declared param
-        // type), a generic instance sends its concrete type args so inference
-        // does not depend on payload fields being present. The args come from
-        // the optional `$types` instance field;
-        // an absent binding lowers to the unknown/top type. Mirrors
-        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
-        // `InboundValue.value_type` for a generic instance.
+        // A codegen class instance has nominal identity even though its payload
+        // is structurally object-shaped. Preserve that identity with a sparse
+        // node annotation. For a generic class, include exact args when every
+        // `$types` entry is present; otherwise send only the class name. The
+        // engine may refine that nominal hint from one contextual class but
+        // will not use it to choose between two concrete instantiations of the
+        // same generic class in a union.
         if (isClassInstance) {
+            const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
             const params = genericParamNames(value);
-            if (params) {
-                const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
+            if (fqn) {
                 const userTypes = value.$types;
-                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
                 const classFields = [];
                 for (const [k, v] of Object.entries(value)) {
                     // Skip method bindings (behavior, not state) and the synthetic
@@ -223,7 +219,13 @@ function setInboundValue(iv, value, ctx) {
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.valueType = { classTy: { name: fqn, typeArgs } };
+                if (params && userTypes !== undefined && params.every((p) => userTypes[p] !== undefined)) {
+                    const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes[p]));
+                    iv.valueType = { classTy: { name: fqn, typeArgs } };
+                }
+                else {
+                    iv.valueType = { classTy: { name: fqn, typeArgs: [] } };
+                }
                 iv.classValue = { fields: classFields };
                 return;
             }
