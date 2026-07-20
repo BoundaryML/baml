@@ -2271,6 +2271,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::HostValue(value), RuntimeTy::Function { .. }) => {
             value.kind == bex_external_types::HostValueKind::Callable
         }
+        (BexExternalValue::RustData(_), RuntimeTy::RustType { .. }) => true,
+        (BexExternalValue::HostValue(value), RuntimeTy::RustType { .. }) => {
+            value.kind == bex_external_types::HostValueKind::Opaque
+        }
         (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
