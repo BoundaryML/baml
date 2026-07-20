@@ -2054,17 +2054,20 @@ fn find_matching_member(
             return Ok(member.clone());
         }
     }
-    let matching: Vec<&RuntimeTy> = members
-        .iter()
-        .filter(|member| {
-            !matches!(
-                member,
-                RuntimeTy::Literal(..)
-                    | RuntimeTy::EnumVariant(..)
-                    | RuntimeTy::BuiltinUnknown { .. }
-            ) && value_matches_type(value, member)
-        })
-        .collect();
+    let mut matching: Vec<&RuntimeTy> = Vec::new();
+    for member in members.iter().filter(|member| {
+        !matches!(
+            member,
+            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) | RuntimeTy::BuiltinUnknown { .. }
+        ) && value_matches_type(value, member)
+    }) {
+        if matching
+            .iter()
+            .all(|matched| !runtime_ty_structurally_equal(matched, member))
+        {
+            matching.push(member);
+        }
+    }
     match matching.as_slice() {
         [member] => return Ok((*member).clone()),
         [] => {}
@@ -2101,12 +2104,17 @@ fn find_unannotated_inbound_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
 ) -> Result<RuntimeTy, EngineError> {
-    let matching: Vec<&RuntimeTy> = members
-        .iter()
-        .filter(|member| {
-            !matches!(member, RuntimeTy::BuiltinUnknown { .. }) && value_matches_type(value, member)
-        })
-        .collect();
+    let mut matching: Vec<&RuntimeTy> = Vec::new();
+    for member in members.iter().filter(|member| {
+        !matches!(member, RuntimeTy::BuiltinUnknown { .. }) && value_matches_type(value, member)
+    }) {
+        if matching
+            .iter()
+            .all(|matched| !runtime_ty_structurally_equal(matched, member))
+        {
+            matching.push(member);
+        }
+    }
     match matching.as_slice() {
         [member] => Ok((*member).clone()),
         [] => members
@@ -3702,6 +3710,33 @@ mod union_container_selection_tests {
             EngineError::TypeMismatch { message }
                 if message.contains("multiple union members")
                     && message.contains("value_type")
+        ));
+    }
+
+    #[test]
+    fn unannotated_structurally_duplicate_members_select_first_canonical_arm() {
+        let declared = RuntimeTy::Union(
+            vec![RuntimeTy::int(), RuntimeTy::int(), RuntimeTy::string()],
+            TyAttr::default(),
+        );
+
+        let coerced = coerce_arg_to_declared_type(BexExternalValue::Int(7), &declared).unwrap();
+        let BexExternalValue::Union { metadata, value } = coerced else {
+            panic!("expected selected union")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &RuntimeTy::int()
+        ));
+        assert!(matches!(*value, BexExternalValue::Int(7)));
+
+        let RuntimeTy::Union(members, _) = &declared else {
+            unreachable!()
+        };
+        let outbound_selected = find_matching_member(&BexExternalValue::Int(7), members).unwrap();
+        assert!(runtime_ty_structurally_equal(
+            &outbound_selected,
+            &RuntimeTy::int()
         ));
     }
 
