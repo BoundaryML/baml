@@ -3,31 +3,31 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function cancel_cascade.$init_test_ns_cancel_cascade_cancel_cascade(registry: testing.TestCollector) -> null {
     load_var registry
-    load_const "cancel_from_handle_then_await_catches_cancelled"
+    load_const "cancel_unblocks_await_on_non_descendant"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "cancel_after_gc_relocation_still_settles"
+    load_const "cancel_from_handle_then_await_catches_cancelled"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "cancelled_child_future_state_is_cancelled"
+    load_const "cancel_after_gc_relocation_still_settles"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "cancelled_child_future_state_is_cancelled"
+    make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_const null
     return
-}
-
-function cancel_cascade.boom_io() -> int {
-    load_const "boom"
-    init_instance baml.errors.Io .message
-    throw
 }
 
 function cancel_cascade.cancel_after_gc_relocation_still_settles() -> int {
@@ -124,6 +124,67 @@ function cancel_cascade.cancel_from_handle_then_await_catches_cancelled() -> int
     load_const 0
 
   L2:
+    return
+}
+
+function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
+    load_var ?2
+    make_cell
+    store_var ?2
+    call baml.sys.now_ms
+    store_var started
+    make_closure .<lambda(cancel_unblocks_await_on_non_descendant_fn, 0)>, 0
+    load_const null
+    load_const null
+    spawn
+    store_var _4
+    load_var _4
+    store_deref ?2
+    load_var slow
+    make_closure .<lambda(cancel_unblocks_await_on_non_descendant_fn, 1)>, 1
+    load_const null
+    load_const null
+    spawn
+    store_var _7
+    load_var _7
+    store_var waiter
+    load_var waiter
+    call baml.future.Future.cancel
+    pop 1
+    load_var waiter
+    await
+    store_var got
+    jump L2
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 0
+    store_var got
+
+  L2:
+    call baml.sys.now_ms
+    store_var _14
+    load_deref ?2
+    call baml.future.Future.cancel
+    pop 1
+    load_var got
+    load_const 0
+    cmp_int_op ==
+    jump_if_false L3
+    pop 1
+    load_var2 8 1
+    sub_int
+    load_const 5000
+    cmp_int_op <
+
+  L3:
     return
 }
 

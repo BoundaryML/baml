@@ -146,11 +146,7 @@ sdk_tests/
    - For Node TypeScript: `sdk_test_typescript` builds only
      `bridge_typescript`, installs Node-only fixture manifests, and runs
      `esm_node`, `tsc_node`, `vitest_node`, and `attw`.
-   - For Web TypeScript: `sdk_test_typescript_web` builds only
-     `bridge_typescript_web`, copies the canonical sibling tests into local
-     generated Web/Workers trees, installs Chromium, and runs the Web and
-     Workers ESM and TypeScript checks. The Web and Workers Vitest checks
-     remain ignored until the Web implementation change is applied.
+   - For Web TypeScript: `sdk_test_typescript_web` builds only `bridge_typescript_web`, copies the canonical sibling tests into local generated Web/Workers trees, installs Chromium, and runs the Web and Workers ESM, TypeScript, and Vitest checks.
    - For rust: the setup script runs a serial `cargo test --no-run`
      per fixture into the shared `target/sdk-rust-target` build dir
      (threaded to the tests as `CARGO_TARGET_DIR`), so the

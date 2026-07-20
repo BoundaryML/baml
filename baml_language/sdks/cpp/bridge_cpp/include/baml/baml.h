@@ -12,6 +12,9 @@
 #include <baml/detail/loader.h>
 #include <baml/detail/registry.h>
 #include <baml/errors.h>
+#include <baml/future.h>
+#include <baml/lit.h>
 #include <baml/runtime.h>
+#include <baml/variant.h>
 
 #endif  // BAML_BAML_H_

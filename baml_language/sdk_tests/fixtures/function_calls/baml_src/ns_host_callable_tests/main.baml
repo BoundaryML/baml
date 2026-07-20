@@ -72,6 +72,26 @@ function call_with_throwing(callback: (int) -> string throws baml.errors.HostCal
     }
 }
 
+function call_with_throwing_propagating(
+    callback: (int) -> string throws baml.errors.HostCallable,
+    x: int,
+) -> string throws baml.errors.HostCallable {
+    callback(x)
+}
+
+function call_returned_callback(factory: () -> ((int) -> string throws never) throws never, x: int) -> string {
+    let callback = factory()
+    callback(x)
+}
+
+function call_returned_callback_in_list(
+    factory: () -> (((int) -> string throws never)[]) throws never,
+    x: int,
+) -> string {
+    let callbacks = factory()
+    callbacks[0](x)
+}
+
 // User-defined error class returned from a host callable. The Python side
 // raises `BamlError(value=ValidationError(...))`; the bridge unwraps the
 // inner pydantic value and emits it as its real BAML class so the catch

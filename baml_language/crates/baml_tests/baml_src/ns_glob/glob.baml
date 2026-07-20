@@ -1,7 +1,5 @@
 // Tests for baml.glob namespace.
 //
-// Converted from crates/baml_tests/tests/glob.rs.
-//
 // HERMETICITY: every scan test creates a unique temp directory under /tmp
 // (using baml.sys.now_ms() and int.random as discriminators), writes fixture files with
 // baml.fs.write / baml.fs.mkdir, runs the assertions, then removes the
@@ -15,11 +13,12 @@
 // baml.json.stringify converts an int to its decimal JSON representation
 // (e.g. 1234567890 → "1234567890"); used to build unique temp dir paths.
 //
-// Left in Rust (cannot be made hermetic or faithful in BAML):
-//   - glob_scan_propagates_permission_errors — conditionally skips under root
-//     via a runtime check (std::fs::set_permissions + read_dir probe), then
-//     asserts an Io error. BAML has no way to set file permissions or to skip
-//     a test at runtime.
+// Scan failures (broken symlink with throw_error_on_broken_symlink=true,
+// unreadable directories) surface as BAML-catchable `baml.errors.Io` throws,
+// so the should-error tests use the standard catch pattern. Permissions are
+// manipulated with `chmod` via baml.sys.shell; the permission-error test
+// probes readability first and trivially passes under root (CI containers),
+// where the test premise is invalid.
 
 // ============================================================================
 // baml.glob.new + Glob.matches — no filesystem needed
@@ -114,8 +113,6 @@ test "glob_matches_negated_pattern" {
 
 // ─── glob_scan_finds_txt_files ───────────────────────────────────────────────
 
-// Returns [length, has_a_txt, has_b_txt] encoded as bools in int form —
-// simpler: return the result directly so callers can chain .length()/.includes().
 function scan_finds_txt_files() -> string[] {
     let root = glob_tmp("scan_txt");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
@@ -299,7 +296,7 @@ test "glob_scan_default_prunes_dot_directories" {
 // ─── glob_scan_follows_symlinked_directory_when_enabled (unix) ───────────────
 
 // follow_symlinks=true: a symlinked directory is traversed and its contents matched.
-// Uses baml.sys.shell to create the symlink (no native BAML symlink API).
+// Needs host-created symlink; baml.fs has no native symlink primitive.
 function scan_follows_symlinked_directory_checks() -> bool[] {
     let outer_root = glob_tmp("sym_outer");
     let target = glob_tmp("sym_target");
@@ -347,45 +344,67 @@ test "glob_scan_skips_broken_symlinks_by_default_has_real" {
 }
 
 // ─── glob_scan_throws_on_broken_symlink_when_opted_in (unix) ─────────────────
-//
-// BUG: when a sys op like `Glob.scan` fails at the engine level it surfaces as
-// an engine-level ExternalOpFailed error (Rust), NOT as a BAML-catchable
-// `baml.errors.Io` instance. The BAML `catch (e) { baml.errors.Io => ... }`
-// arm therefore does not fire; the error escapes the test frame entirely. The
-// Rust test correctly checks `output.result.is_err()` at the Rust level, which
-// does match. There is no BAML-level way to express "this sys-op throws an Io
-// error that can be caught" — catch only intercepts user-thrown BAML values.
-//
-// function scan_throws_on_broken_symlink_when_opted_in() -> bool {
-//     let root = "/tmp/baml_glob_broken_throw_" + baml.json.stringify(baml.sys.now_ms());
-//     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-//     let _ = baml.fs.write(root + "/real.txt", "content");
-//     let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", null);
-//     let g = baml.glob.new("*.txt");
-//     let threw = {
-//         let _ = g.scan(baml.glob.ScanOptions {
-//             cwd: root,
-//             follow_symlinks: true,
-//             throw_error_on_broken_symlink: true,
-//         });
-//         false
-//     } catch (e) {
-//         baml.errors.Io => true  // never reached — ExternalOpFailed bypasses BAML catch
-//     };
-//     let _ = baml.sys.shell("rm -rf " + root, null);
-//     threw
-// }
-//
-// test "glob_scan_throws_on_broken_symlink_when_opted_in" {
-//     assert.is_true(baml.deep_equals(scan_throws_on_broken_symlink_when_opted_in(), true))
-// }
 
-// ============================================================================
-// glob_scan_propagates_permission_errors — LEFT IN RUST
-//
-// This test sets directory permissions to 0o000, probes whether the directory
-// is still readable (to skip under root/CI), then asserts an Io error from
-// the scanner. BAML has no way to set file permissions or to skip a test at
-// runtime; the skip logic in particular requires process-level detection of
-// running-as-root.
-// ============================================================================
+// throw_error_on_broken_symlink=true: a dangling symlink makes the scan throw.
+// Scan failures surface as a BAML-catchable `baml.errors.Io`.
+function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
+    let root = glob_tmp("broken_throw");
+    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(root + "/real.txt", "content");
+    // Create a dangling symlink pointing to a non-existent file.
+    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", null);
+    let g = baml.glob.new("*.txt");
+    let threw = {
+        let _ = g.scan(baml.glob.ScanOptions {
+            cwd: root,
+            follow_symlinks: true,
+            throw_error_on_broken_symlink: true,
+        });
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    };
+    let _ = baml.sys.shell("rm -rf " + root, null);
+    threw
+}
+
+test "glob_scan_throws_on_broken_symlink_when_opted_in" {
+    assert.is_true(scan_throws_on_broken_symlink_when_opted_in_fn())
+}
+
+// ─── glob_scan_propagates_permission_errors (unix) ───────────────────────────
+
+// A directory the walker can enter the parent of but not read must surface as
+// an Io error, not be silently swallowed — throw_error_on_broken_symlink is
+// scoped to broken symlinks only; real I/O errors propagate by default.
+// Permissions are set with `chmod` via baml.sys.shell. Mode 000 → no
+// permissions; root can still read, so probe first and trivially pass there
+// (CI containers) — the test premise is invalid under root.
+function scan_propagates_permission_errors_fn() -> bool {
+    let root = glob_tmp("perm_err");
+    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(root + "/ok.txt", "ok");
+    let locked = root + "/locked";
+    baml.fs.mkdir(locked, baml.fs.MkdirOptions { recursive: false });
+    let _ = baml.fs.write(locked + "/inner.txt", "x");
+    let _ = baml.sys.shell("chmod 000 " + locked, null);
+    let still_readable = baml.sys.shell("ls " + locked, null).ok();
+    let threw = if (still_readable) {
+        true
+    } else {
+        {
+            let _ = baml.glob.new("**/*.txt").scan(root);
+            false
+        } catch (e) {
+            baml.errors.Io => true
+        }
+    };
+    // Restore permissions so the temp dir can be cleaned up.
+    let _ = baml.sys.shell("chmod 755 " + locked, null);
+    let _ = baml.sys.shell("rm -rf " + root, null);
+    threw
+}
+
+test "glob_scan_propagates_permission_errors" {
+    assert.is_true(scan_propagates_permission_errors_fn())
+}
