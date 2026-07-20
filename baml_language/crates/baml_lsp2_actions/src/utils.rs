@@ -400,3 +400,119 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
     };
     humanize_type_string(&rendered)
 }
+
+fn type_ref_needs_postfix_parens(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> bool {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+    matches!(
+        store[id].kind,
+        TypeRefKind::Union { .. } | TypeRefKind::Function { .. }
+    )
+}
+
+fn display_type_ref_as_postfix_base(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    let rendered = display_type_ref(store, id);
+    if type_ref_needs_postfix_parens(store, id) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+fn display_type_ref_as_function_result(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+    let rendered = display_type_ref(store, id);
+    if matches!(store[id].kind, TypeRefKind::Function { .. }) {
+        format!("({rendered})")
+    } else {
+        rendered
+    }
+}
+
+/// The firewall-arena twin of [`display_type_expr`]: format a `TypeRef` as a
+/// brief source-level type string (last path segment only, generics dropped),
+/// arm-for-arm identical to [`display_type_expr`]. For callers holding firewall
+/// data (`FunctionData::type_refs`, `InterfaceData::type_refs`, …) rather than
+/// AST nodes. NOTE: this is deliberately NOT
+/// [`TypeRefStore::display`](baml_compiler2_hir::type_ref::TypeRefStore::display),
+/// which is the *full* `Display` form (whole path + generic args).
+pub fn display_type_ref(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+) -> String {
+    use baml_compiler2_hir::type_ref::TypeRefKind as K;
+    let rendered = match &store[id].kind {
+        K::Path { segments, .. } => segments
+            .last()
+            .map(|n| n.as_str().to_string())
+            .unwrap_or_else(|| "unknown".to_string()),
+        // A projection has no brief form — render it fully, matching the AST path's
+        // `te.to_string()`.
+        K::AssociatedTypeProjection { .. } => store.display(id).to_string(),
+        K::Int => "int".to_string(),
+        K::Bigint => "bigint".to_string(),
+        K::Float => "float".to_string(),
+        K::String => "string".to_string(),
+        K::Bool => "bool".to_string(),
+        K::Null => "null".to_string(),
+        K::Uint8Array => "uint8array".to_string(),
+        K::Media { kind } => format!("{kind:?}").to_lowercase(),
+        K::Optional { inner } => format!("{}?", display_type_ref_as_postfix_base(store, *inner)),
+        K::List { inner } => format!("{}[]", display_type_ref_as_postfix_base(store, *inner)),
+        K::Map { key, value } => format!(
+            "map<{}, {}>",
+            display_type_ref(store, *key),
+            display_type_ref(store, *value)
+        ),
+        K::Union { variants } => variants
+            .iter()
+            .map(|&v| display_type_ref(store, v))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        K::Literal { value } => value.to_string(),
+        K::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let ps: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    p.name
+                        .as_ref()
+                        .map(|n| {
+                            let optional = if p.optional { "?" } else { "" };
+                            format!("{}{}: {}", n, optional, display_type_ref(store, p.ty))
+                        })
+                        .unwrap_or_else(|| display_type_ref(store, p.ty))
+                })
+                .collect();
+            let throws = throws
+                .map(|t| display_type_ref(store, t))
+                .map(|throws| format!(" throws {throws}"))
+                .unwrap_or_default();
+            format!(
+                "({}) -> {}{}",
+                ps.join(", "),
+                display_type_ref_as_function_result(store, *ret),
+                throws
+            )
+        }
+        K::BuiltinUnknown => "unknown".to_string(),
+        K::Never => "never".to_string(),
+        K::Void => "void".to_string(),
+        K::Type => "type".to_string(),
+        K::Rust => "$rust_type".to_string(),
+        K::Infer => "_".to_string(),
+        K::Error | K::Unknown => "unknown".to_string(),
+    };
+    humanize_type_string(&rendered)
+}
