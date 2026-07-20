@@ -253,13 +253,9 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, Ct
         Some(TyLiteralVariant::StringValue(value)) => Literal::String(value.clone()),
         Some(TyLiteralVariant::IntValue(value)) => Literal::Int(*value),
         Some(TyLiteralVariant::BoolValue(value)) => Literal::Bool(*value),
-        Some(TyLiteralVariant::BigintValue(value)) => Literal::Bigint(
-            num_bigint::BigInt::parse_bytes(value.as_bytes(), 10).ok_or_else(|| {
-                CtypesError::InternalError(format!(
-                    "invalid decimal bigint literal in BAML type descriptor: {value:?}"
-                ))
-            })?,
-        ),
+        Some(TyLiteralVariant::BigintValue(value)) => {
+            Literal::Bigint(parse_decimal_bigint_literal(value)?)
+        }
         Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
         None => return Ok(RuntimeTy::unknown()),
     };
@@ -268,4 +264,61 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, Ct
         Freshness::Regular,
         TyAttr::default(),
     ))
+}
+
+fn parse_decimal_bigint_literal(value: &str) -> Result<num_bigint::BigInt, CtypesError> {
+    parse_decimal_bigint_literal_with_limits(
+        value,
+        baml_type::MAX_BIGINT_DECIMAL_DIGITS,
+        baml_type::MAX_BIGINT_BITS,
+    )
+}
+
+fn parse_decimal_bigint_literal_with_limits(
+    value: &str,
+    max_digits: usize,
+    max_bits: u64,
+) -> Result<num_bigint::BigInt, CtypesError> {
+    let len = value.len();
+    let digits = value
+        .strip_prefix('-')
+        .or_else(|| value.strip_prefix('+'))
+        .unwrap_or(value);
+    if digits.len() > max_digits {
+        return Err(CtypesError::InvalidBigintLiteral { len });
+    }
+
+    let parsed = num_bigint::BigInt::parse_bytes(value.as_bytes(), 10).ok_or_else(|| {
+        CtypesError::InternalError(format!(
+            "invalid decimal bigint literal in BAML type descriptor: {value:?}"
+        ))
+    })?;
+    if parsed.bits() > max_bits {
+        return Err(CtypesError::InvalidBigintLiteral { len });
+    }
+    Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_bigint_literal_is_rejected_before_parse_without_echoing_input() {
+        let error = parse_decimal_bigint_literal_with_limits("-1234", 3, u64::MAX).unwrap_err();
+        assert!(matches!(
+            error,
+            CtypesError::InvalidBigintLiteral { len: 5 }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "Invalid decimal bigint literal (5 bytes)"
+        );
+    }
+
+    #[test]
+    fn bounded_invalid_bigint_literal_keeps_format_diagnostic() {
+        let error = parse_decimal_bigint_literal_with_limits("12x", 3, u64::MAX).unwrap_err();
+        assert!(matches!(error, CtypesError::InternalError(message) if message.contains("12x")));
+    }
 }

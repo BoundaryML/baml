@@ -1,6 +1,6 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
+use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy, selected_arm_equal};
 use indexmap::IndexMap;
 
 use crate::{
@@ -373,7 +373,10 @@ fn selected_union_option_index(
             union: union_type.to_string(),
         });
     };
-    let Some(index) = members.iter().position(|member| member == selected_option) else {
+    let Some(index) = members
+        .iter()
+        .position(|member| selected_arm_equal(member, selected_option))
+    else {
         return Err(CtypesError::UnionSelectedTypeNotMember {
             selected: selected_option.to_string(),
             union: union_type.to_string(),
@@ -528,6 +531,7 @@ pub fn build_to_host_call(
 mod tests {
     use std::sync::Arc;
 
+    use baml_type::{Freshness, Literal, TyAttr};
     use bex_project::{
         BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
         PromptAst, PromptAstSimple,
@@ -631,6 +635,31 @@ mod tests {
             artifact_error,
             CtypesError::UnionSelectedTypeNotMember { .. }
         ));
+    }
+
+    #[test]
+    fn outbound_union_matches_structurally_equivalent_selected_type() {
+        let declared = RuntimeTy::Literal(
+            Literal::String("draft".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
+        let rebuilt = RuntimeTy::Literal(
+            Literal::String("draft".to_string()),
+            Freshness::Fresh,
+            TyAttr::default(),
+        );
+        assert_ne!(declared, rebuilt);
+
+        let value = BexExternalValue::union(
+            BexExternalValue::String("draft".into()),
+            [declared],
+            rebuilt,
+        );
+        let encoded = extract_union(
+            external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
+        );
+        assert_eq!(encoded.selected_option_index, Some(0));
     }
 
     #[test]

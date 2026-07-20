@@ -8,7 +8,8 @@ use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
-    BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata, value_satisfies_json,
+    BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata, runtime_ty_structurally_equal,
+    selected_arm_equal, value_satisfies_json,
 };
 use bex_vm::BexVm;
 
@@ -2115,6 +2116,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             BexExternalValue::Adt(BexExternalAdt::Media(media)),
             RuntimeTy::Media(expected_kind, _),
         ) => *expected_kind == baml_type::MediaKind::Generic || media.kind == *expected_kind,
+        (BexExternalValue::HostValue(value), RuntimeTy::Function { .. }) => {
+            value.kind == bex_external_types::HostValueKind::Callable
+        }
+        (BexExternalValue::FunctionRef { .. }, RuntimeTy::Function { .. }) => true,
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
         (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
@@ -2243,97 +2248,6 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
         // treated leniently as compatible.
         _ => true,
     }
-}
-
-/// Exact semantic identity ignoring source-only type attributes and union
-/// member ordering. Unlike `runtime_ty_compatible`, this never treats a
-/// concrete nested optional as its non-optional inner type.
-fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
-    use RuntimeTy as T;
-    match (left, right) {
-        (T::String { .. }, T::String { .. })
-        | (T::Int { .. }, T::Int { .. })
-        | (T::Bigint { .. }, T::Bigint { .. })
-        | (T::Float { .. }, T::Float { .. })
-        | (T::Bool { .. }, T::Bool { .. })
-        | (T::Null { .. }, T::Null { .. })
-        | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
-        // Attribute-free marker/opaque types still have exact structural
-        // identity. These must participate in selected-union membership just
-        // like primitives; in particular, a host-selected `type` arm carries
-        // `RuntimeTy::Type` on both sides of the ABI.
-        (T::BuiltinUnknown { .. }, T::BuiltinUnknown { .. })
-        | (T::RustType { .. }, T::RustType { .. })
-        | (T::Type { .. }, T::Type { .. })
-        | (T::Resource { .. }, T::Resource { .. })
-        | (T::PromptAst { .. }, T::PromptAst { .. })
-        | (T::Void { .. }, T::Void { .. })
-        | (T::Never { .. }, T::Never { .. }) => true,
-        (T::Media(left, _), T::Media(right, _)) => left == right,
-        (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
-        (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
-        (
-            T::Map {
-                key: left_key,
-                value: left_value,
-                ..
-            },
-            T::Map {
-                key: right_key,
-                value: right_value,
-                ..
-            },
-        ) => {
-            runtime_ty_structurally_equal(left_key, right_key)
-                && runtime_ty_structurally_equal(left_value, right_value)
-        }
-        (T::Class(left_name, left_args, _), T::Class(right_name, right_args, _)) => {
-            left_name == right_name
-                && left_args.len() == right_args.len()
-                && left_args
-                    .iter()
-                    .zip(right_args)
-                    .all(|(left, right)| runtime_ty_structurally_equal(left, right))
-        }
-        (T::Enum(left, _), T::Enum(right, _)) => left == right,
-        (
-            T::EnumVariant(left_name, left_variant, _),
-            T::EnumVariant(right_name, right_variant, _),
-        ) => left_name == right_name && left_variant == right_variant,
-        (T::TypeAlias(left, _), T::TypeAlias(right, _)) => left == right,
-        (T::Union(left, _), T::Union(right, _)) => {
-            left.len() == right.len()
-                && left.iter().all(|left_member| {
-                    right.iter().any(|right_member| {
-                        runtime_ty_structurally_equal(left_member, right_member)
-                    })
-                })
-        }
-        _ => false,
-    }
-}
-
-/// A selected non-null arm may be represented as `T` or through the legacy
-/// top-level nullable wrapper `T | null`. This tolerance is deliberately
-/// root-only; recursive structural comparison preserves nested optionality.
-fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
-    if runtime_ty_structurally_equal(left, right) {
-        return true;
-    }
-    sole_non_null(left).is_some_and(|inner| runtime_ty_structurally_equal(inner, right))
-        || sole_non_null(right).is_some_and(|inner| runtime_ty_structurally_equal(left, inner))
-}
-
-fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
-    let RuntimeTy::Union(members, _) = ty else {
-        return None;
-    };
-    if !members.iter().any(RuntimeTy::is_null) {
-        return None;
-    }
-    let mut non_null = members.iter().filter(|member| !member.is_null());
-    let only = non_null.next()?;
-    non_null.next().is_none().then_some(only)
 }
 
 fn float_literal_matches(value: f64, source: &str) -> bool {
@@ -3268,7 +3182,10 @@ mod union_container_selection_tests {
     use std::sync::Arc;
 
     use baml_builtins2::{MediaContent, MediaValue};
-    use baml_type::{Freshness, MediaKind, Name, TyAttr, TypeName};
+    use baml_type::{
+        Freshness, FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, TyAttr, TypeName,
+    };
+    use bex_external_types::{HostValueArc, HostValueKind};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{EnumVariant, Object, Value, types::Enum};
 
@@ -3315,6 +3232,25 @@ mod union_container_selection_tests {
             },
             None,
         ))))
+    }
+
+    fn callback_ty(param_freshness: Freshness) -> RuntimeTy {
+        RuntimeTy::Function {
+            params: vec![RuntimeFunctionParamTy {
+                name: Some(Name::new("status")),
+                ty: RuntimeTy::Literal(
+                    Literal::String("draft".to_string()),
+                    param_freshness,
+                    TyAttr::default(),
+                ),
+                mode: FunctionParamMode::Required,
+            }],
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
     }
 
     fn json_ty() -> RuntimeTy {
@@ -3538,6 +3474,29 @@ mod union_container_selection_tests {
         };
         assert_eq!(metadata.union_type, declared);
         assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn host_typed_callable_selects_structurally_equal_function_arm() {
+        let declared_arm = callback_ty(Freshness::Regular);
+        let wire_arm = callback_ty(Freshness::Fresh);
+        assert_ne!(declared_arm, wire_arm);
+        assert!(runtime_ty_structurally_equal(&declared_arm, &wire_arm));
+
+        let declared = RuntimeTy::union([declared_arm.clone(), RuntimeTy::string()]);
+        let typed = BexExternalValue::typed(
+            BexExternalValue::HostValue(HostValueArc::new(41, HostValueKind::Callable)),
+            wire_arm,
+        );
+        let coerced = coerce_arg_to_declared_type(typed, &declared).unwrap();
+        let BexExternalValue::Union { metadata, .. } = coerced else {
+            panic!("selected callable union metadata was lost")
+        };
+        assert_eq!(metadata.union_type, declared);
+        assert_eq!(metadata.selected_option, declared_arm);
+
+        let opaque = BexExternalValue::HostValue(HostValueArc::new(42, HostValueKind::Opaque));
+        assert!(!value_matches_type(&opaque, &metadata.selected_option));
     }
 
     #[test]
