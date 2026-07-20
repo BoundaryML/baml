@@ -2803,7 +2803,15 @@ type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.
 function baml.random.Rng.random_int(self: baml.random.Rng) -> int throws never {
   { : int
     let bytes = self.random(8) : uint8array
-    bytes[0] & 127 << 7 | bytes[1] << 6 | bytes[2] << 5 | bytes[3] << 4 | bytes[4] << 3 | bytes[5] << 2 | bytes[6] << 1 | bytes[7] : int
+    let magnitude = bytes[0] & 63 << 56 | bytes[1] << 48 | bytes[2] << 40 | bytes[3] << 32 | bytes[4] << 24 | bytes[5] << 16 | bytes[6] << 8 | bytes[7] : int
+    if (bytes[0] & 64 == 0 : bool) : int
+      { : int
+        magnitude : int
+      }
+    else
+      { : int
+        0 - magnitude - 1 : int
+      }
   }
 }
 class baml.random.SystemRandom {

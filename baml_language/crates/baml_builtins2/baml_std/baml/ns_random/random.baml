@@ -15,13 +15,26 @@ interface Rng {
     ///   (for example, if the underlying system random number generator is unavailable)
     function random(self, bytes: int) -> uint8array throws never
 
-    /// Returns a uniformly random `int`.
+    /// Returns a uniformly random `int` over the full `[int.min_value(),
+    /// int.max_value()]` range.
     ///
-    /// Since BAML `int` is 63-bit, this may discard a single bit of entropy.
-    /// This may be relevant when using deterministic PRNGs.
+    /// BAML `int` is 63-bit, so this discards a single bit of the 64 drawn (the
+    /// top bit of the first byte). The remaining 63 bits give a uniform value:
+    /// the low 62 bits form the magnitude and the 63rd is the sign.
     function random_int(self) -> int throws never {
         let bytes = self.random(8);
-        ((bytes[0] & 127) << 7) | (bytes[1] << 6) | (bytes[2] << 5) | (bytes[3] << 4) | (bytes[4] << 3) | (bytes[5] << 2) | (bytes[6] << 1) | bytes[7]
+        // A uniform 62-bit magnitude in `[0, int.max_value()]`. The first byte
+        // is masked to 6 bits (`& 63`) so its top contribution lands at bit 61,
+        // never bit 62 — the i63 sign bit — which would overflow.
+        let magnitude = ((bytes[0] & 63) << 56) | (bytes[1] << 48) | (bytes[2] << 40) | (bytes[3] << 32) | (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+        // Use bit 6 of the first byte as a sign bit. `0 - magnitude - 1` maps
+        // `[0, 2^62)` onto `[int.min_value(), -1]`, so the two branches together
+        // tile the whole signed range with no overlap or overflow.
+        if ((bytes[0] & 64) == 0) {
+            magnitude
+        } else {
+            0 - magnitude - 1
+        }
     }
 }
 

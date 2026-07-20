@@ -6034,50 +6034,73 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     load_var bytes
     load_const 0
     load_array_element
-    load_const 127
+    load_const 63
     bin_op &
-    load_const 7
+    load_const 56
     bin_op <<
     load_var bytes
     load_const 1
     load_array_element
-    load_const 6
+    load_const 48
     bin_op <<
     bin_op |
     load_var bytes
     load_const 2
     load_array_element
-    load_const 5
+    load_const 40
     bin_op <<
     bin_op |
     load_var bytes
     load_const 3
     load_array_element
-    load_const 4
+    load_const 32
     bin_op <<
     bin_op |
     load_var bytes
     load_const 4
     load_array_element
-    load_const 3
+    load_const 24
     bin_op <<
     bin_op |
     load_var bytes
     load_const 5
     load_array_element
-    load_const 2
+    load_const 16
     bin_op <<
     bin_op |
     load_var bytes
     load_const 6
     load_array_element
-    load_const 1
+    load_const 8
     bin_op <<
     bin_op |
     load_var bytes
     load_const 7
     load_array_element
     bin_op |
+    store_var magnitude
+    load_var bytes
+    load_const 0
+    load_array_element
+    load_const 64
+    bin_op &
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    load_var magnitude
+    sub_int
+    load_const 1
+    sub_int
+    jump L2
+
+  L1:
+    load_var magnitude
+
+  L2:
     return
 }
 
