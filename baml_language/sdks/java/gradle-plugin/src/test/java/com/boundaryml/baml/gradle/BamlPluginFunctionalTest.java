@@ -1,6 +1,7 @@
 package com.boundaryml.baml.gradle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -9,7 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.gradle.testkit.runner.TaskOutcome;
@@ -61,9 +64,19 @@ class BamlPluginFunctionalTest {
     @Test
     void generatesCompilesAndIsUpToDateOnRerun() throws IOException {
         writeSettings("consumer");
+        // manageDependencies = false keeps this compile test hermetic: the fake
+        // baml_sdk fixture has no baml_bridge reference, so we don't want the
+        // plugin's auto-injected com.boundaryml:baml-bridge dependency (which is
+        // not published to any repo this build can see) pulled onto the compile
+        // classpath — that resolution would fail with no repositories declared.
+        // The injection itself is covered by the dedicated tests below.
         writeFile("build.gradle.kts", """
             plugins {
                 id("com.boundaryml.baml")
+            }
+
+            baml {
+                manageDependencies.set(false)
             }
             """);
         writeFile("baml.toml", """
@@ -225,7 +238,163 @@ class BamlPluginFunctionalTest {
                 + result.getOutput());
     }
 
+    // ---- (e) dependency management (the one-liner consumer UX) ---------------
+
+    /**
+     * Default behaviour: applying the plugin injects the BAML runtime — an
+     * {@code implementation} on {@code com.boundaryml:baml-bridge} at the
+     * plugin's own version, plus a {@code runtimeOnly} native jar for the build
+     * machine's platform. No {@code baml { }} block, no manual dependencies.
+     */
+    @Test
+    void defaultInjectsBridgeAndHostNativeJar() throws IOException {
+        String out = runPrintBamlDeps("").getOutput();
+
+        String version = BamlPlugin.pluginVersion();
+        String host = BamlPlugin.detectPlatform();
+
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge:" + version),
+            () -> "expected implementation com.boundaryml:baml-bridge:" + version + "; output:\n" + out);
+        assertEquals(
+            List.of("natives-" + host),
+            nativeClassifiers(out),
+            () -> "expected exactly the host native classifier natives-" + host + "; output:\n" + out);
+    }
+
+    /**
+     * An explicit {@code nativePlatforms} list <em>replaces</em> host detection
+     * with exactly the named classifiers (order/dedupe aside), while the
+     * {@code baml-bridge} implementation dependency is still injected.
+     */
+    @Test
+    void nativePlatformsOverrideReplacesDetection() throws IOException {
+        String out = runPrintBamlDeps("""
+            baml {
+                nativePlatforms.set(listOf("macos-aarch64", "windows-x86_64"))
+            }
+            """).getOutput();
+
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge:" + BamlPlugin.pluginVersion()),
+            () -> "baml-bridge implementation should still be injected; output:\n" + out);
+        assertEquals(
+            List.of("natives-macos-aarch64", "natives-windows-x86_64"),
+            nativeClassifiers(out),
+            () -> "explicit nativePlatforms should replace detection; output:\n" + out);
+    }
+
+    /**
+     * The special value {@code "all"} expands to every classifier in the known
+     * set (the six non-experimental targets baml-bridge ships).
+     */
+    @Test
+    void nativePlatformsAllExpandsToEveryKnownPlatform() throws IOException {
+        String out = runPrintBamlDeps("""
+            baml {
+                nativePlatforms.set(listOf("all"))
+            }
+            """).getOutput();
+
+        List<String> expected = BamlPlugin.ALL_PLATFORMS.stream()
+            .map(p -> "natives-" + p)
+            .collect(Collectors.toList());
+        assertEquals(
+            expected,
+            nativeClassifiers(out),
+            () -> "nativePlatforms=[\"all\"] should add every known platform; output:\n" + out);
+    }
+
+    /**
+     * {@code manageDependencies = false} is the full escape hatch: the plugin
+     * injects nothing at all — no {@code baml-bridge}, no native jar.
+     */
+    @Test
+    void manageDependenciesFalseInjectsNothing() throws IOException {
+        String out = runPrintBamlDeps("""
+            baml {
+                manageDependencies.set(false)
+            }
+            """).getOutput();
+
+        assertFalse(
+            out.contains("com.boundaryml:baml-bridge"),
+            () -> "manageDependencies=false should inject no baml-bridge dependency; output:\n" + out);
+        assertTrue(
+            nativeClassifiers(out).isEmpty(),
+            () -> "manageDependencies=false should inject no native jar; output:\n" + out);
+    }
+
+    /**
+     * A pre-existing explicit {@code com.boundaryml:baml-bridge} dependency (any
+     * version, any configuration) suppresses injection entirely: the plugin
+     * defers to the consumer's declaration and adds neither its own pinned
+     * {@code baml-bridge} nor a native jar.
+     */
+    @Test
+    void preExistingBridgeDependencySuppressesInjection() throws IOException {
+        String out = runPrintBamlDeps("""
+            dependencies {
+                implementation("com.boundaryml:baml-bridge:9.9.9-consumer-pin")
+            }
+            """).getOutput();
+
+        // The consumer's own dependency is present...
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge:9.9.9-consumer-pin"),
+            () -> "the consumer's explicit baml-bridge should remain; output:\n" + out);
+        // ...and the plugin did NOT add its own pinned version.
+        assertFalse(
+            implDeps(out).contains("com.boundaryml:baml-bridge:" + BamlPlugin.pluginVersion()),
+            () -> "the plugin must not inject its own baml-bridge when one is explicit; output:\n" + out);
+        // ...and no native jar was injected either.
+        assertTrue(
+            nativeClassifiers(out).isEmpty(),
+            () -> "no native jar should be injected when baml-bridge is explicit; output:\n" + out);
+    }
+
     // ---- helpers -------------------------------------------------------------
+
+    /**
+     * Applies the plugin, appends {@code extraBuildScript} (a {@code baml { }}
+     * and/or {@code dependencies { }} block), registers a {@code printBamlDeps}
+     * task that prints the <em>declared</em> {@code implementation} /
+     * {@code runtimeOnly} dependencies (never resolving them — the injected
+     * baml-bridge is not published to any reachable repo), and runs it.
+     */
+    private BuildResult runPrintBamlDeps(String extraBuildScript) throws IOException {
+        writeSettings("consumer");
+        writeFile("build.gradle.kts",
+            "plugins {\n"
+                + "    id(\"com.boundaryml.baml\")\n"
+                + "}\n"
+                + "\n"
+                + extraBuildScript
+                + "\n"
+                + PRINT_BAML_DEPS_TASK);
+        return runner("printBamlDeps", "--stacktrace").build();
+    }
+
+    /** {@code group:name:version} strings from the {@code IMPL=} lines. */
+    private static List<String> implDeps(String output) {
+        return output.lines()
+            .filter(l -> l.startsWith("IMPL="))
+            .map(l -> l.substring("IMPL=".length()))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * The native-jar classifiers from the {@code RUNTIME=} lines (each line is
+     * {@code RUNTIME=group:name:version|classifier}), in declaration order,
+     * skipping any runtimeOnly dep without a classifier.
+     */
+    private static List<String> nativeClassifiers(String output) {
+        return output.lines()
+            .filter(l -> l.startsWith("RUNTIME="))
+            .map(l -> l.substring(l.indexOf('|') + 1))
+            .filter(c -> !c.isEmpty())
+            .collect(Collectors.toList());
+    }
 
     private GradleRunner runner(String... args) {
         return GradleRunner.create()
@@ -318,4 +487,25 @@ class BamlPluginFunctionalTest {
         + "JAVA\n"
         + "\n"
         + "printf '%s\\n' 'ZmFrZS1iYW1sLWJ5dGVjb2Rl' > \"$OUT/inlinedbaml.b64\"\n";
+
+    /**
+     * A consumer task that prints the <em>declared</em> dependencies of the
+     * {@code implementation} and {@code runtimeOnly} configurations — used by the
+     * dependency-management tests to observe what the plugin injected without
+     * resolving anything (the injected com.boundaryml:baml-bridge is not on any
+     * reachable repository). Native jars carry their classifier after a {@code |}.
+     */
+    private static final String PRINT_BAML_DEPS_TASK =
+        "tasks.register(\"printBamlDeps\") {\n"
+        + "    doLast {\n"
+        + "        configurations.getByName(\"implementation\").dependencies.forEach { d ->\n"
+        + "            println(\"IMPL=\" + d.group + \":\" + d.name + \":\" + d.version)\n"
+        + "        }\n"
+        + "        configurations.getByName(\"runtimeOnly\").dependencies.forEach { d ->\n"
+        + "            val classifier = (d as? org.gradle.api.artifacts.ModuleDependency)\n"
+        + "                ?.artifacts?.joinToString(\",\") { it.classifier ?: \"\" } ?: \"\"\n"
+        + "            println(\"RUNTIME=\" + d.group + \":\" + d.name + \":\" + d.version + \"|\" + classifier)\n"
+        + "        }\n"
+        + "    }\n"
+        + "}\n";
 }

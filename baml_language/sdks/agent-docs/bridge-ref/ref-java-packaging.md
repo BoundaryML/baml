@@ -111,3 +111,34 @@ Three placement patterns, in order of adoption:
   awkward (immutable versions) — likely nightly via Maven-style
   suffixed versions only.
 - Maven-plugin twin of the Gradle plugin: post-GA.
+
+
+## Plugin distribution (dual-channel, decided 2026-07-20)
+
+The Gradle plugin (`com.boundaryml.baml`) ships through two channels at the family version:
+
+- **Gradle Plugin Portal** — canary/stable cuts only (Portal versions are immutable;
+  its catalog is user-facing). Zero-config resolution: the bare `plugins {}` block works.
+  First publish of the new namespace requires a one-time human approval by the Gradle
+  team (warming workflow: `publish-gradle-plugin-manual.yml`).
+- **Maven Central** — every channel, riding the `baml-bridge` bundle (plugin jar +
+  sources/javadoc + the `com.boundaryml.baml.gradle.plugin` marker POM, all signed).
+  Nightly consumers (or anyone pre-Portal-approval) add one `pluginManagement` stanza:
+
+  ```kotlin
+  // settings.gradle.kts — once per project
+  pluginManagement {
+      repositories {
+          mavenCentral()
+          gradlePluginPortal()
+      }
+  }
+  ```
+
+The plugin manages the consumer's dependencies (one-liner UX): it injects the
+version-locked `com.boundaryml:baml-bridge` implementation dep and the host-detected
+`natives-<platform>` classifier (overrides: `baml { nativePlatforms }` incl. `"all"`,
+`baml { manageDependencies.set(false) }`; a pre-existing explicit baml-bridge dep
+suppresses injection). Plugin version == bridge version by construction, published
+from one pipeline. The quickstart example flips to the pure one-liner once the first
+plugin version is live on a registry.
