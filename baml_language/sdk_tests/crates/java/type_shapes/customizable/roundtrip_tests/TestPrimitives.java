@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_sdk.primitives.Fns;
 import baml_sdk.primitives.Primitives;
+import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 
 class TestPrimitives {
@@ -39,6 +40,13 @@ class TestPrimitives {
     @Test
     void test_return_bool() {
         assertTrue(Fns.return_bool());
+    }
+
+    @Test
+    void test_return_bigint() {
+        // 12345678901234567890 > i64 max (9223372036854775807), so it decodes
+        // through the hex bigint wire channel rather than int_value.
+        assertEquals(new BigInteger("12345678901234567890"), Fns.return_bigint());
     }
 
     @Test
@@ -76,6 +84,19 @@ class TestPrimitives {
     @Test
     void test_round_trip_bool() {
         assertFalse(Fns.round_trip_bool(false));
+    }
+
+    @Test
+    void test_round_trip_bigint() {
+        // Encode uses the hex bigint channel only for values outside i64 range
+        // (an in-range int rides int_value), so every case here is beyond i64:
+        // a large positive, its negation, and a power-of-two hex boundary
+        // (2^64 — the first magnitude needing a 17th hex digit).
+        BigInteger big = BigInteger.TWO.pow(80);
+        assertEquals(big, Fns.round_trip_bigint(big));
+        assertEquals(big.negate(), Fns.round_trip_bigint(big.negate()));
+        BigInteger hexBoundary = BigInteger.TWO.pow(64);
+        assertEquals(hexBoundary, Fns.round_trip_bigint(hexBoundary));
     }
 
     @Test

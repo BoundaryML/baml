@@ -137,16 +137,23 @@ pub(crate) fn render_javadoc_with_throws(
     out.push_str("/**\n");
     if let Some(doc) = docstring {
         for line in doc.lines() {
-            out.push_str(indent);
-            out.push_str(" * ");
             // `javac` decodes `\uXXXX` unicode escapes over the raw source
             // BEFORE lexing — inside comments too — so a docstring carrying the
             // escape form of `*/` (`*/`) would terminate the Javadoc
             // block early even though no literal `*/` is present. Neutralize any
             // unicode-escape run first, THEN guard the literal `*/`.
-            let safe = neutralize_unicode_escapes(line);
-            out.push_str(&safe.replace("*/", "* /"));
-            out.push('\n');
+            let safe = neutralize_unicode_escapes(line).replace("*/", "* /");
+            out.push_str(indent);
+            // A blank body line renders as a bare ` *` (no trailing space) —
+            // the rolled `Attributes:`/`Members:` blocks separate the summary
+            // from the section with one, and trailing whitespace is noise.
+            if safe.is_empty() {
+                out.push_str(" *\n");
+            } else {
+                out.push_str(" * ");
+                out.push_str(&safe);
+                out.push('\n');
+            }
         }
     }
     if !throws_names.is_empty() {
@@ -166,6 +173,63 @@ pub(crate) fn render_javadoc_with_throws(
     out.push_str(indent);
     out.push_str(" */\n");
     out
+}
+
+/// Compose the rolled-up class/enum doc TEXT — the summary plus a folded
+/// `Attributes:` (classes) / `Members:` (enums) section listing every
+/// field/variant — mirroring the Python emitter's `format_class_docstring`,
+/// but as plain text with no fences: [`render_javadoc`] wraps it in a
+/// `/** */` block and handles the unicode-escape / `*/` neutralization. There
+/// are no per-member Javadoc blocks — the section is the sole home for
+/// field/variant `///` docs, so both SDKs surface the same rollup.
+///
+/// `members` is `(name, Option<doc>)` for every field/variant in declaration
+/// order. Section-visibility follows the "any-doc" rule: the section appears
+/// iff at least one member carries a `///`; when it appears **every** member is
+/// listed — documented as `name: doc` (continuation lines indented under the
+/// name), undocumented as a bare `name` (no trailing colon). A summary-only
+/// type (class/enum `///` but no member documented) suppresses the section
+/// entirely and renders the summary verbatim. Returns `None` when there is
+/// nothing to render (no summary and no member documented).
+pub(crate) fn format_rolled_docstring(
+    summary: Option<&str>,
+    members: &[(String, Option<String>)],
+    section_label: &str,
+) -> Option<String> {
+    let summary = summary.filter(|s| !s.is_empty());
+    let any_member_doc = members.iter().any(|(_, d)| d.is_some());
+
+    if summary.is_none() && !any_member_doc {
+        return None;
+    }
+    // Summary only (no member documented): the section is suppressed
+    // entirely — even a multi-line summary renders verbatim.
+    if !any_member_doc {
+        return summary.map(std::string::ToString::to_string);
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(s) = summary {
+        lines.extend(s.lines().map(std::string::ToString::to_string));
+        // Blank separator between the summary and the section.
+        lines.push(String::new());
+    }
+    lines.push(format!("{section_label}:"));
+    for (name, doc) in members {
+        // An empty docstring (`Some("")`) falls through to the bare-name form.
+        match doc.as_deref().filter(|d| !d.is_empty()) {
+            Some(d) => {
+                let mut member_lines = d.lines();
+                let first = member_lines.next().unwrap_or("");
+                lines.push(format!("    {name}: {first}"));
+                for line in member_lines {
+                    lines.push(format!("        {line}"));
+                }
+            }
+            None => lines.push(format!("    {name}")),
+        }
+    }
+    Some(lines.join("\n"))
 }
 
 /// Break Java unicode escapes (`\uXXXX`, including multi-`u` markers) in
@@ -289,7 +353,16 @@ pub(crate) fn render_class(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    let mut out = render_javadoc(class.docstring.as_deref(), "");
+    // Field `///` docs fold into the class Javadoc's `Attributes:` section
+    // (Python parity — see [`format_rolled_docstring`]); fields carry no
+    // per-member Javadoc block.
+    let doc_members: Vec<(String, Option<String>)> = class
+        .properties
+        .iter()
+        .map(|p| (java_identifier(p.name.as_str()), p.docstring.clone()))
+        .collect();
+    let rolled = format_rolled_docstring(class.docstring.as_deref(), &doc_members, "Attributes");
+    let mut out = render_javadoc(rolled.as_deref(), "");
     let ident = java_identifier(class.name.name().as_str());
     let generics = if class.generic_params.is_empty() {
         String::new()
@@ -337,8 +410,7 @@ pub(crate) fn render_class(
         ));
     }
 
-    for ((f_ident, f_ty), prop) in fields.iter().zip(&class.properties) {
-        out.push_str(&render_javadoc(prop.docstring.as_deref(), "    "));
+    for (f_ident, f_ty) in &fields {
         out.push_str(&format!("    private final {f_ty} {f_ident};\n"));
     }
 
@@ -549,13 +621,21 @@ fn render_baml_type_args_readback(fields: &[(String, String)]) -> String {
 /// escape; the wire-name serializer map that reconciles escaped
 /// constants with variant spellings lands with the enum capability.
 pub(crate) fn render_enum(enum_: &Enum) -> String {
-    let mut out = render_javadoc(enum_.docstring.as_deref(), "");
+    // Variant `///` docs fold into the enum Javadoc's `Members:` section
+    // (Python parity — see [`format_rolled_docstring`]); variants carry no
+    // per-member Javadoc block.
+    let doc_members: Vec<(String, Option<String>)> = enum_
+        .variants
+        .iter()
+        .map(|v| (java_identifier(v.name.as_str()), v.docstring.clone()))
+        .collect();
+    let rolled = format_rolled_docstring(enum_.docstring.as_deref(), &doc_members, "Members");
+    let mut out = render_javadoc(rolled.as_deref(), "");
     let ident = java_identifier(enum_.name.name().as_str());
     out.push_str("public enum ");
     out.push_str(&ident);
     out.push_str(" {\n");
     for variant in &enum_.variants {
-        out.push_str(&render_javadoc(variant.docstring.as_deref(), "    "));
         out.push_str("    ");
         out.push_str(&java_identifier(variant.name.as_str()));
         out.push_str(",\n");
@@ -1342,5 +1422,131 @@ mod tests {
             neutralize_unicode_escapes("no escapes here"),
             "no escapes here"
         );
+    }
+
+    fn doc(name: &str, text: Option<&str>) -> (String, Option<String>) {
+        (name.to_string(), text.map(std::string::ToString::to_string))
+    }
+
+    #[test]
+    fn rolled_docstring_none_when_nothing_to_render() {
+        // No summary and no member documented → no docstring at all.
+        assert_eq!(
+            format_rolled_docstring(None, &[doc("a", None), doc("b", None)], "Attributes"),
+            None
+        );
+        assert_eq!(format_rolled_docstring(Some(""), &[], "Attributes"), None);
+    }
+
+    #[test]
+    fn rolled_docstring_summary_plus_attributes_section() {
+        // Mirrors the `Doc` class: summary + a fully-documented Attributes
+        // section (Python-parity rollup).
+        let out = format_rolled_docstring(
+            Some("A document with a title and an optional body."),
+            &[
+                doc("title", Some("Title shown in lists and search results.")),
+                doc("body", Some("Free-form body text.")),
+            ],
+            "Attributes",
+        );
+        assert_eq!(
+            out.as_deref(),
+            Some(
+                "A document with a title and an optional body.\n\
+                 \n\
+                 Attributes:\n\
+                 \x20   title: Title shown in lists and search results.\n\
+                 \x20   body: Free-form body text."
+            )
+        );
+    }
+
+    #[test]
+    fn rolled_docstring_multiline_summary_and_bare_undocumented_member() {
+        // Mirrors the `Note` class: multi-line summary, one documented field,
+        // one undocumented field listed as a bare name under the "any-doc" rule.
+        let out = format_rolled_docstring(
+            Some("A multi-line summary.\nContinuation line."),
+            &[doc("id", Some("Stable identifier.")), doc("text", None)],
+            "Attributes",
+        )
+        .unwrap();
+        assert!(
+            out.starts_with("A multi-line summary.\nContinuation line."),
+            "{out}"
+        );
+        assert!(
+            out.contains("\n\nAttributes:\n    id: Stable identifier."),
+            "{out}"
+        );
+        // Bare-name entry: just the identifier, no trailing colon, no doc.
+        assert!(out.ends_with("\n    text"), "{out}");
+    }
+
+    #[test]
+    fn rolled_docstring_enum_members_section() {
+        // Mirrors the `Sentiment` enum: summary + Members section, one bare.
+        let out = format_rolled_docstring(
+            Some("Sentiment labels surfaced by the model."),
+            &[
+                doc("HAPPY", Some("Smiling face.")),
+                doc("SAD", Some("Frowning face.")),
+                doc("NEUTRAL", None),
+            ],
+            "Members",
+        );
+        assert_eq!(
+            out.as_deref(),
+            Some(
+                "Sentiment labels surfaced by the model.\n\
+                 \n\
+                 Members:\n\
+                 \x20   HAPPY: Smiling face.\n\
+                 \x20   SAD: Frowning face.\n\
+                 \x20   NEUTRAL"
+            )
+        );
+    }
+
+    #[test]
+    fn rolled_docstring_summary_only_suppresses_section() {
+        // Mirrors the `Priority` enum: a (multi-line) class-level summary with
+        // every member bare → the Members section is suppressed entirely.
+        let out = format_rolled_docstring(
+            Some("Summary only, no member rollup:\nsecond line."),
+            &[doc("HIGH", None), doc("MEDIUM", None), doc("LOW", None)],
+            "Members",
+        );
+        assert_eq!(
+            out.as_deref(),
+            Some("Summary only, no member rollup:\nsecond line.")
+        );
+        assert!(!out.unwrap().contains("Members:"));
+    }
+
+    #[test]
+    fn rolled_docstring_member_continuation_lines_indent_under_name() {
+        // A multi-line member doc: the first line sits after `name: `, the
+        // continuation lines are indented deeper (8 spaces).
+        let out = format_rolled_docstring(
+            None,
+            &[doc("field", Some("first line\nsecond line"))],
+            "Attributes",
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            "Attributes:\n    field: first line\n        second line"
+        );
+    }
+
+    #[test]
+    fn javadoc_blank_body_line_has_no_trailing_space() {
+        // The rolled summary/section separator is a blank body line; it renders
+        // as a bare ` *` (no trailing whitespace).
+        let rendered = render_javadoc(Some("summary\n\nAttributes:\n    a: x"), "");
+        assert!(rendered.contains("\n *\n"), "{rendered}");
+        assert!(!rendered.contains(" * \n"), "{rendered}");
     }
 }

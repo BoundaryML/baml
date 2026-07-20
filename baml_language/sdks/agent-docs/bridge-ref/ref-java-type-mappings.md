@@ -1,5 +1,5 @@
 ---
-date: 2026-07-17
+date: 2026-07-20
 repository: baml4
 ---
 These are the rules that dictate how Java SDK generation works for BAML.
@@ -136,11 +136,12 @@ Every callable also gets trailing `baml_bridge.BamlCallContext ctx` overloads
 > `Resume$stream`. Python mangles: `$stream` → `_stream`, `$build_request` → `__build_request`.
 > (Same house rule as TS; ref-java-codegen-conventions.md:30–33.)
 
-> ⚠ **Deviation from Python (OPEN — GAP B):** `$stream` companion **types** are minted **in
+> ⚠ **Deviation from Python (DECIDED 2026-07-17, Option B — TS-aligned):** `$stream` companion **types** are minted **in
 > package** as `baml_sdk.<ns>.<Name>$stream` (fully emitted, registered, relied on by the
 > 102/102 `type_shapes` typemap). Python routes them to a **parallel** `baml_sdk.stream_types.<ns>.<Name>`
-> package. Exactly one side must move; the packaging decision is unresolved
-> (java-function-calls-decisions.md, "GAP B", 2026-07-17 addendum).
+> package — the owner-decided layout (TS emits companions in place and the compiler
+> no longer reserves `stream_types`; Python's parallel package is a workaround for
+> `$` being illegal there). The ported stream tests were retargeted accordingly.
 
 ## Exhaustive Ty conversions
 
@@ -148,7 +149,7 @@ Java SDK codegen consumes the codegen-facing `Ty` (a re-export of `baml_type::Co
 as Python. The first column names the upstream TIR shape; the second names the codegen variant
 `translate_ty` actually matches. `Ty::Class` / `Ty::Enum` / `Ty::TypeAlias` route to the generated
 `baml_sdk/` leaf via `route()`; `$stream` class references route to the in-package `<Name>$stream`
-companion (see GAP B above).
+companion (see the decided `$stream` deviation above).
 
 Column key: **Java @ TopLevel** = field/param/return; **Java @ Boxed** = generic type-arg /
 nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wire-driven).
@@ -182,7 +183,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
 | `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
-| `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → `java.lang.Object` | (same) | `null` (wire-driven) | :148, :407–435 |
+| `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
 | `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
 | `Ty::RustType { … }` | `Ty::RustType` | opaque builtin state | `baml_bridge.BamlHandle` | (same) | `null` (wire-driven) | :153 |
@@ -315,15 +316,14 @@ Params and return are boxed. Verified `Function<java.lang.Long, java.lang.String
 > to `typing.Callable[..., ret]` when **any** parameter is optional. Java has no variadic callable
 > type, so it maps by concrete arity to `java.util.function.*`.
 
-> **NOT YET IMPLEMENTED IN JAVA:** a callable **with any optional parameter or arity > 2** bails to
-> `java.lang.Object` (translate_ty.rs:414–419), so the generated param is literally
-> `java.lang.Object callback`. The intended replacement is a generated `@FunctionalInterface` with
-> a fixed-arity SAM plus a nested, always-constructed opts bag with **nullable** accessors
-> (the test's placeholder is `IntOptCallback` with `Long apply(Long x, Opts $opts)`). Status
-> **OPEN** — decision (E) in java-function-calls-decisions.md recommends **E1** (one interface per
-> distinct signature within the namespace, signature-derived name, nested `Opts` bag, documented
-> non-null-bag divergence), not yet built. The descriptor for a callable is `callable`
-> (signature_token lib.rs:397).
+> **LANDED (`202883518`, decision E1):** a callable **with any optional parameter or arity > 2**
+> — which has no `java.util.function.*` equivalent — is emitted as a generated
+> `@FunctionalInterface extends baml_bridge.BamlHostCallable` with a fixed-arity SAM plus a nested,
+> always-constructed `Opts` bag with **nullable** accessors, and a `default __bamlDispatch(...)` that
+> reshapes the bridge's flat declared-order arg list into the SAM. Verified `IntOptCallback` with
+> `Long apply(Long x, Opts $opts)` and `Opts(Long y, Long z)` (nullable). One interface per distinct
+> signature within the namespace, signature-derived name; the documented non-null-bag divergence
+> stands. The descriptor for a callable param is `null` (wire-driven).
 
 Notes:
 - Generated classes are **immutable `public final` value classes**: a canonical all-args constructor
@@ -388,21 +388,25 @@ Function calls return a `BamlOutboundResult` envelope; `ProtoReader.decodeOutbou
   `.value()`, `.baml_trace()`, and `.class_name()`. Special case: an `error` whose value FQN is
   `baml.errors.TypeMismatch` is re-surfaced as a native `java.lang.IllegalArgumentException` (message
   from the decoded value; BAML frames synthesized into real `StackTraceElement`s and spliced onto the
-  exception). **DECIDED 2026-07-17 (D2), in flight.**
+  exception). **LANDED (`74782a679`, D2).**
   > ⚠ **Deviation from Python:** Python remaps `TypeMismatch` to a native `TypeError`; Java has no
   > `TypeError`, so it maps to `IllegalArgumentException` — the idiomatic "bad argument" exception
   > and the intended 1:1 analog (java-function-calls-decisions.md, D2).
 - **`error` carrying a rehydratable host-callable exception** (`baml.errors.HostCallable`) →
-  re-throw the **original** native Java `Throwable` by identity, looked up in the host-value registry.
-  **NOT YET IMPLEMENTED IN JAVA** (host-callables slice 4; recommended registry design A1 + identity
-  rehydration (D) + `BamlError(Object value)` ctor (F) are **OPEN/recommended**, not built).
+  re-throw the **original** native Java `Throwable` by identity, looked up in the Java-side host-value
+  registry (`BamlFfi.lookupHostValue` → `sneakyThrow`, so `assertSame` holds). **LANDED (`202883518`):**
+  registry design A1 + identity rehydration (D) + the 1-arg `BamlError(Object value)` ctor (F) are all
+  built; a foreign/released key falls through to a metadata `BamlError`. See
+  ref-java-outbound-decoding.md, error arm.
 - **`panic`** (non-exit) → throw an unchecked `baml_bridge.BamlPanic(value, bamlTrace, className)`.
-  **DECISION D2: `BamlPanic` re-parents to `java.lang.Error`** so it escapes `catch (Exception)` — the
-  analog of Python raising `BamlPanic` off `BaseException`. In flight.
-- **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → flush telemetry then
-  `Runtime.getRuntime().halt(exitCode)` (hard exit, bypasses shutdown hooks — analog of Python
-  `os._exit`). Design committed, wiring pending; `ProtoReader` already decodes `is_exit` / `exit_code`
-  (:306–309).
+  **`BamlPanic` re-parents to `java.lang.Error`** (`BamlPanic.java:20`) so it escapes
+  `catch (Exception)` — the analog of Python raising `BamlPanic` off `BaseException`. **LANDED
+  (`74782a679`).**
+- **Exit panics** (`baml.sys.exit`, `is_exit_panic`) → run the registered telemetry-flush hooks
+  (`BamlFfi.runExitFlushHooks()`, best-effort) then `Runtime.getRuntime().halt(exitCode)` (hard exit,
+  bypasses shutdown hooks — analog of Python `os._exit`). **Flush hook wired, LANDED (`eab6d37cc`);**
+  no telemetry ships in this slice, so the hook registry is empty by default. `ProtoReader.decodePanic`
+  decodes `is_exit` / `exit_code` and drives the flush-then-halt (`ProtoReader.java:313-319`).
 - **Cancellation** — **DECIDED 2026-07-17 (D1), full Python parity plus a sync path.** Trailing
   `BamlCallContext` overloads (`f(req…, ctx)`, `f(req…, opts, ctx)`); engine-driven abort →
   `BamlCancelledError extends java.util.concurrent.CancellationException` (the future counts as
@@ -445,9 +449,9 @@ discriminator resolved from the per-call handle table.
 | `Adt(Type(RuntimeTy))` | `ty_value` (`BamlTy`) | lenient path → `null` (`OV_TY` skipped, :361–368); strict path → throws `unsupported`. BAML type-reference values do not round-trip. |
 | `Adt(PromptAst(Arc<PromptAst>))` | handle table (`ADT_PROMPT_AST`) on the FFI path; inline `prompt_ast_value` never used | bare `baml_bridge.BamlHandle`; an inline `prompt_ast_value` (`OV_PROMPT_AST`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |
 | `Adt(Media(Arc<MediaValue>))` | handle table (`ADT_MEDIA_*`) on the FFI path; inline `media_value` never used | typed media stdlib class via the `Handle(...)` row; inline `media_value` (`OV_MEDIA`) → `null` (lenient) / throws `unsupported` (strict) (:361–368) |
-| `Adt(TaggedHeapHandle { ty, .. })` | `handle_value` with `BamlOutboundHandle.ty` (full `BamlTy`) | typed wrapper picked by FQN off `handle.ty` — the `$rust_type` shell class / `BamlStream`. Shells implemented (type_shapes 102/102); **`BamlStream<TPartial,TFinal>` NOT YET IMPLEMENTED** (stream capability pending — state doc row ❌) |
+| `Adt(TaggedHeapHandle { ty, .. })` | `handle_value` with `handle_type = ADT_TAGGED_HEAP_HANDLE` (14); `ty` carries the erased `TPartial`/`TFinal` | `baml_bridge.BamlStream<TPartial,TFinal>` via `BamlStream.fromHandle` — the `handle_type` tag alone picks it (Java does **not** read `ty`). **`BamlStream` LANDED (`a6e3ca99e`)**, llm_functions 21/21. (`$rust_type` shells decode via the `class_value` path, not here.) |
 | `RustData(Arc<dyn Any>)` | `try_convert_rust_data`, else `handle_value` (`UNTAGGED_RUST_DATA`) | converted → recurse; otherwise bare `baml_bridge.BamlHandle` stored in the shell class's private `_handle` field |
-| `HostValue(HostValueArc)` | `handle_value` with a host-value handle type | **NOT YET IMPLEMENTED IN JAVA** (host-callables slice 4, **OPEN**): a callable round-trips as a registered functional interface; an opaque throwable is rehydrated by identity on the error path |
+| `HostValue(HostValueArc)` | `handle_value` with `HOST_VALUE_CALLABLE` (15) / `HOST_VALUE_OPAQUE` (16) | **LANDED (`202883518`):** on the error arm a `HOST_VALUE_OPAQUE` throwable is rehydrated **by identity** from the Java-side registry (`lookupHostValue` → original `Throwable` via `sneakyThrow`); a foreign/released key falls through to a metadata `BamlError`. |
 | — | `media_value` (`BamlValueMedia`) inline | lenient → `null`; strict → throws `unsupported` — media always rides `handle_value` on the FFI path (:361–368) |
 | — | `prompt_ast_value` (`BamlValuePromptAst`) inline | lenient → `null`; strict → throws `unsupported` — same rationale (:361–368) |
 
@@ -458,7 +462,7 @@ discriminator resolved from the per-call handle table.
 
 > ⚠ **Deviation from Python (`$stream` instance routing):** an `Instance` for a `$stream` companion
 > decodes into the **in-package `<Name>$stream`** class, not Python's `baml_sdk.stream_types.*`
-> (GAP B, OPEN).
+> (decided 2026-07-17: in-package `$stream` companions stay).
 
 > ⚠ **Deviation from Python (inline media / prompt_ast / ty):** where Python **raises `BamlError`**
 > if it ever sees an inline `media_value` / `prompt_ast_value` (and returns terminal `None` for

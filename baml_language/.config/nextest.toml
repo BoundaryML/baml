@@ -15,6 +15,7 @@ rust-sdk-fixture = { max-threads = 2 }
 java-fixture-type-shapes = { max-threads = 1 }
 java-fixture-function-calls = { max-threads = 1 }
 java-fixture-llm-functions = { max-threads = 1 }
+java-fixture-docstrings-etc = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
@@ -146,6 +147,10 @@ test-group = 'java-fixture-function-calls'
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java) & test(/^llm_functions::/)'
 test-group = 'java-fixture-llm-functions'
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_java) & test(/^docstrings_etc::/)'
+test-group = 'java-fixture-docstrings-etc'
 
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per

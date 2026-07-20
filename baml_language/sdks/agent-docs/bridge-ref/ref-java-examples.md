@@ -1,5 +1,5 @@
 ---
-date: 2026-07-17
+date: 2026-07-20
 repository: baml4
 mirrors: sdks/agent-docs/bridge-ref/ref-python-examples.md
 source_fixtures:
@@ -37,7 +37,9 @@ then the **real generated Java** pulled from
   `thoughts/antonio/java-function-calls-decisions.md`) or the **open decision**.
 
 Every claim below cites code that was read or output that is quoted; no behavior
-is inferred. Line numbers are as of 2026-07-17.
+is inferred. Snippets are re-quoted from the current generated trees; line
+numbers are indicative (last audited 2026-07-20, after the typed-descriptor,
+host-callable, and streaming landings).
 
 **One structural deviation applies to the entire document**, so it is stated
 once here rather than repeated per section:
@@ -113,10 +115,8 @@ public final class Baml {
     private Baml() {}
 
     static {
-        baml_bridge.TypeRegistry.registerClass("user.primitives.Primitives", "baml_sdk.primitives.Primitives",
-            new java.lang.String[] {"int_field", "float_field", "string_field", "bool_field", "null_field", "uint8array_field"},
-            new java.lang.String[] {"int", "float", "string", "bool", "null", "uint8array"});
-        // … registerClass / registerEnum / registerUnion for every symbol …
+        baml_bridge.TypeRegistry.registerClass("user.primitives.Primitives", "baml_sdk.primitives.Primitives", new java.lang.String[] {"int_field", "float_field", "string_field", "bool_field", "null_field", "uint8array_field"}, new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.FLOAT, baml_bridge.BamlType.STRING, baml_bridge.BamlType.BOOL, null, null});
+        // … registerClass / registerEnum / registerUnion / registerUnionAlias for every symbol …
         try (java.io.InputStream in = Baml.class.getResourceAsStream("/baml_sdk/inlinedbaml.b64")) {
             if (in == null) {
                 throw new IllegalStateException("baml_sdk/inlinedbaml.b64 not found on the classpath — …");
@@ -145,19 +145,21 @@ public final class Fns {
     static {
         baml_sdk.Baml.ensure();
     }
+    // Pooled, per-holder decode descriptor: a typed BamlType data structure
+    // (deduped across the holder's bindings), NOT a string.
+    private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.classByFqn("user.Foo");
 
     public static baml_sdk.Foo make_foo(long v) {
-        return (baml_sdk.Foo) baml_bridge.BamlFfi.callSync(
-            "user.make_foo", new java.lang.String[] {"v"}, new java.lang.Object[] {v}, "user.Foo");
+        return (baml_sdk.Foo) baml_bridge.BamlFfi.callSync("user.make_foo", new java.lang.String[] {"v"}, new java.lang.Object[] {v}, $RET0);
     }
 
     @SuppressWarnings("unchecked")
     public static java.util.concurrent.CompletableFuture<baml_sdk.Foo> make_foo_async(long v) {
-        return (java.util.concurrent.CompletableFuture<baml_sdk.Foo>) (java.util.concurrent.CompletableFuture<?>)
-            baml_bridge.BamlFfi.callAsync("user.make_foo", new java.lang.String[] {"v"}, new java.lang.Object[] {v}, "user.Foo");
+        return (java.util.concurrent.CompletableFuture<baml_sdk.Foo>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync("user.make_foo", new java.lang.String[] {"v"}, new java.lang.Object[] {v}, $RET0);
     }
 
-    // + trailing-`ctx` overloads make_foo(v, ctx) / make_foo_async(v, ctx); round_trip_foo(...) similarly
+    // + trailing-`ctx` overloads make_foo(v, ctx) / make_foo_async(v, ctx) (pass $RET0, ctx);
+    //   round_trip_foo(...) similarly, sharing the same pooled $RET0 constant
 }
 ```
 
@@ -220,7 +222,7 @@ Derived from `ns_primitives/types.baml` and
 
 ```java
 // baml_sdk/primitives/Primitives.java
-public class Primitives {
+public final class Primitives {
     private final long int_field;
     private final double float_field;
     private final java.lang.String string_field;
@@ -243,13 +245,13 @@ public class Primitives {
         if (!(o instanceof Primitives)) return false;
         Primitives other = (Primitives) o;
         return this.int_field == other.int_field
-            && this.float_field == other.float_field
+            && java.lang.Double.compare(this.float_field, other.float_field) == 0
             && java.util.Objects.equals(this.string_field, other.string_field)
             && this.bool_field == other.bool_field
             && java.util.Objects.equals(this.null_field, other.null_field)
             && java.util.Arrays.equals(this.uint8array_field, other.uint8array_field);
     }
-    @Override public int hashCode() { … java.util.Arrays.hashCode(this.uint8array_field) … }
+    @Override public int hashCode() { … java.lang.Double.hashCode(this.float_field) … java.util.Arrays.hashCode(this.uint8array_field) … }
 }
 ```
 
@@ -258,36 +260,50 @@ The BAML→Java scalar map: `int → long`, `float → double`, `string → Stri
 (`translate_ty.rs:85-100`).
 
 ```java
-// baml_sdk/primitives/Fns.java
+// baml_sdk/primitives/Fns.java  (pooled per-holder $RET constants; $RET0 = BamlType.INT)
+private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.INT;
+
 public static long return_int() {
-    return (java.lang.Long) baml_bridge.BamlFfi.callSync(
-        "user.primitives.return_int", new java.lang.String[] {}, new java.lang.Object[] {}, "int");
+    return (java.lang.Long) baml_bridge.BamlFfi.callSync("user.primitives.return_int", new java.lang.String[] {}, new java.lang.Object[] {}, $RET0);
 }
 public static byte[] round_trip_uint8_array(byte[] b) {
-    return (byte[]) baml_bridge.BamlFfi.callSync(
-        "user.primitives.round_trip_uint8_array", new java.lang.String[] {"b"}, new java.lang.Object[] {b}, "uint8array");
+    // bigint / uint8array / null are wire-driven → the descriptor is the literal null.
+    return (byte[]) baml_bridge.BamlFfi.callSync("user.primitives.round_trip_uint8_array", new java.lang.String[] {"b"}, new java.lang.Object[] {b}, null);
 }
 ```
 
-> ⚠ **Deviation from Python:** Generated value types are **hand-emitted POJOs**
-> (`private final` fields, canonical all-args constructor, accessors, deep
-> `equals`/`hashCode`), **not Pydantic models and not Java `record`s**. Two
-> consequences: (a) there is **no runtime validation** on construction — Pydantic
-> validates fields, the Java constructor just assigns; (b) equality is deep and
-> hand-written — `byte[]` uses `Arrays.equals`/`Arrays.hashCode` (a `record`'s
-> array component would compare by identity, which the round-trip parity tests
-> forbid). `sdkgen_java/src/emit.rs:137-302`.
+> ⚠ **Deviation from Python:** Generated value types are **hand-emitted `public
+> final` POJOs** (`private final` fields, canonical all-args constructor,
+> accessors, deep `equals`/`hashCode`), **not Pydantic models and not Java
+> `record`s**. Three consequences: (a) there is **no runtime validation** on
+> construction — Pydantic validates fields, the Java constructor just assigns;
+> (b) equality is deep and hand-written — `byte[]` uses
+> `Arrays.equals`/`Arrays.hashCode` (a `record`'s array component would compare
+> by identity, which the round-trip parity tests forbid), and **`double` fields
+> use `Double.compare(a,b) == 0` / `Double.hashCode`** (landed `eab6d37cc`) so
+> `-0.0`/`NaN` compare per the IEEE-total-order the parity tests expect, not `==`;
+> (c) the class is **`final`** — the inbound encoder keys its typemap on the exact
+> runtime class, so a user subclass would silently break inbound-encode.
+> `sdkgen_java/src/emit.rs:137-302`.
 
 > ⚠ **Deviation from Python:** Accessors are **`PreserveCase` zero-prefix
 > methods** named exactly after the BAML field (`int_field()`, `uint8array_field()`),
 > not attribute access (`p.int_field`). `sdkgen_java/src/emit.rs:208-213`.
 
-> ⚠ **Deviation from Python:** The last argument to `callSync`/`callAsync` is a
-> **type-directed decode descriptor** for the declared return type (`"int"`,
-> `"user.Foo"`, `"union[int;string]"`), so the decoder resolves union arm order
-> and element types without trusting the wire shape. Python's `.pyi` is the typed
-> surface; Java threads the descriptor at the call. `emit.rs:22-27`,
-> `translate_ty.rs:304-347` (`descriptor_token`).
+> ⚠ **Deviation from Python:** The last positional argument to
+> `callSync`/`callAsync` is a **type-directed decode descriptor** for the declared
+> return type — a typed `baml_bridge.BamlType` **data structure**
+> (`BamlType.INT`, `BamlType.classByFqn("user.Foo")`,
+> `BamlType.union(BamlType.INT, BamlType.STRING)`), pooled per holder as a
+> `private static final BamlType $RET{n}` constant — so the decoder resolves union
+> arm order and element types without trusting the wire shape. A wholly
+> wire-driven return (bigint / uint8array / null / void / media / callable /
+> handle / the `unknown`-family) passes the literal `null`. The old
+> stringly-typed grammar (`"int"`, `"union[int;string]"`) and its hand-rolled
+> parser were **deleted** (`763a226ef`). Python's `.pyi` is the typed surface;
+> Java threads the `BamlType` at the call. `emit.rs` (`DescriptorPool`, which
+> interns each distinct builder expression into a per-holder `$RET{n}` constant),
+> `translate_ty.rs` (`descriptor_expr` / `descriptor_expr_opt`).
 
 ## Enums And Aliases
 
@@ -303,7 +319,7 @@ public enum Sentiment {
 
 ```java
 // baml_sdk/enums/Enums.java (fields widen a variant type to the enum)
-public class Enums {
+public final class Enums {
     private final baml_sdk.enums.Sentiment bare_enum;
     private final baml_sdk.enums.Sentiment variant_as_type;   // a specific variant type widens to Sentiment
     …
@@ -331,7 +347,7 @@ public sealed interface RecList permits RecList.IntValue, RecList.RecListListVal
 
 ```java
 // baml_sdk/aliases/AliasContainer.java
-public class AliasContainer {
+public final class AliasContainer {
     private final java.util.List<java.lang.String> list_field;   // StringList erased
     private final baml_sdk.aliases.RecList rec_field;            // recursive alias kept nominal
     …
@@ -390,24 +406,38 @@ directly as instance/static methods on the class body:
 
 ```java
 // baml_sdk/generics/WrapperMethods.java
-public class WrapperMethods<T> {
+public final class WrapperMethods<T> {
+    static { baml_sdk.Baml.ensure(); }
+
     private final T value;
     public WrapperMethods(T value) { this.value = value; }
     public T value() { return this.value; }
 
+    // Reified factory (explicit-generics surface, landed 861414d55): binds the
+    // per-class-param type-arg tokens in the runtime side-table so the value
+    // carries its concrete class_ty.type_args on the wire.
+    public static <T> WrapperMethods<T> of(baml_bridge.BamlType $t0, T value) {
+        WrapperMethods<T> $instance = new WrapperMethods<>(value);
+        baml_bridge.TypeRegistry.bindTypeArgs($instance, java.util.List.of($t0));
+        return $instance;
+    }
+    // Reads those tokens back (delegates to the weak-identity side-table).
+    public java.util.List<baml_bridge.BamlType> bamlTypeArgs() {
+        return baml_bridge.TypeRegistry.typeArgsOf(this);
+    }
+    private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.typeVar("T");
+
     public T get_value() {
-        return (T) baml_bridge.BamlFfi.callSync(
-            "user.generics.WrapperMethods.get_value",
-            new java.lang.String[] {"self"}, new java.lang.Object[] {this}, "tv:T");
+        return (T) baml_bridge.BamlFfi.callSync("user.generics.WrapperMethods.get_value", new java.lang.String[] {"self"}, new java.lang.Object[] {this}, $RET0);
     }
     @SuppressWarnings("unchecked")
-    public java.util.concurrent.CompletableFuture<T> get_value_async() { … "tv:T" … }
+    public java.util.concurrent.CompletableFuture<T> get_value_async() { … $RET0 … }
 
-    public baml_bridge.Union2<T, baml_sdk.generics.WrapperMarker> get_value_or_marker() {
-        return (baml_bridge.Union2<T, baml_sdk.generics.WrapperMarker>) baml_bridge.BamlFfi.callSync(
-            "user.generics.WrapperMethods.get_value_or_marker",
-            new java.lang.String[] {"self"}, new java.lang.Object[] {this},
-            "union[tv:T;user.generics.WrapperMarker]");
+    // A union with a TypeVar arm (`T | WrapperMarker`) degenerates to
+    // java.lang.Object with a null (wire-driven) descriptor — no Union2 is minted
+    // when an arm is an unresolved type var (translate_ty.rs:236-250).
+    public java.lang.Object get_value_or_marker() {
+        return (java.lang.Object) baml_bridge.BamlFfi.callSync("user.generics.WrapperMethods.get_value_or_marker", new java.lang.String[] {"self"}, new java.lang.Object[] {this}, null);
     }
     // + get_value(ctx) / get_value_async(ctx) overloads
     // equals/hashCode use WrapperMethods<?> wildcard narrowing (erasure)
@@ -422,7 +452,7 @@ arguments:
 
 ```java
 // baml_sdk/generics/Box.java
-public class Box<T> {
+public final class Box<T> {
     private final T value;
     private final baml_sdk.generics.Wrapper<T> wrapped;
     …
@@ -434,25 +464,39 @@ Free-function generics declare their type parameters on the Java method and
 carries `tv:T`:
 
 ```java
-// baml_sdk/generic_tests/Fns.java
+// baml_sdk/generic_tests/Fns.java   ($RET0 = BamlType.typeVar("T"))
 public static <T> T identity(T x) {
-    return (T) baml_bridge.BamlFfi.callSync(
-        "user.generic_tests.identity", new java.lang.String[] {"x"}, new java.lang.Object[] {x}, "tv:T");
+    return (T) baml_bridge.BamlFfi.callSync("user.generic_tests.identity", new java.lang.String[] {"x"}, new java.lang.Object[] {x}, $RET0);
 }
+// Explicit-generics trailing overloads (landed 861414d55) — pass a BamlTypes bag
+// via a 6-arg callSync/callAsync (returnDesc, ctx, types):
+public static <T> T identity(T x, baml_bridge.BamlTypes types) {
+    return (T) baml_bridge.BamlFfi.callSync("user.generic_tests.identity", new java.lang.String[] {"x"}, new java.lang.Object[] {x}, $RET0, null, types);
+}
+public static <T> T identity(T x, baml_bridge.BamlTypes types, baml_bridge.BamlCallContext ctx) { … $RET0, ctx, types … }
+
 public static <A, B, C> baml_sdk.generic_tests.GenericTriple<A, B, C> make_triple(
         A a, java.util.List<B> b, java.util.Map<java.lang.String, C> c) { … }
 ```
 
-A static factory that would collide with the Java `new` keyword is escaped:
+A static factory that would collide with the Java `new` keyword is escaped, and
+carries the same `BamlTypes` trailing overloads:
 
 ```java
-// baml_sdk/generic_tests/GenericBox.java  —  BAML static `new`
+// baml_sdk/generic_tests/GenericBox.java  —  BAML static `new`  ($RET0 = classByFqn("user.generic_tests.GenericBox"))
 public static <T, V> baml_sdk.generic_tests.GenericBox<V> new$(V value) {
-    return (baml_sdk.generic_tests.GenericBox<V>) baml_bridge.BamlFfi.callSync(
-        "user.generic_tests.GenericBox.new", new java.lang.String[] {"value"}, new java.lang.Object[] {value},
-        "user.generic_tests.GenericBox");
+    return (baml_sdk.generic_tests.GenericBox<V>) baml_bridge.BamlFfi.callSync("user.generic_tests.GenericBox.new", new java.lang.String[] {"value"}, new java.lang.Object[] {value}, $RET0);
+}
+public static <T, V> baml_sdk.generic_tests.GenericBox<V> new$(V value, baml_bridge.BamlTypes types) {
+    return (baml_sdk.generic_tests.GenericBox<V>) baml_bridge.BamlFfi.callSync("user.generic_tests.GenericBox.new", new java.lang.String[] {"value"}, new java.lang.Object[] {value}, $RET0, null, types);
 }
 ```
+
+An **instance** generic method with a `BamlTypes` overload guards on a reified
+receiver — `GenericBox.pair_with(other, types)` throws
+`IllegalArgumentException("explicit type bindings on a generic method require a
+reified receiver so the class type args can be recovered")` when
+`TypeRegistry.typeArgsOf(this).isEmpty()`.
 
 > ⚠ **Deviation from Python:** A static method on a generic class **re-declares
 > the class's type params at method level** (`static <T, V> … new$`), because
@@ -469,30 +513,35 @@ public static <T, V> baml_sdk.generic_tests.GenericBox<V> new$(V value) {
 low-level `_types={T: int}` kwarg, plus the `class_type_params=[…]` /
 `type_params=[…]` metadata on `define_function`):
 
-**NOT YET IMPLEMENTED IN JAVA (emitter surface).** — The generated methods above
-are **inference-only**: no explicit-binding overload is emitted, and the
-`class_type_params` / `type_params` metadata has no Java analog on the wire yet
-(implicit-generics decode is green — 6/6 in type_shapes).
+**LANDED** (commit `861414d55`, on top of the `3991c4fd4` runtime substrate). The
+full explicit-generics emitter surface now ships in `generated/baml_sdk/**`:
 
-- **Runtime substrate: LANDED** overnight (commit `3991c4fd4`). The value-level
-  type tokens exist in the runtime and pass value-equality tests:
+- **Runtime substrate** (`3991c4fd4`): the value-level type tokens in
   `baml_bridge/BamlType.java` (`INT`/`STRING`/`BOOL`/`FLOAT`, `of(Class)`,
-  `of(Class, BamlType...)`, `toWireTy`/`fromWireTy`) and `baml_bridge/BamlTypes.java`
-  (`BamlTypes.of("T", BamlType.INT).and(…)`, an ordered named bag).
-- **Decided design (D3, 2026-07-17):** the call-site surface is a **named bag**
-  `BamlTypes.of("T", BamlType.INT)` passed as a **trailing overload** (1:1 with
-  the wire's named `BamlTyArg` bindings; partial binding allowed); token grammar
-  is minimal-as-tested.
-- **Still OPEN (Antonio):** readback naming (`bamlTypeArgs()` + `Fns$`-style
-  collision escape vs always-`$`-named); and the trailing-overload matrix
-  (req→opts→types→ctx, worst-case 16 methods) vs a fluent builder. The minimal
-  grammar caps readback: a reified arg that is a list/map/union/optional/literal
-  produces no side-table entry (`BamlType.fromWireTy` returns `null` out of
-  grammar, `BamlType.java:172-206`) — decide widen-grammar vs document graceful
-  degradation.
-- Confirmed absent in generated output: `grep -rl BamlTypes` matches only the
-  **test** files, never `generated/baml_sdk/**`; `GenericBox.java` has **no**
-  reified `of(BamlType, value)` factory.
+  `of(Class, BamlType...)`, `classByFqn`, `typeVar`, `toWireTy`/`fromWireTy`) and
+  `baml_bridge/BamlTypes.java` (`BamlTypes.of("T", BamlType.INT).and(…)`, an
+  ordered named bag).
+- **Call-site surface (D3):** a **named bag** `BamlTypes.of("T", BamlType.INT)`
+  passed as a **trailing overload** (1:1 with the wire's named `BamlTyArg`
+  bindings; partial binding allowed) through a 6-arg
+  `callSync`/`callAsync(fqn, names, args, returnDesc, ctx, types)`. Emitted for
+  free functions, static factories, and instance methods (see `identity`,
+  `GenericBox.new$`, `GenericBox.pair_with` above).
+- **Reified factory + readback:** every generic class gets a static
+  `of(BamlType $t0, …, T value)` factory (binds the class type args into the
+  side-table) and a **`bamlTypeArgs()`** accessor (reads them back). This is the
+  resolved answer to the erstwhile-open readback-naming question — the accessor is
+  spelled `bamlTypeArgs()`, delegating to `TypeRegistry.typeArgsOf`.
+- **Instance-method guard:** a generic *instance* method's `BamlTypes` overload
+  throws `IllegalArgumentException` unless the receiver was reified (its class
+  type args must be recoverable) — `GenericBox.pair_with(other, types)` above.
+- **Still minimal-grammar** (unchanged): a reified arg outside the token grammar
+  (list/map/union/optional/literal) yields no side-table entry
+  (`BamlType.fromWireTy` returns `null` out of grammar) — graceful degradation,
+  not an error.
+- Confirmed present in generated output: `grep -rl BamlTypes generated/baml_sdk/**`
+  now matches the generic holders/classes; `GenericBox.java` carries the reified
+  `of(BamlType, value)` factory and `bamlTypeArgs()`.
 
 ## Cross-Namespace References
 
@@ -506,7 +555,7 @@ is preserved by the package path itself:
 // baml_sdk/symbol_collisions/lorem/Ipsum.java
 package baml_sdk.symbol_collisions.lorem;
 
-public class Ipsum {
+public final class Ipsum {
     private final baml_sdk.symbol_collisions.foo.Bar bar1;
     private final baml_sdk.symbol_collisions.fizz.foo.Bar bar2;
     private final baml_sdk.symbol_collisions.fizz.buzz.foo.Bar bar3;
@@ -580,19 +629,27 @@ The runtime-owned `Stream` is re-exported: `baml.llm.Stream` resolves to
 > resolves the type name **directly** to the runtime class
 > (`baml_bridge.BamlStream`, `baml_sdk.baml.media.Image`). `translate_ty.rs:179-193`.
 
-**Streaming calls / `Stream`**: **NOT YET IMPLEMENTED IN JAVA (runtime).** —
-`baml_bridge/BamlStream.java` is a **compile-only stub**: every method throws
-`UnsupportedOperationException` ("the streaming capability is not implemented
-yet"). The generated companion classes (`Stream$stream`, `StreamAccumulator`)
-and the type-map entries exist so the surface compiles, but no streaming call is
-wired. *Open decision:* the target `BamlStream<TPartial, TFinal>` shape (see
-`ref-java-state-of-completeness.md`, "Stream" row). Note: `final`/`final_async`
-escape to `get_final`/`get_final_async` (Java reserved word).
+**Streaming calls / `Stream`**: **LANDED** (commit `a6e3ca99e`, the streaming
+capability). `baml_bridge/BamlStream.java` is a **real**
+`BamlStream<TPartial, TFinal>` wrapping the tagged-heap handle:
+`next()` / `get_final()` (and their `_async` siblings) re-enter the engine via
+ordinary `BamlFfi.callSync`/`callAsync` on `baml.llm.Stream.next` /
+`baml.llm.Stream.final`, passing `this` as the `self` receiver with a **`null`
+(wire-driven) descriptor** — exactly like Python (`BamlStream.java:38-99`).
+Generated code returns it directly (`baml.llm.Client.execute_stream` →
+`baml_bridge.BamlStream<TStream, TFinal>`, `llm_functions` fixture). Exhaustion
+returns a runtime-owned `baml_sdk.baml.stream.StreamFinished` **value** (no
+`null`, no exception — Python's contract), registered in the typemap as a
+`RUNTIME_OWNED` FQN (`TypeRegistry.java:82-94`). Decode gains the
+`ADT_TAGGED_HEAP_HANDLE` arm → `BamlStream.fromHandle` and encode delegates to
+the `BamlHandle` arm (cloned key per the drain contract). `final`/`final_async`
+escape to `get_final`/`get_final_async` (Java reserved word; OWNER decision
+2026-07-18). (See `ref-java-outbound-decoding.md` "Handles" and `ref-java-type-mappings.md`.)
 
-**`build_request`** binding **is** emitted (quoted above), mirroring Python; the
-task tracks the deeper `$build_request` host-request round-trip parity as a
-later capability, so treat the end-to-end `$build_request` runtime behavior as
-**NOT YET verified**, though the codegen surface is present.
+**`build_request`** binding is emitted (quoted above), mirroring Python. The
+`llm_functions` fixture now exercises the deeper `$build_request` round-trip
+end-to-end on keyless replay (`TestStreamingE2e`, `llm_functions` 21/21), so it is
+no longer "codegen-only" — the runtime behavior is verified offline.
 
 ## Stream Companion Types
 
@@ -601,7 +658,7 @@ with the `$stream` name kept verbatim** — every optional-widened field boxes:
 
 ```java
 // baml_sdk/primitives/Primitives$stream.java
-public class Primitives$stream {
+public final class Primitives$stream {
     private final java.lang.Long int_field;       // int   → boxed Long   (partial ⇒ nullable)
     private final java.lang.Double float_field;    // float → boxed Double
     private final java.lang.String string_field;
@@ -631,7 +688,7 @@ class; it does not derive a `Partial[T]` transformation at Java codegen time.
 > module. Java keeps `<Name>$stream` **beside its base type** (no parallel tree).
 > `routing.rs:19-23,141-158` (routing ignores the `$stream` suffix). *Note (GAP B,
 > handoff):* the ported `TestStreams` tests were written to Python's
-> `stream_types.*` layout; reconciling them is an open call (rewrite tests to
+> `stream_types.*` layout; DECIDED 2026-07-17 (Option B): tests were retargeted to
 > `$stream`, house-rule, vs move the emitter to parallel packages).
 
 ## Optional Function Arguments
@@ -646,17 +703,16 @@ emitted beside the required-only pair — an AWS-SDK-v2-style
 
 ```java
 // baml_sdk/Fns.java  —  BAML: optional_args_probe(arg0: int, opt1?: int = 5, opt2?: int)
+//   $RET6 = baml_bridge.BamlType.list(baml_bridge.BamlType.INT)
 public static java.util.List<java.lang.Long> optional_args_probe(long arg0) {
-    return (java.util.List<java.lang.Long>) baml_bridge.BamlFfi.callSync(
-        "user.optional_args_probe", new java.lang.String[] {"arg0"}, new java.lang.Object[] {arg0}, "list<int>");
+    return (java.util.List<java.lang.Long>) baml_bridge.BamlFfi.callSync("user.optional_args_probe", new java.lang.String[] {"arg0"}, new java.lang.Object[] {arg0}, $RET6);
 }
 
 public static java.util.List<java.lang.Long> optional_args_probe(
         long arg0, java.util.function.Consumer<optional_args_probe$Opts> $cfg) {
     optional_args_probe$Opts $opts = new optional_args_probe$Opts();
     $cfg.accept($opts);
-    return (java.util.List<java.lang.Long>) baml_bridge.BamlFfi.callSync("user.optional_args_probe",
-        $opts.$names(new java.lang.String[] {"arg0"}), $opts.$args(new java.lang.Object[] {arg0}), "list<int>");
+    return (java.util.List<java.lang.Long>) baml_bridge.BamlFfi.callSync("user.optional_args_probe", $opts.$names(new java.lang.String[] {"arg0"}), $opts.$args(new java.lang.Object[] {arg0}), $RET6);
 }
 
 public static final class optional_args_probe$Opts {
@@ -705,28 +761,26 @@ Derived from `function_calls/baml_src/ns_methods_on_classes/types.baml`.
 
 ```java
 // baml_sdk/methods_on_classes/Greeter.java
-public class Greeter {
+public final class Greeter {
+    static { baml_sdk.Baml.ensure(); }
+
     private final java.lang.String name;
     public Greeter(java.lang.String name) { this.name = name; }
     public java.lang.String name() { return this.name; }
+    private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.classByFqn("user.methods_on_classes.Greeter");
+    private static final baml_bridge.BamlType $RET1 = baml_bridge.BamlType.STRING;
 
     public static baml_sdk.methods_on_classes.Greeter create(java.lang.String name) {
-        return (baml_sdk.methods_on_classes.Greeter) baml_bridge.BamlFfi.callSync(
-            "user.methods_on_classes.Greeter.create",
-            new java.lang.String[] {"name"}, new java.lang.Object[] {name}, "user.methods_on_classes.Greeter");
+        return (baml_sdk.methods_on_classes.Greeter) baml_bridge.BamlFfi.callSync("user.methods_on_classes.Greeter.create", new java.lang.String[] {"name"}, new java.lang.Object[] {name}, $RET0);
     }
     @SuppressWarnings("unchecked")
     public static java.util.concurrent.CompletableFuture<baml_sdk.methods_on_classes.Greeter> create_async(java.lang.String name) { … }
 
     public java.lang.String who() {                       // instance method: receiver prepended
-        return (java.lang.String) baml_bridge.BamlFfi.callSync(
-            "user.methods_on_classes.Greeter.who",
-            new java.lang.String[] {"self"}, new java.lang.Object[] {this}, "string");
+        return (java.lang.String) baml_bridge.BamlFfi.callSync("user.methods_on_classes.Greeter.who", new java.lang.String[] {"self"}, new java.lang.Object[] {this}, $RET1);
     }
     public java.lang.String greet(java.lang.String greeting) {
-        return (java.lang.String) baml_bridge.BamlFfi.callSync(
-            "user.methods_on_classes.Greeter.greet",
-            new java.lang.String[] {"self", "greeting"}, new java.lang.Object[] {this, greeting}, "string");
+        return (java.lang.String) baml_bridge.BamlFfi.callSync("user.methods_on_classes.Greeter.greet", new java.lang.String[] {"self", "greeting"}, new java.lang.Object[] {this, greeting}, $RET1);
     }
     // + _async siblings and (…, ctx) overloads for each
 }
@@ -763,8 +817,7 @@ order), and the signature still returns the success type:
  * @throws TimeoutError
  */
 public static java.lang.String LoadDoc(java.lang.String path) {
-    return (java.lang.String) baml_bridge.BamlFfi.callSync(
-        "user.raises_test.LoadDoc", new java.lang.String[] {"path"}, new java.lang.Object[] {path}, "string");
+    return (java.lang.String) baml_bridge.BamlFfi.callSync("user.raises_test.LoadDoc", new java.lang.String[] {"path"}, new java.lang.Object[] {path}, $RET0);  // $RET0 = BamlType.STRING
 }
 ```
 
@@ -804,12 +857,12 @@ The **parameter types** for host callables **are emitted and compile today**:
 (`translate_ty.rs:403-435`):
 
 ```java
-// baml_sdk/host_callable_tests/Fns.java
+// baml_sdk/host_callable_tests/Fns.java   ($RET0 = BamlType.STRING)
 public static java.lang.String call_with_callback(
         java.util.function.Function<java.lang.Long, java.lang.String> callback, long x) {
     return (java.lang.String) baml_bridge.BamlFfi.callSync(
         "user.host_callable_tests.call_with_callback",
-        new java.lang.String[] {"callback", "x"}, new java.lang.Object[] {callback, x}, "string");
+        new java.lang.String[] {"callback", "x"}, new java.lang.Object[] {callback, x}, $RET0);
 }
 public static java.lang.String call_with_two_args(
         java.util.function.BiFunction<java.lang.Long, java.lang.String, java.lang.String> callback, long x, java.lang.String prefix) { … }
@@ -831,39 +884,68 @@ public static java.lang.String call_with_typed_throws_propagating(
 > ⚠ **Deviation from Python:** Python renders a callable param as
 > `typing.Callable[[int], str]`; Java maps by arity/return onto the concrete
 > `Runnable` / `Supplier` / `Consumer` / `Function` / `BiConsumer` / `BiFunction`
-> shapes. A callable with **optional params or arity > 2** currently falls back
-> to `java.lang.Object callback` (see the `call_callback_with_optional_args_*`
-> bindings, `Fns.java:96-148`). `translate_ty.rs:403-435`.
+> shapes. A callable with **optional params or arity > 2** — which has no
+> `java.util.function` equivalent — is emitted as a **generated
+> `@FunctionalInterface`** (landed `202883518`), not `java.lang.Object`: the
+> `call_callback_with_optional_args_*` bindings take a
+> `baml_sdk.host_callable_tests.IntOptCallback callback` — a fixed-arity SAM
+> `Long apply(Long x, Opts $opts)` extending `baml_bridge.BamlHostCallable`, with
+> a nested always-non-null `Opts` bag (nullable accessors for the optionals BAML
+> omitted). `translate_ty.rs:403-435` (arity-≤-2 `java.util.function`),
+> `translate_callable` fallback + emitter (`IntOptCallback.java`).
 
 **Runtime host-callable dispatch (the engine calling back *into* the host):**
-**NOT YET IMPLEMENTED IN JAVA (runtime).** — The param types compile, but nothing
-Java-side dispatches a callback: `bridge_java/src/lib.rs` never registers a host
-dispatch/release callback, `BamlFfi` has no `hostDispatch`/`hostRelease`/
-`registerHostCallable`/`nativeCompleteHostCall`, `ProtoWriter` rejects a
-`Function` arg as "arbitrary object", and `ProtoReader` has no `BamlToHostCall`
-decode.
-
-Recommended design (decisions doc §4, slices 4a–4e — still OPEN, awaiting the owner):
+**LANDED** (commit `202883518`, per the owner-accepted A1–F1 brief). The whole
+slice is wired end-to-end — `function_calls` is 154/0:
 
 - **Registry (A1):** a Java-side `ConcurrentHashMap<Long,Object>` in `BamlFfi`
-  holds callables and opaque throwables; Rust stays a pure router. Gives
-  `assertSame` identity for free (objects never leave the JVM).
-- **Executor (B1):** a dedicated cached daemon `ExecutorService` runs user
-  callables off the engine's tokio workers ("return promptly").
-- **Async detection (C1):** detect a returned `CompletableFuture` at the value
-  level and `.whenComplete` instead of encoding inline (no typed async surface
-  yet — the two "async" ported tests actually assert the sync contract).
-- **Exception identity (D):** native exc → opaque `HostCallable` handle
-  round-trips the same `Throwable`; `class_name` = `getSimpleName()`.
-- **`IntOptCallback` (E1):** optional/high-arity callables need a generated
-  `@FunctionalInterface` + nested non-null `Opts` bag (nullable fields) — Java
-  has no structural anonymous `$opts?: {…}` type. *Open:* signature-derived
-  naming.
-- **`BamlError(Object value)` ctor (F):** the throw-direction 1-arg ctor (Java
-  today has only the 3-arg decode ctor, `BamlError.java:26`).
+  holds callables *and* opaque throwables under one keyspace
+  (`registerHostCallable` / `lookupHostValue` / `hostRelease`,
+  `BamlFfi.java:582-616`); Rust is a pure router. `assertSame` identity is free
+  (objects never leave the JVM).
+- **Executor (B1):** a dedicated cached **daemon `ExecutorService`**
+  (`HOST_DISPATCH_EXECUTOR`, `BamlFfi.java:104-105`) runs user callables off the
+  engine's tokio workers; the C callback returns promptly and the result flows
+  back via `nativeCompleteHostCall` (`BamlFfi.java:221, 626-801`).
+- **Async detection (C1):** a returned `CompletableFuture` is detected at the
+  **value level** and awaited (`.whenComplete`) instead of encoded inline — the
+  async parity landed too (`a6e3ca99e`).
+- **Exception identity (D):** a native exception thrown inside a callable becomes
+  an opaque `baml.errors.HostCallable` handle (`HOST_VALUE_OPAQUE`) that
+  round-trips the **same** `Throwable` by registry-key rehydration; `class_name` =
+  `getSimpleName()` (see `ref-java-outbound-decoding.md`, error-arm rehydrate).
+- **`IntOptCallback` (E1):** optional/high-arity callables emit a generated
+  `@FunctionalInterface extends baml_bridge.BamlHostCallable` + nested non-null
+  `Opts` bag, with a `default __bamlDispatch(...)` that reshapes the bridge's flat
+  declared-order args into the SAM (below).
+- **`BamlError(Object value)` ctor (F):** the throw-direction 1-arg ctor with
+  typed unwrap exists so BAML's typed `catch` matches.
 
-The generated `Person` / `ValidationError` value classes already exist
-(`host_callable_tests/Person.java`, `ValidationError.java`).
+```java
+// baml_sdk/host_callable_tests/IntOptCallback.java  (optional-arg callable → generated SAM)
+@FunctionalInterface
+public interface IntOptCallback extends baml_bridge.BamlHostCallable {
+    java.lang.Long apply(java.lang.Long x, Opts $opts);
+
+    @Override
+    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {
+        return apply((java.lang.Long) $positional.get(0), new Opts((java.lang.Long) $optional.get("y"), (java.lang.Long) $optional.get("z")));
+    }
+
+    final class Opts {                       // always constructed non-null; each accessor is null when BAML omitted it
+        private final java.lang.Long y; private final java.lang.Long z;
+        Opts(java.lang.Long y, java.lang.Long z) { this.y = y; this.z = z; }
+        public java.lang.Long y() { return this.y; }
+        public java.lang.Long z() { return this.z; }
+    }
+}
+```
+
+**Forced divergence recorded:** the engine requires the `HostCallable` traceback
+field to be **present**, so Java always synthesizes one (Python's is
+conditionally-always via `__traceback__`). The generated `Person` /
+`ValidationError` value classes exist (`host_callable_tests/Person.java`,
+`ValidationError.java`) as `public final` POJOs.
 
 ## Packaging Markers
 

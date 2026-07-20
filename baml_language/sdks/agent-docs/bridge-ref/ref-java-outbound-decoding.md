@@ -1,5 +1,5 @@
 ---
-date: 2026-07-17
+date: 2026-07-20
 repository: baml4
 source_paths:
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/internal/ProtoReader.java
@@ -184,19 +184,26 @@ have no async-remap path — a sync cancellation keeps the raw `BamlPanic`
 carrying a `baml.panics.Cancelled` value (`BamlFfi.java:191-197`). See **Return
 Path Overview → Cancellation** detail under **Decoder Implementation Details**.
 
-> ⚠ **Deviation from Python:** the same-host **exception rehydration path** for
-> `baml.errors.HostCallable` (`_try_rehydrate_host_value` in Python, which
-> re-raises the *original* native exception object by looking up its `_handle`
-> in the host-value registry) is **NOT YET IMPLEMENTED IN JAVA**. On the Java
-> `error` arm a `HostCallable` value decodes like any other class value (to a
-> registered instance or a field `Map`) and is wrapped in a plain `BamlError`;
-> the original `Throwable` is not recovered by identity. **Status:** host
-> callables are decision-slice 4 in `java-function-calls-decisions.md` — the
-> recommended shape is a Java-side registry (A1) + rehydrate-by-identity on the
-> `ProtoReader` error arm (`lookupHostValue`) so `assertSame` holds, but
-> "nothing" is in place Java-side today (no `ProtoReader.BamlToHostCall` decode,
-> no `lookupHostValue`). The `outboundClassFqn` peel (below) is the one piece
-> already present.
+> ⚠ **Deviation from Python — LANDED (`202883518`):** the same-host **exception
+> rehydration path** for `baml.errors.HostCallable` (`_try_rehydrate_host_value`
+> in Python, which re-raises the *original* native exception object by looking up
+> its `_handle` in the host-value registry) is now implemented in Java. On the
+> `error` arm, when the decoded value's class FQN is `baml.errors.HostCallable`
+> (`HOST_CALLABLE_CLASS`, `ProtoReader.java:119`), `decodeError` calls
+> `rehydrateHostThrowable(value)` (`ProtoReader.java:361-368`): it reads the
+> hidden `_handle` (a `HOST_VALUE_OPAQUE` `BamlHandle`; `hostOpaqueHandle`
+> reflectively invokes the registered class's `_handle()` accessor, or a `Map`
+> fallback, `:377-390`), looks the key up in the Java-side registry via
+> `BamlFfi.lookupHostValue(key)` (`:366`), and — on a same-runtime hit —
+> re-throws the **original** `Throwable` *unwrapped* through `sneakyThrow`
+> (`:265, 400-403`) so `assertSame` holds for any `Throwable` kind (checked,
+> unchecked, `Error`). A foreign/released key (`lookupHostValue` returns `null`
+> or a non-`Throwable`) falls through to the metadata `BamlError`. The mirror is
+> `bridge_python`'s `_try_rehydrate_host_value` (proto.py). The `outboundClassFqn`
+> peel (below) still gates the `class_name`. **Forced divergence (recorded):** the
+> engine requires the `HostCallable` traceback field **present**, so the Java
+> inbound encoder always synthesizes one (Python's is conditionally-always via
+> `__traceback__`).
 
 Java already mirrors Python's `_unwrap_union_variant` peel for the `class_name`
 gating: `outboundClassFqn(valueBytes)` (`ProtoReader.java:1501-1517`) unwraps a
@@ -448,8 +455,10 @@ return instance;
 > keyed by the decoded instance's identity. Python instead **parameterizes the
 > class symbol** (`_parameterize_tys` → `Wrapper[int]`) *before*
 > `model_validate`, so the reified args live on the Pydantic type of the
-> returned object. Java's generated value class has no field to hold them yet
-> (that emitter surface is deferred), so the tokens live beside the instance:
+> returned object. Java's generated value class has **no instance field** for
+> them (Java generics are erased); the tokens live beside the instance in the
+> side-table and are read back through the emitted `bamlTypeArgs()` accessor
+> (landed `861414d55`):
 >
 > ```java
 > private static void bindReifiedTypeArgs(Object instance, List<byte[]> typeArgBytes) {
@@ -480,15 +489,15 @@ return instance;
 >   (`TypeRegistry.java:329-404`). `typeArgsOf` returns `List.of()` for an
 >   unbound instance (pinned by `type_args_of_unbound_instance_is_empty`).
 >
-> The future emitted `bamlTypeArgs()` accessor will delegate to (or replace)
-> `typeArgsOf` (`TypeRegistry.java:315-322`). Pinned by
-> `decode_class_value_binds_reified_type_args` /
+> The emitted **`bamlTypeArgs()`** accessor delegates to `typeArgsOf`
+> (`TypeRegistry.java:315-322`); it is generated on every generic value class
+> alongside a reified `of(BamlType …, T value)` factory (**landed `861414d55`**
+> on the `3991c4fd4` runtime substrate — see `ref-java-examples.md`, "Generics").
+> Pinned by `decode_class_value_binds_reified_type_args` /
 > `…_nested_reified_type_arg` / `…_without_type_args_has_empty_side_table`.
-> **Status:** the explicit-generics *readback naming* (`bamlTypeArgs()`) and the
-> grammar-widening question (should the emitted accessor widen the token grammar
-> or document graceful degradation) are open in
-> `java-function-calls-decisions.md` D3; the runtime substrate landed
-> (commit 3991c4fd4).
+> **Status:** the readback-naming question is resolved (`bamlTypeArgs()`); the
+> token grammar stays minimal by design (an out-of-grammar arg degrades
+> gracefully rather than erroring).
 
 ### Enum decoding
 
@@ -615,8 +624,8 @@ Outbound generic args use `BamlTy` metadata. `BamlType.fromWireTy`
 lowering; it recognizes only the minimal grammar (primitive int/string/bool/float,
 `class_ty`, `enum`) and returns `null` for anything else — the all-or-nothing
 gate described above. There is no `cls[args...]` subscript step (Java generics are
-erased); the tokens are simply retained for the deferred `bamlTypeArgs()`
-accessor.
+erased); the tokens are simply retained for the emitted `bamlTypeArgs()`
+accessor (which reads them back from the side-table).
 
 ## Handles
 
@@ -627,30 +636,30 @@ skips `ty` (field 3), builds a `BamlHandle(key, handleType)`, then dispatches:
 
 | Handle type (wire) | Java decode |
 | --- | --- |
-| `ADT_MEDIA_IMAGE` (6) | `Image.fromHandle(handle)` (`:893`) |
-| `ADT_MEDIA_AUDIO` (7) | `Audio.fromHandle(handle)` (`:894`) |
-| `ADT_MEDIA_VIDEO` (8) | `Video.fromHandle(handle)` (`:895`) |
-| `ADT_MEDIA_PDF` (9) | `Pdf.fromHandle(handle)` (`:896`) |
-| `ADT_TAGGED_HEAP_HANDLE` | **NOT YET IMPLEMENTED IN JAVA** — falls to `default` → bare `BamlHandle` (`:897`). |
-| `HANDLE_UNSPECIFIED` (0) | bare `BamlHandle` (`default` arm, `:897`). |
-| all other handle types | bare `BamlHandle` (`:897`). |
+| `ADT_MEDIA_IMAGE` (6) | `Image.fromHandle(handle)` (`:926`) |
+| `ADT_MEDIA_AUDIO` (7) | `Audio.fromHandle(handle)` (`:927`) |
+| `ADT_MEDIA_VIDEO` (8) | `Video.fromHandle(handle)` (`:928`) |
+| `ADT_MEDIA_PDF` (9) | `Pdf.fromHandle(handle)` (`:929`) |
+| `ADT_TAGGED_HEAP_HANDLE` (14) | **LANDED (`a6e3ca99e`)** — `baml_bridge.BamlStream.fromHandle(handle)`, the runtime-owned streaming wrapper (`:935`). |
+| `HANDLE_UNSPECIFIED` (0) | bare `BamlHandle` (`default` arm, `:936`). |
+| all other handle types | bare `BamlHandle` (`:936`). |
 
 Pinned by `WireCodecTest.decode_media_handle_constructs_image`,
 `decode_media_class_wrapper_unwraps_to_media`, and
 `decode_unknown_handle_type_falls_back_to_bare_handle`.
 
-> ⚠ **Deviation from Python — `ADT_TAGGED_HEAP_HANDLE` (tagged heap
-> handles, incl. stream handles):** Python resolves a generated class from
-> `handle.ty.class_ty.name` (the handle's `ty` is a full `BamlTy`;
-> `BamlOutboundHandle` has no `name`) and calls `cls._from_pyhandle(...)`. Java
-> **does not read `ty` at all** (`:888` skips field 3) and lets a tagged-heap
-> handle fall to the bare-`BamlHandle` default. **Status:** stream partial-model
-> handling is the open `$stream` companion-packaging decision (GAP B in
-> `java-function-calls-decisions.md`: Option A parallel `stream_types.*`
-> packages vs Option B in-package `<Name>$stream`); `BamlStream` exists as a
-> class shell but host-constructed partials via a `$stream`-typed param are an
-> open engine-side question. So the *tagged-heap-handle rehydration to a
-> generated class* is not yet wired.
+> ⚠ **Deviation from Python — `ADT_TAGGED_HEAP_HANDLE` (14) (tagged heap
+> handles, incl. stream handles):** Python resolves the wrapper from
+> `handle.ty.class_ty.name` (`== "baml.llm.Stream"`) via its typemap and calls
+> `cls._from_pyhandle(...)`. Java **does not read `ty` at all** (`:921` skips
+> field 3): `BamlStream` is the *only* tagged-heap-handle wrapper, so the
+> `handle_type` tag alone picks it, and the arm reifies
+> `baml_bridge.BamlStream.fromHandle(handle)` (`:930-935`). The erased
+> `TPartial`/`TFinal` generics are dropped exactly as in `bridge_python`.
+> **LANDED `a6e3ca99e`.** Stream *partials* (`next()` results) decode as ordinary
+> registered `$stream` companion classes on the wire-driven path; the in-package
+> `<Name>$stream` companion-packaging question (GAP B) is orthogonal and tracked
+> in the codegen-conventions / state-of-completeness docs.
 
 > ⚠ **Deviation from Python — `HANDLE_UNSPECIFIED`:** Python raises `BamlError`
 > for a `HANDLE_UNSPECIFIED` handle; Java degrades it to a bare `BamlHandle`
@@ -674,8 +683,12 @@ this object keeps its own — never sharing a key would double-release"
 the same guard as Python's `BamlPyHandle`.
 
 `BamlStream` is a runtime-owned Java class wrapping a `BamlHandle` (the JVM
-analog of Python's `baml_bridge/_stream.py`), but the outbound decode does not
-yet rehydrate a stream handle into it (see `ADT_TAGGED_HEAP_HANDLE` above).
+analog of Python's `baml_bridge/_stream.py`); the outbound decode **now
+rehydrates** a tagged-heap-handle into it via
+`BamlStream.fromHandle(handle)` (the `ADT_TAGGED_HEAP_HANDLE` arm above,
+`ProtoReader.java:935`). `next()` / `get_final()` (and `_async`) then re-enter
+the engine on `baml.llm.Stream.next` / `.final` with `this` as the `self`
+receiver and a `null` (wire-driven) descriptor (`BamlStream.java:38-99`).
 
 ### Cancellation detail (async only)
 
@@ -823,8 +836,9 @@ The host value is a `baml_sdk.generics.Wrapper` instance holding `value = 5L`;
 > ⚠ **Deviation from Python:** Python returns a *parameterized* `Wrapper[int]`
 > Pydantic object — the `int` is on the object's type. Java returns a bare
 > `Wrapper` value class; the `int` lives beside it in the side-table
-> (`typeArgsOf`), because Java generics are erased and the `bamlTypeArgs()`
-> emitter surface is deferred. This exact wire shape is pinned by
+> (`typeArgsOf`), read back through the emitted `bamlTypeArgs()` accessor, because
+> Java generics are erased and the args cannot ride an instance field. This exact
+> wire shape is pinned by
 > `WireCodecTest.decode_class_value_binds_reified_type_args`. Even with empty
 > `type_args`, the FQN-plus-constructor path still reconstructs the object
 > (`…_without_type_args_has_empty_side_table`).
@@ -960,9 +974,9 @@ by the decoder. The Java-specific twist is unions — type-directed, with the wi
 - Outbound decoding is type-rich and `TypeRegistry`-driven. Generic return
   values materialize as generated value classes; the reified
   `class_value.type_args` are retained in the **weak-identity side-table**
-  (`TypeRegistry.typeArgsOf`), pending the deferred `bamlTypeArgs()` accessor —
-  **not** parameterized onto the class the way Python subscripts a Pydantic
-  symbol.
+  (`TypeRegistry.typeArgsOf`), read back through the emitted `bamlTypeArgs()`
+  accessor — **not** parameterized onto the class the way Python subscripts a
+  Pydantic symbol.
 - `BexExternalValue::Instance` carries `type_args`, and `external_to_outbound`
   encodes them via `runtime_ty_to_proto_ty`, so reified generics survive on the
   wire. Java retains them all-or-nothing (an out-of-grammar arg poisons the whole
@@ -979,5 +993,5 @@ by the decoder. The Java-specific twist is unions — type-directed, with the wi
   the error path). Python raises `BamlError` for `media_value`/`prompt_ast_value`
   and returns `None` for `ty_value`.
 - **Host-callable error rehydration** (returning the original `Throwable` by
-  identity) and **tagged-heap-handle / stream** rehydration are **NOT YET
-  IMPLEMENTED IN JAVA**; see the flags above for the decided/open status.
+  identity, `202883518`) and **tagged-heap-handle → `BamlStream`** rehydration
+  (`a6e3ca99e`) are both **LANDED**; see the flags above.

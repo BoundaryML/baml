@@ -78,7 +78,12 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_JAVA_SETUP";
 /// Fixtures whose generated + test sources compile green — their
 /// `javac` gate runs for real (CI enforcement); everything else stays
 /// `#[ignore]`d until its API surface lands.
-const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls", "llm_functions"];
+const GREEN_JAVAC_FIXTURES: &[&str] = &[
+    "type_shapes",
+    "function_calls",
+    "llm_functions",
+    "docstrings_etc",
+];
 
 /// Fixtures whose JUnit runtime suite (`gradle test`) runs green against the
 /// built `bridge_java` cdylib — their `junit` gate runs for real (CI
@@ -89,9 +94,17 @@ const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls", "llm_fu
 /// with no live keys — the streaming tests run against the in-process replay
 /// server (keyless SSE recordings) and the `$build_request` tests set their
 /// api-key env vars through the native `BridgeEnv` setenv shim, so nothing hits
-/// the network. (Serialize its javac+junit gates via a nextest test-group; see
-/// `.config/nextest.toml`.)
-const GREEN_JUNIT_FIXTURES: &[&str] = &["type_shapes", "function_calls", "llm_functions"];
+/// the network. `docstrings_etc` also qualifies trivially: its suite only reads
+/// the generated `.java` source and asserts the rolled-up `Attributes:` /
+/// `Members:` Javadoc (the JVM analog of Python's `inspect.getdoc`), making no
+/// engine calls at all. (Serialize each fixture's javac+junit gates via a
+/// nextest test-group; see `.config/nextest.toml`.)
+const GREEN_JUNIT_FIXTURES: &[&str] = &[
+    "type_shapes",
+    "function_calls",
+    "llm_functions",
+    "docstrings_etc",
+];
 
 const IGNORE_REASON: &str =
     "generated Java API not complete enough for this fixture yet — un-ignore as capabilities land";

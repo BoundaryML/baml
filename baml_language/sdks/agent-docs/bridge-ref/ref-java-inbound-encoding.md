@@ -1,5 +1,5 @@
 ---
-date: 2026-07-17
+date: 2026-07-20
 repository: baml4
 mirrors: baml_language/sdks/agent-docs/bridge-ref/ref-python-inbound-encoding.md
 source_paths:
@@ -12,6 +12,8 @@ source_paths:
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlHandle.java
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlMedia.java
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlUnion.java
+  - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlHostCallable.java
+  - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlStream.java
   - baml_language/sdks/java/sdkgen_java/src/emit.rs
   - baml_language/sdks/java/baml_bridge/src/test/java/baml_bridge/WireCodecTest.java
   - baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_inbound.proto
@@ -54,23 +56,24 @@ static methods as `static` methods on a `Fns` holder / the value class, instance
 methods as non-static methods that prepend the receiver (`emit.rs:29-34`):
 
 ```java
-// free function  return_int(v)  →  baml_sdk.primitives.Fns
+// free function  return_int(v)  →  baml_sdk.primitives.Fns   ($RET0 = BamlType.INT)
 public static long return_int(long v) {
-    return (java.lang.Long) baml_bridge.BamlFfi.callSync(
-        "user.return_int", new String[] {"v"}, new Object[] {v}, "int");
+    return (java.lang.Long) baml_bridge.BamlFfi.callSync("user.return_int", new String[] {"v"}, new Object[] {v}, $RET0);
 }
 
 // instance method  Box.get_value()  →  baml_sdk.lorem.Box
 public long get_value() {
-    return (java.lang.Long) baml_bridge.BamlFfi.callSync(
-        "user.Box.get_value", new String[] {"self"}, new Object[] {this}, "int");
+    return (java.lang.Long) baml_bridge.BamlFfi.callSync("user.Box.get_value", new String[] {"self"}, new Object[] {this}, $RET0);
 }
 ```
 
 Each binding therefore carries two baked literals — `names[]` (the declared
 parameter names, receiver first for instance methods) and `args[]` (the boxed
-values, `this` first for instance methods) — plus a return-type descriptor
-string (`emit.rs:411-432`, `render_method_pair` `emit.rs:575-585`).
+values, `this` first for instance methods) — plus a return-type decode
+descriptor: a pooled per-holder `private static final baml_bridge.BamlType
+$RET{n}` constant (a typed `BamlType`, or the literal `null` for a wire-driven
+return), **not** a descriptor string (`emit.rs`, `DescriptorPool`;
+`translate_ty.rs`, `descriptor_expr`).
 
 At runtime, `BamlFfi.callSync` / `callAsync` do this on the inbound side
 (`BamlFfi.java:213-233` sync, `290-338` async):
@@ -229,22 +232,25 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 | bare `BamlHandle` | `handle` (10) | `BamlHandle{key = cloneKeyForWire, handle_type}` (`:200-210`). |
 | `BamlUnion` (Union2…Union10 arm record) | *(unwrapped)* | Unwrapped to its `value()` component and re-encoded bare — no union envelope inbound (`:211-214`, `unwrapGenericUnion:296-303`). |
 | nominal union wrapper record | *(unwrapped)* | `TypeRegistry.isUnionRecord` → unwrap to inner value, encode bare (`:215-219`, `TypeRegistry.unionRecordInner:259-265`). |
-| registered generated class | `class_value` (8) | One `fields` entry per registry field (declaration order), value read via the public accessor method; FQN on `class_ty.name` (`:220-228`, `encodeClass:239-248`, `ClassEntry.encode:516-528`). |
-| non-class callable (`Function`/lambda/…) | **NOT YET IMPLEMENTED IN JAVA** | Python emits `handle` with `HOST_VALUE_CALLABLE`. Java has no callable arm — such an arg falls through to the class lookup, resolves `null`, and is rejected (`:220-228`). See "Not yet encoded" below. |
-| unsupported object | `IllegalArgumentException` | Names the offending *argument* and its unsupported Java type, e.g. `"argument 'tool' has unsupported Java type java.util.Date"` (`:220-229`, `unsupported`); pinned by `WireCodecTest.inbound_unsupported_type_throws` / `inbound_unsupported_argument_names_the_argument` / `inbound_unsupported_nested_element_names_top_level_argument`. |
+| `baml_bridge.BamlStream` (streaming receiver) | `handle` (10) | Delegates to the `BamlHandle` arm: a `handle_value(ADT_TAGGED_HEAP_HANDLE)` over a freshly cloned key (`:226-235`). Landed `a6e3ca99e`. |
+| host callable (`Function`/`BiFunction`/`Supplier`/`Consumer`/`BiConsumer`/`Runnable`, or a generated `BamlHostCallable`) | `handle` (10) | **LANDED (`202883518`)** — `isHostCallable(value)` (`:256, 414-422`) registers it in the Java-side registry via `BamlFfi.registerHostCallable(value)` and emits `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The engine binds it to an `Object::HostClosure` and dispatches back through `BamlFfi.hostDispatch` on the daemon executor. Mirrors Python's `register_host_callable` + `Handle{HOST_VALUE_CALLABLE}`. |
+| registered generated class | `class_value` (8) | One `fields` entry per registry field (declaration order), value read via the public accessor method; FQN on `class_ty.name`, plus reified `class_ty.type_args` from the side-table (`:269-278`, `encodeClass:295-307`, `ClassEntry.encode`). |
+| unsupported object | `IllegalArgumentException` | Names the offending *argument* and its unsupported Java type: the top-level kwarg loop rewraps to `"cannot encode argument '<name>': unsupported Java type <class>"` (`:128-144, 269-276`, `unsupported`); pinned by `WireCodecTest.inbound_unsupported_type_throws` / `inbound_unsupported_argument_names_the_argument` / `inbound_unsupported_nested_element_names_top_level_argument`. |
 
 > ✅ **Implemented per spec (unsupported object).** Matches Python: an
 > unsupported value throws an `IllegalArgumentException` (the analog of Python's
 > `TypeError`) whose message names the *top-level kwarg* being encoded plus the
-> unsupported Java type — `"argument '<name>' has unsupported Java type
-> <class>"`. The value encoder still recurses on values (not entries), so the
-> deep rejection is a private `UnsupportedInboundTypeException` (an
-> `IllegalArgumentException` subclass carrying the Java type name); the top-level
-> kwarg loop in `encodeCallFunctionArgs` catches it and rewraps it to prepend the
-> argument name. A value nested inside argument `x` (a list element, a class
-> field) still reports `x`, mirroring Python. A *direct* `encodeInboundValue`
-> call (no owning argument) surfaces the bare `"unsupported Java type <class>"`
-> message.
+> unsupported Java type — `"cannot encode argument '<name>': unsupported Java
+> type <class>"` (`ProtoWriter.java:140-143`; pinned by `WireCodecTest:366,381`:
+> `"cannot encode argument 'tool': unsupported Java type java.util.Date"`). The
+> value encoder still recurses on values (not entries), so the deep rejection is a
+> private `UnsupportedInboundTypeException` (an `IllegalArgumentException`
+> subclass carrying the Java type name); the top-level kwarg loop in
+> `encodeCallFunctionArgs` catches it and rewraps it to prepend the argument name.
+> A value nested inside argument `x` (a list element, a class field) still reports
+> `x`, mirroring Python. A *direct* `encodeInboundValue` call (no owning argument)
+> surfaces the bare `"unsupported Java type <class>"` message. Landed `eab6d37cc`
+> (argument-naming IAE on encode reject).
 >
 > *History:* previously Java threw `UnsupportedOperationException`
 > (`"capability not yet implemented: cannot encode argument of type <class>"`)
@@ -269,15 +275,19 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 > accessor returns a `BamlHandle`, which then rides the bare-`handle` arm — the
 > Java analog of Python's `__pydantic_private__` handle walk.
 
-> ⚠ **Deviation from Python (inbound generic reification).** Python fills a class
-> value's `class_ty.type_args` inbound from `pydantic_instance_type_args`, so a
-> generic instance's concrete args are reified across the wire on the *value*.
-> Java's `encodeClass` **omits** `type_args` on inbound class values — "they
-> reify later" (`ProtoWriter.java:236-237`), because the generated instance has
-> no field to hold them yet (the reified-args side-table is decode-only,
-> `TypeRegistry.bindTypeArgs/typeArgsOf:315-362`). Inbound, generic bindings
-> travel **only** via the top-level `CallFunctionArgs.type_args` bag (below),
-> never per class value.
+> ⚠ **Deviation from Python (inbound generic reification) — now on parity
+> (landed `861414d55`).** Python fills a class value's `class_ty.type_args`
+> inbound from `pydantic_instance_type_args`. Java now mirrors this: `encodeClass`
+> takes the instance's reified tokens (`TypeRegistry.typeArgsOf(value)`, the
+> weak-identity side-table populated by a reified `of(BamlType…, value)` factory
+> or an outbound decode) and writes one `class_ty.type_args` entry per token via
+> `BamlType.toWireTy()` (`ProtoWriter.java:277, 295-307`), so a generic instance's
+> concrete args reify across the wire on the *value*. A **non-generic (or unbound)
+> instance has an empty side-table**, so no `type_args` are written and the output
+> is **byte-identical to the pre-generics encoding** (the regression non-generic
+> callers depend on). Explicit generic *bindings* can still travel via the
+> top-level `CallFunctionArgs.type_args` bag (below); the two channels are
+> independent.
 
 > ⚠ **Deviation from Python (map keys).** Python can put string/int/bool/enum
 > keys onto `InboundMapEntry` and lets Rust stringify them on decode. Java's
@@ -308,16 +318,18 @@ with the populated cases at `:929-986`).
 > allowed. Java has neither kwargs nor subscript: it uses an immutable named
 > `BamlTypes` bag — `BamlTypes.of("T", BamlType.INT).and("U", ...)` — passed to a
 > trailing generic overload (`BamlTypes.java:9-64`). Call-site strategy DECIDED
-> (D3, named bag, minimal token grammar); readback naming and the
-> trailing-overload matrix are **STILL OPEN**
-> (`java-function-calls-decisions.md:25`).
+> (D3, named bag, minimal token grammar); the readback question is resolved as the
+> emitted `bamlTypeArgs()` accessor + reified `of(...)` factory.
 
-> ⚠ **Deviation from Python (emitter surface not wired).** The generic
-> `callSync`/`callAsync` overloads that thread the bag are **package-private and
-> reached by no generated code yet** — the explicit-generics emitter surface is
-> deferred (`BamlFfi.java:204-219, 282-296`). The runtime substrate (encode +
-> decode side-table) landed; codegen has not. Non-generic calls pass the four-arg
-> overload with an implicit `null` bag.
+> ⚠ **Deviation from Python (emitter surface) — LANDED (`861414d55`).** The
+> generic `callSync`/`callAsync` overloads that thread the bag are now **reached
+> by generated code**: every generic free function, static factory, and instance
+> method emits trailing `BamlTypes` overloads that call the 6-arg
+> `callSync/callAsync(fqn, names, args, returnDesc, ctx, types)` (see
+> `ref-java-examples.md`, "Generics"; e.g. `identity(x, types)`,
+> `GenericBox.new$(value, types)`, `GenericBox.pair_with(other, types)` — the
+> instance form guarding on a reified receiver). Non-generic calls still pass the
+> four-arg overload with an implicit `null` bag, byte-identical to before.
 
 ### call_id
 
@@ -338,23 +350,22 @@ length prefix (even for a zero-length payload), which marks the oneof arm set
 collection still round-trips as an empty container, not null
 (`ProtoWriter.java:182-185`).
 
-### Not yet encoded (host callables, `ty_value`)
+### Host callables — LANDED (`202883518`); `ty_value` still no-op
 
-- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15):**
-  **NOT YET IMPLEMENTED IN JAVA.** Python registers a non-class callable in the
-  host-value registry and emits `Handle{key, HOST_VALUE_CALLABLE}`. Java's
-  encoder has no callable branch — a `Function`/lambda arg falls into the "registered
-  class?" lookup, resolves `null`, and is rejected with
-  `IllegalArgumentException` naming the argument (`ProtoWriter.java:220-229`). **Status: design
-  scouted, decisions recommended, not built** — the whole host-callable slice
-  (Rust JNI dispatch/release trampolines, a Java-side
-  `ConcurrentHashMap<Long,Object>` registry + `AtomicLong`, the `ProtoWriter`
-  callable branch with encode-failure rollback, `ProtoReader.BamlToHostCall`
-  decode, the invoke ladder, and codegen for optional-args callable interfaces)
-  is enumerated in `java-function-calls-decisions.md:57-360` (slice 4). The
-  wire constant is already defined: `BamlHandle.HOST_VALUE_CALLABLE = 15`,
-  `HOST_VALUE_OPAQUE = 16` (`BamlHandle.java:48-49`), and the release path
-  already skips these keyspaces (`BamlHandle.java:78-81`).
+- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15): LANDED.** The whole
+  slice is wired end-to-end (`function_calls` 154/0). Encode: `isHostCallable`
+  (`ProtoWriter.java:414-422`) matches a generated `BamlHostCallable` interface or
+  any `java.util.function.*` shape, registers the object in the Java-side registry
+  via `BamlFfi.registerHostCallable(value)`, and emits
+  `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The runtime side holds a single
+  `ConcurrentHashMap<Long,Object>` keyspace (callables + opaque throwables) with an
+  `AtomicLong`, a daemon dispatch `ExecutorService`, the `hostDispatch` /
+  `hostRelease` / `nativeCompleteHostCall` trampolines
+  (`BamlFfi.java:104-105, 582-801`), and `ProtoReader.decodeBamlToHostCall`
+  reshapes the flat declared-order args into positional + optional buckets. The
+  wire constants are `BamlHandle.HOST_VALUE_CALLABLE = 15`,
+  `HOST_VALUE_OPAQUE = 16` (`BamlHandle.java:48-49`); the release path skips both
+  keyspaces (`BamlHandle.java:79-81`).
 - **`ty_value` (13):** **NOT YET IMPLEMENTED IN JAVA** — and a **no-op parity**
   with Python: no Python encoder branch emits it either (`ProtoWriter.java:29`;
   Python doc row for `ty_value`). Rust can decode it, but neither host encoder
@@ -373,16 +384,19 @@ stays valid after the call — never sharing a key avoids a double-release
 guarded by a per-instance atomic latch, and skips the `HOST_VALUE_*` keyspaces
 (`BamlHandle.java:35-103`).
 
-> ⚠ **Deviation from Python (encode-failure rollback).** Python's
-> `encode_call_args` has a rollback path: if encoding a later kwarg fails after
-> an earlier kwarg registered a host callable, it releases every callable key
+> ⚠ **Deviation from Python (encode-failure rollback) — still open.** Python's
+> `encode_call_args` has a rollback path: if encoding a later kwarg fails after an
+> earlier kwarg registered a host callable, it releases every callable key
 > registered during that failed encode (the engine never received the payload).
-> Java has **no encode-rollback path yet** (it lands with the host-callable slice
-> 4c, `java-function-calls-decisions.md:342-347`). Note a related untested edge:
-> the media/bare-handle arms mint their cloned wire key eagerly
-> (`ProtoWriter.java:199, 208-209, 261-264`), so if a *later* kwarg's encode
-> throws, those cloned engine rows are orphaned (never sent, so never drained) —
-> there is no rollback for them today.
+> The host-callable slice landed (`202883518`), so a callable arg now **does**
+> register eagerly (`registerHostCallable`, `ProtoWriter.java:264`) — but the
+> top-level loop's `catch` in `encodeCallFunctionArgs`
+> (`ProtoWriter.java:128-144`) only *rewraps* the `UnsupportedInboundTypeException`
+> to name the argument; it does **not** release the callable keys (or the
+> eagerly-cloned media/bare-handle wire keys, `encodeMediaClass:319`,
+> `bare-handle:244`) registered earlier in the same failed encode. So if a *later*
+> kwarg's encode throws, those registry rows / cloned engine rows are orphaned
+> (never sent, so never drained). No rollback is wired today.
 
 ## Typemap Role
 
@@ -422,10 +436,12 @@ An unregistered type returns `null`, letting the value encoder reject it.
 > `baml.llm.Stream`. Java does **not** register media in `TypeRegistry`; instead
 > the media wrapper classes implement the `BamlMedia` marker interface
 > (`bamlHandle()` + `bamlFqn()`), and the encoder detects them by
-> `instanceof BamlMedia` (`ProtoWriter.java:194-199`, `BamlMedia.java:1-23`).
+> `instanceof BamlMedia` (`ProtoWriter.java:220-225`, `BamlMedia.java`).
 > Handle-backed shells are similarly detected by `instanceof BamlHandle`
-> (`ProtoWriter.java:200-210`). `BamlStream` is **not** encodable inbound today
-> (see below).
+> (`ProtoWriter.java:236-246`). `BamlStream` **is** encodable inbound now
+> (landed `a6e3ca99e`): an `instanceof baml_bridge.BamlStream` arm
+> (`ProtoWriter.java:226-235`) delegates to the `BamlHandle` arm, so a stream
+> receiver rides a cloned `handle_value(ADT_TAGGED_HEAP_HANDLE)`.
 
 > ⚠ **Deviation from Python (registration idempotency + laziness).** Registration
 > is idempotent (first registration of an FQN wins) and all maps are
@@ -452,11 +468,12 @@ exercises are marked:
 | `uint8array_value` | `BexExternalValue::Uint8Array` | yes (`byte[]`) |
 | `list_value` | `BexExternalValue::Array` (recursive) | yes |
 | `map_value` | `BexExternalValue::Map` (stringified keys, recursive) | yes |
-| `class_value` | `BexExternalValue::Instance { class_name, fields, type_args }` | yes (FQN only; no per-value `type_args` — see deviation above) |
+| `class_value` | `BexExternalValue::Instance { class_name, fields, type_args }` | yes (FQN + per-value `type_args` for a reified generic instance — see deviation above) |
 | `enum_value` | `BexExternalValue::Variant { enum_name, variant_name }` | yes |
 | `ty_value` | `proto_ty_to_external(...)` — decodable | **no** (no Java encoder arm) |
-| `handle` with `HOST_VALUE_CALLABLE`/`HOST_VALUE_OPAQUE` | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | **no** (host-callable slice deferred) |
-| other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (media `_data`, bare handle) |
+| `handle` with `HOST_VALUE_CALLABLE` (15) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | yes (host callable — `registerHostCallable`, landed `202883518`) |
+| `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | yes, on the throw-back path only (`encodeHostCallableError`'s hidden `_handle`) |
+| other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (media `_data`, bare handle, stream receiver) |
 
 The engine receives the decoded kwargs and the called function FQN. Any missing
 required arg, extra arg, or structural type mismatch is an engine-boundary
@@ -468,11 +485,12 @@ encoder error.
 - Generated Java static types are compile-only. Runtime arg encoding is
   structural and Java-value-driven (`ProtoWriter.encodeInboundValue` dispatches
   on runtime shape, `:154-231`).
-- The inbound wire payload carries class/enum FQNs for generated objects, but not
-  declared parameter types, and — unlike Python — **not** per-class-value reified
-  generics (those are omitted inbound and reified only on decode;
-  `ProtoWriter.java:236-237`). Rust and the engine own coercion and BAML type
-  validation.
+- The inbound wire payload carries class/enum FQNs for generated objects (not
+  declared parameter types) plus, for a reified generic instance, its concrete
+  per-class-value `class_ty.type_args` from the side-table (on parity with Python
+  now, landed `861414d55`; `ProtoWriter.java:277, 295-307`). A non-generic/unbound
+  instance writes none, byte-identical to the pre-generics encoding. Rust and the
+  engine own coercion and BAML type validation.
 - Omit-vs-explicit-null is preserved by the `$Opts` touched-set, not a sentinel:
   a setter never called ⇒ omitted (engine default); a setter called with `null`
   ⇒ an entry with an absent `value` oneof (explicit BAML `null`)
@@ -480,11 +498,16 @@ encoder error.
 - Empty lists and maps require explicit oneof presence; Java gets this for free
   because `WireWriter.writeMessage` always emits the tag + length
   (`WireWriter.java:77-90`).
-- Handle-backed values (media today; host callables/opaques later) are wire keys
-  with clone-for-wire + drain lifetime rules, not ordinary class serialization
-  (`BamlHandle.java:16-33, 115-122`).
+- Handle-backed values are wire keys with clone-for-wire + drain lifetime rules,
+  not ordinary class serialization (`BamlHandle.java:16-33, 115-122`): media
+  (`_data`), bare `$rust_type` shells, and the `BamlStream` receiver clone their
+  key on the way out; **host callables** register in the Java-side registry and
+  ride `handle{HOST_VALUE_CALLABLE}` (no clone — the registry owns them, released
+  via `hostRelease`), and an opaque host throwable rides `HOST_VALUE_OPAQUE` on the
+  throw-back path.
 - **Java explicitly rejects everything it cannot encode** — there is no silent
-  drop on the inbound value path. Host callables and inbound `BamlStream` args
-  both raise `IllegalArgumentException` (naming the argument) rather than being
-  silently omitted (`ProtoWriter.java:220-229`). The only intentionally "silent" behaviors are the
-  designed ones: `null` → absent oneof, and an untouched optional → omitted kwarg.
+  drop on the inbound value path; a value the encoder cannot map raises
+  `IllegalArgumentException` naming the argument (`ProtoWriter.java:269-276`). Host
+  callables and `BamlStream` receivers are **now encoded**, not rejected. The only
+  intentionally "silent" behaviors are the designed ones: `null` → absent oneof,
+  and an untouched optional → omitted kwarg.
