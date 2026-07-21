@@ -501,35 +501,34 @@ pub fn impl_data<'db>(
     // Explicit methods inside `implements I { ... }` remain higher priority.
     // Only in-body class impls inherit direct methods; a free/out-of-body impl
     // must continue to provide its own overrides explicitly.
-    let direct_class_method_ids: Vec<_> = match &block.subject {
-        ImplSubject::InClass {
+    let direct_class_method_locs: Vec<_> = match &block.subject {
+        ImplSubjectData::InClass {
             class,
             out_of_body: false,
         } => {
-            let class_data = item_tree
-                .classes
-                .get(class)
-                .ok_or(ImplDataError::Malformed)?;
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
             let explicit_names: Vec<&Name> = block
                 .methods
                 .iter()
-                .map(|id| &item_tree[*id].name)
+                .map(|loc| &function_data(db, *loc).name)
                 .collect();
             class_data
                 .methods
                 .iter()
                 // `Class::methods` is flattened with implements-block methods;
                 // only entries without an interface target are direct methods.
-                .filter(|id| !item_tree.method_to_iface_target.contains_key(id))
-                .filter(|id| {
-                    let name = &item_tree[**id].name;
+                .filter(|loc| {
+                    baml_compiler2_ppir::item_data::method_interface_target(db, **loc).is_none()
+                })
+                .filter(|loc| {
+                    let name = &function_data(db, **loc).name;
                     name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
                         && !explicit_names.contains(&name)
                         && (iface_data.required_methods.iter().any(|m| m.name == *name)
                             || iface_data
                                 .default_methods
                                 .iter()
-                                .any(|default_id| iface_tree[*default_id].name == *name))
+                                .any(|default_loc| function_data(db, *default_loc).name == *name))
                 })
                 .copied()
                 .collect()
@@ -591,9 +590,9 @@ pub fn impl_data<'db>(
             .map(|loc| &function_data(db, *loc).name)
             .collect();
         override_names.extend(
-            direct_class_method_ids
+            direct_class_method_locs
                 .iter()
-                .map(|id| &item_tree[*id].name),
+                .map(|loc| &function_data(db, *loc).name),
         );
         let default_names: Vec<&Name> = iface_data
             .default_methods

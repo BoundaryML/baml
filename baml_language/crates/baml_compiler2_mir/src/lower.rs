@@ -2599,9 +2599,10 @@ impl<'db> LoweringContext<'db> {
                 // `is`/match lowering should ultimately use the VM's directed
                 // runtime impl-rule lookup instead of enumerating classes.
                 if let baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) = &target_ty_tir {
-                    let root_iface_args_tir = lower_interface_target_args(
+                    let root_iface_args_tir = lower_ref_interface_target_args(
                         db,
-                        &imp.interface_target,
+                        &imp.type_refs,
+                        imp.interface_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &imp_generic_params,
