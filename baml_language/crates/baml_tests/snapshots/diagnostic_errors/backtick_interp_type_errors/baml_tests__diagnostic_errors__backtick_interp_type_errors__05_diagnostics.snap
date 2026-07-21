@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type `int[]` has no member `len`
+    ╭─[ main.baml:10:24 ]
+    │
+ 10 │     `result: ${[1,2,3].len()}`
+    │                        ─┬─  
+    │                         ╰─── type `int[]` has no member `len`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: type `int[]` has no member `len`
+    ╭─[ main.baml:16:18 ]
+    │
+ 16 │     `x ${[1,2,3].len().to_string()}`
+    │                  ─┬─  
+    │                   ╰─── type `int[]` has no member `len`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: operator `+` cannot be applied to `1` and `"x"`
+    ╭─[ main.baml:21:13 ]
+    │
+ 21 │     `sum: ${1 + "x"}`
+    │             ───┬───  
+    │                ╰───── operator `+` cannot be applied to `1` and `"x"`
+    │ 
+    │ Note: Error code: E0004
+────╯
+
+  [type] error: type `"abc"` has no member `nonexistent`
+    ╭─[ main.baml:26:17 ]
+    │
+ 26 │     `v: ${"abc".nonexistent()}`
+    │                 ─────┬─────  
+    │                      ╰─────── type `"abc"` has no member `nonexistent`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: unresolved name: undefined_var
+    ╭─[ main.baml:33:11 ]
+    │
+ 33 │     `v: ${undefined_var}`
+    │           ──────┬──────  
+    │                 ╰──────── unresolved name: undefined_var
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] error: type `int` has no member `bogus`
+    ╭─[ main.baml:39:28 ]
+    │
+ 39 │     `${for (let x in xs)}${x.bogus()}${endfor}`
+    │                            ───┬───  
+    │                               ╰───── type `int` has no member `bogus`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: type `"abc"` has no member `missing`
+    ╭─[ main.baml:43:26 ]
+    │
+ 43 │     `${if (show)}${"abc".missing()}${endif}`
+    │                          ───┬───  
+    │                             ╰───── type `"abc"` has no member `missing`
+    │ 
+    │ Note: Error code: E0007
+────╯

@@ -64,10 +64,8 @@ function main() -> string {
 async fn tagged_template_outer_local_captured_through_user_lambda() {
     // `outer` is defined in `main`, referenced ONLY inside a tagged template
     // that is itself inside a user lambda `f`. The template's interp must
-    // capture `outer` *through* `f` — i.e. `f` must learn it captures `outer`.
-    // Before late-lowering, the synthesized template body lambda was a separate
-    // HIR capture boundary that stole the reference, so `f` never recorded the
-    // capture and this failed to compile with `[E0003] unresolved name: outer`.
+    // capture `outer` *through* `f` — i.e. `f` must learn it captures `outer`
+    // for the compilation to succeed.
     let output = baml_test!(
         r#"
 //baml:tagged_string
@@ -114,10 +112,8 @@ function main() -> string {
 async fn tagged_template_body_param_captured_by_nested_lambda() {
     // The body param `name` is referenced from a *nested* lambda inside the
     // interpolation (`(unused) -> { name }`, immediately invoked). The param is
-    // a MIR-only local with no HIR binding, so neither the nested lambda's
-    // standalone TIR scope inference nor its MIR capture analysis can see it
-    // through the normal paths. Before the fix this failed to compile with
-    // `[E0003] unresolved name: name`.
+    // a MIR-only local with no HIR binding, testing that capture analysis
+    // correctly resolves it through nested lambda scopes.
     let output = baml_test!(
         r#"
 //baml:tagged_string

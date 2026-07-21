@@ -33,6 +33,7 @@ if (isTestRuntime("node")) {
 
 const T = 30_000;
 
+// The replay harness owns a local node:http listener. Web HTTP streaming is deliberately unsupported; browser/workerd tagged-handle selection, cloning, and prompt failure live in bridge_typescript_web/tests/typemap_builtins.test.ts, while generated stream-companion shapes run everywhere in type_shapes/roundtrip_streams.test.ts.
 describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => {
   it(
     "next() yields >= 10 partials and drains to StreamFinished",
@@ -89,6 +90,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
   );
 });
 
+// The class replay cases use the same Node-only local HTTP provider harness.
 describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
   it(
     "next() yields >= 10 doc partials; final() is a typed StreamingDoc",

@@ -1,4 +1,8 @@
-//! Unified tests for network operations.
+//! Tests for network operations that require Rust-side infrastructure.
+//!
+//! These tests need host-created TCP/UDP servers (to write raw bytes to
+//! accepted connections or provide UDP echo peers with a known address,
+//! since `baml.net` lacks `local_addr`) and insta bytecode snapshots.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -121,6 +125,12 @@ async fn net_multiple_reads() {
     );
 }
 
+// Kept in Rust (not the baml_src corpus): the silent peer must be a
+// controlled Rust listener that accepts and holds the connection open. A
+// corpus version using `baml.http.Server.bind` as the silent peer is flaky —
+// the BAML listener object can be GC-collected between `connect` and the
+// throwing `read`, resetting the connection into an `Io` error instead of the
+// expected `Timeout`, intermittently under load.
 #[tokio::test]
 async fn net_read_timeout_fires() {
     // The server accepts the connection but never writes, so a bare read() would
@@ -246,30 +256,6 @@ async fn net_udp_send_recv() {
 }
 
 #[tokio::test]
-async fn net_udp_recv_timeout_fires() {
-    // A bound socket with nobody sending: recv_from(timeout=50ms) must surface
-    // as baml.errors.Timeout rather than blocking forever.
-    let output = baml_test!(
-        r#"
-            function main() -> uint8array {
-                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
-                let dgram = sock.recv_from(timeout = baml.time.Duration.from_milliseconds(50n));
-                dgram.data
-            }
-        "#
-    );
-
-    let err = output
-        .result
-        .expect_err("recv_from with a 50ms timeout and no datagram should time out")
-        .to_string();
-    assert!(
-        err.contains("baml.errors.Timeout"),
-        "expected a baml.errors.Timeout throw, got: {err}"
-    );
-}
-
-#[tokio::test]
 async fn net_udp_recv_succeeds_within_timeout() {
     // A generous recv timeout must not interfere with a prompt datagram.
     let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -297,72 +283,5 @@ async fn net_udp_recv_succeeds_within_timeout() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
-    );
-}
-
-#[tokio::test]
-async fn net_tcp_read_after_close_errors() {
-    // Connect succeeds, then close() invalidates the shared handle so a
-    // subsequent read() on the same socket fails deterministically.
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap().to_string();
-    let server = tokio::spawn(async move {
-        // Accept and hold the connection open so connect() succeeds.
-        let _conn = listener.accept().await.unwrap();
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-    });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> uint8array {{
-                let sock = baml.net.TcpStream.connect("{addr}");
-                sock.close();
-                sock.read()
-            }}
-        "#
-    ));
-    server.await.unwrap();
-
-    assert!(
-        output.result.is_err(),
-        "read after close should fail, got {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn net_tcp_listener_accept_after_close_errors() {
-    let output = baml_test!(
-        r#"
-            function main() -> uint8array {
-                let listener = baml.net.TcpListener.bind("127.0.0.1:0");
-                listener.close();
-                let sock = listener.accept();
-                sock.read()
-            }
-        "#
-    );
-    assert!(
-        output.result.is_err(),
-        "accept after close should fail, got {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn net_udp_send_after_close_errors() {
-    let output = baml_test!(
-        r#"
-            function main() -> int {
-                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
-                sock.close();
-                sock.send_to("x".to_utf8(), "127.0.0.1:9")
-            }
-        "#
-    );
-    assert!(
-        output.result.is_err(),
-        "send_to after close should fail, got {:?}",
-        output.result
     );
 }

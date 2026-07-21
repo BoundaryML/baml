@@ -13,12 +13,14 @@ from baml_sdk.primitives import (
     return_float,
     return_string,
     return_bool,
+    return_bigint,
     return_null,
     round_trip_uint8_array,
     round_trip_int,
     round_trip_float,
     round_trip_string,
     round_trip_bool,
+    round_trip_bigint,
     round_trip_null,
     round_trip_primitives,
 )
@@ -38,6 +40,12 @@ def test_return_string():
 
 def test_return_bool():
     assert return_bool() is True
+
+
+def test_return_bigint():
+    # 12345678901234567890 > i64 max (9223372036854775807), so it decodes
+    # through the hex bigint wire channel rather than int_value.
+    assert return_bigint() == 12345678901234567890
 
 
 def test_return_null():
@@ -68,6 +76,18 @@ def test_round_trip_string():
 
 def test_round_trip_bool():
     assert round_trip_bool(x=False) is False
+
+
+def test_round_trip_bigint():
+    # Encode uses the hex bigint channel only for values outside i64 range (an
+    # in-range int rides int_value), so every case here is beyond i64: a large
+    # positive, its negation, and a power-of-two hex boundary (2**64 — the
+    # first magnitude needing a 17th hex digit).
+    big = 2**80
+    assert round_trip_bigint(x=big) == big
+    assert round_trip_bigint(x=-big) == -big
+    hex_boundary = 2**64
+    assert round_trip_bigint(x=hex_boundary) == hex_boundary
 
 
 def test_round_trip_null():

@@ -7,7 +7,9 @@
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::{Literal, Ty};
-use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata};
+use bex_external_types::{
+    BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
+};
 use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError};
@@ -70,6 +72,20 @@ impl BexEngine {
     /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the pointer is valid (from a handle which is a GC root)
+    //
+    // BUG: this walk has no cycle detection (no visited set, no depth
+    // budget). BAML permits self-referencing values; one reaching the host
+    // boundary makes this recursion diverge. Reproduced via the python
+    // bridge with `class Node { value int  next Node? }` and a body doing
+    // `n.next = n`: the call never returns — a process sample shows every
+    // frame pinned in this function's recursion for minutes at full CPU
+    // (no catchable failure ever surfaces, so `call_and_encode` cannot
+    // fold it into the result envelope). Every language bridge is exposed
+    // identically (`BexExternalValue` and the outbound protobuf are both
+    // trees, so no bridge can see — let alone handle — a cycle). The fix
+    // belongs here: track visited `HeapPtr`s (identity, not equality) and
+    // return an `EngineError` so a cyclic value surfaces on the
+    // envelope's error arm in every SDK.
     fn convert_heap_ptr_to_external_with_type(
         &self,
         ptr: HeapPtr,
@@ -610,16 +626,9 @@ impl BexEngine {
     }
 
     /// Like [`Self::convert_external_to_vm_value`], but threads the declared
-    /// parameter `RuntimeTy` for the top-level value so a `BexExternalValue::HostValue`
-    /// can be bound to its function signature as an [`Object::HostClosure`].
-    ///
-    /// `expected_ty` is honoured only at the top level — nested array
-    /// elements / map values / instance fields fall back to the untyped path
-    /// (`None`). Adding type-driven element handling here would require
-    /// re-traversing the declared `RuntimeTy` in lockstep with the value; we don't
-    /// yet support host callables in collection positions, so the
-    /// type-context is dropped on entry into containers and any nested
-    /// `HostValue` is rejected with `EngineError::CannotConvert`.
+    /// `RuntimeTy` alongside the value tree so a `BexExternalValue::HostValue`
+    /// can be bound to its function signature as an [`Object::HostClosure`],
+    /// including in list, map, and class-field positions.
     pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
         &self,
         holder: &mut impl HeapPermit<T>,
@@ -692,16 +701,19 @@ impl BexEngine {
                 element_type,
                 items,
             } => {
-                let element_ty = realize_host_ty(element_type)?;
+                let declared_element_ty = expected_ty.and_then(peel_list_element_ty);
+                let runtime_element_ty = declared_element_ty.unwrap_or(&element_type).clone();
                 let values = items
                     .into_iter()
-                    .map(|v| self.convert_external_to_vm_value(holder, v))
+                    .map(|v| {
+                        self.convert_external_to_vm_value_with_ty(holder, v, declared_element_ty)
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_array(element_ty, values),
+                        .alloc_array(realize_host_ty(runtime_element_ty)?, values),
                 )
             }
             BexExternalValue::Map {
@@ -710,20 +722,20 @@ impl BexEngine {
                 entries,
             } => {
                 let key_ty = realize_host_ty(key_type)?;
-                let value_ty = realize_host_ty(value_type)?;
+                let declared_value_ty = expected_ty.and_then(peel_map_value_ty);
+                let runtime_value_ty = declared_value_ty.unwrap_or(&value_type).clone();
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| {
-                        self.convert_external_to_vm_value(holder, v)
+                        self.convert_external_to_vm_value_with_ty(holder, v, declared_value_ty)
                             .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
-                Value::object(
-                    holder
-                        .holder_mut()
-                        .tlab_mut()
-                        .alloc_map(key_ty, value_ty, values),
-                )
+                Value::object(holder.holder_mut().tlab_mut().alloc_map(
+                    key_ty,
+                    realize_host_ty(runtime_value_ty)?,
+                    values,
+                ))
             }
             BexExternalValue::Uint8Array(bytes) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))
@@ -775,10 +787,11 @@ impl BexEngine {
                             ),
                         }
                     })?;
+                    let field_ty = class_field.field_template.substitute_symbolic(&type_args);
                     values.push(self.convert_external_to_vm_value_with_ty(
                         holder,
                         ext.clone(),
-                        Some(&class_field.field_type),
+                        Some(&field_ty),
                     )?);
                 }
                 let realized_type_args = type_args
@@ -881,6 +894,13 @@ impl BexEngine {
                     type_name: "host_value (no declared type in context)".to_string(),
                 })?;
                 if matches!(peel_to_rust_type(ty), Some(())) {
+                    if arc.kind != HostValueKind::Opaque {
+                        return Err(EngineError::TypeMismatch {
+                            message:
+                                "callable host value cannot inhabit an opaque `$rust_type` slot"
+                                    .to_string(),
+                        });
+                    }
                     let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
                     return Ok(Value::object(
                         holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
@@ -894,6 +914,13 @@ impl BexEngine {
                              is `{ty}`; expected a function type or `$rust_type`",
                         ),
                     })?;
+                if arc.kind != HostValueKind::Callable {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "opaque host value cannot be passed where the callable type `{function_ty}` was declared"
+                        ),
+                    });
+                }
                 let (params, ret, throws) = match function_ty {
                     RuntimeTy::Function {
                         params,
@@ -1646,6 +1673,46 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     }
 }
 
+/// Find the single list member behind optional/union wrappers and return its
+/// declared element type. Ambiguous unions deliberately return `None`.
+fn peel_list_element_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+    peel_single_container_member(ty, |member| match member {
+        RuntimeTy::List(element, _) => Some(element.as_ref()),
+        _ => None,
+    })
+}
+
+/// Find the single map member behind optional/union wrappers and return its
+/// declared value type. Ambiguous unions deliberately return `None`.
+fn peel_map_value_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+    peel_single_container_member(ty, |member| match member {
+        RuntimeTy::Map { value, .. } => Some(value.as_ref()),
+        _ => None,
+    })
+}
+
+fn peel_single_container_member<'a>(
+    ty: &'a RuntimeTy,
+    select: impl Copy + Fn(&'a RuntimeTy) -> Option<&'a RuntimeTy>,
+) -> Option<&'a RuntimeTy> {
+    if let Some(found) = select(ty) {
+        return Some(found);
+    }
+    let RuntimeTy::Union(members, _) = ty else {
+        return None;
+    };
+    let mut found = None;
+    for member in members {
+        if let Some(candidate) = peel_single_container_member(member, select) {
+            if found.is_some() {
+                return None;
+            }
+            found = Some(candidate);
+        }
+    }
+    found
+}
+
 /// Whether a host-callable's declared return type contains a position the
 /// host-return validator treats as "accept anything": a `RuntimeTy::Void` (the runtime
 /// form of an erased generic type variable, and also a bare `-> void`) or a
@@ -2223,20 +2290,13 @@ impl BexEngine {
                 )),
             },
 
-            // A function-typed return position is not supported yet. The host
-            // call result is materialized by `convert_external_to_vm_value`
-            // *without* a declared type, so a returned `HostValue` (the only
-            // value that inhabits a function type) cannot be bound to an
-            // `Object::HostClosure` and would otherwise fail downstream as a raw
-            // `EngineError::CannotConvert`. Reject it here so it surfaces as a
-            // structured, catchable `HostCallable` instead. This arm covers a
-            // top-level function return and — via the `List` / `Map` / `Class`
-            // recursion above — any nested function position (`(() -> int)[]`,
-            // `class { cb: () -> int }`, …).
-            RuntimeTy::Function { .. } => Err(format!(
-                "host callable returned a value typed `{expected}`; returning a \
-                 callable (a function-typed value) is not supported",
-            )),
+            // Function-typed positions are materialized with their declared
+            // type context into `Object::HostClosure`, including inside
+            // containers and class fields. Keep this validation strict so an
+            // opaque host-value carrier cannot masquerade as a callable.
+            RuntimeTy::Function { .. } => {
+                bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
+            }
 
             // Scalars and everything else: defer to the schema-free shape
             // check (int ≠ float, exact tags, literal equality, media).

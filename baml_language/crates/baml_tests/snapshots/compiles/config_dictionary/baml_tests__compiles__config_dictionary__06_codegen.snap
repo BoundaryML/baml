@@ -18,9 +18,6 @@ function boundary.id.current() -> string {
 }
 
 function user.MyClient$new(lenient: bool) -> null {
-    load_const "OPENAI_API_KEY"
-    sys_op baml.env.get
-    store_var _3
     load_const "MyClient"
     load_const "openai"
     load_const null
@@ -32,7 +29,7 @@ function user.MyClient$new(lenient: bool) -> null {
     load_const null
     load_const null
     load_const null
-    load_var _3
+    load_const null
     load_const null
     load_const null
     load_type string

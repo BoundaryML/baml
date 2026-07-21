@@ -7,8 +7,6 @@ use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
 use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
@@ -75,68 +73,6 @@ fn class_generic_bound_exposes_interface_members() {
             }
         }
         "#,
-    );
-}
-
-#[tokio::test]
-async fn class_generic_bound_member_access_runs_in_class_method() {
-    let output = baml_test!(
-        r#"
-        interface Named {
-            name: string
-        }
-
-        class Dog {
-            name: string
-            implements Named {}
-        }
-
-        class Box<T extends Named> {
-            value: T
-
-            function label(self) -> string {
-                return self.value.name
-            }
-        }
-
-        function main() -> string {
-            return Box<Dog> { value: Dog { name: "Rex" } }.label()
-        }
-        "#
-    );
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("Rex".into())
-    );
-}
-
-#[tokio::test]
-async fn function_class_generic_bound_member_access_runs() {
-    let output = baml_test!(
-        r#"
-        interface Named {
-            name: string
-        }
-
-        class Person {
-            name: string
-            implements Named {}
-        }
-
-        function get_name<T extends Named>(value: T) -> string {
-            return value.name
-        }
-
-        function main() -> string {
-            return get_name(Person { name: "Ada" })
-        }
-        "#
-    );
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("Ada".into())
     );
 }
 

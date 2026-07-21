@@ -46,11 +46,79 @@ use std::{
 ///
 /// If `uv` is managed by mise but its shim isn't on PATH, the
 /// helper falls back to `mise which uv` before giving up. On Windows,
-/// `pnpm` is commonly exposed as `pnpm.cmd`; Rust's process launcher
-/// does not consistently apply shell-style `PATHEXT` expansion when
-/// asked to spawn `pnpm`, so the helper retries the explicit shim.
+/// `pnpm` is commonly exposed as `pnpm.cmd` and `gradle` as
+/// `gradle.bat` (there is no bare `gradle.exe`); Rust's process
+/// launcher does not consistently apply shell-style `PATHEXT`
+/// expansion when asked to spawn `pnpm` / `gradle`, so the helper
+/// retries the explicit shim (`pnpm.cmd` / `gradle.bat`).
 pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
+}
+
+/// Same as [`run_test_cmd`], but treats the listed process exit codes as
+/// successful outcomes. This lets a harness model tool-specific non-error
+/// statuses explicitly—for example, pytest uses exit code 5 when collection
+/// succeeds but finds no tests.
+pub fn run_test_cmd_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    allowed_exit_codes: &[i32],
+) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[],
+        allowed_exit_codes,
+    );
+}
+
+/// Run the Go toolchain against one generated fixture. Prefer the repository's
+/// mise-managed Go binary so a globally installed `go` cannot accidentally use
+/// a different GOROOT than the pinned compiler.
+pub fn run_go_test(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let dir = manifest.join(fixture).join("generated");
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let go = resolve_mise_tool("go").unwrap_or_else(|_| PathBuf::from("go"));
+
+    let output = Command::new(&go)
+        .args(["test", "./..."])
+        .current_dir(&dir)
+        .env_remove("GOROOT")
+        .env("CGO_ENABLED", "1")
+        .env("GOCACHE", workspace_root.join("target/go-build-cache"))
+        .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to spawn `{}` for fixture `{fixture}`: {e}",
+                go.display()
+            )
+        });
+    assert!(
+        output.status.success(),
+        "fixture `{fixture}` `go test ./...` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn go_runtime_library(workspace_root: &Path) -> PathBuf {
+    let filename = if cfg!(target_os = "macos") {
+        "libbridge_cffi.dylib"
+    } else if cfg!(target_os = "windows") {
+        "bridge_cffi.dll"
+    } else {
+        "libbridge_cffi.so"
+    };
+    workspace_root.join("target").join("debug").join(filename)
 }
 
 /// Run a toolchain command from a workspace-relative directory. Used for
@@ -86,6 +154,35 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
     );
 }
 
+/// Java-fixture variant of [`run_test_cmd`]: injects
+/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
+/// generated `Baml` anchor can `System.load` the engine during tests.
+pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
+    let manifest = std::path::PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let lib_name = if cfg!(target_os = "windows") {
+        "bridge_java.dll"
+    } else if cfg!(target_os = "macos") {
+        "libbridge_java.dylib"
+    } else {
+        "libbridge_java.so"
+    };
+    let lib = workspace_root_from_manifest(&manifest)
+        .join("target")
+        .join("debug")
+        .join(lib_name);
+    let lib_str = lib.to_string_lossy().into_owned();
+    run_test_cmd_with_env(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
+    );
+}
+
 /// Same as [`run_test_cmd`] but threads additional environment
 /// variables into the child process.
 pub fn run_test_cmd_with_env(
@@ -94,6 +191,24 @@ pub fn run_test_cmd_with_env(
     cache_subdir: &str,
     cache_env_var: &str,
     extra_env: &[(&str, &str)],
+) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        extra_env,
+        &[],
+    );
+}
+
+fn run_test_cmd_with_env_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    extra_env: &[(&str, &str)],
+    allowed_exit_codes: &[i32],
 ) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
@@ -120,8 +235,13 @@ pub fn run_test_cmd_with_env(
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, extra_env)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` for fixture `{fixture}`: {e}"));
+    let accepted = output.status.success()
+        || output
+            .status
+            .code()
+            .is_some_and(|code| allowed_exit_codes.contains(&code));
     assert!(
-        output.status.success(),
+        accepted,
         "fixture `{fixture}` `{cmd}` failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
@@ -333,6 +453,21 @@ fn run_test_process(
             }
             fallback.output()
         }
+        // Gradle ships as `gradle.bat` on Windows (no bare `gradle.exe`),
+        // and Rust's launcher doesn't reliably apply PATHEXT (see the
+        // `pnpm.cmd` note above), so retry the explicit batch launcher.
+        #[cfg(windows)]
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "gradle" => {
+            let mut fallback = Command::new("gradle.bat");
+            fallback
+                .args(args)
+                .current_dir(dir)
+                .env(cache_env_var, cache_dir);
+            for (k, v) in extra_env {
+                fallback.env(k, v);
+            }
+            fallback.output()
+        }
         Err(err) if err.kind() == ErrorKind::NotFound && prog == "uv" => {
             let uv = resolve_mise_uv()?;
             let mut fallback = Command::new(uv);
@@ -350,12 +485,16 @@ fn run_test_process(
 }
 
 fn resolve_mise_uv() -> io::Result<PathBuf> {
-    let output = Command::new("mise").args(["which", "uv"]).output()?;
+    resolve_mise_tool("uv")
+}
+
+fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
+    let output = Command::new("mise").args(["which", tool]).output()?;
     if !output.status.success() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             format!(
-                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
+                "`{tool}` is not on PATH and `mise which {tool}` failed:\n{}.",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
@@ -365,7 +504,7 @@ fn resolve_mise_uv() -> io::Result<PathBuf> {
     if path.is_empty() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
-            "`uv` is not on PATH and `mise which uv` returned an empty path",
+            format!("`{tool}` is not on PATH and `mise which {tool}` returned an empty path"),
         ));
     }
 
@@ -512,6 +651,53 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
+/// Java generator's test-side glue. Invoked from
+/// `crates/java/src/lib.rs` as
+/// `sdk_test_harness_runner::java::test_suite!()`.
+pub mod java {
+    /// `include!`s `OUT_DIR/java_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::java::run_all`.
+    #[macro_export]
+    macro_rules! java_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/java_tests.rs"));
+        };
+    }
+
+    pub use crate::java_test_suite as test_suite;
+}
+
+/// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as
+/// `sdk_test_harness_runner::cpp::test_suite!()`.
+pub mod cpp {
+    /// `include!`s `OUT_DIR/cpp_tests.rs` — the per-fixture scaffold emitted
+    /// by `sdk_test_harness_setup::cpp::run_all`.
+    #[macro_export]
+    macro_rules! cpp_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/cpp_tests.rs"));
+        };
+    }
+
+    pub use crate::cpp_test_suite as test_suite;
+}
+
+/// Rust generator's test-side glue. Invoked from
+/// `crates/rust/src/lib.rs` as
+/// `sdk_test_harness_runner::rust::test_suite!()`.
+pub mod rust {
+    /// `include!`s `OUT_DIR/rust_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::rust::run_all`.
+    #[macro_export]
+    macro_rules! rust_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/rust_tests.rs"));
+        };
+    }
+
+    pub use crate::rust_test_suite as test_suite;
+}
+
 /// Node TypeScript test-side glue. Invoked from
 /// `crates/typescript/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript::test_suite!()`.
@@ -527,6 +713,18 @@ pub mod typescript {
     }
 
     pub use crate::typescript_test_suite as test_suite;
+}
+
+/// Go generator's test-side glue.
+pub mod go {
+    #[macro_export]
+    macro_rules! go_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/go_tests.rs"));
+        };
+    }
+
+    pub use crate::go_test_suite as test_suite;
 }
 
 /// Browser and Cloudflare Workers TypeScript test-side glue. Invoked from

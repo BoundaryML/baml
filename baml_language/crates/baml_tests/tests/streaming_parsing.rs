@@ -3,6 +3,10 @@
 //! Tests the complete pipeline: SSE → StreamAccumulator → SAP partial/final parse → typed values.
 //! Uses WireMock to serve OpenAI-format SSE responses, then exercises the
 //! compiler-generated `$parse_stream` companion and `Stream<T>` consumption.
+//!
+//! These tests perform HTTP fetches inside the stdlib against the client's
+//! compile-time `base_url`. The wiremock URI must be interpolated into the
+//! BAML source at compile time — not expressible from a corpus test block.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -175,80 +179,6 @@ async fn stream_class_in_namespace_final_value() {
     );
 }
 
-/// Pin for the `$parse_stream` companion's type-arg threading: its body is
-/// synthesized by PPIR as `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)`
-/// (see `synthesize_llm_make_stream_call`), so `StreamCache.new` gets its
-/// types from the frame via `reflect.type_of` — no function-name string is
-/// involved. Class-typed + namespaced to exercise resolution of the
-/// PPIR-synthetic `Doc$stream` in the explicit type args.
-#[tokio::test]
-async fn parse_stream_companion_class_in_namespace() {
-    let server = MockServer::start().await;
-    let sse_body = openai_sse_body(
-        &[
-            r#"{\"title\": \"Hello\", \"body\": \"Wor"#,
-            r#"ld\", \"word_count\": 1}"#,
-        ],
-        "stop",
-    );
-    Mock::given(method("POST"))
-        .and(path("/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_body_string(sse_body),
-        )
-        .mount(&server)
-        .await;
-    let uri = server.uri();
-
-    let ns_source = format!(
-        r##"
-        client<llm> TestClient {{
-            provider openai
-            options {{
-                model "gpt-4o"
-                api_key "test-key"
-                base_url "{uri}"
-            }}
-        }}
-
-        class Doc {{
-            title string
-            body string?
-            word_count int
-        }}
-
-        function TestFunc(input: string) -> Doc {{
-            client TestClient
-            prompt #"Say hello to {{{{ input }}}}"#
-        }}
-
-        function main() -> string {{
-            let req = TestFunc$build_request_stream("world");
-            let sse = baml.http.fetch_sse(req);
-            let s = TestFunc$parse_stream(sse);
-            let d = s.final();
-            d.title
-        }}
-    "##
-    );
-
-    let program =
-        baml_tests::engine::compile_multi_file(&[("ns_extract/main.baml", ns_source.as_str())]);
-    let output = baml_tests::engine::run_compiled(
-        program,
-        "extract.main",
-        baml_tests::engine::IndexMap::new(),
-        false,
-    )
-    .await;
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Hello".to_string().into()))
-    );
-}
-
 #[tokio::test]
 async fn stream_server_error_propagates() {
     let server = MockServer::start().await;
@@ -275,41 +205,5 @@ async fn stream_server_error_propagates() {
     assert!(
         output.result.is_err(),
         "Expected error for streaming with 500 response"
-    );
-}
-
-#[tokio::test]
-async fn stream_done_signal_required() {
-    let server = MockServer::start().await;
-    // SSE body with content but no finish_reason and no [DONE] — stream just ends
-    let sse_body = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n";
-    Mock::given(method("POST"))
-        .and(path("/v1/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_body_string(sse_body),
-        )
-        .mount(&server)
-        .await;
-    let uri = server.uri();
-
-    let source = format!(
-        r#"
-        {llm_source}
-
-        function main() -> string {{
-            let stream: baml.llm.Stream<null | string, string> = baml.llm.stream_llm_function(TestClient, "TestFunc", {{"input": "world"}});
-            stream.final()
-        }}
-    "#,
-        llm_source = streaming_llm_source(&uri)
-    );
-
-    let output = baml_test!(&source);
-    // Stream ended without [DONE] or finish_reason — should error
-    assert!(
-        output.result.is_err(),
-        "Expected error when stream ends without completion signal"
     );
 }

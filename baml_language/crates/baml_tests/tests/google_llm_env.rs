@@ -5,8 +5,12 @@
 //! (process-global), so they must run sequentially — and this file is its own
 //! test binary, so no other tests can race them. Every scenario is
 //! network-free: errors fire before any credential/token IO, and the success
-//! case uses Vertex express-mode (`query_params.key`) which skips token
+//! cases use Vertex express-mode (`query_params.key`) which skips token
 //! minting.
+//!
+//! These scenarios stay in Rust because BAML has no `baml.env.set`, and the
+//! shared corpus process may carry real ambient GOOGLE_* credentials — every
+//! scenario here needs a Google env var either SET or guaranteed ABSENT.
 
 #![allow(unsafe_code)]
 
@@ -220,45 +224,6 @@ async fn google_and_vertex_env_scenarios() {
         url,
         BexExternalValue::String(
             "https://aiplatform.googleapis.com/v1/projects/env-project/locations/global/publishers/google/models/gemini-2.0-flash:generateContent?key=test-express-key"
-                .to_string()
-                .into()
-        ),
-    );
-
-    // ------------------------------------------------------------------
-    // Scenario 6: google-ai with `options.enterprise true` (no env flag)
-    // routes through Vertex. The Google options use the same explicit
-    // location/project fields as VertexAiOptions, proving those fields are
-    // typed, lowered, and consumed through the shared runtime path.
-    // ------------------------------------------------------------------
-    clear_google_env();
-    let url = run(r##"
-        client<llm> G5 {
-            provider google-ai
-            options {
-                model "gemini-2.0-flash"
-                enterprise true
-                project_id "options-project"
-                location "us-west1"
-                query_params {
-                    key "test-express-key"
-                }
-            }
-        }
-        function F6(input: string) -> string {
-            client G5
-            prompt #"Say hello to ${input}"#
-        }
-        function main() -> string {
-            F6$build_request("world").url
-        }
-    "##)
-    .await
-    .expect("options.enterprise must build a Vertex request");
-    assert_eq!(
-        url,
-        BexExternalValue::String(
-            "https://us-west1-aiplatform.googleapis.com/v1/projects/options-project/locations/us-west1/publishers/google/models/gemini-2.0-flash:generateContent?key=test-express-key"
                 .to_string()
                 .into()
         ),

@@ -25,7 +25,7 @@ use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
 };
-use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
+use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
@@ -93,7 +93,23 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // never taint a scope, so unrelated type errors elsewhere in the file are
     // unaffected.
     let tainted = parse_error_tainted_scopes(index, &parse_errors);
-    for (file_scope_idx, scope_id) in index.scope_ids.iter().enumerate() {
+    // Drive inference with PPIR's canonical (post-`$stream`-expansion) ScopeIds,
+    // not HIR's. `ScopeId` is a Salsa *tracked* struct, so HIR's index and
+    // PPIR's expanded index mint distinct Salsa IDs for the same
+    // (file, FileScopeId) pair; keying `infer_scope_types` with HIR IDs here
+    // made every scope in a `$stream`-expanded file get inferred a second time
+    // when TIR/MIR later asked with the PPIR ID. The original file's scopes are
+    // a prefix of the expanded index — the same invariant `infer_scope_types`
+    // relies on when it resolves a `FileScopeId` in the expanded arena — and we
+    // iterate only that prefix, so synthetic `*$stream` scopes are never
+    // visited and diagnostics are unchanged.
+    let ppir_index = baml_compiler2_ppir::file_semantic_index(db, file);
+    for (file_scope_idx, scope_id) in ppir_index
+        .scope_ids
+        .iter()
+        .take(index.scopes.len())
+        .enumerate()
+    {
         if tainted.contains(&file_scope_idx) {
             continue;
         }
@@ -206,11 +222,15 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        let body = baml_compiler2_hir::body::function_body(db, func_loc);
-
         // Expression-body functions already have their signatures checked
         // during scope inference (step 3). Only check non-expr bodies here.
-        if matches!(body.as_ref(), FunctionBody::Expr(_)) {
+        // Read the body discriminant straight off the item tree already in
+        // hand — the `function_body` query clones the whole `ExprBody` arena
+        // on execution, far too expensive for a body-kind test.
+        if matches!(
+            func_data.body,
+            Some(baml_compiler2_ast::FunctionBodyDef::Expr(..))
+        ) {
             continue;
         }
 
@@ -395,7 +415,8 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             param_types.push((param.name.clone(), param_ty));
         }
 
-        if let Some(scope_id) = function_scope_id(index, func_data) {
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+        if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
                 context, res_ctx, pkg_id, scope_id, aliases,
@@ -408,7 +429,8 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let parameter_defaults =
                 baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
             builder.check_function_parameter_defaults(
-                &func_data.params,
+                &baml_compiler2_ppir::item_data::function_data(db, func_loc).params,
+                &baml_compiler2_ppir::item_data::function_source_map(db, func_loc).param_spans,
                 &parameter_defaults,
                 &param_types,
             );
@@ -573,13 +595,8 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // `validate_impl_signatures(loc)` (type conformance) each yield
     // `(TirTypeError, ImplDiagnosticLocation)` pairs anchored via the same source
     // map; a `Method` / field-link / binding location may mark several sites.
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    for impl_id in item_tree.impls.keys() {
-        let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
-        let Some(sm) = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc).as_ref()
-        else {
-            continue;
-        };
+    for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
+        let sm = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc);
         // `impl_data` owns an impl's structural diagnostics whether or not it
         // fully resolves: an unresolved interface target still carries the
         // diagnostics it lowered (the bad target, the for-target, the bounds). A
@@ -1622,22 +1639,6 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
     }
 }
 
-fn function_scope_id<'db>(
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
-    func_data: &baml_compiler2_hir::item_tree::Function,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    index
-        .scopes
-        .iter()
-        .zip(index.scope_ids.iter())
-        .find_map(|(scope, scope_id)| {
-            (matches!(scope.kind, ScopeKind::Function)
-                && scope.range == func_data.span
-                && scope.name.as_ref() == Some(&func_data.name))
-            .then_some(*scope_id)
-        })
-}
-
 fn is_function_default_signature_diagnostic(
     diag: &baml_compiler2_tir::infer_context::TirDiagnostic<'_>,
 ) -> bool {
@@ -1984,6 +1985,9 @@ fn tir_type_error_to_diagnostic_id(
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
+        TirTypeError::GenericSysOpMethodInInterfaceImpl { .. } => {
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl
+        }
         TirTypeError::OutOfBodyImplementsFieldInterface { .. } => {
             DiagnosticId::OutOfBodyImplementsFieldInterface
         }

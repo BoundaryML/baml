@@ -1,39 +1,32 @@
 // Tests for BEP-034 cancellation semantics.
 //
-// Converted from crates/baml_tests/tests/cancel_cascade.rs. Three of the four
-// tests assert on deterministic values/states → converted here. One test
-// (`cancel_unblocks_await_on_non_descendant`) asserts on wall-clock timing
-// (elapsed < 5s) and is left in the Rust file.
-//
 // Helper functions live at top level to avoid the test-block local-boxing VM bug.
 
-function boom_io() -> int throws baml.errors.Io {
-    throw baml.errors.Io { message: "boom" }
+// `waiter` awaits `slow` (a 60s sibling, not a child of waiter). Cancelling
+// `waiter` fires waiter's own cancel token; without the await-race fix,
+// waiter's `await slow` would block on the SetOnce until `slow` settles 60s
+// later. The engine race must observe the cancel and settle waiter
+// immediately: `await waiter` throws Cancelled promptly (bound is generous
+// for CI jitter; the fix lands in tens of ms). Compilation happens before the
+// test body runs, so the measured window covers only the engine run. `slow`
+// is torn down explicitly so B-650's end-of-run wait doesn't stall 60s.
+function cancel_unblocks_await_on_non_descendant_fn() -> bool {
+    let started = baml.sys.now_ms();
+    let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
+    let waiter = spawn { await slow };
+    let _ = waiter.cancel();
+    // waiter's BexThread is parked in the engine's await on `slow`. cancel()
+    // fires waiter's cancel token; awaiting waiter must observe Cancelled now,
+    // not after `slow` settles.
+    let got = (await waiter) catch (e) { baml.panics.Cancelled => 0 };
+    let elapsed = baml.sys.now_ms() - started;
+    let _ = slow.cancel();
+    got == 0 && elapsed < 5000
 }
 
-// BEP-034: "If a fire-and-forget task throws an unhandled error, the error
-// propagates to the parent task at its next `await` point."
-//
-// NOT CONVERTIBLE: the fire-and-forget error propagation mechanism surfaces as
-// a host-level `UnhandledThrow` that bypasses all user `catch` expressions in
-// BAML (even wildcard `_ => ...`). The Rust test asserts `output.result.is_err()`
-// which corresponds to a host-level error, not a user-catchable throw. There is
-// no BAML test-block construct that can assert "this must produce a host error"
-// rather than passing. Left in the Rust file.
-//
-// function fire_and_forget_error_fn() -> int {
-//     let _ = spawn { boom_io() };
-//     await spawn { 99 }
-// }
-//
-// test "fire_and_forget_error_surfaces_at_next_await" {
-//     {
-//         fire_and_forget_error_fn();
-//         baml.sys.panic("expected error propagation")
-//     } catch (e) {
-//         baml.errors.Io => null  // never reached; UnhandledThrow bypasses catch
-//     }
-// }
+test "cancel_unblocks_await_on_non_descendant" {
+    assert.is_true(cancel_unblocks_await_on_non_descendant_fn())
+}
 
 // BEP-034 Phase G: `let f = spawn { sleep(60s); 42 }; f.cancel(); await f
 // catch (Cancelled) { 0 }` → 0. Confirms the full round-trip from user-side

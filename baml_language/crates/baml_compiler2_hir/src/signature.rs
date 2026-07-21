@@ -14,11 +14,14 @@ use text_size::TextRange;
 
 use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 
-/// Compiler2 function signature — param names + unresolved `TypeExpr`.
+/// Compiler2 function signature — param names + unresolved `ast::TypeExpr`.
 ///
-/// No spans — those live in `SignatureSourceMap`.
-/// `TypeExpr` is already span-free (spans live in `TypeExpr` at the
-/// AST layer and are split out here).
+/// The `SignatureSourceMap` twin holds the item-level spans. This struct is NOT
+/// fully span-free, though: `ast::TypeExpr` carries its own `span` inline (its
+/// `PartialEq` ignores that span but transitively compares `RawAttribute` spans),
+/// so a whitespace edit near an attribute can still bust this query's cutoff. The
+/// span-free successor is `ppir::function_data` over the `TypeRef` arena; this
+/// struct is retained until its consumers migrate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     pub name: baml_base::Name,
@@ -220,18 +223,6 @@ pub fn elaborate_function_signature_parts(
     }
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &crate::item_tree::ItemTree,
-    function_id: crate::ids::LocalItemId<crate::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
-}
-
 fn elaborated_function_signature_with_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -257,7 +248,9 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
+    let reserved_effect_param_names = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .to_vec();
     let signature = Arc::new(elaborate_function_signature_parts(
         func_data.name.clone(),
         func_data.generic_params.clone(),

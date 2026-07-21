@@ -14,6 +14,9 @@
 //!
 //! Both are filled during type checking from real inference — there is no
 //! spawn/throws special-casing; `_` lowers to a single `Ty::Infer` hole.
+//!
+//! Tests here use `#[should_panic]` for compile-error assertions and `#[ignore]` for
+//! unimplemented features — neither pattern can be expressed in the BAML corpus.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -233,25 +236,5 @@ async fn throws_plain_stays_exhaustive() {
         }
         function main() -> int { 0 }
     "#
-    );
-}
-
-/// `baml.json.to_json` is a pure serializer: after the stdlib fix it declares
-/// `throws JsonSerializationError` only (no spurious `JsonParseError`), so a
-/// caller can declare exactly that error without an exhaustiveness violation.
-#[tokio::test]
-async fn json_to_json_is_serialize_only() {
-    let out = baml_test!(
-        r#"
-        function dump(x: int) -> baml.json.json throws baml.json.JsonSerializationError {
-          baml.json.to_json(x)
-        }
-        function main() -> int { 0 }
-    "#
-    );
-    assert!(
-        matches!(out.result, Ok(BexExternalValue::Int(0))),
-        "expected 0, got {:?}",
-        out.result
     );
 }

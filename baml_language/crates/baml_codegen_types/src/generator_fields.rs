@@ -16,9 +16,21 @@ pub enum OutputType {
     /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
+    /// Go SDK using the `baml_go` runtime.
+    #[strum(serialize = "go")]
+    Go,
+    /// Rust SDK (`bridge_rust` runtime crate, library name `baml_rs`).
+    #[strum(serialize = "rust")]
+    Rust,
     /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
     #[strum(serialize = "typescript/web")]
     TypescriptWeb,
+    /// Java SDK (`com.boundaryml:baml-bridge` runtime).
+    #[strum(serialize = "java")]
+    Java,
+    /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
+    #[strum(serialize = "cpp")]
+    Cpp,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as

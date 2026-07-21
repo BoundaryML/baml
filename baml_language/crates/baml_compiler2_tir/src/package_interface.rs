@@ -290,12 +290,12 @@ struct LoweredClassMethodSignature {
 fn lower_class_method_signature<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
-    class_data: &baml_compiler2_hir::item_tree::Class,
+    class_data: &baml_compiler2_ppir::item_data::ClassData<'db>,
     method_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ns_path: &[Name],
     diags: &mut Vec<TirTypeError>,
 ) -> LoweredClassMethodSignature {
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, method_loc);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
     let body = baml_compiler2_ppir::function_body(db, method_loc);
 
     let mut all_generic_params = class_data.generic_params.clone();
@@ -305,7 +305,7 @@ fn lower_class_method_signature<'db>(
     // `Self` is the enclosing class's full receiver type (`Foo<T>`, or `Array<T>`→`List<T>`
     // for the builtin containers) — resolved through the lowering context, not erased to a
     // bare `Ty::Class` by a name-substitution pre-pass.
-    let self_ty = crate::self_type::self_type_for_class(
+    let self_ty = crate::lower_type_expr::self_type_for_class_data(
         class_data,
         ns_path,
         file_package::file_package(db, method_loc.file(db)).package,
@@ -323,20 +323,21 @@ fn lower_class_method_signature<'db>(
         bounds: method_bounds,
         self_ty: Some(self_ty.clone()),
     };
-    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<TirTypeError>| {
-        crate::lower_type_expr::lower_type_expr(te, &ctx, diags)
+    let lower_with_self = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                           diags: &mut Vec<TirTypeError>| {
+        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags)
     };
 
     let mut params = Vec::new();
     for param in &sig.params {
         let param_ty = if param.name.as_str() == "self"
             && matches!(
-                param.ty.kind,
-                baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                sig.type_refs[param.type_ref].kind,
+                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
             ) {
             self_ty.clone()
         } else {
-            lower_with_self(&param.ty, diags)
+            lower_with_self(param.type_ref, diags)
         };
         params.push(exported_function_param(
             param.name.clone(),
@@ -345,14 +346,14 @@ fn lower_class_method_signature<'db>(
         ));
     }
 
-    let return_type = sig.return_type.as_ref().map_or(
+    let return_type = sig.return_type.map_or(
         Ty::Unknown {
             attr: TyAttr::default(),
         },
-        |te| lower_with_self(te, diags),
+        |id| lower_with_self(id, diags),
     );
 
-    let declared_throws = sig.throws.as_ref().map(|te| lower_with_self(te, diags));
+    let declared_throws = sig.throws.map(|id| lower_with_self(id, diags));
     let callable_throws = crate::callable::callable_throws(db, method_loc).clone();
 
     let builtin_kind = match body.as_ref() {
@@ -386,8 +387,7 @@ fn lower_class_export<'db>(
     class_loc: ClassLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-    let class_data = &item_tree[class_loc.id(db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
     let class_ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
 
     // Lower fields. The class's type-variable bounds let an associated-type
@@ -403,8 +403,13 @@ fn lower_class_export<'db>(
     let mut fields = Vec::new();
     let mut diags = Vec::new();
     for field in &class_data.fields {
-        if let Some(te) = &field.type_expr {
-            let field_ty = crate::lower_type_expr::lower_type_expr(te, &field_scope, &mut diags);
+        if let Some(type_ref) = field.type_ref {
+            let field_ty = crate::lower_type_expr::lower_type_ref(
+                &class_data.type_refs,
+                type_ref,
+                &field_scope,
+                &mut diags,
+            );
             fields.push((field.name.clone(), field_ty));
         } else {
             fields.push((
@@ -418,10 +423,8 @@ fn lower_class_export<'db>(
 
     // Lower methods
     let mut methods = Vec::new();
-    for method_id in &class_data.methods {
-        let method_loc =
-            baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
-        let method_data = &item_tree[*method_id];
+    for &method_loc in &class_data.methods {
+        let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
         let lowered = lower_class_method_signature(
             db, pkg_items, class_data, method_loc, &class_ns, &mut diags,
         );
@@ -452,8 +455,7 @@ fn lower_enum_export<'db>(
     enum_loc: EnumLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-    let enum_data = &item_tree[enum_loc.id(db)];
+    let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
     let qtn = qualify_def(db, Definition::Enum(enum_loc), name);
     ExportedType::Enum {
         qtn,
@@ -468,16 +470,15 @@ fn lower_alias_export<'db>(
     ta_loc: TypeAliasLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, ta_loc.file(db));
-    let ta_data = &item_tree[ta_loc.id(db)];
+    let ta_data = baml_compiler2_ppir::item_data::type_alias_data(db, ta_loc);
     let ta_ns = file_package::file_package(db, ta_loc.file(db)).namespace_path;
     let mut diags = Vec::new();
     let resolved = ta_data
-        .type_expr
-        .as_ref()
-        .map(|te| {
-            crate::lower_type_expr::lower_type_expr(
-                te,
+        .value
+        .map(|id| {
+            crate::lower_type_expr::lower_type_ref(
+                &ta_data.type_refs,
+                id,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -504,7 +505,7 @@ fn lower_function_export<'db>(
     name: &Name,
 ) -> ExportedFunction {
     let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let mut diags = Vec::new();
     let function_generic_params: Vec<Name> = sig
@@ -528,7 +529,12 @@ fn lower_function_export<'db>(
 
     let mut params = Vec::new();
     for param in &sig.params {
-        let param_ty = crate::lower_type_expr::lower_type_expr(&param.ty, &sig_scope, &mut diags);
+        let param_ty = crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
+            param.type_ref,
+            &sig_scope,
+            &mut diags,
+        );
         params.push(exported_function_param(
             param.name.clone(),
             param_ty,
@@ -536,17 +542,16 @@ fn lower_function_export<'db>(
         ));
     }
 
-    let return_type = sig.return_type.as_ref().map_or(
+    let return_type = sig.return_type.map_or(
         Ty::Unknown {
             attr: TyAttr::default(),
         },
-        |te| crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags),
+        |id| crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags),
     );
 
-    let declared_throws = sig
-        .throws
-        .as_ref()
-        .map(|te| crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags));
+    let declared_throws = sig.throws.map(|id| {
+        crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &sig_scope, &mut diags)
+    });
     let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
 
     let builtin_kind = match body.as_ref() {
@@ -572,14 +577,11 @@ pub fn file_callable_throws_fragment(
     db: &dyn crate::Db,
     file: SourceFile,
 ) -> CallableThrowsFragment {
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let by_id = item_tree
-        .functions
-        .keys()
-        .map(|local_id| {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+    let by_id = baml_compiler2_ppir::item_data::file_functions(db, file)
+        .iter()
+        .map(|&func_loc| {
             (
-                local_id.as_u32(),
+                func_loc.id(db).as_u32(),
                 crate::callable::callable_throws(db, func_loc).clone(),
             )
         })
@@ -977,8 +979,7 @@ impl<'db> PackageResolutionContext<'db> {
         let Definition::Class(class_loc) = def else {
             return Vec::new();
         };
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
         let field_scope = crate::lower_type_expr::ScopeCtx {
             db,
@@ -991,9 +992,13 @@ impl<'db> PackageResolutionContext<'db> {
         let mut diags = Vec::new();
         let mut fields = Vec::new();
         for field in &class_data.fields {
-            if let Some(te) = &field.type_expr {
-                let field_ty =
-                    crate::lower_type_expr::lower_type_expr(te, &field_scope, &mut diags);
+            if let Some(type_ref) = field.type_ref {
+                let field_ty = crate::lower_type_expr::lower_type_ref(
+                    &class_data.type_refs,
+                    type_ref,
+                    &field_scope,
+                    &mut diags,
+                );
                 fields.push((field.name.clone(), field_ty));
             } else {
                 fields.push((
@@ -1019,18 +1024,15 @@ impl<'db> PackageResolutionContext<'db> {
         let Definition::Class(class_loc) = def else {
             return None;
         };
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
         let mut diags = Vec::new();
 
-        for method_id in &class_data.methods {
-            let method_data = &item_tree[*method_id];
+        for &method_loc in &class_data.methods {
+            let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
             if &method_data.name != method_name {
                 continue;
             }
-            let method_loc =
-                baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
             let lowered = lower_class_method_signature(
                 db,
                 &self.own_items,
@@ -1061,26 +1063,18 @@ impl<'db> PackageResolutionContext<'db> {
 /// Convert a Definition to Ty (own-package path).
 fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
     let name = match def {
-        Definition::Class(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            data.name.clone()
-        }
-        Definition::Enum(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            data.name.clone()
-        }
-        Definition::Interface(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            data.name.clone()
-        }
-        Definition::TypeAlias(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            data.name.clone()
-        }
+        Definition::Class(loc) => baml_compiler2_ppir::item_data::class_data(db, loc)
+            .name
+            .clone(),
+        Definition::Enum(loc) => baml_compiler2_ppir::item_data::enum_data(db, loc)
+            .name
+            .clone(),
+        Definition::Interface(loc) => baml_compiler2_ppir::item_data::interface_data(db, loc)
+            .name
+            .clone(),
+        Definition::TypeAlias(loc) => baml_compiler2_ppir::item_data::type_alias_data(db, loc)
+            .name
+            .clone(),
         _ => {
             return Ty::Unknown {
                 attr: TyAttr::default(),
@@ -1092,8 +1086,7 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             // Declared generics live on the type as `TypeVar` args, matching
             // `ExportedType::to_ty` so own-package and dependency resolution
             // produce the same `Ty::Class(qtn, [TypeVar…])` shape.
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            let args = item_tree[loc.id(db)]
+            let args = baml_compiler2_ppir::item_data::class_data(db, loc)
                 .generic_params
                 .iter()
                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
