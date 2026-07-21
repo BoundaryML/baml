@@ -396,7 +396,13 @@ SOURCE_FILE
               WORD "parts"
               EQUALS "="
               BINARY_EXPR
-                WORD "parts"
+                BINARY_EXPR
+                  WORD "parts"
+                  PLUS "+"
+                  PATH_EXPR "arg.name"
+                    WORD "arg"
+                    DOT "."
+                    WORD "name"
                 PLUS "+"
                 CALL_EXPR
                   PATH_EXPR "arg.type.to_string"
@@ -408,32 +414,6 @@ SOURCE_FILE
                   CALL_ARGS "()"
                     L_PAREN "("
                     R_PAREN ")"
-            LET_STMT
-              PATTERN
-                BINDING_PATTERN "let n"
-                  KW_LET "let"
-                  WORD "n"
-              EQUALS "="
-              PATH_EXPR "arg.name"
-                WORD "arg"
-                DOT "."
-                WORD "name"
-            IF_EXPR
-              KW_IF "if"
-              BINARY_EXPR "n != null"
-                WORD "n"
-                NOT_EQUALS "!="
-                KW_NULL "null"
-              BLOCK_EXPR
-                L_BRACE "{"
-                BINARY_EXPR
-                  WORD "parts"
-                  EQUALS "="
-                  BINARY_EXPR "parts + n"
-                    WORD "parts"
-                    PLUS "+"
-                    WORD "n"
-                R_BRACE "}"
             R_BRACE "}"
         FOR_EXPR
           KW_FOR "for"

@@ -63,16 +63,21 @@ fn ty_arg() -> RealizedTy {
     )
 }
 
-/// Allocate one `reflect.Arg { name, type }` instance.
+/// Allocate one `reflect.Arg { name, type }` instance. A nameless positional
+/// (a host callable from a language without parameter-name introspection)
+/// gets the `$argN` placeholder for its position: `$` is unwritable in user
+/// identifiers, so the placeholder cannot collide with any declared
+/// parameter or named-argument key.
 fn alloc_arg(
     vm: &mut BexVm,
     arg_class: HeapPtr,
     name: Option<&baml_type::Name>,
+    position: usize,
     ty: RealizedTy,
 ) -> Value {
     let name_val = match name {
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
-        None => Value::NULL,
+        None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
     let ty_val = Value::object(vm.tlab.alloc_type(ty));
     Value::object(vm.alloc_instance(arg_class, vec![name_val, ty_val]))
@@ -102,14 +107,31 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
     let mut positional = Vec::new();
     let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
     for param in &sig.params {
-        let arg_val = alloc_arg(vm, arg_class, param.name.as_ref(), param.ty.clone());
         match param.mode {
-            FunctionParamMode::Required => positional.push(arg_val),
+            FunctionParamMode::Required => {
+                let position = positional.len();
+                let arg_val = alloc_arg(
+                    vm,
+                    arg_class,
+                    param.name.as_ref(),
+                    position,
+                    param.ty.clone(),
+                );
+                positional.push(arg_val);
+            }
             FunctionParamMode::Optional => {
-                // An optional parameter always has a source name; an erased one
-                // (empty in the stored signature) is unaddressable by callers,
-                // so it is simply absent from `opts`.
+                // An optional parameter always has a source name; a nameless
+                // one is unaddressable by callers (there is nothing to pass
+                // it by), so it is simply absent from `opts`. Placeholders
+                // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
+                    let arg_val = alloc_arg(
+                        vm,
+                        arg_class,
+                        Some(name),
+                        positional.len(),
+                        param.ty.clone(),
+                    );
                     opts.insert(bex_str::BexStr::from(name.as_str()), arg_val);
                 }
             }

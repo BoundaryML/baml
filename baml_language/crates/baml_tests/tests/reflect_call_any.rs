@@ -280,11 +280,7 @@ async fn signature_reports_types_and_param_split() {
             if limit != null {
                 limit_str = limit.type.to_string()
             }
-            let q_name = "unnamed"
-            let first = sig.args[0].name
-            if first != null {
-                q_name = first
-            }
+            let q_name = sig.args[0].name
             let doc = "no-doc"
             let d = sig.docstring
             if d != null {

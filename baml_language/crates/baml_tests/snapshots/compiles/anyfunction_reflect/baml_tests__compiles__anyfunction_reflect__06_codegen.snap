@@ -85,23 +85,15 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
   L1:
     load_var _15
     store_var arg
-    load_var parts
+    load_var2 3 10
+    load_field .name
+    bin_op +
     store_var _19
     load_var arg
     load_field .type
     call baml.TypeValue.baml.ToString.to_string
-    store_var _20
+    store_var _22
     load_var2 11 12
-    bin_op +
-    store_var parts
-    load_var arg
-    load_field .name
-    store_var_load_var n
-    load_const null
-    call baml.ops.equals_equals
-    unary_op !
-    pop_jump_if_false L0
-    load_var2 3 13
     bin_op +
     store_var parts
     jump L0
@@ -115,21 +107,21 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     load_type baml.iter.Iterable<Item = string, Error = never>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _32
+    store_var _28
 
   L3:
-    load_var _32
+    load_var _28
     load_type baml.iter.Iterator<Item = string, Error = never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _33
-    load_var _33
+    store_var _29
+    load_var _29
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _33
+    load_var _29
     store_var key
     load_type string
     load_type reflect.Arg
@@ -143,14 +135,14 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     call baml.ops.equals_equals
     unary_op !
     pop_jump_if_false L3
-    load_var2 3 16
+    load_var2 3 15
     bin_op +
-    store_var _45
+    store_var _41
     load_var opt
     load_field .1
     call baml.TypeValue.baml.ToString.to_string
-    store_var _48
-    load_var2 18 19
+    store_var _44
+    load_var2 17 18
     bin_op +
     store_var parts
     jump L3

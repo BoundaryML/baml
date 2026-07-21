@@ -18,8 +18,12 @@ function type_of<T>() -> type {
 
 /// One parameter of a function signature (BEP-062).
 class Arg {
-  /// The parameter's name; null when the value carries none.
-  name string?
+  /// The parameter's name. When the callable carries no name for a
+  /// positional parameter (a host callable from a language without
+  /// parameter-name introspection), this is the placeholder `$argN` for
+  /// position N. `$` cannot appear in a user identifier, so a placeholder
+  /// can never collide with a declared parameter or named-argument key.
+  name string
   /// The parameter's type.
   type type
 }

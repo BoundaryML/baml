@@ -47,11 +47,7 @@ function signature_access(f: baml.AnyFunction) -> string throws never {
     // and `type` is an ordinary member name on `reflect.Arg`.
     let parts = sig.returns.to_string() + sig.errors.to_string() + sig.args.length().to_string()
     for (let arg in sig.args) {
-        parts = parts + arg.type.to_string()
-        let n = arg.name
-        if n != null {
-            parts = parts + n
-        }
+        parts = parts + arg.name + arg.type.to_string()
     }
     for (let key in sig.opts.keys()) {
         let opt = sig.opts.get(key)
