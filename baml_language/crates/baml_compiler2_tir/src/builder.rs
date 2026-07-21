@@ -4124,13 +4124,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
                     .cloned()
                     .collect();
-                // An `Error` expected type is an upstream failure — suppress to avoid a cascade.
-                // An `Unknown` expected (a synthesis position with no annotation) is exactly where
-                // inference was meant to succeed, so a failure there IS reported. Malformed
-                // explicit type args (wrong arity) were already diagnosed at their own site, so
-                // the params they failed to fill must not also report as uninferable.
+                // Cascade suppression: an uninferable parameter is reported only when every
+                // inference source it had was sound. An `Error` expected type is an upstream
+                // failure, so nothing is reported; an `Unknown` expected (a synthesis position
+                // with no annotation) is exactly where inference was meant to succeed, so a
+                // failure there IS reported. Malformed explicit type args (wrong arity) were
+                // already diagnosed at their own site, so the params they failed to fill must
+                // not also report as uninferable. Likewise per parameter: when the variable
+                // occurs in a param whose argument already failed to type (its recorded type
+                // carries an error-recovery sentinel; unlike an expected type, an argument is
+                // only ever `Unknown`/`Error` through its own already-diagnosed failure), the
+                // cannot-infer is a figment of the argument's error, so only the argument's own
+                // diagnostic is kept (B-836).
                 if !matches!(expected, Ty::Error { .. }) && !explicit_type_args_errored {
                     for name in &unresolved_callee_typevars {
+                        let tainted_by_errored_arg = param_arg_pairs.iter().any(|(param, arg)| {
+                            crate::generics::contains_typevar_where(&param.ty, &|n| n == name)
+                                && self
+                                    .expressions
+                                    .get(arg)
+                                    .is_some_and(crate::generics::contains_error_recovery)
+                        });
+                        if tainted_by_errored_arg {
+                            continue;
+                        }
                         self.context.report_simple(
                             TirTypeError::CannotInferTypeParameter { name: name.clone() },
                             expr_id,
@@ -4815,33 +4832,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 segments,
             } => {
                 // Untagged backtick (BEP §11). The value is realized by the
-                // desugared `elaborated` concat; type it so codegen has the
-                // `.to_string()` resolutions it needs, but DISCARD its
-                // diagnostics — those describe the synthetic `.to_string()`
-                // calls. The user-facing strict-stringify errors come from the
-                // structured `segments`, anchored on the original `${…}` spans:
-                // each `${expr}` must be non-null and stringable.
+                // desugared `elaborated` concat: each `${expr}` is wrapped in
+                // the total renderer `string.from(...)` and the parts are
+                // folded with `+`. Inferring that tree types every `${expr}`
+                // sub-expression in place (the segment `ExprId`s are shared
+                // with the tree), so every diagnostic it produces is the
+                // user's own, anchored on original spans, and all of them are
+                // KEPT. Discarding any of them lets the sub-expression's
+                // error-recovery type reach MIR, where runtime lowering ICEs
+                // (B-836). The synthetic wrapping itself cannot fail:
+                // `string.from` accepts every type, and its `T` never cascades
+                // a cannot-infer error off an already-errored argument
+                // (`check_call_inner` suppresses that like any other upstream
+                // failure).
                 //
-                // The template's type IS the elaborated tree's type — always a
+                // The template's type IS the elaborated tree's type: always a
                 // string, but literal-preserving for a constant template (e.g.
                 // `` `abc` `` infers `Ty::Literal("abc")`), so constant folding
                 // of comparisons on literal backticks (BEP §9) still fires.
-                let saved = self.context.diagnostic_count();
                 let elaborated_ty = self.infer_expr(*elaborated, body);
-                // The elaborated tree wraps each `${expr}` in a synthetic
-                // `.to_string()` and folds the parts with `+` (a side-effect-only
-                // `${ let … }` splices its statements into one shared concat
-                // block). DISCARD the synthetic member/call noise — a nullable or
-                // non-stringable interp makes `expr.to_string()` report
-                // `NotCallable`/`UnresolvedMember` on a synthetic span — but KEEP
-                // genuine `UnresolvedName`s: a name the user wrote (`${ nope }`,
-                // or `nope` on a spliced `let`'s RHS) is never synthesized by the
-                // `.to_string()` wrapping or the accumulator, so retaining it both
-                // surfaces the real error AND stops a `Ty::Unknown` from reaching
-                // MIR (where runtime lowering would ICE). The user-facing
-                // strict-stringify errors still come from the structured
-                // `segments`, anchored on the original `${…}` spans.
-                self.context.retain_user_name_diagnostics(saved);
+                // The one interpolation rule the elaborated tree cannot
+                // express: each `${expr}` must be non-null (strict stringify,
+                // BEP §7), reported on the original `${…}` spans.
                 self.check_template_interps_stringable(segments, body);
                 elaborated_ty
             }

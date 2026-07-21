@@ -1996,34 +1996,6 @@ impl<'db> InferContext<'db> {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
-    /// Drop every diagnostic recorded after index `n` EXCEPT genuine
-    /// `UnresolvedName`s. Used by the untagged-backtick (`Default` template)
-    /// path: inferring the desugared `elaborated` concat synthesizes
-    /// `expr.to_string()` member calls and a `+`-fold, whose failures
-    /// (`NotCallable`/`UnresolvedMember`) are noise pointing at synthetic spans
-    /// (the strict-stringify errors are re-reported on the original `${…}` spans
-    /// by [`check_template_interps_stringable`](crate::builder)). But a bare
-    /// unresolved *name* — `${ nope }`, or `nope` on a spliced `let`'s RHS — is
-    /// never introduced by that desugaring (it emits member/call nodes and a
-    /// guaranteed-bound accumulator, never a fresh name reference), so an
-    /// `UnresolvedName` here is always genuine user code. Keeping it surfaces the
-    /// real error and prevents the unresolved `Ty::Unknown` from slipping through
-    /// to MIR, where runtime lowering of an error-recovery type ICEs.
-    pub fn retain_user_name_diagnostics(&self, n: usize) {
-        let mut diags = self.diagnostics.borrow_mut();
-        let len = diags.diagnostics.len();
-        if n >= len {
-            return;
-        }
-        // Keep `[..n]` verbatim; from `[n..]` keep only `UnresolvedName`.
-        let tail: Vec<TirDiagnostic<'db>> = diags
-            .diagnostics
-            .drain(n..)
-            .filter(|d| matches!(d.error, TirTypeError::UnresolvedName { .. }))
-            .collect();
-        diags.diagnostics.extend(tail);
-    }
-
     /// Freeze the source spans of diagnostics recorded at index `[start..]`,
     /// resolving their arena-relative locations against `source_map` and
     /// replacing them with absolute [`DiagnosticLocation::Span`]s.

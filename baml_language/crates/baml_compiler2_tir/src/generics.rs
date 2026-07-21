@@ -167,39 +167,65 @@ pub fn skip_self_param(params: &[FunctionParamTy]) -> &[FunctionParamTy] {
 
 // ── Type variable utilities ────────────────────────────────────────────────
 
-/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
-pub fn contains_typevar(ty: &Ty) -> bool {
+/// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
+/// or for any type nested inside it? The single traversal behind the
+/// `contains_*` family; the arms cover every child position a `Ty` can carry.
+/// A function type carries no generic binders of its own (function values are
+/// realized), so recursion enters its params/ret/throws with `pred` unchanged;
+/// a projection is entered through both its base (`T::Item`) and its
+/// qualifying interface's types.
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
     match ty {
-        Ty::TypeVar(_, _) => true,
         Ty::AssociatedTypeProjection {
             base, interface, ..
-        } => contains_typevar(base) || interface.tys().any(contains_typevar),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
-        Ty::Union(tys, _) => tys.iter().any(contains_typevar),
-        Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
+        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
         Ty::Function {
             params,
             ret,
             throws,
             ..
         } => {
-            params.iter().any(|param| contains_typevar(&param.ty))
-                || contains_typevar(ret)
-                || contains_typevar(throws)
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
         }
-        Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
         Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(contains_typevar)
+            type_args.iter().any(|t| contains_ty_where(t, pred))
                 || associated_bindings
                     .iter()
-                    .any(|(_, ty)| contains_typevar(ty))
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
         }
         _ => false,
     }
+}
+
+/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
+pub fn contains_typevar(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
+}
+
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// anywhere in its structure? An expression recorded with such a type already
+/// failed to compile at its own site; downstream consumers (e.g. call-site
+/// generic inference) use this to recognize an already-failed input and avoid
+/// cascading a second diagnostic off it.
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
 }
 
 /// Whether `ty` contains an associated-type projection whose base carries no
@@ -274,54 +300,7 @@ pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
 pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
-    match ty {
-        Ty::TypeVar(name, _) => pred(name),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar_where(inner, pred),
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => {
-            contains_typevar_where(k, pred) || contains_typevar_where(v, pred)
-        }
-        Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_where(t, pred)),
-        Ty::Future(value, error, _) => {
-            contains_typevar_where(value, pred) || contains_typevar_where(error, pred)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            // A function type carries no generic binders of its own (function
-            // values are realized): every type var in its body is the
-            // caller-scope/rigid var the outer `pred` reasons about, so recurse
-            // with `pred` unchanged.
-            params
-                .iter()
-                .any(|param| contains_typevar_where(&param.ty, pred))
-                || contains_typevar_where(ret, pred)
-                || contains_typevar_where(throws, pred)
-        }
-        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_typevar_where(t, pred)),
-        Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(|t| contains_typevar_where(t, pred))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_typevar_where(ty, pred))
-        }
-        // Mirror `contains_typevar`: a type variable can hide in the projection
-        // base (e.g. `T::Item`) or the qualifying interface. Without this arm
-        // the deferral check (`defers_typevar`) is blind to an associated-type
-        // parameter and may check it against an under-determined type.
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            contains_typevar_where(base, pred)
-                || interface.tys().any(|t| contains_typevar_where(t, pred))
-        }
-        _ => false,
-    }
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(name, _) if pred(name)))
 }
 
 // ── Type variable inference & union normalization ──────────────────────────────
@@ -613,5 +592,150 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr: attr.clone(),
         },
         _ => ty.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::TyAttr;
+    use baml_type::{Interface, QualifiedTypeName};
+
+    use super::*;
+
+    fn attr() -> TyAttr {
+        TyAttr::default()
+    }
+
+    fn err() -> Ty {
+        Ty::Error { attr: attr() }
+    }
+
+    fn unknown() -> Ty {
+        Ty::Unknown { attr: attr() }
+    }
+
+    fn int() -> Ty {
+        Ty::Int { attr: attr() }
+    }
+
+    fn qn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
+    }
+
+    #[test]
+    fn sentinels_match_directly() {
+        assert!(contains_error_recovery(&err()));
+        assert!(contains_error_recovery(&unknown()));
+        assert!(!contains_error_recovery(&int()));
+    }
+
+    #[test]
+    fn descends_into_lists() {
+        assert!(contains_error_recovery(&Ty::List(Box::new(err()), attr())));
+        assert!(contains_error_recovery(&Ty::EvolvingList(
+            Box::new(unknown()),
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::List(Box::new(int()), attr())));
+    }
+
+    #[test]
+    fn descends_into_map_key_and_value() {
+        let map = |key: Ty, value: Ty| Ty::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&map(err(), int())));
+        assert!(contains_error_recovery(&map(int(), err())));
+        assert!(!contains_error_recovery(&map(int(), int())));
+        assert!(contains_error_recovery(&Ty::EvolvingMap(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_unions_and_futures() {
+        assert!(contains_error_recovery(&Ty::Union(
+            vec![int(), err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Union(
+            vec![int(), int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(err()),
+            Box::new(int()),
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_function_params_ret_and_throws() {
+        let func = |param: Ty, ret: Ty, throws: Ty| Ty::Function {
+            params: vec![FunctionParamTy::required(None, param)],
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&func(err(), int(), int())));
+        assert!(contains_error_recovery(&func(int(), err(), int())));
+        assert!(contains_error_recovery(&func(int(), int(), err())));
+        assert!(!contains_error_recovery(&func(int(), int(), int())));
+    }
+
+    #[test]
+    fn descends_into_class_and_interface_type_args() {
+        assert!(contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("BoxLike"),
+            vec![err()],
+            vec![],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("Iter"),
+            vec![],
+            vec![(Name::new("Item"), err())],
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_projection_base_and_interface() {
+        let projection = |base: Ty, iface_generic: Ty| Ty::AssociatedTypeProjection {
+            base: Box::new(base),
+            interface: Box::new(Interface::new(qn("Iter"), vec![iface_generic], vec![])),
+            member: Name::new("Item"),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&projection(err(), int())));
+        assert!(contains_error_recovery(&projection(int(), err())));
+        assert!(!contains_error_recovery(&projection(int(), int())));
+    }
+
+    #[test]
+    fn contains_typevar_where_filters_by_name() {
+        let t = Ty::List(Box::new(Ty::TypeVar(Name::new("T"), attr())), attr());
+        assert!(contains_typevar(&t));
+        assert!(contains_typevar_where(&t, &|n| n.as_str() == "T"));
+        assert!(!contains_typevar_where(&t, &|n| n.as_str() == "U"));
     }
 }
