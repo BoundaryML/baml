@@ -403,6 +403,33 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         Ok(instance)
     }
 
+    pub fn create_transcriptions(
+        mut properties: PropertyHandler<Meta>,
+    ) -> Result<Self, Vec<Error<Meta>>> {
+        let base_url = properties
+            .ensure_base_url_with_default(UnresolvedUrl::new_static("https://api.openai.com/v1"));
+
+        let api_key = Some(
+            properties
+                .ensure_api_key()
+                .unwrap_or_else(|| StringOr::EnvVar("OPENAI_API_KEY".to_string())),
+        );
+
+        let http_config = properties.ensure_http_config("openai");
+
+        let mut instance = Self::create_common(
+            properties,
+            Some(either::Either::Left(base_url)),
+            api_key,
+            http_config,
+        )?;
+        instance.supported_request_modes = SupportedRequestModes {
+            stream: Some(false),
+        };
+
+        Ok(instance)
+    }
+
     /// Creates an OpenRouter client with sensible defaults.
     /// - Default base_url: https://openrouter.ai/api/v1
     /// - Default API key from OPENROUTER_API_KEY environment variable
@@ -479,5 +506,91 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             media_url_handler,
             http_config,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use baml_types::{EvaluationContext, StringOr, UnresolvedValue};
+    use indexmap::IndexMap;
+    use secrecy::ExposeSecret;
+
+    use super::*;
+    use crate::{ClientProvider, OpenAIClientProviderVariant};
+
+    fn option_string(value: &str) -> ((), UnresolvedValue<()>) {
+        (
+            (),
+            UnresolvedValue::String(StringOr::Value(value.to_string()), ()),
+        )
+    }
+
+    fn option_bool(value: bool) -> ((), UnresolvedValue<()>) {
+        ((), UnresolvedValue::Bool(value, ()))
+    }
+
+    fn resolve_transcriptions(
+        options: IndexMap<String, ((), UnresolvedValue<()>)>,
+    ) -> ResolvedOpenAI {
+        let unresolved =
+            match UnresolvedOpenAI::create_transcriptions(PropertyHandler::new(options, ())) {
+                Ok(unresolved) => unresolved,
+                Err(errors) => panic!(
+                    "transcriptions client properties should parse: {}",
+                    errors
+                        .iter()
+                        .map(|error| error.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            };
+        let env = HashMap::from([("OPENAI_API_KEY".to_string(), "test-openai-key".to_string())]);
+        let ctx = EvaluationContext::new(&env, false);
+
+        unresolved
+            .resolve(
+                &ClientProvider::OpenAI(OpenAIClientProviderVariant::Transcriptions),
+                &ctx,
+            )
+            .expect("transcriptions client properties should resolve")
+    }
+
+    #[test]
+    fn transcriptions_defaults_to_openai_base_url_api_key_and_no_streaming() {
+        let resolved = resolve_transcriptions(IndexMap::new());
+
+        assert_eq!(resolved.base_url, "https://api.openai.com/v1");
+        let api_key = resolved.api_key.as_ref().expect("api key should default");
+        assert_eq!(api_key.api_key.expose_secret(), "test-openai-key");
+        assert_eq!(api_key.provenance.as_deref(), Some("OPENAI_API_KEY"));
+        assert_eq!(resolved.supported_request_modes.stream, Some(false));
+        assert!(!resolved.supports_streaming());
+    }
+
+    #[test]
+    fn transcriptions_respects_explicit_base_url_override() {
+        let mut options = IndexMap::new();
+        options.insert(
+            "base_url".to_string(),
+            option_string("http://localhost:1234/custom/v1/"),
+        );
+
+        let resolved = resolve_transcriptions(options);
+
+        assert_eq!(resolved.base_url, "http://localhost:1234/custom/v1");
+        assert!(!resolved.supports_streaming());
+    }
+
+    #[test]
+    fn transcriptions_forces_streaming_off_even_when_enabled() {
+        let mut options = IndexMap::new();
+        options.insert("supports_streaming".to_string(), option_bool(true));
+
+        let resolved = resolve_transcriptions(options);
+
+        assert_eq!(resolved.supported_request_modes.stream, Some(false));
+        assert!(!resolved.supports_streaming());
     }
 }
