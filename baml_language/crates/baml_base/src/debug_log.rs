@@ -1,7 +1,7 @@
 //! Debug logging infrastructure for compiler development.
 //!
 //! This module provides a thread-local debug log that can be used to collect
-//! debug messages during compilation, which are then displayed in onionskin.
+//! debug messages during compilation for development tools and diagnostics.
 //!
 //! In release builds, all debug logging is compiled away to nothing.
 
