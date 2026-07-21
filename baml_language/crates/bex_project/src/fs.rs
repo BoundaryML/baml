@@ -1,6 +1,7 @@
-use std::io::Read;
+use std::{io::Read, path::Path};
 
 use crate::LspError;
+use utils_windows::NativePathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FsPath(String);
@@ -17,6 +18,10 @@ impl FsPath {
 
     pub fn as_path(&self) -> &std::path::Path {
         std::path::Path::new(self.0.as_str())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -131,37 +136,39 @@ impl BamlVFS {
         .clone()
     }
 
-    pub(crate) fn get_path_from_str(
+    pub(crate) fn get_path_from_vfs_path(
         &self,
         raw: &FsPath,
         context: &'static str,
     ) -> Result<vfs::VfsPath, LspError> {
-        self.get_path_from_path(raw.as_path(), context)
+        vfs::VfsPath::from(self.clone())
+            .join(raw.as_str())
+            .map_err(|e| LspError::InvalidPath {
+                path: raw.as_path().to_path_buf(),
+                message: format!("{context}: {e}"),
+            })
     }
 
-    pub(crate) fn get_path_from_path(
+    pub(crate) fn get_path_from_platform_path(
         &self,
-        raw: &std::path::Path,
+        raw: &Path,
         context: &'static str,
     ) -> Result<vfs::VfsPath, LspError> {
         let vfs_path = vfs::VfsPath::from(self.clone());
-        #[cfg(target_arch = "wasm32")]
-        let is_absolute = raw.starts_with("/");
-        #[cfg(not(target_arch = "wasm32"))]
-        let is_absolute = raw.is_absolute();
-        #[allow(clippy::implicit_clone)]
-        let raw: std::path::PathBuf = if !is_absolute {
+        let raw = if !raw.is_absolute() {
             self.get_cwd().join(raw)
         } else {
             raw.to_path_buf()
         };
 
-        let path_as_str = raw.to_string_lossy();
-        #[cfg(windows)]
-        let path_as_str = path_as_str.replace('\\', "/");
-        let path_as_str: &str = path_as_str.as_ref();
+        let path_as_str = NativePathBuf::new(raw.clone())
+            .and_then(|path| path.to_vfs_path())
+            .map_err(|e| LspError::InvalidPath {
+                path: raw.clone(),
+                message: format!("{context}: {e}"),
+            })?;
         vfs_path
-            .join(path_as_str)
+            .join(&path_as_str)
             .map_err(|e| LspError::InvalidPath {
                 path: raw.clone(),
                 message: format!("{context}: {e}"),
@@ -234,5 +241,22 @@ impl vfs::FileSystem for BamlVFS {
 
     fn move_dir(&self, src: &str, dest: &str) -> vfs::VfsResult<()> {
         self.fs.move_dir(src, dest)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_vfs_paths_do_not_pass_through_native_path_parsing() {
+        let fs = BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/"))));
+        let internal = FsPath::from_str("/C:/workspace %/main.baml".to_string());
+
+        let path = fs
+            .get_path_from_vfs_path(&internal, "test internal path")
+            .unwrap();
+
+        assert_eq!(path.as_str(), internal.as_str());
     }
 }

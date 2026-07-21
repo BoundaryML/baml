@@ -35,6 +35,7 @@ bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
+utils_windows = { workspace = true }
 async-trait = { workspace = true }
 borsh = { workspace = true }
 log = { workspace = true }

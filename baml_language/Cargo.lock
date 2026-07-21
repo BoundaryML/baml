@@ -1077,12 +1077,14 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "utils_windows",
  "vfs",
  "webbrowser",
 ]
@@ -1396,6 +1398,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utils_windows",
  "vfs",
  "walkdir",
  "wasm-bindgen-futures",
@@ -8355,6 +8358,13 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "utils_windows"
+version = "0.0.0-beta"
+dependencies = [
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "uuid"
