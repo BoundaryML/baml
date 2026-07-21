@@ -561,6 +561,17 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         method: Name,
     },
+    /// A `$rust_io_function` (sys-op) method inside an `implements` block has
+    /// method-level generic parameters. An impl-block method is reached only
+    /// through interface (virtual) dispatch, which does not reconstruct the
+    /// synthetic type-argument slots a generic sys-op's glue reads off the
+    /// stack — so such a call would fail at runtime. (A generic sys-op declared
+    /// directly on a class is fine: it lowers to a direct `SysOp` instruction,
+    /// which does supply those slots.) Impl conformance.
+    GenericSysOpMethodInInterfaceImpl {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
     /// An interface that declares fields is implemented out-of-body
     /// (`implement I for T`). A field-bearing interface can only be implemented in the
     /// class body, where its fields are satisfied by the class's own fields (E0126).
@@ -1459,6 +1470,15 @@ impl fmt::Display for TirTypeError {
                     interface.render_user_facing()
                 )
             }
+            TirTypeError::GenericSysOpMethodInInterfaceImpl { interface, method } => {
+                write!(
+                    f,
+                    "`$rust_io_function` method `{method}` implementing interface `{}` may not \
+                     declare its own generic parameters: a sys-op reached through interface \
+                     dispatch cannot carry method-level type arguments",
+                    interface.render_user_facing()
+                )
+            }
             TirTypeError::OutOfBodyImplementsFieldInterface { interface } => {
                 write!(
                     f,
@@ -1855,16 +1875,13 @@ fn resolve_related_location<'db>(
                 .map(|range| (func_loc.file(db).file_id(db), range))
         }
         RelatedLocation::ClassField(class_loc, field_name) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let source_map = baml_compiler2_hir::file_item_tree_source_map(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
             let field_index = class_data
                 .fields
                 .iter()
                 .position(|field| &field.name == field_name)?;
-            let range = source_map
-                .class_field_spans
-                .get(&class_loc.id(db))?
+            let range = baml_compiler2_ppir::item_data::class_source_map(db, *class_loc)
+                .field_name_spans
                 .get(field_index)
                 .copied()?;
             Some((class_loc.file(db).file_id(db), range))
@@ -2002,34 +2019,6 @@ impl<'db> InferContext<'db> {
     /// [`diagnostic_count`](Self::diagnostic_count)).
     pub fn truncate_diagnostics(&self, n: usize) {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
-    }
-
-    /// Drop every diagnostic recorded after index `n` EXCEPT genuine
-    /// `UnresolvedName`s. Used by the untagged-backtick (`Default` template)
-    /// path: inferring the desugared `elaborated` concat synthesizes
-    /// `expr.to_string()` member calls and a `+`-fold, whose failures
-    /// (`NotCallable`/`UnresolvedMember`) are noise pointing at synthetic spans
-    /// (the strict-stringify errors are re-reported on the original `${…}` spans
-    /// by [`check_template_interps_stringable`](crate::builder)). But a bare
-    /// unresolved *name* — `${ nope }`, or `nope` on a spliced `let`'s RHS — is
-    /// never introduced by that desugaring (it emits member/call nodes and a
-    /// guaranteed-bound accumulator, never a fresh name reference), so an
-    /// `UnresolvedName` here is always genuine user code. Keeping it surfaces the
-    /// real error and prevents the unresolved `Ty::Unknown` from slipping through
-    /// to MIR, where runtime lowering of an error-recovery type ICEs.
-    pub fn retain_user_name_diagnostics(&self, n: usize) {
-        let mut diags = self.diagnostics.borrow_mut();
-        let len = diags.diagnostics.len();
-        if n >= len {
-            return;
-        }
-        // Keep `[..n]` verbatim; from `[n..]` keep only `UnresolvedName`.
-        let tail: Vec<TirDiagnostic<'db>> = diags
-            .diagnostics
-            .drain(n..)
-            .filter(|d| matches!(d.error, TirTypeError::UnresolvedName { .. }))
-            .collect();
-        diags.diagnostics.extend(tail);
     }
 
     /// Freeze the source spans of diagnostics recorded at index `[start..]`,

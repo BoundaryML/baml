@@ -4,6 +4,8 @@ members = [
   "forks/*",
   "sdks/cpp/sdkgen_cpp",
   "sdks/go/sdkgen_go",
+  "sdks/java/bridge_java",
+  "sdks/java/sdkgen_java",
   "sdks/typescript/bridge_typescript",
   "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
@@ -12,6 +14,10 @@ members = [
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
+  # `sdk_tests/crates/java` follows typescript_node's soft-fail model
+  # (see below); its per-fixture tests are `#[ignore]`d while
+  # `sdkgen_java` is a stub.
+  "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
   "sdk_tests/crates/go",
@@ -69,6 +75,8 @@ baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
+sdkgen_java = { path = "sdks/java/sdkgen_java" }
+bridge_java = { path = "sdks/java/bridge_java" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -272,6 +280,7 @@ tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
+jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
@@ -288,6 +297,13 @@ wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
 getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+# Pinned to the rand 0.8-era ecosystem (rand_core 0.6) to share the `RngCore`
+# trait with `num-bigint`'s `rand` feature below, so the `baml.random`
+# generators can drive `num-bigint` sampling (future `bigint.random`). Bumping
+# to rand_core 0.9 would fork that trait and is deliberately avoided.
+rand_core = "0.6"
+rand_chacha = "0.3"
+rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
@@ -435,11 +451,19 @@ inherits = "release"
 # contract mandates `panic = "unwind"` for a library loaded into a user's
 # server).
 #
+# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
+# process. Its `catch_unwind` boundary turns an engine panic into a catchable
+# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
+# recover), so it needs `panic = "unwind"` for exactly the same reason as
+# `bridge_cffi` — the 8-target Java native matrix selects
+# `--profile release-bridge-java`.
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
 # binary can't mix strategies), so these artifacts need their own profile rather
 # than a package override. maturin (`--profile release-bridge-python`), napi
-# (`--profile release-bridge-node`), and the standalone cdylib matrix
-# (`--profile release-bridge-cffi`) select these at build time. The CLI and wasm
+# (`--profile release-bridge-node`), the standalone cdylib matrix
+# (`--profile release-bridge-cffi`), and the Java native matrix
+# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -451,5 +475,9 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-java]
 inherits = "release"
 panic = "unwind"

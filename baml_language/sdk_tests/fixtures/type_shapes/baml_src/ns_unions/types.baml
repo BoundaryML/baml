@@ -37,6 +37,15 @@ function round_trip_optional_plus_null(u: T? | string) -> T? | string {
   u
 }
 
+// Differently-typed list arms. An empty list carries no items, so the wire's
+// `item_type` on `BamlValueList` is the ONLY evidence for which arm was taken —
+// the round-trip pins that a non-empty int list lands on the int[] arm and a
+// non-empty string list on the string[] arm (not merely the first-declared list
+// arm), and documents what the engine does with an ambiguous empty list.
+function round_trip_str_or_int_list(x: string[] | int[]) -> string[] | int[] {
+  x
+}
+
 function round_trip_t(t: T) -> T {
   t
 }

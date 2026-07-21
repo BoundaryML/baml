@@ -209,7 +209,21 @@ fn extract_from_class(
         .map(|n| n.as_str().to_string())
         .collect();
 
-    for method in &class_def.methods {
+    // Builtin methods may be declared directly on the class or inside an
+    // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
+    // implementors put their `$rust_function` / `$rust_io_function` methods in
+    // an `implements Rng { ... }` block. A method inside `implements I` is named
+    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
+    // `scoped_implements_method_name`), so it carries the interface qualifier; a
+    // direct method is just `{ns}.{Class}.{method}`.
+    let direct = class_def.methods.iter().map(|m| (m, None));
+    let in_impl = class_def.implements.iter().flat_map(|b| {
+        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
+        // build the method's fully-qualified name, so reuse it verbatim.
+        let iface = b.target.to_string();
+        b.methods.iter().map(move |m| (m, Some(iface.clone())))
+    });
+    for (method, iface_qualifier) in direct.chain(in_impl) {
         let Some(pipeline) = extract_builtin_pipeline(method) else {
             continue;
         };
@@ -227,7 +241,15 @@ fn extract_from_class(
             }
         }
 
-        let path = format!("{namespace_prefix}.{class_name}.{}", method.name.as_str());
+        let path = match &iface_qualifier {
+            Some(iface) => {
+                format!(
+                    "{namespace_prefix}.{class_name}.{iface}.{}",
+                    method.name.as_str()
+                )
+            }
+            None => format!("{namespace_prefix}.{class_name}.{}", method.name.as_str()),
+        };
         let fn_name = path_to_fn_name(&path);
 
         let has_self = method
