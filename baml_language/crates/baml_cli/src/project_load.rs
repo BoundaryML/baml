@@ -280,8 +280,12 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     };
 
     let walk_root = project_source_root(&canonical);
+    // Read sources across worker threads; `collect` on an indexed parallel
+    // iterator preserves discovery order, so `FileId` assignment (and with it
+    // diagnostic ordering) is identical to a serial read.
+    use rayon::prelude::*;
     let files = discover_baml_files(&walk_root)
-        .into_iter()
+        .into_par_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -303,10 +307,17 @@ pub(crate) fn build_db_from_sources(
 ) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(&resolved.root);
-    for (path, content) in &resolved.files {
+    for (path, _) in &resolved.files {
         on_file(path);
-        db.add_or_update_file(path, content);
     }
+    // Bulk registration: one project-file-list write instead of one per file
+    // (the per-file path is O(files²) Vec copies + one salsa revision each).
+    db.add_or_update_files(
+        resolved
+            .files
+            .iter()
+            .map(|(path, content)| (path.as_path(), content.as_str())),
+    );
     db
 }
 

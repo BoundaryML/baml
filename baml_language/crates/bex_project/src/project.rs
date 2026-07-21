@@ -224,7 +224,12 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
     let mut documents = Vec::new();
     let mut has_errors = false;
 
-    for file in &source_files {
+    // Check across worker threads (input order preserved, so per-file zip is
+    // sound). This runs under the held source guard, so no mutation can race
+    // the cloned worker handles; the guard is the same exclusion the serial
+    // loop relied on.
+    let per_file = baml_project::check_files_parallel(db, &source_files);
+    for (file, diagnostics) in source_files.iter().zip(per_file) {
         let file_id = file.file_id(db);
         let Some(path) = db.file_id_to_path(file_id).cloned() else {
             continue;
@@ -232,7 +237,6 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
         let text = file.text(db).clone();
         file_texts.insert(file_id, (path.clone(), text));
 
-        let diagnostics = baml_lsp2_actions::check_file(db, *file);
         has_errors |= diagnostics
             .iter()
             .any(|d| d.severity == baml_compiler_diagnostics::Severity::Error);
