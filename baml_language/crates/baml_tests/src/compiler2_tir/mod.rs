@@ -1314,15 +1314,11 @@ pub(crate) mod support {
         output
     }
 
-    /// Render a file's HIR2 (compiler2 item tree) as readable text.
-    pub fn render_hir2(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
+    /// Render a file's PPIR (canonical, post-expansion item tree) as readable
+    /// text — includes the synthesized `*$stream` companions.
+    pub fn render_ppir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
-        use baml_compiler2_hir::{
-            file_item_tree,
-            file_package::file_package,
-            file_semantic_index,
-            loc::{ClassLoc, EnumLoc, TypeAliasLoc},
-        };
+        use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
             path: &baml_base::TypePath,
@@ -1491,6 +1487,161 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
                 baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
                 baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
+            }
+        }
+
+        /// The firewall-`TypeRef` twin of [`type_expr_to_string_hir`]: renders one
+        /// type reference from an item's `type_refs` arena, byte-identical to the
+        /// `ast::TypeExpr` renderer above.
+        fn type_ref_to_string(
+            store: &baml_compiler2_hir::type_ref::TypeRefStore,
+            id: baml_compiler2_hir::type_ref::TypeRefId,
+            pkg_prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
+            use baml_compiler2_hir::type_ref::TypeRefKind as K;
+            fn is_local_type_path(
+                first: &str,
+                local_type_names: &std::collections::HashSet<&str>,
+            ) -> bool {
+                local_type_names.contains(first)
+                    || first
+                        .strip_suffix("$stream")
+                        .is_some_and(|base| local_type_names.contains(base))
+            }
+
+            match &store[id].kind {
+                K::Path {
+                    segments,
+                    generic_args,
+                    associated_type_bindings,
+                } => {
+                    let path = segments
+                        .iter()
+                        .map(|n| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    let mut rendered = if is_local_type_path(first, local_type_names) {
+                        format!("{pkg_prefix}{path}")
+                    } else {
+                        path
+                    };
+                    if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+                        let mut args = generic_args
+                            .iter()
+                            .map(|&arg| {
+                                type_ref_to_string(store, arg, pkg_prefix, local_type_names)
+                            })
+                            .collect::<Vec<_>>();
+                        args.extend(associated_type_bindings.iter().map(|binding| {
+                            format!(
+                                "{} = {}",
+                                binding.name,
+                                type_ref_to_string(store, binding.ty, pkg_prefix, local_type_names)
+                            )
+                        }));
+                        rendered.push('<');
+                        rendered.push_str(&args.join(", "));
+                        rendered.push('>');
+                    }
+                    rendered
+                }
+                K::Int => "int".into(),
+                K::Bigint => "bigint".into(),
+                K::Float => "float".into(),
+                K::String => "string".into(),
+                K::Bool => "bool".into(),
+                K::Null => "null".into(),
+                K::Never => "never".into(),
+                K::Void => "void".into(),
+                K::Uint8Array => "uint8array".into(),
+                K::Media { kind: k } => format!("{:?}", k).to_lowercase(),
+                K::Optional { inner } => {
+                    format!(
+                        "{}?",
+                        type_ref_to_string(store, *inner, pkg_prefix, local_type_names)
+                    )
+                }
+                K::List { inner } => {
+                    format!(
+                        "{}[]",
+                        type_ref_to_string(store, *inner, pkg_prefix, local_type_names)
+                    )
+                }
+                K::Map { key, value } => format!(
+                    "map<{}, {}>",
+                    type_ref_to_string(store, *key, pkg_prefix, local_type_names),
+                    type_ref_to_string(store, *value, pkg_prefix, local_type_names)
+                ),
+                K::Union { variants: members } => members
+                    .iter()
+                    .map(|&m| type_ref_to_string(store, m, pkg_prefix, local_type_names))
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                K::Literal { value: lit } => lit.to_string(),
+                K::Function {
+                    params,
+                    ret,
+                    throws,
+                } => {
+                    let ps: Vec<String> = params
+                        .iter()
+                        .map(|p| {
+                            p.name
+                                .as_ref()
+                                .map(|n| {
+                                    let optional_marker = if p.optional { "?" } else { "" };
+                                    format!(
+                                        "{}{}: {}",
+                                        n.as_str(),
+                                        optional_marker,
+                                        type_ref_to_string(
+                                            store,
+                                            p.ty,
+                                            pkg_prefix,
+                                            local_type_names
+                                        )
+                                    )
+                                })
+                                .unwrap_or_else(|| {
+                                    type_ref_to_string(store, p.ty, pkg_prefix, local_type_names)
+                                })
+                        })
+                        .collect();
+                    let throws = throws
+                        .map(|throws| {
+                            type_ref_to_string(store, throws, pkg_prefix, local_type_names)
+                        })
+                        .map(|throws| format!(" throws {throws}"))
+                        .unwrap_or_default();
+                    format!(
+                        "({}) -> {}{}",
+                        ps.join(", "),
+                        type_ref_to_string(store, *ret, pkg_prefix, local_type_names),
+                        throws
+                    )
+                }
+                K::BuiltinUnknown => "unknown".into(),
+                K::AssociatedTypeProjection {
+                    base,
+                    interface,
+                    member,
+                } => {
+                    let base = type_ref_to_string(store, *base, pkg_prefix, local_type_names);
+                    if let Some(interface) = interface {
+                        let interface =
+                            type_ref_to_string(store, *interface, pkg_prefix, local_type_names);
+                        format!("({base} as {interface}).{member}")
+                    } else {
+                        format!("{base}.{member}")
+                    }
+                }
+                K::Type => "type".into(),
+                K::Rust => "$rust_type".into(),
+                K::Error => "error".into(),
+                K::Unknown => "?".into(),
+                K::Infer => "_".into(),
             }
         }
 
@@ -1982,39 +2133,41 @@ pub(crate) mod support {
             )
         };
 
-        let item_tree = file_item_tree(db, file);
+        use baml_compiler2_ppir::item_data::{
+            class_data, enum_data, file_classes, file_enums, file_functions, file_type_aliases,
+            function_data, function_llm_meta, type_alias_data,
+        };
 
         let mut local_type_names = std::collections::HashSet::new();
-        for class in item_tree.classes.values() {
-            local_type_names.insert(class.name.as_str());
+        for &loc in file_classes(db, file) {
+            local_type_names.insert(class_data(db, loc).name.as_str());
         }
-        for enum_def in item_tree.enums.values() {
-            local_type_names.insert(enum_def.name.as_str());
+        for &loc in file_enums(db, file) {
+            local_type_names.insert(enum_data(db, loc).name.as_str());
         }
-        for ta in item_tree.type_aliases.values() {
-            local_type_names.insert(ta.name.as_str());
+        for &loc in file_type_aliases(db, file) {
+            local_type_names.insert(type_alias_data(db, loc).name.as_str());
         }
 
-        let mut classes: Vec<_> = item_tree.classes.iter().collect();
-        classes.sort_by_key(|(_, c)| c.name.as_str().to_string());
-        for (id, class) in classes {
-            let _loc = ClassLoc::new(db, file, *id);
+        let mut classes = file_classes(db, file).to_vec();
+        classes.sort_by_key(|&loc| class_data(db, loc).name.as_str().to_string());
+        for loc in classes {
+            let class = class_data(db, loc);
             writeln!(output, "class {prefix}{} {{", class.name).ok();
             for field in &class.fields {
                 let ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
+                    .type_ref
+                    .map(|id| type_ref_to_string(&class.type_refs, id, &prefix, &local_type_names))
                     .unwrap_or_else(|| "?".into());
                 writeln!(output, "  {}: {}", field.name, ty).ok();
             }
             writeln!(output, "}}").ok();
         }
 
-        let mut enums: Vec<_> = item_tree.enums.iter().collect();
-        enums.sort_by_key(|(_, e)| e.name.as_str().to_string());
-        for (id, enum_def) in enums {
-            let _loc = EnumLoc::new(db, file, *id);
+        let mut enums = file_enums(db, file).to_vec();
+        enums.sort_by_key(|&loc| enum_data(db, loc).name.as_str().to_string());
+        for loc in enums {
+            let enum_def = enum_data(db, loc);
             write!(output, "enum {prefix}{} {{", enum_def.name).ok();
             for (i, v) in enum_def.variants.iter().enumerate() {
                 if i > 0 {
@@ -2025,46 +2178,50 @@ pub(crate) mod support {
             writeln!(output, "}}").ok();
         }
 
-        let mut type_aliases: Vec<_> = item_tree.type_aliases.iter().collect();
-        type_aliases.sort_by_key(|(_, ta)| ta.name.as_str().to_string());
-        for (id, ta) in type_aliases {
-            let _loc = TypeAliasLoc::new(db, file, *id);
+        let mut type_aliases = file_type_aliases(db, file).to_vec();
+        type_aliases.sort_by_key(|&loc| type_alias_data(db, loc).name.as_str().to_string());
+        for loc in type_aliases {
+            let ta = type_alias_data(db, loc);
             let ty = ta
-                .type_expr
-                .as_ref()
-                .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
+                .value
+                .map(|id| type_ref_to_string(&ta.type_refs, id, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
             writeln!(output, "type {prefix}{} = {}", ta.name, ty).ok();
         }
 
-        let mut functions: Vec<_> = item_tree.functions.iter().collect();
-        functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-        for (_, func) in functions {
+        let mut functions = file_functions(db, file).to_vec();
+        functions.sort_by_key(|&loc| function_data(db, loc).name.as_str().to_string());
+        for loc in functions {
+            let func = function_data(db, loc);
+            let defaults = baml_compiler2_ppir::function_parameter_defaults(db, loc);
             let params: Vec<String> = func
                 .params
                 .iter()
-                .map(|p| {
-                    let default_suffix = default_ref_suffix(p.default.as_ref(), &func.defaults);
+                .enumerate()
+                .map(|(index, p)| {
+                    let default_suffix =
+                        default_ref_suffix(defaults.param_default(index), &defaults.defaults);
                     let ty = p
-                        .type_expr
-                        .as_ref()
-                        .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
+                        .type_ref
+                        .map(|id| {
+                            type_ref_to_string(&func.type_refs, id, &prefix, &local_type_names)
+                        })
                         .unwrap_or_else(|| "?".into());
                     format!("{}: {}{}", p.name, ty, default_suffix)
                 })
                 .collect();
             let ret = func
                 .return_type
-                .as_ref()
-                .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
+                .map(|id| type_ref_to_string(&func.type_refs, id, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
-            let body_kind = if func.declarative_meta.is_some() {
+            let func_body = baml_compiler2_ppir::function_body(db, loc);
+            let body_kind = if function_llm_meta(db, loc).is_some() {
                 "llm"
             } else {
-                match &func.body {
-                    Some(baml_compiler2_ast::FunctionBodyDef::Expr(_, _)) => "expr",
-                    Some(baml_compiler2_ast::FunctionBodyDef::Builtin(_)) => "builtin",
-                    None => "missing",
+                match func_body.as_ref() {
+                    baml_compiler2_hir::body::FunctionBody::Expr(_) => "expr",
+                    baml_compiler2_hir::body::FunctionBody::Builtin(_) => "builtin",
+                    baml_compiler2_hir::body::FunctionBody::Missing => "missing",
                 }
             };
             write!(
@@ -2076,7 +2233,7 @@ pub(crate) mod support {
                 body_kind
             )
             .ok();
-            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, _)) = &func.body {
+            if let baml_compiler2_hir::body::FunctionBody::Expr(body) = func_body.as_ref() {
                 if let Some(root) = body.root_expr {
                     writeln!(output, " {{").ok();
                     writeln!(

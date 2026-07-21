@@ -617,7 +617,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         quote! {
             {
                 let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== HIR2 (package {}) ===", pkg_filter).unwrap();
+                writeln!(output, "\n=== PPIR (package {}) ===", pkg_filter).unwrap();
                 use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
                 let mut baml_files: Vec<_> = compiler2_all_files(&db)
                     .into_iter()
@@ -626,7 +626,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
                     writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_hir2(&db, sf));
+                    output.push_str(&render_ppir(&db, sf));
                 }
             }
         }
@@ -636,8 +636,8 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
     quote! {
         #[test]
-        fn test_03_hir() {
-            use crate::compiler2_tir::support::render_hir2;
+        fn test_03_ppir() {
+            use crate::compiler2_tir::support::render_ppir;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -646,16 +646,16 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             #file_loaders
 
             let mut output = String::new();
-            writeln!(output, "=== HIR2 ===").unwrap();
+            writeln!(output, "=== PPIR ===").unwrap();
 
             for source_file in &source_files {
-                output.push_str(&render_hir2(&db, *source_file));
+                output.push_str(&render_ppir(&db, *source_file));
             }
 
             #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("03_hir", output);
+                assert_snapshot!("03_ppir", output);
             });
         }
     }
