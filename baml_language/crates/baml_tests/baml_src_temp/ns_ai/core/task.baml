@@ -40,7 +40,7 @@ class PromptRenderRecipe {
 }
 
 // Executable compatibility spelling for the proposed Task<T, P>. See D-001
-// and D-002 in _plan/bepv2/v2_deviations.md.
+// and D-002 in _plan/bepv2/_internal/deviations.md.
 class Task<T> {
   provider: Provider,
   prompt: baml.llm.PromptAst,

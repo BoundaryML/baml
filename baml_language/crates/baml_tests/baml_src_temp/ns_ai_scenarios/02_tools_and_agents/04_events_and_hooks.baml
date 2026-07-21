@@ -1,7 +1,7 @@
 test "guide 02.04: observers and post-tool hooks see the run" {
   let observer = GuideObserver { kinds: [] };
   let hooks = no_op_hooks();
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [knowledge_tool()],
     guide_dispatch,
     hooks = hooks,
@@ -27,7 +27,7 @@ testset "integ-test-guide-02-events-and-hooks" {
         [knowledge_tool()],
         `Call search_knowledge exactly once with query "duplicate charge", then use its result to return the final resolution.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [knowledge_tool()],
         guide_dispatch,
         hooks = hooks,

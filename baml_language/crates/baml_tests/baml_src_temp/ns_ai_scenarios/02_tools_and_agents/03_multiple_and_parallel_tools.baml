@@ -8,7 +8,7 @@ test "guide 02.03: one model step may dispatch multiple tool calls" {
   let provider = fake_tool_provider(calls);
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool(), account_tool()]),
-    guide_agent_options([knowledge_tool(), account_tool()], guide_dispatch),
+    root.ai.AgentOptions.new([knowledge_tool(), account_tool()], guide_dispatch),
   );
   match (outcome) {
     let done: root.ai.Done<Resolution> => assert.equal(done.value.priority, TicketPriority.Urgent),
@@ -26,7 +26,7 @@ testset "integ-test-guide-02-parallel-tools" {
         [knowledge_tool(), account_tool()],
         `Resolve ticket T-100. In your first response you must call both search_knowledge with query "duplicate charge" and lookup_account with customer_id "C-1" as parallel tool calls. Wait for both results before returning the final value.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [knowledge_tool(), account_tool()],
         guide_dispatch,
         hooks = hooks,

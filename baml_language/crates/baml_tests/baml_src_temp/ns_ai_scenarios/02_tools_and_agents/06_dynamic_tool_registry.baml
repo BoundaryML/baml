@@ -1,7 +1,7 @@
 test "guide 02.06: a hook can add a tool before the next model step" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
   let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [],
     guide_dispatch,
     tool_registry = registry,
@@ -43,10 +43,14 @@ class AddAccountAfterFirstStepHooks {
   after_calls: string[],
 
   implements root.ai.AgentHooks {
-    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
-        throws baml.errors.ToolError {
-      if (context.step == 1 && !context.tool_registry.contains("lookup_account")) {
-        context.tool_registry.add(account_tool());
+    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan throws never {
+      let has_account = context.tools.filter((tool: root.ai.Tool) -> bool {
+        tool.name == "lookup_account"
+      }).length() > 0;
+      if (context.step == 1 && !has_account) {
+        let next_tools = context.tools.slice(0, context.tools.length());
+        next_tools.push(account_tool());
+        return root.ai.StepPlan { provider: null, tools: next_tools, stop: null };
       }
       root.ai.StepPlan { provider: null, tools: null, stop: null }
     }
@@ -70,7 +74,7 @@ testset "integ-test-guide-02-dynamic-tool-registry" {
         [],
         `First call search_knowledge with query "duplicate charge". A lookup_account tool will be added after that result. Then call lookup_account with customer_id "C-1" before returning the final resolution.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [],
         guide_dispatch,
         tool_registry = registry,

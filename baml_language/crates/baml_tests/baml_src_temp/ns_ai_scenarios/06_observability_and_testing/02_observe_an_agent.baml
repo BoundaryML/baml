@@ -1,7 +1,7 @@
 test "guide 06.02: an observer receives model, tool, and completion events" {
   //# Attach an observer to agent options
   let observer = GuideObserver { kinds: [] };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [knowledge_tool()],
     guide_dispatch,
     observers = [observer],
@@ -26,7 +26,7 @@ testset "integ-test-guide-06-observe-agent" {
     );
     let outcome = root.ai.drivers.run_agent<Resolution>(
       task,
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [knowledge_tool()],
         guide_dispatch,
         observers = [observer],

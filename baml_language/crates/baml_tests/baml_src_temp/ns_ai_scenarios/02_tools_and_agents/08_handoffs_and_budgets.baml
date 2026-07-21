@@ -5,7 +5,7 @@ test "guide 02.08: a handoff tool returns control to the application" {
   }]);
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [handoff_tool]),
-    guide_agent_options([handoff_tool], guide_dispatch),
+    root.ai.AgentOptions.new([handoff_tool], guide_dispatch),
   );
   match (outcome) {
     let handoff: root.ai.Handoff => assert.equal(handoff.to, "lookup_account"),
@@ -14,10 +14,11 @@ test "guide 02.08: a handoff tool returns control to the application" {
 }
 
 test "guide 02.08: a step budget returns resumable state" {
-  let options = root.ai.AgentOptions {
-    ...guide_agent_options([knowledge_tool()], guide_dispatch),
-    budget: root.ai.Budget { max_steps: 1, max_cost_usd: null },
-  };
+  let options = root.ai.AgentOptions.new(
+    [knowledge_tool()],
+    guide_dispatch,
+    budget = root.ai.Budget { max_steps: 1, max_cost_usd: null },
+  );
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [knowledge_tool()]),
     options,
@@ -48,10 +49,11 @@ test "guide 02.08: a cost budget stops between provider steps" {
       cost_usd: 0.02,
     },
   };
-  let options = root.ai.AgentOptions {
-    ...guide_agent_options([knowledge_tool()], guide_dispatch),
-    budget: root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
-  };
+  let options = root.ai.AgentOptions.new(
+    [knowledge_tool()],
+    guide_dispatch,
+    budget = root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
+  );
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
     options,
@@ -103,10 +105,11 @@ implements root.ai.ToolCallingProvider for LiveCostedToolProvider {
 testset "integ-test-guide-02-budgets" {
   test "guide 02.08 live OpenAI: step budget stops after one real provider turn" {
     let provider = live_openai();
-    let options = root.ai.AgentOptions {
-      ...guide_agent_options([knowledge_tool()], guide_dispatch),
-      budget: root.ai.Budget { max_steps: 1, max_cost_usd: null },
-    };
+    let options = root.ai.AgentOptions.new(
+      [knowledge_tool()],
+      guide_dispatch,
+      budget = root.ai.Budget { max_steps: 1, max_cost_usd: null },
+    );
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ToolInstructions_task(
         provider,
@@ -133,10 +136,11 @@ testset "integ-test-guide-02-budgets" {
       inner: live_openai(),
       cost_per_step_usd: 0.02,
     };
-    let options = root.ai.AgentOptions {
-      ...guide_agent_options([knowledge_tool()], guide_dispatch),
-      budget: root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
-    };
+    let options = root.ai.AgentOptions.new(
+      [knowledge_tool()],
+      guide_dispatch,
+      budget = root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
+    );
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ToolInstructions_task(
         provider,

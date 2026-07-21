@@ -5,7 +5,7 @@ test "guide 03.04: prepare_step can switch providers through transcript import" 
     provider_name: "fake-tools-secondary",
   };
   let hooks = GuideHooks { ...no_op_hooks(), switch_after_step: second };
-  let options = guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), first, [knowledge_tool()]),
     options,
@@ -110,7 +110,7 @@ testset "integ-test-guide-03-switch-between-turns" {
         [knowledge_tool()],
         `Call search_knowledge with query "duplicate charge". After its result the run will move to another provider; that provider must return the final resolution from the imported conversation.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [knowledge_tool()],
         guide_dispatch,
         hooks = hooks,

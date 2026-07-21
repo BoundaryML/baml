@@ -9,9 +9,9 @@ older `crates/baml_tests/baml_src/ns_ai` experiment.
 - `ns_ai/` implements the proposed shared provider, task, driver, tool,
   transcript, resource, observability, reliability, and harness contracts.
 - `ns_ai/ns_drivers/` is the executable spelling of `ai.drivers.*`.
-- `ns_ai_scenarios/` mirrors `_plan/bepv2/user-guide/` theme-for-theme and uses
+- `ns_ai_scenarios/` mirrors the `_plan/bepv2/pages/guide-*/` chapters and uses
   one support-ticket domain model throughout.
-- `_plan/bepv2/v2_deviations.md` records every known place where ordinary BAML
+- `_plan/bepv2/_internal/deviations.md` records every known place where ordinary BAML
   cannot yet spell the normative design exactly.
 
 ## Manual desugaring convention

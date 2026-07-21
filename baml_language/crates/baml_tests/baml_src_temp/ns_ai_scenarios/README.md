@@ -1,6 +1,6 @@
 # User-guide scenario map
 
-The numbered directories mirror `_plan/bepv2/user-guide/` and reuse the same
+The numbered directories mirror `_plan/bepv2/pages/guide-*/` and reuse the same
 support-ticket model. Each `.baml` page is independently readable, while common
 task constructors and fixtures live in the theme's `00_*.baml` file.
 

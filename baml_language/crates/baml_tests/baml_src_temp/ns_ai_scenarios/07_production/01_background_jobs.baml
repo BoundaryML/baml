@@ -14,6 +14,11 @@ test "guide 07.01: a background job has poll, cancel, and resume coordinates" {
 
 testset "integ-test-guide-07-background" {
   test "guide 07.01 live OpenAI: submit, persist token, resume, and poll remote work" {
+    // The full integration selector intentionally launches many foreground
+    // provider calls in parallel. Submit background-priority work after that
+    // burst so this test measures the job lifecycle rather than account-level
+    // queue starvation.
+    baml.sys.sleep(baml.time.Duration.from_seconds(15)) catch (e) { _ => null };
     let provider = root.ai.OpenAiBackground {
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -34,10 +39,19 @@ testset "integ-test-guide-07-background" {
     assert.equal(resumed.token().id, persisted.id)
     let complete: root.ai.Response<Resolution>? = null;
     let attempts = 0;
+    let poll_errors = 0;
     let started_ms = baml.sys.now_ms();
     let deadline_ms = started_ms + 60000;
     while (complete == null && baml.sys.now_ms() < deadline_ms) {
-      complete = resumed.poll();
+      complete = resumed.poll() catch (e) {
+        // Polling is read-only and replay-safe. A transient transport failure
+        // must not discard the durable response ID or force resubmission.
+        _ => {
+          if (resumed.status() == root.ai.JobStatus.Failed) { throw e; }
+          poll_errors = poll_errors + 1;
+          null
+        },
+      };
       attempts = attempts + 1;
       if (complete == null) {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(500)) catch (e) { _ => null };
@@ -51,6 +65,7 @@ testset "integ-test-guide-07-background" {
       "guide": "07.01",
       "job_id": persisted.id,
       "polls": attempts,
+      "poll_errors": poll_errors,
       "elapsed_ms": baml.sys.now_ms() - started_ms,
       "provider": response.meta.provider,
       "input_tokens": response.meta.usage?.input_tokens ?? 0,

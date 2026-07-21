@@ -28,7 +28,7 @@ test "guide 04.05: an agent resumes the supplied transcript instead of starting 
   //# Submit tool results before handing control to the agent
   let resumed = provider.submit(transcript, guide_dispatch(calls.calls));
   let hooks = no_op_hooks();
-  let options = guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
   //# Resume the agent from existing continuation state
   let outcome = root.ai.drivers.run_agent<Resolution>(task.with_transcript(resumed), options);
   match (outcome) {
@@ -74,7 +74,7 @@ testset "integ-test-guide-04-save-and-resume" {
     let hooks = no_op_hooks();
     let outcome = root.ai.drivers.run_agent<Resolution>(
       task.with_transcript(resumed),
-      guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks),
+      root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks),
     );
     log.info("live transcript resume " + {
       "saved_provider": token.provider,

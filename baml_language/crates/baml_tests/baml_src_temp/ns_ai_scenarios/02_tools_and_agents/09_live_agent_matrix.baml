@@ -10,7 +10,7 @@ testset "integ-test-guide-02-agent-capabilities" {
     let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
     let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
     let observer = GuideObserver { kinds: [] };
-    let options = guide_agent_options(
+    let options = root.ai.AgentOptions.new(
       [],
       guide_dispatch,
       tool_registry = registry,
@@ -45,7 +45,7 @@ testset "integ-test-guide-02-agent-capabilities" {
     //# Run until the handoff boundary
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ResolveTicketWithTools_task(sample_ticket(), provider, [handoff]),
-      guide_agent_options([handoff], guide_dispatch),
+      root.ai.AgentOptions.new([handoff], guide_dispatch),
     );
     //# Verify control was transferred
     match (outcome) {

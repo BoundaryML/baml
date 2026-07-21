@@ -1,7 +1,7 @@
 class ToolRosterHooks {
   apply_at_step: int,
   remove_name: string?,
-  clear_registry: bool,
+  clear_roster: bool,
   application_tools: root.ai.Tool[]?,
   next_provider: root.ai.Provider?,
 
@@ -10,17 +10,19 @@ class ToolRosterHooks {
       if (context.step != self.apply_at_step) {
         return root.ai.StepPlan { provider: null, tools: null, stop: null };
       }
-      if (self.clear_registry) {
-        context.tool_registry.clear();
-      } else {
-        match (self.remove_name) {
-          let name: string => { let _ = context.tool_registry.remove(name); },
-          null => {},
-        }
-      }
+      let next_tools: root.ai.Tool[]? = match (self.application_tools) {
+        let replacement: root.ai.Tool[] => replacement,
+        null if self.clear_roster => [],
+        null => match (self.remove_name) {
+          let name: string => context.tools.filter((tool: root.ai.Tool) -> bool {
+            tool.name != name
+          }),
+          null => null,
+        },
+      };
       root.ai.StepPlan {
         provider: self.next_provider,
-        tools: self.application_tools,
+        tools: next_tools,
         stop: null,
       }
     }
@@ -31,7 +33,7 @@ function tool_roster_hooks() -> ToolRosterHooks throws never {
   ToolRosterHooks {
     apply_at_step: 1,
     remove_name: null,
-    clear_registry: false,
+    clear_roster: false,
     application_tools: null,
     next_provider: null,
   }
@@ -40,7 +42,7 @@ function tool_roster_hooks() -> ToolRosterHooks throws never {
 test "guide 02.09: remove one application tool between provider steps" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), remove_name: "lookup_account" };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [],
     guide_dispatch,
     tool_registry = registry,
@@ -64,7 +66,7 @@ test "guide 02.09: remove one application tool between provider steps" {
 
 test "guide 02.09: an explicit empty list removes all application tools" {
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), application_tools: [] };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [knowledge_tool(), account_tool()],
     guide_dispatch,
     hooks = hooks,
@@ -86,10 +88,10 @@ test "guide 02.09: an explicit empty list removes all application tools" {
   }
 }
 
-test "guide 02.09: clearing a registry persists across later steps" {
+test "guide 02.09: an empty replacement updates the registry and persists" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
-  let hooks = ToolRosterHooks { ...tool_roster_hooks(), clear_registry: true };
-  let options = guide_agent_options(
+  let hooks = ToolRosterHooks { ...tool_roster_hooks(), clear_roster: true };
+  let options = root.ai.AgentOptions.new(
     [],
     guide_dispatch,
     tool_registry = registry,
@@ -126,7 +128,7 @@ test "guide 02.09: remove application and provider-owned tools together" {
     application_tools: [],
     next_provider: without_builtins,
   };
-  let options = guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), initial, [knowledge_tool()]),
     options,
@@ -156,7 +158,7 @@ testset "integ-test-guide-02-remove-tools" {
         [],
         `First call search_knowledge with query "duplicate charge". After its result, lookup_account will be removed. Return the final resolution without calling a removed tool.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [],
         guide_dispatch,
         tool_registry = registry,

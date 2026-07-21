@@ -4,7 +4,7 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
   //# Run the tool-enabled agent
   let outcome = root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
-    guide_agent_options([knowledge_tool()], guide_dispatch),
+    root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
   );
   //# Verify typed completion
   match (outcome) {
@@ -85,7 +85,7 @@ testset "integ-test-guide-02-one-tool" {
     //# Run the live tool loop
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
-      guide_agent_options([knowledge_tool()], guide_dispatch),
+      root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
     );
     //# Verify the live typed result
     match (outcome) {
@@ -104,7 +104,7 @@ testset "integ-test-guide-02-one-tool" {
     //# Run the live prompt-tool loop
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
-      guide_agent_options([knowledge_tool()], guide_dispatch),
+      root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
     );
     //# Verify the live typed result
     match (outcome) {

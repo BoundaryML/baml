@@ -1,6 +1,6 @@
 test "guide 02.05: before-tool hooks may rewrite a call" {
   let hooks = GuideHooks { ...no_op_hooks(), replace_name: "lookup_account" };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [knowledge_tool(), account_tool()],
     guide_dispatch,
     hooks = hooks,
@@ -14,7 +14,7 @@ test "guide 02.05: before-tool hooks may rewrite a call" {
 
 test "guide 02.05: before-tool hooks may block a call" {
   let hooks = GuideHooks { ...no_op_hooks(), block_name: "search_knowledge" };
-  let options = guide_agent_options([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
   root.ai.drivers.run_agent<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [knowledge_tool()]),
     options,
@@ -39,7 +39,7 @@ testset "integ-test-guide-02-modify-or-block-tools" {
         [account_alias_tool(), account_tool()],
         `Call search_knowledge exactly once with customer_id "C-1". After its result, return the final resolution.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [account_alias_tool(), account_tool()],
         guide_dispatch,
         hooks = hooks,
@@ -63,7 +63,7 @@ testset "integ-test-guide-02-modify-or-block-tools" {
         [knowledge_tool()],
         `Call search_knowledge once with query "duplicate charge". If policy blocks it, do not retry the tool; return a final resolution explaining that the lookup was unavailable.`,
       ),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [knowledge_tool()],
         guide_dispatch,
         hooks = hooks,

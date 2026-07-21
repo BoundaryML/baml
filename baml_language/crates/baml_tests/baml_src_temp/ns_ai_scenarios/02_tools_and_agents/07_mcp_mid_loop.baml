@@ -39,9 +39,9 @@ class FakeMcpConnection {
   }
 }
 
-// The bootstrap tool changes application state. The prepare-step hook is the
-// single place that applies those requests to the driver-owned ToolRegistry,
-// so roster changes are versioned and emitted before the next provider step.
+// The bootstrap tool changes application state. The prepare-step hook turns
+// pending requests into a complete next roster, which the driver validates and
+// applies before the next provider step.
 class McpServerBroker {
   connection: FakeMcpConnection,
   pending_servers: string[],
@@ -61,22 +61,24 @@ class McpServerBroker {
     root.ai.ToolResult.ok(call, { "server": args.server, "status": "connection_requested" })
   }
 
-  function activate_pending(self, registry: root.ai.ToolRegistry) -> null
-      throws baml.errors.ToolError {
+  function activate_pending(self, current_tools: root.ai.Tool[]) -> root.ai.Tool[]? throws never {
     let pending = self.pending_servers.slice(0, self.pending_servers.length());
     self.pending_servers = [];
+    let next_tools = current_tools.slice(0, current_tools.length());
+    let changed = false;
     //# Activate MCP servers requested by the model
     for (let server in pending) {
       if (server == "orders"
           && self.connected_servers.filter((name: string) -> bool { name == server }).length() == 0) {
-        //## Discover and register this server's tools
+        //## Discover and add this server's tools to the next roster
         for (let tool in self.connection.tools()) {
-          registry.add(tool);
+          next_tools.push(tool);
+          changed = true;
         }
         self.connected_servers.push(server);
       }
     }
-    null
+    if (changed) { next_tools } else { null }
   }
 }
 
@@ -84,11 +86,10 @@ class McpBootstrapHooks {
   broker: McpServerBroker,
 
   implements root.ai.AgentHooks {
-    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
-        throws baml.errors.ToolError {
+    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan throws never {
       //# Apply bootstrap requests before the next model step
-      self.broker.activate_pending(context.tool_registry);
-      root.ai.StepPlan { provider: null, tools: null, stop: null }
+      let next_tools = self.broker.activate_pending(context.tools);
+      root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
     }
   }
 }
@@ -160,7 +161,7 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
     }`,
     usage_per_step: null,
   };
-  let options = guide_agent_options(
+  let options = root.ai.AgentOptions.new(
     [],
     (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
       dispatch_with_mcp_bootstrap(broker, calls)
@@ -204,7 +205,7 @@ testset "integ-test-guide-02-mcp-bootstrap" {
     };
     let outcome = root.ai.drivers.run_agent<Resolution>(
       McpBootstrap_task(provider),
-      guide_agent_options(
+      root.ai.AgentOptions.new(
         [],
         (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
           dispatch_with_mcp_bootstrap(broker, calls)
