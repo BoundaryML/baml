@@ -13,12 +13,11 @@ use baml_type::normalize::TypeContext;
 
 use super::{
     Definition, ExprId, InterfaceBound, MemberAccess, Name, PackageItems, SelfReceiver,
-    TirTypeError, Ty, TyAttr, TypeInferenceBuilder, function_generic_param_bounds_exprs,
-    lower_generic_param_bounds,
+    TirTypeError, Ty, TyAttr, TypeInferenceBuilder, lower_generic_param_bound_refs,
 };
 use crate::{
     infer_context::SelfCallPosition,
-    signature::{DeclaredSignature, lower_signature},
+    signature::{DeclaredSignature, SigTypeRef, lower_signature},
 };
 
 /// One realized interface instantiation to resolve a member against: `loc` reads the declared
@@ -73,65 +72,88 @@ struct MemberLoweringEnv {
 }
 
 /// A positional or keyword interface-method parameter. The `self` receiver is an ordinary
-/// positional `arg`, desugared to `self: Self` (its `ty` is the `Self` path).
+/// positional `arg`, desugared to `self: Self` (its `ty` is [`SigTypeRef::SelfReceiver`]).
 struct InterfaceMethodParam {
     name: Name,
-    ty: baml_compiler2_ast::TypeExpr,
+    ty: SigTypeRef,
 }
 
 /// A normalized interface-method signature: default and required methods both reduce to
 /// this so one builder produces the `Ty::Function`. Interfaces must label their full
 /// contract, so `return_type`/`throws` are required (sourced from the declaration, never
 /// inferred from a body).
-pub(crate) struct InterfaceMethodSpec {
+pub(crate) struct InterfaceMethodSpec<'db> {
+    /// The arena every signature slot (`args`/`kwargs`/`return_type`/`throws`) indexes: the
+    /// elaborated store for a default method, the interface's own store for a required one.
+    sig_refs: &'db baml_compiler2_hir::type_ref::TypeRefStore,
+    /// The arena the `generics` bound ids index. Bounds are never elaborated, so for a
+    /// default method this is the *declaration* store (`FunctionData::type_refs`), distinct
+    /// from `sig_refs`; for a required method the two are one store.
+    bound_refs: &'db baml_compiler2_hir::type_ref::TypeRefStore,
     /// Positional (required) parameters, in declaration order.
     args: Vec<InterfaceMethodParam>,
     /// Keyword/optional parameters (those with a default).
     kwargs: Vec<InterfaceMethodParam>,
-    return_type: baml_compiler2_ast::TypeExpr,
-    throws: baml_compiler2_ast::TypeExpr,
+    return_type: SigTypeRef,
+    throws: SigTypeRef,
     /// Method generic params with their interface-bound *conjunction* (`T extends A & B`),
     /// unified. Currently at most one element per param — the parser surfaces only the first
     /// conjunct — but a list so an override's bounds compare correctly once §3.6 lands.
-    generics: Vec<(Name, Vec<baml_compiler2_ast::TypeExpr>)>,
+    generics: Vec<(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)>,
 }
 
-impl InterfaceMethodSpec {
-    pub(crate) fn from_default<'db>(
+impl<'db> InterfaceMethodSpec<'db> {
+    pub(crate) fn from_default(
         db: &'db dyn crate::Db,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Self {
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+        let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
-            // The implicit `self` receiver: name "self" with no declared type.
+            // The implicit `self` receiver: name "self" with no declared type
+            // (elaboration synthesizes an `Unknown` node for it).
             let is_self = p.name.as_str() == "self"
-                && matches!(p.ty.kind, baml_compiler2_ast::TypeExprKind::Unknown { .. });
-            (is_self, p.has_default, p.name.clone(), p.ty.clone())
+                && matches!(
+                    sig.type_refs[p.type_ref].kind,
+                    baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                );
+            (
+                is_self,
+                p.has_default,
+                p.name.clone(),
+                SigTypeRef::Id(p.type_ref),
+            )
         }));
         let generics = sig
             .user_generic_params
             .iter()
             .cloned()
             .zip(
-                function_generic_param_bounds_exprs(db, func_loc)
-                    .into_iter()
-                    .map(|bound| bound.into_iter().collect()),
+                func_data
+                    .generic_param_bounds
+                    .iter()
+                    .map(|bound| bound.iter().copied().collect()),
             )
             .collect();
         Self {
+            sig_refs: &sig.type_refs,
+            bound_refs: &func_data.type_refs,
             args,
             kwargs,
-            return_type: sig.return_type.clone().unwrap_or_else(unknown_type_expr),
-            throws: sig.throws.clone().unwrap_or_else(unknown_type_expr),
+            return_type: sig.return_type.map_or(SigTypeRef::Missing, SigTypeRef::Id),
+            throws: sig.throws.map_or(SigTypeRef::Missing, SigTypeRef::Id),
             generics,
         }
     }
 
-    pub(crate) fn from_required(sig: &baml_compiler2_hir::item_tree::InterfaceMethodSig) -> Self {
+    pub(crate) fn from_required(
+        iface_data: &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
+        sig: &baml_compiler2_ppir::item_data::InterfaceMethodSigData,
+    ) -> Self {
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
-            let is_self = p.name.as_str() == "self" && p.type_expr.is_none();
-            let ty = p.type_expr.clone().unwrap_or_else(unknown_type_expr);
-            (is_self, p.default.is_some(), p.name.clone(), ty)
+            let is_self = p.name.as_str() == "self" && p.type_ref.is_none();
+            let ty = p.type_ref.map_or(SigTypeRef::Missing, SigTypeRef::Id);
+            (is_self, p.has_default, p.name.clone(), ty)
         }));
         let generics = sig
             .generic_params
@@ -140,15 +162,16 @@ impl InterfaceMethodSpec {
             .zip(
                 sig.generic_param_bounds
                     .iter()
-                    .cloned()
-                    .map(|bound| bound.into_iter().collect()),
+                    .map(|bound| bound.iter().copied().collect()),
             )
             .collect();
         Self {
+            sig_refs: &iface_data.type_refs,
+            bound_refs: &iface_data.type_refs,
             args,
             kwargs,
-            return_type: sig.return_type.clone().unwrap_or_else(unknown_type_expr),
-            throws: sig.throws.clone().unwrap_or_else(unknown_type_expr),
+            return_type: sig.return_type.map_or(SigTypeRef::Missing, SigTypeRef::Id),
+            throws: sig.throws.map_or(SigTypeRef::Missing, SigTypeRef::Id),
             generics,
         }
     }
@@ -160,10 +183,16 @@ impl InterfaceMethodSpec {
     }
 
     /// The method's generic parameters paired with their interface-bound conjunction
-    /// (declaration order) — so an override's bounds can be checked against the interface
-    /// method's (an implementation may not add a requirement the interface does not declare).
-    pub(crate) fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_ast::TypeExpr>)] {
+    /// (declaration order, ids into [`Self::bound_store`]) — so an override's bounds can be
+    /// checked against the interface method's (an implementation may not add a requirement
+    /// the interface does not declare).
+    pub(crate) fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)] {
         &self.generics
+    }
+
+    /// The arena [`Self::generic_bounds`]' ids index.
+    pub(crate) fn bound_store(&self) -> &'db baml_compiler2_hir::type_ref::TypeRefStore {
+        self.bound_refs
     }
 
     /// Lower this normalized signature to a `Ty::Function` through `ctx` (which resolves `Self`,
@@ -175,40 +204,36 @@ impl InterfaceMethodSpec {
         diags: &mut Vec<TirTypeError>,
     ) -> Ty {
         let signature = DeclaredSignature {
+            type_refs: self.sig_refs,
             positional: self
                 .args
                 .iter()
-                .map(|p| (Some(p.name.clone()), &p.ty))
+                .map(|p| (Some(p.name.clone()), p.ty))
                 .collect(),
             keyword: self
                 .kwargs
                 .iter()
-                .map(|p| (Some(p.name.clone()), &p.ty))
+                .map(|p| (Some(p.name.clone()), p.ty))
                 .collect(),
-            return_type: &self.return_type,
-            throws: &self.throws,
+            return_type: self.return_type,
+            throws: self.throws,
         };
         lower_signature(&signature, ctx, diags).into_ty()
     }
 }
 
-fn unknown_type_expr() -> baml_compiler2_ast::TypeExpr {
-    baml_compiler2_ast::TypeExprKind::Unknown { attrs: vec![] }.at(text_size::TextRange::default())
-}
-
 /// Split `(is_self, has_default, name, ty)` tuples into positional args (no default) and
 /// keyword/optional kwargs (with a default). The `self` receiver desugars to `self: Self`
-/// and stays a positional arg (its declared type is replaced by the `Self` path).
+/// and stays a positional arg (its declared type is replaced by
+/// [`SigTypeRef::SelfReceiver`]).
 fn split_params(
-    params: impl Iterator<Item = (bool, bool, Name, baml_compiler2_ast::TypeExpr)>,
+    params: impl Iterator<Item = (bool, bool, Name, SigTypeRef)>,
 ) -> (Vec<InterfaceMethodParam>, Vec<InterfaceMethodParam>) {
     let mut args = Vec::new();
     let mut kwargs = Vec::new();
     for (is_self, has_default, name, ty) in params {
-        // `self` is syntax sugar for `self: Self` — until `TypeExprKind::Self` exists, desugar
-        // to the `Self` path so the receiver flows through normal param lowering.
         let ty = if is_self {
-            crate::lower_type_expr::type_expr_for_name(Name::new("Self"))
+            SigTypeRef::SelfReceiver
         } else {
             ty
         };
@@ -590,10 +615,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
                 continue;
             };
-            let declares_field = baml_compiler2_hir::file_item_tree(db, data.interface.file(db))
-                .interfaces
-                .get(&data.interface.id(db))
-                .is_some_and(|iface| iface.fields.iter().any(|f| &f.name == field));
+            let declares_field = baml_compiler2_ppir::item_data::interface_data(db, data.interface)
+                .fields
+                .iter()
+                .any(|f| &f.name == field);
             if !declares_field {
                 continue;
             }
@@ -789,19 +814,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         member: &Name,
     ) -> Option<UnionMemberKind> {
         let db = self.context.db();
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-        let iface_data = iface_tree.interfaces.get(&iface_loc.id(db))?;
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
         if iface_data.fields.iter().any(|field| &field.name == member) {
             return Some(UnionMemberKind::Field);
         }
-        if iface_data
-            .default_methods
+        if iface_data.default_methods.iter().any(|&fn_loc| {
+            baml_compiler2_ppir::item_data::function_data(db, fn_loc).name == *member
+        }) || iface_data
+            .required_methods
             .iter()
-            .any(|&fn_id| iface_tree[fn_id].name == *member)
-            || iface_data
-                .required_methods
-                .iter()
-                .any(|sig| &sig.name == member)
+            .any(|sig| &sig.name == member)
         {
             return Some(UnionMemberKind::Method);
         }
@@ -849,9 +871,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         access: &MemberAccess<'_>,
     ) -> Option<Ty> {
         let db = self.context.db();
-        let file = view.loc.file(db);
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let iface_data = iface_tree.interfaces.get(&view.loc.id(db))?;
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
 
         // Field lookup: this interface's own fields (no closure).
         for field in &iface_data.fields {
@@ -871,9 +891,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 });
             }
             let ty = field
-                .type_expr
-                .as_ref()
-                .map(|te| {
+                .type_ref
+                .map(|type_ref| {
                     // A field lowers in the same environment as a method signature — so
                     // `key: Self.Key` resolves through the receiver's pins/impls exactly
                     // as a `-> Self.Key` return would. Fields require a bound receiver
@@ -882,8 +901,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let mut diags = env.diags;
                     let ns = view.namespace(db);
                     let ty = crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(
-                            te,
+                        &crate::lower_type_expr::lower_type_ref(
+                            &iface_data.type_refs,
+                            type_ref,
                             &crate::lower_type_expr::ScopeCtx {
                                 db,
                                 package_items: view.pkg_items(db),
@@ -896,8 +916,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                         &env.bindings,
                     );
+                    let span = baml_compiler2_ppir::item_data::interface_source_map(db, view.loc)
+                        .type_refs
+                        .span(type_ref);
                     for diag in diags {
-                        self.context.report_at_span(diag, te.span);
+                        self.context.report_at_span(diag, span);
                     }
                     ty
                 })
@@ -916,12 +939,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Method lookup: the interface's default body, else its required signature.
         // Both normalize to one `InterfaceMethodSpec` and one builder.
-        if let Some(&fn_id) = iface_data
-            .default_methods
-            .iter()
-            .find(|&&fn_id| iface_tree[fn_id].name == *access.member)
-        {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, fn_id);
+        if let Some(&func_loc) = iface_data.default_methods.iter().find(|&&fn_loc| {
+            baml_compiler2_ppir::item_data::function_data(db, fn_loc).name == *access.member
+        }) {
             let spec = InterfaceMethodSpec::from_default(db, func_loc);
             return Some(self.build_interface_method_ty(view, recv, &spec, access));
         }
@@ -930,7 +950,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .find(|sig| sig.name == *access.member)
         {
-            let spec = InterfaceMethodSpec::from_required(sig);
+            let spec = InterfaceMethodSpec::from_required(iface_data, sig);
             return Some(self.build_interface_method_ty(view, recv, &spec, access));
         }
         None
@@ -967,10 +987,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 true,
             )
         {
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
+            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             if iface_data.fields.is_empty() {
                 continue;
             }
@@ -997,12 +1014,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     continue;
                 }
                 let ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| {
+                    .type_ref
+                    .map(|type_ref| {
                         crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_expr(
-                                te,
+                            &crate::lower_type_expr::lower_type_ref(
+                                &iface_data.type_refs,
+                                type_ref,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: view.pkg_items(db),
@@ -1039,11 +1056,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         receiver_generic: Option<&Name>,
     ) -> MemberLoweringEnv {
         let db = self.context.db();
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, view.loc.file(db));
-        let data = iface_tree
-            .interfaces
-            .get(&view.loc.id(db))
-            .unwrap_or_else(|| unreachable!("the caller resolved this member in the view's data"));
+        let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
         let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
         let mut diags = Vec::new();
 
@@ -1196,7 +1209,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn associated_type_pin(
         &self,
         view: &InterfaceView<'db>,
-        assoc: &baml_compiler2_ast::AssociatedTypeDef,
+        assoc: &baml_compiler2_ppir::item_data::AssociatedTypeData,
         prefer_symbolic: bool,
         prior: &rustc_hash::FxHashMap<Name, Ty>,
     ) -> Option<Ty> {
@@ -1220,11 +1233,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pins resolved so far), so a Self-referencing default (`type Items = Self.Item[]`)
         // reduces against them. The default was lowered once (symbolic `Self`) by the shared
         // query; realize substitutes this receiver for `Self` and the realized generic args.
-        let iface_generic_params = baml_compiler2_hir::file_item_tree(db, view.loc.file(db))
-            .interfaces
-            .get(&view.loc.id(db))
-            .map(|iface| iface.generic_params.clone())
-            .unwrap_or_default();
+        let iface_generic_params =
+            &baml_compiler2_ppir::item_data::interface_data(db, view.loc).generic_params;
         let self_ty = Ty::Interface(
             view.realized.name.clone(),
             view.realized.generics.clone(),
@@ -1233,7 +1243,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         let realized = crate::interfaces::realize_associated_default(
             &default,
-            &iface_generic_params,
+            iface_generic_params,
             &view.realized.generics,
             &self_ty,
         );
@@ -1254,11 +1264,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         access: &MemberAccess<'_>,
     ) -> Ty {
         let db = self.context.db();
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, view.loc.file(db));
-        let data = iface_tree
-            .interfaces
-            .get(&view.loc.id(db))
-            .unwrap_or_else(|| unreachable!("the caller resolved this method in the view's data"));
+        let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
         let ns = view.namespace(db);
         let pkg_items = view.pkg_items(db);
 
@@ -1310,16 +1316,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         // A `Self.Assoc` projection is exempt in both positions: the existential's pins
         // (or the assoc default) make it one concrete type for every member.
         if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_)) && access.bound {
+            let contains_bare_self = |slot: SigTypeRef| match slot {
+                SigTypeRef::Id(id) => Self::type_ref_contains_bare_self(spec.sig_refs, id),
+                // The desugared receiver IS bare `Self` (excluded below by name).
+                SigTypeRef::SelfReceiver => true,
+                SigTypeRef::Missing => false,
+            };
+            let self_in_invariant_position = |slot: SigTypeRef| match slot {
+                SigTypeRef::Id(id) => Self::type_ref_self_in_invariant_position(spec.sig_refs, id),
+                SigTypeRef::SelfReceiver | SigTypeRef::Missing => false,
+            };
             let param_self = spec
                 .args
                 .iter()
                 .chain(&spec.kwargs)
                 .filter(|p| p.name.as_str() != "self")
-                .any(|p| Self::type_expr_contains_bare_self(&p.ty));
+                .any(|p| contains_bare_self(p.ty));
             let position = if param_self {
                 Some(SelfCallPosition::Parameter)
-            } else if Self::type_expr_self_in_invariant_position(&spec.return_type)
-                || Self::type_expr_self_in_invariant_position(&spec.throws)
+            } else if self_in_invariant_position(spec.return_type)
+                || self_in_invariant_position(spec.throws)
             {
                 Some(SelfCallPosition::NestedInReturn)
             } else {
@@ -1362,14 +1378,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         // single-bound; take the first conjunct until that path is retyped to a conjunction
         // (currently a no-op — the parser surfaces at most one). Conformance (E0120) reads the
         // full conjunction via `generic_bounds()`.
-        let bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = spec
+        let bound_ids: Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>> = spec
             .generics
             .iter()
-            .map(|(_, bound)| bound.first().cloned())
+            .map(|(_, bound)| bound.first().copied())
             .collect();
-        function_generic_param_bounds.extend(lower_generic_param_bounds(
+        function_generic_param_bounds.extend(lower_generic_param_bound_refs(
             db,
-            &bound_exprs,
+            spec.bound_store(),
+            &bound_ids,
             pkg_items,
             &ns,
             &all_generic_params,

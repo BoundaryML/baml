@@ -28,6 +28,8 @@ import * as forwardRefs from "./baml_sdk/forward_refs/index.js";
 import * as complexModels from "./baml_sdk/complex_models/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
 import * as a from "./baml_sdk/a/index.js";
+import * as builtinMedia from "./baml_sdk/baml/media/index.js";
+import * as builtinLlm from "./baml_sdk/baml/llm/index.js";
 
 describe("type_shapes — namespace imports", () => {
   it("baml_sdk root imports cleanly", () => {
@@ -53,8 +55,16 @@ describe("type_shapes — namespace imports", () => {
       complexModels,
       lorem,
       a,
+      builtinMedia,
+      builtinLlm,
     ]) {
       expect(mod).toBeDefined();
+    }
+  });
+
+  it("runtime-owned builtin leaves expose their public names", () => {
+    for (const value of [builtinMedia.Image, builtinMedia.Audio, builtinMedia.Video, builtinMedia.Pdf, builtinLlm.Stream]) {
+      expect(value).toBeTypeOf("function");
     }
   });
 });

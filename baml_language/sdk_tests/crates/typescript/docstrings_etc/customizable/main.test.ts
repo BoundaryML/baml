@@ -19,14 +19,17 @@ const docsSource = () =>
     "\n",
   );
 
-describe.runIf(isTestRuntime("node"))("docstrings_etc", () => {
+describe("docstrings_etc exports", () => {
   it("imports all documented symbols from baml_sdk/docs", () => {
     expect(Doc).toBeDefined();
     expect(Note).toBeDefined();
     expect(Priority).toBeDefined();
     expect(Sentiment).toBeDefined();
   });
+});
 
+// Reading generated TypeScript source requires Node's local filesystem APIs.
+describe.runIf(isTestRuntime("node"))("docstrings_etc generated source", () => {
   it("renders class summaries and Attributes sections as JSDoc", () => {
     const src = docsSource();
 

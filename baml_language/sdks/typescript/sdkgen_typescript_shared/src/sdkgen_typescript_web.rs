@@ -33,7 +33,43 @@ pub fn to_source_code_with_bytecode(
 
 #[cfg(test)]
 mod tests {
+    use baml_base::Name as BaseName;
+    use baml_codegen_types::{Class, Name, Origin, Symbol};
+
     use super::*;
+
+    fn runtime_owned_pool() -> SymbolPool {
+        let mut pool = SymbolPool::new();
+        for (namespace, class_name) in [
+            ("media", "Image"),
+            ("media", "Audio"),
+            ("media", "Video"),
+            ("media", "Pdf"),
+            ("llm", "Stream"),
+        ] {
+            let name = Name::new(
+                BaseName::new("baml"),
+                vec![BaseName::new(namespace)],
+                BaseName::new(class_name),
+            );
+            pool.insert(
+                name.clone(),
+                Symbol::Class(Class {
+                    name,
+                    generic_params: Vec::new(),
+                    docstring: None,
+                    properties: Vec::new(),
+                    static_methods: Vec::new(),
+                    instance_methods: Vec::new(),
+                    origin: Origin {
+                        source_file_path: "builtins.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            );
+        }
+        pool
+    }
 
     #[test]
     fn generated_sdk_uses_web_runtime_package() {
@@ -46,5 +82,40 @@ mod tests {
         assert!(typemap.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(!root.contains("from \"@boundaryml/baml-bridge\";"));
         assert!(!typemap.contains("from \"@boundaryml/baml-bridge\";"));
+    }
+
+    #[test]
+    fn generated_builtin_leaves_use_web_constructor_identity() {
+        let output = to_source_code(&runtime_owned_pool(), &[], NamingConvention::PreserveCase);
+        let media = &output[&PathBuf::from("baml/media/index.ts")];
+        let llm = &output[&PathBuf::from("baml/llm/index.ts")];
+        let typemap = &output[&PathBuf::from("_typemap.ts")];
+        for (runtime_name, local_name) in [
+            ("BamlImage", "Image"),
+            ("BamlAudio", "Audio"),
+            ("BamlVideo", "Video"),
+            ("BamlPdf", "Pdf"),
+        ] {
+            assert!(media.contains(&format!(
+                "import {{ {runtime_name} as {local_name} }} from \"{RUNTIME_PACKAGE}\";"
+            )));
+        }
+        assert!(llm.contains(&format!(
+            "import {{ BamlStream as Stream }} from \"{RUNTIME_PACKAGE}\";"
+        )));
+        for fqn in [
+            "baml.media.Image",
+            "baml.media.Audio",
+            "baml.media.Video",
+            "baml.media.Pdf",
+            "baml.llm.Stream",
+        ] {
+            assert!(typemap.contains(&format!("\"{fqn}\": () => (__leaf_")));
+        }
+        assert!(
+            output
+                .values()
+                .all(|source| !source.contains("from \"@boundaryml/baml-bridge\";"))
+        );
     }
 }

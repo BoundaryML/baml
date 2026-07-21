@@ -30,7 +30,7 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  * codegen embeds precompiled BAML bytecode.
  */
 export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
-export { BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
+export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;
 export declare class FunctionResult {

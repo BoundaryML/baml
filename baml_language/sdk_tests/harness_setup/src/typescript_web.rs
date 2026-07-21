@@ -200,7 +200,6 @@ mod {name} {{
             buffer.push_str(
                 r#"
     #[test]
-    #[ignore = "typescript/web runtime lands in the Web implementation change"]
     fn vitest_web() {
         cmd("pnpm exec vitest run --config vitest.web.config.ts");
     }
@@ -211,7 +210,6 @@ mod {name} {{
             buffer.push_str(
                 r#"
     #[test]
-    #[ignore = "typescript/web runtime lands in the Web implementation change"]
     fn vitest_workers() {
         cmd("pnpm exec vitest run --config vitest.workers.config.ts");
     }

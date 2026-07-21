@@ -5109,7 +5109,6 @@ mod tests {
     };
 
     use baml_base::{FileId, SourceFile};
-    use baml_compiler2_ast as ast;
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
     use baml_workspace::Project;
 
@@ -5146,12 +5145,6 @@ mod tests {
         fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
             SourceFile::new(self, content.to_string(), path.into(), file_id)
-        }
-
-        fn init_with_file(&mut self) -> SourceFile {
-            let file = self.add_file("test.baml", "function f() -> int { 1 }");
-            self.project = Some(Project::new(self, PathBuf::from("."), vec![file]));
-            file
         }
     }
 
@@ -5271,51 +5264,26 @@ mod tests {
 
     #[test]
     fn function_metadata_reports_defaulted_params() {
+        // A real parsed function, not a fabricated item tree: the firewall
+        // queries this flows through (`function_in_scope_generic_param_bounds`
+        // → `function_data`) are total over Locs minted from a real tree, and
+        // panic on ids that were never allocated.
         let mut db = TestDb::default();
-        let file = db.init_with_file();
+        let file = db.add_file(
+            "test.baml",
+            "function f(required: int, with_default: int = 1, also_required: int) -> int { 1 }",
+        );
+        db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
 
-        let mut defaults = ast::FunctionDefaults::empty();
-        let default_expr = ast::DefaultExprId::new(defaults.exprs.exprs.alloc(ast::Expr::Null));
-        let function_id = baml_compiler2_hir::ids::LocalItemId::<
-            baml_compiler2_hir::ids::FunctionMarker,
-        >::new(1, 0);
-        let default_ref = baml_compiler2_hir::item_tree::DefaultExprRef {
-            function: function_id,
-            expr: default_expr,
-        };
-        let param = |name: &str, default| baml_compiler2_hir::item_tree::FunctionParam {
-            name: baml_base::Name::new(name),
-            type_expr: None,
-            default,
-            span: baml_base::Span::fake().range,
-        };
-        let func_data = baml_compiler2_hir::item_tree::Function {
-            name: baml_base::Name::new("f"),
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
-            params: vec![
-                param("required", None),
-                param("with_default", Some(default_ref)),
-                param("also_required", None),
-            ],
-            defaults,
-            return_type: None,
-            throws: None,
-            body: None,
-            declarative_meta: None,
-            origin: ast::FunctionOrigin::UserDefined,
-            docstring: None,
-            is_tagged_template_tag: false,
-            span: baml_base::Span::fake().range,
-        };
-        let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {
-            params: func_data
-                .params
-                .iter()
-                .map(|param| param.default.clone())
-                .collect(),
-            defaults: func_data.defaults.clone(),
-        };
+        let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
+        let (function_id, func_data) = item_tree
+            .functions
+            .iter()
+            .find(|(_, f)| f.name.as_str() == "f")
+            .expect("test file declares `f`");
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, *function_id);
+        let parameter_defaults =
+            baml_compiler2_hir::signature::function_parameter_defaults(&db, func_loc);
         let cache = ResolvedAliases {
             aliases: HashMap::new(),
             recursive: HashSet::new(),
@@ -5324,8 +5292,8 @@ mod tests {
         let metadata = compute_function_metadata_from_item_tree(
             &db,
             file,
-            function_id,
-            &func_data,
+            *function_id,
+            func_data,
             &parameter_defaults,
             &cache,
         );

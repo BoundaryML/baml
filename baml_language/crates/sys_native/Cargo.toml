@@ -46,6 +46,7 @@ sys_ops = { workspace = true }
 sys_types = { workspace = true }
 bytes = { workspace = true, optional = true }
 futures = { workspace = true }
+getrandom = { workspace = true }
 http-body-util = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }

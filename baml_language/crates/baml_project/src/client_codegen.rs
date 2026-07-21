@@ -216,58 +216,68 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
-                // Combined generics in scope inside the method body: the
-                // class's TypeVars plus the method's own. Order matches
-                // declaration: class-level first, method-level second.
-                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
-                method_scope_generics.extend(method.generic_params.iter().cloned());
                 let method_loc = FunctionLoc::new(db, source_file, *method_id);
+                // Same elaboration as free functions (see the free-function
+                // path). The method's own `generic_params` are its user +
+                // synthetic effect params; the enclosing class's params join
+                // only the lowering scope, not the method's declared generics.
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
+                // Emitted generics are the method's *user* params only; effect
+                // params (see the free-function path) join only the lowering
+                // scope.
+                let method_own_generics: Vec<Name> = sig.user_generic_params.clone();
+                // Generics in scope inside the method body: the class's TypeVars
+                // first, then the method's own user + synthetic effect params.
+                let mut method_scope_generics: Vec<Name> = class_generic_params.clone();
+                method_scope_generics.extend(sig.user_generic_params.iter().cloned());
+                method_scope_generics.extend(sig.synthetic_effect_params.iter().cloned());
+                // Empty bounds match the prior raw-AST lowering (see the
+                // free-function path).
+                let method_bounds = lower_type_expr::TypeVarBoundsMap::default();
+                let ctx = lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &method_scope_generics,
+                    bounds: &method_bounds,
+                    self_ty: None,
+                };
+                let type_refs = &sig.type_refs;
+                let lower = |id| {
+                    let mut diagnostics = Vec::new();
+                    let tir_ty =
+                        lower_type_expr::lower_type_ref(type_refs, id, &ctx, &mut diagnostics);
+                    convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+                };
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
-                let arguments: Vec<cg::FunctionArgument> = method
+                let arguments: Vec<cg::FunctionArgument> = sig
                     .params
                     .iter()
                     .enumerate()
                     .skip(usize::from(is_instance))
-                    .filter_map(|(index, param)| {
-                        let ty = resolve_type_expr(
-                            db,
-                            param.type_expr.as_ref(),
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &method_scope_generics,
-                            alias_map,
-                            recursive_aliases,
-                        )?;
-                        Some(cg::FunctionArgument {
-                            name: param.name.clone(),
-                            docstring: None,
-                            ty,
-                            default: lower_codegen_default(
-                                method_defaults.param_default(index),
-                                &method_defaults.defaults,
-                            ),
-                        })
+                    .map(|(index, param)| cg::FunctionArgument {
+                        name: param.name.clone(),
+                        docstring: None,
+                        ty: lower(param.type_ref),
+                        default: lower_codegen_default(
+                            method_defaults.param_default(index),
+                            &method_defaults.defaults,
+                        ),
                     })
                     .collect();
 
-                let return_type = resolve_type_expr(
-                    db,
-                    method.return_type.as_ref(),
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &method_scope_generics,
-                    alias_map,
-                    recursive_aliases,
-                )
-                .unwrap_or(cg::Ty::Void {
-                    attr: TyAttr::default(),
-                });
+                let return_type = sig.return_type.map_or(
+                    cg::Ty::Void {
+                        attr: TyAttr::default(),
+                    },
+                    lower,
+                );
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
-                    generic_params: method.generic_params.clone(),
+                    generic_params: method_own_generics,
                     docstring: method.docstring.clone(),
                     arguments,
                     return_type,
@@ -395,47 +405,72 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
             // already filtered above.
 
-            let func_generic_params: Vec<Name> = func.generic_params.clone();
             let func_loc = FunctionLoc::new(db, source_file, *id);
+            // Source the signature from the *elaborated* HIR data, not the raw
+            // item tree: elaboration mints a synthetic effect param for every
+            // callback parameter that omits a `throws` clause and rewrites that
+            // parameter's `throws` to the fresh param. Both must reach the
+            // codegen type — the inferred outer `throws` (from `callable_throws`)
+            // references the effect param, so a raw lowering would leave it a
+            // dangling, undeclared typevar and collapse the callback's own
+            // `throws` to `Never`.
+            let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+            // Effect params (minted for a callback whose `throws` is inferred)
+            // join only the lowering *scope*, so the callback and the inferred
+            // outer `throws` resolve to real typevars instead of dangling /
+            // `Never`. They are inferred from the callback, not user-bound, so
+            // they are NOT emitted as user-facing generics: an SDK that binds
+            // generics by name (e.g. Python's `_types=`) must not see them — a
+            // consumer that needs the throws type recovers it from the callback
+            // parameter (the Rust SDK, via each callback's associated error
+            // type).
+            let scope_generics: Vec<Name> = sig
+                .user_generic_params
+                .iter()
+                .chain(sig.synthetic_effect_params.iter())
+                .cloned()
+                .collect();
+            let func_generic_params: Vec<Name> = sig.user_generic_params.clone();
+            // Empty bounds match the prior raw-AST lowering: this path resolves
+            // only in-scope typevars (incl. the effect params), not associated
+            // projections that would need interface bounds.
+            let func_bounds = lower_type_expr::TypeVarBoundsMap::default();
+            let ctx = lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &scope_generics,
+                bounds: &func_bounds,
+                self_ty: None,
+            };
+            let type_refs = &sig.type_refs;
+            let lower = |id| {
+                let mut diagnostics = Vec::new();
+                let tir_ty = lower_type_expr::lower_type_ref(type_refs, id, &ctx, &mut diagnostics);
+                convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
+            };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            let arguments: Vec<cg::FunctionArgument> = func
+            let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
                 .enumerate()
-                .filter_map(|(index, param)| {
-                    let ty = resolve_type_expr(
-                        db,
-                        param.type_expr.as_ref(),
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &func_generic_params,
-                        alias_map,
-                        recursive_aliases,
-                    )?;
-                    Some(cg::FunctionArgument {
-                        name: param.name.clone(),
-                        docstring: None,
-                        ty,
-                        default: lower_codegen_default(
-                            func_defaults.param_default(index),
-                            &func_defaults.defaults,
-                        ),
-                    })
+                .map(|(index, param)| cg::FunctionArgument {
+                    name: param.name.clone(),
+                    docstring: None,
+                    ty: lower(param.type_ref),
+                    default: lower_codegen_default(
+                        func_defaults.param_default(index),
+                        &func_defaults.defaults,
+                    ),
                 })
                 .collect();
 
-            let return_type = resolve_type_expr(
-                db,
-                func.return_type.as_ref(),
-                pkg_items,
-                &pkg_info.namespace_path,
-                &func_generic_params,
-                alias_map,
-                recursive_aliases,
-            )
-            .unwrap_or(cg::Ty::Void {
-                attr: TyAttr::default(),
-            });
+            let return_type = sig.return_type.map_or(
+                cg::Ty::Void {
+                    attr: TyAttr::default(),
+                },
+                lower,
+            );
 
             let cg_func = cg::Function {
                 name: func.name.clone(),

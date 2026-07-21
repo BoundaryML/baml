@@ -141,27 +141,37 @@ fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
     for b in builtins {
         let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
         let segments: Vec<&str> = rest.split('.').collect();
-        let baml_method_name = segments.last().unwrap().to_string();
-        let rust_method_name = camel_to_snake(&baml_method_name);
+        let last_idx = segments.len() - 1;
+
+        // The class is the first uppercase segment before the final method
+        // segment (if any). Everything after the class is the dispatch key:
+        // a method declared inside an `implements I { ... }` block keeps the
+        // interface segment in its runtime path (`...{Class}.I.method`), so the
+        // class dispatch must match on `I.method`. The Rust method name comes
+        // from the final segment alone so it stays a valid identifier.
+        let class_idx = segments[..last_idx]
+            .iter()
+            .position(|s| s.starts_with(|c: char| c.is_uppercase()));
+
+        let (ns_segments, class_name, baml_method_name): (Vec<&str>, Option<&str>, String) =
+            match class_idx {
+                Some(ci) => (
+                    segments[..ci].to_vec(),
+                    Some(segments[ci]),
+                    segments[ci + 1..].join("."),
+                ),
+                None => (
+                    segments[..last_idx].to_vec(),
+                    None,
+                    segments[last_idx].to_string(),
+                ),
+            };
 
         let entry = BuiltinEntry {
             builtin: b,
             baml_method_name,
-            rust_method_name,
+            rust_method_name: camel_to_snake(segments[last_idx]),
         };
-
-        let prefix_segments = &segments[..segments.len() - 1];
-
-        let mut ns_segments: Vec<&str> = Vec::new();
-        let mut class_name: Option<&str> = None;
-
-        for &seg in prefix_segments {
-            if seg.starts_with(|c: char| c.is_uppercase()) {
-                class_name = Some(seg);
-                break;
-            }
-            ns_segments.push(seg);
-        }
 
         let node = root.get_or_create_namespace(&ns_segments);
 

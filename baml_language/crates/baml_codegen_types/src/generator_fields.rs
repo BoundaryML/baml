@@ -25,6 +25,9 @@ pub enum OutputType {
     /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
     #[strum(serialize = "typescript/web")]
     TypescriptWeb,
+    /// Java SDK (`com.boundaryml:baml-bridge` runtime).
+    #[strum(serialize = "java")]
+    Java,
     /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
     #[strum(serialize = "cpp")]
     Cpp,

@@ -4238,6 +4238,93 @@ impl BexVm {
         }
     }
 
+    /// Drain a sys-op's arguments off the eval stack and produce the
+    /// [`VmExecState::SysOp`] yield that hands control to the engine.
+    ///
+    /// This is the single implementation of "run a `$rust_io_function`",
+    /// shared by the dedicated `OpCode::SysOp` handler (a statically-known
+    /// direct call) and the general call funnel
+    /// ([`Self::execute_call_from_locals_offset`], reached when a sys-op is
+    /// invoked as a callable value — virtual/interface dispatch, a bound-method
+    /// value, or a callback handed to a native higher-order builtin). Both
+    /// present the op's `arity` arguments as the top of the stack, so a sys-op
+    /// is dispatched identically however it is reached.
+    ///
+    /// `callee_fn_ptr` must point at an `Object::Function` whose kind is
+    /// [`FunctionKind::SysOp`]. The kind check below is genuinely load-bearing
+    /// for the `OpCode::SysOp` caller (its `as_object_ptr` does not verify the
+    /// kind — see there); the funnel caller has already matched on the kind, so
+    /// for it the check is redundant. Do not delete it.
+    fn dispatch_sysop_yield(
+        &mut self,
+        callee_fn_ptr: HeapPtr,
+        runtime_id: Option<Value>,
+        frame_idx: usize,
+    ) -> Result<VmExecState, VmError> {
+        let (sys_op, function_id, arity, capture, param_names) = {
+            let obj = self.get_object(callee_fn_ptr);
+            let Object::Function(f) = obj else {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::SysOp.into(),
+                    got: ObjectType::of(obj).into(),
+                }
+                .into());
+            };
+            let FunctionKind::SysOp(sys_op) = f.kind else {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::SysOp.into(),
+                    got: FunctionType::from(&f.kind).into(),
+                }
+                .into());
+            };
+            (
+                sys_op,
+                f.function_id,
+                f.arity,
+                f.capture,
+                f.param_names.clone(),
+            )
+        };
+        let args_offset = self
+            .stack
+            .len()
+            .checked_sub(arity)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+        let args_offset = StackIndex::from_raw(args_offset);
+        let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
+        // PR4b: sys-op calls (LLM calls included) appear on the timeline as a
+        // CallFunction here; the engine emits the matching EndFunction once the
+        // op completes.
+        let call_site_source = self.call_site_source_for_frame(frame_idx, self.cur_pc);
+        let capture_mask = VmCaptureMask::from_props(capture, self.value_capture_auto_enabled);
+        let explicit_local_id = runtime_id
+            .map(|value| self.consume_local_id_value(value))
+            .transpose()?;
+        let capture_mask = explicit_local_id
+            .as_ref()
+            .map_or(capture_mask, |id| capture_mask.with_overrides(id.capture));
+        let call_id = self.prof_enter_sysop(function_id, call_site_source, capture_mask);
+        if let Some(explicit_local_id) = &explicit_local_id {
+            self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
+        }
+        let entries: Vec<(String, Value)> = call_args
+            .iter()
+            .enumerate()
+            .map(|(index, value)| {
+                let name = param_names
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| format!("arg{index}"));
+                (name, *value)
+            })
+            .collect();
+        self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
+        Ok(VmExecState::SysOp {
+            operation: sys_op,
+            args: call_args,
+        })
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -4321,7 +4408,7 @@ impl BexVm {
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
         // GenericFunction), carried on call notifications so the engine can map
         // it to a `FunctionId` without a name lookup.
-        let (callee, _callee_fn_ptr) = match self.get_object(callee_ptr) {
+        let (callee, callee_fn_ptr) = match self.get_object(callee_ptr) {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
@@ -4648,14 +4735,43 @@ impl BexVm {
             }
 
             FunctionKind::SysOp(_) => {
-                log::error!(
-                    "[VM] tried to CALL SysOp function '{callee_name}' via bytecode — SysOps must go through the engine yield path"
+                // A sys-op reached as a callable value — virtual/interface
+                // dispatch, a bound-method value, or a callback handed to a
+                // native higher-order builtin — runs through the same engine
+                // yield as a direct `OpCode::SysOp`: drain its args and suspend.
+                // The resolved sys-op `Function`'s arity already counts the
+                // receiver, so the top-of-stack args are exactly what the op's
+                // glue expects. On resume the engine pushes the result and the
+                // caller's post-call store binds it, identically to a returning
+                // bytecode callee.
+                //
+                // `dispatch_sysop_yield` drains `stack.len() - arity`; every
+                // funnel caller positions the args as the exact top of stack, so
+                // that window is `locals_offset`. Assert it rather than thread
+                // `locals_offset` through the shared helper.
+                debug_assert_eq!(
+                    self.stack.len().checked_sub(callee_arity),
+                    Some(locals_offset.raw()),
+                    "sysop dispatch: args must be the top {callee_arity} stack slots \
+                     (len {}, locals_offset {})",
+                    self.stack.len(),
+                    locals_offset.raw(),
                 );
-                return Err(VmInternalError::TypeError {
-                    expected: FunctionType::Callable.into(),
-                    got: FunctionType::from(&callee_kind).into(),
-                }
-                .into());
+                // Sys-ops do not thread type arguments: a method-level-generic
+                // sys-op is rejected at compile time (E0153), and class/interface
+                // generics are type-erased for the op's glue. Any type args here
+                // would be silently dropped, so fail closed in debug.
+                debug_assert!(
+                    closure_type_args.is_empty()
+                        && bound_method_class_type_args.is_empty()
+                        && gf_type_args.is_empty(),
+                    "sysop dispatch received type args, which it cannot thread to the op",
+                );
+                return Ok(Some(self.dispatch_sysop_yield(
+                    callee_fn_ptr,
+                    runtime_id,
+                    *frame_idx,
+                )?));
             }
 
             FunctionKind::NativeUnresolved => {
@@ -5920,66 +6036,16 @@ impl BexVm {
                     };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee);
-                    let expected_type = FunctionType::SysOp;
-                    let callee_ptr = self.as_object_ptr(callee_value, expected_type.into())?;
-                    let Object::Function(callable_future) = self.get_object(callee_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: expected_type.into(),
-                            got: ObjectType::of(self.get_object(callee_ptr)).into(),
-                        }
-                        .into());
-                    };
-                    let FunctionKind::SysOp(sys_op) = callable_future.kind else {
-                        return Err(VmInternalError::TypeError {
-                            expected: FunctionType::SysOp.into(),
-                            got: FunctionType::from(&callable_future.kind).into(),
-                        }
-                        .into());
-                    };
-                    let sysop_function_id = callable_future.function_id;
-                    let sysop_arity = callable_future.arity;
-                    let sysop_capture = callable_future.capture;
-                    let sysop_param_names = callable_future.param_names.clone();
-                    let args_offset = self
-                        .stack
-                        .len()
-                        .checked_sub(sysop_arity)
-                        .ok_or(VmInternalError::NotEnoughItemsOnStack(sysop_arity))?;
-                    let args_offset = StackIndex::from_raw(args_offset);
-                    let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    // PR4b: sys-op calls (LLM calls included) appear on the
-                    // timeline as a CallFunction here; the engine emits the
-                    // matching EndFunction once the op completes.
-                    let call_site_source = self.call_site_source_for_frame(*frame_idx, self.cur_pc);
-                    let capture_mask =
-                        VmCaptureMask::from_props(sysop_capture, self.value_capture_auto_enabled);
-                    let explicit_local_id = runtime_id
-                        .map(|value| self.consume_local_id_value(value))
-                        .transpose()?;
-                    let capture_mask = explicit_local_id
-                        .as_ref()
-                        .map_or(capture_mask, |id| capture_mask.with_overrides(id.capture));
-                    let call_id =
-                        self.prof_enter_sysop(sysop_function_id, call_site_source, capture_mask);
-                    if let Some(explicit_local_id) = &explicit_local_id {
-                        self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
-                    }
-                    let entries: Vec<(String, Value)> = call_args
-                        .iter()
-                        .enumerate()
-                        .map(|(index, value)| {
-                            let name = sysop_param_names
-                                .get(index)
-                                .cloned()
-                                .unwrap_or_else(|| format!("arg{index}"));
-                            (name, *value)
-                        })
-                        .collect();
-                    self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
-                    return Ok(Some(VmExecState::SysOp {
-                        operation: sys_op,
-                        args: call_args,
-                    }));
+                    // `as_object_ptr` only unwraps the value to a heap pointer
+                    // (the `FunctionType` argument is error-message metadata, not
+                    // an assertion). `dispatch_sysop_yield`'s own kind check is
+                    // therefore the load-bearing validation on this path — it
+                    // rejects a non-sys-op global before draining and yields.
+                    let callee_ptr =
+                        self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
+                    return Ok(Some(
+                        self.dispatch_sysop_yield(callee_ptr, runtime_id, *frame_idx)?,
+                    ));
                 }
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────

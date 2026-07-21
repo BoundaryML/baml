@@ -5,10 +5,9 @@
 //! `customizable/test_generic.rs`; here we cover the
 //! concretely-instantiated generic class round trips.
 
-// PROVISIONAL: generics have no Rust SDK design yet. This port assumes
-// generated generic structs with pub fields, instantiated with struct-path
-// turbofish (`Wrapper::<i64> { .. }`), and that the generator boxes
-// recursive fields (`next: Option<std::boxed::Box<GenericLinkedList<T>>>`).
+// Generic classes emit as `BamlValue`-bounded structs with pub fields,
+// instantiated with struct-path turbofish (`Wrapper::<i64> { .. }`), and
+// recursive fields box (`next: Option<std::boxed::Box<GenericLinkedList<T>>>`).
 // The generated `Box` (the fixture's `Box<T>` class) shadows the prelude's
 // `std::boxed::Box`, so the recursion boxes below are spelled in full.
 use baml_sdk::generics::{

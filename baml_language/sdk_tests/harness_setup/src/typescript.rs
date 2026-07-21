@@ -177,7 +177,11 @@ pub(crate) fn rewrite_test_bridge_imports(dir: &Path) {
     for entry in fs::read_dir(dir).unwrap().flatten() {
         let path = entry.path();
         if path.is_dir() {
-            if path.file_name().and_then(|name| name.to_str()) != Some("baml_sdk") {
+            let skip = matches!(
+                path.file_name().and_then(|name| name.to_str()),
+                Some("baml_sdk") | Some("node_modules")
+            );
+            if !skip {
                 rewrite_test_bridge_imports(&path);
             }
         } else if path.extension().and_then(|extension| extension.to_str()) == Some("ts") {

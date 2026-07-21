@@ -17,6 +17,7 @@ mod completion;
 pub mod decode;
 pub mod encode;
 pub mod error;
+pub mod host_value;
 pub mod loader;
 pub mod runtime;
 #[cfg(test)]
@@ -27,6 +28,7 @@ pub mod wire;
 
 pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
+pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;

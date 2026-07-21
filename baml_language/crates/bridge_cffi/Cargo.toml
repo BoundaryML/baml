@@ -28,6 +28,7 @@ futures = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
+vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 baml_version = { workspace = true }
@@ -38,7 +39,6 @@ libc = { workspace = true }
 once_cell = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-vfs = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 cbindgen = { workspace = true }

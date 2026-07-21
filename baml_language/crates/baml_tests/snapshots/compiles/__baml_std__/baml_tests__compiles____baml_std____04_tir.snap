@@ -3130,20 +3130,52 @@ class baml.panics.IntegerOverflow$stream {
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
---- <builtin>/baml/ns_sap/sap.baml ---
-function baml.sap.parse<T>(text: string) -> T throws baml.errors.LlmClient {
-  { : T
-    root.llm.__sap_parse_final<TFinal>(text, root.llm.StreamCache.new(reflect.type_of<T>(), reflect.type_of<T>())) : T
+--- <builtin>/baml/ns_random/random.baml ---
+function baml.random.Rng.random_int(self: baml.random.Rng) -> int throws never {
+  { : int
+    let bytes = self.random(8) : uint8array
+    let magnitude = bytes[0] & 63 << 56 | bytes[1] << 48 | bytes[2] << 40 | bytes[3] << 32 | bytes[4] << 24 | bytes[5] << 16 | bytes[6] << 8 | bytes[7] : int
+    if (bytes[0] & 64 == 0 : bool) : int
+      { : int
+        magnitude : int
+      }
+    else
+      { : int
+        0 - magnitude - 1 : int
+      }
   }
 }
-function baml.sap.parse_type(t: type, text: string) -> unknown throws baml.errors.LlmClient {
-  { : unknown
-    let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) : baml.llm.StreamCache<unknown, unknown>
-    root.llm.__sap_parse_final<TFinal>(text, cache) : unknown
+class baml.random.SystemRandom {
+}
+function baml.random.SystemRandom.get() -> baml.random.SystemRandom throws never {
+  { : baml.random.SystemRandom
+    SystemRandom {  } : baml.random.SystemRandom
   }
 }
-
---- <builtin>/baml/ns_schema/schema.baml ---
+class baml.random.Xoshiro256PlusPlus {
+  _state: $rust_type
+}
+function baml.random.Xoshiro256PlusPlus.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.Xoshiro256PlusPlus throws never {
+  { : baml.random.Xoshiro256PlusPlus
+    Xoshiro256PlusPlus._new(seed) : baml.random.Xoshiro256PlusPlus
+  }
+}
+class baml.random.ChaCha20 {
+  _state: $rust_type
+}
+function baml.random.ChaCha20.new(seed: uint8array = SystemRandom.get().random(32)) -> baml.random.ChaCha20 throws never {
+  { : baml.random.ChaCha20
+    ChaCha20._new(seed) : baml.random.ChaCha20
+  }
+}
+class baml.random.SystemRandom$stream {
+}
+class baml.random.Xoshiro256PlusPlus$stream {
+  _state: $rust_type
+}
+class baml.random.ChaCha20$stream {
+  _state: $rust_type
+}
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {

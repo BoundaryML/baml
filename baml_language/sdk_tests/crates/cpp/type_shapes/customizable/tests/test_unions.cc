@@ -1,6 +1,6 @@
 // Roundtrip coverage for baml_sdk::unions - union normalization variants.
 // Port of roundtrip_tests/test_unions.py, plus the C++-only canonical-form
-// guarantees: baml::Union is an order-canonical std::variant alias
+// guarantees: baml::variant is an order-canonical std::variant alias
 // (variant<A, B> and variant<B, A> are the SAME type, matching BAML's
 // set-semantic unions), readable with baml::match and every std::variant
 // API.
@@ -13,19 +13,20 @@
 
 using baml_sdk::unions::T;
 using baml_sdk::unions::UnionContainer;
-using IntOrString = baml::Union<int64_t, std::string>;
+using IntOrString = baml::variant<int64_t, std::string>;
 
 // Canonicalization: both spellings resolve to one instantiation, singles
 // collapse to plain variants, and the generated field type is reachable
 // from either spelling.
-static_assert(std::is_same<baml::Union<int64_t, std::string>,
-                           baml::Union<std::string, int64_t>>::value,
-              "baml::Union must be order-canonical");
-static_assert(std::is_same<baml::Union<T, std::string>,
-                           baml::Union<std::string, T>>::value,
-              "baml::Union must be order-canonical for generated types");
-static_assert(std::is_same<baml::Union<int64_t>, std::variant<int64_t>>::value,
-              "a one-alternative baml::Union is a plain std::variant");
+static_assert(std::is_same<baml::variant<int64_t, std::string>,
+                           baml::variant<std::string, int64_t>>::value,
+              "baml::variant must be order-canonical");
+static_assert(std::is_same<baml::variant<T, std::string>,
+                           baml::variant<std::string, T>>::value,
+              "baml::variant must be order-canonical for generated types");
+static_assert(
+    std::is_same<baml::variant<int64_t>, std::variant<int64_t>>::value,
+    "a one-alternative baml::variant is a plain std::variant");
 
 BAML_TEST(round_trip_null_to_end) {
   using U = std::optional<IntOrString>;
@@ -50,7 +51,7 @@ BAML_TEST(round_trip_singleton_unwrap) {
 }
 
 BAML_TEST(round_trip_optional_plus_null) {
-  using TOrString = baml::Union<T, std::string>;
+  using TOrString = baml::variant<T, std::string>;
   using U = std::optional<TOrString>;
   BAML_ASSERT(baml_sdk::unions::round_trip_optional_plus_null(
                   U{TOrString{T{1}}}) == U{TOrString{T{1}}});
@@ -66,11 +67,11 @@ BAML_TEST(round_trip_t) {
 
 BAML_TEST(round_trip_union_container) {
   const UnionContainer c{
-      std::nullopt,                       // null_to_end
-      IntOrString{std::string("d")},      // dedup
-      5,                                  // singleton_unwrap
-      baml::Union<std::string, T>{T{2}},  // optional_plus_null:
-                                          // reversed spelling on purpose
+      std::nullopt,                         // null_to_end
+      IntOrString{std::string("d")},        // dedup
+      5,                                    // singleton_unwrap
+      baml::variant<std::string, T>{T{2}},  // optional_plus_null:
+                                            // reversed spelling on purpose
   };
   BAML_ASSERT(baml_sdk::unions::round_trip_union_container(c) == c);
 }
@@ -98,6 +99,6 @@ BAML_TEST(union_is_a_plain_std_variant) {
   BAML_ASSERT(std::holds_alternative<int64_t>(u));
   BAML_ASSERT_EQ(std::get<int64_t>(u), int64_t{9});
   // Assign across spellings: same type, plain copy.
-  baml::Union<std::string, int64_t> v = u;
+  baml::variant<std::string, int64_t> v = u;
   BAML_ASSERT_EQ(std::get<int64_t>(v), int64_t{9});
 }

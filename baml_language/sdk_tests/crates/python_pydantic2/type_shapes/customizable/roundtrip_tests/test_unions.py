@@ -8,6 +8,7 @@ from baml_sdk.unions import (
     round_trip_dedup,
     round_trip_singleton_unwrap,
     round_trip_optional_plus_null,
+    round_trip_str_or_int_list,
     round_trip_t,
     round_trip_union_container,
 )
@@ -33,6 +34,19 @@ def test_round_trip_optional_plus_null():
     assert round_trip_optional_plus_null(u=T(v=1)) == T(v=1)
     assert round_trip_optional_plus_null(u="s") == "s"
     assert round_trip_optional_plus_null(u=None) is None
+
+
+def test_round_trip_str_or_int_list():
+    # Differently-typed list arms. The wire's `item_type` (populated by the
+    # engine even for an empty list) is what selects the arm; Python drops the
+    # union wrapper and returns the bare list, so these assert the value
+    # round-trip. A non-empty list of each element type round-trips faithfully.
+    assert round_trip_str_or_int_list(x=[1, 2, 3]) == [1, 2, 3]
+    assert round_trip_str_or_int_list(x=["a", "b"]) == ["a", "b"]
+    # An empty list is assignable to both arms; the engine canonicalizes the
+    # bare `[]` to the FIRST declared arm (string[]) with item_type=string.
+    # Python returns the bare list, so the value round-trips as [] regardless.
+    assert round_trip_str_or_int_list(x=[]) == []
 
 
 def test_round_trip_t():

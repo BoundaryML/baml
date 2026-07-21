@@ -6669,30 +6669,149 @@ function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown {
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
 }
 
-function baml.sap.parse(text: string) -> T {
-    load_type #0
-    load_type #0
-    sys_op baml.llm.StreamCache.new
-    store_var _2
-    load_var2 1 2
-    load_type #0
-    load_type #0
-    sys_op baml.llm.__sap_parse_final
+function baml.random.ChaCha20.Rng.random(self: baml.random.ChaCha20, bytes: int) -> uint8array {
+}
+
+function baml.random.ChaCha20.Rng.random_int(self: baml.random.ChaCha20) -> int {
+}
+
+function baml.random.ChaCha20._new(seed: uint8array) -> baml.random.ChaCha20 {
+}
+
+function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
+    load_var seed
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var seed
+
+  L0:
+    load_var seed
+    call baml.random.ChaCha20._new
     return
 }
 
-function baml.sap.parse_type(t: type, text: string) -> unknown {
-    load_var2 1 1
-    sys_op baml.llm.StreamCache.new
-    store_var cache
-    load_var2 2 3
-    load_type unknown
-    load_type unknown
-    sys_op baml.llm.__sap_parse_final
+function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
+    load_var self
+    load_const 8
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var bytes
+    load_var bytes
+    load_const 0
+    load_array_element
+    load_const 63
+    bin_op &
+    load_const 56
+    bin_op <<
+    load_var bytes
+    load_const 1
+    load_array_element
+    load_const 48
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 2
+    load_array_element
+    load_const 40
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 3
+    load_array_element
+    load_const 32
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 4
+    load_array_element
+    load_const 24
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 5
+    load_array_element
+    load_const 16
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 6
+    load_array_element
+    load_const 8
+    bin_op <<
+    bin_op |
+    load_var bytes
+    load_const 7
+    load_array_element
+    bin_op |
+    store_var magnitude
+    load_var bytes
+    load_const 0
+    load_array_element
+    load_const 64
+    bin_op &
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    load_var magnitude
+    sub_int
+    load_const 1
+    sub_int
+    jump L2
+
+  L1:
+    load_var magnitude
+
+  L2:
     return
 }
 
-function baml.schema.json_schema(t: type) -> baml.json.json {
+function baml.random.SystemRandom.Rng.random(self: baml.random.SystemRandom, bytes: int) -> uint8array {
+}
+
+function baml.random.SystemRandom.Rng.random_int(self: baml.random.SystemRandom) -> int {
+}
+
+function baml.random.SystemRandom.get() -> baml.random.SystemRandom {
+    alloc_instance baml.random.SystemRandom
+    return
+}
+
+function baml.random.Xoshiro256PlusPlus.Rng.random(self: baml.random.Xoshiro256PlusPlus, bytes: int) -> uint8array {
+}
+
+function baml.random.Xoshiro256PlusPlus.Rng.random_int(self: baml.random.Xoshiro256PlusPlus) -> int {
+}
+
+function baml.random.Xoshiro256PlusPlus._new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+}
+
+function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+    load_var seed
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    load_const 32
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var seed
+
+  L0:
+    load_var seed
+    call baml.random.Xoshiro256PlusPlus._new
+    return
 }
 
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
