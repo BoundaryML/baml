@@ -34,21 +34,30 @@ impl CheckArgs {
         let mut db = build_db_from_sources(&resolved, |_| {});
         let cache = CacheContext::open(&resolved, false);
 
-        // Check is a read-only cache consumer. It can use the immutable stdlib
-        // interface and the last successful compile's reuse seeds, but cannot
-        // advance the manifest without emitting matching Program/unit entries.
-        // The stdlib-interface-hit flag is only useful to run/test (which write),
-        // so a read-only check discards it.
-        let reuse_plan = match &cache {
-            Some(ctx) => ctx.prepare_warm_db(&mut db).reuse_plan,
-            None => None,
+        // The manifest can only advance alongside emitted Program/unit entries,
+        // so a clean check *seeds* the cache below by running the same
+        // emit-and-store path as run/test (gated to checks that actually have
+        // something to advance). That turns a check-only workflow warm instead
+        // of leaving it on the full-compile path forever.
+        let (reuse_plan, stdlib_interface_hit) = match &cache {
+            Some(ctx) => {
+                let prep = ctx.prepare_warm_db(&mut db);
+                (prep.reuse_plan, prep.stdlib_interface_hit)
+            }
+            None => (None, false),
         };
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
-        let diagnostics = cache.as_ref().map_or_else(
-            || baml_project::collect_diagnostics(&db),
-            |cache| cache.collect_diagnostics_for_check(&db, reuse_plan.as_ref()),
-        );
+        // With a cache, collect through the incremental collector so the fresh
+        // per-file blobs are available for seeding below; its merged set is
+        // identical to the read-only collector's.
+        let (diagnostics, fresh_diagnostics) = match &cache {
+            Some(ctx) => {
+                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+                (incremental.merged, Some(incremental.fresh_by_file))
+            }
+            None => (baml_project::collect_diagnostics(&db), None),
+        };
         if let Some(cache) = &cache {
             cache.verify_diagnostics(&db)?;
             cache.verify_stdlib_diagnostics(&db)?;
@@ -92,6 +101,48 @@ impl CheckArgs {
         if error_count > 0 {
             reporter.abandon();
             return Ok(crate::ExitCode::Other);
+        }
+
+        // Seed the bytecode cache from this clean check — the same
+        // emit-and-store path run/test use — but only when it advances the
+        // manifest: no reuse plan (missing/stale manifest) or a plan with
+        // dirty files. A fully-current manifest (zero dirty files) has
+        // nothing to store, and skipping keeps the no-op check emit-free.
+        // Seeding is an optimization: a failed emit on a diagnostics-clean
+        // project is logged, never surfaced as a check failure.
+        if let Some(ctx) = &cache {
+            let should_seed = reuse_plan
+                .as_ref()
+                .is_none_or(|plan| !plan.dirty_files.is_empty());
+            if should_seed {
+                match crate::bytecode_cache::compile_program_artifacts(
+                    &db,
+                    &baml_db::baml_compiler2_emit::CompileOptions {
+                        emit_test_cases: false,
+                    },
+                    cache.as_ref(),
+                    reuse_plan.as_ref(),
+                ) {
+                    Ok(compiled) => {
+                        let fresh = fresh_diagnostics
+                            .as_ref()
+                            .expect("a cache is present, so fresh diagnostics were computed");
+                        ctx.verify_and_store(
+                            &db,
+                            &compiled,
+                            fresh,
+                            reuse_plan.as_ref(),
+                            stdlib_interface_hit,
+                            || build_db_from_sources(&resolved, |_| {}),
+                        )?;
+                    }
+                    Err(err) => {
+                        crate::bytecode_cache::cache_debug(format_args!(
+                            "check: cache seeding skipped (emit failed): {err:?}"
+                        ));
+                    }
+                }
+            }
         }
 
         reporter.finish("Finished", format!("checked {file_count} file(s)"));
