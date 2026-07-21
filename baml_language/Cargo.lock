@@ -764,6 +764,7 @@ dependencies = [
  "libsui",
  "mimalloc",
  "object 0.36.3",
+ "rayon",
  "regex",
  "reqwest",
  "sdkgen_cpp",

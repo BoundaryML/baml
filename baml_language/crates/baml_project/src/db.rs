@@ -450,6 +450,44 @@ impl ProjectDatabase {
         }
     }
 
+    /// Bulk [`Self::add_or_update_file`]: identical per-file semantics
+    /// (canonicalization, tombstone revival, map registration), but the
+    /// project file list is written once at the end instead of once per new
+    /// file. The per-file path clones and re-sets the whole `files` Vec and
+    /// bumps the salsa revision each time — O(files²) copies plus one
+    /// revision per file during initial project load.
+    pub fn add_or_update_files<'a, I>(&mut self, files: I)
+    where
+        I: IntoIterator<Item = (&'a std::path::Path, &'a str)>,
+    {
+        let mut new_files = Vec::new();
+        for (path, content) in files {
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+            if let Some(&existing_file) = self.file_map.get(&canonical_path) {
+                existing_file.set_text(self).to(content.to_string());
+                continue;
+            }
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
+            let file_id = file.file_id(self);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
+            new_files.push(file);
+        }
+        if !new_files.is_empty()
+            && let Some(project) = self.project
+        {
+            let mut project_files: Vec<SourceFile> = project.files(self).clone();
+            project_files.extend(new_files);
+            project.set_files(self).to(project_files);
+        }
+    }
+
     /// Remove a file from the database.
     ///
     /// Note: Salsa doesn't support true removal. The input is emptied (so its
