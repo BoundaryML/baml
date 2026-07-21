@@ -594,3 +594,148 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
         _ => ty.clone(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use baml_base::TyAttr;
+    use baml_type::{Interface, QualifiedTypeName};
+
+    use super::*;
+
+    fn attr() -> TyAttr {
+        TyAttr::default()
+    }
+
+    fn err() -> Ty {
+        Ty::Error { attr: attr() }
+    }
+
+    fn unknown() -> Ty {
+        Ty::Unknown { attr: attr() }
+    }
+
+    fn int() -> Ty {
+        Ty::Int { attr: attr() }
+    }
+
+    fn qn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
+    }
+
+    #[test]
+    fn sentinels_match_directly() {
+        assert!(contains_error_recovery(&err()));
+        assert!(contains_error_recovery(&unknown()));
+        assert!(!contains_error_recovery(&int()));
+    }
+
+    #[test]
+    fn descends_into_lists() {
+        assert!(contains_error_recovery(&Ty::List(Box::new(err()), attr())));
+        assert!(contains_error_recovery(&Ty::EvolvingList(
+            Box::new(unknown()),
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::List(Box::new(int()), attr())));
+    }
+
+    #[test]
+    fn descends_into_map_key_and_value() {
+        let map = |key: Ty, value: Ty| Ty::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&map(err(), int())));
+        assert!(contains_error_recovery(&map(int(), err())));
+        assert!(!contains_error_recovery(&map(int(), int())));
+        assert!(contains_error_recovery(&Ty::EvolvingMap(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_unions_and_futures() {
+        assert!(contains_error_recovery(&Ty::Union(
+            vec![int(), err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Union(
+            vec![int(), int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(err()),
+            Box::new(int()),
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_function_params_ret_and_throws() {
+        let func = |param: Ty, ret: Ty, throws: Ty| Ty::Function {
+            params: vec![FunctionParamTy::required(None, param)],
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&func(err(), int(), int())));
+        assert!(contains_error_recovery(&func(int(), err(), int())));
+        assert!(contains_error_recovery(&func(int(), int(), err())));
+        assert!(!contains_error_recovery(&func(int(), int(), int())));
+    }
+
+    #[test]
+    fn descends_into_class_and_interface_type_args() {
+        assert!(contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("BoxLike"),
+            vec![err()],
+            vec![],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("Iter"),
+            vec![],
+            vec![(Name::new("Item"), err())],
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_projection_base_and_interface() {
+        let projection = |base: Ty, iface_generic: Ty| Ty::AssociatedTypeProjection {
+            base: Box::new(base),
+            interface: Box::new(Interface::new(qn("Iter"), vec![iface_generic], vec![])),
+            member: Name::new("Item"),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&projection(err(), int())));
+        assert!(contains_error_recovery(&projection(int(), err())));
+        assert!(!contains_error_recovery(&projection(int(), int())));
+    }
+
+    #[test]
+    fn contains_typevar_where_filters_by_name() {
+        let t = Ty::List(Box::new(Ty::TypeVar(Name::new("T"), attr())), attr());
+        assert!(contains_typevar(&t));
+        assert!(contains_typevar_where(&t, &|n| n.as_str() == "T"));
+        assert!(!contains_typevar_where(&t, &|n| n.as_str() == "U"));
+    }
+}
