@@ -314,10 +314,11 @@ rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
-# `asm` enables the hardware SHA-2 backend (SHA-NI / ARMv8 crypto extensions,
-# runtime-detected). Without it the warm bytecode-cache path software-hashes
-# ~hundreds of MB of unit payloads per run.
-sha2 = { version = "0.10", features = [ "oid", "asm" ] }
+# The hardware SHA-2 backend (`asm`: SHA-NI / ARMv8 crypto extensions,
+# runtime-detected) is enabled per-target in `bex_cache` — the `asm` feature
+# does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
+# be turned on here unconditionally.
+sha2 = { version = "0.10", features = [ "oid" ] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

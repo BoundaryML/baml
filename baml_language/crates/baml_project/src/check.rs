@@ -193,7 +193,7 @@ pub fn collect_compiler2_diagnostics_narrowed(
     NarrowedDiagnostics { merged, fresh }
 }
 
-/// Public wrapper over [`package_level_diagnostics`] for callers that assemble
+/// Public wrapper over the private `package_level_diagnostics` for callers that assemble
 /// per-file diagnostics themselves (the LSP's candidate builder): these
 /// cross-file diagnostics come from `package_items`, not `check_file`, so a
 /// per-file sweep alone silently misses them.
