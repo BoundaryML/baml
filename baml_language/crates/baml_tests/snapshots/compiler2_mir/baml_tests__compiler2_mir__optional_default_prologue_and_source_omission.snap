@@ -1,19 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.main() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = call const fn user.add(const 5_i64, const <omitted>) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.add(base: int, amount: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -37,6 +24,19 @@ fn user.add(base: int, amount: int) -> int {
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.main() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn user.add(const 5_i64, const <omitted>) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

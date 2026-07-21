@@ -5,10 +5,10 @@
 
 use std::fmt::Write;
 
-use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, Terminator, lower_function, pretty::display_function,
 };
+use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_project::ProjectDatabase;
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
@@ -21,11 +21,13 @@ fn make_db() -> ProjectDatabase {
 
 /// Lower all functions in a file to MIR and pretty-print them.
 fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-    let item_tree = file_item_tree(db, file);
+    // Dump in source order (by declaration span) — intrinsic and
+    // salsa-enumeration-independent, matching the generated `test_04_5_mir`.
+    let mut functions = file_functions(db, file).to_vec();
+    functions.sort_by_key(|loc| function_source_map(db, *loc).span.start());
     let mut output = String::new();
 
-    for local_id in item_tree.functions.keys() {
-        let func_loc = FunctionLoc::new(db, file, *local_id);
+    for func_loc in functions {
         let mir = lower_function(db, func_loc, OptLevel::Two);
         writeln!(output, "{}", display_function(&mir)).unwrap();
     }
@@ -48,14 +50,11 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
 }
 "#,
     );
-    let item_tree = file_item_tree(&db, file);
-    let main_id = item_tree
-        .functions
+    let main_loc = *file_functions(&db, file)
         .iter()
-        .find(|(_, function)| function.name.as_str() == "main")
-        .map(|(id, _)| *id)
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, FunctionLoc::new(&db, file, main_id), OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two);
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -114,15 +113,12 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
 }
 "#,
     );
-    let item_tree = file_item_tree(&db, file);
     let lower_named = |name: &str| {
-        let id = item_tree
-            .functions
+        let loc = *file_functions(&db, file)
             .iter()
-            .find(|(_, function)| function.name.as_str() == name)
-            .map(|(id, _)| *id)
+            .find(|&&loc| function_data(&db, loc).name.as_str() == name)
             .unwrap_or_else(|| panic!("{name} function"));
-        lower_function(&db, FunctionLoc::new(&db, file, id), OptLevel::Two)
+        lower_function(&db, loc, OptLevel::Two)
     };
 
     for name in ["indirect", "optional"] {

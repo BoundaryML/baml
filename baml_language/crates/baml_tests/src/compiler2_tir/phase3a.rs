@@ -8,7 +8,7 @@ use super::support::{make_db, render_tir};
 
 #[test]
 fn explicit_local_id_is_structural_call_metadata() {
-    use baml_compiler2_hir::scope::ScopeKind;
+    use baml_compiler2_ppir::item_data::{file_functions, function_data, function_scope};
     use baml_compiler2_tir::inference::{ParamBinding, infer_scope_types};
 
     let mut db = make_db();
@@ -31,20 +31,11 @@ function main(id: boundary.LocalId) -> int {
         "a trailing LocalId side channel must compile cleanly:\n{rendered}"
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
-    let main_scope = index
-        .scopes
+    let main_loc = *file_functions(&db, file)
         .iter()
-        .enumerate()
-        .find(|(_, scope)| {
-            scope.kind == ScopeKind::Function
-                && scope
-                    .name
-                    .as_ref()
-                    .is_some_and(|name| name.as_str() == "main")
-        })
-        .map(|(scope_index, _)| index.scope_ids[scope_index])
-        .expect("main function scope");
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let main_scope = function_scope(&db, main_loc).expect("main function scope");
     let inference = infer_scope_types(&db, main_scope);
     let plans = inference.iter_call_plans().collect::<Vec<_>>();
     assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
