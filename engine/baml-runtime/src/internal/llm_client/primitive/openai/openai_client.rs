@@ -11,7 +11,10 @@ use serde_json::json;
 
 use super::{
     properties,
-    types::{ChatCompletionResponse, ChatCompletionResponseDelta},
+    types::{
+        build_transcription_parts, ChatCompletionResponse, ChatCompletionResponseDelta,
+        TranscriptionParts,
+    },
 };
 use crate::{
     client_registry::ClientProperty,
@@ -418,6 +421,22 @@ impl OpenAIClient {
     }
 }
 
+fn attach_transcription_body(
+    req: reqwest::RequestBuilder,
+    parts: TranscriptionParts,
+) -> Result<reqwest::RequestBuilder> {
+    let file = reqwest::multipart::Part::bytes(parts.file_bytes)
+        .file_name(parts.filename)
+        .mime_str(&parts.mime)?;
+    let mut form = reqwest::multipart::Form::new().part("file", file);
+
+    for (key, value) in parts.fields {
+        form = form.text(key, value);
+    }
+
+    Ok(req.multipart(form))
+}
+
 impl RequestBuilder for OpenAIClient {
     fn http_client(&self) -> &reqwest::Client {
         &self.client
@@ -468,6 +487,14 @@ impl RequestBuilder for OpenAIClient {
         // Don't attach BAML creds to localhost requests, i.e. ollama
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
+        }
+
+        if matches!(strategy, ProviderStrategy::TranscriptionsApi) {
+            if stream {
+                anyhow::bail!("OpenAI audio transcriptions do not support streaming");
+            }
+            let parts = build_transcription_parts(&self.properties.properties, prompt)?;
+            return attach_transcription_body(req, parts);
         }
 
         let mut body = strategy.build_body(prompt, &self.properties.properties, self)?;
@@ -916,6 +943,7 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 
 #[cfg(test)]
 mod tests {
+    use base64::{prelude::BASE64_STANDARD, Engine};
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
     use internal_llm_client::{openai, RolesSelection, SupportedRequestModes};
@@ -1133,6 +1161,44 @@ mod tests {
             transcriptions_client.get_response_type(),
             ResponseType::OpenAITranscription
         ));
+    }
+
+    #[tokio::test]
+    async fn transcriptions_build_request_uses_multipart_endpoint() {
+        let mut transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+        transcriptions_client
+            .properties
+            .properties
+            .insert("model".to_string(), json!("gpt-4o-transcribe"));
+        let prompt = vec![RenderedChatMessage {
+            role: "user".to_string(),
+            allow_duplicate_role: false,
+            parts: vec![ChatMessagePart::Media(baml_types::BamlMedia::base64(
+                BamlMediaType::Audio,
+                BASE64_STANDARD.encode(b"fake mp3 bytes"),
+                Some("audio/mpeg".to_string()),
+            ))],
+        }];
+
+        let request = transcriptions_client
+            .build_request(either::Right(prompt.as_slice()), false, false, true)
+            .await
+            .expect("transcription request should build")
+            .build()
+            .expect("reqwest request should build");
+
+        assert_eq!(
+            request.url().as_str(),
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+        let content_type = request
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .expect("multipart request should set content-type");
+        assert!(content_type.starts_with("multipart/form-data"));
+        assert!(!content_type.starts_with("application/json"));
     }
 
     #[test]
