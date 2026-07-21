@@ -33,7 +33,7 @@ pub mod testing;
 
 pub use check::{
     CheckResult, NarrowedDiagnostics, collect_compiler2_diagnostics,
-    collect_compiler2_diagnostics_narrowed, collect_diagnostics,
+    collect_compiler2_diagnostics_narrowed, collect_diagnostics, collect_package_level_diagnostics,
 };
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};

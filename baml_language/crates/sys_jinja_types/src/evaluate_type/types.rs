@@ -14,13 +14,13 @@ use minijinja::machinery::{
 
 use super::TypeError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
     pub name: String,
     pub values: Vec<EnumValueDefinition>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumValueDefinition {
     pub name: String,
     pub alias: Option<String>,
@@ -300,7 +300,7 @@ impl BitOr for Type {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Scope {
     CodeBlock(IndexMap<String, Type>),
     Branch(IndexMap<String, Type>, IndexMap<String, Type>, bool),
@@ -311,7 +311,7 @@ enum Scope {
     Narrowing(IndexMap<String, Type>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,

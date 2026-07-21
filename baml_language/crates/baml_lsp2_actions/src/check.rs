@@ -193,6 +193,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         file_id,
         &item_tree,
         pkg_items,
+        &pkg_info.package,
         &pkg_info.namespace_path,
         source_text,
     ));
@@ -1214,10 +1215,33 @@ fn check_jinja_templates(
     file_id: FileId,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    package: &Name,
     namespace_path: &[Name],
     source_text: &str,
 ) -> Vec<Diagnostic> {
-    let base_types = build_jinja_types(db, pkg_items, namespace_path);
+    // Files with no LLM prompts and no template_string bodies have nothing to
+    // validate. Return before touching the package-wide Jinja environment so
+    // such files never pay for (or depend on) it at all.
+    let has_prompts = item_tree.functions.values().any(|func_data| {
+        matches!(
+            &func_data.declarative_meta,
+            Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm)) if llm.prompt.is_some()
+        )
+    });
+    let has_templates = item_tree
+        .template_strings
+        .values()
+        .any(|template| template.body.is_some());
+    if !has_prompts && !has_templates {
+        return Vec::new();
+    }
+
+    let ns_id = baml_compiler2_hir::namespace::NamespaceId::new(
+        db,
+        package.clone(),
+        namespace_path.to_vec(),
+    );
+    let base_types = jinja_base_types(db, ns_id);
     let mut diagnostics = Vec::new();
 
     for func_data in item_tree.functions.values() {
@@ -1227,7 +1251,7 @@ fn check_jinja_templates(
             func_data,
             pkg_items,
             namespace_path,
-            &base_types,
+            base_types,
             source_text,
         ));
     }
@@ -1297,6 +1321,31 @@ fn check_llm_prompt_template(
         &prompt.text,
         sys_jinja_types::validate_template(func_data.name.as_str(), &prompt.text, &mut types),
     )
+}
+
+/// Package-wide Jinja type environment (classes, enums, aliases, and
+/// `template_strings` visible from a namespace), memoized per
+/// (package, namespace path).
+///
+/// `build_jinja_types` walks every type in the package, so before this was a
+/// Salsa query it re-ran O(package items) work once per checked file — the
+/// dominant quadratic term in whole-project checks (and it ran a second time
+/// per file inside `get_bytecode`'s error gate). As a tracked function the
+/// walk runs once per (package, namespace, revision) and every later
+/// `check_file` in the same revision gets a memo hit; `PredefinedTypes`'s
+/// `PartialEq` gives Salsa backdating, so edits that leave the environment
+/// unchanged don't invalidate downstream prompt checks.
+#[salsa::tracked(returns(ref))]
+fn jinja_base_types<'db>(
+    db: &'db dyn Db,
+    ns_id: baml_compiler2_hir::namespace::NamespaceId<'db>,
+) -> sys_jinja_types::PredefinedTypes {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, ns_id.package(db));
+    // Match the call-site environment exactly: `check_file` resolves items via
+    // `package_resolution_context(...).own_items`, which is ppir's
+    // `package_items` — use the same query here so the env is identical.
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    build_jinja_types(db, pkg_items, &ns_id.path(db))
 }
 
 fn build_jinja_types(

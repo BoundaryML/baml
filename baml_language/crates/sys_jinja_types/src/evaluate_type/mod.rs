@@ -15,7 +15,7 @@ use minijinja::machinery::{Span, ast::Expr};
 pub use self::types::{EnumDefinition, EnumValueDefinition, JinjaContext, PredefinedTypes, Type};
 pub(crate) use self::{expr::evaluate_type, stmt::get_variable_types};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeError {
     message: String,
     span: Span,
