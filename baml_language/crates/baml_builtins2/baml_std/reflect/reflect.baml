@@ -65,12 +65,15 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
   $rust_function
 }
 
-/// Calls `f` with `args` (positional) and `opts` (named), checked at
-/// runtime against `f`'s signature. An absent named argument fires the
-/// callee's own default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a
-/// pinned `AnyFunction<Returns = json, Throws = ToolError>` yields typed
-/// results and an exhaustive catch; a bare `AnyFunction` returns `unknown`
-/// and throws `unknown` (which covers `InvalidArgumentError`).
-function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], opts: map<string, unknown> = {}) -> R throws E | InvalidArgumentError {
+/// Calls `f` with `args`, every argument keyed by parameter name (a nameless
+/// positional is addressed by its `$argN` placeholder), checked at runtime
+/// against `f`'s signature: a missing required parameter, a key naming no
+/// parameter, or a value that does not fit its parameter's type throws
+/// `InvalidArgumentError`. An absent optional fires the callee's own
+/// default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a pinned
+/// `AnyFunction<Returns = json, Throws = ToolError>` yields typed results
+/// and an exhaustive catch; a bare `AnyFunction` returns `unknown` and
+/// throws `unknown` (which covers `InvalidArgumentError`).
+function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError {
   $rust_function
 }

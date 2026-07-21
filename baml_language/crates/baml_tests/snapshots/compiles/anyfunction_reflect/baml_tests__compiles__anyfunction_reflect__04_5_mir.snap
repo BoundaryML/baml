@@ -216,11 +216,11 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     }
 }
 
-fn user.typed_dispatch(name: string, args: unknown[]) -> string | Doc[] {
+fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc[] {
     // Locals:
     let _0: string | Doc[] // _0 // return
     let _1: string // name // param
-    let _2: unknown[] // args // param
+    let _2: map<string, unknown> // args // param
     let _3: map<string, baml.AnyFunction<Returns = string | Doc[], Throws = ToolError>> // tools
     let _4: null | baml.AnyFunction<Returns = string | Doc[], Throws = ToolError> // f
     let _5: type
@@ -268,7 +268,7 @@ fn user.typed_dispatch(name: string, args: unknown[]) -> string | Doc[] {
         _10 = copy _4;
         _11 = load_type(Doc[] | string);
         _12 = load_type(ToolError);
-        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2, const <omitted>) -> [bb13, unwind: bb8];
+        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb13, unwind: bb8];
     }
 
     bb7: {

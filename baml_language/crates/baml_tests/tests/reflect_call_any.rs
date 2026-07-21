@@ -6,7 +6,7 @@ use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 #[tokio::test]
-async fn call_any_dispatches_positional_args() {
+async fn call_any_dispatches_named_args() {
     let output = baml_test!(
         r#"
         function add(x: int, y: int) -> int throws never {
@@ -15,7 +15,7 @@ async fn call_any_dispatches_positional_args() {
 
         function main() -> int throws never {
             let f: baml.AnyFunction<Returns = int, Throws = never> = add
-            return reflect.call_any(f, [20, 22]) catch (e) {
+            return reflect.call_any(f, { "x": 20, "y": 22 }) catch (e) {
                 _ => -1
             }
         }
@@ -35,11 +35,11 @@ async fn call_any_absent_optional_fires_callee_default() {
         function main() -> int throws never {
             let f: baml.AnyFunction<Returns = int, Throws = never> = scale
             // Absent: the callee's own (non-constant) default fires: 5 * 6.
-            let defaulted = reflect.call_any(f, [5]) catch (e) {
+            let defaulted = reflect.call_any(f, { "x": 5 }) catch (e) {
                 _ => -1
             }
             // Present: the supplied value wins: 5 * 10.
-            let supplied = reflect.call_any(f, [5], opts = { "factor": 10 }) catch (e) {
+            let supplied = reflect.call_any(f, { "x": 5, "factor": 10 }) catch (e) {
                 _ => -1
             }
             return defaulted * 1000 + supplied
@@ -50,7 +50,7 @@ async fn call_any_absent_optional_fires_callee_default() {
 }
 
 #[tokio::test]
-async fn call_any_rejects_bad_arity_type_and_key() {
+async fn call_any_rejects_missing_key_and_type_mismatches() {
     let output = baml_test!(
         r#"
         function greet(name: string, excited: bool = false) -> string throws never {
@@ -59,21 +59,21 @@ async fn call_any_rejects_bad_arity_type_and_key() {
 
         function main() -> int throws never {
             let f: baml.AnyFunction<Returns = string, Throws = never> = greet
-            let arity = reflect.call_any(f, []) catch (e) {
+            let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
-            let ty = reflect.call_any(f, [42]) catch (e) {
+            let ty = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
-            let key = reflect.call_any(f, ["x"], opts = { "volume": 11 }) catch (e) {
+            let key = reflect.call_any(f, { "name": "x", "volume": 11 }) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
-            let opt_ty = reflect.call_any(f, ["x"], opts = { "excited": "yes" }) catch (e) {
+            let opt_ty = reflect.call_any(f, { "name": "x", "excited": "yes" }) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
             let failures = 0
-            if arity is int {
-                failures = failures + arity
+            if missing is int {
+                failures = failures + missing
             }
             if ty is int {
                 failures = failures + ty
@@ -101,7 +101,7 @@ async fn call_any_invalid_argument_error_carries_types() {
 
         function main() -> string throws never {
             let f: baml.AnyFunction<Returns = string, Throws = never> = greet
-            let out = reflect.call_any(f, [42]) catch (e) {
+            let out = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => e.expected.to_string() + "|" + e.got.to_string()
             }
             if out is string {
@@ -134,7 +134,7 @@ async fn call_any_propagates_callee_typed_throw() {
             let f: baml.AnyFunction<Returns = string, Throws = ToolError> = fail_search
             // Exhaustive without a wildcard: the channel is exactly
             // ToolError | reflect.InvalidArgumentError.
-            return reflect.call_any(f, ["cats"]) catch (e) {
+            return reflect.call_any(f, { "q": "cats" }) catch (e) {
                 ToolError => e.message,
                 reflect.InvalidArgumentError => "iae"
             }
@@ -163,12 +163,12 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
             throw ToolError { message: s }
         }
 
-        function dispatch(tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>>, name: string, arg: string) -> string throws never {
+        function dispatch(tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>>, name: string, args: map<string, unknown>) -> string throws never {
             let f = tools.get(name)
             if f is null {
                 return "no-such-tool"
             }
-            return reflect.call_any(f, [arg]) catch (e) {
+            return reflect.call_any(f, args) catch (e) {
                 ToolError => "err:" + e.message,
                 reflect.InvalidArgumentError => "iae"
             }
@@ -179,7 +179,7 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
                 "shout": shout,
                 "fail": fail,
             }
-            return dispatch(tools, "shout", "hi") + "/" + dispatch(tools, "fail", "down") + "/" + dispatch(tools, "nope", "x")
+            return dispatch(tools, "shout", { "s": "hi" }) + "/" + dispatch(tools, "fail", { "s": "down" }) + "/" + dispatch(tools, "nope", {})
         }
         "#
     );
@@ -198,7 +198,7 @@ async fn call_any_lambda_callee() {
                 x * 2
             }
             let f: baml.AnyFunction<Returns = int, Throws = never> = double
-            return reflect.call_any(f, [21]) catch (e) {
+            return reflect.call_any(f, { "x": 21 }) catch (e) {
                 _ => -1
             }
         }
@@ -222,7 +222,7 @@ async fn call_any_bound_method_callee() {
         function main() -> int throws never {
             let c = Counter { base: 40 }
             let m: baml.AnyFunction<Returns = int, Throws = never> = c.bump
-            return reflect.call_any(m, [2]) catch (e) {
+            return reflect.call_any(m, { "amount": 2 }) catch (e) {
                 _ => -1
             }
         }
@@ -316,7 +316,7 @@ async fn generic_function_reflects_coarsely_and_dispatches() {
             // A generic callable's unresolved slots erase to `unknown` rather
             // than refusing reflection, and call_any still dispatches.
             let sig = reflect.signature(f)
-            let r = reflect.call_any(f, [42]) catch (e) {
+            let r = reflect.call_any(f, { "x": 42 }) catch (e) {
                 _ => -1
             }
             let called = "no"

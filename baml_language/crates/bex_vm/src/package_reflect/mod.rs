@@ -174,27 +174,19 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
     }
 }
 
-/// The call's shape as a function type: the provided positionals' reconstructed
-/// types plus each provided named argument, with `unknown` return/throws.
-fn call_shape_ty(
-    vm: &BexVm,
-    provided: &[Value],
-    opts: &IndexMap<bex_str::BexStr, Value>,
-) -> RealizedTy {
+/// The call's shape as a function type: each provided named argument as a
+/// parameter carrying the value's reconstructed type, with `unknown`
+/// return/throws.
+fn call_shape_ty(vm: &BexVm, provided: &IndexMap<bex_str::BexStr, Value>) -> RealizedTy {
     use baml_type::{FunctionParamMode, RealizedFunctionParamTy};
-    let mut params: Vec<RealizedFunctionParamTy> = provided
+    let params = provided
         .iter()
-        .map(|&v| RealizedFunctionParamTy {
-            name: None,
+        .map(|(k, &v)| RealizedFunctionParamTy {
+            name: Some(baml_type::Name::new(k.as_str())),
             ty: value_realized_ty(vm, v),
             mode: FunctionParamMode::Required,
         })
         .collect();
-    params.extend(opts.iter().map(|(k, &v)| RealizedFunctionParamTy {
-        name: Some(baml_type::Name::new(k.as_str())),
-        ty: value_realized_ty(vm, v),
-        mode: FunctionParamMode::Optional,
-    }));
     RealizedTy::Function {
         params,
         ret: Box::new(RealizedTy::unknown()),
@@ -237,22 +229,25 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     normalize::is_subtype(&actual, &expected, &RuntimeTypeContext::new(vm))
 }
 
-/// `reflect.call_any<R, E>(f, args, opts = {}) -> R throws E | InvalidArgumentError`.
+/// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
 ///
-/// Checks the runtime-assembled arguments against `f`'s runtime signature,
-/// then dispatches through the CPS trampoline. Absent optionals are passed as
-/// `OMITTED_ARG`, so a bytecode callee's own default prologue fires; the
+/// Every argument is keyed by parameter name; a nameless positional is
+/// addressed by the same `$argN` placeholder `reflect.signature` reports, so
+/// the signature's keys are exactly the accepted keys. Checks the map
+/// against `f`'s runtime signature (a missing required parameter, a key
+/// naming no parameter, or an ill-typed value throws `InvalidArgumentError`),
+/// then dispatches through the CPS trampoline. Absent optionals are passed
+/// as `OMITTED_ARG`, so a bytecode callee's own default prologue fires; the
 /// callee's throw unwinds transparently past the native frame to the caller,
 /// which is exactly the declared `throws E` channel.
 fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
     use baml_type::FunctionParamMode;
-    let (Some(&f_val), Some(&pos_val)) = (args.first(), args.get(1)) else {
+    let (Some(&f_val), Some(&args_val)) = (args.first(), args.get(1)) else {
         return VmInternalError::MissingNativeFunction {
             name: "reflect.call_any".to_string(),
         }
         .into();
     };
-    let opts_val = args.get(2).copied().unwrap_or(Value::OMITTED_ARG);
 
     let Some(f_ptr) = f_val.as_object_ptr() else {
         return non_callable_error("reflect.call_any");
@@ -261,86 +256,60 @@ fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         return non_callable_error("reflect.call_any");
     };
 
-    let provided: Vec<Value> = match pos_val.as_object_ptr().map(|p| vm.get_object(p)) {
-        Some(Object::Array(arr)) => arr.to_vec(),
-        _ => {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "reflect.call_any expects an array of positional arguments".to_string(),
-            })
-            .into();
-        }
-    };
-    let opts: IndexMap<bex_str::BexStr, Value> = if opts_val.is_omitted() {
-        IndexMap::new()
-    } else {
-        match opts_val.as_object_ptr().map(|p| vm.get_object(p)) {
+    let provided: IndexMap<bex_str::BexStr, Value> =
+        match args_val.as_object_ptr().map(|p| vm.get_object(p)) {
             Some(Object::Map(map)) => map.to_index_map(),
             _ => {
                 return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "reflect.call_any expects a map of named arguments".to_string(),
+                    message: "reflect.call_any expects a map of arguments".to_string(),
                 })
                 .into();
             }
-        }
-    };
-
-    let required: Vec<&baml_type::RealizedFunctionParamTy> = sig
-        .params
-        .iter()
-        .filter(|p| p.mode == FunctionParamMode::Required)
-        .collect();
-
-    // Positional arity, then per-value fit.
-    if provided.len() != required.len() {
-        let expected = callee_fn_ty(&sig);
-        let got = call_shape_ty(vm, &provided, &opts);
-        return raise_invalid_argument(vm, expected, got);
-    }
-    for (&value, param) in provided.iter().zip(&required) {
-        if !value_fits(vm, value, &param.ty) {
-            let expected = param.ty.clone();
-            let got = value_realized_ty(vm, value);
-            return raise_invalid_argument(vm, expected, got);
-        }
-    }
-
-    // Named arguments: every key must name a declared optional, and fit it.
-    for (key, &value) in &opts {
-        let Some(param) = sig.params.iter().find(|p| {
-            p.mode == FunctionParamMode::Optional
-                && p.name.as_ref().is_some_and(|n| n.as_str() == key.as_str())
-        }) else {
-            let expected = callee_fn_ty(&sig);
-            let got = call_shape_ty(vm, &provided, &opts);
-            return raise_invalid_argument(vm, expected, got);
         };
-        if !value_fits(vm, value, &param.ty) {
-            let expected = param.ty.clone();
-            let got = value_realized_ty(vm, value);
-            return raise_invalid_argument(vm, expected, got);
+
+    // Walk the parameters in declaration order, resolving each from the map
+    // by its addressable name and assembling the callee's frame as we go.
+    // Absent optionals become `OMITTED_ARG`: a bytecode callee's default
+    // prologue replaces them; a native callee's glue reads them as "not
+    // supplied". A nameless optional is unaddressable and always omitted.
+    let mut final_args = Vec::with_capacity(sig.params.len());
+    let mut matched = 0usize;
+    let mut positional_idx = 0usize;
+    for param in &sig.params {
+        let key = match (&param.name, param.mode) {
+            (Some(name), _) => Some(name.as_str().to_string()),
+            (None, FunctionParamMode::Required) => Some(format!("$arg{positional_idx}")),
+            (None, FunctionParamMode::Optional) => None,
+        };
+        if param.mode == FunctionParamMode::Required {
+            positional_idx += 1;
+        }
+        let value = key.and_then(|k| provided.get(k.as_str()).copied());
+        match (param.mode, value) {
+            (_, Some(value)) => {
+                if !value_fits(vm, value, &param.ty) {
+                    let expected = param.ty.clone();
+                    let got = value_realized_ty(vm, value);
+                    return raise_invalid_argument(vm, expected, got);
+                }
+                matched += 1;
+                final_args.push(value);
+            }
+            (FunctionParamMode::Required, None) => {
+                let expected = callee_fn_ty(&sig);
+                let got = call_shape_ty(vm, &provided);
+                return raise_invalid_argument(vm, expected, got);
+            }
+            (FunctionParamMode::Optional, None) => final_args.push(Value::OMITTED_ARG),
         }
     }
 
-    // Assemble the callee's frame in parameter order. Absent optionals become
-    // `OMITTED_ARG`: a bytecode callee's default prologue replaces them; a
-    // native callee's glue reads them as "not supplied".
-    let mut final_args = Vec::with_capacity(sig.params.len());
-    let mut positional = provided.into_iter();
-    for param in &sig.params {
-        match param.mode {
-            // The arity check above guarantees one provided value per
-            // required param; the fallback is unreachable.
-            FunctionParamMode::Required => {
-                final_args.push(positional.next().unwrap_or(Value::OMITTED_ARG));
-            }
-            FunctionParamMode::Optional => final_args.push(
-                param
-                    .name
-                    .as_ref()
-                    .and_then(|n| opts.get(n.as_str()).copied())
-                    .unwrap_or(Value::OMITTED_ARG),
-            ),
-        }
+    // Every provided key must have matched a parameter (names are unique, so
+    // the counts agree exactly when no key was extraneous).
+    if matched != provided.len() {
+        let expected = callee_fn_ty(&sig);
+        let got = call_shape_ty(vm, &provided);
+        return raise_invalid_argument(vm, expected, got);
     }
 
     NativeCallResult::YieldToCall {

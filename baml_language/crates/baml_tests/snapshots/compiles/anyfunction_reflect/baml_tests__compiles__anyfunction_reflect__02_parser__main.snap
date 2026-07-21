@@ -502,10 +502,16 @@ SOURCE_FILE
       PARAMETER
         WORD "args"
         COLON ":"
-        TYPE_EXPR "unknown[]"
-          WORD "unknown"
-          L_BRACKET "["
-          R_BRACKET "]"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "unknown"
+              WORD "unknown"
+            GREATER ">"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "Doc[] | string"

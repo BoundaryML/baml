@@ -10,7 +10,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], opts: map<string, unknown>) -> R {
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
 }
 
 function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
@@ -152,7 +152,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     return
 }
 
-function user.typed_dispatch(name: string, args: unknown[]) -> Doc[] | string {
+function user.typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] | string {
     call user.heterogeneous_tool_map
     store_var tools
     load_type string
@@ -181,7 +181,6 @@ function user.typed_dispatch(name: string, args: unknown[]) -> Doc[] | string {
     load_type Doc[] | string
     load_type ToolError
     load_var2 4 2
-    load_const <omitted>
     call reflect.call_any
     jump L9
     load_var e

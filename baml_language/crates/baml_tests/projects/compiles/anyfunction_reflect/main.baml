@@ -58,7 +58,7 @@ function signature_access(f: baml.AnyFunction) -> string throws never {
     return parts
 }
 
-function typed_dispatch(name: string, args: unknown[]) -> Doc[] | string throws never {
+function typed_dispatch(name: string, args: map<string, unknown>) -> Doc[] | string throws never {
     let tools = heterogeneous_tool_map()
     let f = tools.get(name)
     if f is null {

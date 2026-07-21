@@ -55,7 +55,7 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
     return parts : string
   }
 }
-function user.typed_dispatch(name: string, args: unknown[]) -> user.Doc[] | string throws never {
+function user.typed_dispatch(name: string, args: map<string, unknown>) -> user.Doc[] | string throws never {
   { : never
     let tools = heterogeneous_tool_map() : map<string, baml.AnyFunction<Returns = user.Doc[] | string, Throws = user.ToolError>>
     let f = tools.get(name) : baml.AnyFunction<Returns = user.Doc[] | string, Throws = user.ToolError> | null
