@@ -6186,8 +6186,13 @@ impl<'a> Parser<'a> {
             Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
             Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
             // `client` is a keyword but a valid field name (BEP-049 §10
-            // `Context { client: ... }`), so an object literal can begin with it.
-            Some(t) if t.kind == TokenKind::Word || t.kind == TokenKind::Client => {
+            // `Context { client: ... }`), so an object literal can begin with
+            // it; likewise `throws` (BEP-062 `Signature { throws: ... }`).
+            Some(t)
+                if t.kind == TokenKind::Word
+                    || t.kind == TokenKind::Client
+                    || t.kind == TokenKind::Throws =>
+            {
                 let mut i = 2;
                 while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
                     && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
@@ -7133,10 +7138,12 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            // Check for valid field start (`client` is a keyword but a valid
-            // field name — BEP-049 §10 `Context { client: ... }`).
+            // Check for valid field start (`client` and `throws` are keywords
+            // but valid field names — BEP-049 §10 `Context { client: ... }`,
+            // BEP-062 `Signature { throws: ... }`).
             } else if self.at(TokenKind::Word)
                 || self.at(TokenKind::Client)
+                || self.at(TokenKind::Throws)
                 || self.at(TokenKind::Quote)
                 || self.at(TokenKind::Hash)
             {
@@ -7188,9 +7195,10 @@ impl<'a> Parser<'a> {
     fn parse_object_field(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Field name - can be identifier, qualified identifier, or string literal.
-            // `client` is a keyword but a valid field name (BEP-049 §10
-            // `Context { client: ... }`).
-            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+            // `client` and `throws` are keywords but valid field names
+            // (BEP-049 §10 `Context { client: ... }`, BEP-062
+            // `Signature { throws: ... }`).
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) || p.at(TokenKind::Throws) {
                 p.bump(); // identifier field name
                 while p.at(TokenKind::Dot) {
                     p.bump();

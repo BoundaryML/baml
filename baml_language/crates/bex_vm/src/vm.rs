@@ -1238,45 +1238,49 @@ pub(crate) struct CallableSignature {
     pub(crate) throws: Option<baml_type::RealizedTy>,
 }
 
-/// Reconstruct a [`CallableSignature`] from a raw `Function` object. Like
-/// [`function_object_ty`], unresolved generics are already erased to `unknown`
-/// in the stored signature, so a generic callable reconstructs coarsely.
+/// Reconstruct a [`CallableSignature`] from a raw `Function` object.
 /// `drop_receiver` skips the leading `self` parameter for bound methods.
+///
+/// A stored signature slot that does not realize — a generic function's
+/// unresolved `TypeVar`, a symbolic projection — erases to `unknown` for that
+/// slot rather than dropping the whole callable: `reflect.signature` /
+/// `reflect.call_any` prefer the coarse truth over refusing generic
+/// callables. (This is deliberately looser than [`function_object_ty`], whose
+/// `is`-matching consumers must never affirm a type they cannot prove.)
 fn function_callable_signature(
     f: &bex_vm_types::types::Function,
     drop_receiver: bool,
-) -> Option<CallableSignature> {
-    use baml_type::{FunctionParamMode, RealizedFunctionParamTy};
+) -> CallableSignature {
+    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy, TyAttr};
+    let realized_or_unknown = |ty: &baml_type::RuntimeTy| {
+        realized_arg(ty).unwrap_or(RealizedTy::BuiltinUnknown {
+            attr: TyAttr::default(),
+        })
+    };
     let params = f
         .param_types
         .iter()
         .enumerate()
         .skip(usize::from(drop_receiver))
-        .map(|(i, ty)| {
-            Some(RealizedFunctionParamTy {
-                name: f
-                    .param_names
-                    .get(i)
-                    .filter(|n| !n.is_empty())
-                    .map(|n| Name::new(n.as_str())),
-                ty: realized_arg(ty)?,
-                mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
-                    FunctionParamMode::Optional
-                } else {
-                    FunctionParamMode::Required
-                },
-            })
+        .map(|(i, ty)| RealizedFunctionParamTy {
+            name: f
+                .param_names
+                .get(i)
+                .filter(|n| !n.is_empty())
+                .map(|n| Name::new(n.as_str())),
+            ty: realized_or_unknown(ty),
+            mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
+                FunctionParamMode::Optional
+            } else {
+                FunctionParamMode::Required
+            },
         })
-        .collect::<Option<Vec<_>>>()?;
-    let throws = match &f.throws_type {
-        Some(ty) => Some(realized_arg(ty)?),
-        None => None,
-    };
-    Some(CallableSignature {
+        .collect();
+    CallableSignature {
         params,
-        ret: realized_arg(&f.return_type)?,
-        throws,
-    })
+        ret: realized_or_unknown(&f.return_type),
+        throws: f.throws_type.as_ref().map(realized_or_unknown),
+    }
 }
 
 /// Get the type tag for any runtime value.
@@ -1980,14 +1984,14 @@ impl BexVm {
                 // SAFETY: `closure.function` points to a live `Function`, the
                 // same invariant `resolve_callable_target` relies on.
                 match unsafe { closure.function.get() } {
-                    Object::Function(f) => function_callable_signature(f, false),
+                    Object::Function(f) => Some(function_callable_signature(f, false)),
                     _ => None,
                 }
             }
             Object::GenericFunction(gf) => {
                 let inner = self.globals.get(self.proof(), gf.function);
                 match inner.as_object_ptr().map(|p| self.get_object(p)) {
-                    Some(Object::Function(f)) => function_callable_signature(f, false),
+                    Some(Object::Function(f)) => Some(function_callable_signature(f, false)),
                     _ => None,
                 }
             }
@@ -1995,7 +1999,7 @@ impl BexVm {
                 // SAFETY: `bm.function` points to a live `Function` (the bind
                 // site stored it), as at `CallIndirect`'s BoundMethod arm.
                 match unsafe { bm.function.get() } {
-                    Object::Function(f) => function_callable_signature(f, true),
+                    Object::Function(f) => Some(function_callable_signature(f, true)),
                     _ => None,
                 }
             }

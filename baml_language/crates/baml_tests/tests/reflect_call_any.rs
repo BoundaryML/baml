@@ -342,3 +342,56 @@ async fn signature_bound_method_drops_receiver() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::String("1|int".into())));
 }
+
+#[tokio::test]
+async fn generic_function_reflects_coarsely_and_dispatches() {
+    let output = baml_test!(
+        r#"
+        function ident<T>(x: T) -> T throws never {
+            return x
+        }
+
+        function main() -> string throws never {
+            let f: baml.AnyFunction = ident
+            // A generic callable's unresolved slots erase to `unknown` rather
+            // than refusing reflection, and call_any still dispatches.
+            let sig = reflect.signature(f)
+            let r = reflect.call_any(f, [42]) catch (e) {
+                _ => -1
+            }
+            let called = "no"
+            if r is int {
+                called = r.to_string()
+            }
+            return sig.returns.to_string() + "|" + sig.args.length().to_string() + "|" + called
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("unknown|1|42".into()))
+    );
+}
+
+#[tokio::test]
+async fn signature_object_literal_accepts_throws_key() {
+    let output = baml_test!(
+        r#"
+        function main() -> string throws never {
+            // `throws` as an unquoted object-literal key (it is a keyword in
+            // type position only).
+            let manual = reflect.Signature {
+                args: [],
+                kwargs: {},
+                returns: reflect.type_of<int>(),
+                throws: reflect.type_of<never>(),
+            }
+            return manual.returns.to_string() + "|" + manual.throws.to_string()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("int|never".into()))
+    );
+}
