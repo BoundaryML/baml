@@ -71,6 +71,17 @@ case "$MODE" in
 --all)
     PROFILE_FLAG="--profile release-bridge-swift"
     PROFILE_DIR="release-bridge-swift"
+    # Deployment targets must match Package.swift's platform minimums
+    # (.macOS(.v13) / .iOS(.v16)) — without these, cargo stamps objects
+    # with the host OS version and every consumer link warns
+    # "was built for newer macOS version than being linked".
+    export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
+    export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-16.0}"
+    # Self-provision cross targets for the PINNED toolchain (adding them
+    # to the default toolchain does nothing — rust-toolchain.toml wins).
+    (cd "$WORKSPACE_ROOT" && rustup target add \
+        aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios \
+        aarch64-apple-ios-sim x86_64-apple-ios)
     for t in aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios \
              aarch64-apple-ios-sim x86_64-apple-ios; do
         build_target "$t"
@@ -100,3 +111,16 @@ rm -rf "$OUT"
 mkdir -p "$(dirname "$OUT")"
 xcodebuild -create-xcframework "${LIB_ARGS[@]}" -output "$OUT"
 echo "wrote $OUT"
+
+# Optional packaging for release pipelines: --zip <path> after the mode
+# produces a deterministic-layout zip plus its SwiftPM checksum on
+# stdout, so distribution CI never needs to know how packaging works.
+if [[ "${2:-}" == "--zip" || "${3:-}" == "--zip" ]]; then
+    ZIP_OUT=""
+    [[ "${2:-}" == "--zip" ]] && ZIP_OUT="${3:?--zip requires a path}"
+    [[ "${3:-}" == "--zip" ]] && ZIP_OUT="${4:?--zip requires a path}"
+    (cd "$(dirname "$OUT")" && ditto -c -k --keepParent "$(basename "$OUT")" "$ZIP_OUT")
+    CHECKSUM="$(cd "$SWIFT_SDK_DIR" && swift package compute-checksum "$ZIP_OUT")"
+    echo "zip $ZIP_OUT"
+    echo "checksum $CHECKSUM"
+fi
