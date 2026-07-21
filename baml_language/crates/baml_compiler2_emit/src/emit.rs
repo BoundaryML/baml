@@ -1845,7 +1845,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
-    /// Emit a constant value.
     /// Push a function reference as a value: a pooled, interned
     /// `Object::GenericFunction` wrapper over the function's global slot
     /// (empty `type_args` for a plain reference). Interning by

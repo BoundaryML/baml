@@ -38,12 +38,6 @@ fn ty_never() -> RealizedTy {
     }
 }
 
-fn ty_unknown() -> RealizedTy {
-    RealizedTy::BuiltinUnknown {
-        attr: TyAttr::default(),
-    }
-}
-
 /// The two natives' parameters are statically `baml.AnyFunction`, so a
 /// non-callable here means the coercion rule and the runtime disagree — an
 /// internal invariant break, not a user error.
@@ -138,13 +132,7 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         }
     }
     let args_val = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
-    let opts_val = Value::object(vm.tlab.alloc_map(
-        RealizedTy::String {
-            attr: TyAttr::default(),
-        },
-        ty_arg(),
-        opts,
-    ));
+    let opts_val = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
     let returns_val = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
     let errors_val = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
     let docstring_val = match &sig.docstring {
@@ -209,8 +197,8 @@ fn call_shape_ty(
     }));
     RealizedTy::Function {
         params,
-        ret: Box::new(ty_unknown()),
-        throws: Box::new(ty_unknown()),
+        ret: Box::new(RealizedTy::unknown()),
+        throws: Box::new(RealizedTy::unknown()),
         attr: TyAttr::default(),
     }
 }
@@ -219,7 +207,7 @@ fn call_shape_ty(
 /// value, a future, an opaque handle).
 fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
     vm.value_concrete_ty(value)
-        .map_or_else(ty_unknown, RealizedTy::from)
+        .map_or_else(RealizedTy::unknown, RealizedTy::from)
 }
 
 /// Whether `value` fits the parameter type `expected`, by the canonical
@@ -340,14 +328,10 @@ fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
     let mut positional = provided.into_iter();
     for param in &sig.params {
         match param.mode {
+            // The arity check above guarantees one provided value per
+            // required param; the fallback is unreachable.
             FunctionParamMode::Required => {
-                let Some(value) = positional.next() else {
-                    return VmInternalError::MissingNativeFunction {
-                        name: "reflect.call_any".to_string(),
-                    }
-                    .into();
-                };
-                final_args.push(value);
+                final_args.push(positional.next().unwrap_or(Value::OMITTED_ARG));
             }
             FunctionParamMode::Optional => final_args.push(
                 param

@@ -1318,10 +1318,9 @@ impl NormalTy {
                 && sup_qn.is_builtin_root_type("AnyFunction") =>
             {
                 sup_bindings.iter().all(|(name, sup_pin)| {
-                    sub_bindings
-                        .iter()
-                        .find_map(|(n, ty)| (n == name).then_some(ty))
-                        .is_some_and(|sub_pin| sub_pin.is_subtype_of(sup_pin, ctx, assumptions))
+                    sub_bindings.iter().any(|(n, sub_pin)| {
+                        n == name && sub_pin.is_subtype_of(sup_pin, ctx, assumptions)
+                    })
                 })
             }
 

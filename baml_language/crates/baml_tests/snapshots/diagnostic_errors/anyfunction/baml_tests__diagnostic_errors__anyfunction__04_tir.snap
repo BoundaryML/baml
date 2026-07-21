@@ -14,12 +14,6 @@ function user.pick<T>(f: T) -> T throws never {
 class user.Holder {
   f: T
 }
-class user.MyTool$stream {
-  name: string | null
-}
-class user.Holder$stream {
-  f: T | null
-}
 class user.ToolError {
   message: string
 }
@@ -44,10 +38,16 @@ function user.main() -> int throws never {
     let bad_widen: baml.AnyFunction<Returns = string> = narrow : baml.AnyFunction<Returns = user.Doc[], Throws = unknown> -> baml.AnyFunction<Returns = string, Throws = unknown>
     return 0 : 0
   }
-  !! 595..605: type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got (q: string) -> Doc[] throws ToolError
-  !! 661..671: type mismatch: expected baml.AnyFunction<Throws = never, Returns = unknown>, got (q: string) -> Doc[] throws ToolError
-  !! 709..711: type mismatch: expected baml.AnyFunction<Returns = unknown, Throws = unknown>, got 42
-  !! 831..837: type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got baml.AnyFunction<Returns = Doc[], Throws = unknown>
+  !! 1081..1091: type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got (q: string) -> Doc[] throws ToolError
+  !! 1147..1157: type mismatch: expected baml.AnyFunction<Throws = never, Returns = unknown>, got (q: string) -> Doc[] throws ToolError
+  !! 1195..1197: type mismatch: expected baml.AnyFunction<Returns = unknown, Throws = unknown>, got 42
+  !! 1317..1323: type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got baml.AnyFunction<Returns = Doc[], Throws = unknown>
+}
+class user.MyTool$stream {
+  name: string | null
+}
+class user.Holder$stream {
+  f: T | null
 }
 class user.ToolError$stream {
   message: string | null

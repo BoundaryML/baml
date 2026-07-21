@@ -4596,51 +4596,9 @@ impl<'db> LoweringContext<'db> {
             .into_iter()
             .chain(self.lambda_generic_params.iter().cloned())
             .collect();
-        // BEP-062: collect the runtime signature alongside, so emit can stamp
-        // it onto the compiled `Function` object. Top-level declarations get
-        // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
-        // and without this a closure value carries no signature at all (which
-        // `reflect.signature` / `reflect.call_any` consume).
-        let mut sig_param_names = Vec::with_capacity(func_def.params.len());
-        let mut sig_param_types = Vec::with_capacity(func_def.params.len());
-        let mut sig_param_defaults = Vec::with_capacity(func_def.params.len());
-        for (param_idx, param) in func_def.params.iter().enumerate() {
-            let param_ty = match &param.type_expr {
-                Some(spanned_te) => {
-                    let mut diags = Vec::new();
-                    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                        spanned_te,
-                        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                            db: self.db,
-                            package_items: pkg_items,
-                            ns_context: &pkg_info.namespace_path,
-                            generic_params: &lambda_param_generics,
-                            bounds: &self.enclosing_generic_param_bounds(),
-                            self_ty: None,
-                        },
-                        &mut diags,
-                    );
-                    self.lambda_param_tir_types
-                        .insert(param.name.clone(), tir_ty.clone());
-                    self.convert_tir_ty_for_runtime(&tir_ty)
-                }
-                None => baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-            };
-            sig_param_names.push(param.name.to_string());
-            sig_param_types.push(param_ty.clone());
-            sig_param_defaults.push(param.default.is_some());
-            let local = self
-                .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
-            self.locals.insert(param.name.clone(), local);
-            self.binding_locals
-                .insert(BindingId::parameter(self.current_scope, param_idx), local);
-        }
-        // The declared return/throws, lowered in the same generic scope as the
-        // params. Unannotated slots make no claim (`unknown`); an explicit
-        // `throws never` becomes `None` (the runtime's "cannot throw").
+        // Lower a lambda-scope type annotation (a param, the return, the
+        // throws), with the enclosing and lambda generics in scope. Lowering
+        // diagnostics are dropped: TIR reports the lambda's own type errors.
         let lower_sig_ty = |this: &mut Self, te: &baml_compiler2_ast::TypeExpr| {
             let mut diags = Vec::new();
             baml_compiler2_tir::lower_type_expr::lower_type_expr(
@@ -4656,6 +4614,35 @@ impl<'db> LoweringContext<'db> {
                 &mut diags,
             )
         };
+        // BEP-062: collect the runtime signature alongside, so emit can stamp
+        // it onto the compiled `Function` object. Top-level declarations get
+        // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
+        // and without this a closure value carries no signature at all (which
+        // `reflect.signature` / `reflect.call_any` consume).
+        let mut sig_param_types = Vec::with_capacity(func_def.params.len());
+        for (param_idx, param) in func_def.params.iter().enumerate() {
+            let param_ty = match &param.type_expr {
+                Some(spanned_te) => {
+                    let tir_ty = lower_sig_ty(self, spanned_te);
+                    self.lambda_param_tir_types
+                        .insert(param.name.clone(), tir_ty.clone());
+                    self.convert_tir_ty_for_runtime(&tir_ty)
+                }
+                None => baml_type::RuntimeTy::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+            };
+            sig_param_types.push(param_ty.clone());
+            let local = self
+                .builder
+                .declare_local(Some(param.name.clone()), param_ty, None);
+            self.locals.insert(param.name.clone(), local);
+            self.binding_locals
+                .insert(BindingId::parameter(self.current_scope, param_idx), local);
+        }
+        // The declared return/throws. Unannotated slots make no claim
+        // (`unknown`); an explicit `throws never` becomes `None` (the
+        // runtime's "cannot throw").
         let sig_return_type = match &func_def.return_type {
             Some(te) => {
                 let tir_ty = lower_sig_ty(self, te);
@@ -4733,9 +4720,13 @@ impl<'db> LoweringContext<'db> {
                 .map(|ty| ty.as_ty().render_user_facing())
                 .collect(),
             display_return_type: sig_return_type.as_ty().render_user_facing(),
-            param_names: sig_param_names,
+            param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
+            param_has_default: func_def
+                .params
+                .iter()
+                .map(|p| p.default.is_some())
+                .collect(),
             param_types: sig_param_types,
-            param_has_default: sig_param_defaults,
             return_type: sig_return_type,
             throws_type: sig_throws_type,
         });

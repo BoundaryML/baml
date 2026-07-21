@@ -1229,10 +1229,10 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
 
 /// A callable value's reconstructed signature in the shape the `reflect`
 /// natives consume (BEP-062): parameters in declaration order (a bound
-/// method's receiver dropped), the return type, and the throws type as the
-/// runtime stores it. `throws: None` means "cannot throw"; its user-visible
-/// static spelling is `never` (deliberately not the `void` convention
-/// `function_object_ty` uses — see `FIXME(function-type-matching)` in emit).
+/// method's receiver dropped), the return type, and the throws type.
+/// `throws: None` means "cannot throw"; its user-visible static spelling is
+/// `never` (deliberately not the `void` convention `function_object_ty`
+/// uses — see `FIXME(function-type-matching)` in emit).
 pub(crate) struct CallableSignature {
     pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
     pub(crate) ret: baml_type::RealizedTy,
@@ -1254,12 +1254,9 @@ fn function_callable_signature(
     f: &bex_vm_types::types::Function,
     drop_receiver: bool,
 ) -> CallableSignature {
-    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy, TyAttr};
-    let realized_or_unknown = |ty: &baml_type::RuntimeTy| {
-        realized_arg(ty).unwrap_or(RealizedTy::BuiltinUnknown {
-            attr: TyAttr::default(),
-        })
-    };
+    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy};
+    let realized_or_unknown =
+        |ty: &baml_type::RuntimeTy| realized_arg(ty).unwrap_or_else(RealizedTy::unknown);
     let params = f
         .param_types
         .iter()
@@ -1975,12 +1972,9 @@ impl BexVm {
     /// `emit_pooled_function_value`), so a raw `Object::Function` is never a
     /// data value and deliberately has no arm here.
     ///
-    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed —
-    /// coarsely, from its underlying function's stored (generic-erased)
-    /// signature with the receiver parameter dropped. `value_concrete_ty`
-    /// deliberately reports no type there so the `is` matcher never affirms a
-    /// wrong one; `reflect.signature` / `reflect.call_any` prefer the coarse
-    /// truth (erased slots read `unknown`) over refusing bound methods.
+    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed
+    /// (receiver dropped) and unresolved slots erase rather than refuse; see
+    /// [`function_callable_signature`] for the coarse-truth rationale.
     pub(crate) fn callable_signature(&self, value: Value) -> Option<CallableSignature> {
         use baml_type::RealizedTy;
         match self.get_object(value.as_object_ptr()?) {

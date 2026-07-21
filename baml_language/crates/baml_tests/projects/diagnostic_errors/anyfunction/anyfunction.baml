@@ -1,3 +1,26 @@
+// BEP-062: baml.AnyFunction is a compiler builtin. It cannot be implemented
+// by hand (E0153) and cannot be used as a generic bound (E0154) on
+// functions, classes, impl generics, or associated types.
+
+class MyTool {
+    name string
+}
+
+implements baml.AnyFunction for MyTool {
+}
+
+function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
+    return f
+}
+
+class Holder<T extends baml.AnyFunction> {
+    f T
+}
+
+interface Registry {
+    type Callee extends baml.AnyFunction
+}
+
 // BEP-062: AnyFunction coercion failures. The derived conformance checks the
 // function's return against the Returns pin and its throws against the
 // Throws pin (both covariant); non-functions never conform; existential

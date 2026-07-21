@@ -190,31 +190,6 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
 }
 
 #[tokio::test]
-async fn call_any_on_bare_any_function_returns_unknown() {
-    let output = baml_test!(
-        r#"
-        function add(x: int, y: int) -> int throws never {
-            x + y
-        }
-
-        function main() -> int throws never {
-            let f: baml.AnyFunction = add
-            // Bare pins: result is `unknown`, channel is `unknown` (covers
-            // InvalidArgumentError); narrow the result back with `is`.
-            let r = reflect.call_any(f, [20, 22]) catch (e) {
-                _ => -1
-            }
-            if r is int {
-                return r
-            }
-            return -2
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
-}
-
-#[tokio::test]
 async fn call_any_lambda_callee() {
     let output = baml_test!(
         r#"
@@ -301,23 +276,6 @@ async fn signature_reports_types_and_param_split() {
 }
 
 #[tokio::test]
-async fn signature_non_throwing_reports_never() {
-    let output = baml_test!(
-        r#"
-        function add(x: int, y: int) -> int throws never {
-            x + y
-        }
-
-        function main() -> string throws never {
-            let f: baml.AnyFunction = add
-            return reflect.signature(f).errors.to_string()
-        }
-        "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::String("never".into())));
-}
-
-#[tokio::test]
 async fn signature_bound_method_drops_receiver() {
     let output = baml_test!(
         r#"
@@ -333,11 +291,16 @@ async fn signature_bound_method_drops_receiver() {
             let c = Counter { base: 40 }
             let m: baml.AnyFunction = c.bump
             let sig = reflect.signature(m)
+            // Also anchors the non-throwing spelling: `errors` reads `never`.
             return sig.args.length().to_string() + "|" + sig.returns.to_string()
+                + "|" + sig.errors.to_string()
         }
         "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::String("1|int".into())));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("1|int|never".into()))
+    );
 }
 
 #[tokio::test]
