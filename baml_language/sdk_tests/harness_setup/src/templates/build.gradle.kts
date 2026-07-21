@@ -33,6 +33,12 @@ dependencies {
     // `implementation` so it lands on both the generated `baml_sdk/**`
     // compile classpath and the test runtime classpath.
     implementation(files("../../../../../sdks/java/baml_bridge/build/libs/baml-bridge.jar"))
+    // JSpecify nullness annotations. The generated code carries
+    // `org.jspecify.annotations.@Nullable` on nullable positions; the real
+    // baml-bridge POM exposes this as an `api` (transitive) dependency, but the
+    // fixtures link the runtime by bare jar via `files(...)` (no POM), so the
+    // annotation jar must be declared explicitly here to satisfy javac.
+    implementation("org.jspecify:jspecify:1.0.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     // Analog of pytest's monkeypatch.setenv for env-driven tests (see
     // llm_functions build_request tests). Caveat: patches the JVM's view

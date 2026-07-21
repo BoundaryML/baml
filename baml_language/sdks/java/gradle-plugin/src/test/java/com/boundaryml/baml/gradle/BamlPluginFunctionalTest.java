@@ -260,6 +260,78 @@ class BamlPluginFunctionalTest {
             List.of("natives-" + host),
             nativeClassifiers(out),
             () -> "expected exactly the host native classifier natives-" + host + "; output:\n" + out);
+        // A pure-Java consumer must NOT get the Kotlin ergonomics layer.
+        assertFalse(
+            out.contains("com.boundaryml:baml-bridge-kotlin"),
+            () -> "a non-Kotlin consumer should not get baml-bridge-kotlin; output:\n" + out);
+    }
+
+    /**
+     * A Kotlin consumer (the {@code org.jetbrains.kotlin.jvm} plugin applied)
+     * additionally gets {@code com.boundaryml:baml-bridge-kotlin} at the plugin's
+     * own version — while {@code baml-bridge} (and its native jar) is still
+     * injected. The plugins block declares both the BAML plugin (from the
+     * injected TestKit classpath, no version) and Kotlin (from the Plugin
+     * Portal); the {@code printBamlDeps} task then reports the declared deps.
+     */
+    @Test
+    void kotlinConsumerAlsoGetsBamlBridgeKotlin() throws IOException {
+        writeSettings("consumer");
+        writeFile("build.gradle.kts",
+            "plugins {\n"
+                + "    id(\"com.boundaryml.baml\")\n"
+                + "    id(\"org.jetbrains.kotlin.jvm\") version \"1.9.25\"\n"
+                + "}\n"
+                + "\n"
+                + PRINT_BAML_DEPS_TASK);
+
+        String out = runner("printBamlDeps", "--stacktrace").build().getOutput();
+
+        String version = BamlPlugin.pluginVersion();
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge-kotlin:" + version),
+            () -> "a Kotlin consumer should get baml-bridge-kotlin:" + version + "; output:\n" + out);
+        // baml-bridge itself is still injected (the native jar rides with it).
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge:" + version),
+            () -> "baml-bridge should still be injected for a Kotlin consumer; output:\n" + out);
+    }
+
+    /**
+     * A Kotlin consumer that already declares an explicit
+     * {@code com.boundaryml:baml-bridge-kotlin} suppresses the Kotlin injection
+     * (defer-to-explicit), while an explicit baml-bridge-kotlin does not itself
+     * suppress the baml-bridge/native injection.
+     */
+    @Test
+    void explicitBamlBridgeKotlinSuppressesKotlinInjection() throws IOException {
+        writeSettings("consumer");
+        writeFile("build.gradle.kts",
+            "plugins {\n"
+                + "    id(\"com.boundaryml.baml\")\n"
+                + "    id(\"org.jetbrains.kotlin.jvm\") version \"1.9.25\"\n"
+                + "}\n"
+                + "\n"
+                + "dependencies {\n"
+                + "    implementation(\"com.boundaryml:baml-bridge-kotlin:7.7.7-consumer-pin\")\n"
+                + "}\n"
+                + "\n"
+                + PRINT_BAML_DEPS_TASK);
+
+        String out = runner("printBamlDeps", "--stacktrace").build().getOutput();
+
+        // The consumer's own kotlin dep stays; the plugin adds no pinned one.
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge-kotlin:7.7.7-consumer-pin"),
+            () -> "the consumer's explicit baml-bridge-kotlin should remain; output:\n" + out);
+        assertFalse(
+            implDeps(out).contains("com.boundaryml:baml-bridge-kotlin:" + BamlPlugin.pluginVersion()),
+            () -> "the plugin must not inject its own baml-bridge-kotlin when one is explicit; output:\n"
+                + out);
+        // baml-bridge is still injected (an explicit KOTLIN dep does not suppress it).
+        assertTrue(
+            implDeps(out).contains("com.boundaryml:baml-bridge:" + BamlPlugin.pluginVersion()),
+            () -> "baml-bridge should still be injected; output:\n" + out);
     }
 
     /**

@@ -17,7 +17,11 @@
 //     -PbamlNativePlatform=linux-x86_64
 
 plugins {
-    java
+    // java-library (a superset of `java`) so the `api` configuration exists —
+    // JSpecify must be a compile-scoped TRANSITIVE dependency of the published
+    // POM (see below), which plain `java` (implementation → runtime scope)
+    // cannot express.
+    `java-library`
     `maven-publish`
     signing
 }
@@ -27,6 +31,14 @@ repositories {
 }
 
 dependencies {
+    // JSpecify nullness annotations. The generated Java SDK (sdkgen_java) emits
+    // `org.jspecify.annotations.@Nullable` on nullable positions, so consumers
+    // must have jspecify on their COMPILE classpath. `api` publishes it at
+    // compile scope in this POM, so a consumer resolving com.boundaryml:baml-bridge
+    // inherits it transitively — no manual dependency. JSpecify is a tiny,
+    // zero-dependency annotations-only jar.
+    api("org.jspecify:jspecify:1.0.0")
+
     // Test-only: exercise the native round-trip in BamlFfiSmokeTest. Versions
     // match the sdk_test_java fixtures so the shared Gradle cache is reused.
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")

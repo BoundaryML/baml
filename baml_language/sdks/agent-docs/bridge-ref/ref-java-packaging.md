@@ -142,3 +142,51 @@ version-locked `com.boundaryml:baml-bridge` implementation dep and the host-dete
 suppresses injection). Plugin version == bridge version by construction, published
 from one pipeline. The quickstart example flips to the pure one-liner once the first
 plugin version is live on a registry.
+
+
+## Maven Central artifacts (family, one pipeline, one version)
+
+Three coordinates, all published by `release-baml-language.yml` → `publish-maven`
+in a single signed Central bundle at the same family version (per-coordinate
+idempotency: each is (re)published only when that version is missing from Central):
+
+| Coordinate | What it is | How consumers get it |
+|---|---|---|
+| `com.boundaryml:baml-bridge` | Pure-Java runtime (hand-rolled protobuf codec + JNI) plus per-platform `natives-<platform>` classifier jars carrying the `bridge_java` cdylib. Exposes `org.jspecify:jspecify` as an `api` (transitive, compile-scope) dep so generated `@Nullable` annotations resolve. | `implementation("…:baml-bridge:…")` + a `natives-*` classifier; or auto-injected by the plugin. |
+| `com.boundaryml:baml-gradle-plugin` (+ marker `com.boundaryml.baml:com.boundaryml.baml.gradle.plugin`) | Build-time codegen plugin (`com.boundaryml.baml`). | `plugins { id("com.boundaryml.baml") version "X" }` (Gradle Plugin Portal, stable channels) or from Central via a `pluginManagement` stanza (every channel). |
+| `com.boundaryml:baml-bridge-kotlin` | Kotlin ergonomics over the runtime (see below). Depends on `baml-bridge` at the same family version (composite build locally; the POM carries the Maven coordinate). | `implementation("…:baml-bridge-kotlin:…")`; or auto-injected by the plugin when `org.jetbrains.kotlin.jvm` is applied. |
+
+**JSpecify nullness (all consumers).** The Java emitter (`sdkgen_java`) writes
+`org.jspecify.annotations.@Nullable` on the genuinely-nullable positions of the
+generated code (nullable field accessors/constructor params, nullable binding
+params + returns, `CompletableFuture<@Nullable T>` async elements, `$Opts` setters
+for nullable optionals, the always-nullable `IntOptCallback`-style `Opts`
+accessors, and `List<@Nullable T>` / `Map<…, @Nullable V>` element positions). So
+Kotlin sees real nullness instead of platform types (`String?` vs `String!`), and
+Java IDEs improve. JSpecify is a transitive dep of `baml-bridge` (no new coordinate,
+no action for consumers).
+
+### Kotlin — `baml-bridge-kotlin`
+
+The generated Java SDK is already directly usable from Kotlin; `baml-bridge-kotlin`
+adds idiomatic **runtime-type** ergonomics (per-generated-function sugar is
+explicitly out of scope):
+
+- `stream.asFlow(): Flow<P>` — a cold flow of partials, draining `next_async()`
+  until the `StreamFinished` sentinel (never emitted); `stream.awaitFinal(): F`.
+- `fold` over the `UnionN` arity family (`Union2`…`Union10`) — one lambda per arm,
+  exhaustive by signature — plus `armIOrNull()` narrowing accessors.
+- `withBamlContext { ctx -> … }` — runs the block with a fresh `BamlCallContext`
+  and calls `ctx.abort()` if the coroutine is cancelled (wires the coroutine's
+  `CancellationException` → engine abort), rethrowing to preserve structured
+  concurrency. The Java surface instead holds a `BamlCallContext` and calls
+  `abort()` explicitly.
+- `_async` bindings return `CompletableFuture`, so plain `kotlinx.coroutines`
+  `.await()` already works — the library adds the stream/union/context sugar that
+  isn't a one-liner.
+
+It is **one new Central coordinate** (no Portal involvement — the Portal is
+plugin-only) and depends on `baml-bridge` at the same version. The Gradle plugin
+auto-injects it whenever the consumer applies the Kotlin JVM plugin (same
+version-lock + defer-to-explicit rules as `baml-bridge`), so a Kotlin consumer
+using the plugin needs no extra dependency line.

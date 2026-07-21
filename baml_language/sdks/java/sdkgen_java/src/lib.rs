@@ -663,6 +663,13 @@ mod tests {
     fn t_class(n: Name) -> Ty {
         Ty::Class(n, Vec::new(), a())
     }
+    fn t_null() -> Ty {
+        Ty::Null { attr: a() }
+    }
+    /// `T?` — a nullable BAML type (`T | null`).
+    fn t_opt(inner: Ty) -> Ty {
+        Ty::Union(vec![inner, t_null()], a())
+    }
 
     fn class_sym_with_props(
         n: &Name,
@@ -1315,8 +1322,15 @@ mod tests {
             "{iface}"
         );
         assert!(iface.contains("final class Opts {"), "{iface}");
-        assert!(iface.contains("public java.lang.Long y() {"), "{iface}");
-        assert!(iface.contains("public java.lang.Long z() {"), "{iface}");
+        // The Opts bag accessors are `@Nullable` by design (null ⇒ BAML omitted).
+        assert!(
+            iface.contains("public java.lang.@org.jspecify.annotations.Nullable Long y() {"),
+            "{iface}"
+        );
+        assert!(
+            iface.contains("public java.lang.@org.jspecify.annotations.Nullable Long z() {"),
+            "{iface}"
+        );
     }
 
     #[test]
@@ -1918,5 +1932,142 @@ mod tests {
         // The Fns holder references the escaped anchor.
         let fns = &out[&PathBuf::from("lorem/Fns.java")];
         assert!(fns.contains("baml_sdk.Baml$.ensure();"), "{fns}");
+    }
+
+    // ---- JSpecify nullness annotations ---------------------------------------
+
+    #[test]
+    fn nullable_field_accessor_return_is_annotated() {
+        // A `string?` field: the private field, constructor param, and accessor
+        // return all carry `@Nullable`; a non-null `int` field is untouched.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["nn"], "Doc");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![("title", t_opt(t_string())), ("count", t_int())],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("nn/Doc.java")];
+        assert!(
+            file.contains(
+                "private final java.lang.@org.jspecify.annotations.Nullable String title;"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains("public java.lang.@org.jspecify.annotations.Nullable String title() {"),
+            "{file}"
+        );
+        // The constructor param is annotated too.
+        assert!(
+            file.contains("java.lang.@org.jspecify.annotations.Nullable String title"),
+            "{file}"
+        );
+        // The non-null primitive field stays a bare unboxed `long`.
+        assert!(file.contains("public long count() {"), "{file}");
+        assert!(!file.contains("Nullable Long count"), "{file}");
+    }
+
+    #[test]
+    fn nullable_list_element_field_is_annotated() {
+        // A `(string?)[]` field: the element is `@Nullable`, the list is not.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["nn"], "Tags");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(&n, &[], vec![("items", t_list(t_opt(t_string())))], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("nn/Tags.java")];
+        assert!(
+            file.contains(
+                "public java.util.List<java.lang.@org.jspecify.annotations.Nullable String> items() {"
+            ),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn nullable_param_and_return_are_annotated() {
+        // `fn find(needle: string?) -> string?`: the required param and both the
+        // sync return and the async future's element type carry `@Nullable`.
+        let mut pool = SymbolPool::new();
+        let f = Function {
+            name: BaseName::new("find"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("needle"),
+                docstring: None,
+                ty: t_opt(t_string()),
+                default: None,
+            }],
+            return_type: t_opt(t_string()),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(name("user", &["nn"], "find"), Symbol::Function(f));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("nn/Fns.java")];
+        assert!(
+            file.contains(
+                "public static java.lang.@org.jspecify.annotations.Nullable String find(java.lang.@org.jspecify.annotations.Nullable String needle) {"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "public static java.util.concurrent.CompletableFuture<java.lang.@org.jspecify.annotations.Nullable String> find_async(java.lang.@org.jspecify.annotations.Nullable String needle) {"
+            ),
+            "{file}"
+        );
+    }
+
+    #[test]
+    fn nullable_optional_setter_param_is_annotated() {
+        use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault};
+        // A nullable optional arg (`hint?: string?`) → its `$Opts` setter param
+        // is `@Nullable`; a non-null optional's setter is not.
+        let mut pool = SymbolPool::new();
+        let f = Function {
+            name: BaseName::new("probe"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("x"),
+                    docstring: None,
+                    ty: t_int(),
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("hint"),
+                    docstring: None,
+                    ty: t_opt(t_string()),
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        baml_base::Literal::String("hi".into()),
+                    ))),
+                },
+            ],
+            return_type: t_int(),
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(name("user", &["nn"], "probe"), Symbol::Function(f));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("nn/Fns.java")];
+        assert!(
+            file.contains(
+                "public probe$Opts hint(java.lang.@org.jspecify.annotations.Nullable String v) {"
+            ),
+            "{file}"
+        );
     }
 }
