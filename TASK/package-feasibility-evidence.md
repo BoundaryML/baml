@@ -1,13 +1,13 @@
 # C# atomic-package feasibility evidence
 
-Status: B4 partially executed through the third exact-source atomic attempt on
-2026-07-20. All eight producers and deterministic package assembly passed,
-producing a measured exact eight-RID package under the ceiling. Four native
-consumer jobs passed; both Windows consumers executed successfully and failed
-only post-run checksum parsing, while both musl jobs failed before restore on
-a missing Docker environment forward. The focused verifier repairs are local;
-the package baseline is measured but not approved until all eight consumers
-and final completeness pass atomically.
+Status: B4 partially executed through the fourth exact-source atomic attempt
+on 2026-07-20/21. All eight producers and deterministic package assembly
+passed. All six Unix consumers, protocol consistency, and semantic/deployment
+evidence passed. Both Windows consumers passed exact package recovery,
+execution, checksum, and RID policy before the PE allowlist exposed nine
+unintended AWS-LC jitter-entropy exports on both architectures. The focused
+Windows native-build repair is local; the package baseline is measured but not
+approved until all eight consumers and final completeness pass atomically.
 
 ## Target and size authority
 
@@ -398,12 +398,67 @@ forward the already-required `BamlNativeProbeMode=Package`. Protocol
 generation and semantic/deployment evidence passed, but completeness skipped;
 no B4 or C6 promotion is claimed.
 
+The fourth exact-source atomic attempt, [run
+29788598100](https://github.com/BoundaryML/baml/actions/runs/29788598100),
+used tag and source SHA
+`991f491fba8cb10543b1cbb2aba33b5d9b3079bc`. All eight producers and
+package assembly passed. The exact current package evidence is:
+
+| Property | Exact result |
+| --- | --- |
+| Package bytes | `68,548,074` |
+| Package SHA-256 | `9e6c1b7b6c0c24048106b2abd8a26bd97c1a4a558059a8d119f5cf8e53db5a83` |
+| Pack/normalize time | `37` seconds |
+| Exact inventory | `15` entries: managed assembly, metadata/build files, and eight runtime natives |
+| Shipping native total | `180,794,948` bytes |
+| Diagnostic total | `2,458,570,592` bytes |
+| Reproducible compressed diagnostics | `536,212,176` bytes |
+| Bytecode | `683,918` bytes / `44ec354587d912e222d0263e3bc8a944514195da2c134e9e1db6ce4e202d66f2` |
+| Package ceiling | `200,000,000` bytes, passed |
+
+The package artifact is `68,491,349` bytes with Actions digest
+`sha256:a20b0f72a025cd47ce7f6cc6cada34278ec6122ce6f4413df9405773ffbbef69`;
+the diagnostic artifact is `533,443,852` bytes with digest
+`sha256:20948c93b5454a3bd8ca2a81fab9b6e4139981e98be030c373daa4a197f873f8`.
+All six Unix consumers passed completely, including both real-musl containers.
+Their exact restore/publish/cache/publish-output/native measurements are:
+
+| RID | Restore/publish seconds | Cache bytes | Publish bytes | Native bytes | Native SHA-256 |
+| --- | --- | ---: | ---: | ---: | --- |
+| `linux-arm64` | 7 / 5 | 441,081,856 | 21,598,208 | 21,446,720 | `9410ac423d2f7a2d86282d7a8435e0b160c531f40e21ad9de23e8ce3f185cfdc` |
+| `linux-musl-arm64` | 5 / 3 | 440,815,616 | 21,528,576 | 21,376,824 | `66b0ff4c0af3d393e295e8e5394fc5e39e59abf5c3a1518d09ef42384c0a00c4` |
+| `linux-musl-x64` | 4 / 4 | 436,391,936 | 24,326,144 | 24,170,528 | `f6fbe864eb4b994c7b3424b8a8e65e85208199882dd8bb61834776e147604fff` |
+| `linux-x64` | 8 / 7 | 436,654,080 | 24,473,600 | 24,318,040 | `e545e6dca35bdb6c119961d088a65ce1f5ed12c9ab91db1177ca9e0a328e2e4f` |
+| `osx-arm64` | 5 / 3 | 439,406,592 | 21,307,392 | 21,111,072 | `76c157a8c8b68d2607ba1ac00f0abb780a1080d88555d575b69bf2cb748f0ddc` |
+| `osx-x64` | 10 / 6 | 433,422,336 | 21,696,512 | 21,539,636 | `df4c64c8ae040e99d3f4a0b67ee52355107e5d1ef28aedc4770a907ff1d57991` |
+
+Both Windows consumers also restored, published exactly one selected native,
+executed the ABI/lifetime and ordinary-call probe, passed exact digest
+comparison and eight-RID policy, and recorded their measurements before PE
+inspection:
+
+| RID | Restore/publish seconds | Cache bytes | Publish bytes | Native bytes | Native SHA-256 |
+| --- | --- | ---: | ---: | ---: | --- |
+| `win-arm64` | 15 / 10 | 591,504,384 | 22,623,232 | 22,409,728 | `5189b58fd456edd2c9b42d16e0dacea1531772863551fc4c118f0c8ac6e38e33` |
+| `win-x64` | 9 / 8 | 573,265,920 | 24,654,848 | 24,422,400 | `3431e448b573a004af2911b051daf47392964a4c00d8dfd97d8eee241fc814aa` |
+
+Their PE export comparisons then rejected the same nine prefixed
+`aws_lc_0_41_0_jent_*` functions beyond the exact 26-symbol bridge allowlist.
+The pinned non-FIPS `aws-lc-sys 0.41.0` marks these optional jitter-entropy
+functions `__declspec(dllexport)` under MSVC, so static linkage exposes them.
+The local repair uses the dependency's supported
+`AWS_LC_SYS_NO_JITTER_ENTROPY=1` build option on Windows only. It retains
+AWS-LC as the selected backend, makes no FIPS claim, and does not weaken the
+allowlist or any consumer assertion. Protocol consistency and the complete
+semantic/deployment lane also passed; final completeness skipped solely
+because the two Windows consumer jobs did not conclude success.
+
 ## Remaining closure
 
 B4 remains blocked, not passed. The measured package is a valid feasibility
-baseline but the third attempt did not complete all consumers or the final
-digest. The locally validated musl environment/checksum-parser repairs must
-be committed and executed from a new exact-source bootstrap tag; a passing
+baseline but the fourth attempt did not complete both Windows consumers or the
+final digest. The locally validated Windows AWS-LC build repair must be
+committed and executed from a new exact-source bootstrap tag; a passing
 attempt must:
 
 1. supply all eight real immutable artifacts from the frozen release plan;

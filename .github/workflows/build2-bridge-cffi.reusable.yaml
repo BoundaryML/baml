@@ -160,6 +160,18 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
+      - name: Exclude the optional AWS-LC jitter source on Windows
+        if: contains(matrix._.target, 'windows-msvc')
+        shell: bash
+        run: |
+          set -euo pipefail
+          # aws-lc-sys 0.41.0's bundled jitter-entropy library marks nine of
+          # its internal functions __declspec(dllexport) under MSVC. Static
+          # linkage would therefore widen bridge_cffi.dll's public ABI. Use
+          # aws-lc-sys's supported non-FIPS opt-out on Windows only; the
+          # selected AWS-LC backend and the bridge's exact exports stay fixed.
+          echo 'AWS_LC_SYS_NO_JITTER_ENTROPY=1' >> "$GITHUB_ENV"
+
       - name: Install cross (Linux targets)
         if: matrix._.use_cross
         run: |

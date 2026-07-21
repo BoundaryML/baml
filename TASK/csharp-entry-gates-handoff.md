@@ -1,15 +1,14 @@
 # C# implementation-entry external-run handoff
 
-Status: the third exact-source atomic attempt at commit
-`ccf3bcfadd5a919b2cbee205ace07a1ac9cd565c` passed all eight producers,
-assembled and normalized the exact eight-RID package, passed four native
-consumer jobs, all three protocol builders and their fan-in, and the complete
-semantic/deployment lane. Two musl jobs failed before restore because the
-workflow omitted one required environment variable at the Docker boundary;
-both Windows jobs executed the package successfully but failed a post-run
-checksum comparison because GNU `sha256sum` escaped their absolute paths.
-The focused verifier repairs are local. No gate is promoted until another
-exact-source attempt passes completely; B4 and C6 remain blocked and
+Status: the fourth exact-source atomic attempt at commit
+`991f491fba8cb10543b1cbb2aba33b5d9b3079bc` proved both verifier repairs,
+passed all eight producers, assembled the exact package, passed all six Unix
+consumers, all three protocol builders and their fan-in, and the complete
+semantic/deployment lane. Both Windows consumers also passed restore,
+publish, exact checksum, ABI/lifetime execution, and RID policy before their
+PE inspection exposed the same nine unintended AWS-LC jitter-entropy exports.
+The focused Windows native-build repair is local. No gate is promoted until
+another exact-source attempt passes completely; B4 and C6 remain blocked and
 `TASK/implementation.md` must not be created yet.
 
 ## Exact workflow
@@ -264,6 +263,63 @@ The final completeness job correctly skipped because four consumer jobs did
 not conclude success. No package was published and no release or registry
 state changed.
 
+## Fourth atomic attempt
+
+[GitHub Actions run 29788598100](https://github.com/BoundaryML/baml/actions/runs/29788598100)
+was triggered by exact tag
+`csharp-entry-gates-991f491fba8cb10543b1cbb2aba33b5d9b3079bc` at source
+SHA `991f491fba8cb10543b1cbb2aba33b5d9b3079bc`, event `push`, attempt 1,
+release version `0.15.0`. Twenty-three jobs passed, two Windows consumers
+failed, and final completeness skipped. All eight producers and deterministic
+package assembly passed. The normalized 15-entry package is `68,548,074`
+bytes, SHA-256
+`9e6c1b7b6c0c24048106b2abd8a26bd97c1a4a558059a8d119f5cf8e53db5a83`,
+and was built/normalized twice in 37 seconds under the exact
+`200,000,000`-byte ceiling. Its shipping natives total `180,794,948` bytes;
+the diagnostic bundles total `2,458,570,592` bytes and compress reproducibly
+to `536,212,176` bytes. The Actions package artifact is `68,491,349` bytes,
+digest
+`sha256:a20b0f72a025cd47ce7f6cc6cada34278ec6122ce6f4413df9405773ffbbef69`;
+the diagnostic artifact is `533,443,852` bytes, digest
+`sha256:20948c93b5454a3bd8ca2a81fab9b6e4139981e98be030c373daa4a197f873f8`.
+
+Both real-musl consumers passed restore, publish, exact one-native selection,
+ABI/lifetime and ordinary-call execution, exact digest comparison, RID policy,
+ELF dependency/RPATH/strip inspection, and the 26-symbol export allowlist.
+The other four Unix consumers also passed. This proves the Docker environment
+forwarding repair. Both Windows consumers passed the same execution boundary,
+including exact checksum normalization; x64 selected the `24,422,400`-byte
+native at SHA-256
+`3431e448b573a004af2911b051daf47392964a4c00d8dfd97d8eee241fc814aa`,
+and ARM64 selected the `22,409,728`-byte native at SHA-256
+`5189b58fd456edd2c9b42d16e0dacea1531772863551fc4c118f0c8ac6e38e33`.
+Each then failed PE export comparison on the identical nine extra symbols:
+
+- `aws_lc_0_41_0_jent_entropy_collector_alloc`
+- `aws_lc_0_41_0_jent_entropy_collector_free`
+- `aws_lc_0_41_0_jent_entropy_init`
+- `aws_lc_0_41_0_jent_entropy_init_ex`
+- `aws_lc_0_41_0_jent_entropy_switch_notime_impl`
+- `aws_lc_0_41_0_jent_read_entropy`
+- `aws_lc_0_41_0_jent_read_entropy_safe`
+- `aws_lc_0_41_0_jent_set_fips_failure_callback`
+- `aws_lc_0_41_0_jent_version`
+
+The pinned non-FIPS `aws-lc-sys 0.41.0` bundles a jitter-entropy library whose
+MSVC header marks those functions `__declspec(dllexport)`. Static linkage
+therefore widens the final DLL ABI even though the symbols are dependency
+internals. The local repair sets aws-lc-sys's supported
+`AWS_LC_SYS_NO_JITTER_ENTROPY=1` build opt-out on Windows only. It retains the
+selected AWS-LC backend and all bridge exports, does not claim FIPS behavior,
+and keeps the exact 26-symbol assertion unchanged. Another exact-source run
+must prove both Windows architectures contain no dependency exports and still
+execute the package normally.
+
+All three protocol builders, protocol consistency fan-in, and the complete
+semantic/deployment lane passed again. The final completeness job correctly
+skipped because the two Windows consumers did not conclude success. No package
+was published and no release or registry state changed.
+
 ## Provenance preflight
 
 The first provenance commit's temporary-index preview contained exactly the
@@ -275,12 +331,12 @@ That scope became commit
 `9d29c01928df7ce726c49286a3067129fc039115` was the first atomic attempt's
 source.
 
-The musl environment/checksum-parser repairs and post-run ledger updates
-require a new reviewed source commit and a new matching
+The Windows AWS-LC build repair and post-run ledger updates require a new
+reviewed source commit and a new matching
 `csharp-entry-gates-<full source SHA>` tag. Its precommit scope must contain
-only the reusable verifier workflow plus these four continuously maintained
-ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and
-all excluded paths remain outside that commit.
+only the native-builder workflow plus these four continuously maintained
+ledger files. The local `.codex/`, `.TASK.readonly-seed/`, `AGENTS.md`, and all
+excluded paths remain outside that commit.
 
 After the run, record in `verification-gates.md`:
 
@@ -495,4 +551,4 @@ Current source SHA-256 values:
 | shared Rust setup action | `2063428518629315d1d6bb67e4c864764466cfc6a9654469dec014d908c2713a` |
 | manual caller workflow | `cd3e45ef30ecd8789116e16a3c34212b35a905244020b417a57e70a35fc28f96` |
 | reusable verifier workflow | `d21a9a2d95ef991e65084b66ed02d7bfb4861a05f1a1d24acde8d21b798f4a93` |
-| native builder workflow | `bca7fcbcc696aa2a65e405cf3942a563d878d4b83b88dfd9d81eb3dbb54b2101` |
+| native builder workflow | `4f0c787272179dcc9fd4ed5c0680d31a413d456c0dfc07d360572a9905f42c98` |
