@@ -247,6 +247,11 @@ function baml.Float.to_degrees(self: baml.Float) -> float throws never {
     self * 180.0 / float.pi() : float
   }
 }
+function baml.Float.random(rng: baml.random.Rng = root.random.SystemRandom.get()) -> float throws never {
+  { : float
+    float._unit_from_draw(rng.random_int()) : float
+  }
+}
 class baml.Float$stream {
 }
 

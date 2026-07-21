@@ -478,6 +478,9 @@ function baml.Comparable$for$string.compare(self: string, other: string) -> int 
     return
 }
 
+function baml.Float._unit_from_draw(draw: int) -> float {
+}
+
 function baml.Float.abs(self: baml.Float) -> float {
 }
 
@@ -585,7 +588,23 @@ function baml.Float.pi() -> float {
 function baml.Float.pow(self: baml.Float, exp: float) -> float {
 }
 
-function baml.Float.random() -> float {
+function baml.Float.random(rng: baml.random.Rng) -> float {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    call baml.Float._unit_from_draw
+    return
 }
 
 function baml.Float.round(self: baml.Float) -> float {

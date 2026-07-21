@@ -403,10 +403,13 @@ class Float {
   }
 
   /// Returns a uniformly distributed random float in the half-open range
-  /// `[0.0, 1.0)`.
+  /// `[0.0, 1.0)`, drawn from `rng`.
   ///
-  /// Uses the host's cryptographic entropy source. Each call returns a fresh
-  /// value drawn from 53 random bits (matching f64 mantissa precision), so
+  /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
+  /// source; pass a seeded generator to make the draw reproducible. Each call
+  /// consumes exactly one value from `rng` — unlike `int.random`, no draw is
+  /// ever rejected — and yields one of the `2^53` multiples of `2^-53` in
+  /// `[0, 1)`, matching f64's mantissa precision. So
   /// `random() * range + offset` produces a uniform sample in any
   /// `[offset, offset + range)` interval whose endpoints are representable.
   ///
@@ -414,9 +417,21 @@ class Float {
   /// ```
   /// float.random()              // some x with 0 <= x < 1
   /// float.random() * 100.0      // some x with 0 <= x < 100
+  ///
+  /// // Reproducible: the same seed replays the same values.
+  /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
+  /// float.random(rng = rng)
   /// ```
-  //baml:fallible
-  function random() -> float throws never {
+  function random(rng: root.random.Rng = root.random.SystemRandom.get()) -> float throws never {
+    float._unit_from_draw(rng.random_int())
+  }
+
+  /// Internal: reads 53 bits of one uniform `int` draw as a multiple of `2^-53`
+  /// in `[0.0, 1.0)`.
+  ///
+  /// Total — every draw maps to a value, so there is no rejection loop here and
+  /// `random` needs only a single draw.
+  function _unit_from_draw(draw: int) -> float throws never {
     $rust_function
   }
 

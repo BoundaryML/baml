@@ -33,7 +33,7 @@ interface        baml.Concrete                    <builtin>/baml/core.baml:15
 interface        baml.AnyFunction                 <builtin>/baml/core.baml:30
 class            baml.TaggedString                <builtin>/baml/core.baml:42
 class            baml.Float                       <builtin>/baml/float.baml:8
-function         baml._trunc_to_int               <builtin>/baml/float.baml:461
+function         baml._trunc_to_int               <builtin>/baml/float.baml:476
 class            baml.Int                         <builtin>/baml/int.baml:19
 class            baml.Null                        <builtin>/baml/null.baml:2
 class            baml.String                      <builtin>/baml/string.baml:5

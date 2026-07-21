@@ -989,7 +989,36 @@ fn baml.Float.to_degrees(self: baml.Float) -> float {
 
 fn baml.Float.parse = builtin(vm)
 
-fn baml.Float.random = builtin(vm)
+fn baml.Float.random(rng: baml.random.Rng) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.random.Rng // rng // param
+    let _2: bool
+    let _3: int
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _3 = virtual_call random_int as baml.random.Rng(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _0 = call const fn baml.Float._unit_from_draw(copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.Float._unit_from_draw = builtin(vm)
 
 fn baml.Float.pi = builtin(vm)
 
