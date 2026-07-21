@@ -978,7 +978,7 @@ mod tests {
         cache.store(&key, &Program::default()).expect("store");
 
         cache
-            .trim(std::time::Duration::from_secs(3600))
+            .trim(std::time::Duration::from_hours(1))
             .expect("trim");
         assert!(cache.load(&key).is_some(), "fresh entry survives trim");
 

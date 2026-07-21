@@ -1858,6 +1858,10 @@ fn source_aware_tir_type_error_message(
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
             format!("`.as<T>` requires an interface target, got {}", ty(target))
         }
+        TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
+            "`$id` at a call site expects `boundary.LocalId`, got {}",
+            ty(got)
+        ),
         _ => error.to_string(),
     }
 }
@@ -1960,7 +1964,9 @@ fn tir_type_error_to_diagnostic_id(
         // a name-resolution failure.
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
-        | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        | TirTypeError::DuplicateRuntimeIdArgument
+        | TirTypeError::RuntimeIdArgumentMustBeLast
+        | TirTypeError::RuntimeIdArgumentTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
         // A `_` placeholder in a non-inferable position.
@@ -2362,6 +2368,39 @@ function TakeGuess(person: Person) -> string {
                 .iter()
                 .any(|message| message == "`self` cannot have a default value"),
             "missing self-default diagnostic; got {messages:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_renders_runtime_id_mismatch_type_in_file_namespace() {
+        let test = CursorTest::with_filename(
+            "billing/test.baml",
+            r#"class WrongId {
+  value int
+}
+
+function target(value: int) -> int {
+  value
+}
+
+function main(value: WrongId) -> int {
+  target(1, $id = value)
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| {
+                diag.id == DiagnosticId::TypeMismatch
+                    && diag.message.contains("expects `boundary.LocalId`")
+            })
+            .expect("runtime-id type mismatch diagnostic");
+
+        assert_eq!(
+            diag.message,
+            "`$id` at a call site expects `boundary.LocalId`, got WrongId"
         );
     }
 
