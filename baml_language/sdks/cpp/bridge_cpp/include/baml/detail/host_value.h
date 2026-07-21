@@ -6,11 +6,21 @@
 // references a type-erased dispatcher in the process-global
 // host_value_registry. When BAML invokes the callable, the engine fires
 // the registered host-dispatch callback; the trampoline here runs the
-// dispatcher on a detached thread (dispatch must be fire-and-return --
-// the engine awaits the completion, so the user callable must not run on
-// the engine's worker), and the dispatcher decodes the BamlToHostCall
-// args, invokes the user function, and resolves the call via
-// complete_host_call. Mirrors bridge_python::host_value.
+// dispatcher INLINE on the engine's worker, decoding the BamlToHostCall
+// args, invoking the user function, and resolving the call via
+// complete_host_call before returning.
+//
+// Inline dispatch is safe because the engine installs the in-flight entry
+// before firing (sys_native `host_impls`), so completing from inside the
+// callback resolves an already-registered oneshot, and because the engine
+// announces the blocking section with `block_in_place` on a multi-thread
+// runtime, which migrates the remaining tasks off this worker and keeps
+// the runtime live even when the user callable re-enters the engine.
+//
+// bridge_python spawns a tokio task here instead. That is ~free in Python;
+// the C++ equivalent was a detached OS thread per crossing, which measured
+// ~29us against ~7us inline on an M-series Mac -- pure overhead on a path
+// hot enough to matter (an embedded game loop issues thousands per second).
 //
 // Host exceptions cross back in two shapes (Python parity):
 //   - baml::host_throw<T>           -> the typed BAML class value itself
@@ -33,7 +43,6 @@
 #include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -494,8 +503,7 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
   };
   // No C++ exception may cross the C ABI (bridge contract), and every
   // setup fault must still complete the call or the engine awaits forever:
-  // bytes.assign can throw bad_alloc, the registry lock can throw, and the
-  // std::thread constructor throws system_error under thread exhaustion.
+  // bytes.assign can throw bad_alloc and the registry lock can throw.
   try {
     std::vector<uint8_t> bytes;
     if (args != nullptr && length != 0) {
@@ -510,22 +518,19 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
                      std::to_string(host_value_key));
       return;
     }
-    // Fire-and-return: the engine awaits the completion, so the user
-    // callable runs on its own thread (the analog of Python's spawned
-    // tokio task). run_host_callable completes the call on every exit
-    // path.
-    std::thread([dispatcher = std::move(dispatcher), bridge_failure, call_id,
-                 bytes = std::move(bytes)]() mutable {
-      try {
-        dispatcher(call_id, std::move(bytes));
-      } catch (...) {
-        bridge_failure(
-            "host callable dispatch failed outside the user callable");
-      }
-    }).detach();
+    // Run inline on the engine's worker (see the header comment for why
+    // this is safe). run_host_callable completes the call on every exit
+    // path; the catch is for a fault in the dispatcher itself, outside the
+    // user callable, which must still complete the call rather than leave
+    // the engine awaiting forever.
+    try {
+      dispatcher(call_id, std::move(bytes));
+    } catch (...) {
+      bridge_failure("host callable dispatch failed outside the user callable");
+    }
   } catch (...) {
     try {
-      bridge_failure("host callable dispatch could not be spawned");
+      bridge_failure("host callable dispatch could not be started");
     } catch (...) {
       // Even the failure path failed (e.g. allocation): swallowing is all
       // the ABI permits -- that call hangs rather than the process

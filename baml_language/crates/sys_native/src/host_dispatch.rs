@@ -83,15 +83,36 @@ pub fn set_dispatch_fn(f: HostDispatchFn) {
 pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
     match HOST_DISPATCH_FN.get() {
         Some(f) => {
-            // The dispatch fn is fire-and-return: every bridge hands the call
-            // off to the host (spawning a task / goroutine / threadsafe-fn
-            // callback) and returns promptly, then later resolves the in-flight
-            // `CompletionHandle` via `complete_host_call`. It never blocks on
-            // the host's response, so we call it directly. A
-            // `tokio::task::block_in_place` wrapper would only be needed for a
-            // blocking callee, and it would panic on a current-thread runtime —
-            // neither applies here.
-            f(host_value_key, call_id, args.as_ptr(), args.len());
+            // Most bridges are fire-and-return: they hand the call off to
+            // the host (spawning a task / goroutine / threadsafe-fn callback)
+            // and return promptly, later resolving the in-flight
+            // `CompletionHandle` via `complete_host_call`.
+            //
+            // A bridge may instead run the host callable *inline* and complete
+            // the call before returning — the C++ bridge does this to avoid
+            // spawning an OS thread per crossing, which dominates its cost.
+            // The inflight entry is installed before this call (see
+            // `host_impls`), so an inline `complete_host_call` resolves a
+            // registered oneshot. Inline dispatch does occupy this worker for
+            // the duration of the callable, so on a multi-thread runtime we
+            // announce the blocking section: `block_in_place` migrates the
+            // remaining tasks off this worker, which keeps the runtime live
+            // even when the callable synchronously re-enters the engine.
+            //
+            // `block_in_place` panics on a current-thread runtime, and is
+            // meaningless outside a runtime context, so both fall back to a
+            // direct call (a fire-and-return bridge never needs it, and an
+            // inline bridge on a current-thread runtime cannot be rescued
+            // here anyway).
+            let call = || f(host_value_key, call_id, args.as_ptr(), args.len());
+            match tokio::runtime::Handle::try_current() {
+                Ok(handle)
+                    if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread =>
+                {
+                    tokio::task::block_in_place(call);
+                }
+                _ => call(),
+            }
             true
         }
         None => {
