@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.RootAliasParam(cfg: Config) -> string {
+fn user.RootIdentity(cfg: Config) -> Config {
     // Locals:
-    let _0: string // _0 // return
+    let _0: Config // _0 // return
     let _1: Config // cfg // param
 
     bb0: {
-        _0 = copy _1.0;
+        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -24,6 +24,20 @@ fn user.RootConstruct(key: string) -> Config {
 
     bb0: {
         _0 = user.Config { copy _1, const "prod" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.RootEnumReturn() -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+
+    bb0: {
+        _0 = const user.Status.Ok;
         goto -> bb1;
     }
 
@@ -67,40 +81,10 @@ fn user.RootEnumMatch(s: Status) -> string {
     }
 }
 
-fn user.RootEnumReturn() -> Status {
-    // Locals:
-    let _0: Status // _0 // return
-
-    bb0: {
-        _0 = const user.Status.Ok;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootIdentity(cfg: Config) -> Config {
-    // Locals:
-    let _0: Config // _0 // return
-    let _1: Config // cfg // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootMixedConfigs(root_cfg: Config, llm_cfg: llm.Config) -> string {
+fn user.RootAliasParam(cfg: Config) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Config // root_cfg // param
-    let _2: llm.Config // llm_cfg // param
+    let _1: Config // cfg // param
 
     bb0: {
         _0 = copy _1.0;
@@ -160,36 +144,6 @@ fn user.RootThrowEnum(x: int) -> string {
     }
 }
 
-fn user.RootUsesAuthConfig(cfg: auth.Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Config // cfg // param
-
-    bb0: {
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootUsesAuthError(e: auth.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Error // e // param
-
-    bb0: {
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.RootUsesLlmConfig(cfg: llm.Config) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -234,6 +188,36 @@ fn user.RootUsesLlmStatus() -> llm.Status {
     }
 }
 
+fn user.RootUsesAuthConfig(cfg: auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.RootUsesAuthError(e: auth.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: auth.Error // e // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -249,13 +233,29 @@ fn user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     }
 }
 
-fn user.auth.AuthAliasParam(t: auth.Token) -> string {
+fn user.RootMixedConfigs(root_cfg: Config, llm_cfg: llm.Config) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: auth.Token // t // param
+    let _1: Config // root_cfg // param
+    let _2: llm.Config // llm_cfg // param
 
     bb0: {
         _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.auth.AuthIdentity(cfg: auth.Config) -> auth.Config {
+    // Locals:
+    let _0: auth.Config // _0 // return
+    let _1: auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -271,6 +271,20 @@ fn user.auth.AuthConstruct(provider: string) -> auth.Config {
 
     bb0: {
         _0 = user.auth.Config { copy _1, const "s3cret" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.auth.AuthEnumReturn() -> auth.Role {
+    // Locals:
+    let _0: auth.Role // _0 // return
+
+    bb0: {
+        _0 = const user.auth.Role.Admin;
         goto -> bb1;
     }
 
@@ -314,143 +328,10 @@ fn user.auth.AuthEnumMatch(r: auth.Role) -> string {
     }
 }
 
-fn user.auth.AuthEnumReturn() -> auth.Role {
-    // Locals:
-    let _0: auth.Role // _0 // return
-
-    bb0: {
-        _0 = const user.auth.Role.Admin;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.AuthIdentity(cfg: auth.Config) -> auth.Config {
-    // Locals:
-    let _0: auth.Config // _0 // return
-    let _1: auth.Config // cfg // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.AuthMakeToken(v: string) -> auth.Token {
-    // Locals:
-    let _0: auth.Token // _0 // return
-    let _1: string // v // param
-
-    bb0: {
-        _0 = user.auth.Token { copy _1, const user.auth.Role.User };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
+fn user.auth.AuthAliasParam(t: auth.Token) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: llm.Status // s // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "done";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "generating";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "ready";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Status // s // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "pending";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "failed";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.auth.AuthMixedConfigs(auth_cfg: auth.Config, root_cfg: Config, llm_cfg: llm.Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Config // auth_cfg // param
-    let _2: Config // root_cfg // param
-    let _3: llm.Config // llm_cfg // param
-
-    bb0: {
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.AuthMixedErrors(auth_err: auth.Error, root_err: Error, llm_err: llm.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Error // auth_err // param
-    let _2: Error // root_err // param
-    let _3: llm.Error // llm_err // param
+    let _1: auth.Token // t // param
 
     bb0: {
         _0 = copy _1.0;
@@ -507,6 +388,85 @@ fn user.auth.AuthThrowEnum(x: int) -> string {
 
     bb3: {
         throw const user.auth.Role.Guest;
+    }
+}
+
+fn user.auth.AuthMakeToken(v: string) -> auth.Token {
+    // Locals:
+    let _0: auth.Token // _0 // return
+    let _1: string // v // param
+
+    bb0: {
+        _0 = user.auth.Token { copy _1, const user.auth.Role.User };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.auth.AuthUsesRootConfig(cfg: Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.auth.AuthUsesRootStatus() -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+
+    bb0: {
+        _0 = const user.Status.Pending;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.auth.AuthMatchesRootStatus(s: Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
     }
 }
 
@@ -579,6 +539,41 @@ fn user.auth.AuthUsesLlmStatus() -> llm.Status {
     }
 }
 
+fn user.auth.AuthMatchesLlmStatus(s: llm.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: llm.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "done";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "generating";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ready";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn user.auth.AuthUsesNestedClient(c: llm.openai.Client) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -594,10 +589,12 @@ fn user.auth.AuthUsesNestedClient(c: llm.openai.Client) -> string {
     }
 }
 
-fn user.auth.AuthUsesRootConfig(cfg: Config) -> string {
+fn user.auth.AuthMixedConfigs(auth_cfg: auth.Config, root_cfg: Config, llm_cfg: llm.Config) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Config // cfg // param
+    let _1: auth.Config // auth_cfg // param
+    let _2: Config // root_cfg // param
+    let _3: llm.Config // llm_cfg // param
 
     bb0: {
         _0 = copy _1.0;
@@ -609,12 +606,15 @@ fn user.auth.AuthUsesRootConfig(cfg: Config) -> string {
     }
 }
 
-fn user.auth.AuthUsesRootStatus() -> Status {
+fn user.auth.AuthMixedErrors(auth_err: auth.Error, root_err: Error, llm_err: llm.Error) -> string {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: string // _0 // return
+    let _1: auth.Error // auth_err // param
+    let _2: Error // root_err // param
+    let _3: llm.Error // llm_err // param
 
     bb0: {
-        _0 = const user.Status.Pending;
+        _0 = copy _1.0;
         goto -> bb1;
     }
 
@@ -623,13 +623,13 @@ fn user.auth.AuthUsesRootStatus() -> Status {
     }
 }
 
-fn user.llm.LlmAliasParam(cfg: llm.Config) -> string {
+fn user.llm.LlmIdentity(cfg: llm.Config) -> llm.Config {
     // Locals:
-    let _0: string // _0 // return
+    let _0: llm.Config // _0 // return
     let _1: llm.Config // cfg // param
 
     bb0: {
-        _0 = copy _1.0;
+        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -645,6 +645,20 @@ fn user.llm.LlmConstruct(model: string) -> llm.Config {
 
     bb0: {
         _0 = user.llm.Config { copy _1, const 0.7_f64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.LlmEnumReturn() -> llm.Status {
+    // Locals:
+    let _0: llm.Status // _0 // return
+
+    bb0: {
+        _0 = const user.llm.Status.Ready;
         goto -> bb1;
     }
 
@@ -688,94 +702,13 @@ fn user.llm.LlmEnumMatch(s: llm.Status) -> string {
     }
 }
 
-fn user.llm.LlmEnumReturn() -> llm.Status {
+fn user.llm.LlmAliasParam(cfg: llm.Config) -> string {
     // Locals:
-    let _0: llm.Status // _0 // return
-
-    bb0: {
-        _0 = const user.llm.Status.Ready;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmIdentity(cfg: llm.Config) -> llm.Config {
-    // Locals:
-    let _0: llm.Config // _0 // return
+    let _0: string // _0 // return
     let _1: llm.Config // cfg // param
 
     bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Status // s // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "pending";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "failed";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cfg: auth.Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.Config // llm_cfg // param
-    let _2: Config // root_cfg // param
-    let _3: auth.Config // auth_cfg // param
-
-    bb0: {
         _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmResponseConstruct(text: string) -> llm.Response {
-    // Locals:
-    let _0: llm.Response // _0 // return
-    let _1: string // text // param
-
-    bb0: {
-        _0 = user.llm.Response { copy _1, const 42_i64 };
         goto -> bb1;
     }
 
@@ -832,26 +765,112 @@ fn user.llm.LlmThrowEnum(x: int) -> string {
     }
 }
 
-fn user.llm.LlmThrowsRootEnum(x: int) -> string {
+fn user.llm.LlmResponseConstruct(text: string) -> llm.Response {
     // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
+    let _0: llm.Response // _0 // return
+    let _1: string // text // param
 
     bb0: {
-        switch copy _1 [0: bb3, otherwise: bb1];
+        _0 = user.llm.Response { copy _1, const 42_i64 };
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = const "ok";
-        goto -> bb2;
+        return;
+    }
+}
+
+fn user.llm.LlmUsesRootConfig(cfg: Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.LlmUsesRootError(e: Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Error // e // param
+
+    bb0: {
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.LlmUsesRootStatus() -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+
+    bb0: {
+        _0 = const user.Status.Ok;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.LlmMatchesRootStatus(s: Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
     }
 
     bb2: {
-        return;
+        _0 = const "pending";
+        goto -> bb5;
     }
 
     bb3: {
-        throw const user.Status.Failed;
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.llm.LlmUsesRootAlias(cfg: Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -877,6 +896,29 @@ fn user.llm.LlmThrowsRootError(x: int) -> string {
     bb3: {
         _2 = user.Error { const 404_i64, const "not found" };
         throw copy _2;
+    }
+}
+
+fn user.llm.LlmThrowsRootEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.Status.Failed;
     }
 }
 
@@ -939,10 +981,12 @@ fn user.llm.LlmUsesNestedClient(c: llm.openai.Client) -> string {
     }
 }
 
-fn user.llm.LlmUsesRootAlias(cfg: Config) -> string {
+fn user.llm.LlmMixedConfigs(llm_cfg: llm.Config, root_cfg: Config, auth_cfg: auth.Config) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Config // cfg // param
+    let _1: llm.Config // llm_cfg // param
+    let _2: Config // root_cfg // param
+    let _3: auth.Config // auth_cfg // param
 
     bb0: {
         _0 = copy _1.0;
@@ -954,42 +998,13 @@ fn user.llm.LlmUsesRootAlias(cfg: Config) -> string {
     }
 }
 
-fn user.llm.LlmUsesRootConfig(cfg: Config) -> string {
+fn user.llm.openai.OpenAIIdentity(c: llm.openai.Client) -> llm.openai.Client {
     // Locals:
-    let _0: string // _0 // return
-    let _1: Config // cfg // param
+    let _0: llm.openai.Client // _0 // return
+    let _1: llm.openai.Client // c // param
 
     bb0: {
-        _0 = copy _1.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmUsesRootError(e: Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Error // e // param
-
-    bb0: {
-        _0 = copy _1.1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmUsesRootStatus() -> Status {
-    // Locals:
-    let _0: Status // _0 // return
-
-    bb0: {
-        _0 = const user.Status.Ok;
+        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -1005,6 +1020,20 @@ fn user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
 
     bb0: {
         _0 = user.llm.openai.Client { copy _1, const "org-123" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIEnumReturn() -> llm.openai.Model {
+    // Locals:
+    let _0: llm.openai.Model // _0 // return
+
+    bb0: {
+        _0 = const user.llm.openai.Model.GPT4o;
         goto -> bb1;
     }
 
@@ -1035,194 +1064,6 @@ fn user.llm.openai.OpenAIEnumMatch(m: llm.openai.Model) -> string {
 
     bb3: {
         _0 = const "gpt4o-mini";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "gpt4o";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIEnumReturn() -> llm.openai.Model {
-    // Locals:
-    let _0: llm.openai.Model // _0 // return
-
-    bb0: {
-        _0 = const user.llm.openai.Model.GPT4o;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIIdentity(c: llm.openai.Client) -> llm.openai.Client {
-    // Locals:
-    let _0: llm.openai.Client // _0 // return
-    let _1: llm.openai.Client // c // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Role // r // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Role.Admin: bb4, Role.User: bb3, Role.Guest: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "guest";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "user";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "admin";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.Status // s // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "done";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "generating";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "ready";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Status // s // param
-    let _2: int
-
-    bb0: {
-        _2 = discriminant(_1);
-        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "pending";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "failed";
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const "ok";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIMixedErrors(openai_err: llm.openai.Error, root_err: Error, llm_err: llm.Error, auth_err: auth.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Error // openai_err // param
-    let _2: Error // root_err // param
-    let _3: llm.Error // llm_err // param
-    let _4: auth.Error // auth_err // param
-
-    bb0: {
-        _0 = copy _1.1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIMixedModels(openai_model: llm.openai.Model, llm_model: llm.Model) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Model // openai_model // param
-    let _2: llm.Model // llm_model // param
-    let _3: int
-
-    bb0: {
-        _3 = discriminant(_1);
-        switch copy _3 [Model.GPT4o: bb4, Model.GPT4oMini: bb3, Model.O3: bb2, otherwise: bb1] (exhaustive);
-    }
-
-    bb1: {
-        unreachable;
-    }
-
-    bb2: {
-        _0 = const "o3";
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const "mini";
         goto -> bb5;
     }
 
@@ -1284,10 +1125,10 @@ fn user.llm.openai.OpenAIThrowEnum(x: int) -> string {
     }
 }
 
-fn user.llm.openai.OpenAIUsesAuthConfig(cfg: auth.Config) -> string {
+fn user.llm.openai.OpenAIUsesRootConfig(cfg: Config) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: auth.Config // cfg // param
+    let _1: Config // cfg // param
 
     bb0: {
         _0 = copy _1.0;
@@ -1299,16 +1140,51 @@ fn user.llm.openai.OpenAIUsesAuthConfig(cfg: auth.Config) -> string {
     }
 }
 
-fn user.llm.openai.OpenAIUsesAuthRole() -> auth.Role {
+fn user.llm.openai.OpenAIUsesRootStatus() -> Status {
     // Locals:
-    let _0: auth.Role // _0 // return
+    let _0: Status // _0 // return
 
     bb0: {
-        _0 = const user.auth.Role.User;
+        _0 = const user.Status.Ok;
         goto -> bb1;
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIMatchesRootStatus(s: Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -1357,10 +1233,45 @@ fn user.llm.openai.OpenAIUsesLlmStatus() -> llm.Status {
     }
 }
 
-fn user.llm.openai.OpenAIUsesRootConfig(cfg: Config) -> string {
+fn user.llm.openai.OpenAIMatchesLlmStatus(s: llm.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Config // cfg // param
+    let _1: llm.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ready: bb4, Status.Generating: bb3, Status.Done: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "done";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "generating";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ready";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIUsesAuthConfig(cfg: auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: auth.Config // cfg // param
 
     bb0: {
         _0 = copy _1.0;
@@ -1372,16 +1283,105 @@ fn user.llm.openai.OpenAIUsesRootConfig(cfg: Config) -> string {
     }
 }
 
-fn user.llm.openai.OpenAIUsesRootStatus() -> Status {
+fn user.llm.openai.OpenAIUsesAuthRole() -> auth.Role {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: auth.Role // _0 // return
 
     bb0: {
-        _0 = const user.Status.Ok;
+        _0 = const user.auth.Role.User;
         goto -> bb1;
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIMatchesAuthRole(r: auth.Role) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: auth.Role // r // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Role.Admin: bb4, Role.User: bb3, Role.Guest: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "guest";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "user";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "admin";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIMixedErrors(openai_err: llm.openai.Error, root_err: Error, llm_err: llm.Error, auth_err: auth.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: llm.openai.Error // openai_err // param
+    let _2: Error // root_err // param
+    let _3: llm.Error // llm_err // param
+    let _4: auth.Error // auth_err // param
+
+    bb0: {
+        _0 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIMixedModels(openai_model: llm.openai.Model, llm_model: llm.Model) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: llm.openai.Model // openai_model // param
+    let _2: llm.Model // llm_model // param
+    let _3: int
+
+    bb0: {
+        _3 = discriminant(_1);
+        switch copy _3 [Model.GPT4o: bb4, Model.GPT4oMini: bb3, Model.O3: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "o3";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "mini";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "gpt4o";
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }

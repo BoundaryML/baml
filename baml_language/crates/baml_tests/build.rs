@@ -769,11 +769,9 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                     .collect();
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
-                    let item_tree = file_item_tree(&db, sf);
-                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                    for (local_id, _func_data) in functions {
-                        let func_loc = FunctionLoc::new(&db, sf, *local_id);
+                    let mut functions = file_functions(&db, sf).to_vec();
+                    functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                    for func_loc in functions {
                         let mir = lower_function(&db, func_loc, OptLevel::Two);
                         writeln!(output, "{}", display_function(&mir)).unwrap();
                     }
@@ -787,8 +785,8 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
     quote! {
         #[test]
         fn test_04_5_mir() {
-            use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
             use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+            use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -800,11 +798,12 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             writeln!(output, "=== MIR2 ===").unwrap();
 
             for source_file in &source_files {
-                let item_tree = file_item_tree(&db, *source_file);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                // Dump in source order (by declaration span) — an intrinsic,
+                // salsa-enumeration-independent key, so the snapshot never churns
+                // on a firewall/tie-break change the way a name sort would.
+                let mut functions = file_functions(&db, *source_file).to_vec();
+                functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                for func_loc in functions {
                     let mir = lower_function(&db, func_loc, OptLevel::Two);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
                 }

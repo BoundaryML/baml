@@ -2,6 +2,48 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.parse_and_roundtrip(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
+    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+
+    bb0: {
+        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _0 = call const fn baml.json.stringify(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.parse_and_roundtrip_pretty(s: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // s // param
+    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
+    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+
+    bb0: {
+        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _2;
+        _0 = call const fn baml.json.stringify_pretty(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.match_parsed(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -102,48 +144,6 @@ fn user.match_parsed(s: string) -> string {
     }
 
     bb16: {
-        return;
-    }
-}
-
-fn user.parse_and_roundtrip(s: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // s // param
-    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-
-    bb0: {
-        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = copy _2;
-        _0 = call const fn baml.json.stringify(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.parse_and_roundtrip_pretty(s: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // s // param
-    let _2: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // j
-    let _3: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
-
-    bb0: {
-        _2 = call const fn baml.json.parse(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _3 = copy _2;
-        _0 = call const fn baml.json.stringify_pretty(copy _3) -> [bb2];
-    }
-
-    bb2: {
         return;
     }
 }
