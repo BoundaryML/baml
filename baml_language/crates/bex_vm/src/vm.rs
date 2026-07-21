@@ -3471,30 +3471,41 @@ impl BexVm {
         }))
     }
 
-    /// `int << r`, validated: a negative count throws `NegativeBitShift`, and a
-    /// result outside the i63 range throws `IntegerOverflow` (e.g. `1 << 62`).
-    /// `checked_shl` also rules out the shift-amount UB of a raw `<<`.
+    /// `int << r`, validated: a negative count throws `NegativeBitShift`. Bits
+    /// shifted past the i63 width are discarded rather than overflowing, so the
+    /// result is the low 63 bits read as two's complement — `1 << 61` is
+    /// `2^61`, `1 << 62` is `int.min_value()` (bit 62 is the sign bit), and
+    /// `1 << 63` is `0`.
+    ///
+    /// The constant folder in `baml_compiler2_tir` mirrors this; the two must
+    /// agree or a folded `<<` diverges from the executed one.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
-        };
-        match l.checked_shl(shift).and_then(Value::try_int) {
-            Some(v) => Ok(v),
-            None => Err(self.integer_overflow(format!("{l} << {r} overflows int"))),
+        match r {
+            ..=-1 => Err(self.negative_bit_shift(r)),
+            // The extra place lands bit 62 — the i63 sign bit — in the i64 sign
+            // bit, and the arithmetic `>> 1` sign-extends it back over bit 63.
+            // The arm bounds `r + 1` to `1..=63`, so the shift amount is always
+            // a valid one for `i64`.
+            0..63 => Ok(Value::int((l << (r + 1)) >> 1)),
+            63.. => Ok(Value::int(0)),
         }
     }
 
     /// `int >> r` (arithmetic), validated: a negative count throws
     /// `NegativeBitShift`. The result is always within i63 (magnitude only
-    /// shrinks); a count `>= 64` saturates to the sign bit (`min(63)` avoids the
-    /// shift-amount UB of a raw `>>`).
+    /// shrinks). The shift propagates the sign, so a count at or past the i63
+    /// width saturates to the sign bit — `0` for a non-negative `l` and `-1`
+    /// for a negative one — rather than to `0` unconditionally.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
-        };
-        Ok(Value::int(l >> shift.min(63)))
+        match r {
+            ..=-1 => Err(self.negative_bit_shift(r)),
+            0..63 => Ok(Value::int(l >> r)),
+            // Not `0`: `l >> 63` keeps the sign, and the constant folder in
+            // `baml_compiler2_tir` folds this same count via `checked_shr`.
+            63.. => Ok(Value::int(l >> 63)),
+        }
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -5358,9 +5369,8 @@ impl BexVm {
                 // than wrapping or raw-Rust-panicking. Only `*` can overflow
                 // i64 from i63 operands (so it needs checked_mul); +, -, /, %
                 // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
-                // two i63 values stay in range, but `<<` can leave it (e.g.
-                // `1 << 62`), so Shl/Shr are validated (overflow + negative
-                // count) too.
+                // two i63 values stay in range, and `<<` truncates back into it
+                // (see `int_shl`); both shifts still reject a negative count.
                 BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
                 BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
                 BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,

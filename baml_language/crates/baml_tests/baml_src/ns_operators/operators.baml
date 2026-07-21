@@ -50,8 +50,59 @@ test "shift_left" {
     assert.is_true(baml.deep_equals(10 << 3, 80))
 }
 
+// `<<` discards the bits pushed past the 63-bit width instead of overflowing,
+// so bit 62 lands on the sign and anything above it falls off entirely.
+// `ops_shl` takes its operands at runtime so the VM's shift opcode is
+// exercised; the literal forms next to it go through the constant folder, and
+// the two must agree.
+function ops_shl(x: int, n: int) -> int { x << n }
+
+test "shift_left_truncates" {
+    assert.is_true(baml.deep_equals(ops_shl(1, 61), 2305843009213693952))
+    assert.is_true(baml.deep_equals(1 << 61, 2305843009213693952))
+
+    // Bit 62 is the i63 sign bit, so `1 << 62` is `int.min_value()`. The folded
+    // form has to spell the literal out — `deep_equals` pins its type to the
+    // first argument, and a folded `<<` is a literal type rather than `int`.
+    // `-MAX - 1` is how `int.min_value()` itself dodges the literal parser.
+    assert.is_true(baml.deep_equals(ops_shl(1, 62), baml.Int.min_value()))
+    assert.is_true(baml.deep_equals(1 << 62, -4611686018427387903 - 1))
+
+    // Every bit is gone at 63 and beyond, whatever the left operand.
+    assert.is_true(baml.deep_equals(ops_shl(1, 63), 0))
+    assert.is_true(baml.deep_equals(1 << 63, 0))
+    assert.is_true(baml.deep_equals(ops_shl(-1, 100), 0))
+    assert.is_true(baml.deep_equals((-1) << 100, 0))
+
+    // Truncation keeps the low bits: `-1` is all-ones, so shifting it left by
+    // one clears bit 0 and leaves the rest, i.e. `-2`.
+    assert.is_true(baml.deep_equals(ops_shl(-1, 1), -2))
+    assert.is_true(baml.deep_equals((-1) << 1, -2))
+}
+
 test "shift_right" {
     assert.is_true(baml.deep_equals(10 >> 3, 1))
+}
+
+// `>>` is arithmetic: it propagates the sign rather than feeding in zeros, so a
+// count at or past the 63-bit width saturates to the sign bit — 0 for a
+// non-negative operand, -1 for a negative one. Regression for a VM arm that
+// returned 0 for both, which disagreed with the constant folder.
+function ops_shr(x: int, n: int) -> int { x >> n }
+
+test "shift_right_saturates_to_sign" {
+    assert.is_true(baml.deep_equals(ops_shr(-1, 63), -1))
+    assert.is_true(baml.deep_equals((-1) >> 63, -1))
+    assert.is_true(baml.deep_equals(ops_shr(-1, 200), -1))
+
+    assert.is_true(baml.deep_equals(ops_shr(1, 63), 0))
+    assert.is_true(baml.deep_equals(1 >> 63, 0))
+    assert.is_true(baml.deep_equals(ops_shr(1, 200), 0))
+
+    // Below the width the sign still propagates: -8 >> 2 is -2, not a large
+    // positive value.
+    assert.is_true(baml.deep_equals(ops_shr(-8, 2), -2))
+    assert.is_true(baml.deep_equals((-8) >> 2, -2))
 }
 
 // Bitwise NOT (`~`) is two's-complement complement: `~x == -x - 1`. Regression

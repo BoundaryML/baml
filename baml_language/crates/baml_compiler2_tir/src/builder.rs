@@ -14572,11 +14572,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Some(Ty::Literal(LiteralValue::Int(a ^ b), f, TyAttr::default()))
                 }
                 BinaryOp::Shl => {
-                    // `<<` can overflow i63 (e.g. `1 << 62`), so range-check the
-                    // result; out-of-range / negative-count cases return None and
-                    // defer to the runtime op's IntegerOverflow / NegativeBitShift.
+                    // `<<` discards the bits shifted past the i63 width instead
+                    // of overflowing, so the folded result is always in range.
+                    // This mirrors `int_shl` in `bex_vm`: shift one extra place
+                    // to land bit 62 in the i64 sign bit, then sign-extend it
+                    // back. A negative count returns None and defers to the
+                    // runtime op's NegativeBitShift.
                     let shift = u32::try_from(b).ok()?;
-                    Self::fold_int(a.checked_shl(shift)?, f)
+                    let truncated = if shift >= 63 {
+                        0
+                    } else {
+                        (a << (shift + 1)) >> 1
+                    };
+                    Self::fold_int(truncated, f)
                 }
                 BinaryOp::Shr => {
                     let shift = u32::try_from(b).ok()?;

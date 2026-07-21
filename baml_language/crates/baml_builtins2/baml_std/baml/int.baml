@@ -11,6 +11,11 @@
 /// Arithmetic (`+`, `-`, `*`, `/`, unary `-`) that would leave this range
 /// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
 /// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.
+///
+/// `<<` is the exception: it discards the bits shifted past the 63-bit width
+/// rather than throwing, so `1 << 62` is `int.min_value()` (bit 62 is the sign
+/// bit) and `1 << 63` is `0`. A negative count on either shift throws
+/// `baml.panics.NegativeBitShift`.
 class Int {
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 

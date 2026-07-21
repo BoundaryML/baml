@@ -1922,7 +1922,7 @@ function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random(self: ?, bytes: int) -> uint8array  [builtin]
 function baml.random.random_int(self: ?) -> int  [expr] {
-  { let bytes = self.random(8); let magnitude = bytes[0] BitAnd 63 Shl 56 BitOr bytes[1] Shl 48 BitOr bytes[2] Shl 40 BitOr bytes[3] Shl 32 BitOr bytes[4] Shl 24 BitOr bytes[5] Shl 16 BitOr bytes[6] Shl 8 BitOr bytes[7] } if (bytes[0] BitAnd 64 Eq 0) {  } magnitude else {  } 0 Sub magnitude Sub 1
+  { let bytes = self.random(8) } bytes[0] Shl 56 BitOr bytes[1] Shl 48 BitOr bytes[2] Shl 40 BitOr bytes[3] Shl 32 BitOr bytes[4] Shl 24 BitOr bytes[5] Shl 16 BitOr bytes[6] Shl 8 BitOr bytes[7]
 }
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
