@@ -20,7 +20,106 @@ fn baml.Bigint.ilog = builtin(vm)
 
 fn baml.Bigint.parse = builtin(vm)
 
-fn baml.Bigint.random = builtin(vm)
+fn baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: bigint // lower // param
+    let _2: bigint // upper // param
+    let _3: baml.random.Rng // rng // param
+    let _4: bool
+    let _5: bool
+    let _6: baml.errors.InvalidArgument
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: type
+    let _13: string
+    let _14: type
+    let _15: int // width
+    let _16: bigint // r
+    let _17: uint8array
+    let _18: int
+    let _19: bool
+    let _20: bigint
+    let _21: uint8array
+    let _22: int
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = copy _1 >= copy _2;
+        branch copy _5 -> [bb11, bb3];
+    }
+
+    bb3: {
+        _15 = call const fn baml.Bigint._random_byte_count(copy _1, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        _18 = copy _15;
+        _17 = virtual_call random as baml.random.Rng(copy _3, copy _18) -> [bb5];
+    }
+
+    bb5: {
+        _16 = call const fn baml.Bigint._random_in_range(copy _17, copy _1, copy _2) -> [bb6];
+    }
+
+    bb6: {
+        _20 = copy _16;
+        _19 = copy _20 == copy _2;
+        branch copy _19 -> [bb9, bb7];
+    }
+
+    bb7: {
+        _0 = copy _16;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _22 = copy _15;
+        _21 = virtual_call random as baml.random.Rng(copy _3, copy _22) -> [bb10];
+    }
+
+    bb10: {
+        _16 = call const fn baml.Bigint._random_in_range(copy _21, copy _1, copy _2) -> [bb6];
+    }
+
+    bb11: {
+        _12 = load_type(bigint);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb12];
+    }
+
+    bb12: {
+        _10 = const "bigint.random: lower (" + copy _11;
+        _9 = copy _10 + const ") must be less than upper (";
+        _14 = load_type(bigint);
+        _13 = call const fn baml.String.from<copy _14>(copy _2) -> [bb13];
+    }
+
+    bb13: {
+        _8 = copy _9 + copy _13;
+        _7 = copy _8 + const ")";
+        _6 = baml.errors.InvalidArgument { copy _7 };
+        throw copy _6;
+    }
+}
+
+fn baml.Bigint._random_byte_count = builtin(vm)
+
+fn baml.Bigint._random_in_range = builtin(vm)
 
 fn baml.Comparable$for$int.compare(self: int, other: Self) -> int {
     // Locals:

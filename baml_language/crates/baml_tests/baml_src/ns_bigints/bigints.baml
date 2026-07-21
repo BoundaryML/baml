@@ -431,6 +431,81 @@ test "bigint_random_lower_greater_throws" {
     }
 }
 
+// ─── random: the `rng` parameter ──────────────────────────────────────────────
+
+function bigint_random_seed() -> uint8array {
+    // Bound to a local: a byte-string literal in tail position is not
+    // recognized as the return value (E0029) — same workaround as ns_ints.
+    let seed = b"\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f\x60";
+    seed
+}
+
+// Two generators on the same seed must walk the same 30 values.
+function bigint_random_seeded_is_reproducible() -> bool {
+    let a = baml.random.Xoshiro256PlusPlus.new(seed = bigint_random_seed());
+    let b = baml.random.Xoshiro256PlusPlus.new(seed = bigint_random_seed());
+    let ok = true;
+    let i = 0;
+    while (i < 30) {
+        let x = bigint.random(0n, 1000000000000000000000000n, rng = a);
+        let y = bigint.random(0n, 1000000000000000000000000n, rng = b);
+        if (x != y || x < 0n || x >= 1000000000000000000000000n) { ok = false } else { null }
+        i = i + 1
+    }
+    ok
+}
+
+test "bigint_random_seeded_is_reproducible" {
+    assert.is_true(bigint_random_seeded_is_reproducible())
+}
+
+// Ranges that stress the byte/bit accounting: a single value (zero bytes
+// drawn), an exact power of two (nothing ever rejected), and one past a byte
+// boundary (257 needs nine bits, so a draw is masked down from two bytes —
+// without that masking this range would reject 255 of every 256 draws).
+function bigint_random_bit_boundaries() -> bool {
+    let rng = baml.random.ChaCha20.new(seed = bigint_random_seed());
+    let ok = true;
+    let i = 0;
+    while (i < 300) {
+        let one = bigint.random(7n, 8n, rng = rng);
+        let pow2 = bigint.random(0n, 256n, rng = rng);
+        let past = bigint.random(0n, 257n, rng = rng);
+        if (one != 7n) { ok = false } else { null }
+        if (pow2 < 0n || pow2 >= 256n) { ok = false } else { null }
+        if (past < 0n || past >= 257n) { ok = false } else { null }
+        i = i + 1
+    }
+    ok
+}
+
+test "bigint_random_bit_boundaries" {
+    assert.is_true(bigint_random_bit_boundaries())
+}
+
+// A range straddling zero, and one far past what an `int` could hold, must both
+// stay in bounds and cover more than a single value.
+function bigint_random_wide_and_negative() -> bool {
+    let rng = baml.random.Xoshiro256PlusPlus.new(seed = bigint_random_seed());
+    let lo = -100000000000000000000000000000n;
+    let hi = 100000000000000000000000000000n;
+    let ok = true;
+    let saw_negative = false;
+    let saw_positive = false;
+    let i = 0;
+    while (i < 200) {
+        let r = bigint.random(lo, hi, rng = rng);
+        if (r < lo || r >= hi) { ok = false } else { null }
+        if (r < 0n) { saw_negative = true } else { saw_positive = true }
+        i = i + 1
+    }
+    ok && saw_negative && saw_positive
+}
+
+test "bigint_random_wide_and_negative" {
+    assert.is_true(bigint_random_wide_and_negative())
+}
+
 // ─── equality and ordering ────────────────────────────────────────────────────
 
 test "test_bigint_eq_same_alloc" {

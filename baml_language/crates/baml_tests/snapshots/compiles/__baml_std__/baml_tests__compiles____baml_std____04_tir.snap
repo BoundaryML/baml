@@ -8,6 +8,21 @@ source: crates/baml_tests/src/generated_tests.rs
 --- <builtin>/baml/bigint.baml ---
 class baml.Bigint {
 }
+function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng = root.random.SystemRandom.get()) -> bigint throws baml.errors.InvalidArgument {
+  { : bigint
+    if (lower >= upper : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "bigint.random: lo..." + string.from(lower) + ") must be less th..." + string.from(upper) + ")" } : baml.errors.InvalidArgument
+      }
+    let width = bigint._random_byte_count(lower, upper) : int
+    let r = bigint._random_in_range(rng.random(width), lower, upper) : bigint
+    while r == upper
+      { : void
+        r = bigint._random_in_range(rng.random(width), lower, upper) : bigint
+      }
+    r : bigint
+  }
+}
 class baml.Bigint$stream {
 }
 

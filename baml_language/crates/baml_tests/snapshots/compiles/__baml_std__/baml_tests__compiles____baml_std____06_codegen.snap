@@ -364,6 +364,12 @@ function baml.Array.splice(self: baml.Array<#0>, start: int, count: int, replace
 function baml.Array.unshift(self: baml.Array<#0>, item: #0) -> int {
 }
 
+function baml.Bigint._random_byte_count(lower: bigint, upper: bigint) -> int {
+}
+
+function baml.Bigint._random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint {
+}
+
 function baml.Bigint.abs(self: baml.Bigint) -> bigint {
 }
 
@@ -388,7 +394,76 @@ function baml.Bigint.parse(text: string) -> bigint {
 function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 }
 
-function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
+function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) -> bigint {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var2 1 2
+    cmp_bigint_op >=
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var2 1 2
+    call baml.Bigint._random_byte_count
+    store_var width
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _17
+    load_var2 8 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+
+  L2:
+    load_var2 7 2
+    cmp_bigint_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    return
+
+  L4:
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _21
+    load_var2 9 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+    jump L2
+
+  L5:
+    load_type bigint
+    load_var lower
+    call baml.String.from
+    store_var _11
+    load_type bigint
+    load_var upper
+    call baml.String.from
+    store_var _13
+    load_const "bigint.random: lower ("
+    load_var _11
+    bin_op +
+    load_const ") must be less than upper ("
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const ")"
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {

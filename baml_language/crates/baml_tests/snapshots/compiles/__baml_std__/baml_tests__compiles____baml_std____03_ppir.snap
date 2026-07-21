@@ -10,6 +10,8 @@ class baml.Bigint {
 }
 class baml.Bigint$stream {
 }
+function baml._random_byte_count(lower: bigint, upper: bigint) -> int  [builtin]
+function baml._random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint  [builtin]
 function baml.abs(self: ?) -> bigint  [builtin]
 function baml.clamp(self: ?, min: bigint, max: bigint) -> bigint  [builtin]
 function baml.ilog(self: ?, base: bigint) -> bigint  [builtin]
@@ -18,7 +20,9 @@ function baml.max(self: ?, other: bigint) -> bigint  [builtin]
 function baml.min(self: ?, other: bigint) -> bigint  [builtin]
 function baml.parse(text: string) -> bigint  [builtin]
 function baml.pow(self: ?, exp: bigint) -> bigint  [builtin]
-function baml.random(lower: bigint, upper: bigint) -> bigint  [builtin]
+function baml.random(lower: bigint, upper: bigint, rng: root.random.Rng = root.random.SystemRandom.get()) -> bigint  [expr] {
+  { if (lower Ge upper) { throw root.errors.InvalidArgument { message: "bigint.random: lo..." Add string.from(lower) Add ") must be less th..." Add string.from(upper) Add ")" } }; let width = bigint._random_byte_count(lower, upper); let r = bigint._random_in_range(rng.random(width), lower, upper); while r Eq upper { r = bigint._random_in_range(rng.random(width), lower, upper) } } r
+}
 
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {

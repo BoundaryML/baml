@@ -171,11 +171,16 @@ class Bigint {
   }
 
   /// Returns a uniformly distributed random integer in the half-open range
-  /// `[lower, upper)`.
+  /// `[lower, upper)`, drawn from `rng`.
   ///
   /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
-  /// Uses the host's cryptographic entropy source — no user-supplied RNG
-  /// handle.
+  /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
+  /// source; pass a seeded generator to make the draw reproducible.
+  ///
+  /// The range is unbounded, so each attempt takes as many bytes from `rng` as
+  /// the range is wide. The result is unbiased, which costs rejection sampling:
+  /// the number of attempts is unbounded in the worst case, though each is
+  /// accepted with probability at least one half.
   ///
   /// # Examples
   /// ```
@@ -184,8 +189,45 @@ class Bigint {
   /// bigint.random(0n, 1n)          // always 0  (single-element range)
   /// bigint.random(5n, 5n)          // throws — empty range
   /// bigint.random(10n, 0n)         // throws — lower > upper
+  ///
+  /// // Reproducible: the same seed replays the same values.
+  /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
+  /// bigint.random(0n, 10n, rng = rng)
   /// ```
-  function random(lower: bigint, upper: bigint) -> bigint throws root.errors.InvalidArgument {
+  function random(lower: bigint, upper: bigint, rng: root.random.Rng = root.random.SystemRandom.get()) -> bigint throws root.errors.InvalidArgument {
+    if (lower >= upper) {
+      throw root.errors.InvalidArgument {
+        message: "bigint.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+      };
+    }
+    // How many bytes an attempt needs depends only on the range, so resolve it
+    // once rather than per draw.
+    let width = bigint._random_byte_count(lower, upper);
+    let r = bigint._random_in_range(rng.random(width), lower, upper);
+    while (r == upper) {
+      r = bigint._random_in_range(rng.random(width), lower, upper);
+    }
+    r
+  }
+
+  /// Internal: the number of random bytes one `_random_in_range` attempt needs
+  /// for `[lower, upper)`. Zero when the range holds a single value.
+  ///
+  /// Callers must check `lower < upper` first.
+  function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
+    $rust_function
+  }
+
+  /// Internal: maps the bytes of one draw onto `[lower, upper)`.
+  ///
+  /// Returns `upper` to mean "this draw landed in the biased tail — draw
+  /// again". That is unambiguous because the range is half-open, so `upper` is
+  /// never itself a valid result. A draw shorter than `_random_byte_count`
+  /// asked for is rejected the same way, rather than quietly narrowing the
+  /// distribution.
+  ///
+  /// Callers must check `lower < upper` first.
+  function _random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint throws never {
     $rust_function
   }
 }
