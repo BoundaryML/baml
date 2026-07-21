@@ -29,10 +29,9 @@ function user.takes_int(x: int) -> int throws never {
 }
 function user.call_site_label() -> int throws never {
   { : int
-    takes_int($id = baml.id.new()) : int
+    takes_int($id = boundary.id()) : int
   }
-  !! 859..872: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
-  !! 843..873: missing required argument `x`
+  !! 843..873: expected 1 argument(s), got 0
 }
 function user.shadowing_let() -> int throws never {
   { : 2

@@ -567,10 +567,12 @@ jobs:
     # in that aggregator's needs. It gates on all-builds like every sibling
     # publisher — a failure anywhere in the release build blocks the Maven push.
     #
-    # This job ships TWO artifact families in one Central bundle:
+    # This job ships THREE artifact families in one Central bundle:
     #   - com.boundaryml:baml-bridge (the runtime + its per-platform native jars);
     #   - com.boundaryml:baml-gradle-plugin (+ its plugin-marker POM
-    #     com.boundaryml.baml:com.boundaryml.baml.gradle.plugin).
+    #     com.boundaryml.baml:com.boundaryml.baml.gradle.plugin);
+    #   - com.boundaryml:baml-bridge-kotlin (the Kotlin ergonomics layer over the
+    #     runtime; depends on baml-bridge at the same family version).
     # The plugin rides Central on EVERY channel (canary + nightly) because the
     # Gradle Plugin Portal is stable-channels-only — nightlies can only reach
     # Gradle consumers via Central (add mavenCentral() to pluginManagement). The
@@ -617,16 +619,20 @@ jobs:
           }
           bridge_code="$(check baml-bridge)"
           plugin_code="$(check baml-gradle-plugin)"
+          kotlin_code="$(check baml-bridge-kotlin)"
           bridge_publish=$([[ "$bridge_code" == "200" ]] && echo false || echo true)
           plugin_publish=$([[ "$plugin_code" == "200" ]] && echo false || echo true)
-          any_publish=$([[ "$bridge_publish" == "true" || "$plugin_publish" == "true" ]] && echo true || echo false)
+          kotlin_publish=$([[ "$kotlin_code" == "200" ]] && echo false || echo true)
+          any_publish=$([[ "$bridge_publish" == "true" || "$plugin_publish" == "true" || "$kotlin_publish" == "true" ]] && echo true || echo false)
           {
             echo "bridge_publish=$bridge_publish"
             echo "plugin_publish=$plugin_publish"
+            echo "kotlin_publish=$kotlin_publish"
             echo "any_publish=$any_publish"
           } >> "$GITHUB_OUTPUT"
           echo "baml-bridge ${VERSION}: HTTP ${bridge_code} → publish=${bridge_publish}"
           echo "baml-gradle-plugin ${VERSION}: HTTP ${plugin_code} → publish=${plugin_publish}"
+          echo "baml-bridge-kotlin ${VERSION}: HTTP ${kotlin_code} → publish=${kotlin_publish}"
       - name: Setup mise (JDK + gradle)
         if: ${{ steps.exists.outputs.any_publish == 'true' }}
         uses: ./.github/actions/setup-mise
@@ -659,7 +665,7 @@ jobs:
           # layout, attaches every downloaded natives-<platform> jar as a
           # classifier artifact (bamlNativeJarsDir), and signs + checksums all of
           # them with the in-memory key.
-          mise exec -- gradle --no-daemon publishMavenPublicationToStagingRepository \
+          gradle --no-daemon publishMavenPublicationToStagingRepository \
             -PbamlVersion="$VERSION" \
             -PbamlNativeJarsDir="$GITHUB_WORKSPACE/dist/natives"
       - name: Stage the signed gradle-plugin into the same Central layout
@@ -681,7 +687,30 @@ jobs:
           # Central bundle below carries both families. publishAllPublications*
           # covers pluginMaven + the marker; both are signed with the in-memory
           # key. The dir is created if baml-bridge was skipped (already on Central).
-          mise exec -- gradle --no-daemon publishAllPublicationsToStagingRepository \
+          gradle --no-daemon publishAllPublicationsToStagingRepository \
+            -PbamlVersion="$VERSION" \
+            -PbamlStagingDir="$GITHUB_WORKSPACE/baml_language/sdks/java/baml_bridge/build/staging-deploy"
+      - name: Stage the signed baml-bridge-kotlin into the same Central layout
+        if: ${{ steps.exists.outputs.kotlin_publish == 'true' }}
+        working-directory: baml_language/sdks/java/baml-bridge-kotlin
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            exit 1
+          fi
+          # Stage the kotlin jar+sources+javadoc+POM into baml-bridge's
+          # staging-deploy tree via -PbamlStagingDir, so the single Central bundle
+          # below carries all three families; signed with the in-memory key. The
+          # dir is created if baml-bridge was skipped (already on Central). The
+          # composite build (includeBuild ../baml_bridge) resolves the api dep
+          # locally while the POM carries com.boundaryml:baml-bridge at $VERSION.
+          # Direct `gradle` (mise puts it on PATH); no `mise exec --` wrapper.
+          gradle --no-daemon publishMavenPublicationToStagingRepository \
             -PbamlVersion="$VERSION" \
             -PbamlStagingDir="$GITHUB_WORKSPACE/baml_language/sdks/java/baml_bridge/build/staging-deploy"
       - name: Upload the Central bundle to the portal (publish automatically)
@@ -690,6 +719,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
           BRIDGE_PUBLISH: ${{ steps.exists.outputs.bridge_publish }}
           PLUGIN_PUBLISH: ${{ steps.exists.outputs.plugin_publish }}
+          KOTLIN_PUBLISH: ${{ steps.exists.outputs.kotlin_publish }}
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
         run: |
@@ -706,6 +736,11 @@ jobs:
           fi
           if [[ "$PLUGIN_PUBLISH" == "true" && ! -d "$staging/com/boundaryml/baml-gradle-plugin/$VERSION" ]]; then
             echo "::error::staging layout missing com/boundaryml/baml-gradle-plugin/$VERSION"
+            find "$staging" -maxdepth 4 -type d || true
+            exit 1
+          fi
+          if [[ "$KOTLIN_PUBLISH" == "true" && ! -d "$staging/com/boundaryml/baml-bridge-kotlin/$VERSION" ]]; then
+            echo "::error::staging layout missing com/boundaryml/baml-bridge-kotlin/$VERSION"
             find "$staging" -maxdepth 4 -type d || true
             exit 1
           fi
@@ -813,7 +848,7 @@ jobs:
             echo "::error::GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET secret is empty"
             exit 1
           fi
-          mise exec -- gradle --no-daemon publishPlugins -PbamlVersion="$VERSION"
+          gradle --no-daemon publishPlugins -PbamlVersion="$VERSION"
 
   publish-toolchain-release:
     name: Publish toolchain release assets

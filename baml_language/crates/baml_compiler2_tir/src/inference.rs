@@ -1289,6 +1289,14 @@ impl DefaultParameterInference<'_> {
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
     pub type_args: Vec<Ty>,
+    /// Hidden call metadata which is not part of the callee's parameter list.
+    pub side_channels: CallSideChannels,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallSideChannels {
+    /// The trailing `boundary.LocalId` expression supplied as `$id = ...`.
+    pub runtime_id: Option<ExprId>,
 }
 
 impl CallPlan {
@@ -1324,10 +1332,12 @@ impl CallPlan {
     }
 
     pub fn matches_provided_args(&self, args: &[ExprId]) -> bool {
-        self.provided_arg_count() == args.len()
-            && args
-                .iter()
-                .all(|arg| self.provided_args().any(|provided| provided == *arg))
+        let side_channel_count = usize::from(self.side_channels.runtime_id.is_some());
+        self.provided_arg_count() + side_channel_count == args.len()
+            && args.iter().all(|arg| {
+                self.provided_args().any(|provided| provided == *arg)
+                    || self.side_channels.runtime_id == Some(*arg)
+            })
     }
 }
 

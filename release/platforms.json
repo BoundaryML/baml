@@ -54,7 +54,7 @@
         "toolchain": { "runner": "ubuntu-24.04-arm" },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
-        "java": { "platform": "linux-aarch64-musl", "runner": "ubuntu-24.04-arm", "experimental": true },
+        "java": { "platform": "linux-aarch64-musl", "runner": "ubuntu-latest", "experimental": true },
         "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
       }
     },

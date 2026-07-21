@@ -575,7 +575,7 @@ function interfaces_associated_types.rdf_main() -> int {
 
 function interfaces_associated_types.rdf_score(source: interfaces_associated_types.RdfSource<Item = int> | interfaces_associated_types.RdfSource<Item = string>) -> int {
     load_var source
-    is_type interfaces_associated_types.RdfIntSource
+    is_type interfaces_associated_types.RdfSource<Item = int>
     pop_jump_if_false L0
     jump L1
 
@@ -921,7 +921,7 @@ function interfaces_associated_types.rmf_main() -> int {
 
 function interfaces_associated_types.rmf_score(source: interfaces_associated_types.RmfSource<Item = int> | interfaces_associated_types.RmfSource<Item = string>) -> int {
     load_var source
-    is_type interfaces_associated_types.RmfIntSource
+    is_type interfaces_associated_types.RmfSource<Item = int>
     pop_jump_if_false L0
     jump L1
 

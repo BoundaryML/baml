@@ -45,6 +45,51 @@ pub mod internal {
         /// envelopes by peeling with [`crate::decode::unwrap`] first —
         /// the provided impls and generated impls all do.
         fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError>;
+        /// The wire `BamlTy` describing this type's BAML counterpart.
+        ///
+        /// Sent as an explicit `TypeVar` binding
+        /// (`CallFunctionArgs.type_args`) when the type instantiates a
+        /// generic parameter: Rust call sites are always fully
+        /// monomorphic, so a generated generic binding sends every one of
+        /// the callee's `TypeVar`s explicitly and never relies on the
+        /// engine's argument-side inference.
+        fn baml_ty() -> wire::BamlTy;
+    }
+
+    /// Wire `BamlTy` for a user class instantiation. Generated class impls
+    /// call this from [`__BamlValuePrivate::baml_ty`]. `type_args` holds the
+    /// class's concrete generic arguments in declaration order (empty for a
+    /// non-generic class).
+    pub fn class_ty(fqn: &str, type_args: Vec<wire::BamlTy>) -> wire::BamlTy {
+        super::wire_ty(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
+            name: fqn.to_string(),
+            type_args,
+        }))
+    }
+
+    /// Wire `BamlTy` for an enum. Generated enum impls call this from
+    /// [`__BamlValuePrivate::baml_ty`].
+    pub fn enum_ty(fqn: &str) -> wire::BamlTy {
+        super::wire_ty(wire::baml_ty::Ty::Enum(wire::BamlTyEnum {
+            name: fqn.to_string(),
+        }))
+    }
+
+    /// Wire `BamlTy` for a union of the given option types, in arm order.
+    /// Generated synthesized-union impls call this from
+    /// [`__BamlValuePrivate::baml_ty`].
+    pub fn union_ty(options: Vec<wire::BamlTy>) -> wire::BamlTy {
+        super::wire_ty(wire::baml_ty::Ty::Union(wire::BamlTyUnion { options }))
+    }
+
+    /// Wire `BamlTy` for a string-literal type — a string-literal arm of a
+    /// synthesized union.
+    pub fn literal_string_ty(value: &str) -> wire::BamlTy {
+        super::wire_ty(wire::baml_ty::Ty::Literal(wire::BamlTyLiteral {
+            literal: Some(wire::baml_ty_literal::Literal::StringValue(
+                value.to_string(),
+            )),
+        }))
     }
 }
 
@@ -53,6 +98,18 @@ use internal::__BamlValuePrivate;
 /// Shorthand for building an inbound value from a oneof arm.
 fn inbound(value: In) -> wire::InboundValue {
     wire::InboundValue { value: Some(value) }
+}
+
+/// Shorthand for building a wire type from a oneof arm.
+fn wire_ty(ty: wire::baml_ty::Ty) -> wire::BamlTy {
+    wire::BamlTy { ty: Some(ty) }
+}
+
+/// Shorthand for a primitive wire type.
+fn primitive_ty(kind: wire::BamlTyPrimitiveKind) -> wire::BamlTy {
+    wire_ty(wire::baml_ty::Ty::Primitive(wire::BamlTyPrimitive {
+        kind: kind as i32,
+    }))
 }
 
 /// The inbound null value (absent oneof = null on the wire).
@@ -103,6 +160,10 @@ impl __BamlValuePrivate for i64 {
             _ => Err(wrong_type("int", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt)
+    }
 }
 
 impl __BamlValuePrivate for f64 {
@@ -116,6 +177,10 @@ impl __BamlValuePrivate for f64 {
             Some(Out::FloatValue(f)) => Ok(f),
             _ => Err(wrong_type("float", &v)),
         }
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveFloat)
     }
 }
 
@@ -131,6 +196,10 @@ impl __BamlValuePrivate for bool {
             _ => Err(wrong_type("bool", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveBool)
+    }
 }
 
 impl __BamlValuePrivate for String {
@@ -144,6 +213,10 @@ impl __BamlValuePrivate for String {
             Some(Out::StringValue(s)) => Ok(s),
             _ => Err(wrong_type("string", &v)),
         }
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveString)
     }
 }
 
@@ -161,6 +234,10 @@ impl __BamlValuePrivate for () {
             _ => Err(wrong_type("null", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveNull)
+    }
 }
 
 /// BAML `uint8array`. There is deliberately no `u8: BamlValue` impl, so
@@ -176,6 +253,10 @@ impl __BamlValuePrivate for Vec<u8> {
             Some(Out::Uint8arrayValue(bytes)) => Ok(bytes),
             _ => Err(wrong_type("uint8array", &v)),
         }
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveBytes)
     }
 }
 
@@ -195,6 +276,10 @@ impl __BamlValuePrivate for BigInt {
             _ => Err(wrong_type("bigint", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveBigint)
+    }
 }
 
 /// BAML `T?`: `None` is the explicit null value.
@@ -213,6 +298,14 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Option<T> {
             _ => T::from_baml(v).map(Some),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire_ty(wire::baml_ty::Ty::Optional(Box::new(
+            wire::BamlTyOptional {
+                inner: Some(Box::new(T::baml_ty())),
+            },
+        )))
+    }
 }
 
 /// BAML `T[]`.
@@ -230,6 +323,12 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
             _ => Err(wrong_type("list", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire_ty(wire::baml_ty::Ty::List(Box::new(wire::BamlTyList {
+            item: Some(Box::new(T::baml_ty())),
+        })))
+    }
 }
 
 /// A key of a BAML `map`. The language currently restricts map keys to
@@ -242,6 +341,9 @@ pub trait BamlMapKey: Sized + Eq + std::hash::Hash {
     fn to_baml_key(&self) -> wire::inbound_map_entry::Key;
     /// Decode from an outbound (stringified) map key.
     fn from_baml_key(key: &str) -> Result<Self, DecodeError>;
+    /// The wire `BamlTy` of this key type — the `key` slot when a map
+    /// type instantiates a generic parameter.
+    fn baml_key_ty() -> wire::BamlTy;
 }
 
 impl BamlMapKey for String {
@@ -251,6 +353,10 @@ impl BamlMapKey for String {
 
     fn from_baml_key(key: &str) -> Result<Self, DecodeError> {
         Ok(key.to_string())
+    }
+
+    fn baml_key_ty() -> wire::BamlTy {
+        primitive_ty(wire::BamlTyPrimitiveKind::BamlTyPrimitiveString)
     }
 }
 
@@ -284,6 +390,13 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
                 .collect(),
             _ => Err(wrong_type("map", &v)),
         }
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire_ty(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
+            key: Some(Box::new(K::baml_key_ty())),
+            value: Some(Box::new(V::baml_ty())),
+        })))
     }
 }
 
@@ -319,6 +432,13 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
             _ => Err(wrong_type("map", &v)),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire_ty(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
+            key: Some(Box::new(K::baml_key_ty())),
+            value: Some(Box::new(V::baml_ty())),
+        })))
+    }
 }
 
 /// Forwarding impl for boxed values: recursive class fields are boxed at
@@ -332,6 +452,10 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Box<T> {
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         T::from_baml(v).map(Box::new)
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        T::baml_ty()
+    }
 }
 
 /// [`Infallible`] occupies the `throws` slot of contract-free functions;
@@ -344,6 +468,10 @@ impl __BamlValuePrivate for Infallible {
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         Err(wrong_type("never", &v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire_ty(wire::baml_ty::Ty::Never(wire::BamlTyNever {}))
     }
 }
 

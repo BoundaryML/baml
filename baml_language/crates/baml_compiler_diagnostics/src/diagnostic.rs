@@ -14,7 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
+/// (e.g., in `baml_tests` snapshots).
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a

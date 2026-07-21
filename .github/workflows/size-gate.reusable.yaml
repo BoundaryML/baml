@@ -415,7 +415,7 @@ jobs:
   size-gate-report:
     name: "enforce-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: always()
+    if: ${{ always() && !cancelled() }}
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
     permissions:
       contents: read

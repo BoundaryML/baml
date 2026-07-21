@@ -131,7 +131,13 @@ pub(crate) fn translate_ty(
             if !args.is_empty() {
                 let rendered: Vec<String> = args
                     .iter()
-                    .map(|a| translate_ty(a, TyPosition::Boxed, ctx, sink))
+                    .map(|a| {
+                        annotate_element(
+                            a,
+                            translate_ty(a, TyPosition::Boxed, ctx, sink),
+                            ctx.aliases,
+                        )
+                    })
                     .collect();
                 out.push('<');
                 out.push_str(&rendered.join(", "));
@@ -155,13 +161,21 @@ pub(crate) fn translate_ty(
         Ty::TypeVar(name, _) => java_identifier(name.as_str()),
         Ty::List(inner, _) => format!(
             "java.util.List<{}>",
-            translate_ty(inner, TyPosition::Boxed, ctx, sink)
+            annotate_element(
+                inner,
+                translate_ty(inner, TyPosition::Boxed, ctx, sink),
+                ctx.aliases
+            )
         ),
         // All map keys are stringified engine-side (str/int/bool/enum
         // keys all arrive as strings), so the Java map key is String.
         Ty::Map { value, .. } => format!(
             "java.util.Map<java.lang.String, {}>",
-            translate_ty(value, TyPosition::Boxed, ctx, sink)
+            annotate_element(
+                value,
+                translate_ty(value, TyPosition::Boxed, ctx, sink),
+                ctx.aliases
+            )
         ),
         Ty::Union(items, _) => translate_union(items, ctx, sink),
         Ty::BuiltinUnknown { .. } => "java.lang.Object".to_string(),
@@ -187,6 +201,87 @@ fn primitive(pos: TyPosition, unboxed: &str, boxed: &str) -> String {
     match pos {
         TyPosition::TopLevel => unboxed.to_string(),
         TyPosition::Boxed => boxed.to_string(),
+    }
+}
+
+/// The `JSpecify` nullness annotation, fully qualified and written inline — the
+/// emitter carries no imports, so annotations are qualified at the use site like
+/// every other type reference. It is a `TYPE_USE` annotation (`JSpecify` targets
+/// `TYPE_USE` only), so it must sit immediately before the simple type name even
+/// on a qualified type (`java.lang.@…Nullable String`); see [`annotate_nullable`].
+pub(crate) const NULLABLE_ANNOTATION: &str = "@org.jspecify.annotations.Nullable";
+
+/// Whether a BAML type is genuinely nullable — it admits the `null` value:
+///
+/// - a `T | null` union (any non-null arm count) — the arm-stripping point in
+///   [`translate_union`] that collapses `T | null` to boxed-`T` is exactly the
+///   point that knows the position is nullable; this query recovers that bit
+///   alongside the rendered type, without stringly-flagging it;
+/// - the bare `null` type (inhabited only by `null`);
+/// - a NON-recursive alias whose resolved target is nullable (recursive aliases
+///   mint a nominal reference type, treated as non-null by default).
+///
+/// Everything else is non-null (a plain reference, a list/map/class value, an
+/// unboxed primitive). This is the emitter's single source of truth for where a
+/// `org.jspecify.annotations.Nullable` belongs.
+pub(crate) fn is_nullable(ty: &Ty, aliases: &AliasTable) -> bool {
+    match ty {
+        Ty::Union(items, _) => items.iter().any(|t| matches!(t, Ty::Null { .. })),
+        Ty::Null { .. } => true,
+        Ty::TypeAlias(name, _) => match aliases.get(name) {
+            Some((resolved, false)) => is_nullable(resolved, aliases),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// Insert the `JSpecify` `@Nullable` type-use annotation into a rendered Java type
+/// at the syntactically-correct position:
+///
+/// - an array reference (`byte[]`) marks the array itself nullable —
+///   `byte @Nullable []` (annotating before `[]`, NOT the element);
+/// - a generic type (`java.util.List<…>`) annotates the OUTER raw type's simple
+///   name, keeping the (possibly already element-annotated) type-args intact —
+///   `java.util.@Nullable List<…>`;
+/// - a qualified name (`java.lang.Long`) annotates the trailing simple name —
+///   `java.lang.@Nullable Long`;
+/// - a bare simple name (a type variable `T`) — `@Nullable T`.
+///
+/// A `TYPE_USE` annotation on a qualified name is only legal immediately before
+/// the simple name, which is why this splits rather than prefixing the whole
+/// expression.
+pub(crate) fn annotate_nullable(rendered: &str) -> String {
+    // Array reference: the annotation on the array level marks the array itself
+    // nullable (element nullability, if any, was already baked into `base`).
+    if let Some(base) = rendered.strip_suffix("[]") {
+        return format!("{base} {NULLABLE_ANNOTATION} []");
+    }
+    // Split off any generic arguments; the annotation binds the OUTER raw type.
+    let (raw, generic) = match rendered.find('<') {
+        Some(idx) => (&rendered[..idx], &rendered[idx..]),
+        None => (rendered, ""),
+    };
+    match raw.rfind('.') {
+        Some(dot) => format!(
+            "{}.{NULLABLE_ANNOTATION} {}{generic}",
+            &raw[..dot],
+            &raw[dot + 1..]
+        ),
+        None => format!("{NULLABLE_ANNOTATION} {raw}{generic}"),
+    }
+}
+
+/// Annotate a rendered element/argument type with `@Nullable` iff the BAML type
+/// in that position is nullable — the element-nullability half of the `JSpecify`
+/// pass, applied at the `Boxed` container/generic-argument recursion sites
+/// ([`translate_ty`]'s `List` / `Map` / `Class` arms) where the boxed-inner
+/// collapse would otherwise drop the `null` arm.
+fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
+    if is_nullable(ty, aliases) {
+        annotate_nullable(&rendered)
+    } else {
+        rendered
     }
 }
 
@@ -1263,6 +1358,105 @@ mod tests {
         assert_eq!(
             union_arm_tokens(&[int(), string()]),
             vec!["Int".to_string(), "String".to_string()]
+        );
+    }
+
+    #[test]
+    fn is_nullable_detects_null_admitting_types() {
+        let aliases = AliasTable::new();
+        // `T | null` (single non-null arm) is nullable.
+        assert!(is_nullable(&union(vec![int(), null()]), &aliases));
+        // A multi-arm union with a null arm is nullable (the null arm is
+        // stripped from the rendered arity family, but the position is nullable).
+        assert!(is_nullable(&union(vec![int(), string(), null()]), &aliases));
+        // The bare `null` type is nullable.
+        assert!(is_nullable(&null(), &aliases));
+        // Plain non-null types are not.
+        assert!(!is_nullable(&int(), &aliases));
+        assert!(!is_nullable(&string(), &aliases));
+        assert!(!is_nullable(&list(int()), &aliases));
+        assert!(!is_nullable(&union(vec![int(), string()]), &aliases));
+    }
+
+    #[test]
+    fn is_nullable_follows_non_recursive_aliases() {
+        let alias_name = name("user", &["aliases"], "MaybeInt");
+        let mut aliases = AliasTable::new();
+        aliases.insert(alias_name.clone(), (union(vec![int(), null()]), false));
+        assert!(is_nullable(&alias_ty(alias_name), &aliases));
+        // A recursive alias mints a nominal (non-null) reference type.
+        let rec_name = name("user", &["aliases"], "RecList");
+        aliases.insert(
+            rec_name.clone(),
+            (union(vec![int(), list(alias_ty(rec_name.clone()))]), true),
+        );
+        assert!(!is_nullable(&alias_ty(rec_name), &aliases));
+    }
+
+    #[test]
+    fn annotate_nullable_places_type_use_annotation() {
+        // Qualified class name: annotation binds the trailing simple name.
+        assert_eq!(
+            annotate_nullable("java.lang.String"),
+            "java.lang.@org.jspecify.annotations.Nullable String"
+        );
+        // Generic type: annotate the OUTER raw type, keep the type-args intact.
+        assert_eq!(
+            annotate_nullable("java.util.List<java.lang.Long>"),
+            "java.util.@org.jspecify.annotations.Nullable List<java.lang.Long>"
+        );
+        // Already-element-annotated generic: outer annotation composes cleanly.
+        assert_eq!(
+            annotate_nullable("java.util.List<java.lang.@org.jspecify.annotations.Nullable Long>"),
+            "java.util.@org.jspecify.annotations.Nullable List<java.lang.@org.jspecify.annotations.Nullable Long>"
+        );
+        // Array reference: annotate the array level, not the element.
+        assert_eq!(
+            annotate_nullable("byte[]"),
+            "byte @org.jspecify.annotations.Nullable []"
+        );
+        // Bare simple name (a type variable).
+        assert_eq!(
+            annotate_nullable("T"),
+            "@org.jspecify.annotations.Nullable T"
+        );
+    }
+
+    #[test]
+    fn nullable_list_element_is_annotated() {
+        // `(int | null)[]` renders the element as `@Nullable`-annotated boxed
+        // inner; the list itself is not nullable, so it is not annotated.
+        assert_eq!(
+            tr(&list(union(vec![int(), null()])), TyPosition::TopLevel),
+            "java.util.List<java.lang.@org.jspecify.annotations.Nullable Long>"
+        );
+        // A non-null element list is unchanged.
+        assert_eq!(
+            tr(&list(int()), TyPosition::TopLevel),
+            "java.util.List<java.lang.Long>"
+        );
+    }
+
+    #[test]
+    fn nullable_map_value_is_annotated() {
+        assert_eq!(
+            tr(
+                &map(string(), union(vec![string(), null()])),
+                TyPosition::TopLevel
+            ),
+            "java.util.Map<java.lang.String, java.lang.@org.jspecify.annotations.Nullable String>"
+        );
+    }
+
+    #[test]
+    fn nullable_class_type_arg_is_annotated() {
+        let c = class_ty(
+            name("user", &["generics"], "Wrapper"),
+            vec![union(vec![int(), null()])],
+        );
+        assert_eq!(
+            tr(&c, TyPosition::TopLevel),
+            "baml_sdk.generics.Wrapper<java.lang.@org.jspecify.annotations.Nullable Long>"
         );
     }
 }

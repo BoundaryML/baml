@@ -138,7 +138,6 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
-arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
@@ -172,7 +171,6 @@ crossbeam-channel = { version = "0.5" }
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).
 crossbeam-utils = { version = "0.8" }
-crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
@@ -219,7 +217,6 @@ prost = "0.14"
 prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
-ratatui = "0.29"
 rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
@@ -247,7 +244,6 @@ serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserv
 # package-renamed so `use serde_yaml::` imports stay unchanged.
 serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
-similar = { version = "2.4.0", features = [ "inline" ] }
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }

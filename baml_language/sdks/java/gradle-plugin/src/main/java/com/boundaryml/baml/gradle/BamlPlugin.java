@@ -59,6 +59,18 @@ public class BamlPlugin implements Plugin<Project> {
     static final String BRIDGE_ARTIFACT = "baml-bridge";
 
     /**
+     * The Kotlin ergonomics layer. Injected (at the plugin's own version) ONLY
+     * when the consumer applies the Kotlin JVM plugin, so a pure-Java consumer
+     * never pulls it. It brings baml-bridge transitively (its POM declares it as
+     * an api dependency), but baml-bridge is injected directly regardless (the
+     * native jar rides with that).
+     */
+    static final String KOTLIN_ARTIFACT = "baml-bridge-kotlin";
+
+    /** The Kotlin JVM plugin id whose presence gates the {@link #KOTLIN_ARTIFACT} injection. */
+    static final String KOTLIN_JVM_PLUGIN_ID = "org.jetbrains.kotlin.jvm";
+
+    /**
      * The full known set of native-jar platform classifiers, mirroring the
      * targets {@code baml_bridge} publishes (release/platforms.json → the six
      * non-experimental {@code java} targets). This is what the extension's
@@ -155,6 +167,11 @@ public class BamlPlugin implements Plugin<Project> {
      * ({@code manageDependencies = false}) or already declares an explicit
      * {@code com.boundaryml:baml-bridge} dependency (in which case we defer to
      * it and log at info).
+     *
+     * <p>When the consumer also applies the Kotlin JVM plugin
+     * ({@code org.jetbrains.kotlin.jvm}), the Kotlin ergonomics layer
+     * {@code com.boundaryml:baml-bridge-kotlin} is injected too (same version,
+     * same defer-to-explicit rule); a pure-Java consumer never gets it.
      */
     private static void manageDependencies(Project project, BamlExtension extension) {
         if (!extension.getManageDependencies().getOrElse(true)) {
@@ -188,6 +205,18 @@ public class BamlPlugin implements Plugin<Project> {
             dependencies.add(
                 JavaPlugin.RUNTIME_ONLY_CONFIGURATION_NAME,
                 BRIDGE_GROUP + ":" + BRIDGE_ARTIFACT + ":" + version + ":natives-" + platform);
+        }
+
+        // Kotlin consumers additionally get the ergonomics layer
+        // (com.boundaryml:baml-bridge-kotlin) at the plugin's own version — same
+        // version-lock + defer-to-explicit rules as baml-bridge. Gated on the
+        // Kotlin JVM plugin being applied, so a pure-Java consumer never pulls a
+        // Kotlin runtime.
+        if (project.getPluginManager().hasPlugin(KOTLIN_JVM_PLUGIN_ID)
+            && !hasExplicitDependency(project, KOTLIN_ARTIFACT)) {
+            dependencies.add(
+                JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME,
+                BRIDGE_GROUP + ":" + KOTLIN_ARTIFACT + ":" + version);
         }
     }
 
@@ -224,14 +253,22 @@ public class BamlPlugin implements Plugin<Project> {
 
     /**
      * True if any configuration already declares a {@code com.boundaryml:baml-bridge}
+     * dependency (regardless of version/classifier/configuration).
+     */
+    private static boolean hasExplicitBridgeDependency(Project project) {
+        return hasExplicitDependency(project, BRIDGE_ARTIFACT);
+    }
+
+    /**
+     * True if any configuration already declares a {@code com.boundaryml:<artifact>}
      * dependency (regardless of version/classifier/configuration). Reads only
      * declared dependencies — it never triggers resolution.
      */
-    private static boolean hasExplicitBridgeDependency(Project project) {
+    private static boolean hasExplicitDependency(Project project, String artifact) {
         for (Configuration configuration : project.getConfigurations()) {
             for (Dependency dependency : configuration.getDependencies()) {
                 if (BRIDGE_GROUP.equals(dependency.getGroup())
-                    && BRIDGE_ARTIFACT.equals(dependency.getName())) {
+                    && artifact.equals(dependency.getName())) {
                     return true;
                 }
             }

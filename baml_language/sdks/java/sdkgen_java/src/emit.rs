@@ -375,7 +375,9 @@ pub(crate) fn render_class(
         format!("<{}>", params.join(", "))
     };
 
-    // (ident, java type) per property, in declaration order.
+    // (ident, RAW java type) per property, in declaration order. The raw type
+    // (no `@Nullable`) drives `equals`/`hashCode` dispatch — a nullable
+    // `uint8array?` field is still `byte[]` there and must use `Arrays.equals`.
     let fields: Vec<(String, String)> = class
         .properties
         .iter()
@@ -384,6 +386,25 @@ pub(crate) fn render_class(
                 java_identifier(p.name.as_str()),
                 translate_ty(&p.ty, TyPosition::TopLevel, ctx, sink),
             )
+        })
+        .collect();
+
+    // The DISPLAY type per property: the raw type with a JSpecify `@Nullable`
+    // woven in when the BAML field type is nullable. Used for the public value
+    // surface — field declaration, canonical constructor, accessor, reified
+    // factory — so a Kotlin/IDE consumer sees the field's real nullness instead
+    // of a platform type. (`equals`/`hashCode` keep the raw `fields` above.)
+    let display_fields: Vec<(String, String)> = class
+        .properties
+        .iter()
+        .zip(&fields)
+        .map(|(p, (f_ident, raw))| {
+            let ty = if crate::translate_ty::is_nullable(&p.ty, ctx.aliases) {
+                crate::translate_ty::annotate_nullable(raw)
+            } else {
+                raw.clone()
+            };
+            (f_ident.clone(), ty)
         })
         .collect();
 
@@ -410,12 +431,12 @@ pub(crate) fn render_class(
         ));
     }
 
-    for (f_ident, f_ty) in &fields {
+    for (f_ident, f_ty) in &display_fields {
         out.push_str(&format!("    private final {f_ty} {f_ident};\n"));
     }
 
     // Canonical all-args constructor, field declaration order.
-    let params: Vec<String> = fields
+    let params: Vec<String> = display_fields
         .iter()
         .map(|(f_ident, f_ty)| format!("{f_ty} {f_ident}"))
         .collect();
@@ -425,8 +446,9 @@ pub(crate) fn render_class(
     }
     out.push_str("    }\n");
 
-    // PreserveCase accessors.
-    for (f_ident, f_ty) in &fields {
+    // PreserveCase accessors — the nullable ones carry `@Nullable` on their
+    // return type (the primary Kotlin-visible nullness signal).
+    for (f_ident, f_ty) in &display_fields {
         out.push_str(&format!(
             "\n    public {f_ty} {f_ident}() {{\n        return this.{f_ident};\n    }}\n"
         ));
@@ -444,7 +466,7 @@ pub(crate) fn render_class(
             &ident,
             &generics,
             class.generic_params.len(),
-            &fields,
+            &display_fields,
         ));
         out.push_str(&render_baml_type_args_readback(&fields));
     }
@@ -781,6 +803,11 @@ fn render_callable_pair(
             if ty == "void" {
                 ty = "java.lang.Void".to_string();
             }
+            // A nullable required param (`x: T?`) carries `@Nullable` so callers
+            // (Kotlin especially) see it accepts `null`.
+            if crate::translate_ty::is_nullable(&a.ty, ctx.aliases) {
+                ty = crate::translate_ty::annotate_nullable(&ty);
+            }
             format!("{} {}", ty, java_identifier(a.name.as_str()))
         })
         .collect();
@@ -797,8 +824,16 @@ fn render_callable_pair(
     param_names_java.extend(required.iter().map(|a| format!("{:?}", a.name.as_str())));
     arg_exprs.extend(required.iter().map(|a| java_identifier(a.name.as_str())));
 
-    let ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
-    let ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
+    let mut ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
+    let mut ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
+    // A nullable return (`-> T?`) carries `@Nullable` on both the sync signature
+    // and the async future's element type (`CompletableFuture<@Nullable T>`). A
+    // nullable type is always a boxed reference, so `ret_top == "void"` (the
+    // void-return sentinel checked downstream) can never be a nullable type.
+    if crate::translate_ty::is_nullable(&function.return_type, ctx.aliases) {
+        ret_top = crate::translate_ty::annotate_nullable(&ret_top);
+        ret_boxed = crate::translate_ty::annotate_nullable(&ret_boxed);
+    }
 
     // Type-directed decode descriptor for the declared return type, passed as the
     // LAST runtime-call argument so the decoder resolves union arm order / element
@@ -1218,7 +1253,12 @@ fn render_optional_configurator(
     // arg name is a Java keyword).
     let mut setters = String::new();
     for a in optionals {
-        let boxed = translate_ty(&a.ty, TyPosition::Boxed, ctx, sink);
+        let mut boxed = translate_ty(&a.ty, TyPosition::Boxed, ctx, sink);
+        // A nullable optional (`y?: T?`) accepts `null` as its VALUE (distinct
+        // from omitting it → BAML default), so its setter param is `@Nullable`.
+        if crate::translate_ty::is_nullable(&a.ty, ctx.aliases) {
+            boxed = crate::translate_ty::annotate_nullable(&boxed);
+        }
         let wire = a.name.as_str();
         let setter = java_identifier(wire);
         setters.push_str(&format!(
@@ -1321,9 +1361,13 @@ fn render_opts_bag(optionals: &[(String, String)]) -> String {
         out.push_str(&format!("            this.{id} = {id};\n"));
     }
     out.push_str("        }\n");
+    // Every accessor is `@Nullable` by design — it returns `null` for an
+    // optional BAML omitted (this bag is always constructed with a slot per
+    // optional, `null`-filled where absent).
     for (id, ty) in &fields {
+        let ret = crate::translate_ty::annotate_nullable(ty);
         out.push_str(&format!(
-            "\n        public {ty} {id}() {{\n            return this.{id};\n        }}\n"
+            "\n        public {ret} {id}() {{\n            return this.{id};\n        }}\n"
         ));
     }
     out.push_str("    }\n");
