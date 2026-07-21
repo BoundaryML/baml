@@ -103,6 +103,7 @@ impl WithChat for OpenAIClient {
 /// Provider-specific strategies for handling different OpenAI-compatible APIs
 enum ProviderStrategy {
     ResponsesApi,
+    TranscriptionsApi,
     StandardOpenAI { provider: String },
 }
 
@@ -110,6 +111,7 @@ impl ProviderStrategy {
     fn get_endpoint(&self, base_url: &str, is_completion: bool) -> String {
         match self {
             ProviderStrategy::ResponsesApi => format!("{base_url}/responses"),
+            ProviderStrategy::TranscriptionsApi => format!("{base_url}/audio/transcriptions"),
             ProviderStrategy::StandardOpenAI { .. } => {
                 if is_completion {
                     format!("{base_url}/completions")
@@ -127,6 +129,11 @@ impl ProviderStrategy {
         chat_converter: &impl ToProviderMessageExt,
     ) -> Result<serde_json::Value> {
         match self {
+            ProviderStrategy::TranscriptionsApi => {
+                anyhow::bail!(
+                    "BAML internal error (openai-transcriptions): multipart body construction is not wired"
+                );
+            }
             ProviderStrategy::ResponsesApi => {
                 // Start with all properties passed through
                 let mut body = properties.clone();
@@ -319,6 +326,7 @@ impl ProviderStrategy {
                     // Responses API supports streaming with the stream parameter
                     body.insert("stream".into(), json!(true));
                 }
+                ProviderStrategy::TranscriptionsApi => {}
                 ProviderStrategy::StandardOpenAI { provider } => {
                     body.insert("stream".into(), json!(true));
                     if provider == "openai" {
@@ -343,6 +351,11 @@ impl ProviderStrategy {
             -> Result<Vec<serde_json::Map<String, serde_json::Value>>>,
     ) -> Result<serde_json::Value> {
         match self {
+            ProviderStrategy::TranscriptionsApi => {
+                anyhow::bail!(
+                    "BAML internal error (openai-transcriptions): chat message formatting is not used for multipart transcriptions"
+                );
+            }
             ProviderStrategy::ResponsesApi => {
                 // For responses API, use standard formatting
                 Ok(json!(parts_to_message(&content.parts)?))
@@ -387,6 +400,8 @@ impl OpenAIClient {
     fn get_provider_strategy(&self) -> ProviderStrategy {
         if self.provider.as_str() == "openai-responses" {
             ProviderStrategy::ResponsesApi
+        } else if self.provider.as_str() == "openai-transcriptions" {
+            ProviderStrategy::TranscriptionsApi
         } else {
             ProviderStrategy::StandardOpenAI {
                 provider: self.provider.clone(),
@@ -397,6 +412,7 @@ impl OpenAIClient {
     fn get_response_type(&self) -> ResponseType {
         match self.get_provider_strategy() {
             ProviderStrategy::ResponsesApi => ResponseType::OpenAIResponses,
+            ProviderStrategy::TranscriptionsApi => ResponseType::OpenAITranscription,
             ProviderStrategy::StandardOpenAI { .. } => ResponseType::OpenAI,
         }
     }
@@ -622,6 +638,13 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openai-responses")
     }
 
+    pub fn new_transcriptions(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAITranscription;
+        make_openai_client!(client, properties, "openai-transcriptions")
+    }
+
     pub fn new_openrouter(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties =
             properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
@@ -670,6 +693,16 @@ impl OpenAIClient {
         // Override response type for responses API
         properties.client_response_type = internal_llm_client::ResponseType::OpenAIResponses;
         make_openai_client!(client, properties, "openai-responses", dynamic)
+    }
+
+    pub fn dynamic_new_transcriptions(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let mut properties =
+            properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
+        properties.client_response_type = internal_llm_client::ResponseType::OpenAITranscription;
+        make_openai_client!(client, properties, "openai-transcriptions", dynamic)
     }
 
     /// Creates an OpenRouter client from a dynamic client definition (e.g., from Python/TypeScript code).
@@ -889,6 +922,48 @@ mod tests {
 
     use super::*;
 
+    fn test_openai_client(provider: &str, response_type: ResponseType) -> OpenAIClient {
+        OpenAIClient {
+            name: "test".to_string(),
+            provider: provider.to_string(),
+            retry_policy: None,
+            context: RenderContext_Client {
+                name: "test".to_string(),
+                provider: provider.to_string(),
+                default_role: "user".to_string(),
+                allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: false,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
+                allowed_metadata: AllowedRoleMetadata::All,
+            },
+            properties: ResolvedOpenAI {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: None,
+                role_selection: RolesSelection::default(),
+                allowed_metadata: AllowedRoleMetadata::All,
+                supported_request_modes: SupportedRequestModes::default(),
+                headers: IndexMap::new(),
+                properties: BamlMap::new(),
+                query_params: IndexMap::new(),
+                proxy_url: None,
+                finish_reason_filter: FinishReasonFilter::All,
+                client_response_type: response_type,
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
+            },
+            client: reqwest::Client::new(),
+        }
+    }
+
     #[test]
     fn test_provider_strategy_selection() {
         // Mock client with responses provider
@@ -940,6 +1015,19 @@ mod tests {
                 // Success!
             }
             _ => panic!("Expected ResponsesApi strategy for openai-responses provider"),
+        }
+    }
+
+    #[test]
+    fn test_transcriptions_api_strategy_selection() {
+        let transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+
+        let strategy = transcriptions_client.get_provider_strategy();
+
+        match strategy {
+            ProviderStrategy::TranscriptionsApi => {}
+            _ => panic!("Expected TranscriptionsApi strategy for openai-transcriptions provider"),
         }
     }
 
@@ -1005,6 +1093,23 @@ mod tests {
     }
 
     #[test]
+    fn test_transcriptions_api_endpoint_generation() {
+        let strategy = ProviderStrategy::TranscriptionsApi;
+
+        let chat_endpoint = strategy.get_endpoint("https://api.openai.com/v1", false);
+        assert_eq!(
+            chat_endpoint,
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+
+        let completion_endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
+        assert_eq!(
+            completion_endpoint,
+            "https://api.openai.com/v1/audio/transcriptions"
+        );
+    }
+
+    #[test]
     fn test_standard_openai_endpoint_generation() {
         let strategy = ProviderStrategy::StandardOpenAI {
             provider: "openai".to_string(),
@@ -1017,6 +1122,17 @@ mod tests {
         // Test completions endpoint
         let endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
         assert_eq!(endpoint, "https://api.openai.com/v1/completions");
+    }
+
+    #[test]
+    fn test_transcriptions_response_type() {
+        let transcriptions_client =
+            test_openai_client("openai-transcriptions", ResponseType::OpenAITranscription);
+
+        assert!(matches!(
+            transcriptions_client.get_response_type(),
+            ResponseType::OpenAITranscription
+        ));
     }
 
     #[test]
