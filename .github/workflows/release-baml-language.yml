@@ -713,6 +713,10 @@ jobs:
           echo "bundle contents:"
           unzip -l "$GITHUB_WORKSPACE/central-bundle.zip"
 
+          if [[ -z "$CENTRAL_USERNAME" || -z "$CENTRAL_PASSWORD" ]]; then
+            echo "::error::CENTRAL_USERNAME / CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
+            exit 1
+          fi
           # Portal auth: Bearer <base64(username:password)> (env → shell var, never
           # interpolated into this script body).
           token="$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')"

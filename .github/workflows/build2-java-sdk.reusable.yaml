@@ -95,6 +95,8 @@ jobs:
   build-natives:
     name: ${{ matrix._.platform }}
     needs: matrix
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -209,6 +211,8 @@ jobs:
   build-main:
     name: main + sources + javadoc
     needs: matrix
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
