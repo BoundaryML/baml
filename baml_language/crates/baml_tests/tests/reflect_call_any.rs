@@ -39,7 +39,7 @@ async fn call_any_absent_optional_fires_callee_default() {
                 _ => -1
             }
             // Present: the supplied value wins: 5 * 10.
-            let supplied = reflect.call_any(f, [5], kwargs = { "factor": 10 }) catch (e) {
+            let supplied = reflect.call_any(f, [5], opts = { "factor": 10 }) catch (e) {
                 _ => -1
             }
             return defaulted * 1000 + supplied
@@ -65,10 +65,10 @@ async fn call_any_rejects_bad_arity_type_and_key() {
             let ty = reflect.call_any(f, [42]) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
-            let key = reflect.call_any(f, ["x"], kwargs = { "volume": 11 }) catch (e) {
+            let key = reflect.call_any(f, ["x"], opts = { "volume": 11 }) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
-            let opt_ty = reflect.call_any(f, ["x"], kwargs = { "excited": "yes" }) catch (e) {
+            let opt_ty = reflect.call_any(f, ["x"], opts = { "excited": "yes" }) catch (e) {
                 reflect.InvalidArgumentError => 1
             }
             let failures = 0
@@ -264,6 +264,7 @@ async fn signature_reports_types_and_param_split() {
             message string
         }
 
+        /// Searches the index.
         function search(q: string, limit: int = 10) -> string[] throws ToolError {
             if q == "boom" {
                 throw ToolError { message: "x" }
@@ -274,31 +275,31 @@ async fn signature_reports_types_and_param_split() {
         function main() -> string throws never {
             let f: baml.AnyFunction = search
             let sig = reflect.signature(f)
-            let limit = sig.kwargs.get("limit")
+            let limit = sig.opts.get("limit")
             let limit_str = "absent"
             if limit != null {
                 limit_str = limit.type.to_string()
-                // Parameter docstrings are not recorded yet; the field is
-                // schema-stable null.
-                if limit.docstring != null {
-                    limit_str = "unexpected-docstring"
-                }
             }
             let q_name = "unnamed"
             let first = sig.args[0].name
             if first != null {
                 q_name = first
             }
-            return sig.returns.to_string() + "|" + sig.throws.to_string()
+            let doc = "no-doc"
+            let d = sig.docstring
+            if d != null {
+                doc = d
+            }
+            return sig.returns.to_string() + "|" + sig.errors.to_string()
                 + "|" + sig.args.length().to_string() + "|" + sig.args[0].type.to_string()
-                + "|" + q_name + "|" + limit_str
+                + "|" + q_name + "|" + limit_str + "|" + doc
         }
         "#
     );
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "string[]|ToolError|1|string|q|int".into()
+            "string[]|ToolError|1|string|q|int|Searches the index.".into()
         ))
     );
 }
@@ -313,7 +314,7 @@ async fn signature_non_throwing_reports_never() {
 
         function main() -> string throws never {
             let f: baml.AnyFunction = add
-            return reflect.signature(f).throws.to_string()
+            return reflect.signature(f).errors.to_string()
         }
         "#
     );
@@ -374,19 +375,20 @@ async fn generic_function_reflects_coarsely_and_dispatches() {
 }
 
 #[tokio::test]
-async fn signature_object_literal_accepts_throws_key() {
+async fn signature_object_literal_construction() {
     let output = baml_test!(
         r#"
         function main() -> string throws never {
-            // `throws` as an unquoted object-literal key (it is a keyword in
-            // type position only).
+            // Manual Signature construction through the plain class literal.
+            // (No keyword-named fields: the error channel field is `errors`.)
             let manual = reflect.Signature {
                 args: [],
-                kwargs: {},
+                opts: {},
                 returns: reflect.type_of<int>(),
-                throws: reflect.type_of<never>(),
+                errors: reflect.type_of<never>(),
+                docstring: null,
             }
-            return manual.returns.to_string() + "|" + manual.throws.to_string()
+            return manual.returns.to_string() + "|" + manual.errors.to_string()
         }
         "#
     );

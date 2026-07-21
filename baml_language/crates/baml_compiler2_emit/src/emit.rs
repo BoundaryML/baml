@@ -1021,6 +1021,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         Function {
             name: String::new(),
             source_file: String::new(), // caller sets this after compile_mir_function returns
+            docstring: None,
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,

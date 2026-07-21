@@ -39,7 +39,7 @@ function user.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns =
 function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string throws never {
   { : never
     let sig = reflect.signature(f) : reflect.Signature
-    let parts = sig.returns.to_string() + sig.throws.to_string() + sig.args.length().to_string() : string
+    let parts = sig.returns.to_string() + sig.errors.to_string() + sig.args.length().to_string() : string
     for arg in sig.args
       { : void
         parts = parts + arg.type.to_string() : string
@@ -49,12 +49,12 @@ function user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = u
             parts = parts + n : string
           }
       }
-    for key in sig.kwargs.keys()
+    for key in sig.opts.keys()
       { : void
-        let kwarg = sig.kwargs.get(key) : reflect.Arg | null
-        if (kwarg != null : bool) : void
+        let opt = sig.opts.get(key) : reflect.Arg | null
+        if (opt != null : bool) : void
           { : void
-            parts = parts + key + kwarg.type.to_string() : string
+            parts = parts + key + opt.type.to_string() : string
           }
       }
     return parts : string

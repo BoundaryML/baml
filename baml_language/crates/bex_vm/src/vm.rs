@@ -434,6 +434,7 @@ mod tests {
         Object::Function(Box::new(Function {
             name: "test_native".to_string(),
             source_file: String::new(),
+            docstring: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -1236,6 +1237,8 @@ pub(crate) struct CallableSignature {
     pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
     pub(crate) ret: baml_type::RealizedTy,
     pub(crate) throws: Option<baml_type::RealizedTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub(crate) docstring: Option<String>,
 }
 
 /// Reconstruct a [`CallableSignature`] from a raw `Function` object.
@@ -1280,6 +1283,7 @@ fn function_callable_signature(
         params,
         ret: realized_or_unknown(&f.return_type),
         throws: f.throws_type.as_ref().map(realized_or_unknown),
+        docstring: f.docstring.clone(),
     }
 }
 
@@ -2013,6 +2017,8 @@ impl BexVm {
                     ty => Some(ty.clone()),
                 },
                 ret: (*hc.ret_ty).clone(),
+                // Host closures are FFI-constructed; they carry no docs.
+                docstring: None,
             }),
             _ => None,
         }
@@ -2581,6 +2587,7 @@ impl BexVm {
         let entry_function = Function {
             name: format!("$entry::{callee_name}"),
             source_file: String::new(),
+            docstring: None,
             arity: 0,
             real_local_count: 0,
             bytecode,

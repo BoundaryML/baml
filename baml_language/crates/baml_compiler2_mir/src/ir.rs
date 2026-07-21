@@ -136,6 +136,8 @@ pub struct RuntimeSignature {
     /// clause (`throws never` == `None`, unannotated == `Some(unknown)`, no
     /// claim).
     pub throws_type: Option<baml_type::RuntimeTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub docstring: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
     /// Display strings for the parameter types, parallel to `param_names`.

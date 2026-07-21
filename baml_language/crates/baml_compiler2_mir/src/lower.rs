@@ -4722,6 +4722,7 @@ impl<'db> LoweringContext<'db> {
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
+            docstring: func_def.docstring.clone(),
             display_type_params: func_def
                 .generic_params
                 .iter()

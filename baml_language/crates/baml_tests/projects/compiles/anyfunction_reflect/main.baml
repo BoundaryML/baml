@@ -1,6 +1,6 @@
 // BEP-062 AnyFunction slice, positive cases: derived conformance for every
 // arrow shape, covariant pins, existential widening, reflect.signature member
-// access (including the keyword-named `throws` field), and call_any's
+// access, and call_any's
 // R/E-from-pins typing with an exhaustive wildcard-free catch.
 
 class ToolError {
@@ -43,9 +43,9 @@ function heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = Doc[
 
 function signature_access(f: baml.AnyFunction) -> string throws never {
     let sig = reflect.signature(f)
-    // `throws` doubles as a member name here (keyword in type position only),
+    // The error channel field is `errors` (no keyword-named fields),
     // and `type` is an ordinary member name on `reflect.Arg`.
-    let parts = sig.returns.to_string() + sig.throws.to_string() + sig.args.length().to_string()
+    let parts = sig.returns.to_string() + sig.errors.to_string() + sig.args.length().to_string()
     for (let arg in sig.args) {
         parts = parts + arg.type.to_string()
         let n = arg.name
@@ -53,10 +53,10 @@ function signature_access(f: baml.AnyFunction) -> string throws never {
             parts = parts + n
         }
     }
-    for (let key in sig.kwargs.keys()) {
-        let kwarg = sig.kwargs.get(key)
-        if kwarg != null {
-            parts = parts + key + kwarg.type.to_string()
+    for (let key in sig.opts.keys()) {
+        let opt = sig.opts.get(key)
+        if opt != null {
+            parts = parts + key + opt.type.to_string()
         }
     }
     return parts

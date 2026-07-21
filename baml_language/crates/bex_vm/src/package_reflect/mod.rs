@@ -63,9 +63,7 @@ fn ty_arg() -> RealizedTy {
     )
 }
 
-/// Allocate one `reflect.Arg { name, docstring, type }` instance.
-/// `docstring` is always null until the compiler records parameter
-/// docstrings (the class doc explains the forward-compat field).
+/// Allocate one `reflect.Arg { name, type }` instance.
 fn alloc_arg(
     vm: &mut BexVm,
     arg_class: HeapPtr,
@@ -77,7 +75,7 @@ fn alloc_arg(
         None => Value::NULL,
     };
     let ty_val = Value::object(vm.tlab.alloc_type(ty));
-    Value::object(vm.alloc_instance(arg_class, vec![name_val, Value::NULL, ty_val]))
+    Value::object(vm.alloc_instance(arg_class, vec![name_val, ty_val]))
 }
 
 /// `reflect.signature(f) -> reflect.Signature`.
@@ -102,7 +100,7 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         .into();
     };
     let mut positional = Vec::new();
-    let mut kwargs: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
+    let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
     for param in &sig.params {
         let arg_val = alloc_arg(vm, arg_class, param.name.as_ref(), param.ty.clone());
         match param.mode {
@@ -110,26 +108,30 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
             FunctionParamMode::Optional => {
                 // An optional parameter always has a source name; an erased one
                 // (empty in the stored signature) is unaddressable by callers,
-                // so it is simply absent from `kwargs`.
+                // so it is simply absent from `opts`.
                 if let Some(name) = &param.name {
-                    kwargs.insert(bex_str::BexStr::from(name.as_str()), arg_val);
+                    opts.insert(bex_str::BexStr::from(name.as_str()), arg_val);
                 }
             }
         }
     }
     let args_val = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
-    let kwargs_val = Value::object(vm.tlab.alloc_map(
+    let opts_val = Value::object(vm.tlab.alloc_map(
         RealizedTy::String {
             attr: TyAttr::default(),
         },
         ty_arg(),
-        kwargs,
+        opts,
     ));
     let returns_val = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
-    let throws_val = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
+    let errors_val = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
+    let docstring_val = match &sig.docstring {
+        Some(doc) => Value::object(vm.alloc_string(doc.as_str())),
+        None => Value::NULL,
+    };
     NativeCallResult::Done(Value::object(vm.alloc_instance(
         class_ptr,
-        vec![args_val, kwargs_val, returns_val, throws_val],
+        vec![args_val, opts_val, returns_val, errors_val, docstring_val],
     )))
 }
 

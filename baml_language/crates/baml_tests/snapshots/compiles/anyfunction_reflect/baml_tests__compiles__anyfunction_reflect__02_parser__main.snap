@@ -329,7 +329,7 @@ SOURCE_FILE
               R_PAREN ")"
         LET_STMT
           PATTERN
-            BINDING_PATTERN "// `throws` doubles as a member name here (keyword in type position only),
+            BINDING_PATTERN "// The error channel field is `errors` (no keyword-named fields),
     // and `type` is an ordinary member name on `reflect.Arg`.
     let parts"
               KW_LET "let"
@@ -349,11 +349,10 @@ SOURCE_FILE
                   R_PAREN ")"
               PLUS "+"
               CALL_EXPR
-                FIELD_ACCESS_EXPR
-                  FIELD_ACCESS_EXPR "sig.throws"
-                    WORD "sig"
-                    DOT "."
-                    KW_THROWS "throws"
+                PATH_EXPR "sig.errors.to_string"
+                  WORD "sig"
+                  DOT "."
+                  WORD "errors"
                   DOT "."
                   WORD "to_string"
                 CALL_ARGS "()"
@@ -446,10 +445,10 @@ SOURCE_FILE
                 WORD "key"
           KW_IN "in"
           CALL_EXPR
-            PATH_EXPR "sig.kwargs.keys"
+            PATH_EXPR "sig.opts.keys"
               WORD "sig"
               DOT "."
-              WORD "kwargs"
+              WORD "opts"
               DOT "."
               WORD "keys"
             CALL_ARGS "()"
@@ -460,15 +459,15 @@ SOURCE_FILE
             L_BRACE "{"
             LET_STMT
               PATTERN
-                BINDING_PATTERN "let kwarg"
+                BINDING_PATTERN "let opt"
                   KW_LET "let"
-                  WORD "kwarg"
+                  WORD "opt"
               EQUALS "="
               CALL_EXPR
-                PATH_EXPR "sig.kwargs.get"
+                PATH_EXPR "sig.opts.get"
                   WORD "sig"
                   DOT "."
-                  WORD "kwargs"
+                  WORD "opts"
                   DOT "."
                   WORD "get"
                 CALL_ARGS
@@ -478,8 +477,8 @@ SOURCE_FILE
                   R_PAREN ")"
             IF_EXPR
               KW_IF "if"
-              BINARY_EXPR "kwarg != null"
-                WORD "kwarg"
+              BINARY_EXPR "opt != null"
+                WORD "opt"
                 NOT_EQUALS "!="
                 KW_NULL "null"
               BLOCK_EXPR
@@ -494,8 +493,8 @@ SOURCE_FILE
                       WORD "key"
                     PLUS "+"
                     CALL_EXPR
-                      PATH_EXPR "kwarg.type.to_string"
-                        WORD "kwarg"
+                      PATH_EXPR "opt.type.to_string"
+                        WORD "opt"
                         DOT "."
                         WORD "type"
                         DOT "."

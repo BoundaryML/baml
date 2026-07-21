@@ -192,6 +192,11 @@ pub struct Function {
     /// synthesized functions that have no source file.
     pub source_file: String,
 
+    /// The declaration's joined `///` doc-comment lines, if any. Surfaced by
+    /// runtime reflection (BEP-062 `reflect.signature`); `None` for lambdas
+    /// without docs and synthesized functions.
+    pub docstring: Option<String>,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 
