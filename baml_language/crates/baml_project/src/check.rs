@@ -102,7 +102,12 @@ fn collect_file_diagnostics_parallel(
 /// thread count. Priming the per-file indexes first keeps all workers busy
 /// on file-local work; the aggregate fold itself is then cheap for whichever
 /// worker claims it.
-fn prime_file_indexes_parallel(db: &ProjectDatabase) {
+///
+/// Public because warm cache paths (the serve-time throws gate, package-level
+/// diagnostics on a no-op check) demand the same aggregates outside any
+/// per-file check fan-out. Priming twice is harmless — the second wave is all
+/// memo hits.
+pub fn prime_file_indexes_parallel(db: &ProjectDatabase) {
     const CHUNK: usize = 4;
     let all_files = baml_compiler2_hir::compiler2_all_files(db);
     let chunks: Vec<&[SourceFile]> = all_files.chunks(CHUNK).collect();
@@ -194,6 +199,12 @@ pub fn collect_compiler2_diagnostics_narrowed(
     precomputed: Vec<Diagnostic>,
 ) -> NarrowedDiagnostics {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    // Even a fully-served (zero-checked-files) collection ends in
+    // `package_level_diagnostics`, which derives the whole-package aggregates
+    // — prime the per-file indexes across workers so that derivation is a
+    // parallel-fed fold, not a serial parse of the project. When the caller
+    // already primed (cache gate, cold fan-out) this is all memo hits.
+    prime_file_indexes_parallel(db);
     // Filter up front (outside any parallel region): `should_check` is a plain
     // `&dyn Fn`, so it never has to be thread-safe.
     let checked: Vec<SourceFile> = source_files
