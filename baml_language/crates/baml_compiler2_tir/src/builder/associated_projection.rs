@@ -560,10 +560,9 @@ fn associated_type_bound_interface(
     self_ty: &Ty,
     member: &Name,
 ) -> Option<baml_type::Interface> {
-    let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let iface = tree.interfaces.get(&iface_loc.id(db))?;
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
     let assoc = iface.associated_types.iter().find(|a| &a.name == member)?;
-    let bound_te = assoc.bound.as_ref()?;
+    let bound_ref = assoc.bound?;
 
     let pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
     let pkg_items = baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg.package.clone()));
@@ -634,7 +633,7 @@ fn associated_type_bound_interface(
     // The bound is checked at the interface's declaration; diagnostics are discarded here.
     let mut diags = Vec::new();
     let lowered = crate::generics::substitute_ty(
-        &crate::lower_type_expr::lower_type_expr(bound_te, &scope, &mut diags),
+        &crate::lower_type_expr::lower_type_ref(&iface.type_refs, bound_ref, &scope, &mut diags),
         &bindings,
     );
     lowered.as_interface()
@@ -667,11 +666,10 @@ pub(crate) fn associated_type_declared_bound(
     // over-applied qualifier (`(base as I).member` where `interface I<X>`) is
     // malformed — leave the projection opaque rather than realize a bound against
     // mismatched generics.
-    let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let arity_ok = tree
-        .interfaces
-        .get(&iface_loc.id(db))
-        .is_some_and(|iface| iface.generic_params.len() == interface.generics.len());
+    let arity_ok = baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+        .generic_params
+        .len()
+        == interface.generics.len();
     if !arity_ok {
         return Vec::new();
     }
@@ -891,13 +889,10 @@ fn interface_declares_member(db: &dyn crate::Db, qtn: &QualifiedTypeName, member
 
 /// Whether the interface at `loc` declares associated type `member` directly.
 fn interface_declares_member_at(db: &dyn crate::Db, loc: InterfaceLoc<'_>, member: &Name) -> bool {
-    let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-    tree.interfaces.get(&loc.id(db)).is_some_and(|iface| {
-        iface
-            .associated_types
-            .iter()
-            .any(|assoc| &assoc.name == member)
-    })
+    baml_compiler2_ppir::item_data::interface_data(db, loc)
+        .associated_types
+        .iter()
+        .any(|assoc| &assoc.name == member)
 }
 
 /// Resolve an interface's qualified name to its declaration location.

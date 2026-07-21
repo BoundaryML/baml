@@ -26,20 +26,40 @@ fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
     }
 }
 
+/// Generic parameters of the type declaration enclosing `function` — the
+/// class's for a class method, the interface's for a default method, empty for
+/// top-level functions and free-impl methods (whose generics live on the impl
+/// block). Firewall twin of `ItemTree::enclosing_type_generic_params`.
+fn enclosing_type_generic_params<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Vec<Name> {
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+            baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .generic_params
+                .clone()
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+            baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                .generic_params
+                .clone()
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(_)) | None => Vec::new(),
+    }
+}
+
 fn lowered_declared_callable_throws<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Option<Ty> {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = item_tree
-        .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+    let mut generic_params = enclosing_type_generic_params(db, function);
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
@@ -68,15 +88,12 @@ fn signature_cycle_initial_callable_throws<'db>(
     function: FunctionLoc<'db>,
 ) -> Ty {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = item_tree
-        .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+    let mut generic_params = enclosing_type_generic_params(db, function);
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
@@ -106,17 +123,16 @@ fn signature_cycle_initial_callable_throws<'db>(
 }
 
 fn callable_short_name<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name {
-    let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
 
     // Only a class owner qualifies the name — interface default methods and
     // free-impl methods keep their bare name, preserving the throw-set key
     // format the scan produced.
-    if let Some(baml_compiler2_hir::item_tree::MethodOwner::Class(class_id)) =
-        item_tree.method_owners.get(&function.id(db))
+    if let Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) =
+        baml_compiler2_ppir::item_data::method_owner(db, function)
     {
-        Name::new(format!("{}.{}", item_tree[*class_id].name, func_data.name))
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        Name::new(format!("{}.{}", class_data.name, func_data.name))
     } else {
         func_data.name.clone()
     }

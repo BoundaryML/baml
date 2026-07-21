@@ -10,6 +10,7 @@
 // widens literal values to their base scalar (Python parity).
 
 #include <baml/box.h>
+#include <baml/detail/host_value.h>
 #include <baml/detail/proto.h>
 #include <baml/errors.h>
 #include <baml/lit.h>
@@ -445,6 +446,27 @@ inline std::vector<uint8_t> raw_payload(const pb::BamlOutboundValue& v) {
       is_panic ? result.panic().value() : result.error().value();
   std::string class_name = thrown_class_name(value);
   std::string message = error_message_of(value);
+
+  // A baml.errors.HostCallable wrapping a native host exception carries a
+  // _handle into this process's registry: rethrow the original exception
+  // object instead of a flattened baml::error (Python-identity parity).
+  if (!is_panic && class_name == "baml.errors.HostCallable") {
+    const pb::BamlOutboundValue& v = unwrap(value);
+    if (v.value_case() == pb::BamlOutboundValue::kClassValue) {
+      for (const auto& field : v.class_value().fields()) {
+        if (field.key() == "_handle" &&
+            field.value().value_case() == pb::BamlOutboundValue::kHandleValue &&
+            field.value().handle_value().handle_type() ==
+                pb::HOST_VALUE_OPAQUE) {
+          if (std::exception_ptr original =
+                  host_value_registry::instance().find_exception(
+                      field.value().handle_value().key())) {
+            std::rethrow_exception(original);
+          }
+        }
+      }
+    }
+  }
 
   if (is_panic) {
     if (result.panic().is_exit_panic()) {

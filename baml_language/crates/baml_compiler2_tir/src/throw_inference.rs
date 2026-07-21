@@ -115,35 +115,36 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let func_ns = pkg_info.namespace_path;
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     // Class methods (including `implements`-block methods, which
     // `class_data.methods` flattens in) and interface default methods are
     // not top-level solver entries under their own names.
     let mut member_ids = std::collections::HashSet::new();
-    for class_data in item_tree.classes.values() {
+    for class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
         member_ids.extend(class_data.methods.iter().copied());
     }
-    for iface_data in item_tree.interfaces.values() {
+    for iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
         member_ids.extend(iface_data.default_methods.iter().copied());
     }
     // Out-of-body `implement<…> I for Y { … }` blocks: their methods dispatch
     // through the interface registry and were never solver nodes under their
     // bare names. (In-body `implements` methods are already covered above —
     // `class_data.methods` flattens them in.)
-    for impl_id in &item_tree.free_impls {
-        if let Some(block) = item_tree.impls.get(impl_id) {
-            member_ids.extend(block.methods.iter().copied());
-        }
+    for impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, file) {
+        let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
+        member_ids.extend(block.methods.iter().copied());
     }
 
     let mut out = Vec::new();
 
-    for (local_id, func_data) in &item_tree.functions {
-        if member_ids.contains(local_id) {
+    for func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        if member_ids.contains(func_loc) {
             continue;
         }
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+        let func_loc = *func_loc;
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let short_name = &func_data.name;
         let key = function_key(db, func_loc, short_name);
 
@@ -153,6 +154,7 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
             &func_ns,
             func_loc,
             &func_data.generic_params,
+            &func_data.type_refs,
             &func_data.params,
         );
 
@@ -172,12 +174,12 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
         });
     }
 
-    for class_data in item_tree.classes.values() {
+    for class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
         let class_name = &class_data.name;
-        for &method_id in &class_data.methods {
-            let method_data = &item_tree[method_id];
+        for &func_loc in &class_data.methods {
+            let method_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
             let method_name = &method_data.name;
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
             // Key as "ClassName.method_name" (with namespace prefix if any).
             let method_short = Name::new(format!("{class_name}.{method_name}"));
             let key = function_key(db, func_loc, &method_short);
@@ -188,6 +190,7 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
                 &func_ns,
                 func_loc,
                 &method_data.generic_params,
+                &method_data.type_refs,
                 &method_data.params,
             );
 
@@ -341,7 +344,8 @@ fn extract_direct_and_declared<'db>(
     ns_context: &[Name],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     generic_params: &[Name],
-    params: &[baml_compiler2_hir::item_tree::FunctionParam],
+    type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
+    params: &[baml_compiler2_ppir::item_data::FunctionParamData],
 ) -> (BTreeSet<ThrowFact>, bool) {
     let sig = baml_compiler2_ppir::function_signature(db, func_loc);
     let body = baml_compiler2_ppir::function_body(db, func_loc);
@@ -375,6 +379,7 @@ fn extract_direct_and_declared<'db>(
             ns_context,
             generic_params,
             crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
+            type_refs,
             params,
         );
         collect_direct_throws(db, pkg_items, ns_context, func_loc, expr_body, &param_types)
@@ -456,15 +461,17 @@ fn lower_param_types<'db>(
     ns_context: &[Name],
     generic_params: &[Name],
     bounds: &crate::lower_type_expr::TypeVarBoundsMap,
-    params: &[baml_compiler2_hir::item_tree::FunctionParam],
+    type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
+    params: &[baml_compiler2_ppir::item_data::FunctionParamData],
 ) -> Vec<(Name, Ty)> {
     params
         .iter()
         .filter_map(|param| {
-            let type_expr = param.type_expr.as_ref()?;
+            let type_ref = param.type_ref?;
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr(
-                type_expr,
+            let ty = crate::lower_type_expr::lower_type_ref(
+                type_refs,
+                type_ref,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
