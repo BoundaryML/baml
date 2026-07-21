@@ -246,12 +246,22 @@ extern "C" fn host_dispatch_callback(
 
     let handle = DISPATCH_RT.handle().clone();
     DISPATCH_RT.spawn(async move {
-        // The user closure runs in its own task so a panic is contained by
-        // tokio (a JoinError), never wedging the in-flight call.
-        let future = match (callable.0)(call.args) {
-            Ok(future) => future,
-            Err(message) => {
+        // Run the erased closure on the blocking pool: for the sync families it
+        // runs the user closure body inline, so this both isolates a panic (as
+        // a `JoinError` that still completes the call) and keeps a slow/blocking
+        // sync closure off the 2-worker async pool. For the async families it
+        // only builds the future, which is driven on the async pool below.
+        let future = match handle.spawn_blocking(move || (callable.0)(call.args)).await {
+            Ok(Ok(future)) => future,
+            Ok(Err(message)) => {
                 log::warn(&format!("host callable argument decode failed: {message}"));
+                complete_bridge_failure(call_id);
+                return;
+            }
+            Err(join_error) => {
+                log::warn(&format!(
+                    "host callable panicked during invocation: {join_error}"
+                ));
                 complete_bridge_failure(call_id);
                 return;
             }
