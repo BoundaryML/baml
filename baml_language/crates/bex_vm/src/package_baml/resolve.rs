@@ -177,44 +177,20 @@ impl<'vm> ImplResolver<'vm> {
     /// (functionally determined by the impl), so they never affect which impl is
     /// selected — coherence is per `(Self, Iface<Args>)`. A caller holding an
     /// *expected* associated projection can validate it against the resolved rule via
-    /// [`Self::type_implements`]; that is checking, not selection. An empty `iface_args`
-    /// request matches any instantiation — the case for non-generic interfaces
-    /// (`Equals`/`Compare`), which have exactly one rule per type.
+    /// [`Self::type_implements`]; that is checking, not selection.
     ///
-    /// `None` when no impl of `iface` applies to `concrete_ty`. When several rules
-    /// apply — a type implementing one generic interface at distinct instantiations
-    /// (`Converter<int>` + `Converter<float>`) — the one whose args match the request
-    /// wins; the fallback to the first applicable rule serves the empty-request /
-    /// single-impl cases and is defensive for the (compile-time-coherence-forbidden)
-    /// no-match case.
+    /// The match is **exact — no near-miss fallback**. An empty `iface_args` request
+    /// matches any instantiation, the legitimate case for a *non-generic* interface
+    /// (`Equals`/`Compare`), which has nothing to specify. A *generic* interface
+    /// always carries its full concrete instantiation (BAML generics are specified,
+    /// never truly omitted), and the type checker already proved
+    /// `concrete_ty : Iface<those args>` — so `None` means no rule matches a
+    /// fully-specified request, i.e. the proof and the runtime registry disagree: an
+    /// invariant violation the caller surfaces (a virtual call as an internal error,
+    /// a projection as opaque). Returning the first applicable rule instead would
+    /// silently dispatch a different instantiation (`Converter<string>` through
+    /// `Converter<int>`), reading operands and members at the wrong type.
     pub(crate) fn resolve_implements_rule(
-        self,
-        concrete_ty: &RealizedTy,
-        iface: &TypeName,
-        iface_args: &[RealizedTy],
-    ) -> Option<(&'vm RuntimeImplRule, Vec<RealizedTy>)> {
-        self.resolve_implements_rule_exact(concrete_ty, iface, iface_args)
-            .or_else(|| {
-                // Defensive fallback for the (compile-time-coherence-forbidden)
-                // no-match case: the first applicable rule.
-                self.candidate_rules(concrete_ty, iface)
-                    .into_iter()
-                    .find_map(|rule| {
-                        self.rule_applies(rule, concrete_ty, &mut Vec::new())
-                            .map(|type_args| (rule, type_args))
-                    })
-            })
-    }
-
-    /// [`Self::resolve_implements_rule`] without the first-applicable fallback:
-    /// `None` unless a rule's realized interface args match a non-empty request
-    /// exactly (an empty request still matches any instantiation). Operator
-    /// dispatch resolves with the operands' runtime types as the request — the
-    /// type checker proved that exact instantiation is implemented, so on a
-    /// proof/registry desync the dispatch must surface as unresolved rather than
-    /// silently select a near-miss specialization (whose method glue would read
-    /// the rhs as the wrong type).
-    pub(crate) fn resolve_implements_rule_exact(
         self,
         concrete_ty: &RealizedTy,
         iface: &TypeName,

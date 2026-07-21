@@ -222,7 +222,7 @@ fn dispatch_op(
     };
     let resolver = resolve::ImplResolver::new(vm);
     let Some((rule, bound_args)) =
-        resolver.resolve_implements_rule_exact(&self_ty.into(), &op_qtn, iface_args)
+        resolver.resolve_implements_rule(&self_ty.into(), &op_qtn, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
