@@ -219,6 +219,13 @@ pub struct ManifestFile {
     /// interface blob. Because the manifest is written only after a passing
     /// error gate, a clean file's blob holds warnings / info only.
     pub diagnostics: Vec<u8>,
+    /// Opaque borsh blob of this file's `CallableThrowsFragment` — a verbatim
+    /// copy of the same bytes stored in the file's [`CompilationUnit`]. Kept
+    /// in the manifest so the warm path can seed per-function
+    /// `callable_throws` without reading any unit payloads (the units are
+    /// only needed when bytecode is actually relinked). Empty when the file
+    /// contributes no fragment.
+    pub callable_throws_fragment: Vec<u8>,
     /// Content-addressed cache key of this file's serialized [`CompilationUnit`];
     /// the manifest is the sole mutable pointer table for the immutable per-file
     /// unit entries.
@@ -256,8 +263,14 @@ pub fn manifest_key(
 /// The manifest owns reuse policy and points to the exact value produced by the
 /// last successful compile.
 pub fn unit_key(payload: &[u8]) -> CacheKey {
+    unit_key_from_digest(&Sha256::digest(payload).into())
+}
+
+/// [`unit_key`] from an already-computed payload digest (the same digest
+/// entry validation produces), skipping the payload hash.
+fn unit_key_from_digest(digest: &[u8; 32]) -> CacheKey {
     let mut h = keyed_hasher(b"unit");
-    h.update(Sha256::digest(payload));
+    h.update(digest);
     CacheKey(h.finalize().into())
 }
 
@@ -473,12 +486,35 @@ impl BytecodeCache {
         Some(payload.to_vec())
     }
 
+    /// [`Self::load_raw_shared`] that also returns the payload's integrity
+    /// digest (already computed by entry validation), so content-key checks
+    /// derived from that digest need not re-hash the payload.
+    fn load_raw_shared_with_digest(&self, key: &CacheKey) -> Option<(Vec<u8>, [u8; 32])> {
+        let path = self.entry_path(key);
+        if let Ok(data) = fs::read(&path)
+            && let Some((payload, digest)) = check_entry_with_digest(&data, key)
+        {
+            freshen_entry(&path);
+            return Some((payload.to_vec(), digest));
+        }
+        let remote = self.remote.as_ref()?;
+        let entry = remote.get(key)?;
+        let (payload, digest) = check_entry_with_digest(&entry, key)?;
+        let payload = payload.to_vec();
+        self.persist_from_remote(key, &entry);
+        Some((payload, digest))
+    }
+
     /// Load one content-addressed unit through the local/remote read-through
     /// path. Both the entry framing and the unit key's payload hash must agree;
     /// any mismatch is a cache miss.
     pub fn load_unit_shared(&self, key: &CacheKey) -> Option<CompilationUnit> {
-        let payload = self.load_raw_shared(key)?;
-        if unit_key(&payload) != *key {
+        // `check_entry` already verified the header's key echo and the payload
+        // integrity digest, and `unit_key` is derived from that same digest —
+        // so the content-key check here reuses the digest instead of hashing
+        // the (potentially large) payload a second time.
+        let (payload, digest) = self.load_raw_shared_with_digest(key)?;
+        if unit_key_from_digest(&digest) != *key {
             let _ = fs::remove_file(self.entry_path(key));
             return None;
         }
@@ -595,6 +631,13 @@ impl BytecodeCache {
 
 /// Validate an entry's header against `key`; return the payload slice.
 fn check_entry<'a>(data: &'a [u8], key: &CacheKey) -> Option<&'a [u8]> {
+    check_entry_with_digest(data, key).map(|(payload, _)| payload)
+}
+
+/// [`check_entry`] that also hands back the payload digest it computed, so
+/// callers whose content keys derive from that digest (see [`unit_key`]) can
+/// avoid a second full pass over the payload.
+fn check_entry_with_digest<'a>(data: &'a [u8], key: &CacheKey) -> Option<(&'a [u8], [u8; 32])> {
     if data.len() < HEADER_LEN || data[..4] != MAGIC {
         return None;
     }
@@ -611,7 +654,7 @@ fn check_entry<'a>(data: &'a [u8], key: &CacheKey) -> Option<&'a [u8]> {
     if digest != data[48..80] {
         return None;
     }
-    Some(payload)
+    Some((payload, digest))
 }
 
 /// Write via temp file + atomic rename: readers never observe a torn entry,

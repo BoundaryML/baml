@@ -749,6 +749,7 @@ mod tests {
                 sig_referenced_names: Vec::new(),
                 throw_facts: Vec::new(), // poison: honest is non-empty
                 diagnostics: Vec::new(),
+                callable_throws_fragment: Vec::new(),
                 unit_key: [0u8; 32], // no unit → callable_throws seed empty
             }],
         };
