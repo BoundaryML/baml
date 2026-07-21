@@ -139,9 +139,20 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         Some(doc) => Value::object(vm.alloc_string(doc.as_str())),
         None => Value::NULL,
     };
+    let name_val = match &sig.name {
+        Some(name) => Value::object(vm.alloc_string(name.as_str())),
+        None => Value::NULL,
+    };
     NativeCallResult::Done(Value::object(vm.alloc_instance(
         class_ptr,
-        vec![args_val, opts_val, returns_val, errors_val, docstring_val],
+        vec![
+            name_val,
+            args_val,
+            opts_val,
+            returns_val,
+            errors_val,
+            docstring_val,
+        ],
     )))
 }
 

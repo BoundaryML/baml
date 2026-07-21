@@ -138,6 +138,9 @@ pub struct RuntimeSignature {
     pub throws_type: Option<baml_type::RuntimeTy>,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
+    /// The declaration's fully qualified name; `None` for lambdas (which
+    /// have no source-level name).
+    pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
     /// Display strings for the parameter types, parallel to `param_names`.

@@ -265,13 +265,18 @@ async fn signature_reports_types_and_param_split() {
             if limit != null {
                 limit_str = limit.type.to_string()
             }
+            let fn_name = "unnamed"
+            let sn = sig.name
+            if sn != null {
+                fn_name = sn
+            }
             let q_name = sig.args[0].name
             let doc = "no-doc"
             let d = sig.docstring
             if d != null {
                 doc = d
             }
-            return sig.returns.to_string() + "|" + sig.errors.to_string()
+            return fn_name + "|" + sig.returns.to_string() + "|" + sig.errors.to_string()
                 + "|" + sig.args.length().to_string() + "|" + sig.args[0].type.to_string()
                 + "|" + q_name + "|" + limit_str + "|" + doc
         }
@@ -280,7 +285,7 @@ async fn signature_reports_types_and_param_split() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "string[]|ToolError|1|string|q|int|Searches the index.".into()
+            "user.search|string[]|ToolError|1|string|q|int|Searches the index.".into()
         ))
     );
 }
@@ -301,15 +306,27 @@ async fn signature_bound_method_drops_receiver() {
             let c = Counter { base: 40 }
             let m: baml.AnyFunction = c.bump
             let sig = reflect.signature(m)
+            let method_name = "unnamed"
+            let n = sig.name
+            if n != null {
+                method_name = n
+            }
+            // A lambda has no source-level name, so it reports none.
+            let lambda_name = "some"
+            if reflect.signature((x: int) -> int throws never { x }).name == null {
+                lambda_name = "null"
+            }
             // Also anchors the non-throwing spelling: `errors` reads `never`.
-            return sig.args.length().to_string() + "|" + sig.returns.to_string()
-                + "|" + sig.errors.to_string()
+            return method_name + "|" + lambda_name + "|" + sig.args.length().to_string()
+                + "|" + sig.returns.to_string() + "|" + sig.errors.to_string()
         }
         "#
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String("1|int|never".into()))
+        Ok(BexExternalValue::String(
+            "user.Counter.bump|null|1|int|never".into()
+        ))
     );
 }
 

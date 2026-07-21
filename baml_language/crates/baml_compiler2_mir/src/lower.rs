@@ -4709,6 +4709,9 @@ impl<'db> LoweringContext<'db> {
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
+            // A lambda has no source-level name; its `Function::name` is a
+            // synthetic debug identity.
+            name: None,
             docstring: func_def.docstring.clone(),
             display_type_params: func_def
                 .generic_params

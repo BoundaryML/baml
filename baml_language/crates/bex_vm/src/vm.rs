@@ -435,6 +435,7 @@ mod tests {
             name: "test_native".to_string(),
             source_file: String::new(),
             docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -1234,6 +1235,9 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
 /// `never` (deliberately not the `void` convention `function_object_ty`
 /// uses — see `FIXME(function-type-matching)` in emit).
 pub(crate) struct CallableSignature {
+    /// The declaration's fully qualified name; `None` for host closures and
+    /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
+    pub(crate) name: Option<String>,
     pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
     pub(crate) ret: baml_type::RealizedTy,
     pub(crate) throws: Option<baml_type::RealizedTy>,
@@ -1277,6 +1281,7 @@ fn function_callable_signature(
         })
         .collect();
     CallableSignature {
+        name: f.declared_name.clone(),
         params,
         ret: realized_or_unknown(&f.return_type),
         throws: f.throws_type.as_ref().map(realized_or_unknown),
@@ -2002,6 +2007,8 @@ impl BexVm {
                 }
             }
             Object::HostClosure(hc) => Some(CallableSignature {
+                // Host closures are FFI-constructed; they carry no name.
+                name: None,
                 params: (*hc.params).clone(),
                 // Normalize the stored error type into the `None == never`
                 // convention (host closures store a realized `never`/`void`
@@ -2582,6 +2589,7 @@ impl BexVm {
             name: format!("$entry::{callee_name}"),
             source_file: String::new(),
             docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,

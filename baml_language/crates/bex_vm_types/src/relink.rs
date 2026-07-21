@@ -297,6 +297,7 @@ mod tests {
             name: "test".to_string(),
             source_file: String::new(),
             docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
