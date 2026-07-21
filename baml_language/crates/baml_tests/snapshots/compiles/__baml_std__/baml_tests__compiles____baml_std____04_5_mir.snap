@@ -121,6 +121,42 @@ fn baml.Bigint._random_byte_count = builtin(vm)
 
 fn baml.Bigint._random_in_range = builtin(vm)
 
+fn baml.Bool.random(rng: baml.random.Rng) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.random.Rng // rng // param
+    let _2: bool
+    let _3: int
+    let _4: int
+    let _5: uint8array
+    let _6: 0
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = virtual_call random as baml.random.Rng(copy _1, const 1_i64) -> [bb3];
+    }
+
+    bb3: {
+        _6 = const 0_i64;
+        _4 = copy _5[_6];
+        _3 = copy _4 & const 128_i64;
+        _0 = copy _3 == const 128_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn baml.Comparable$for$int.compare(self: int, other: Self) -> int {
     // Locals:
     let _0: int // _0 // return

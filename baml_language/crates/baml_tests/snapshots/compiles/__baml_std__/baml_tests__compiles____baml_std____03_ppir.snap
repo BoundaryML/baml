@@ -29,6 +29,9 @@ class baml.Bool {
 }
 class baml.Bool$stream {
 }
+function baml.random(rng: root.random.Rng = root.random.SystemRandom.get()) -> bool  [expr] {
+  {  } rng.random(1)[0] BitAnd 128 Eq 128
+}
 
 --- <builtin>/baml/comparable.baml ---
 function baml._compare_shim(a: T, b: T) -> int  [builtin]

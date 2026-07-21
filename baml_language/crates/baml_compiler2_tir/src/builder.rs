@@ -10089,6 +10089,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         "int" => &["Int"],
                         "bigint" => &["Bigint"],
                         "float" => &["Float"],
+                        "bool" => &["Bool"],
                         _ => &[],
                     };
                     if !class_path.is_empty() {

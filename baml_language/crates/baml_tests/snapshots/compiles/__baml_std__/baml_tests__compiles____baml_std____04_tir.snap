@@ -29,6 +29,11 @@ class baml.Bigint$stream {
 --- <builtin>/baml/bool.baml ---
 class baml.Bool {
 }
+function baml.Bool.random(rng: baml.random.Rng = root.random.SystemRandom.get()) -> bool throws never {
+  { : bool
+    rng.random(1)[0] & 128 == 128 : bool
+  }
+}
 class baml.Bool$stream {
 }
 

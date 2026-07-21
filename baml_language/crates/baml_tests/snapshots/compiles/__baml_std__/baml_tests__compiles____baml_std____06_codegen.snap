@@ -466,6 +466,31 @@ function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) 
     throw
 }
 
+function baml.Bool.random(rng: baml.random.Rng) -> bool {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_const 1
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_const 0
+    load_array_element
+    load_const 128
+    bin_op &
+    load_const 128
+    cmp_int_op ==
+    return
+}
+
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     load_var2 1 2
     cmp_op <
