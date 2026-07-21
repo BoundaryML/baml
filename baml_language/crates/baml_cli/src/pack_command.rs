@@ -40,7 +40,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{load_project_for_build, resolve_standalone_file, validate_file_from_flags},
+    project_load::{resolve_standalone_file, validate_file_from_flags},
     reporter::Reporter,
 };
 
@@ -237,44 +237,118 @@ impl PackArgs {
     }
 
     fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
-        let (db, needs_format_hint) = if let Some(file) = self.file.as_deref() {
-            self.load_standalone(file)?
-        } else {
-            self.load_project(reporter)?
+        if let Some(file) = self.file.as_deref() {
+            // Standalone `--file` mode has no project root, so there is no
+            // cache seam — always a cold compile, same as `baml run --file`.
+            let (db, needs_format_hint) = self.load_standalone(file)?;
+            check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
+            let program = baml_compiler2_emit::generate_project_bytecode(
+                &db,
+                &baml_compiler2_emit::CompileOptions {
+                    emit_test_cases: false,
+                },
+            )
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            return Ok((db, program, needs_format_hint));
+        }
+        self.load_and_compile_project(reporter)
+    }
+
+    /// Project-mode load + compile through the bytecode cache — the same warm
+    /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
+    /// when nothing changed, per-file unit reuse on a dirty edit, full compile
+    /// otherwise. Pack compiles with `emit_test_cases: false`, so it shares
+    /// run/check's exact cache key space — a pack right after a run (or a
+    /// re-pack) serves the identical `Program`. The packaged bytecode is
+    /// target-independent (the `--target` triple only selects the host binary
+    /// bytes), and emit determinism guarantees a reused image is byte-identical
+    /// to a fresh compile, so serving from cache never changes the artifact.
+    fn load_and_compile_project(
+        &self,
+        reporter: &Reporter,
+    ) -> Result<(ProjectDatabase, Program, bool)> {
+        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
+        if resolved.files.is_empty() {
+            anyhow::bail!("No .baml files found in {}", resolved.root.display());
+        }
+        // Mirror `baml run`'s per-file format check: probe each source through
+        // the formatter and emit a single advisory if any file would change.
+        let needs_format_hint = resolved
+            .files
+            .iter()
+            .any(|(_, source)| crate::run_command::source_needs_format_hint(source));
+
+        // Building the database only sets salsa inputs — the expensive work
+        // (typecheck, emit) happens lazily below, which a cache hit skips.
+        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
+
+        let cache =
+            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
+        if !crate::bytecode_cache::CacheContext::verify_enabled()
+            && let Some(ctx) = &cache
+            && let Some(program) = ctx.load()
+        {
+            crate::bytecode_cache::cache_debug(format_args!(
+                "pack: bytecode cache hit — skipping compile"
+            ));
+            return Ok((db, program, needs_format_hint));
+        }
+
+        // Seed the stdlib typed interface and prepare the per-file reuse plan —
+        // the same warm-database setup run/check/test use.
+        let (reuse_plan, stdlib_interface_hit) = match &cache {
+            Some(ctx) => {
+                let prep = ctx.prepare_warm_db(&mut db);
+                (prep.reuse_plan, prep.stdlib_interface_hit)
+            }
+            None => (None, false),
         };
 
         // Keep `baml pack` quiet during compilation. Its visible progress is
         // packaging/downloading/output-oriented; compile/count status belongs
         // to `check` and `generate`.
-        check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
+        //
+        // With a cache, gate diagnostics through the incremental collector: it
+        // checks only the reuse plan's dirty files and serves clean files from
+        // their cached blobs, returning the fresh per-file blobs to persist.
+        // Without a cache, run the honest full check (no blobs to store).
+        let fresh_diagnostics = if let Some(ctx) = &cache {
+            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            bail_on_error_diagnostics(
+                &db,
+                &incremental.merged,
+                "Cannot pack: compilation errors found",
+                reporter,
+            )?;
+            Some(incremental.fresh_by_file)
+        } else {
+            check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
+            None
+        };
 
-        let program = baml_compiler2_emit::generate_project_bytecode(
+        let compiled = crate::bytecode_cache::compile_program_artifacts(
             &db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
+            cache.as_ref(),
+            reuse_plan.as_ref(),
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-
-        Ok((db, program, needs_format_hint))
-    }
-
-    fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
-        if baml_files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", from.display());
+        if let Some(ctx) = &cache {
+            let fresh = fresh_diagnostics
+                .as_ref()
+                .expect("a cache is present, so fresh diagnostics were computed");
+            ctx.verify_and_store(
+                &db,
+                &compiled,
+                fresh,
+                reuse_plan.as_ref(),
+                stdlib_interface_hit,
+                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+            )?;
         }
-        // Mirror `baml run`'s per-file format check: probe each source
-        // through the formatter and emit a single advisory if any file
-        // would change. Cheap enough at compile time (we already read
-        // each file from disk during discovery) and matches the
-        // warning surfaces `baml run` already provides.
-        let needs_format_hint = baml_files.iter().any(|path| {
-            std::fs::read_to_string(path)
-                .map(|source| crate::run_command::source_needs_format_hint(&source))
-                .unwrap_or(false)
-        });
-        Ok((db, needs_format_hint))
+        Ok((db, compiled.program, needs_format_hint))
     }
 
     fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
@@ -405,15 +479,25 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 }
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
+fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
+    let diagnostics = baml_project::collect_diagnostics(db);
+    bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
+}
+
+/// Render any `Error`-severity entries in an already-collected diagnostics
+/// list and bail with `ctx`; no-op when the list is error-free.
 ///
 /// When `reporter` has an active spinner, abandon it before printing so
 /// the multi-line ariadne block lands cleanly instead of getting
 /// interleaved with the tick character.
-fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
+fn bail_on_error_diagnostics(
+    db: &ProjectDatabase,
+    diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+    ctx: &str,
+    reporter: &Reporter,
+) -> Result<()> {
     use baml_db::baml_compiler_diagnostics::render;
 
-    let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -421,6 +505,7 @@ fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Re
     if errors.is_empty() {
         return Ok(());
     }
+    let source_files = db.get_source_files();
     let mut sources = HashMap::new();
     let mut file_paths = HashMap::new();
     for sf in &source_files {
@@ -1146,9 +1231,9 @@ mod tests {
         assert_eq!(name, "DoesNotExist");
     }
 
-    // ── load_project / load_standalone error paths ────────────────────
+    // ── project / load_standalone error paths ─────────────────────────
 
-    /// An empty directory has no `.baml` files → `load_project` errors
+    /// An empty directory has no `.baml` files → project loading errors
     /// before ever reaching compilation.
     #[test]
     fn test_load_project_empty_dir_errors() {
@@ -1165,7 +1250,7 @@ mod tests {
         let mut args = pack_args();
         args.from = Some(tmp.path().to_path_buf());
         let reporter = Reporter::new();
-        let err = args.load_project(&reporter).unwrap_err();
+        let err = args.load_and_compile_project(&reporter).unwrap_err();
         assert!(
             format!("{err}").contains("No .baml files"),
             "expected no-files error; got: {err}",
