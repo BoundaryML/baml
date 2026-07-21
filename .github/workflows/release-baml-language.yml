@@ -375,6 +375,16 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-java-sdk:
+    name: Build Java SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-java-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   build-web-sdk:
     name: Build Web SDK
     needs: [plan]
@@ -471,6 +481,7 @@ jobs:
       - build-python-sdk
       - build-nodejs-sdk
       - build-web-sdk
+      - build-java-sdk
       # The engine cdylib is required — it is the shared artifact every
       # dylib-loader SDK depends on.
       - build-bridge-cffi
@@ -546,6 +557,263 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
       channel: ${{ needs.plan.outputs.channel }}
+
+  publish-maven:
+    name: Publish Java Maven Central
+    needs: [plan, build-java-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # Maven Central is its own registry (like PyPI/npm/crates.io): a leaf
+    # publisher that does not feed the pkg.boundaryml.com manifest, so it is not
+    # in that aggregator's needs. It gates on all-builds like every sibling
+    # publisher — a failure anywhere in the release build blocks the Maven push.
+    #
+    # This job ships TWO artifact families in one Central bundle:
+    #   - com.boundaryml:baml-bridge (the runtime + its per-platform native jars);
+    #   - com.boundaryml:baml-gradle-plugin (+ its plugin-marker POM
+    #     com.boundaryml.baml:com.boundaryml.baml.gradle.plugin).
+    # The plugin rides Central on EVERY channel (canary + nightly) because the
+    # Gradle Plugin Portal is stable-channels-only — nightlies can only reach
+    # Gradle consumers via Central (add mavenCentral() to pluginManagement). The
+    # dedicated publish-gradle-plugin job additionally pushes canary/stable cuts
+    # to the Portal. Per-coordinate idempotency lets either family be (re)published
+    # independently when only one is missing from Central.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+      - name: Resolve Maven version
+        id: ver
+        run: |
+          set -euo pipefail
+          # Maven version = the plan's canonical string, Maven-legal as-is
+          # (canary → 0.15.0, nightly → 0.15.0-nightly.YYYYMMDD.a).
+          version="$(jq -r .canonical_version release-plan.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Decide what to publish (per-coordinate Central idempotency)
+        id: exists
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          # IDEMPOTENCY: a published Central version is immutable. Check each
+          # coordinate independently so a re-run publishes only the family that is
+          # still missing (skip only if BOTH already exist). Checking the main
+          # artifact dir is sufficient — sources/javadoc/natives/marker publish
+          # atomically alongside it.
+          check() {
+            local url="https://repo1.maven.org/maven2/com/boundaryml/$1/${VERSION}/"
+            curl -s -o /dev/null -w '%{http_code}' -I "$url" || echo 000
+          }
+          bridge_code="$(check baml-bridge)"
+          plugin_code="$(check baml-gradle-plugin)"
+          bridge_publish=$([[ "$bridge_code" == "200" ]] && echo false || echo true)
+          plugin_publish=$([[ "$plugin_code" == "200" ]] && echo false || echo true)
+          any_publish=$([[ "$bridge_publish" == "true" || "$plugin_publish" == "true" ]] && echo true || echo false)
+          {
+            echo "bridge_publish=$bridge_publish"
+            echo "plugin_publish=$plugin_publish"
+            echo "any_publish=$any_publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "baml-bridge ${VERSION}: HTTP ${bridge_code} → publish=${bridge_publish}"
+          echo "baml-gradle-plugin ${VERSION}: HTTP ${plugin_code} → publish=${plugin_publish}"
+      - name: Setup mise (JDK + gradle)
+        if: ${{ steps.exists.outputs.any_publish == 'true' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+      - name: Download native jars
+        if: ${{ steps.exists.outputs.bridge_publish == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          # The 8 per-target natives-<platform> jars (fewer if an experimental
+          # target's build failed — continue-on-error — which never blocks).
+          pattern: java-sdk-natives-*
+          path: dist/natives
+          merge-multiple: true
+      - name: Stage the signed baml-bridge Central layout
+        if: ${{ steps.exists.outputs.bridge_publish == 'true' }}
+        working-directory: baml_language/sdks/java/baml_bridge
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          # In-memory PGP signing path in build.gradle.kts keys on GPG_PRIVATE_KEY.
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            exit 1
+          fi
+          # One staging run produces the full main+sources+javadoc+pom+module
+          # layout, attaches every downloaded natives-<platform> jar as a
+          # classifier artifact (bamlNativeJarsDir), and signs + checksums all of
+          # them with the in-memory key.
+          mise exec -- gradle --no-daemon publishMavenPublicationToStagingRepository \
+            -PbamlVersion="$VERSION" \
+            -PbamlNativeJarsDir="$GITHUB_WORKSPACE/dist/natives"
+      - name: Stage the signed gradle-plugin into the same Central layout
+        if: ${{ steps.exists.outputs.plugin_publish == 'true' }}
+        working-directory: baml_language/sdks/java/gradle-plugin
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "::error::GPG_PRIVATE_KEY secret is empty; Central rejects unsigned bundles"
+            exit 1
+          fi
+          # Stage the plugin jar+sources+javadoc AND the plugin-marker POM
+          # (com.boundaryml.baml:com.boundaryml.baml.gradle.plugin) into
+          # baml-bridge's staging-deploy tree via -PbamlStagingDir, so the single
+          # Central bundle below carries both families. publishAllPublications*
+          # covers pluginMaven + the marker; both are signed with the in-memory
+          # key. The dir is created if baml-bridge was skipped (already on Central).
+          mise exec -- gradle --no-daemon publishAllPublicationsToStagingRepository \
+            -PbamlVersion="$VERSION" \
+            -PbamlStagingDir="$GITHUB_WORKSPACE/baml_language/sdks/java/baml_bridge/build/staging-deploy"
+      - name: Upload the Central bundle to the portal (publish automatically)
+        if: ${{ steps.exists.outputs.any_publish == 'true' }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          BRIDGE_PUBLISH: ${{ steps.exists.outputs.bridge_publish }}
+          PLUGIN_PUBLISH: ${{ steps.exists.outputs.plugin_publish }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          staging="baml_language/sdks/java/baml_bridge/build/staging-deploy"
+          # Central rejects a maven-metadata.xml inside the bundle (it owns that);
+          # strip it and its checksum/signature sidecars.
+          find "$staging" -name 'maven-metadata.xml*' -delete
+          # Sanity: whichever family we staged must be present in the layout.
+          if [[ "$BRIDGE_PUBLISH" == "true" && ! -d "$staging/com/boundaryml/baml-bridge/$VERSION" ]]; then
+            echo "::error::staging layout missing com/boundaryml/baml-bridge/$VERSION"
+            find "$staging" -maxdepth 4 -type d || true
+            exit 1
+          fi
+          if [[ "$PLUGIN_PUBLISH" == "true" && ! -d "$staging/com/boundaryml/baml-gradle-plugin/$VERSION" ]]; then
+            echo "::error::staging layout missing com/boundaryml/baml-gradle-plugin/$VERSION"
+            find "$staging" -maxdepth 4 -type d || true
+            exit 1
+          fi
+          ( cd "$staging" && zip -q -r "$GITHUB_WORKSPACE/central-bundle.zip" com )
+          echo "bundle contents:"
+          unzip -l "$GITHUB_WORKSPACE/central-bundle.zip"
+
+          if [[ -z "$CENTRAL_USERNAME" || -z "$CENTRAL_PASSWORD" ]]; then
+            echo "::error::CENTRAL_USERNAME / CENTRAL_PASSWORD secrets are not set — cannot publish to Maven Central"
+            exit 1
+          fi
+          # Portal auth: Bearer <base64(username:password)> (env → shell var, never
+          # interpolated into this script body).
+          token="$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')"
+
+          # publishingType=AUTOMATIC: Central validates then publishes to Maven
+          # Central with no Portal-UI click. The response body is the deployment
+          # UUID. The bundle carries whichever of baml-bridge / baml-gradle-plugin
+          # were staged above.
+          deployment_id="$(curl -fsS -X POST \
+            -H "Authorization: Bearer $token" \
+            -F "bundle=@$GITHUB_WORKSPACE/central-bundle.zip" \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=baml-java-$VERSION")"
+          echo "central deployment id: $deployment_id"
+
+          # Poll the deployment until it validates + starts publishing (AUTOMATIC),
+          # or fails.
+          for attempt in $(seq 1 80); do
+            body="$(curl -fsS -X POST -H "Authorization: Bearer $token" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")"
+            state="$(printf '%s' "$body" | jq -r '.deploymentState // empty')"
+            echo "attempt ${attempt}: deploymentState=${state:-<none>}"
+            case "$state" in
+              PUBLISHED|PUBLISHING)
+                echo "baml-bridge $VERSION accepted by Maven Central (state: $state)"
+                exit 0
+                ;;
+              FAILED)
+                echo "::error::Central deployment $deployment_id FAILED"
+                printf '%s\n' "$body" | jq . 2>/dev/null || printf '%s\n' "$body"
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+          echo "::error::timed out waiting for deployment $deployment_id (last state: ${state:-<none>})"
+          exit 1
+
+  publish-gradle-plugin:
+    name: Publish Gradle Plugin Portal
+    # Builds the plugin from source (no java-sdk artifacts consumed), but gates on
+    # all-builds like every sibling publisher so a failure anywhere blocks it.
+    needs: [plan, all-builds]
+    # The Gradle Plugin Portal is STABLE-CHANNELS-ONLY: publish for canary/stable
+    # cuts, never nightlies. `channel != 'nightly'` covers canary today and any
+    # future stable channel while excluding nightly. Nightlies still reach Gradle
+    # consumers — they ride Maven Central via the publish-maven bundle above (add
+    # mavenCentral() to pluginManagement to resolve the plugin from there).
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.plan.outputs.channel != 'nightly' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Skip if this version is already on the Gradle Plugin Portal
+        id: exists
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          # IDEMPOTENCY: the Portal rejects republishing an existing version. Its
+          # public m2 mirror exposes the plugin-marker POM, so a HEAD on that path
+          # tells us whether this version is already live (a re-run → skip).
+          url="https://plugins.gradle.org/m2/com/boundaryml/baml/com.boundaryml.baml.gradle.plugin/${VERSION}/"
+          code="$(curl -s -o /dev/null -w '%{http_code}' -I "$url" || echo 000)"
+          if [[ "$code" == "200" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "com.boundaryml.baml ${VERSION} already on the Portal; skipping"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "com.boundaryml.baml ${VERSION} not on the Portal (HTTP ${code}); will publish"
+          fi
+      - name: Setup mise (JDK + gradle)
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: java gradle
+      - name: Publish to the Gradle Plugin Portal
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        working-directory: baml_language/sdks/java/gradle-plugin
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          # com.gradle.plugin-publish reads these env vars natively (verified: it
+          # falls back to GRADLE_PUBLISH_KEY/SECRET when the gradle.publish.*
+          # properties are unset). The Portal does not require GPG signatures, so
+          # no signing key is passed here.
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GRADLE_PUBLISH_KEY:-}" || -z "${GRADLE_PUBLISH_SECRET:-}" ]]; then
+            echo "::error::GRADLE_PUBLISH_KEY / GRADLE_PUBLISH_SECRET secret is empty"
+            exit 1
+          fi
+          mise exec -- gradle --no-daemon publishPlugins -PbamlVersion="$VERSION"
 
   publish-toolchain-release:
     name: Publish toolchain release assets
