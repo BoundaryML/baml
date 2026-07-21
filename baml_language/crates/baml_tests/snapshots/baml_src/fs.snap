@@ -1953,6 +1953,7 @@ function fs.fs_tmp(name: string) -> string {
     store_var _6
     load_const 0
     load_const 1000000000
+    load_const <omitted>
     call baml.Int.random
     call baml.json.stringify
     store_var _8

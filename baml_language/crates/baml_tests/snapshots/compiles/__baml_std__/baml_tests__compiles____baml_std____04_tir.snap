@@ -253,6 +253,20 @@ class baml.Float$stream {
 --- <builtin>/baml/int.baml ---
 class baml.Int {
 }
+function baml.Int.random(lower: int, upper: int, rng: baml.random.Rng = root.random.SystemRandom.get()) -> int throws baml.errors.InvalidArgument {
+  { : int
+    if (lower >= upper : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "int.random: lower (" + string.from(lower) + ") must be less th..." + string.from(upper) + ")" } : baml.errors.InvalidArgument
+      }
+    let r = int._random_in_range(rng.random_int(), lower, upper) : int
+    while r == upper
+      { : void
+        r = int._random_in_range(rng.random_int(), lower, upper) : int
+      }
+    r : int
+  }
+}
 function baml.Int.max_value() -> int throws never {
   { : 4611686018427387903
     4611686018427387903 : 4611686018427387903

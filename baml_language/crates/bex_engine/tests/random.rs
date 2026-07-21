@@ -116,12 +116,13 @@ function main() -> int {
 }
 
 #[tokio::test]
-async fn default_random_int_spans_full_signed_range_without_overflow() {
+async fn default_random_int_spans_full_signed_range() {
     // The `Rng.random_int` default body — inherited by any user implementor that
-    // provides only `random`. All-`0xFF` bytes assemble the maximum magnitude
-    // with the sign bit set: exactly the input that overflowed the old
-    // `(bytes[0] & 127) << 56` form. It must land on `int.min_value()`, and
-    // all-zero bytes on `0`, confirming the full signed range with no overflow.
+    // provides only `random` — lays the 8 drawn bytes straight down into the i63
+    // word, discarding the first byte's top bit where `<<` truncates. These four
+    // inputs pin that layout and, between them, both ends of the signed range:
+    // the sign is the first byte's bit 6, so `0x40` alone is `int.min_value()`
+    // and `0x3F` over all-ones is `int.max_value()`.
     let source = r#"
 class AllOnes {
     implements baml.random.Rng {
@@ -139,9 +140,28 @@ class AllZeros {
         }
     }
 }
+class SignBitOnly {
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array throws never {
+            let data = b"\x40\x00\x00\x00\x00\x00\x00\x00";
+            data
+        }
+    }
+}
+class AllButSignBit {
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array throws never {
+            let data = b"\x3f\xff\xff\xff\xff\xff\xff\xff";
+            data
+        }
+    }
+}
 function main() -> bool {
-    (AllOnes {}).random_int() == baml.Int.min_value()
+    // All-ones is every one of the 63 bits set, i.e. -1.
+    (AllOnes {}).random_int() == -1
         && (AllZeros {}).random_int() == 0
+        && (SignBitOnly {}).random_int() == baml.Int.min_value()
+        && (AllButSignBit {}).random_int() == baml.Int.max_value()
 }
 "#;
     assert_engine_executes(EngineProgram {

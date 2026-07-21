@@ -1031,7 +1031,95 @@ fn baml.Int.count_ones = builtin(vm)
 
 fn baml.Int.parse = builtin(vm)
 
-fn baml.Int.random = builtin(vm)
+fn baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // lower // param
+    let _2: int // upper // param
+    let _3: baml.random.Rng // rng // param
+    let _4: bool
+    let _5: bool
+    let _6: baml.errors.InvalidArgument
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: type
+    let _13: string
+    let _14: type
+    let _15: int // r
+    let _16: int
+    let _17: bool
+    let _18: int
+    let _19: int
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = copy _1 >= copy _2;
+        branch copy _5 -> [bb10, bb3];
+    }
+
+    bb3: {
+        _16 = virtual_call random_int as baml.random.Rng(copy _3) -> [bb4];
+    }
+
+    bb4: {
+        _15 = call const fn baml.Int._random_in_range(copy _16, copy _1, copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _18 = copy _15;
+        _17 = copy _18 == copy _2;
+        branch copy _17 -> [bb8, bb6];
+    }
+
+    bb6: {
+        _0 = copy _15;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+
+    bb8: {
+        _19 = virtual_call random_int as baml.random.Rng(copy _3) -> [bb9];
+    }
+
+    bb9: {
+        _15 = call const fn baml.Int._random_in_range(copy _19, copy _1, copy _2) -> [bb5];
+    }
+
+    bb10: {
+        _12 = load_type(int);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb11];
+    }
+
+    bb11: {
+        _10 = const "int.random: lower (" + copy _11;
+        _9 = copy _10 + const ") must be less than upper (";
+        _14 = load_type(int);
+        _13 = call const fn baml.String.from<copy _14>(copy _2) -> [bb12];
+    }
+
+    bb12: {
+        _8 = copy _9 + copy _13;
+        _7 = copy _8 + const ")";
+        _6 = baml.errors.InvalidArgument { copy _7 };
+        throw copy _6;
+    }
+}
+
+fn baml.Int._random_in_range = builtin(vm)
 
 fn baml.Int.max_value() -> int {
     // Locals:

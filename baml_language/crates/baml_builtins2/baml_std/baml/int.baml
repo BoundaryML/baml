@@ -243,14 +243,21 @@ class Int {
   }
 
   /// Returns a uniformly distributed random integer in the half-open range
-  /// `[lower, upper)`.
+  /// `[lower, upper)`, drawn from `rng`.
   ///
   /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
-  /// Uses the host's cryptographic entropy source — no user-supplied RNG
-  /// handle. The largest representable half-open range is supported (e.g.
+  /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
+  /// source; pass a seeded generator to make the draw reproducible. The largest
+  /// representable half-open range is supported (e.g.
   /// `random(int.min_value(), int.max_value())` returns a value in
   /// `[int.min_value(), int.max_value())`; `int.max_value()` itself is never
   /// returned).
+  ///
+  /// The result is unbiased, and pays for that with rejection sampling: the
+  /// number of values taken from `rng` is unbounded in the worst case. A draw
+  /// is rejected only when it lands in the tail that would over-represent the
+  /// low end of the range — at worst half the time, and for any range well
+  /// under the full `int` domain, almost never.
   ///
   /// # Examples
   /// ```
@@ -259,8 +266,36 @@ class Int {
   /// int.random(0, 1)          // always 0  (single-element range)
   /// int.random(5, 5)          // throws — empty range
   /// int.random(10, 0)         // throws — lower > upper
+  ///
+  /// // Reproducible: the same seed replays the same values.
+  /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
+  /// int.random(0, 10, rng = rng)
   /// ```
-  function random(lower: int, upper: int) -> int throws root.errors.InvalidArgument {
+  function random(lower: int, upper: int, rng: root.random.Rng = root.random.SystemRandom.get()) -> int throws root.errors.InvalidArgument {
+    if (lower >= upper) {
+      throw root.errors.InvalidArgument {
+        message: "int.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+      };
+    }
+    // The count of values in the range runs to 2^63 - 1, which is not itself an
+    // `int`, so the reduction is done natively in wider arithmetic. The loop
+    // stays here because only this side can reach `rng` for another draw.
+    let r = int._random_in_range(rng.random_int(), lower, upper);
+    while (r == upper) {
+      r = int._random_in_range(rng.random_int(), lower, upper);
+    }
+    r
+  }
+
+  /// Internal: maps one uniform full-range draw onto `[lower, upper)`.
+  ///
+  /// Returns `upper` to mean "this draw landed in the biased tail — draw
+  /// again". That is unambiguous because the range is half-open, so `upper` is
+  /// never itself a valid result.
+  ///
+  /// Callers must check `lower < upper` first; an empty range has no value to
+  /// return and is a caller bug, not a runtime error.
+  function _random_in_range(draw: int, lower: int, upper: int) -> int throws never {
     $rust_function
   }
 
