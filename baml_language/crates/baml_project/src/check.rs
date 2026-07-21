@@ -163,9 +163,26 @@ pub fn collect_compiler2_diagnostics_narrowed(
     precomputed: Vec<Diagnostic>,
 ) -> NarrowedDiagnostics {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    // Filter up front (outside any parallel region): `should_check` is a plain
+    // `&dyn Fn`, so it never has to be thread-safe.
+    let checked: Vec<SourceFile> = source_files
+        .iter()
+        .copied()
+        .filter(|file| should_check(*file))
+        .collect();
     let mut fresh: Vec<Diagnostic> = Vec::new();
-    for file in &source_files {
-        if should_check(*file) {
+    // Same parallel-by-default policy as [`collect_compiler2_diagnostics`]. On
+    // a cold check `should_check` is all-true and `checked` is the whole
+    // project, so a serial loop here would leave every core but one idle; on a
+    // warm incremental check the dirty set is small and stays on the serial
+    // arm. Cross-file collection order is not part of the contract: `merged`
+    // gets the total-order sort below, and `fresh` consumers group by owner
+    // file (per-file order is preserved — each file's diagnostics come from
+    // one `lsp2_check_file` call, appended contiguously).
+    if checked.len() > 8 {
+        collect_file_diagnostics_parallel(db, &checked, &mut fresh);
+    } else {
+        for file in &checked {
             fresh.extend(lsp2_check_file(db, *file));
         }
     }
@@ -174,6 +191,15 @@ pub fn collect_compiler2_diagnostics_narrowed(
     merged.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut merged);
     NarrowedDiagnostics { merged, fresh }
+}
+
+/// Public wrapper over [`package_level_diagnostics`] for callers that assemble
+/// per-file diagnostics themselves (the LSP's candidate builder): these
+/// cross-file diagnostics come from `package_items`, not `check_file`, so a
+/// per-file sweep alone silently misses them.
+pub fn collect_package_level_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
+    let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    package_level_diagnostics(db, &source_files)
 }
 
 /// Package-level diagnostics (cross-file name conflicts and namespace shadows),

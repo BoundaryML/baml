@@ -243,6 +243,34 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
         });
     }
 
+    // Package-level diagnostics (cross-file name conflicts and namespace
+    // shadows) come from `package_items`, not `check_file`, so the per-file
+    // sweep above misses them: without this the candidate under-reports
+    // errors relative to `get_bytecode`'s gate, and cross-file conflicts
+    // never reach the editor at all. Bucket each onto its primary-span
+    // file's document; only user-file spans count toward `has_errors`
+    // (matching the gate's filter).
+    let package_diags = baml_project::collect_package_level_diagnostics(db);
+    if !package_diags.is_empty() {
+        let doc_index: HashMap<std::path::PathBuf, usize> = documents
+            .iter()
+            .enumerate()
+            .map(|(idx, doc)| (doc.path.clone(), idx))
+            .collect();
+        for diag in package_diags {
+            let Some(span) = diag.primary_span() else {
+                continue;
+            };
+            let Some((path, _)) = file_texts.get(&span.file_id) else {
+                continue;
+            };
+            has_errors |= diag.severity == baml_compiler_diagnostics::Severity::Error;
+            if let Some(&idx) = doc_index.get(path) {
+                documents[idx].diagnostics.push(diag);
+            }
+        }
+    }
+
     DiagnosticCandidate {
         source_revision: guard.revision(),
         file_texts,
@@ -806,7 +834,10 @@ impl BexProject {
         if diagnostics.has_errors {
             return CompilationOutcome::BlockedByDiagnostics(diagnostics);
         }
-        match guard.db().get_bytecode() {
+        // The candidate above is a full-project check (per-file sweep plus
+        // package-level diagnostics), so `get_bytecode`'s error gate would
+        // re-derive exactly what `has_errors` just proved — skip it.
+        match guard.db().get_bytecode_unchecked() {
             Ok(program) => CompilationOutcome::Ready(
                 Box::new(CompiledCandidate {
                     source_revision: guard.revision(),
