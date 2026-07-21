@@ -15,7 +15,8 @@ name: BAML SDK Release - Build Java
 #
 # Per target the cdylib is built NATIVELY (each target's `runner` is native-arch,
 # like the toolchain matrix), so `cargo build --target <triple>` needs no cross C
-# toolchain except the musl linker (`setup-musl-cross`). `bridge_java` is the JVM
+# toolchain except musl, which builds inside `cross` containers (like
+# build2-bridge-cffi — the container carries the full musl toolchain). `bridge_java` is the JVM
 # analog of `bridge_cffi`: it loads into the user's JVM, so it is built
 # `--profile release-bridge-java` (`panic = "unwind"`) — an engine panic must
 # unwind into the bridge's `catch_unwind` -> `BamlPanic` boundary, not SIGABRT
@@ -146,11 +147,18 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
-      - name: Setup musl cross toolchain
+      - name: Install cross (musl targets)
+        # musl builds run inside `cross` containers (mirroring
+        # build2-bridge-cffi): the container image carries the full musl
+        # toolchain, so the JNI cdylib links against musl libc cleanly —
+        # the native-runner musl-cross toolchain lacks libgcc_s.so.1 for
+        # the cdylib link (rehearsal run 29862339596). `Cross.toml` at the
+        # workspace root forwards RUSTFLAGS into the container.
         if: ${{ matrix._.libc == 'musl' }}
-        uses: ./.github/actions/setup-musl-cross
-        with:
-          target: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          cargo install cross --locked --version 0.2.5
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
 
       - name: Build bridge_java cdylib
         working-directory: baml_language
@@ -169,7 +177,7 @@ jobs:
           if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
           fi
-          cargo build -p bridge_java --profile release-bridge-java --target "$TARGET"
+          "${CARGO:-cargo}" build -p bridge_java --profile release-bridge-java --target "$TARGET"
 
       - name: Package natives-<platform> jar
         working-directory: baml_language/sdks/java/baml_bridge
