@@ -285,7 +285,7 @@ async fn signature_reports_types_and_param_split() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "user.search|string[]|ToolError|1|string|q|int|Searches the index.".into()
+            "search|string[]|ToolError|1|string|q|int|Searches the index.".into()
         ))
     );
 }
@@ -324,9 +324,7 @@ async fn signature_bound_method_drops_receiver() {
     );
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::String(
-            "user.Counter.bump|null|1|int|never".into()
-        ))
+        Ok(BexExternalValue::String("bump|null|1|int|never".into()))
     );
 }
 

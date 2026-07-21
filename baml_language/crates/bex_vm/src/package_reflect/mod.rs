@@ -16,7 +16,6 @@ use crate::{
     BexVm,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
     package_baml::{NativeCallResult, NativeFunction, PassThroughContinuation},
-    type_context::RuntimeTypeContext,
     vm::CallableSignature,
 };
 
@@ -218,7 +217,8 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
         };
     }
     let expected: Ty = expected.clone().into();
-    normalize::is_subtype(&actual, &expected, &RuntimeTypeContext::new(vm))
+    // The VM itself is the runtime `TypeContext`.
+    normalize::is_subtype(&actual, &expected, vm)
 }
 
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.

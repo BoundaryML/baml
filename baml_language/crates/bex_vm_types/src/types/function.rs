@@ -197,7 +197,8 @@ pub struct Function {
     /// without docs and synthesized functions.
     pub docstring: Option<String>,
 
-    /// The source declaration's fully qualified name, recorded at lowering.
+    /// The name the function was declared with (`greet`, `bump`), recorded
+    /// at lowering.
     /// `None` for callables that have no source-level name: lambdas and
     /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
     /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection

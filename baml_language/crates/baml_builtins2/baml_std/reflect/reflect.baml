@@ -33,7 +33,7 @@ class Arg {
 /// declaration order; named/optional parameters appear in `opts`, keyed by
 /// name. A bound method reports its receiver-adjusted signature (no `self`).
 class Signature {
-  /// The function's fully qualified name; null for host callables and
+  /// The name the function was declared with; null for host callables and
   /// compiler-synthesized callables (including lambdas).
   name string?
   /// Positional (required) parameters, in order.
