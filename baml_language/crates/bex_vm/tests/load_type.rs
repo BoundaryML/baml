@@ -49,6 +49,7 @@ fn inject_function(
     let func = Function {
         name: fn_name.to_string(),
         source_file: String::new(),
+        docstring: None,
         arity: 0,
         real_local_count: 0,
         bytecode,

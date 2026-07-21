@@ -509,6 +509,18 @@ pub enum TirTypeError {
     /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
+    /// BEP-062: an `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler and
+    /// cannot be written by hand.
+    BuiltinInterfaceNotImplementable {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// BEP-062: a generic parameter's bound names a compiler-builtin interface
+    /// (`baml.AnyFunction`) that is only legal as a value type (an
+    /// existential), never as a bound.
+    BuiltinInterfaceNotABound {
+        interface: crate::ty::QualifiedTypeName,
+    },
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
     /// an interface-bounded type parameter
     /// (`<T extends I>`) was given a non-concrete type argument (a union,
@@ -1401,6 +1413,19 @@ impl fmt::Display for TirTypeError {
                 f,
                 "generic bound `{}` is not an interface; bounds must be interfaces",
                 bound.render_user_facing()
+            ),
+            TirTypeError::BuiltinInterfaceNotImplementable { interface } => write!(
+                f,
+                "`{}` is a compiler builtin and cannot be implemented by hand; \
+                 every function type implements it automatically",
+                interface.render_user_facing()
+            ),
+            TirTypeError::BuiltinInterfaceNotABound { interface } => write!(
+                f,
+                "`{}` cannot be used as a generic bound; use it as a value type \
+                 instead (e.g. `f: {}`)",
+                interface.render_user_facing(),
+                interface.render_user_facing()
             ),
             TirTypeError::BoundedTypeArgNotConcrete { arg, bound } => {
                 let bound = bound

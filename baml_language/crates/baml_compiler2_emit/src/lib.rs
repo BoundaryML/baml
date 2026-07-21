@@ -3234,6 +3234,7 @@ fn emit_file_group(
             let chainer_fn = Function {
                 name: "$init_test".to_string(),
                 source_file: String::new(), // synthesized, no source file
+                docstring: None,
                 arity: 1,
                 real_local_count: 1, // the registry param
                 bytecode,
@@ -3360,15 +3361,20 @@ fn compute_throws_type(
     }
 }
 
-#[derive(Debug, Clone)]
-struct FunctionSignatureMetadata {
-    param_names: Vec<String>,
-    param_types: Vec<baml_type::RuntimeTy>,
-    param_has_default: Vec<bool>,
-    return_type: baml_type::RuntimeTy,
-    display_type_params: Vec<String>,
-    display_param_types: Vec<String>,
-    display_return_type: String,
+/// Stamp signature metadata onto a compiled `Function` — the single writer
+/// for both top-level declarations (metadata built by
+/// `compute_function_metadata_from_item_tree`) and lambdas (metadata recorded
+/// by MIR's `lower_lambda` on `MirFunction::signature`).
+fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeSignature) {
+    f.param_names.clone_from(&sig.param_names);
+    f.param_types.clone_from(&sig.param_types);
+    f.param_has_default.clone_from(&sig.param_has_default);
+    f.return_type = sig.return_type.clone();
+    f.throws_type.clone_from(&sig.throws_type);
+    f.docstring.clone_from(&sig.docstring);
+    f.display_type_params.clone_from(&sig.display_type_params);
+    f.display_param_types.clone_from(&sig.display_param_types);
+    f.display_return_type.clone_from(&sig.display_return_type);
 }
 
 fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
@@ -3398,7 +3404,7 @@ fn compute_function_metadata_from_item_tree(
     func_data: &baml_compiler2_hir::item_tree::Function,
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
-) -> FunctionSignatureMetadata {
+) -> baml_compiler2_mir::RuntimeSignature {
     use baml_compiler2_hir::item_tree::MethodOwner;
 
     let param_names: Vec<String> = func_data
@@ -3739,11 +3745,15 @@ fn compute_function_metadata_from_item_tree(
         (null_ty(), "null".to_string())
     };
 
-    FunctionSignatureMetadata {
+    baml_compiler2_mir::RuntimeSignature {
         param_names,
         param_types,
         param_has_default,
         return_type,
+        // TIR's inferred transitive throw set — richer than the declared
+        // clause (a declared clause is a firewall the inference respects).
+        throws_type: compute_throws_type(db, file, &func_data.name, cache),
+        docstring: func_data.docstring.clone(),
         display_type_params,
         display_param_types,
         display_return_type,
@@ -4686,6 +4696,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
     Some(Function {
         name: fq_name.to_string(),
         source_file: String::new(), // builtins have no source file
+        docstring: None,
         arity,
         real_local_count: 0,
         bytecode: Bytecode::default(),
@@ -4736,16 +4747,7 @@ fn attach_function_metadata(
         &parameter_defaults,
         cache,
     );
-    compiled_fn.return_type = signature_metadata.return_type;
-    compiled_fn.param_names = signature_metadata.param_names;
-    compiled_fn.param_types = signature_metadata.param_types;
-    compiled_fn.param_has_default = signature_metadata.param_has_default;
-    compiled_fn.display_type_params = signature_metadata.display_type_params;
-    compiled_fn.display_param_types = signature_metadata.display_param_types;
-    compiled_fn.display_return_type = signature_metadata.display_return_type;
-
-    // Set inferred throws type from TIR throw inference
-    compiled_fn.throws_type = compute_throws_type(db, file, &func_data.name, cache);
+    apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func_data.origin);
 
     // Set LLM-specific body_meta if this is an LLM function
@@ -4895,6 +4897,14 @@ fn compile_lambdas_flat(
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
                 f.source_file = source_file.to_string();
+                // Stamp the runtime signature `lower_lambda` recorded — the
+                // same struct and writer as a top-level declaration (lambdas
+                // have no TIR `func_data` to read from). Closure values
+                // otherwise carry no signature, which BEP-062's
+                // `reflect.signature` / `reflect.call_any` consume.
+                if let Some(sig) = &lambda.signature {
+                    apply_signature_metadata(&mut f, sig);
+                }
                 let idx = objects_base + objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -5003,6 +5013,7 @@ fn compile_init_function<'db>(
                 Function {
                     name: format!("$init_let_{i}"),
                     source_file: String::new(), // synthesized, no source file
+                    docstring: None,
                     arity: 0,
                     real_local_count: 0,
                     bytecode,
@@ -5076,6 +5087,7 @@ fn compile_init_function<'db>(
     Ok(Function {
         name: "$init".to_string(),
         source_file: String::new(), // synthesized, no source file
+        docstring: None,
         arity: 0,
         real_local_count: 0,
         bytecode,

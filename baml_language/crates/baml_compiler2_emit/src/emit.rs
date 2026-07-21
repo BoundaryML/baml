@@ -1021,6 +1021,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         Function {
             name: String::new(),
             source_file: String::new(), // caller sets this after compile_mir_function returns
+            docstring: None,
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
@@ -1844,7 +1845,54 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
-    /// Emit a constant value.
+    /// Push a function reference as a value: a pooled, interned
+    /// `Object::GenericFunction` wrapper over the function's global slot
+    /// (empty `type_args` for a plain reference). Interning by
+    /// (function, `type_args`) over the shared object pool makes identical
+    /// references share ONE pooled object → pointer-stable identity
+    /// (`greet === greet`, `foo<int> === foo<int>`).
+    ///
+    /// Serial emit scans the whole program pool here, so wrappers minted by
+    /// EARLIER functions are reused too. Parallel emit scans only this
+    /// worker's fragment; the serial merge replays the cross-function dedup
+    /// in original function order (see `merge_function_fragment`),
+    /// reproducing the exact serial candidate set and pool layout.
+    fn emit_pooled_function_value(
+        &mut self,
+        item: &baml_compiler2_mir::ItemRef,
+        type_args: &[baml_type::RealizedTy],
+    ) {
+        let name_str = item.to_string();
+        let global_idx = *self
+            .globals
+            .get(&name_str)
+            .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+        let gidx = GlobalIndex::from_raw(global_idx);
+        let existing = self
+            .objects
+            .iter()
+            .position(|o| {
+                matches!(o, Object::GenericFunction(gf)
+                if gf.function == gidx && gf.type_args.as_ref() == type_args)
+            })
+            .map(|local| self.objects_base + local);
+        let pool_idx = match existing {
+            Some(idx) => idx,
+            None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
+                function: gidx,
+                type_args: type_args.to_vec().into_boxed_slice(),
+            })),
+        };
+        let const_idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
+        let inst = self.emit(Instruction::LoadConst(const_idx));
+        let meta = if type_args.is_empty() {
+            name_str
+        } else {
+            format!("{name_str}<...>")
+        };
+        self.set_operand(inst, OperandMeta::Const(meta));
+    }
+
     fn emit_constant(&mut self, constant: &Constant) {
         match constant {
             Constant::Int(v) => {
@@ -1892,53 +1940,31 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.set_operand(inst, OperandMeta::Const("<omitted>".to_string()));
             }
             Constant::Function(item_ref) => {
+                // A plain function reference as a VALUE. Pooled exactly like
+                // `Constant::GenericFunction`, with EMPTY type args: every
+                // function-pointer value on the heap is a wrapper object
+                // (`GenericFunction`/`Closure`/`BoundMethod`/`HostClosure`),
+                // and a raw `Object::Function` is never a data value — the
+                // invariant `value_concrete_ty` / `callable_signature` rely
+                // on. Interning keeps `greet === greet` pointer-stable, as a
+                // direct `LoadGlobal` of the function object did before.
+                self.emit_pooled_function_value(item_ref, &[]);
+            }
+            Constant::GlobalItem(item_ref) => {
+                // A non-function global item (a client, a top-level `let`,
+                // ...): read the value `$init` stored in its slot, unwrapped.
                 let name_str = item_ref.to_string();
                 let global_idx = self
                     .globals
                     .get(&name_str)
-                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                    .unwrap_or_else(|| panic!("undefined global item: {name_str}"));
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
             Constant::GenericFunction { item, type_args } => {
-                // `foo<int>` as a value. Resolve the base function's global slot
-                // (like `Constant::Function`), then pool an interned
-                // `Object::GenericFunction`. Interning by (function, type_args)
-                // over the shared object pool makes identical instantiations
-                // share ONE pooled object → pointer-stable `foo<int> === foo<int>`.
-                let name_str = item.to_string();
-                let global_idx = *self
-                    .globals
-                    .get(&name_str)
-                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
-                let gidx = GlobalIndex::from_raw(global_idx);
-                // Serial emit scans the whole program pool here, so identical
-                // instantiations minted by EARLIER functions are reused too.
-                // Parallel emit scans only this worker's fragment; the serial
-                // merge replays the cross-function dedup in original function
-                // order (see `merge_function_fragment`), reproducing the exact
-                // serial candidate set and pool layout.
-                let existing = self
-                    .objects
-                    .iter()
-                    .position(|o| {
-                        matches!(o, Object::GenericFunction(gf)
-                        if gf.function == gidx && gf.type_args.as_ref() == type_args.as_slice())
-                    })
-                    .map(|local| self.objects_base + local);
-                let pool_idx = match existing {
-                    Some(idx) => idx,
-                    None => {
-                        self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
-                            function: gidx,
-                            type_args: type_args.clone().into_boxed_slice(),
-                        }))
-                    }
-                };
-                let const_idx =
-                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(pool_idx)));
-                let inst = self.emit(Instruction::LoadConst(const_idx));
-                self.set_operand(inst, OperandMeta::Const(format!("{name_str}<...>")));
+                // `foo<int>` as a value: the same pooled wrapper, carrying its
+                // concrete type arguments so calling it seeds `frame.type_args`.
+                self.emit_pooled_function_value(item, type_args);
             }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
