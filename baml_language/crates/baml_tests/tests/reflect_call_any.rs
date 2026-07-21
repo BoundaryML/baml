@@ -101,20 +101,30 @@ async fn call_any_invalid_argument_error_carries_types() {
 
         function main() -> string throws never {
             let f: baml.AnyFunction<Returns = string, Throws = never> = greet
-            let out = reflect.call_any(f, { "name": 42 }) catch (e) {
-                reflect.InvalidArgumentError => e.expected.to_string() + "|" + e.got.to_string()
+            let bad_value = reflect.call_any(f, { "name": 42 }) catch (e) {
+                reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string()
             }
-            if out is string {
-                return out
+            let missing = reflect.call_any(f, {}) catch (e) {
+                reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string()
             }
-            return "not-a-string"
+            let out = "?"
+            if bad_value is string {
+                out = bad_value
+            }
+            if missing is string {
+                out = out + "/" + missing
+            }
+            return out
         }
         "#
     );
     assert_eq!(
         output.result,
-        // The reconstructed runtime type of the value `42` is its base type.
-        Ok(BexExternalValue::String("string|int".into()))
+        // The reconstructed runtime type of the value `42` is its base type;
+        // a missing required parameter reports its type against `never`.
+        Ok(BexExternalValue::String(
+            "name:string|int/name:string|never".into()
+        ))
     );
 }
 
