@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use super::types::{
     ChatCompletionResponse, ChatCompletionResponseDelta, ResponseOutputType, ResponsesApiResponse,
-    ResponsesApiStreamEvent,
+    ResponsesApiStreamEvent, TranscriptionResponse,
 };
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
@@ -18,6 +18,140 @@ fn to_prompt(
     match prompt {
         either::Left(prompt) => internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
         either::Right(prompt) => internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
+    }
+}
+
+#[cfg(test)]
+mod transcription_response_tests {
+    use std::time::Duration;
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
+
+    #[test]
+    fn parses_transcription_text_response() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "text": "hello world" });
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-4o-transcribe".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "hello world".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "gpt-4o-transcribe".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: None,
+                output_tokens: None,
+                total_tokens: None,
+                cached_input_tokens: None,
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn parses_verbose_transcription_response_ignoring_extra_fields() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({
+            "text": "hello verbose",
+            "duration": 1.5,
+            "segments": [],
+        });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("gpt-4o-mini-transcribe".to_string()),
+        );
+
+        match result {
+            LLMResponse::Success(response) => {
+                assert_eq!(response.content, "hello verbose");
+                assert_eq!(response.model, "gpt-4o-mini-transcribe");
+                assert!(response.metadata.baml_is_complete);
+                assert_eq!(response.metadata.finish_reason, Some("stop".to_string()));
+                assert_eq!(response.metadata.prompt_tokens, None);
+                assert_eq!(response.metadata.output_tokens, None);
+                assert_eq!(response.metadata.total_tokens, None);
+            }
+            other => panic!("Expected LLMResponse::Success, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transcription_response_missing_text_fails() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "duration": 1.5 });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("gpt-4o-transcribe".to_string()),
+        );
+
+        match result {
+            LLMResponse::LLMFailure(error) => {
+                assert!(matches!(error.code, ErrorCode::UnsupportedResponse(2)));
+                assert!(error.raw_response.is_some());
+            }
+            other => panic!("Expected LLMResponse::LLMFailure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transcription_response_malformed_shape_fails() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "text": ["not", "a", "string"] });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            None,
+        );
+
+        match result {
+            LLMResponse::LLMFailure(error) => {
+                assert!(matches!(error.code, ErrorCode::UnsupportedResponse(2)));
+                assert_eq!(error.model, None);
+            }
+            other => panic!("Expected LLMResponse::LLMFailure, got {other:?}"),
+        }
     }
 }
 
@@ -101,6 +235,52 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
                     .and_then(|details| details.get("cached_tokens"))
                     .and_then(|cached| cached.as_u64())
             }),
+        },
+    })
+}
+
+pub fn parse_openai_transcription_response<C: WithClient + RequestBuilder>(
+    client: &C,
+    prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+    response_body: serde_json::Value,
+    system_now: web_time::SystemTime,
+    instant_now: web_time::Instant,
+    model_name: Option<String>,
+) -> LLMResponse {
+    let response = match TranscriptionResponse::deserialize(&response_body)
+        .context(format!(
+            "Failed to parse into an OpenAI transcription response: {response_body}"
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: model_name.clone(),
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{e:?}"),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
+        }) {
+        Ok(response) => response,
+        Err(e) => return LLMResponse::LLMFailure(e),
+    };
+
+    LLMResponse::Success(LLMCompleteResponse {
+        client: client.context().name.to_string(),
+        prompt: to_prompt(prompt),
+        content: response.text,
+        start_time: system_now,
+        latency: instant_now.elapsed(),
+        model: model_name.unwrap_or_default(),
+        request_options: client.request_options().clone(),
+        metadata: LLMCompleteResponseMetadata {
+            baml_is_complete: true,
+            finish_reason: Some("stop".to_string()),
+            prompt_tokens: None,
+            output_tokens: None,
+            total_tokens: None,
+            cached_input_tokens: None,
         },
     })
 }
@@ -698,6 +878,7 @@ mod responses_tests {
   "user": null,
   "metadata": {}
 }
+
     "#;
 
     const RESPONSES_API_RESPONSE_MCP: &str = r#"
