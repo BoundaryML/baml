@@ -724,15 +724,18 @@ fn class_trait_ident(ns: &str, class: &str) -> syn::Ident {
 }
 
 fn ns_module_ident(ns: &str) -> syn::Ident {
-    format_ident!("{}", ns.replace('.', "_"))
+    format_ident!("{}", namespace_symbol(ns))
 }
 
 fn namespace_pascal(ns: &str) -> String {
-    ns.split('.').map(capitalize_first).collect::<String>()
+    capitalize_first(&namespace_symbol(ns))
 }
 
 fn namespace_symbol(ns: &str) -> String {
-    ns.replace('.', "_")
+    // Escape the escape character first, then give namespace separators their
+    // own prefix-free code. This keeps dotted and underscored namespaces
+    // distinct, including boundary cases such as `a._b` and `a_.b`.
+    ns.replace('_', "__").replace('.', "_d")
 }
 
 fn namespace_relative_path<'a>(path: &'a str, ns: &str) -> &'a str {
@@ -2744,13 +2747,22 @@ mod tests {
 
     #[test]
     fn nested_namespaces_have_valid_symbols_and_relative_dispatch_paths() {
-        assert_eq!(namespace_pascal("sql.sqlite"), "SqlSqlite");
-        assert_eq!(namespace_symbol("sql.sqlite"), "sql_sqlite");
-        assert_eq!(ns_module_ident("sql.sqlite").to_string(), "sql_sqlite");
+        assert_eq!(namespace_pascal("sql.sqlite"), "Sql_dsqlite");
+        assert_eq!(namespace_symbol("sql.sqlite"), "sql_dsqlite");
+        assert_eq!(ns_module_ident("sql.sqlite").to_string(), "sql_dsqlite");
         assert_eq!(
             namespace_relative_path("baml.sql.sqlite._memory_sqlite", "sql"),
             "sqlite._memory_sqlite"
         );
+    }
+
+    #[test]
+    fn namespace_identifier_encoding_is_collision_free() {
+        for (left, right) in [("sql.sqlite", "sql_sqlite"), ("a._b", "a_.b")] {
+            assert_ne!(namespace_symbol(left), namespace_symbol(right));
+            assert_ne!(namespace_pascal(left), namespace_pascal(right));
+            assert_ne!(ns_module_ident(left), ns_module_ident(right));
+        }
     }
 
     #[test]

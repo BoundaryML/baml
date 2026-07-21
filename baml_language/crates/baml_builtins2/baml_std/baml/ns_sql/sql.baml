@@ -30,7 +30,7 @@ class ConnectOptions {
   max_connections int?
   connect_timeout root.time.Duration?
   query_timeout root.time.Duration?
-  validate bool?
+  validate_connection bool?
 }
 
 class QueryOptions {

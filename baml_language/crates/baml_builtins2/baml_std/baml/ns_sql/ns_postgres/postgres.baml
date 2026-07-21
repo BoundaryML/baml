@@ -16,7 +16,7 @@ class PostgresOptions {
   max_lifetime root.time.Duration?
   application_name string?
   ssl_mode PostgresSslMode?
-  validate bool?
+  validate_connection bool?
 }
 
 function connect(url: string, options: PostgresOptions? = null) -> root.sql.Database throws root.sql.SqlError {

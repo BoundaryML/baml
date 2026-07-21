@@ -1908,7 +1908,7 @@ impl io::IoNamespaceSql for DefaultIoOps {
         _: &Arc<BexHeap>,
         _: CallId,
         _: String,
-        _: Option<io::owned::sql_postgres::PostgresOptions>,
+        _: Option<io::owned::sql_dpostgres::PostgresOptions>,
         _: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_unsupported()
@@ -1918,7 +1918,7 @@ impl io::IoNamespaceSql for DefaultIoOps {
         _: &Arc<BexHeap>,
         _: CallId,
         _: String,
-        _: Option<io::owned::sql_sqlite::SqliteOptions>,
+        _: Option<io::owned::sql_dsqlite::SqliteOptions>,
         _: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_unsupported()
@@ -1927,7 +1927,7 @@ impl io::IoNamespaceSql for DefaultIoOps {
         &self,
         _: &Arc<BexHeap>,
         _: CallId,
-        _: Option<io::owned::sql_sqlite::SqliteOptions>,
+        _: Option<io::owned::sql_dsqlite::SqliteOptions>,
         _: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_unsupported()

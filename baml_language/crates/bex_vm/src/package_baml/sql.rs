@@ -59,7 +59,7 @@ fn snapshot_bind(vm: &mut BexVm, value: Value) -> Result<SqlBindValue, VmRustFnE
                 let element_type = sql_array_type(&values.element_ty);
                 let source_values = values.to_vec();
                 let Some(element_type) = element_type else {
-                    return Err(unsupported(vm, "unsupported PostgreSQL array element type"));
+                    return Err(unsupported(vm, "unsupported SQL array element type"));
                 };
                 let values = source_values
                     .iter()

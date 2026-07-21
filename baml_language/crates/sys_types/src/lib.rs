@@ -195,42 +195,36 @@ pub enum OpErrorPayload {
     HostThrown(Box<BexExternalValue>),
 }
 
+fn format_thrown_value(
+    f: &mut std::fmt::Formatter<'_>,
+    prefix: &str,
+    value: &BexExternalValue,
+) -> std::fmt::Result {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            let message = fields.get("message").and_then(|value| match value {
+                BexExternalValue::String(message) => Some(message.as_str()),
+                _ => None,
+            });
+            match message {
+                Some(message) => write!(f, "{prefix} {class_name}: {message}"),
+                None => write!(f, "{prefix} {class_name}"),
+            }
+        }
+        other => write!(f, "{prefix} {other:?}"),
+    }
+}
+
 impl OpErrorPayload {
     /// Short, human-facing summary for `Display`. The engine reads the
     /// payload structurally — this is purely for diagnostic output.
     fn display_summary(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Vm(e) => std::fmt::Display::fmt(e, f),
-            Self::BamlThrown(boxed) => match boxed.as_ref() {
-                BexExternalValue::Instance {
-                    class_name, fields, ..
-                } => {
-                    let message = fields.get("message").and_then(|v| match v {
-                        BexExternalValue::String(s) => Some(s.as_str()),
-                        _ => None,
-                    });
-                    match message {
-                        Some(m) => write!(f, "thrown {class_name}: {m}"),
-                        None => write!(f, "thrown {class_name}"),
-                    }
-                }
-                other => write!(f, "thrown {other:?}"),
-            },
-            Self::HostThrown(boxed) => match boxed.as_ref() {
-                BexExternalValue::Instance {
-                    class_name, fields, ..
-                } => {
-                    let message = fields.get("message").and_then(|v| match v {
-                        BexExternalValue::String(s) => Some(s.as_str()),
-                        _ => None,
-                    });
-                    match message {
-                        Some(m) => write!(f, "host thrown {class_name}: {m}"),
-                        None => write!(f, "host thrown {class_name}"),
-                    }
-                }
-                other => write!(f, "host thrown {other:?}"),
-            },
+            Self::BamlThrown(value) => format_thrown_value(f, "thrown", value),
+            Self::HostThrown(value) => format_thrown_value(f, "host thrown", value),
         }
     }
 }
@@ -952,10 +946,43 @@ impl SysOpResult {
 mod tests {
     use std::collections::HashMap;
 
+    use indexmap::IndexMap;
+
     use super::*;
 
     fn map(pairs: &[(&str, i32)]) -> HashMap<String, i32> {
         pairs.iter().map(|(k, v)| ((*k).to_string(), *v)).collect()
+    }
+
+    #[test]
+    fn thrown_payload_summaries_preserve_instance_and_value_formatting() {
+        let instance = |message: Option<BexExternalValue>| BexExternalValue::Instance {
+            class_name: "example.Error".to_string(),
+            type_args: vec![],
+            fields: message
+                .map(|message| IndexMap::from([("message".to_string(), message)]))
+                .unwrap_or_default(),
+        };
+
+        assert_eq!(
+            OpErrorBody::baml_thrown_value(instance(Some(BexExternalValue::String(
+                "details".into(),
+            ))))
+            .to_string(),
+            "thrown example.Error: details"
+        );
+        assert_eq!(
+            OpErrorBody::host_thrown_value(instance(None)).to_string(),
+            "host thrown example.Error"
+        );
+        assert_eq!(
+            OpErrorBody::baml_thrown_value(instance(Some(BexExternalValue::Int(1)))).to_string(),
+            "thrown example.Error"
+        );
+        assert_eq!(
+            OpErrorBody::host_thrown_value(BexExternalValue::Int(7)).to_string(),
+            "host thrown Int(7)"
+        );
     }
 
     #[test]

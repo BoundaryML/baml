@@ -20,7 +20,7 @@ class SqliteOptions {
   journal_mode SqliteJournalMode?
   foreign_keys bool?
   max_connections int?
-  validate bool?
+  validate_connection bool?
 }
 
 function open(path: string, options: SqliteOptions? = null) -> root.sql.Database throws root.sql.SqlError {

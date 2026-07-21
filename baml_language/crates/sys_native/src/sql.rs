@@ -291,7 +291,7 @@ fn database_external(handle: Arc<DatabaseHandle>) -> BexExternalValue {
 
 async fn connect_postgres(
     url: String,
-    options: owned::sql_postgres::PostgresOptions,
+    options: owned::sql_dpostgres::PostgresOptions,
 ) -> Result<Arc<DatabaseHandle>, SqlError> {
     if !url.starts_with("postgres://") && !url.starts_with("postgresql://") {
         return Err(SqlError::connection(
@@ -352,7 +352,7 @@ async fn connect_postgres(
     if let Some(value) = max_lifetime {
         pool_options = pool_options.max_lifetime(value);
     }
-    let pool = if options.validate.unwrap_or(true) {
+    let pool = if options.validate_connection.unwrap_or(true) {
         pool_options
             .connect_with(connect)
             .await
@@ -400,7 +400,7 @@ fn sqlite_url(input: &str) -> Result<String, SqlError> {
 
 async fn connect_sqlite(
     input: String,
-    options: owned::sql_sqlite::SqliteOptions,
+    options: owned::sql_dsqlite::SqliteOptions,
     force_memory: bool,
 ) -> Result<Arc<DatabaseHandle>, SqlError> {
     let max = validate_count(options.max_connections, 1, "max_connections")?;
@@ -475,7 +475,7 @@ async fn connect_sqlite(
     let pool_options = SqlitePoolOptions::new()
         .max_connections(max)
         .min_connections(1);
-    let pool = if options.validate.unwrap_or(true) {
+    let pool = if options.validate_connection.unwrap_or(true) {
         pool_options
             .connect_with(connect)
             .await
@@ -1975,51 +1975,61 @@ async fn execute_transaction(
     statement: Arc<SqlStatement>,
 ) -> Result<owned::sql::CommandResult, SqlError> {
     let mut guard = transaction.connection.lock().await;
-    let connection = guard
-        .as_mut()
-        .ok_or_else(|| SqlError::closed("transaction"))?;
-    match connection {
-        TransactionConnection::Postgres(connection) => {
-            let sql = statement.render_postgres();
-            let arguments = pg_arguments(&statement.values)?;
-            validate_single_statement(&sql, SqlDialect::Postgres)?;
-            let describe = (&mut **connection)
-                .describe(&sql)
-                .await
-                .map_err(|error| map_sqlx_error(error, false, false))?;
-            if !describe.columns().is_empty() {
-                return Err(SqlError::new(
-                    "Database",
-                    "execute cannot be used with a statement that returns columns",
-                ));
+    let Some(connection) = guard.take() else {
+        return Err(SqlError::closed("transaction"));
+    };
+    let mut connection = DiscardOnDropConnection(Some(connection));
+    let result = async {
+        let connection = connection
+            .0
+            .as_mut()
+            .expect("transaction statement guard has a connection");
+        match connection {
+            TransactionConnection::Postgres(connection) => {
+                let sql = statement.render_postgres();
+                let arguments = pg_arguments(&statement.values)?;
+                validate_single_statement(&sql, SqlDialect::Postgres)?;
+                let describe = (&mut **connection)
+                    .describe(&sql)
+                    .await
+                    .map_err(|error| map_sqlx_error(error, false, false))?;
+                if !describe.columns().is_empty() {
+                    return Err(SqlError::new(
+                        "Database",
+                        "execute cannot be used with a statement that returns columns",
+                    ));
+                }
+                let result = sqlx::query_with(&sql, arguments)
+                    .execute(&mut **connection)
+                    .await
+                    .map_err(|error| map_sqlx_error(error, false, false))?;
+                command_result(result.rows_affected())
             }
-            let result = sqlx::query_with(&sql, arguments)
-                .execute(&mut **connection)
-                .await
-                .map_err(|error| map_sqlx_error(error, false, false))?;
-            command_result(result.rows_affected())
-        }
-        TransactionConnection::Sqlite(connection) => {
-            let sql = statement.render_sqlite();
-            let arguments = sqlite_arguments(&statement.values)?;
-            validate_single_statement(&sql, SqlDialect::Sqlite)?;
-            let describe = (&mut **connection)
-                .describe(&sql)
-                .await
-                .map_err(|error| map_sqlx_error(error, false, false))?;
-            if !describe.columns().is_empty() {
-                return Err(SqlError::new(
-                    "Database",
-                    "execute cannot be used with a statement that returns columns",
-                ));
+            TransactionConnection::Sqlite(connection) => {
+                let sql = statement.render_sqlite();
+                let arguments = sqlite_arguments(&statement.values)?;
+                validate_single_statement(&sql, SqlDialect::Sqlite)?;
+                let describe = (&mut **connection)
+                    .describe(&sql)
+                    .await
+                    .map_err(|error| map_sqlx_error(error, false, false))?;
+                if !describe.columns().is_empty() {
+                    return Err(SqlError::new(
+                        "Database",
+                        "execute cannot be used with a statement that returns columns",
+                    ));
+                }
+                let result = sqlx::query_with(&sql, arguments)
+                    .execute(&mut **connection)
+                    .await
+                    .map_err(|error| map_sqlx_error(error, false, false))?;
+                command_result(result.rows_affected())
             }
-            let result = sqlx::query_with(&sql, arguments)
-                .execute(&mut **connection)
-                .await
-                .map_err(|error| map_sqlx_error(error, false, false))?;
-            command_result(result.rows_affected())
         }
     }
+    .await;
+    *guard = connection.0.take();
+    result
 }
 
 async fn query_transaction(
@@ -2030,47 +2040,57 @@ async fn query_transaction(
     ctx: DecodeContext,
 ) -> Result<Vec<BexExternalValue>, SqlError> {
     let mut guard = transaction.connection.lock().await;
-    let connection = guard
-        .as_mut()
-        .ok_or_else(|| SqlError::closed("transaction"))?;
-    match connection {
-        TransactionConnection::Postgres(connection) => {
-            let sql = statement.render_postgres();
-            let arguments = pg_arguments(&statement.values)?;
-            validate_single_statement(&sql, SqlDialect::Postgres)?;
-            let mut rows = sqlx::query_with(&sql, arguments).fetch(&mut **connection);
-            let mut values = Vec::new();
-            while limit.is_none_or(|limit| values.len() < limit) {
-                let Some(row) = rows
-                    .try_next()
-                    .await
-                    .map_err(|error| map_sqlx_error(error, false, false))?
-                else {
-                    break;
-                };
-                values.push(decode_pg_row(&row, &ty, &ctx)?);
+    let Some(connection) = guard.take() else {
+        return Err(SqlError::closed("transaction"));
+    };
+    let mut connection = DiscardOnDropConnection(Some(connection));
+    let result = async {
+        let connection = connection
+            .0
+            .as_mut()
+            .expect("transaction query guard has a connection");
+        match connection {
+            TransactionConnection::Postgres(connection) => {
+                let sql = statement.render_postgres();
+                let arguments = pg_arguments(&statement.values)?;
+                validate_single_statement(&sql, SqlDialect::Postgres)?;
+                let mut rows = sqlx::query_with(&sql, arguments).fetch(&mut **connection);
+                let mut values = Vec::new();
+                while limit.is_none_or(|limit| values.len() < limit) {
+                    let Some(row) = rows
+                        .try_next()
+                        .await
+                        .map_err(|error| map_sqlx_error(error, false, false))?
+                    else {
+                        break;
+                    };
+                    values.push(decode_pg_row(&row, &ty, &ctx)?);
+                }
+                Ok(values)
             }
-            Ok(values)
-        }
-        TransactionConnection::Sqlite(connection) => {
-            let sql = statement.render_sqlite();
-            let arguments = sqlite_arguments(&statement.values)?;
-            validate_single_statement(&sql, SqlDialect::Sqlite)?;
-            let mut rows = sqlx::query_with(&sql, arguments).fetch(&mut **connection);
-            let mut values = Vec::new();
-            while limit.is_none_or(|limit| values.len() < limit) {
-                let Some(row) = rows
-                    .try_next()
-                    .await
-                    .map_err(|error| map_sqlx_error(error, false, false))?
-                else {
-                    break;
-                };
-                values.push(decode_sqlite_row(&row, &ty, &ctx)?);
+            TransactionConnection::Sqlite(connection) => {
+                let sql = statement.render_sqlite();
+                let arguments = sqlite_arguments(&statement.values)?;
+                validate_single_statement(&sql, SqlDialect::Sqlite)?;
+                let mut rows = sqlx::query_with(&sql, arguments).fetch(&mut **connection);
+                let mut values = Vec::new();
+                while limit.is_none_or(|limit| values.len() < limit) {
+                    let Some(row) = rows
+                        .try_next()
+                        .await
+                        .map_err(|error| map_sqlx_error(error, false, false))?
+                    else {
+                        break;
+                    };
+                    values.push(decode_sqlite_row(&row, &ty, &ctx)?);
+                }
+                Ok(values)
             }
-            Ok(values)
         }
     }
+    .await;
+    *guard = connection.0.take();
+    result
 }
 
 fn scalar_result(mut values: Vec<BexExternalValue>) -> Result<BexExternalValue, SqlError> {
@@ -2458,11 +2478,11 @@ impl io::IoNamespaceSql for NativeSysOps {
             let handle = if url.starts_with("postgres://") || url.starts_with("postgresql://") {
                 connect_postgres(
                     url,
-                    owned::sql_postgres::PostgresOptions {
+                    owned::sql_dpostgres::PostgresOptions {
                         max_connections: options.max_connections,
                         connect_timeout: options.connect_timeout,
                         query_timeout: options.query_timeout,
-                        validate: options.validate,
+                        validate_connection: options.validate_connection,
                         ..Default::default()
                     },
                 )
@@ -2470,10 +2490,10 @@ impl io::IoNamespaceSql for NativeSysOps {
             } else if url.starts_with("sqlite:") || url.starts_with("file:") || url == ":memory:" {
                 connect_sqlite(
                     url.clone(),
-                    owned::sql_sqlite::SqliteOptions {
+                    owned::sql_dsqlite::SqliteOptions {
                         max_connections: options.max_connections,
                         query_timeout: options.query_timeout,
-                        validate: options.validate,
+                        validate_connection: options.validate_connection,
                         ..Default::default()
                     },
                     url == ":memory:",
@@ -2493,7 +2513,7 @@ impl io::IoNamespaceSql for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         url: String,
-        options: Option<owned::sql_postgres::PostgresOptions>,
+        options: Option<owned::sql_dpostgres::PostgresOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_output(async move {
@@ -2508,7 +2528,7 @@ impl io::IoNamespaceSql for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         path: String,
-        options: Option<owned::sql_sqlite::SqliteOptions>,
+        options: Option<owned::sql_dsqlite::SqliteOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_output(async move {
@@ -2522,7 +2542,7 @@ impl io::IoNamespaceSql for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        options: Option<owned::sql_sqlite::SqliteOptions>,
+        options: Option<owned::sql_dsqlite::SqliteOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         sql_output(async move {

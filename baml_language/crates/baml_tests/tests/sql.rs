@@ -187,6 +187,7 @@ function main() -> string {
   db.execute(baml.sql.statement`CREATE TABLE events(value TEXT)`)
   db.transaction((tx) -> {
     tx.execute(baml.sql.statement`INSERT INTO events VALUES (${"committed"})`)
+    tx.scalar<int>(baml.sql.statement`SELECT count(*) FROM events`)
   })
   db.transaction((tx) -> {
     tx.execute(baml.sql.statement`INSERT INTO events VALUES (${"rolled-back"})`)
@@ -226,6 +227,43 @@ function main() -> string {
         Ok(BexExternalValue::String(
             "closed:readonly:rolled-back:0:1".into()
         ))
+    );
+}
+
+#[tokio::test]
+async fn sqlite_transaction_timeout_discards_connection_and_poisons_handle() {
+    let output = baml_test!(
+        r#"
+function main() -> string {
+  let db = baml.sql.sqlite.memory()
+  defer { db.close() }
+  let tx = db._begin(null)
+  let timed_out = tx.query<int>(
+    baml.sql.statement`WITH RECURSIVE n(x) AS (
+      SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 100000000
+    ) SELECT x FROM n`,
+    options = baml.sql.QueryOptions { timeout: baml.time.Duration.from_milliseconds(10) },
+  ) catch (e) {
+    let error: baml.sql.SqlError => match (error.kind) {
+      baml.sql.SqlErrorKind.Timeout => "timeout",
+      _ => "wrong",
+    }
+  }
+  let closed = tx.scalar<int>(baml.sql.statement`SELECT 1`) catch (e) {
+    let error: baml.sql.SqlError => match (error.kind) {
+      baml.sql.SqlErrorKind.Closed => "closed",
+      _ => "wrong",
+    }
+  }
+  tx._rollback_if_open()
+  let pool_value = db.scalar<int>(baml.sql.statement`SELECT 1`)
+  timed_out.to_string() + ":" + closed.to_string() + ":" + pool_value.to_string()
+}
+"#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("timeout:closed:1".into()))
     );
 }
 
