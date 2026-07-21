@@ -60,6 +60,10 @@ pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
                     ),
                 }
             }
+
+            fn baml_ty() -> ::baml_bridge::wire::BamlTy {
+                ::baml_bridge::baml_value::internal::enum_ty(#fqn)
+            }
         }
     }
 }
