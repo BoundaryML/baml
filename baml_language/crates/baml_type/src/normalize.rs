@@ -1282,6 +1282,49 @@ impl NormalTy {
                     })
             }),
 
+            // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
+            // every function type, with the parameter list erased. Conformance
+            // is derived right here rather than from an `implements` block
+            // (function types are not impl subjects): the return type must fit
+            // the `Returns` pin and the throws type the `Throws` pin. Omitted
+            // pins were filled with their `unknown` defaults when the
+            // existential was lowered; a pin missing anyway degrades to that
+            // same top-type default (accepts everything).
+            (NormalTy::Function { ret, throws, .. }, NormalTy::Interface(qn, _, bindings))
+                if qn.is_builtin_root_type("AnyFunction") =>
+            {
+                let pin = |name: &str| {
+                    bindings
+                        .iter()
+                        .find_map(|(n, ty)| (n.as_str() == name).then_some(ty))
+                };
+                pin("Returns").is_none_or(|r| ret.is_subtype_of(r, ctx, assumptions))
+                    && pin("Throws").is_none_or(|t| throws.is_subtype_of(t, ctx, assumptions))
+            }
+
+            // BEP-062: `AnyFunction`'s pins are covariant, unlike every other
+            // interface binding (`interface_requires` compares those
+            // invariantly): `AnyFunction<Returns = Label>` fits where
+            // `AnyFunction<Returns = json>` is expected, because every held
+            // function returning `Label` also returns a `json`. Sound because
+            // the pins only describe outputs of the held function (its return
+            // and error channels); the erased parameter list leaves no
+            // write-through position. A pin missing on the sub side claims
+            // nothing (conservative), matching the fail-safe contract.
+            (
+                NormalTy::Interface(sub_qn, _, sub_bindings),
+                NormalTy::Interface(sup_qn, _, sup_bindings),
+            ) if sub_qn.is_builtin_root_type("AnyFunction")
+                && sup_qn.is_builtin_root_type("AnyFunction") =>
+            {
+                sup_bindings.iter().all(|(name, sup_pin)| {
+                    sub_bindings
+                        .iter()
+                        .find_map(|(n, ty)| (n == name).then_some(ty))
+                        .is_some_and(|sub_pin| sub_pin.is_subtype_of(sup_pin, ctx, assumptions))
+                })
+            }
+
             // Concrete (or any non-interface) type implementing an interface.
             (sub, NormalTy::Interface(qn, args, bindings))
                 if !matches!(sub, NormalTy::Interface(..)) =>

@@ -1226,6 +1226,59 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
     })
 }
 
+/// A callable value's reconstructed signature in the shape the `reflect`
+/// natives consume (BEP-062): parameters in declaration order (a bound
+/// method's receiver dropped), the return type, and the throws type as the
+/// runtime stores it. `throws: None` means "cannot throw"; its user-visible
+/// static spelling is `never` (deliberately not the `void` convention
+/// `function_object_ty` uses — see `FIXME(function-type-matching)` in emit).
+pub(crate) struct CallableSignature {
+    pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
+    pub(crate) ret: baml_type::RealizedTy,
+    pub(crate) throws: Option<baml_type::RealizedTy>,
+}
+
+/// Reconstruct a [`CallableSignature`] from a raw `Function` object. Like
+/// [`function_object_ty`], unresolved generics are already erased to `unknown`
+/// in the stored signature, so a generic callable reconstructs coarsely.
+/// `drop_receiver` skips the leading `self` parameter for bound methods.
+fn function_callable_signature(
+    f: &bex_vm_types::types::Function,
+    drop_receiver: bool,
+) -> Option<CallableSignature> {
+    use baml_type::{FunctionParamMode, RealizedFunctionParamTy};
+    let params = f
+        .param_types
+        .iter()
+        .enumerate()
+        .skip(usize::from(drop_receiver))
+        .map(|(i, ty)| {
+            Some(RealizedFunctionParamTy {
+                name: f
+                    .param_names
+                    .get(i)
+                    .filter(|n| !n.is_empty())
+                    .map(|n| Name::new(n.as_str())),
+                ty: realized_arg(ty)?,
+                mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
+                    FunctionParamMode::Optional
+                } else {
+                    FunctionParamMode::Required
+                },
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let throws = match &f.throws_type {
+        Some(ty) => Some(realized_arg(ty)?),
+        None => None,
+    };
+    Some(CallableSignature {
+        params,
+        ret: realized_arg(&f.return_type)?,
+        throws,
+    })
+}
+
 /// Get the type tag for any runtime value.
 ///
 /// This is a free function to avoid borrow checker issues when called
@@ -1904,6 +1957,61 @@ impl BexVm {
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
+    }
+
+    /// A callable value's [`CallableSignature`] (BEP-062 `reflect`), or `None`
+    /// for a non-callable value.
+    ///
+    /// Every function-pointer value is a wrapper object — a plain reference
+    /// is a pooled empty-type-args `GenericFunction` (see the emit-side
+    /// `emit_pooled_function_value`), so a raw `Object::Function` is never a
+    /// data value and deliberately has no arm here.
+    ///
+    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed —
+    /// coarsely, from its underlying function's stored (generic-erased)
+    /// signature with the receiver parameter dropped. `value_concrete_ty`
+    /// deliberately reports no type there so the `is` matcher never affirms a
+    /// wrong one; `reflect.signature` / `reflect.call_any` prefer the coarse
+    /// truth (erased slots read `unknown`) over refusing bound methods.
+    pub(crate) fn callable_signature(&self, value: Value) -> Option<CallableSignature> {
+        use baml_type::RealizedTy;
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => {
+                // SAFETY: `closure.function` points to a live `Function`, the
+                // same invariant `resolve_callable_target` relies on.
+                match unsafe { closure.function.get() } {
+                    Object::Function(f) => function_callable_signature(f, false),
+                    _ => None,
+                }
+            }
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| self.get_object(p)) {
+                    Some(Object::Function(f)) => function_callable_signature(f, false),
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(bm) => {
+                // SAFETY: `bm.function` points to a live `Function` (the bind
+                // site stored it), as at `CallIndirect`'s BoundMethod arm.
+                match unsafe { bm.function.get() } {
+                    Object::Function(f) => function_callable_signature(f, true),
+                    _ => None,
+                }
+            }
+            Object::HostClosure(hc) => Some(CallableSignature {
+                params: (*hc.params).clone(),
+                // Normalize the stored error type into the `None == never`
+                // convention (host closures store a realized `never`/`void`
+                // for a non-throwing callee rather than omitting it).
+                throws: match &*hc.throws_ty {
+                    RealizedTy::Never { .. } | RealizedTy::Void { .. } => None,
+                    ty => Some(ty.clone()),
+                },
+                ret: (*hc.ret_ty).clone(),
+            }),
+            _ => None,
+        }
     }
 
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every

@@ -10,6 +10,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], kwargs: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.Box.unwrap(self: Box<T>) -> T {
     load_var self
     load_field .value
@@ -246,7 +252,7 @@ function user.test_unbound_higher_order() -> string[] {
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 1
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call user.apply_to_each
     return
 }
@@ -263,7 +269,7 @@ function user.test_unbound_in_map() -> string[] {
     init_instance user.Employee .first, .last
     load_type Employee
     alloc_array 2
-    load_global user.Employee.full_name
+    load_const user.Employee.full_name
     call baml.Array.map
     return
 }

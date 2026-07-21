@@ -592,6 +592,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GlobalItem(qn) => write!(f, "const item {qn}"),
         Constant::GenericFunction { item, type_args } => {
             let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
             write!(f, "const fn {item}<{}>", args.join(", "))

@@ -15,3 +15,61 @@
 function type_of<T>() -> type {
     $compiler_intrinsic
 }
+
+/// One parameter of a function signature (BEP-062).
+class Arg {
+  /// The parameter's name; null when the value carries none.
+  name string?
+  /// The parameter's doc comment; null when absent. Parameter docstrings are
+  /// not yet recorded by the compiler, so this is currently always null; the
+  /// field is part of the schema so tool renderers need no shape change when
+  /// they land.
+  docstring string?
+  /// The parameter's type.
+  type type
+}
+
+/// The runtime signature of a function value, reconstructed from the value
+/// itself (BEP-062). Positional (required) parameters appear in `args` in
+/// declaration order; named/optional parameters appear in `kwargs`, keyed by
+/// name. A bound method reports its receiver-adjusted signature (no `self`).
+class Signature {
+  /// Positional (required) parameters, in order.
+  args Arg[]
+  /// Named/optional parameters, keyed by parameter name.
+  kwargs map<string, Arg>
+  /// The return type.
+  returns type
+  /// The error type; `never` if the function cannot throw.
+  throws type
+}
+
+/// Thrown by `reflect.call_any` when the supplied arguments do not fit the
+/// callee's runtime signature: wrong positional arity, a named argument the
+/// callee does not declare, or a value that does not fit its parameter's
+/// type. For a single bad value, `expected`/`got` are the parameter's and the
+/// value's types; for an arity or unknown-name mismatch they are the callee's
+/// function type and the call's shape.
+class InvalidArgumentError {
+  expected type
+  got type
+}
+
+/// Returns the runtime signature of `f`.
+///
+/// Usage:
+///   let sig = reflect.signature(f)
+///   sig.returns.to_string()
+function signature(f: baml.AnyFunction) -> Signature throws never {
+  $rust_function
+}
+
+/// Calls `f` with `args` (positional) and `kwargs` (named), checked at
+/// runtime against `f`'s signature. An absent named argument fires the
+/// callee's own default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a
+/// pinned `AnyFunction<Returns = json, Throws = ToolError>` yields typed
+/// results and an exhaustive catch; a bare `AnyFunction` returns `unknown`
+/// and throws `unknown` (which covers `InvalidArgumentError`).
+function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], kwargs: map<string, unknown> = {}) -> R throws E | InvalidArgumentError {
+  $rust_function
+}

@@ -324,7 +324,7 @@ fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -353,7 +353,7 @@ fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -381,7 +381,7 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Cl
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -409,7 +409,7 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -438,7 +438,7 @@ fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -467,7 +467,7 @@ fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) 
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -495,7 +495,7 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.C
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -523,7 +523,7 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) 
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -627,7 +627,7 @@ fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> str
     }
 
     bb1: {
-        _3 = const fn user.GPT4o;
+        _3 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -657,7 +657,7 @@ fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.
     }
 
     bb1: {
-        _3 = const fn user.GPT4o;
+        _3 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -686,7 +686,7 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
     }
 
     bb1: {
-        _3 = const fn user.GPT4o;
+        _3 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -715,7 +715,7 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
     }
 
     bb1: {
-        _3 = const fn user.GPT4o;
+        _3 = const item user.GPT4o;
         goto -> bb2;
     }
 

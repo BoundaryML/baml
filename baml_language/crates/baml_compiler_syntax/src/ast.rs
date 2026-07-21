@@ -2332,6 +2332,9 @@ impl Field {
                         // `client` keyword stays valid as a field name
                         // (BEP-049 §10 `ctx.client` on `Context`).
                         | SyntaxKind::KW_CLIENT
+                        // `throws` too (BEP-062 `reflect.Signature.throws`);
+                        // member access accepts it symmetrically.
+                        | SyntaxKind::KW_THROWS
                 )
             })
     }

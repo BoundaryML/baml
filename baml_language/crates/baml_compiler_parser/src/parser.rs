@@ -520,6 +520,12 @@ impl<'a> Parser<'a> {
             // `ctx.client` (on the `Context` type) parses. Unambiguous here:
             // class bodies and `.member` access have no `client` construct.
             || self.at(TokenKind::Client)
+            // `throws` is a keyword in function types/declarations, but class
+            // bodies already accept it as a field name (see the field-name
+            // token sets below), so member access must too — BEP-062's
+            // `reflect.Signature` has a `throws` field (`sig.throws`).
+            // Unambiguous here: no expression continues with `throws`.
+            || self.at(TokenKind::Throws)
     }
 
     /// True for `field as class_field` inside an `implements` block.

@@ -54,6 +54,9 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_EXTENDS
             | SyntaxKind::KW_REQUIRES
+            // `throws` doubles as a field/member name (class bodies already
+            // parse it as one; BEP-062's `reflect.Signature.throws`).
+            | SyntaxKind::KW_THROWS
             // Contextual keywords re-lexed from a `Word`: still lower by text
             // (the literal/identifier arms below switch on the text), so they
             // must read as ident tokens just as they did when they were `Word`.

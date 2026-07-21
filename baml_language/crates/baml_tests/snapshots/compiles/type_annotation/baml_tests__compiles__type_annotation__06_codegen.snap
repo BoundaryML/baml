@@ -10,6 +10,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], kwargs: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.test_let_binding(function_name: string) -> string {
     load_var function_name
     sys_op baml.llm.get_return_type

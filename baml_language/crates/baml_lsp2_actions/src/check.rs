@@ -1967,6 +1967,11 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
+        // Builtin interfaces (BEP-062, E0153/E0154).
+        TirTypeError::BuiltinInterfaceNotImplementable { .. } => {
+            DiagnosticId::BuiltinInterfaceNotImplementable
+        }
+        TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
         // Generic-parameter / associated-type declaration hygiene.

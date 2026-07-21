@@ -17,7 +17,7 @@ fn user.ExtractInvoice(text: string, client: baml.llm.Client) -> Invoice {
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -46,7 +46,7 @@ fn user.ExtractInvoice$build_request(text: string, client: baml.llm.Client) -> b
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -74,7 +74,7 @@ fn user.ExtractInvoice$build_request_stream(text: string, client: baml.llm.Clien
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 
@@ -102,7 +102,7 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
     }
 
     bb1: {
-        _2 = const fn user.GPT4o;
+        _2 = const item user.GPT4o;
         goto -> bb2;
     }
 

@@ -4568,6 +4568,14 @@ impl<'db> LoweringContext<'db> {
             .into_iter()
             .chain(self.lambda_generic_params.iter().cloned())
             .collect();
+        // BEP-062: collect the runtime signature alongside, so emit can stamp
+        // it onto the compiled `Function` object. Top-level declarations get
+        // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
+        // and without this a closure value carries no signature at all (which
+        // `reflect.signature` / `reflect.call_any` consume).
+        let mut sig_param_names = Vec::with_capacity(func_def.params.len());
+        let mut sig_param_types = Vec::with_capacity(func_def.params.len());
+        let mut sig_param_defaults = Vec::with_capacity(func_def.params.len());
         for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
@@ -4592,6 +4600,9 @@ impl<'db> LoweringContext<'db> {
                     attr: baml_type::TyAttr::default(),
                 },
             };
+            sig_param_names.push(param.name.to_string());
+            sig_param_types.push(param_ty.clone());
+            sig_param_defaults.push(param.default.is_some());
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -4599,6 +4610,42 @@ impl<'db> LoweringContext<'db> {
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
+        // The declared return/throws, lowered in the same generic scope as the
+        // params. Unannotated slots make no claim (`unknown`); an explicit
+        // `throws never` becomes `None` (the runtime's "cannot throw").
+        let lower_sig_ty = |this: &mut Self, te: &baml_compiler2_ast::TypeExpr| {
+            let mut diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                te,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db: this.db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &lambda_param_generics,
+                    bounds: &this.enclosing_generic_param_bounds(),
+                    self_ty: None,
+                },
+                &mut diags,
+            )
+        };
+        let sig_return_type = match &func_def.return_type {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                self.convert_tir_ty_for_runtime(&tir_ty)
+            }
+            None => baml_type::RuntimeTy::unknown(),
+        };
+        let sig_throws_type = match &func_def.throws {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                if matches!(tir_ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
+                    None
+                } else {
+                    Some(self.convert_tir_ty_for_runtime(&tir_ty))
+                }
+            }
+            None => Some(baml_type::RuntimeTy::unknown()),
+        };
 
         // Create entry and exit blocks.
         let entry = self.builder.create_block();
@@ -4646,6 +4693,23 @@ impl<'db> LoweringContext<'db> {
         };
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
+        lambda_mir.signature = Some(crate::ir::RuntimeSignature {
+            display_type_params: func_def
+                .generic_params
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+            display_param_types: sig_param_types
+                .iter()
+                .map(|ty| ty.as_ty().render_user_facing())
+                .collect(),
+            display_return_type: sig_return_type.as_ty().render_user_facing(),
+            param_names: sig_param_names,
+            param_types: sig_param_types,
+            param_has_default: sig_param_defaults,
+            return_type: sig_return_type,
+            throws_type: sig_throws_type,
+        });
 
         // Collect transitive captures that inner lambda bodies discovered were
         // needed (names that weren't in hir_captures but that inner lambdas
@@ -6545,11 +6609,15 @@ impl<'db> LoweringContext<'db> {
             );
             return;
         }
-        // Otherwise treat as function/constructor reference
-        self.builder.assign(
-            dest,
-            Rvalue::Use(Operand::Constant(Constant::Function(item))),
-        );
+        // A function reference becomes a pooled function-value wrapper at
+        // emit; any other item (a client, a top-level `let`, a template
+        // string, ...) is a plain read of the global slot `$init` filled.
+        let constant = match def {
+            Definition::Function(_) => Constant::Function(item),
+            _ => Constant::GlobalItem(item),
+        };
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Constant(constant)));
     }
 }
 
@@ -14616,6 +14684,7 @@ pub fn lower_function<'db>(
                 item_ref,
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
+                signature: None,
             }
         }
         FunctionBody::Missing => MirFunction {
@@ -14646,6 +14715,7 @@ pub fn lower_function<'db>(
                 viz_nodes: vec![],
             }),
             lambdas: vec![],
+            signature: None,
         },
     }
 }

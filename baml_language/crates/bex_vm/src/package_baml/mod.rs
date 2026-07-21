@@ -118,9 +118,10 @@ pub trait Continuation: Send {
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
-/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch) whose only
-/// job is to dispatch one call and surface its value.
-pub(super) struct PassThroughContinuation;
+/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch,
+/// `reflect.call_any`) whose only job is to dispatch one call and surface its
+/// value.
+pub(crate) struct PassThroughContinuation;
 
 impl Continuation for PassThroughContinuation {
     fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
@@ -398,6 +399,12 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                         PackageBamlImpl::get_native_fn(function.name.as_str())
                     } else if function.name.starts_with("boundary.") {
                         crate::package_boundary::get_native_fn(function.name.as_str())
+                    } else if function.name.starts_with("reflect.") {
+                        // `reflect` stays out of the fail-fast arm below:
+                        // `reflect.type_of` is a compiler intrinsic whose
+                        // declaration still exists as an unresolved function
+                        // object but is never dispatched through CALL.
+                        crate::package_reflect::get_native_fn(function.name.as_str())
                     } else {
                         None
                     };

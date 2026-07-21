@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== STRONG AST ERROR ===
+Expected token/node of kind WORD, but found KW_THROWS at main.baml:48:47

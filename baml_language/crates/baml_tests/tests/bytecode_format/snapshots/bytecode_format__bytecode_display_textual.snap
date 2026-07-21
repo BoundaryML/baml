@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function assert.approx_equal(actual: float, expected: float, eps: float) -> null {
     load_var eps
@@ -180,6 +179,12 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
+}
+
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: unknown[], kwargs: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {

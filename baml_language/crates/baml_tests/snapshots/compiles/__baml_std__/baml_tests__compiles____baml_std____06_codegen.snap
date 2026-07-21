@@ -7850,7 +7850,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     load_type baml.toml.Item
     load_type baml.json.JsonDecodeError
     load_var json
-    load_global baml.toml.item_from_json
+    load_const baml.toml.item_from_json
     call baml.Array.map
     jump L4
 
@@ -7918,7 +7918,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_type baml.json.json
     load_type baml.json.JsonSerializationError
     load_var item
-    load_global baml.toml.item_to_json
+    load_const baml.toml.item_to_json
     call baml.Array.map
     store_var _0
     jump L7
