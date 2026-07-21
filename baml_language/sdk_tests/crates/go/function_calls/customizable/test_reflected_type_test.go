@@ -8,7 +8,7 @@ import (
 	baml_go "github.com/boundaryml/baml-go"
 )
 
-func TestReflectedTypeTopLevelAndRuntimeProducedValues(t *testing.T) {
+func Test_reflected_type_top_level_and_runtime_produced_values(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_go.PrimitiveBAMLType(baml_go.IntType)
 	got, err := baml_sdk.GoTypeTestsRoundTripType(ctx, integer)
@@ -39,7 +39,7 @@ func TestReflectedTypeTopLevelAndRuntimeProducedValues(t *testing.T) {
 	}
 }
 
-func TestReflectedTypePrimitiveLiteralAndNominalDescriptors(t *testing.T) {
+func Test_reflected_type_primitive_literal_and_nominal_descriptors(t *testing.T) {
 	ctx := context.Background()
 	primitives, err := baml_sdk.GoTypeTestsReflectedPrimitives(ctx)
 	wantPrimitives := []baml_go.BAMLType{
@@ -86,7 +86,7 @@ func TestReflectedTypePrimitiveLiteralAndNominalDescriptors(t *testing.T) {
 	}
 }
 
-func TestReflectedTypeComposesThroughOptionalContainersAndClasses(t *testing.T) {
+func Test_reflected_type_composes_through_optional_containers_and_classes(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_go.PrimitiveBAMLType(baml_go.IntType)
 	stringType := baml_go.PrimitiveBAMLType(baml_go.StringType)
@@ -132,7 +132,7 @@ func TestReflectedTypeComposesThroughOptionalContainersAndClasses(t *testing.T) 
 	}
 }
 
-func TestReflectedTypeClosedDynamicUnionsAndCallback(t *testing.T) {
+func Test_reflected_type_closed_dynamic_unions_and_callback(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_go.PrimitiveBAMLType(baml_go.IntType)
 

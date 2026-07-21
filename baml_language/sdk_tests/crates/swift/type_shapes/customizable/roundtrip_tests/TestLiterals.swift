@@ -8,7 +8,7 @@ import XCTest
 import Baml
 
 final class TestLiterals: XCTestCase {
-    func test_return_literals() throws {
+    func test_literals_return_literals() throws {
         XCTAssertEqual(try Baml.literals.return_literal42(), 42)
         XCTAssertEqual(try Baml.literals.return_literal_neg_one(), -1)
         XCTAssertEqual(try Baml.literals.return_literal_draft(), "draft")
@@ -17,30 +17,30 @@ final class TestLiterals: XCTestCase {
         XCTAssertEqual(try Baml.literals.return_literal_false(), false)
     }
 
-    func test_round_trip_literal42() throws {
+    func test_literals_round_trip_literal42() throws {
         XCTAssertEqual(try Baml.literals.round_trip_literal42(x: 42), 42)
     }
 
-    func test_round_trip_literal_draft() throws {
+    func test_literals_round_trip_literal_draft() throws {
         XCTAssertEqual(try Baml.literals.round_trip_literal_draft(x: "draft"), "draft")
     }
 
-    func test_round_trip_literal_escaped() throws {
+    func test_literals_round_trip_literal_escaped() throws {
         XCTAssertEqual(
             try Baml.literals.round_trip_literal_escaped(x: "has \"quotes\""),
             "has \"quotes\""
         )
     }
 
-    func test_round_trip_literal_true() throws {
+    func test_literals_round_trip_literal_true() throws {
         XCTAssertEqual(try Baml.literals.round_trip_literal_true(x: true), true)
     }
 
-    func test_round_trip_literal_false() throws {
+    func test_literals_round_trip_literal_false() throws {
         XCTAssertEqual(try Baml.literals.round_trip_literal_false(x: false), false)
     }
 
-    func test_round_trip_literals() throws {
+    func test_literals_round_trip_literals() throws {
         let lit = Baml.literals.Literals(
             literal_42: 42,
             literal_draft: "draft",

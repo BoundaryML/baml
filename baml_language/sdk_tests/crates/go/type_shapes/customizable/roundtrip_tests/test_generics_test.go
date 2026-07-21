@@ -8,7 +8,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestRoundTripWrapperInt(t *testing.T) {
+func Test_round_trip_wrapper_int(t *testing.T) {
 	want := baml_sdk.GenericsWrapper[int64]{Value: 5}
 	got, err := baml_sdk.GenericsRoundTripWrapperInt(context.Background(), want)
 	if err != nil || got != want {
@@ -16,7 +16,7 @@ func TestRoundTripWrapperInt(t *testing.T) {
 	}
 }
 
-func TestRoundTripGenericLinkedListInt(t *testing.T) {
+func Test_round_trip_generic_linked_list_int(t *testing.T) {
 	want := baml_sdk.GenericsGenericLinkedList[int64]{
 		Value: 1,
 		Next:  &baml_sdk.GenericsGenericLinkedList[int64]{Value: 2},
@@ -27,7 +27,7 @@ func TestRoundTripGenericLinkedListInt(t *testing.T) {
 	}
 }
 
-func TestRoundTripGenericBinaryTreeInt(t *testing.T) {
+func Test_round_trip_generic_binary_tree_int(t *testing.T) {
 	want := baml_sdk.GenericsGenericBinaryTree[int64]{Value: 1}
 	got, err := baml_sdk.GenericsRoundTripGenericBinaryTreeInt(context.Background(), want)
 	if err != nil || !reflect.DeepEqual(got, want) {
@@ -35,7 +35,7 @@ func TestRoundTripGenericBinaryTreeInt(t *testing.T) {
 	}
 }
 
-func TestRoundTripBoxInt(t *testing.T) {
+func Test_round_trip_box_int(t *testing.T) {
 	want := baml_sdk.GenericsBox[int64]{
 		Value:   3,
 		Wrapped: baml_sdk.GenericsWrapper[int64]{Value: 4},
@@ -46,7 +46,7 @@ func TestRoundTripBoxInt(t *testing.T) {
 	}
 }
 
-func TestRoundTripNestedGenerics(t *testing.T) {
+func Test_round_trip_nested_generics(t *testing.T) {
 	want := baml_sdk.GenericsNestedGenerics{
 		Ww: baml_sdk.GenericsWrapper[baml_sdk.GenericsWrapper[int64]]{
 			Value: baml_sdk.GenericsWrapper[int64]{Value: 1},
@@ -62,7 +62,7 @@ func TestRoundTripNestedGenerics(t *testing.T) {
 	}
 }
 
-func TestRoundTripDifferingInstantiation(t *testing.T) {
+func Test_round_trip_differing_instantiation(t *testing.T) {
 	want := baml_sdk.GenericsDifferingInstantiation{
 		List: baml_sdk.GenericsGenericLinkedList[baml_sdk.GenericsWrapper[int64]]{
 			Value: baml_sdk.GenericsWrapper[int64]{Value: 1},

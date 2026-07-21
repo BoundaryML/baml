@@ -27,7 +27,7 @@ static std::string GeneratedSdkFile(const std::string& rel_path) {
 // `baml.sys.now_ms() -> int` is a `$rust_function` -> `FunctionKind::Native`.
 // Calling it as an entry point should run the native and return a positive
 // millisecond timestamp, not reject with `NotInvokableAsEntry`.
-BAML_TEST(native_now_ms_callable_as_entry_point) {
+BAML_TEST(stdlib_entrypoints_native_now_ms_callable_as_entry_point) {
   BAML_ASSERT(baml_sdk::baml::sys::now_ms() > 0);
 }
 
@@ -35,11 +35,12 @@ BAML_TEST(native_now_ms_callable_as_entry_point) {
 // `FunctionKind::SysOp`. Calling it as an entry point should run the
 // filesystem sysop and return a bool. `.` exists in the generated fixture
 // directory on the test host.
-BAML_TEST(sysop_fs_exists_callable_as_entry_point) {
+BAML_TEST(stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point) {
   BAML_ASSERT(baml_sdk::baml::fs::exists(".") == true);
 }
 
-BAML_TEST(compiler_intrinsics_are_not_emitted_as_entry_points) {
+BAML_TEST(
+    stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points) {
   const char* files[] = {
       "baml_sdk/include/baml_sdk.h",
       "baml_sdk/src/bindings.cc",

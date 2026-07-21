@@ -7,22 +7,22 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-BAML_TEST(root_foo_reachable) {
+BAML_TEST(main_root_foo_reachable) {
   (void)sizeof(baml_sdk::Foo);
   BAML_ASSERT(true);
 }
 
-BAML_TEST(lorem_resume_reachable) {
+BAML_TEST(main_lorem_resume_reachable) {
   (void)sizeof(baml_sdk::lorem::Resume);
   BAML_ASSERT(true);
 }
 
-BAML_TEST(deep_namespace_thing_reachable) {
+BAML_TEST(main_deep_namespace_thing_reachable) {
   (void)sizeof(baml_sdk::a::b::Thing);
   BAML_ASSERT(true);
 }
 
-BAML_TEST(all_namespaces_reachable) {
+BAML_TEST(main_all_namespaces_reachable) {
   // One symbol per in-scope namespace (python parity:
   // test_all_namespaces_reachable). Sibling test files exercise most of
   // these behaviorally; naming them here pins pure existence, which the

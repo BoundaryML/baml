@@ -22,6 +22,6 @@ var (
 	_ func(context.Context, func(baml_sdk.StringOrThing) baml_sdk.StringOrThing, baml_sdk.StringOrThing) (baml_sdk.StringOrThing, error) = baml_sdk.CallCrossPackageUnionCallback
 )
 
-func TestCrossPackageTypesCompile(t *testing.T) {
+func Test_compile_cross_package_types_compile(t *testing.T) {
 	t.Log("cross-package imports and collision-safe aliases compiled")
 }

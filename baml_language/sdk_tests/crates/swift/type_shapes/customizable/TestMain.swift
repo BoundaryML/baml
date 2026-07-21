@@ -10,7 +10,7 @@ import XCTest
 import Baml
 
 final class TestMain: XCTestCase {
-    func test_all_namespaces_reachable() {
+    func test_main_all_namespaces_reachable() {
         _ = Baml.primitives.self
         _ = Baml.enums.self
         _ = Baml.literals.self
@@ -29,16 +29,16 @@ final class TestMain: XCTestCase {
         _ = Baml.a.self
     }
 
-    func test_root_foo_reachable() throws {
+    func test_main_root_foo_reachable() throws {
         let f = try Baml.round_trip_foo(f: Baml.Foo(v: 3))
         XCTAssertEqual(f, Baml.Foo(v: 3))
     }
 
-    func test_lorem_resume_reachable() {
+    func test_main_lorem_resume_reachable() {
         _ = Baml.lorem.Resume.self
     }
 
-    func test_deep_namespace_thing_reachable() {
+    func test_main_deep_namespace_thing_reachable() {
         _ = Baml.a.b.Thing.self
     }
 }

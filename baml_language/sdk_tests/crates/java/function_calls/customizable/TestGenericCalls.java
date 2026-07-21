@@ -64,7 +64,7 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_identity_explicit() {
+    void test_generic_calls_identity_explicit() {
         assertEquals(5L, Fns.identity(5L, BamlTypes.of("T", BamlType.INT)));
         assertEquals("hi", Fns.identity("hi", BamlTypes.of("T", BamlType.STRING)));
 
@@ -107,12 +107,12 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_identity_async_explicit() {
+    void test_generic_calls_identity_async_explicit() {
         assertEquals(7L, Fns.identity_async(7L, BamlTypes.of("T", BamlType.INT)).join());
     }
 
     @Test
-    void test_tag_or_value_explicit() {
+    void test_generic_calls_tag_or_value_explicit() {
         // `tag_or_value` reflects its bound `T` back as a string; `x` must
         // inhabit the substituted `T | string | null` (a union arg -> `Object`).
         assertEquals("int", Fns.tag_or_value(5L, BamlTypes.of("T", BamlType.INT)));
@@ -124,7 +124,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_make_triple_explicit() {
+    void test_generic_calls_make_triple_explicit() {
         // A=int, B=str, C=bool, bound positionally by name.
         var t =
                 Fns.make_triple(
@@ -141,7 +141,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_one_type_arg_explicit() {
+    void test_generic_calls_one_type_arg_explicit() {
         assertEquals("int", Fns.one_type_arg(BamlTypes.of("T", BamlType.INT)));
         assertEquals("string", Fns.one_type_arg(BamlTypes.of("T", BamlType.STRING)));
         // Nested generic binding must encode fully (base class + concrete arg).
@@ -151,14 +151,14 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_two_type_args_explicit() {
+    void test_generic_calls_two_type_args_explicit() {
         assertEquals(
                 "int | string",
                 Fns.two_type_args(BamlTypes.of("A", BamlType.INT).and("B", BamlType.STRING)));
     }
 
     @Test
-    void test_generic_free_fn_requires_binding() {
+    void test_generic_calls_generic_free_fn_requires_binding() {
         // `one_type_arg<T>()` / `two_type_args<A,B>()` are return/body-only: NO
         // argument carries the TypeVar, so a bare call finds no evidence and the
         // engine (Gate A) rejects it. `baml.errors.TypeMismatch` surfaces as a
@@ -173,7 +173,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_subscript_wrong_arity_raises() {
+    void test_generic_calls_subscript_wrong_arity_raises() {
         // java-port note: Python's subscript form requires FULL arity and raises
         // a host-side message "expected 2 type argument(s) for ['A', 'B'], got 1".
         // Java has a single `BamlTypes` surface that (like Python's `_types=`)
@@ -191,14 +191,14 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_consume_int_wrapper_baseline() {
+    void test_generic_calls_consume_int_wrapper_baseline() {
         // A concretely-instantiated `GenericBox<int>` flows in; the `int` field
         // flows back out. Anchors the suite.
         assertEquals(9L, Fns.consume_int_wrapper(GenericBox.of(BamlType.INT, 9L)));
     }
 
     @Test
-    void test_genericbox_get_explicit() {
+    void test_generic_calls_genericbox_get_explicit() {
         // `GenericBox.of(BamlType.INT, ...)` carries the type arg; the host
         // recovers it from the receiver as the method frame's class-level `T`.
         GenericBox<Long> b = GenericBox.of(BamlType.INT, 5L);
@@ -206,14 +206,14 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_genericbox_pair_with_explicit() {
+    void test_generic_calls_genericbox_pair_with_explicit() {
         // `T` from the reified receiver, `U` from the method's explicit binding.
         GenericBox<Long> b = GenericBox.of(BamlType.INT, 5L);
         assertEquals("int | string", b.pair_with("hello world", BamlTypes.of("U", BamlType.STRING)));
     }
 
     @Test
-    void test_genericbox_new_static_explicit() {
+    void test_generic_calls_genericbox_new_static_explicit() {
         // Generic STATIC method (`new` -> `new$`); only the static's own `V` is
         // bound, no class type args ride along.
         GenericBox<Long> box = GenericBox.new$(5L, BamlTypes.of("V", BamlType.INT));
@@ -222,7 +222,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_generic_static_infers_binding() {
+    void test_generic_calls_generic_static_infers_binding() {
         // A generic static's own `V` appears in a parameter, so a bare call
         // INFERS it from the value — no explicit binding needed.
         GenericBox<Long> box = GenericBox.new$(5L);
@@ -231,7 +231,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_named_static_distinct_typevar_names() {
+    void test_generic_calls_named_static_distinct_typevar_names() {
         // Static TypeVar names differ from the class's (`make<D,E>`); each binds
         // by NAME into the static frame's own params.
         assertEquals(
@@ -240,7 +240,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_instance_method_unparameterized_receiver_raises() {
+    void test_generic_calls_instance_method_unparameterized_receiver_raises() {
         // java-port note: `new GenericBox<>(5L)` is UNBOUND (no reified type
         // args), so `pair_with`'s class `T` can't be recovered host-side. Python
         // raises a pydantic-specific message; the Java analog is a host-side
@@ -254,7 +254,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_extract_explicit() {
+    void test_generic_calls_extract_explicit() {
         // Nested generic; body is `reflect.type_of<A|B|C|D>()`.
         GenericPair<GenericPair<Long, String>, GenericPair<Boolean, Double>> pair =
                 GenericPair.of(
@@ -277,7 +277,7 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_parse_as_explicit() {
+    void test_generic_calls_parse_as_explicit() {
         // `T` bound by the host explicitly. Return-position-only, so the call
         // site needs a target/witness type for the erased `<T>`.
         StringIntPair pair =
@@ -293,7 +293,7 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_second_of_explicit() {
+    void test_generic_calls_second_of_explicit() {
         assertEquals(
                 "hi",
                 Fns.second_of(
@@ -306,7 +306,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_list_head_explicit() {
+    void test_generic_calls_list_head_explicit() {
         GenericRecursive<Long> linkedList =
                 GenericRecursive.of(
                         BamlType.INT, 7L, GenericRecursive.of(BamlType.INT, 8L, null));
@@ -314,13 +314,13 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_choose_explicit() {
+    void test_generic_calls_choose_explicit() {
         assertEquals(1L, Fns.choose(1L, 2L, BamlTypes.of("T", BamlType.INT)));
         assertEquals("a", Fns.choose("a", "b", BamlTypes.of("T", BamlType.STRING)));
     }
 
     @Test
-    void test_read_items_explicit() {
+    void test_generic_calls_read_items_explicit() {
         ContainerShapes<Long> container =
                 ContainerShapes.of(BamlType.INT, 1L, List.of(1L, 2L, 3L), Map.of("k", 4L), null, null);
         assertEquals(List.of(1L, 2L, 3L), Fns.read_items(container, BamlTypes.of("T", BamlType.INT)));
@@ -331,7 +331,7 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_wrap_explicit() {
+    void test_generic_calls_wrap_explicit() {
         GenericBox<Long> w = Fns.wrap(5L, BamlTypes.of("T", BamlType.INT));
         assertInstanceOf(GenericBox.class, w);
         assertEquals(5L, w.value());
@@ -342,7 +342,7 @@ class TestGenericCalls {
     // =======================================================================
 
     @Test
-    void test_make_int_box_reified() {
+    void test_generic_calls_make_int_box_reified() {
         GenericBox<Long> box = Fns.make_int_box();
         assertInstanceOf(GenericBox.class, box);
         assertEquals(List.of(BamlType.INT), box.bamlTypeArgs());
@@ -350,7 +350,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_make_int_container_reified() {
+    void test_generic_calls_make_int_container_reified() {
         ContainerShapes<Long> c = Fns.make_int_container();
         assertInstanceOf(ContainerShapes.class, c);
         assertEquals(List.of(BamlType.INT), c.bamlTypeArgs());
@@ -362,7 +362,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_make_nested_box_reified() {
+    void test_generic_calls_make_nested_box_reified() {
         GenericBox<GenericBox<Long>> outer = Fns.make_nested_box();
         assertInstanceOf(GenericBox.class, outer);
         // The outer box's single type arg is itself the reified `GenericBox<int>`.
@@ -374,7 +374,7 @@ class TestGenericCalls {
     }
 
     @Test
-    void test_make_int_str_bool_triple_reified() {
+    void test_generic_calls_make_int_str_bool_triple_reified() {
         GenericTriple<Long, String, Boolean> t = Fns.make_int_str_bool_triple();
         assertInstanceOf(GenericTriple.class, t);
         assertEquals(List.of(BamlType.INT, BamlType.STRING, BamlType.BOOL), t.bamlTypeArgs());

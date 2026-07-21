@@ -6,13 +6,13 @@ IR → codegen → import).
 """
 
 
-def test_imports():
+def test_main_imports_symbols_reachable():
     import baml_sdk  # noqa: F401
     import baml_sdk.docs  # noqa: F401
     from baml_sdk.docs import Doc, Note, Priority, Sentiment  # noqa: F401
 
 
-def test_class_doc_summary_and_attributes_section_in_dunder_doc():
+def test_main_class_doc_summary_and_attributes_section():
     import inspect
 
     from baml_sdk.docs import Doc
@@ -31,7 +31,7 @@ def test_class_doc_summary_and_attributes_section_in_dunder_doc():
     assert doc == expected, f"got:\n{doc!r}"
 
 
-def test_undocumented_field_listed_as_bare_name_under_attributes():
+def test_main_undocumented_field_listed_as_bare_name_under_attributes():
     # Note: `id` is documented, `text` is not. The "any-doc" rule says
     # the Attributes: section appears (because `id` carries a `///`)
     # and lists every field, with `text` rendered as a bare name.
@@ -47,7 +47,7 @@ def test_undocumented_field_listed_as_bare_name_under_attributes():
     assert doc.rstrip().endswith("\n    text"), f"got:\n{doc!r}"
 
 
-def test_enum_doc_summary_and_members_section_in_dunder_doc():
+def test_main_enum_doc_summary_and_members_section():
     import inspect
 
     from baml_sdk.docs import Sentiment
@@ -65,7 +65,7 @@ def test_enum_doc_summary_and_members_section_in_dunder_doc():
     assert doc == expected, f"got:\n{doc!r}"
 
 
-def test_enum_summary_only_omits_members_section_when_no_variant_documented():
+def test_main_enum_summary_only_omits_members_section():
     # Priority has a class-level /// but no variant carries one — the
     # Members: section should be suppressed entirely. Variants are
     # still importable / iterable normally.
@@ -83,7 +83,7 @@ def test_enum_summary_only_omits_members_section_when_no_variant_documented():
     assert {m.value for m in Priority} == {"HIGH", "MEDIUM", "LOW"}
 
 
-def test_no_inline_field_or_variant_doc_artifacts():
+def test_main_no_inline_field_or_variant_doc_artifacts():
     # Field/variant `///` lines must not produce inline `# …` comments
     # or `"""…"""` attribute docstrings — they live exclusively inside
     # the parent's Attributes:/Members: section.

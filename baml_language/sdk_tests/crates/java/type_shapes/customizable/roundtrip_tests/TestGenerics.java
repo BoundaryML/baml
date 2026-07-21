@@ -37,32 +37,32 @@ import org.junit.jupiter.api.Test;
 class TestGenerics {
 
     @Test
-    void test_round_trip_wrapper_int() {
+    void test_generics_round_trip_wrapper_int() {
         Wrapper<Long> w = new Wrapper<>(5L);
         assertEquals(w, Fns.round_trip_wrapper_int(w));
     }
 
     @Test
-    void test_round_trip_generic_linked_list_int() {
+    void test_generics_round_trip_generic_linked_list_int() {
         GenericLinkedList<Long> ll =
                 new GenericLinkedList<>(1L, new GenericLinkedList<>(2L, null));
         assertEquals(ll, Fns.round_trip_generic_linked_list_int(ll));
     }
 
     @Test
-    void test_round_trip_generic_binary_tree_int() {
+    void test_generics_round_trip_generic_binary_tree_int() {
         GenericBinaryTree<Long> t = new GenericBinaryTree<>(1L, null, null);
         assertEquals(t, Fns.round_trip_generic_binary_tree_int(t));
     }
 
     @Test
-    void test_round_trip_box_int() {
+    void test_generics_round_trip_box_int() {
         Box<Long> b = new Box<>(3L, new Wrapper<>(4L));
         assertEquals(b, Fns.round_trip_box_int(b));
     }
 
     @Test
-    void test_round_trip_nested_generics() {
+    void test_generics_round_trip_nested_generics() {
         NestedGenerics n =
                 new NestedGenerics(
                         new Wrapper<Wrapper<Long>>(new Wrapper<>(1L)),
@@ -72,7 +72,7 @@ class TestGenerics {
     }
 
     @Test
-    void test_round_trip_differing_instantiation() {
+    void test_generics_round_trip_differing_instantiation() {
         DifferingInstantiation d =
                 new DifferingInstantiation(
                         new GenericLinkedList<Wrapper<Long>>(new Wrapper<>(1L), null));

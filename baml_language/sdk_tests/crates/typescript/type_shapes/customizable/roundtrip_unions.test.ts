@@ -13,28 +13,28 @@ import {
 } from "./baml_sdk/unions/index.js";
 
 describe("roundtrip unions", () => {
-  it("round_trip_null_to_end", () => {
+  it("unions_round_trip_null_to_end", () => {
     expect(round_trip_null_to_end(1)).toBe(1);
     expect(round_trip_null_to_end("s")).toBe("s");
     expect(round_trip_null_to_end(null)).toBeNull();
   });
-  it("round_trip_dedup", () => {
+  it("unions_round_trip_dedup", () => {
     expect(round_trip_dedup(2)).toBe(2);
     expect(round_trip_dedup("x")).toBe("x");
   });
-  it("round_trip_singleton_unwrap", () =>
+  it("unions_round_trip_singleton_unwrap", () =>
     expect(round_trip_singleton_unwrap(7)).toBe(7));
-  it("round_trip_optional_plus_null", () => {
+  it("unions_round_trip_optional_plus_null", () => {
     const t = new T({ v: 1 });
     expect(round_trip_optional_plus_null(t)).toEqual(t);
     expect(round_trip_optional_plus_null("s")).toBe("s");
     expect(round_trip_optional_plus_null(null)).toBeNull();
   });
-  it("round_trip_t", () => {
+  it("unions_round_trip_t", () => {
     const t = new T({ v: 4 });
     expect(round_trip_t(t)).toEqual(t);
   });
-  it("round_trip_union_container", () => {
+  it("unions_round_trip_union_container", () => {
     const c = new UnionContainer({
       null_to_end: null,
       dedup: "d",

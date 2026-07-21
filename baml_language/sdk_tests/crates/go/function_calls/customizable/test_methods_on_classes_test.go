@@ -28,7 +28,7 @@ var (
 
 // Direct synchronous Go port of the canonical Python/TypeScript/Rust
 // instance-method round trips. Go has one context-aware synchronous surface.
-func TestInstanceMethodsOnClassesRoundTrip(t *testing.T) {
+func Test_instance_methods_on_classes_round_trip(t *testing.T) {
 	ctx := context.Background()
 	greeter, err := baml_sdk.MethodsOnClassesGreeterCreate(ctx, "hopper")
 	if err != nil || greeter.Name != "hopper" {
@@ -44,7 +44,7 @@ func TestInstanceMethodsOnClassesRoundTrip(t *testing.T) {
 
 // Direct port of Python test_opt_box_method_matrix. Go exposes the static BAML
 // method as a package helper because Go has no associated functions.
-func TestInstanceMethodOptionalArguments(t *testing.T) {
+func Test_instance_method_optional_arguments(t *testing.T) {
 	ctx := context.Background()
 	box, err := baml_sdk.OptBoxMake(ctx, 3)
 	if err != nil || box.Base != 10 {
@@ -66,7 +66,7 @@ func TestInstanceMethodOptionalArguments(t *testing.T) {
 	}
 }
 
-func TestMethodSelfAllSupportedPositionsRoundTrip(t *testing.T) {
+func Test_method_self_all_supported_positions_round_trip(t *testing.T) {
 	ctx := context.Background()
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {
@@ -114,7 +114,7 @@ func TestMethodSelfAllSupportedPositionsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEmptyClassSelfRoundTrip(t *testing.T) {
+func Test_empty_class_self_round_trip(t *testing.T) {
 	value := baml_sdk.MethodSelfEdgesEmptyMethodSelf{}
 	got, err := value.Identity(context.Background())
 	if err != nil || got != value {
@@ -122,7 +122,7 @@ func TestEmptyClassSelfRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMethodGeneratedNameCollisionsStayCallable(t *testing.T) {
+func Test_method_generated_name_collisions_stay_callable(t *testing.T) {
 	ctx := context.Background()
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {
@@ -144,7 +144,7 @@ func TestMethodGeneratedNameCollisionsStayCallable(t *testing.T) {
 	}
 }
 
-func TestInstanceMethodThrowPreservesCurrentGoErrorContract(t *testing.T) {
+func Test_instance_method_throw_preserves_current_go_error_contract(t *testing.T) {
 	ctx := context.Background()
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {
@@ -165,7 +165,7 @@ func TestInstanceMethodThrowPreservesCurrentGoErrorContract(t *testing.T) {
 	}
 }
 
-func TestInstanceNeverMethodHasErrorOnlySignatureAndReturnsPanic(t *testing.T) {
+func Test_instance_never_method_has_error_only_signature_and_returns_panic(t *testing.T) {
 	ctx := context.Background()
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {
@@ -187,7 +187,7 @@ func TestInstanceNeverMethodHasErrorOnlySignatureAndReturnsPanic(t *testing.T) {
 	}
 }
 
-func TestInstanceMethodCancellationReturnsExactContextError(t *testing.T) {
+func Test_instance_method_cancellation_returns_exact_context_error(t *testing.T) {
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -204,7 +204,7 @@ func TestInstanceMethodCancellationReturnsExactContextError(t *testing.T) {
 	}
 }
 
-func TestInstanceMethodMediaReceiverDefaultAndOwnershipRoundTrip(t *testing.T) {
+func Test_instance_method_media_receiver_default_and_ownership_round_trip(t *testing.T) {
 	ctx := context.Background()
 	var value baml_sdk.MethodSelfEdgesMethodSelfEdges
 	if err := json.Unmarshal([]byte(`{"round_trip":"edge"}`), &value); err != nil {

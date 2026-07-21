@@ -21,12 +21,12 @@ import org.junit.jupiter.api.Test;
 class TestMain {
 
     @Test
-    void test_root_imports_cleanly() {
+    void test_main_root_imports_cleanly() {
         assertNotNull(baml_sdk.Fns.class);
     }
 
     @Test
-    void test_all_namespaces_reachable() {
+    void test_main_all_namespaces_reachable() {
         assertNotNull(baml_sdk.primitives.Primitives.class);
         assertNotNull(baml_sdk.media.Media.class);
         assertNotNull(baml_sdk.enums.Sentiment.class);
@@ -47,17 +47,17 @@ class TestMain {
     }
 
     @Test
-    void test_root_foo_reachable() {
+    void test_main_root_foo_reachable() {
         assertNotNull(Foo.class);
     }
 
     @Test
-    void test_lorem_resume_reachable() {
+    void test_main_lorem_resume_reachable() {
         assertNotNull(Resume.class);
     }
 
     @Test
-    void test_deep_namespace_thing_reachable() {
+    void test_main_deep_namespace_thing_reachable() {
         assertNotNull(Thing.class);
     }
 }

@@ -6,17 +6,17 @@ import XCTest
 import Baml
 
 final class TestSymbolCollisions: XCTestCase {
-    func test_round_trip_foo_bar() throws {
+    func test_symbol_collisions_round_trip_foo_bar() throws {
         let bar = try Baml.symbol_collisions.foo.make_foo_bar(label: "hi", count: 2)
         XCTAssertEqual(try Baml.symbol_collisions.foo.round_trip_foo_bar(b: bar), bar)
     }
 
-    func test_round_trip_fizz_foo_bar() throws {
+    func test_symbol_collisions_round_trip_fizz_foo_bar() throws {
         let bar = try Baml.symbol_collisions.fizz.foo.make_fizz_foo_bar(tag: "t", ratio: 1.5)
         XCTAssertEqual(try Baml.symbol_collisions.fizz.foo.round_trip_fizz_foo_bar(b: bar), bar)
     }
 
-    func test_round_trip_fizz_buzz_foo_bar() throws {
+    func test_symbol_collisions_round_trip_fizz_buzz_foo_bar() throws {
         let bar = try Baml.symbol_collisions.fizz.buzz.foo.make_fizz_buzz_foo_bar(
             flavor: "f", weight: 2.5, active: true
         )
@@ -26,7 +26,7 @@ final class TestSymbolCollisions: XCTestCase {
         )
     }
 
-    func test_round_trip_ipsum() throws {
+    func test_symbol_collisions_round_trip_ipsum() throws {
         let ipsum = try Baml.symbol_collisions.lorem.make_ipsum(
             bar1: Baml.symbol_collisions.foo.make_foo_bar(label: "a", count: 1),
             bar2: Baml.symbol_collisions.fizz.foo.make_fizz_foo_bar(tag: "b", ratio: 2.0),
@@ -37,7 +37,7 @@ final class TestSymbolCollisions: XCTestCase {
         XCTAssertEqual(try Baml.symbol_collisions.lorem.round_trip_ipsum(i: ipsum), ipsum)
     }
 
-    func test_round_trip_deep() throws {
+    func test_symbol_collisions_round_trip_deep() throws {
         let ipsum = try Baml.symbol_collisions.lorem.make_ipsum(
             bar1: Baml.symbol_collisions.foo.make_foo_bar(label: "a", count: 1),
             bar2: Baml.symbol_collisions.fizz.foo.make_fizz_foo_bar(tag: "b", ratio: 2.0),

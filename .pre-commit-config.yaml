@@ -33,6 +33,7 @@ repos:
         fail_fast: true
 
       - id: check-yaml
+        args: [--allow-multiple-documents]
         fail_fast: true
 
   - repo: local

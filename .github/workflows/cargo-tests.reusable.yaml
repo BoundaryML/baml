@@ -390,6 +390,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      sdk-dirs: ${{ steps.matrix.outputs.sdk-dirs }}
     steps:
       - name: "Build matrix"
         id: matrix
@@ -399,6 +400,7 @@ jobs:
             const baseMatrix = [
               {
                 "sdk-label": "go",
+                "sdk-dir": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
                 "install-args": "sccache direnv go cargo:cargo-nextest",
@@ -409,6 +411,7 @@ jobs:
               },
               {
                 "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
@@ -419,6 +422,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript",
                 "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
@@ -429,6 +433,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript_web",
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
@@ -444,6 +449,7 @@ jobs:
                 // pre-clones the pinned protobuf sources. Windows joins
                 // once the MSVC test driver lands (test.sh is bash).
                 "sdk-label": "cpp",
+                "sdk-dir": "cpp",
                 "package-name": "sdk_test_cpp",
                 "sdk-path": "cpp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -454,6 +460,7 @@ jobs:
               },
               {
                 "sdk-label": "csharp",
+                "sdk-dir": "csharp",
                 "package-name": "sdk_test_csharp",
                 "sdk-path": "csharp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -464,6 +471,7 @@ jobs:
               },
               {
                 "sdk-label": "rust",
+                "sdk-dir": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -478,6 +486,7 @@ jobs:
                 // the baml_bridge jar; test time spawns `gradle` from
                 // PATH, so `java` + `gradle` must be in install-args).
                 "sdk-label": "java",
+                "sdk-dir": "java",
                 "package-name": "sdk_test_java",
                 "sdk-path": "java",
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
@@ -488,6 +497,7 @@ jobs:
               },
               {
                 "sdk-label": "go",
+                "sdk-dir": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
                 "install-args": "sccache direnv go cargo:cargo-nextest",
@@ -498,6 +508,7 @@ jobs:
               },
               {
                 "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
@@ -508,6 +519,7 @@ jobs:
               },
               {
                 "sdk-label": "cpp",
+                "sdk-dir": "cpp",
                 "package-name": "sdk_test_cpp",
                 "sdk-path": "cpp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -518,6 +530,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript",
                 "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
@@ -528,6 +541,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript_web",
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
@@ -538,6 +552,7 @@ jobs:
               },
               {
                 "sdk-label": "csharp",
+                "sdk-dir": "csharp",
                 "package-name": "sdk_test_csharp",
                 "sdk-path": "csharp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -548,6 +563,7 @@ jobs:
               },
               {
                 "sdk-label": "rust",
+                "sdk-dir": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -558,6 +574,7 @@ jobs:
               },
               {
                 "sdk-label": "java",
+                "sdk-dir": "java",
                 "package-name": "sdk_test_java",
                 "sdk-path": "java",
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
@@ -571,6 +588,7 @@ jobs:
                 // and the nextest-bound setup script assembles the
                 // BamlBridgeFFI xcframework (host slice) before the run.
                 "sdk-label": "swift",
+                "sdk-dir": "swift",
                 "package-name": "sdk_test_swift",
                 "sdk-path": "swift",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -581,6 +599,7 @@ jobs:
               },
               {
                 "sdk-label": "go",
+                "sdk-dir": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
                 "install-args": "sccache direnv go cargo:cargo-nextest",
@@ -591,6 +610,7 @@ jobs:
               },
               {
                 "sdk-label": "python-pydantic2",
+                "sdk-dir": "python",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
@@ -601,6 +621,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript",
                 "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
@@ -611,6 +632,7 @@ jobs:
               },
               {
                 "sdk-label": "typescript-web",
+                "sdk-dir": "typescript",
                 "package-name": "sdk_test_typescript_web",
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
@@ -621,6 +643,7 @@ jobs:
               },
               {
                 "sdk-label": "csharp",
+                "sdk-dir": "csharp",
                 "package-name": "sdk_test_csharp",
                 "sdk-path": "csharp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -631,6 +654,7 @@ jobs:
               },
               {
                 "sdk-label": "rust",
+                "sdk-dir": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
@@ -641,6 +665,7 @@ jobs:
               },
               {
                 "sdk-label": "java",
+                "sdk-dir": "java",
                 "package-name": "sdk_test_java",
                 "sdk-path": "java",
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
@@ -656,6 +681,49 @@ jobs:
               : baseMatrix;
 
             core.setOutput("matrix", JSON.stringify(matrix, null, 2));
+            core.setOutput(
+              "sdk-dirs",
+              JSON.stringify([...new Set(baseMatrix.map((entry) => entry["sdk-dir"]))].sort()),
+            );
+
+  sdk-test-coverage:
+    name: "sdk test coverage"
+    runs-on: ubuntu-latest
+    needs: sdk-test-matrix
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: "Assert every SDK directory has a matrix entry"
+        uses: actions/github-script@v8
+        env:
+          MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const sdkRoot = path.join(process.env.GITHUB_WORKSPACE, "baml_language", "sdks");
+            const sdkDirs = fs.readdirSync(sdkRoot, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
+              .filter((sdkDir) => sdkDir !== "agent-docs")
+              .sort();
+            const coveredSdkDirs = new Set(JSON.parse(process.env.MATRIX_SDK_DIRS));
+            const missingSdkDirs = sdkDirs.filter((sdkDir) => !coveredSdkDirs.has(sdkDir));
+
+            await core.summary
+              .addHeading("SDK test matrix coverage")
+              .addTable([
+                [{ data: "SDK directory", header: true }, { data: "Matrix entry", header: true }],
+                ...sdkDirs.map((sdkDir) => [sdkDir, coveredSdkDirs.has(sdkDir) ? "yes" : "no"]),
+              ])
+              .write();
+
+            if (missingSdkDirs.length > 0) {
+              core.setFailed(`SDK directories without an sdk-test-matrix entry: ${missingSdkDirs.join(", ")}`);
+            }
 
   # SDK tests (codegen end-to-end). The `sdk_test_*` generator crates emit
   # generated Go/Python/TypeScript projects from `.baml` sources via build.rs,

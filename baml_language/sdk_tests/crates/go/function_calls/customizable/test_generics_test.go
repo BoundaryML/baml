@@ -9,7 +9,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestGenericIdentityInferenceAndExplicitTypes(t *testing.T) {
+func Test_generic_identity_inference_and_explicit_types(t *testing.T) {
 	ctx := context.Background()
 	integer, err := baml_sdk.GenericTestsIdentity(ctx, int64(5))
 	if err != nil || integer != 5 {
@@ -33,7 +33,7 @@ func TestGenericIdentityInferenceAndExplicitTypes(t *testing.T) {
 	}
 }
 
-func TestGenericReturnOnlyTypeArguments(t *testing.T) {
+func Test_generic_return_only_type_arguments(t *testing.T) {
 	ctx := context.Background()
 	name, err := baml_sdk.GenericTestsOneTypeArg[int64](ctx)
 	if err != nil || name != "int" {
@@ -49,7 +49,7 @@ func TestGenericReturnOnlyTypeArguments(t *testing.T) {
 	}
 }
 
-func TestGenericClassesContainersAndConcreteOutputs(t *testing.T) {
+func Test_generic_classes_containers_and_concrete_outputs(t *testing.T) {
 	ctx := context.Background()
 	triple, err := baml_sdk.GenericTestsMakeTriple(ctx, int64(1), []string{"a", "b"}, map[string]bool{"k": true})
 	if err != nil || triple.First != 1 || !reflect.DeepEqual(triple.Second, []string{"a", "b"}) || !triple.Third["k"] {
@@ -89,7 +89,7 @@ func TestGenericClassesContainersAndConcreteOutputs(t *testing.T) {
 	}
 }
 
-func TestGenericNullableTypeVariablesPreserveEveryPointerBoundary(t *testing.T) {
+func Test_generic_nullable_type_variables_preserve_every_pointer_boundary(t *testing.T) {
 	ctx := context.Background()
 	value := int64(5)
 	present, err := baml_sdk.GenericTestsMaybeId(ctx, &value)
@@ -138,7 +138,7 @@ func TestGenericNullableTypeVariablesPreserveEveryPointerBoundary(t *testing.T) 
 	}
 }
 
-func TestGenericReceiverAndStaticHelpers(t *testing.T) {
+func Test_generic_receiver_and_static_helpers(t *testing.T) {
 	ctx := context.Background()
 	box := baml_sdk.GenericTestsGenericBox[int64]{Value: 5}
 	got, err := box.Get(ctx)
@@ -167,7 +167,7 @@ func TestGenericReceiverAndStaticHelpers(t *testing.T) {
 	}
 }
 
-func TestGenericUnionInputAndEngineValidation(t *testing.T) {
+func Test_generic_union_input_and_engine_validation(t *testing.T) {
 	ctx := context.Background()
 	tag, err := baml_sdk.GenericTestsTagOrValue[int64](ctx, int64(5))
 	if err != nil || tag != "int" {

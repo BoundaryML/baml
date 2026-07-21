@@ -63,7 +63,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_simple_sync_callable_returns_string() {
+    void test_host_callables_simple_sync_callable_returns_string() {
         Function<Long, String> cb = x -> "got " + x;
 
         String result = Fns.call_with_callback(cb, 5L);
@@ -71,7 +71,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_two_arg_callable_unpacks_positional_args() {
+    void test_host_callables_two_arg_callable_unpacks_positional_args() {
         BiFunction<Long, String, String> cb = (x, prefix) -> prefix + ":" + x;
 
         String result = Fns.call_with_two_args(cb, 7L, "answer");
@@ -79,7 +79,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_int_return_callable_round_trip() {
+    void test_host_callables_int_return_callable_round_trip() {
         Function<Long, Long> cb = x -> x * 2;
 
         long result = Fns.call_int_callback(cb, 21L);
@@ -87,7 +87,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_callable_round_trips_original_python_exception() {
+    void test_host_callables_throwing_callable_round_trips_original_python_exception() {
         // A native Java exception raised inside a host callable surfaces back to
         // the caller as the *same* exception object (identity), not flattened
         // into a BamlError(HostCallable(...)) wrapper.
@@ -104,7 +104,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_callable_keyerror_round_trips_with_identity() {
+    void test_host_callables_throwing_callable_keyerror_round_trips_with_identity() {
         // The rehydration path is class-agnostic: any exception round-trips by
         // reference. (Python's KeyError -> Java's NoSuchElementException, the
         // nearest "missing key" analog.)
@@ -120,7 +120,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_callable_custom_python_exception_round_trips_with_identity() {
+    void test_host_callables_throwing_callable_custom_python_exception_round_trips_with_identity() {
         // A user-defined exception subclass also round-trips by identity — the
         // bridge doesn't care about the concrete type.
         MyDomainError raised = new MyDomainError("custom domain failure", 42L);
@@ -136,7 +136,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml() {
+    void test_host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml() {
         // When the host throws BamlError(value=<codegenned BAML class>), the
         // bridge unwraps the inner value and emits it as that real BAML class on
         // the wire, so BAML's typed `catch (e: ValidationError)` matches
@@ -151,7 +151,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
+    void test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
         // The same BamlError(ValidationError(...)), when NOT caught in BAML,
         // propagates back out with all typed fields preserved.
         BamlError raised =
@@ -171,7 +171,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_throwing_async_callable_round_trips_original_python_exception() {
+    void test_host_callables_throwing_async_callable_round_trips_original_python_exception() {
         // java-port note: Python's callback is an `async def` that raises; the
         // dispatch path runs the coroutine. Java has no coroutine detection, and
         // an async host callable would be a distinct
@@ -190,7 +190,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_multiple_throws_in_flight_do_not_collide_in_registry() {
+    void test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry() {
         // Each host throw mints a fresh host-value key; calls in quick succession
         // must not see the wrong original exception.
         RuntimeException raisedFirst = new RuntimeException("first");
@@ -214,7 +214,7 @@ class TestHostCallables {
 
     @Test
     @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void test_concurrent_throws_in_flight_rehydrate_to_their_own_object() throws Exception {
+    void test_host_callables_concurrent_throws_in_flight_rehydrate_to_their_own_object() throws Exception {
         // The sequential test above proves keys don't collide back-to-back; this
         // proves the host-value registry (BamlFfi.HOST_VALUES) stays isolated
         // under genuine PARALLELISM — two callables throwing distinct exceptions
@@ -270,19 +270,19 @@ class TestHostCallables {
                     + "WeakReference + System.gc() is non-deterministic too, so this is "
                     + "skipped (TS uses it.skip for the same reason).")
     @Test
-    void test_release_fires_on_drop_of_callable() {
+    void test_host_callables_release_fires_on_drop_of_callable() {
         // Intentionally empty — see @Disabled reason.
     }
 
     @Test
-    void test_lambda_round_trip() {
+    void test_host_callables_lambda_round_trip() {
         // Lambdas hit the callable-encoding branch just like named functions.
         String result = Fns.call_with_callback(x -> "lambda-" + x, 99L);
         assertEquals("lambda-99", result);
     }
 
     @Test
-    void test_async_callable_runs_to_completion() {
+    void test_host_callables_async_callable_runs_to_completion() {
         // java-port note: Python detects a coroutine return and runs it to
         // completion on the dispatch thread. Java's `Function<Long,String>` slot
         // is synchronous; the async-callable surface would be a distinct
@@ -296,7 +296,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_async_callable_returning_future_is_awaited_by_bridge() {
+    void test_host_callables_async_callable_returning_future_is_awaited_by_bridge() {
         // The FAITHFUL Java spelling of Python's `async def` host callable: the
         // callback RETURNS a CompletableFuture<String> rather than a String, and
         // the bridge (BamlFfi.runHostDispatch, design point C — value-level async
@@ -321,7 +321,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_async_callable_future_completing_exceptionally_round_trips_original() {
+    void test_host_callables_async_callable_future_completing_exceptionally_round_trips_original() {
         // Failure half of the value-level async path: when the returned future
         // completes EXCEPTIONALLY, the bridge's `whenComplete` error branch drives
         // the same design-point-D exception path as a synchronous throw — the
@@ -341,7 +341,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_multiple_callable_keys_are_distinct() {
+    void test_host_callables_multiple_callable_keys_are_distinct() {
         long[] counterA = {0};
         long[] counterB = {0};
 
@@ -361,7 +361,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_class_callback_round_trips_pydantic_model() {
+    void test_host_callables_class_callback_round_trips_pydantic_model() {
         // A user-defined `Person` class round-trips through the callable
         // boundary: the engine encodes it, the dispatcher decodes it into the
         // generated value class, and the callback receives a `Person`.
@@ -373,7 +373,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_call_repeatedly_invokes_callback_n_times() {
+    void test_host_callables_call_repeatedly_invokes_callback_n_times() {
         List<Long> invocations = new ArrayList<>();
         Function<Long, String> cb = x -> {
             invocations.add(x);
@@ -386,7 +386,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_call_repeatedly_with_zero_n_returns_empty_list() {
+    void test_host_callables_call_repeatedly_with_zero_n_returns_empty_list() {
         List<Long> invocations = new ArrayList<>();
         Function<Long, String> cb = x -> {
             invocations.add(x);
@@ -399,7 +399,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_call_with_throwing_in_baml_catches_host_callable_error() {
+    void test_host_callables_call_with_throwing_in_baml_catches_host_callable_error() {
         // The BAML `catch (e)` arm intercepts a host-thrown
         // `baml.errors.HostCallable` and returns `"caught:" + e.class_name`.
         //
@@ -430,7 +430,7 @@ class TestHostCallables {
                             + ($opts.z() != null ? $opts.z() : 9);
 
     @Test
-    void test_optional_args_all_unset_apply_host_defaults() {
+    void test_host_callables_optional_args_all_unset_apply_host_defaults() {
         // `callback(x)` supplies neither optional -> both dropped -> host
         // defaults 8/9 -> 5*100 + 8*10 + 9 = 589.
         assertEquals(
@@ -439,7 +439,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_optional_args_partially_set_deliver_by_name() {
+    void test_host_callables_optional_args_partially_set_deliver_by_name() {
         // `callback(x, y=2)` (500 + 20 + 9 = 529) then `callback(x, z=3)`
         // (500 + 80 + 3 = 583). Optionals cross by name; the omitted one falls
         // back to the host default.
@@ -449,7 +449,7 @@ class TestHostCallables {
     }
 
     @Test
-    void test_optional_args_all_set_deliver_both() {
+    void test_host_callables_optional_args_all_set_deliver_both() {
         // `callback(x, y=2, z=3)` supplies both -> 500 + 20 + 3 = 523.
         assertEquals(
                 List.of(523L),

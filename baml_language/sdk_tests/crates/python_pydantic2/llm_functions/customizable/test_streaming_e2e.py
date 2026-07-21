@@ -27,7 +27,7 @@ from replay_harness import replay_server
 
 
 @replay_server(recording_path="replay_extract_string")
-def test_stream():
+def test_streaming_e2e_stream():
     """Sync `next()` yields a stream of partials and drains to `StreamFinished`."""
     from baml_sdk.baml.stream import StreamFinished
     from baml_sdk.lorem import stream_e2e_extract_stream
@@ -46,7 +46,7 @@ def test_stream():
 
 
 @replay_server(recording_path="replay_extract_string")
-async def test_stream_async():
+async def test_streaming_e2e_stream_async():
     """Async sibling over the pyo3-tokio path: `next_async()` / `final_async()`."""
     from baml_sdk.baml.stream import StreamFinished
     from baml_sdk.lorem import stream_e2e_extract_stream_async
@@ -65,7 +65,7 @@ async def test_stream_async():
 
 
 @replay_server(recording_path="replay_extract_string")
-def test_stream_collect_in_baml():
+def test_streaming_e2e_stream_collect_in_baml():
     """BAML-driven counterpart: the `S | StreamFinished` union stays engine-side."""
     from baml_sdk.lorem import stream_e2e_collect, StreamE2ECollectResult
 
@@ -85,7 +85,7 @@ def test_stream_collect_in_baml():
 
 
 @replay_server(recording_path="replay_extract_doc")
-def test_stream_doc():
+def test_streaming_e2e_stream_doc():
     """Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`."""
     from baml_sdk.baml.stream import StreamFinished
     from baml_sdk.lorem import stream_e2e_extract_doc_stream, StreamingDoc
@@ -105,7 +105,7 @@ def test_stream_doc():
 
 
 @replay_server(recording_path="replay_extract_doc")
-async def test_stream_doc_async():
+async def test_streaming_e2e_stream_doc_async():
     """Async sibling over the pyo3-tokio path for a class `T`."""
     from baml_sdk.baml.stream import StreamFinished
     from baml_sdk.lorem import stream_e2e_extract_doc_stream_async, StreamingDoc
@@ -125,7 +125,7 @@ async def test_stream_doc_async():
 
 
 @replay_server(recording_path="replay_extract_doc")
-def test_stream_doc_collect_in_baml():
+def test_streaming_e2e_stream_doc_collect_in_baml():
     """BAML-driven counterpart: the `S | StreamFinished` union stays engine-side;
     only the concrete `StreamingDoc` crosses the FFI boundary."""
     from baml_sdk.lorem import stream_e2e_collect_doc, StreamingDoc

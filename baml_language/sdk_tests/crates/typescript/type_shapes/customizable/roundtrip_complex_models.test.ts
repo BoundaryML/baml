@@ -17,7 +17,7 @@ import {
 } from "./baml_sdk/complex_models/index.js";
 
 describe("roundtrip complex_models", () => {
-  it("round_trip_complex_profile preserves a deeply nested mixed-shape class", () => {
+  it("complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class", () => {
     const home = new PostalAddress({
       line1: "1 Compiler Way",
       line2: null,
@@ -112,7 +112,7 @@ describe("roundtrip complex_models", () => {
     expect(round_trip_complex_profile(profile)).toEqual(profile);
   });
 
-  it("round_trip_complex_profile accepts plain object literals (no class constructors)", () => {
+  it("complex_models_round_trip_complex_profile_accepts_plain_object_literals_no_class_constructors", () => {
     // The encoder treats a plain object and a `new X({...})` instance
     // identically — both become a tagless `map_value` that the engine coerces
     // to the declared parameter type. So the whole graph can be one nested

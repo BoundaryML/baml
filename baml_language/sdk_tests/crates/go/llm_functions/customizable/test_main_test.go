@@ -19,7 +19,7 @@ var (
 	_ func(baml.LlmClient) baml_sdk.LoremExtractResumeBuildRequestOption                                        = baml_sdk.WithLoremExtractResumeBuildRequestClient
 )
 
-func TestExtractResumeBuildRequestIncludesOpenAIAPIKey(t *testing.T) {
+func Test_extract_resume_build_request_includes_open_aiapi_key(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-openai-shorthand-test")
 
 	request, err := baml_sdk.LoremExtractResumeBuildRequest(
@@ -34,7 +34,7 @@ func TestExtractResumeBuildRequestIncludesOpenAIAPIKey(t *testing.T) {
 	assertRequest(t, request, "api.openai.com", "Some resume text")
 }
 
-func TestStreamingExtractBuildRequestIncludesOpenAIAPIKey(t *testing.T) {
+func Test_streaming_extract_build_request_includes_open_aiapi_key(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-openai-responses-test")
 
 	request, err := baml_sdk.LoremStreamingExtractBuildRequest(
@@ -49,7 +49,7 @@ func TestStreamingExtractBuildRequestIncludesOpenAIAPIKey(t *testing.T) {
 	assertRequest(t, request, "/responses", "Some text to summarize")
 }
 
-func TestClassifySentimentBuildRequestIncludesAnthropicAPIKey(t *testing.T) {
+func Test_classify_sentiment_build_request_includes_anthropic_api_key(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-shorthand-test")
 
 	request, err := baml_sdk.IpsumClassifySentimentBuildRequest(
@@ -64,7 +64,7 @@ func TestClassifySentimentBuildRequestIncludesAnthropicAPIKey(t *testing.T) {
 	assertRequest(t, request, "api.anthropic.com", "I love this!")
 }
 
-func TestBuildRequestAcceptsExplicitClientOption(t *testing.T) {
+func Test_build_request_accepts_explicit_client_option(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-explicit-client")
 	client := baml.LlmClient{
 		Name:       "anthropic/claude-3-5-sonnet-latest",
@@ -85,7 +85,7 @@ func TestBuildRequestAcceptsExplicitClientOption(t *testing.T) {
 	assertRequest(t, request, "api.anthropic.com", "Use the explicit client")
 }
 
-func TestBuildRequestHonorsCancellation(t *testing.T) {
+func Test_build_request_honors_cancellation(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-cancelled")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

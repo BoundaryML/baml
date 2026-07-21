@@ -4,5 +4,5 @@ import { describe, it, expect } from "vitest";
 import { no_op } from "./baml_sdk/void/index.js";
 
 describe("roundtrip void", () => {
-  it("no_op returns null", () => expect(no_op()).toBeNull());
+  it("void_no_op", () => expect(no_op()).toBeNull());
 });

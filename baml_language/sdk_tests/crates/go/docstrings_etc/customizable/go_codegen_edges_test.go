@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestGoCodegenFunctionDocComment(t *testing.T) {
+func Test_go_codegen_function_doc_comment(t *testing.T) {
 	contents, err := os.ReadFile("baml_sdk/functions.go")
 	if err != nil {
 		t.Fatal(err)

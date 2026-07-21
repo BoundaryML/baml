@@ -15,18 +15,18 @@ using forward_refs::RecListWithOther;
 using RecItems = std::vector<baml::box<RecList>>;
 using RecWOItems = std::vector<baml::box<RecListWithOther>>;
 
-BAML_TEST(round_trip_other) {
+BAML_TEST(forward_refs_round_trip_other) {
   const Other o{7};
   BAML_ASSERT(forward_refs::round_trip_other(o) == o);
 }
 
-BAML_TEST(round_trip_node_symbol_exists) {
+BAML_TEST(forward_refs_round_trip_node_symbol_exists) {
   // Uninhabitable (required self-ref); reference-only, like Python's
   // import-only assertion.
   (void)&forward_refs::round_trip_node;
 }
 
-BAML_TEST(round_trip_rec_list) {
+BAML_TEST(forward_refs_round_trip_rec_list) {
   // variant-bodied recursive alias in the forward_refs namespace (distinct
   // from ns_aliases' RecList; exercises forward-ref quoting): [1, [2, 3]].
   const RecList r{RecItems{
@@ -36,7 +36,7 @@ BAML_TEST(round_trip_rec_list) {
   BAML_ASSERT(forward_refs::round_trip_rec_list(r) == r);
 }
 
-BAML_TEST(round_trip_rec_list_with_other) {
+BAML_TEST(forward_refs_round_trip_rec_list_with_other) {
   // RecListWithOther = int | Other | RecListWithOther[] -- the only
   // union-bodied recursive alias with a class alternative.
   const RecListWithOther leaf{int64_t{1}};

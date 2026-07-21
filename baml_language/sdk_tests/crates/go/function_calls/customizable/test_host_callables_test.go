@@ -63,7 +63,7 @@ func waitForCallbackStart(t *testing.T, started <-chan struct{}, done <-chan err
 	}
 }
 
-func TestHostCallablePrimitiveAndMultipleArguments(t *testing.T) {
+func Test_host_callable_primitive_and_multiple_arguments(t *testing.T) {
 	ctx := context.Background()
 	got, err := baml_sdk.HostCallableTestsCallWithCallback(ctx, func(value int64) string {
 		return fmt.Sprintf("got %d", value)
@@ -94,7 +94,7 @@ func optionalArgsCallback(
 	return x*100 + options.Y.Or(8)*10 + options.Z.Or(9)
 }
 
-func TestHostCallableOptionalArguments(t *testing.T) {
+func Test_host_callable_optional_arguments(t *testing.T) {
 	ctx := context.Background()
 
 	unset, err := baml_sdk.HostCallableTestsCallCallbackWithOptionalArgsAllUnset(ctx, optionalArgsCallback, 5)
@@ -113,7 +113,7 @@ func TestHostCallableOptionalArguments(t *testing.T) {
 	}
 }
 
-func TestHostCallableNullableOptionalDistinguishesAllThreeStates(t *testing.T) {
+func Test_host_callable_nullable_optional_distinguishes_all_three_states(t *testing.T) {
 	callback := func(x int64, options baml_sdk.CallbackIntWithValueOptionalIntOptions) int64 {
 		value, supplied := options.Value.Get()
 		if !supplied {
@@ -134,7 +134,7 @@ func TestHostCallableNullableOptionalDistinguishesAllThreeStates(t *testing.T) {
 	}
 }
 
-func TestHostCallableOptionalNamesAvoidGeneratedAndProjectionCollisions(t *testing.T) {
+func Test_host_callable_optional_names_avoid_generated_and_projection_collisions(t *testing.T) {
 	callback := func(options baml_sdk.CallbackWithCtxIntWithErrIntWithResultIntWithZeroIntWithBootstrapIntWithInitIntWithMainIntWithFooBarIntWithFooBarIntOptions) int64 {
 		return options.Ctx.Or(0) + options.Err.Or(0) + options.Result.Or(0) +
 			options.Zero.Or(0) + options.Bootstrap.Or(0) + options.Init.Or(0) +
@@ -149,7 +149,7 @@ func TestHostCallableOptionalNamesAvoidGeneratedAndProjectionCollisions(t *testi
 	}
 }
 
-func TestHostCallableClassArgument(t *testing.T) {
+func Test_host_callable_class_argument(t *testing.T) {
 	person := baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 37}
 	got, err := baml_sdk.HostCallableTestsCallWithClassCallback(
 		context.Background(),
@@ -163,7 +163,7 @@ func TestHostCallableClassArgument(t *testing.T) {
 	}
 }
 
-func TestHostCallableStructuredRoundTrips(t *testing.T) {
+func Test_host_callable_structured_round_trips(t *testing.T) {
 	ctx := context.Background()
 	person := baml_sdk.HostCallableTestsPerson{Name: "Grace", Age: 45}
 	gotPerson, err := baml_sdk.HostCallableTestsCallClassRoundtripCallback(ctx, func(value baml_sdk.HostCallableTestsPerson) baml_sdk.HostCallableTestsPerson {
@@ -200,7 +200,7 @@ func TestHostCallableStructuredRoundTrips(t *testing.T) {
 	}
 }
 
-func TestHostCallableClosedUnionRoundTrips(t *testing.T) {
+func Test_host_callable_closed_union_round_trips(t *testing.T) {
 	ctx := context.Background()
 	input := baml_sdk.NewStringOrIntFromInt(7)
 	got, err := baml_sdk.HostCallableTestsCallUnionRoundtripCallback(ctx, func(value baml_sdk.StringOrInt) baml_sdk.StringOrInt {
@@ -237,7 +237,7 @@ func TestHostCallableClosedUnionRoundTrips(t *testing.T) {
 	}
 }
 
-func TestHostCallableClosedUnionContainersAndNominalArms(t *testing.T) {
+func Test_host_callable_closed_union_containers_and_nominal_arms(t *testing.T) {
 	ctx := context.Background()
 	listInput := []baml_sdk.StringOrInt{
 		baml_sdk.NewStringOrIntFromString("one"),
@@ -283,7 +283,7 @@ func TestHostCallableClosedUnionContainersAndNominalArms(t *testing.T) {
 	}
 }
 
-func TestHostCallableClosedUnionLiteralOptionalAndSelectedEmptyContainerArms(t *testing.T) {
+func Test_host_callable_closed_union_literal_optional_and_selected_empty_container_arms(t *testing.T) {
 	ctx := context.Background()
 	literalInput := baml_sdk.NewIntOrStringLiteralcd322617OrStringLiteral6ca6c75cFromStringLiteralcd322617()
 	literal, err := baml_sdk.HostCallableTestsCallLiteralUnionRoundtripCallback(ctx, func(value baml_sdk.IntOrStringLiteralcd322617OrStringLiteral6ca6c75c) baml_sdk.IntOrStringLiteralcd322617OrStringLiteral6ca6c75c {
@@ -334,7 +334,7 @@ func TestHostCallableClosedUnionLiteralOptionalAndSelectedEmptyContainerArms(t *
 	}
 }
 
-func TestHostCallableMediaRoundTrip(t *testing.T) {
+func Test_host_callable_media_round_trip(t *testing.T) {
 	mime := "image/png"
 	image, err := baml_go.NewImageFromUrl("https://example.com/callback.png", &mime)
 	if err != nil {
@@ -352,7 +352,7 @@ func TestHostCallableMediaRoundTrip(t *testing.T) {
 	}
 }
 
-func TestHostCallableRepeatedAndConcurrentReuse(t *testing.T) {
+func Test_host_callable_repeated_and_concurrent_reuse(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
 	callback := func(value int64) string {
@@ -388,7 +388,7 @@ func TestHostCallableRepeatedAndConcurrentReuse(t *testing.T) {
 	}
 }
 
-func TestHostCallableDeclaredThrowIsCatchable(t *testing.T) {
+func Test_host_callable_declared_throw_is_catchable(t *testing.T) {
 	got, err := baml_sdk.HostCallableTestsCallWithThrowing(
 		context.Background(),
 		func(int64) (string, error) { return "", errors.New("callback failed") },
@@ -399,7 +399,7 @@ func TestHostCallableDeclaredThrowIsCatchable(t *testing.T) {
 	}
 }
 
-func TestHostCallablePanicDoesNotCrossCgoBoundary(t *testing.T) {
+func Test_host_callable_panic_does_not_cross_cgo_boundary(t *testing.T) {
 	_, err := baml_sdk.HostCallableTestsCallWithCallback(
 		context.Background(),
 		func(int64) string { panic("callback exploded") },
@@ -410,7 +410,7 @@ func TestHostCallablePanicDoesNotCrossCgoBoundary(t *testing.T) {
 	}
 }
 
-func TestHostCallableCancellationWhileDispatched(t *testing.T) {
+func Test_host_callable_cancellation_while_dispatched(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -431,7 +431,7 @@ func TestHostCallableCancellationWhileDispatched(t *testing.T) {
 	close(release)
 }
 
-func TestHostCallableVoidSignatures(t *testing.T) {
+func Test_host_callable_void_signatures(t *testing.T) {
 	var seen atomic.Int64
 	got, err := baml_sdk.HostCallableTestsCallVoidCallback(context.Background(), func(value int64) {
 		seen.Store(value)
@@ -455,7 +455,7 @@ func TestHostCallableVoidSignatures(t *testing.T) {
 	}
 }
 
-func TestNilHostCallableFailsBeforeDispatch(t *testing.T) {
+func Test_nil_host_callable_fails_before_dispatch(t *testing.T) {
 	var callback func(int64) string
 	_, err := baml_sdk.HostCallableTestsIgnoreCallback(context.Background(), callback)
 	if err == nil || !strings.Contains(err.Error(), `argument "callback"`) || !strings.Contains(err.Error(), "host callable is nil") {
@@ -463,7 +463,7 @@ func TestNilHostCallableFailsBeforeDispatch(t *testing.T) {
 	}
 }
 
-func TestHostCallableReentrantCallDoesNotDeadlock(t *testing.T) {
+func Test_host_callable_reentrant_call_does_not_deadlock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	got, err := baml_sdk.HostCallableTestsCallWithCallback(ctx, func(int64) string {
@@ -478,7 +478,7 @@ func TestHostCallableReentrantCallDoesNotDeadlock(t *testing.T) {
 	}
 }
 
-func TestHostCallableLateAndUncaughtFailuresReleaseNativeIdentity(t *testing.T) {
+func Test_host_callable_late_and_uncaught_failures_release_native_identity(t *testing.T) {
 	const repetitions = 16
 	var finalized atomic.Int64
 	for index := 0; index < repetitions; index++ {

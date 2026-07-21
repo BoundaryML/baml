@@ -17,7 +17,7 @@ using aliases::MaybeRec;
 using aliases::RecList;
 using RecChildren = std::vector<baml::box<RecList>>;
 
-BAML_TEST(round_trip_string_list) {
+BAML_TEST(aliases_round_trip_string_list) {
   // StringList is a generated `using` alias; the codegen pool preserves
   // alias identity at use sites, so the signature spells StringList too.
   static_assert(
@@ -27,7 +27,7 @@ BAML_TEST(round_trip_string_list) {
   BAML_ASSERT(aliases::round_trip_string_list(s) == s);
 }
 
-BAML_TEST(round_trip_rec_list) {
+BAML_TEST(aliases_round_trip_rec_list) {
   // RecList = int | RecList[]
   const RecList leaf{int64_t{1}};
   BAML_ASSERT(aliases::round_trip_rec_list(leaf) == leaf);
@@ -43,7 +43,7 @@ BAML_TEST(round_trip_rec_list) {
   BAML_ASSERT(aliases::round_trip_rec_list(nested) == nested);
 }
 
-BAML_TEST(round_trip_alias_container) {
+BAML_TEST(aliases_round_trip_alias_container) {
   const AliasContainer c{
       {"x"},  // list_field: StringList
       RecList{RecChildren{
@@ -56,7 +56,7 @@ BAML_TEST(round_trip_alias_container) {
   BAML_ASSERT(aliases::round_trip_alias_container(c) == c);
 }
 
-BAML_TEST(round_trip_maybe_rec) {
+BAML_TEST(aliases_round_trip_maybe_rec) {
   // C++-specific: a nullable recursive-alias reference folds the null into
   // the box (optional_box<RecList>; optional<Box<T>> needs a complete T).
   const MaybeRec none{{}};
