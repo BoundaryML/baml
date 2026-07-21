@@ -1230,8 +1230,9 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_type",
+ "ignore",
  "salsa",
- "walkdir",
+ "tempfile",
 ]
 
 [[package]]
