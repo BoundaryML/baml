@@ -144,6 +144,48 @@ pub(crate) fn load_project_for_build(
     }
 }
 
+/// Lenient counterpart to [`resolve_project_sources`] for introspection
+/// sessions: `Ok(None)` when no project root is found (instead of an error),
+/// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
+/// key the bytecode cache identically to the strict path, but a broken
+/// manifest must not lock an agent out of `describe`/`grep`.
+pub(crate) fn resolve_project_sources_lenient(
+    from: Option<&Path>,
+) -> Result<Option<ResolvedProject>> {
+    let canonical = resolve_search_start(from)?;
+    let Some(canonical) = find_baml_project_root(&canonical) else {
+        return Ok(None);
+    };
+    let toml_path = canonical.join("baml.toml");
+    let manifest = if toml_path.exists() {
+        std::fs::read_to_string(&toml_path).ok()
+    } else {
+        None
+    };
+    let walk_root = project_source_root(&canonical);
+    use rayon::prelude::*;
+    let files = discover_baml_files(&walk_root)
+        .into_par_iter()
+        .map(|path| {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?;
+            Ok((path, content))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Some(ResolvedProject {
+        root: canonical,
+        manifest,
+        files,
+    }))
+}
+
+/// The directory a projectless introspection session roots at (the same
+/// fallback [`load_project_or_default`] uses when no project is found).
+pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
+    let canonical = resolve_search_start(from)?;
+    Ok(project_search_dir(&canonical))
+}
+
 /// Read-only/introspection loader: like [`load_project_from`] but **never
 /// fails on a missing `baml.toml`**. This is for the commands an agent
 /// reaches for first (`describe`, `grep`) — the most expensive thing they

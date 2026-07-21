@@ -5,11 +5,7 @@ use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity, render};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{
-    bytecode_cache::CacheContext,
-    project_load::{build_db_from_sources, resolve_project_sources},
-    reporter::Reporter,
-};
+use crate::reporter::Reporter;
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
@@ -21,61 +17,56 @@ pub struct CheckArgs {
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let resolved = resolve_project_sources(self.from.as_deref())?;
-        if resolved.files.is_empty() {
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWrite,
+        )?;
+        if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                resolved.root.display()
+                session.root().display()
             ));
             return Ok(crate::ExitCode::Other);
         }
-        let file_count = resolved.files.len();
-        let mut db = build_db_from_sources(&resolved, |_| {});
-        let cache = CacheContext::open(&resolved, false);
+        let file_count = session.file_count();
 
         // The manifest can only advance alongside emitted Program/unit entries,
         // so a clean check *seeds* the cache below by running the same
         // emit-and-store path as run/test (gated to checks that actually have
         // something to advance). That turns a check-only workflow warm instead
         // of leaving it on the full-compile path forever.
-        let (reuse_plan, stdlib_interface_hit) = match &cache {
-            Some(ctx) => {
-                let prep = ctx.prepare_warm_db(&mut db);
-                (prep.reuse_plan, prep.stdlib_interface_hit)
-            }
-            None => (None, false),
-        };
+        let warmth = session.warm_prep();
+        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let (db, cache) = (&session.db, &session.cache);
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
         // With a cache, collect through the incremental collector so the fresh
         // per-file blobs are available for seeding below; its merged set is
         // identical to the read-only collector's.
-        let (diagnostics, fresh_diagnostics) = match &cache {
+        let (diagnostics, fresh_diagnostics) = match cache {
             Some(ctx) => {
-                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
-            None => (baml_project::collect_diagnostics(&db), None),
+            None => (baml_project::collect_diagnostics(db), None),
         };
-        if let Some(cache) = &cache {
-            cache.verify_diagnostics(&db)?;
-            cache.verify_stdlib_diagnostics(&db)?;
+        if let Some(cache) = cache {
+            cache.verify_diagnostics(db)?;
+            cache.verify_stdlib_diagnostics(db)?;
             // Sampled field verification (rustc-style 1-in-32): `baml check`
             // serves clean files' cached diagnostics and seeds their throws, so
             // it is a warm serving path like run/test. After the served result
             // exists, ~1 run in 32 re-derives one served clean file on a fresh,
             // un-seeded database and hard-errors on any drift.
-            cache.maybe_sampled_verify(reuse_plan.as_ref(), || {
-                build_db_from_sources(&resolved, |_| {})
-            })?;
+            cache.maybe_sampled_verify(reuse_plan.as_ref(), || session.honest_db())?;
             // Materialize the per-toolchain builtin-diagnostics blob on a miss.
             // Unlike the manifest, this blob is a build constant (keyed only by
             // the compiler fingerprint), so a read-only `check` may safely write
             // it — letting a check-only workflow drop the builtin re-inference
             // tail on its second run. Self-gates on blob presence, and the honest
             // re-derivation is Salsa-memoized against the check just performed.
-            cache.store_stdlib_diagnostics(&db);
+            cache.store_stdlib_diagnostics(db);
         }
         // Warm-incremental evidence (mirrors run/test): with the diagnostics
         // cache serving clean user files and the stdlib blob serving builtins,
@@ -85,7 +76,7 @@ impl CheckArgs {
             baml_db::baml_compiler2_tir::inference::scope_inferences()
         ));
         if !diagnostics.is_empty() {
-            let rendered = render_project_diagnostics(&db, &diagnostics);
+            let rendered = render_project_diagnostics(db, &diagnostics);
             reporter.suspend(|| {
                 #[allow(clippy::print_stderr)]
                 {
@@ -110,13 +101,13 @@ impl CheckArgs {
         // nothing to store, and skipping keeps the no-op check emit-free.
         // Seeding is an optimization: a failed emit on a diagnostics-clean
         // project is logged, never surfaced as a check failure.
-        if let Some(ctx) = &cache {
+        if let Some(ctx) = cache {
             let should_seed = reuse_plan
                 .as_ref()
                 .is_none_or(|plan| !plan.dirty_files.is_empty());
             if should_seed {
                 match crate::bytecode_cache::compile_program_artifacts(
-                    &db,
+                    db,
                     &baml_db::baml_compiler2_emit::CompileOptions {
                         emit_test_cases: false,
                     },
@@ -128,12 +119,12 @@ impl CheckArgs {
                             .as_ref()
                             .expect("a cache is present, so fresh diagnostics were computed");
                         ctx.verify_and_store(
-                            &db,
+                            db,
                             &compiled,
                             fresh,
                             reuse_plan.as_ref(),
                             stdlib_interface_hit,
-                            || build_db_from_sources(&resolved, |_| {}),
+                            || session.honest_db(),
                         )?;
                     }
                     Err(err) => {

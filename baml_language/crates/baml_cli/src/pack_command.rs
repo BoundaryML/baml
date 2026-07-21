@@ -267,42 +267,30 @@ impl PackArgs {
         &self,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, Program, bool)> {
-        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
-        if resolved.files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", resolved.root.display());
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWrite,
+        )?;
+        if session.is_empty() {
+            anyhow::bail!("No .baml files found in {}", session.root().display());
         }
         // Mirror `baml run`'s per-file format check: probe each source through
         // the formatter and emit a single advisory if any file would change.
-        let needs_format_hint = resolved
-            .files
-            .iter()
-            .any(|(_, source)| crate::run_command::source_needs_format_hint(source));
+        let needs_format_hint = session.needs_format_hint();
 
-        // Building the database only sets salsa inputs — the expensive work
-        // (typecheck, emit) happens lazily below, which a cache hit skips.
-        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
-
-        let cache =
-            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
-        if !crate::bytecode_cache::CacheContext::verify_enabled()
-            && let Some(ctx) = &cache
-            && let Some(program) = ctx.load()
-        {
+        if let Some(program) = session.try_cached_program() {
             crate::bytecode_cache::cache_debug(format_args!(
                 "pack: bytecode cache hit — skipping compile"
             ));
-            return Ok((db, program, needs_format_hint));
+            return Ok((session.db, program, needs_format_hint));
         }
 
         // Seed the stdlib typed interface and prepare the per-file reuse plan —
         // the same warm-database setup run/check/test use.
-        let (reuse_plan, stdlib_interface_hit) = match &cache {
-            Some(ctx) => {
-                let prep = ctx.prepare_warm_db(&mut db);
-                (prep.reuse_plan, prep.stdlib_interface_hit)
-            }
-            None => (None, false),
-        };
+        let warmth = session.warm_prep();
+        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let db = &session.db;
+        let cache = &session.cache;
 
         // Keep `baml pack` quiet during compilation. Its visible progress is
         // packaging/downloading/output-oriented; compile/count status belongs
@@ -312,22 +300,22 @@ impl PackArgs {
         // checks only the reuse plan's dirty files and serves clean files from
         // their cached blobs, returning the fresh per-file blobs to persist.
         // Without a cache, run the honest full check (no blobs to store).
-        let fresh_diagnostics = if let Some(ctx) = &cache {
-            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+        let fresh_diagnostics = if let Some(ctx) = cache {
+            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
             bail_on_error_diagnostics(
-                &db,
+                db,
                 &incremental.merged,
                 "Cannot pack: compilation errors found",
                 reporter,
             )?;
             Some(incremental.fresh_by_file)
         } else {
-            check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
+            check_diagnostics(db, "Cannot pack: compilation errors found", reporter)?;
             None
         };
 
         let compiled = crate::bytecode_cache::compile_program_artifacts(
-            &db,
+            db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
@@ -335,20 +323,20 @@ impl PackArgs {
             reuse_plan.as_ref(),
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-        if let Some(ctx) = &cache {
+        if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                &db,
+                db,
                 &compiled,
                 fresh,
                 reuse_plan.as_ref(),
                 stdlib_interface_hit,
-                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+                || session.honest_db(),
             )?;
         }
-        Ok((db, compiled.program, needs_format_hint))
+        Ok((session.db, compiled.program, needs_format_hint))
     }
 
     fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {

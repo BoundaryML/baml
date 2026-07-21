@@ -1785,11 +1785,7 @@ impl CacheContext {
     /// the identical warm-database setup `run`, `test`, and `check` each run
     /// before the diagnostics gate. `check` discards `stdlib_interface_hit`.
     pub(crate) fn prepare_warm_db(&self, db: &mut ProjectDatabase) -> WarmPrep {
-        let stdlib_interface_hit = !Self::verify_enabled()
-            && self
-                .load_stdlib_interface()
-                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
-                .is_some();
+        let stdlib_interface_hit = self.seed_stdlib_interface(db);
         let reuse_plan = prepare_reuse_plan(db, self.plan_reuse(db));
         WarmPrep {
             reuse_plan,
@@ -2275,6 +2271,17 @@ impl CacheContext {
             }
         }
         Ok(())
+    }
+
+    /// Install the immutable stdlib typed-interface seed (a per-toolchain
+    /// build constant). Returns whether the seed was served; gated off under
+    /// `BAML_CACHE_VERIFY` so the oracle exercises the honest path.
+    pub(crate) fn seed_stdlib_interface(&self, db: &mut ProjectDatabase) -> bool {
+        !Self::verify_enabled()
+            && self
+                .load_stdlib_interface()
+                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
+                .is_some()
     }
 
     /// Test hook: overwrite one file's cached diagnostics with an empty blob,

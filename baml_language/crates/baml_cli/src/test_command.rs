@@ -14,12 +14,7 @@ use bex_engine::{
 use clap::{Args, ValueEnum};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    bytecode_cache::CacheContext,
-    project_load::{build_db_from_sources, resolve_project_sources},
-    reporter::Reporter,
-    test_filter::TestFilter,
-};
+use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -199,17 +194,18 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let resolved = resolve_project_sources(self.from.as_deref())?;
-        if resolved.files.is_empty() {
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWriteTests,
+        )?;
+        if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                resolved.root.display()
+                session.root().display()
             ));
             return Ok(crate::ExitCode::NoTestsRun);
         }
-
-        let cache = CacheContext::open(&resolved, /* emit_test_cases */ true);
 
         // Warm `--list` fast path. The flattened test list (legacy tests +
         // fully-expanded testset leaf names) is a pure function of the compiled
@@ -220,16 +216,12 @@ impl TestArgs {
         // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
         // honest path below.
         if self.list {
-            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref()) {
+            if let Some(exit) = self.try_cached_list(&reporter, session.cache.as_ref()) {
                 return Ok(exit);
             }
         }
 
-        let cached_program = if CacheContext::verify_enabled() {
-            None
-        } else {
-            cache.as_ref().and_then(CacheContext::load)
-        };
+        let cached_program = session.try_cached_program();
 
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries everything the test run
@@ -251,22 +243,14 @@ impl TestArgs {
         let (engine, legacy) = if let Some(hit) = cached_engine {
             hit
         } else {
-            let mut db = build_db_from_sources(&resolved, |_| {});
+            let warmth = session.warm_prep();
+            let (reuse_plan, stdlib_interface_hit) =
+                (warmth.reuse_plan, warmth.stdlib_interface_hit);
+            let db = &session.db;
+            let cache = &session.cache;
             let project = db
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
-
-            // Seed the stdlib typed interface before the first typecheck query
-            // (gated off under verify so the oracle exercises the honest path) and
-            // prepare the per-file reuse plan — the same warm-database setup `run`
-            // and `check` run.
-            let (reuse_plan, stdlib_interface_hit) = match &cache {
-                Some(ctx) => {
-                    let prep = ctx.prepare_warm_db(&mut db);
-                    (prep.reuse_plan, prep.stdlib_interface_hit)
-                }
-                None => (None, false),
-            };
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -275,11 +259,11 @@ impl TestArgs {
             // plan's dirty files, serve clean files from their cached blobs, and
             // carry the fresh per-file blobs into the manifest); without one,
             // run the honest full check. The merged set is byte-identical.
-            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = &cache {
-                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
+                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
-                (baml_project::collect_diagnostics(&db), None)
+                (baml_project::collect_diagnostics(db), None)
             };
             let errors: Vec<_> = diagnostics
                 .iter()
@@ -291,37 +275,37 @@ impl TestArgs {
                 // run/pack errors instead of a bullet list of messages. Sources
                 // and paths cover every user file plus builtins — an error in one
                 // file may carry related spans elsewhere.
-                let rendered = crate::check_command::render_project_diagnostics(&db, &errors);
+                let rendered = crate::check_command::render_project_diagnostics(db, &errors);
                 reporter.abandon();
                 eprintln!("{rendered}");
                 return Ok(crate::ExitCode::Other);
             }
 
             // ── 3. Discover legacy tests from HIR ──────────────────────────
-            let legacy = discover_legacy_tests(&db, project);
+            let legacy = discover_legacy_tests(db, project);
 
             // ── 4. Compile + engine + runtime ──────────────────────────────
             let compile_options = baml_compiler2_emit::CompileOptions {
                 emit_test_cases: true,
             };
             let compiled = crate::bytecode_cache::compile_program_artifacts(
-                &db,
+                db,
                 &compile_options,
                 cache.as_ref(),
                 reuse_plan.as_ref(),
             )
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-            if let Some(ctx) = &cache {
+            if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
                 ctx.verify_and_store(
-                    &db,
+                    db,
                     &compiled,
                     fresh,
                     reuse_plan.as_ref(),
                     stdlib_interface_hit,
-                    || build_db_from_sources(&resolved, |_| {}),
+                    || session.honest_db(),
                 )?;
             }
             // Warm-run evidence: with the stdlib interface seeded this is 0 (the
@@ -413,7 +397,7 @@ impl TestArgs {
             // with no filters the display list above already IS the unfiltered
             // list, so no extra VM call. Written only from an error-free
             // discovery (never-save-on-error).
-            if let Some(ctx) = &cache {
+            if let Some(ctx) = &session.cache {
                 let all_leaf_names = if self.include.is_empty() && self.exclude.is_empty() {
                     testset_names.clone()
                 } else {
