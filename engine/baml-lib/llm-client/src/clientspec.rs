@@ -63,6 +63,8 @@ pub enum OpenAIClientProviderVariant {
     Azure,
     /// The OpenAI Responses API variant
     Responses,
+    /// The OpenAI audio transcriptions API variant
+    Transcriptions,
     /// The generic client provider variant
     Generic,
     /// The OpenRouter client provider variant
@@ -98,6 +100,7 @@ impl std::fmt::Display for OpenAIClientProviderVariant {
             OpenAIClientProviderVariant::Ollama => write!(f, "ollama"),
             OpenAIClientProviderVariant::Azure => write!(f, "azure-openai"),
             OpenAIClientProviderVariant::Responses => write!(f, "openai-responses"),
+            OpenAIClientProviderVariant::Transcriptions => write!(f, "openai-transcriptions"),
             OpenAIClientProviderVariant::Generic => write!(f, "openai-generic"),
             OpenAIClientProviderVariant::OpenRouter => write!(f, "openrouter"),
         }
@@ -125,6 +128,9 @@ impl std::str::FromStr for ClientProvider {
             "baml-azure-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Azure)),
             "openai-responses" => Ok(ClientProvider::OpenAI(
                 OpenAIClientProviderVariant::Responses,
+            )),
+            "openai-transcriptions" => Ok(ClientProvider::OpenAI(
+                OpenAIClientProviderVariant::Transcriptions,
             )),
             "baml-ollama-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
             "ollama" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
@@ -154,6 +160,7 @@ impl std::str::FromStr for OpenAIClientProviderVariant {
             "ollama" => Ok(OpenAIClientProviderVariant::Ollama),
             "azure-openai" => Ok(OpenAIClientProviderVariant::Azure),
             "openai-responses" => Ok(OpenAIClientProviderVariant::Responses),
+            "openai-transcriptions" => Ok(OpenAIClientProviderVariant::Transcriptions),
             "openai-generic" => Ok(OpenAIClientProviderVariant::Generic),
             "openrouter" => Ok(OpenAIClientProviderVariant::OpenRouter),
             _ => Err(anyhow::anyhow!(
@@ -186,6 +193,7 @@ impl ClientProvider {
             "openai-generic",
             "azure-openai",
             "openai-responses",
+            "openai-transcriptions",
             "anthropic",
             "ollama",
             "openrouter",
@@ -494,6 +502,7 @@ impl AllowedRoleMetadata {
 pub enum UnresolvedResponseType {
     OpenAI,
     OpenAIResponses,
+    OpenAITranscription,
     Anthropic,
     Google,
     Vertex,
@@ -503,6 +512,7 @@ pub enum UnresolvedResponseType {
 pub enum ResponseType {
     OpenAI,
     OpenAIResponses,
+    OpenAITranscription,
     Anthropic,
     Google,
     Vertex,
@@ -517,6 +527,7 @@ impl UnresolvedResponseType {
         match self {
             Self::OpenAI => Ok(ResponseType::OpenAI),
             Self::OpenAIResponses => Ok(ResponseType::OpenAIResponses),
+            Self::OpenAITranscription => Ok(ResponseType::OpenAITranscription),
             Self::Anthropic => Ok(ResponseType::Anthropic),
             Self::Google => Ok(ResponseType::Google),
             Self::Vertex => Ok(ResponseType::Vertex),
@@ -654,6 +665,58 @@ mod tests {
     }
 
     #[test]
+    fn test_openai_transcriptions_provider_parses() {
+        let provider = ClientProvider::from_str("openai-transcriptions").unwrap();
+
+        assert_eq!(
+            provider,
+            ClientProvider::OpenAI(OpenAIClientProviderVariant::Transcriptions)
+        );
+    }
+
+    #[test]
+    fn test_openai_transcriptions_variant_parses() {
+        let variant = OpenAIClientProviderVariant::from_str("openai-transcriptions").unwrap();
+
+        assert_eq!(variant, OpenAIClientProviderVariant::Transcriptions);
+    }
+
+    #[test]
+    fn test_openai_transcriptions_display() {
+        let variant = OpenAIClientProviderVariant::Transcriptions;
+
+        assert_eq!(variant.to_string(), "openai-transcriptions");
+    }
+
+    #[test]
+    fn test_openai_transcriptions_in_allowed_providers() {
+        let allowed = ClientProvider::allowed_providers();
+
+        assert!(allowed.contains(&"openai-transcriptions"));
+    }
+
+    #[test]
+    fn test_openai_transcriptions_roundtrip() {
+        let original = ClientProvider::OpenAI(OpenAIClientProviderVariant::Transcriptions);
+        let string_repr = match &original {
+            ClientProvider::OpenAI(variant) => variant.to_string(),
+            _ => panic!("Expected OpenAI provider"),
+        };
+
+        assert_eq!(string_repr, "openai-transcriptions");
+
+        let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
+        assert_eq!(original, parsed_back);
+    }
+
+    #[test]
+    fn test_openai_transcription_singular_provider_is_invalid() {
+        let result = ClientProvider::from_str("openai-transcription");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_response_type_resolution() {
         use baml_types::GetEnvVar;
 
@@ -674,6 +737,32 @@ mod tests {
 
         assert!(resolved.is_ok());
         assert!(matches!(resolved.unwrap(), ResponseType::OpenAIResponses));
+    }
+
+    #[test]
+    fn test_openai_transcription_response_type_resolution() {
+        use baml_types::GetEnvVar;
+
+        struct MockEnvContext;
+        impl GetEnvVar for MockEnvContext {
+            fn get_env_var(&self, _name: &str) -> Result<String, anyhow::Error> {
+                Err(anyhow::anyhow!("No env var"))
+            }
+
+            fn set_allow_missing_env_var(&self, _: bool) -> Self {
+                MockEnvContext
+            }
+        }
+
+        let unresolved = UnresolvedResponseType::OpenAITranscription;
+        let ctx = MockEnvContext;
+        let resolved = unresolved.resolve(&ctx);
+
+        assert!(resolved.is_ok());
+        assert!(matches!(
+            resolved.unwrap(),
+            ResponseType::OpenAITranscription
+        ));
     }
 
     #[test]
