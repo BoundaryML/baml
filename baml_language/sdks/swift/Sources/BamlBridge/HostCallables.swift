@@ -69,9 +69,13 @@ public struct BamlHostArgs: Sendable {
 /// `throws` contract) — the Swift analog of Python raising
 /// `BamlError(SomeGeneratedModel(...))` inside a callback.
 public struct BamlThrownValue: Error {
-    public let value: any BamlEncodable
+    // `Error` implies `Sendable`, so the stored payload must be too
+    // (strict-concurrency checking on newer compilers rejects a bare
+    // `any BamlEncodable` here). Every realistic conformer already is:
+    // generated models are Sendable value types.
+    public let value: any BamlEncodable & Sendable
 
-    public init(_ value: any BamlEncodable) {
+    public init(_ value: any BamlEncodable & Sendable) {
         self.value = value
     }
 }
