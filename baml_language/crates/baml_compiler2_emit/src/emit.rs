@@ -3300,19 +3300,22 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
             // ── Structural (value matcher) ───────────────────────────────────
             // Element/key/value discriminates, a bare frame reference (`T`,
-            // `T[]`), or a union that may carry one: the VM value matcher. The
-            // deprecated `TypeArgRefOrWildcard` (B-634 dispatch-guard tolerance)
-            // routes here too — `substitute` resolves it to the same frame slot
-            // as `TypeArgRef`, and the matcher's covariant top-level relation
-            // gives it the subtype-or-wildcard semantics it needs.
+            // `T[]`), an interface existential (membership resolved at runtime
+            // against the impl registry — never a compile-time implementor
+            // enumeration), or a union that may carry any of these: the VM value
+            // matcher. The deprecated `TypeArgRefOrWildcard` is no longer
+            // produced (typevars now lower to `TypeArgRef`), but is still routed
+            // here defensively — `substitute` resolves it to the same frame slot
+            // as `TypeArgRef`.
             #[expect(
                 deprecated,
-                reason = "TypeArgRefOrWildcard is a live dispatch-guard template variant until type erasure is removed"
+                reason = "TypeArgRefOrWildcard is a still-defined (unemitted) template variant until type erasure is removed"
             )]
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::TypeArgRefOrWildcard(_)
+            | TyTemplate::Interface(..)
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
@@ -3346,8 +3349,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
                 // tag. The only non-realized template reaching here is an
-                // associated projection (Unit-5 work), which has no
-                // representable check yet.
+                // associated projection, which has no representable check yet
+                // (a value's concrete type carries no unresolved projection to
+                // unify with).
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {

@@ -364,6 +364,65 @@ pub trait TypeContext {
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// The [`TypeContext`] with **every nominal fact opaque** — the algebra's pure
+/// structural/set-theoretic core: union flatten/sort/dedup, `never` removal,
+/// literal-into-base collapse, invariant container recursion, function-type
+/// variance. No alias expands, no interface membership or `requires` holds, no
+/// enum completes, no type variable carries a bound, and no projection reduces —
+/// each is a leaf equal only to itself.
+///
+/// Every answer is fail-closed: `NoFacts` can only under-approximate a
+/// fact-aware context, never over-claim. But an under-approximation is still an
+/// incorrect *miss* (`type A = int | A[]` ≢ `type B = int | B[]` here, though
+/// they denote the same type), which is why this context is **deprecated from
+/// birth**: each use site marks a boundary that has not yet been given a real
+/// fact source, kept visible so it gets one rather than quietly becoming a
+/// convention. Supply the richest context the site can reach; reach for
+/// `NoFacts` only when none exists yet.
+#[deprecated = "every NoFacts site is a boundary awaiting a real fact context — supply one (compiler: GlobalTypeContext; runtime: the VM / an engine-side context) instead of comparing fact-free"]
+pub struct NoFacts;
+
+#[expect(
+    deprecated,
+    reason = "naming `NoFacts` to define its own trait impl fires the lint; this is \
+              the type's definition, not a consumer site to migrate off it"
+)]
+impl TypeContext for NoFacts {
+    fn alias_def(&self, _name: &QualifiedTypeName) -> Option<Ty> {
+        None
+    }
+
+    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
+        false
+    }
+
+    fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
+        false
+    }
+
+    fn enum_variants(&self, _name: &QualifiedTypeName) -> Option<Vec<Name>> {
+        None
+    }
+
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+        _fuel: u32,
+    ) -> ProjectionStep {
+        ProjectionStep::Opaque
+    }
+}
+
 /// Free-function form of [`TypeContext::normalize`], for a context held by value.
 /// Pending removal once every caller uses the method form.
 pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {

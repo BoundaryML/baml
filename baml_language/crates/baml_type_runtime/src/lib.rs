@@ -22,7 +22,12 @@
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
 //! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
 
-use baml_type::{Name, Ty, TyAttr};
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: inference runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
+)]
+use baml_type::normalize::NoFacts;
+use baml_type::{Name, Ty, TyAttr, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -171,6 +176,10 @@ impl InferenceConstraints {
 }
 
 /// Resolve one `TypeVar`'s recorded occurrences to a single binding, or fail.
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity: this solver runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
+)]
 fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
     let mut lowers: Vec<&Ty> = Vec::new();
     let mut uppers: Vec<&Ty> = Vec::new();
@@ -190,12 +199,13 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
         })
     };
 
-    // Invariant occurrences must be rigidly equal to one another.
+    // Invariant occurrences must be rigidly equal to one another (canonical
+    // equivalence: coercion-free, union-order-insensitive).
     let rigid: Option<Ty> = match equals.split_first() {
         None => None,
         Some((first, rest)) => {
             for other in rest {
-                if !ty_equal(first, other) {
+                if !NoFacts.equivalent(first, other) {
                     return fail(format!(
                         "`{name}` would have to be both `{first}` and `{other}` at the same \
                          time. Because `{name}` appears inside a list, map, or class type, it \
@@ -214,7 +224,7 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
         Some(eq) => {
             // T == eq; every lower must be <: eq and eq <: every upper.
             if let Some(l) = &lower
-                && !l.is_subtype_of(&eq)
+                && !NoFacts.is_subtype(l, &eq)
             {
                 return fail(format!(
                     "`{name}` would have to be both `{eq}` and `{l}` at the same time: one \
@@ -223,7 +233,7 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
                 ));
             }
             for u in &uppers {
-                if !eq.is_subtype_of(u) {
+                if !NoFacts.is_subtype(&eq, u) {
                     return fail(format!(
                         "one argument fixes `{name}` to `{eq}` (where it appears inside a list, \
                          map, or class type), but a function argument only accepts `{u}` for \
@@ -235,7 +245,7 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
         }
         None => match (lower, upper) {
             (Some(l), Some(u)) => {
-                if !l.is_subtype_of(&u) {
+                if !NoFacts.is_subtype(&l, &u) {
                     return fail(format!(
                         "`{name}` can't satisfy every argument at once: one argument supplies a \
                          `{l}` for `{name}`, while a function argument only accepts `{u}` for \
@@ -290,26 +300,24 @@ fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
     Ok(acc)
 }
 
-/// The meet (greatest lower bound) of two types, using only the coercion-free
-/// [`Ty::is_subtype_of`]. For comparable types it is the narrower one; for
-/// unrelated types it is `Never` (no common subtype) — which the solver reads as
-/// an irreconcilable conflict.
+/// The meet (greatest lower bound) of two types, using the canonical coercion-free
+/// subtype relation. For comparable types it is the narrower one; for unrelated
+/// types it is `Never` (no common subtype) — which the solver reads as an
+/// irreconcilable conflict.
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity — see the `NoFacts` import note"
+)]
 fn meet_ty(a: &Ty, b: &Ty) -> Ty {
-    if a.is_subtype_of(b) {
+    if NoFacts.is_subtype(a, b) {
         a.clone()
-    } else if b.is_subtype_of(a) {
+    } else if NoFacts.is_subtype(b, a) {
         b.clone()
     } else {
         Ty::Never {
             attr: TyAttr::default(),
         }
     }
-}
-
-/// Coercion-free type equality used for invariant rigidity: two types are equal
-/// iff they are mutual subtypes.
-fn ty_equal(a: &Ty, b: &Ty) -> bool {
-    a.is_subtype_of(b) && b.is_subtype_of(a)
 }
 
 // ── Type variable inference ────────────────────────────────────────────────
@@ -533,13 +541,17 @@ fn union_atoms(actual: &Ty) -> Vec<Ty> {
 
 /// Whether a concrete (non-`TypeVar`) union-formal member already explains an
 /// actual `atom` — i.e. the atom is a *coercion-free* subtype of the sibling.
-/// Uses [`Ty::is_subtype_of`], which is intentionally free of numeric widening
+/// The canonical subtype relation is intentionally free of numeric widening
 /// (`int` is NOT covered by a `float` sibling) and admits only same-
 /// representation widenings (literal → primitive, union membership). This keeps
 /// the subtraction consistent with the TIR's runtime-tag-identity match
 /// dispatch (`builder.rs::atoms_overlap`).
+#[expect(
+    deprecated,
+    reason = "fact-free by necessity — see the `NoFacts` import note"
+)]
 fn covers(concrete: &Ty, atom: &Ty) -> bool {
-    atom.is_subtype_of(concrete)
+    NoFacts.is_subtype(atom, concrete)
 }
 
 /// Merge a fresh best-effort solve into an existing bindings map, unioning with

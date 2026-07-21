@@ -996,10 +996,13 @@ fn tir2_to_dispatch_guard_template(
             .iter()
             .position(|p| p == name)
             .map(|n| {
-                #[expect(deprecated)]
-                TyTemplate::TypeArgRefOrWildcard(
-                    u32::try_from(n).expect("generic param index fits in u32"),
-                )
+                // A frame type-parameter lowers to its `TypeArgRef` slot. It used
+                // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
+                // reified-and-widened `T` (`Shape | Sq`) would match a value's
+                // narrower `Shape`; that is unnecessary now the runtime relates
+                // type args through the canonical algebra, which absorbs
+                // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
             .unwrap_or(TyTemplate::Wildcard),
         Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::list(
@@ -1077,6 +1080,17 @@ pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
         RuntimeTy::Class(tn, args, _) if !args.is_empty() => TyTemplate::class(
             tn.clone(),
             args.iter().map(ty_to_template_from_resolved_ty).collect(),
+        ),
+        // Interfaces decompose so the membership test keeps its instantiation
+        // (args + associated bindings), with a nested residual type variable a
+        // hole at its own position rather than a panic in the realized-leaf path.
+        RuntimeTy::Interface(tn, args, assoc, _) => TyTemplate::interface(
+            tn.clone(),
+            args.iter().map(ty_to_template_from_resolved_ty).collect(),
+            assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty_to_template_from_resolved_ty(ty)))
+                .collect(),
         ),
         RuntimeTy::Function {
             params,
@@ -11105,76 +11119,6 @@ impl<'db> LoweringContext<'db> {
             .any(|f| &f.name == field)
     }
 
-    /// Class-tag dispatch guards for every implementor that satisfies the
-    /// *specific instantiation* `iface_tn<iface_type_args>`. Implementors of a
-    /// different instantiation (e.g. `StrSlot: Slot<string>` when the request is
-    /// `Slot<int>`) are excluded, because `interface_class_guard_for_args`
-    /// returns `None` for a non-matching argument list. Used by the runtime
-    /// `is`-type test so a generic-interface pattern respects its type argument.
-    fn interface_implementor_class_guards(
-        &self,
-        iface_tn: &TypeName,
-        iface_type_args: &[Tir2Ty],
-        iface_assoc: &[(Name, Tir2Ty)],
-    ) -> Vec<(TypeName, InterfaceClassGuard)> {
-        let Some(impls) = self.interface_implementors.get(iface_tn).cloned() else {
-            return Vec::new();
-        };
-        let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
-        else {
-            return Vec::new();
-        };
-        let mut out: Vec<(TypeName, InterfaceClassGuard)> = Vec::new();
-        for impl_tn in &impls {
-            let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
-                continue;
-            };
-            let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
-            for impl_block in &class_data.implements {
-                let Some((target_tn, target_args, target_assoc)) = self
-                    .resolve_implements_target_view(
-                        impl_block.target,
-                        &impl_block.associated_type_bindings,
-                        class_loc,
-                    )
-                else {
-                    continue;
-                };
-                let Some(target_views) =
-                    self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
-                else {
-                    continue;
-                };
-                for (target_view_tn, target_view_args, target_view_assoc) in target_views {
-                    for (requested_tn, requested_args, requested_assoc) in &requested_views {
-                        if target_view_tn != *requested_tn {
-                            continue;
-                        }
-                        let Some(guard) = interface_class_guard_for_args(
-                            &target_view_args,
-                            &target_view_assoc,
-                            requested_args,
-                            requested_assoc,
-                            &class_data.generic_params,
-                            &self.resolved_aliases.aliases,
-                        ) else {
-                            continue;
-                        };
-                        // Push every matching guard — a generic class can satisfy
-                        // the requested instantiation through more than one
-                        // type-arg projection (`Pair<L, R>` implementing
-                        // `Slot<L>` and `Slot<R>`), and dropping all but the first
-                        // would make some runtime values fail the `is` test.
-                        // Redundant identical branches are harmless (both succeed).
-                        out.push((impl_tn.clone(), guard));
-                    }
-                }
-            }
-        }
-        out
-    }
-
     fn resolve_implementor_interface_field_candidates(
         &self,
         impl_tn: &TypeName,
@@ -12763,30 +12707,21 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        // BEP-044/BEP-057: testing a value against an *interface* type means
-        // "is its runtime class an implementor". Interface types used to lower
-        // to `RuntimeTy::Class`; they now lower to `RuntimeTy::Interface` so reflection can
-        // retain associated bindings. Accept both runtime shapes here.
-        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = &ty
-            && let Some(impls) = self.interface_implementors.get(tn).cloned()
-        {
-            if impls.is_empty() {
-                // No class implements the interface — the test can never hold.
-                self.builder.goto(failure);
-                return;
-            }
-            let members: Vec<RuntimeTy> = impls
-                .into_iter()
-                .map(|cn| RuntimeTy::Class(cn, Vec::new(), TyAttr::default()))
-                .collect();
-            self.emit_is_type_branch(
-                scrutinee,
-                RuntimeTy::Union(members, TyAttr::default()),
-                success,
-                failure,
-            );
-            return;
-        }
+        // BEP-044/BEP-057: testing a value against an *interface* type means "is
+        // its concrete runtime type an implementor" — emitted as a single `IsType` on the
+        // interface existential itself, which the VM resolves through the canonical
+        // membership check against the impl registry (`type_implements`, at the
+        // requested instantiation: type args and associated bindings validated
+        // exactly). The bytecode never enumerates implementors: a compile-time list
+        // is closed-world (an implementor loaded from a later package would silently
+        // fail the test).
+        //
+        // Interfaces reach here already tagged `RuntimeTy::Interface`: TIR resolves
+        // an interface reference to `Ty::Interface` (never `Ty::Class`), and
+        // `lower_to_runtime` preserves the tag and its instantiation. So no
+        // name-based re-tag is needed — matching a `RuntimeTy::Class` against
+        // `interface_implementors` would both miss declaration-only interfaces and
+        // drop the instantiation.
         if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
@@ -12980,36 +12915,21 @@ impl LoweringContext<'_> {
 
                 visited.remove(&key);
             }
-            // An associated or generic interface pattern (`Slot<int>`,
-            // `Source<Item=int>`) must respect its full interface view: test
-            // only the implementors of *that* view, not every implementor of
-            // the bare interface.
-            Tir2Ty::Interface(iface_qtn, type_args, associated_bindings, _)
-                if !type_args.is_empty() || !associated_bindings.is_empty() =>
-            {
-                let iface_tn = iface_qtn.clone();
-                let guards = self.interface_implementor_class_guards(
-                    &iface_tn,
-                    type_args,
-                    associated_bindings,
-                );
-                if guards.is_empty() {
-                    self.builder.goto(failure);
-                    return;
-                }
-                let mut next_check = self.builder.current_block();
-                for (idx, (impl_tn, guard)) in guards.iter().enumerate() {
-                    let bb_next = if idx + 1 == guards.len() {
-                        failure
-                    } else {
-                        self.builder.create_block()
-                    };
-                    self.builder.set_current_block(next_check);
-                    self.emit_interface_class_guard_branch(
-                        scrutinee, impl_tn, guard, success, bb_next,
-                    );
-                    next_check = bb_next;
-                }
+            // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
+            // `Named`) is a single membership test against the interface
+            // existential itself: the VM's canonical algebra resolves the value's
+            // concrete class against the impl registry at the requested
+            // instantiation (type args and associated bindings validated exactly;
+            // an omitted dimension matches any). The bytecode never enumerates
+            // implementors — a compile-time list is closed-world (an implementor
+            // in a later-loaded package would silently fail the test). The
+            // enclosing function's type variables in the instantiation lower to
+            // `TypeArgRef` frame slots, resolved at runtime.
+            Tir2Ty::Interface(..) => {
+                let generic_params = self.enclosing_generic_params();
+                let template =
+                    tir2_to_dispatch_guard_template(ty, self.resolved_aliases, &generic_params);
+                self.emit_is_type_template_branch(scrutinee, template, success, failure);
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
@@ -13568,28 +13488,31 @@ impl LoweringContext<'_> {
                     // site a type variable corresponds to exactly one realized
                     // type).
                     //
-                    // Use the dispatch-guard template (frame TypeVar →
-                    // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
-                    // exact `TypeArgRef` one. A pattern type-test is covariant —
-                    // it asks "does this value belong to type `Opt<T>`" — so the
-                    // reified frame arg must be compared with `is_subtype_of`, not
-                    // `==`. Otherwise, when inference pins `T` to a supertype union
-                    // of the value's actual type arg (e.g. a `default: T` arg
+                    // Each frame `TypeVar` lowers to a `TypeArgRef` and is
+                    // compared *invariantly* against the value's realized arg by
+                    // the canonical algebra. When inference pins `T` to a supertype
+                    // union of the value's actual arg (e.g. a `default: T` arg
                     // subtypes, so `T` reifies to the un-subsumed join `Shape | Sq`
-                    // while the value is `Opt<Shape>`), the exact check
-                    // `Shape | Sq == Shape` fails and the arm silently misses. This
-                    // matches the interface class-dispatch guard path
-                    // (`emit_interface_class_guard_branch`), which already builds
-                    // its typevar args with `tir2_to_dispatch_guard_template`.
-                    // Directionality is preserved: a strictly wider runtime arg
-                    // still fails to match a narrower pinned `T`.
+                    // while the value is `Opt<Shape>`), the arm still matches: the
+                    // algebra knows `Sq <: Shape` and absorbs `Shape | Sq == Shape`,
+                    // so invariant equivalence holds. (The old context-free
+                    // comparison could not see that membership, which is why this
+                    // used to need a covariant `TypeArgRefOrWildcard` band-aid.)
+                    //
+                    // `tir2_to_dispatch_guard_template` (rather than
+                    // `tir2_to_template`) is still used because it also maps an
+                    // unresolved associated projection in the pattern to a match-any
+                    // `Wildcard` — a separate erasure concern.
                     //
                     // `Self`-carrying patterns are excluded: `Self` has no frame
                     // slot yet, so the guard builder would lower it to a
-                    // match-anything `Wildcard` — over-matching is strictly worse
-                    // than today's constant-false. The `Self` units replace this
-                    // (class bodies substitute the enclosing class; interface
-                    // default methods gain a frame slot).
+                    // match-anything `Wildcard`. Keeping them on the erased path
+                    // loses no precision — there a bare `Self` is constant-false
+                    // (`Wildcard` → `emit_false`), while a nested `Self` (e.g.
+                    // `Box<Self>`) already over-matches its container through the
+                    // same residual-typevar `Wildcard` bandaid. The `Self` units
+                    // replace this (class bodies substitute the enclosing class;
+                    // interface default methods gain a frame slot).
                     if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                         && !baml_compiler2_tir::generics::contains_typevar_where(
                             &pat_tir_ty,
