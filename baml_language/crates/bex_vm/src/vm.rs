@@ -2194,8 +2194,9 @@ impl BexVm {
 
     /// Bootstraps the VM preparing the given callable to run.
     ///
-    /// `function` may point to either an [`Object::Function`] or an
-    /// [`Object::Closure`]. Closure entry points are used by BEP-034
+    /// `function` may point to an [`Object::Function`], [`Object::Closure`],
+    /// [`Object::GenericFunction`], or [`Object::HostClosure`]. Closure entry
+    /// points are used by BEP-034
     /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
     /// in a closure that carries the captured environment, then hands the
     /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
@@ -2211,7 +2212,8 @@ impl BexVm {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
             Object::GenericFunction(gf) => gf.type_args.to_vec(),
-            other => panic!("expect function or closure as entry point, got {other:?}"),
+            Object::HostClosure(_) => vec![],
+            other => panic!("expect callable as entry point, got {other:?}"),
         };
         // The captured/specialized type args are positional (De Bruijn order);
         // pair each with the callee's generic-param name so they round-trip
@@ -2260,9 +2262,12 @@ impl BexVm {
         debug_assert!(
             matches!(
                 self.get_object(function),
-                Object::Function(_) | Object::Closure(_) | Object::GenericFunction(_)
+                Object::Function(_)
+                    | Object::Closure(_)
+                    | Object::GenericFunction(_)
+                    | Object::HostClosure(_)
             ),
-            "expect function or closure as entry point, got {:?}",
+            "expect callable as entry point, got {:?}",
             self.get_object(function)
         );
 
@@ -2270,6 +2275,16 @@ impl BexVm {
         // callee's generic params before seeding the frame.
         let param_names = self.entry_point_generic_param_names(function);
         let type_args = lower_named_type_args(&param_names, type_args);
+
+        // Host closures have no backing `Object::Function`, so enter them
+        // through a tiny `CALL_INDIRECT; RETURN` bytecode wrapper. This is the
+        // same dispatch path an ordinary BAML expression uses for a host
+        // callable and therefore yields `BamlHostCallHostValue` to the engine.
+        if matches!(self.get_object(function), Object::HostClosure(_)) {
+            debug_assert!(type_args.is_empty(), "host closures have no type arguments");
+            self.push_host_closure_trampoline_frame(function, args);
+            return;
+        }
 
         // Normalize a `GenericFunction` entry point to its concrete inner
         // function (`dispatch_ptr`) and the stored specialization
@@ -2456,6 +2471,83 @@ impl BexVm {
 
         // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
         // its own pair through the normal Call/SysOp instruction paths.
+        let (call_id, parent_call_id) = self.prof_enter_call(0, None);
+        self.frames.push(Frame::Bytecode(BytecodeFrame {
+            function: entry_ptr,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(0),
+            type_args: Vec::new(),
+            faulting_pc: 0,
+            call_id,
+            parent_call_id,
+            capture_mask: VmCaptureMask::disabled(),
+        }));
+    }
+
+    /// Enter a host-owned callable as a VM root by reproducing the normal
+    /// indirect-call stack shape: arguments first, callable on top. The
+    /// synthetic wrapper gives the yielded host sys-op a bytecode frame to
+    /// resume into and a normal `Return` path after the host result arrives.
+    fn push_host_closure_trampoline_frame(&mut self, closure: HeapPtr, args: &[Value]) {
+        let (arity, return_type, throws_type) = match self.get_object(closure) {
+            Object::HostClosure(hc) => {
+                let throws_type = match &*hc.throws_ty {
+                    baml_type::RealizedTy::Never { .. } | baml_type::RealizedTy::Void { .. } => {
+                        None
+                    }
+                    ty => Some(baml_type::RuntimeTy::from(ty.clone())),
+                };
+                (
+                    hc.arity,
+                    baml_type::RuntimeTy::from((*hc.ret_ty).clone()),
+                    throws_type,
+                )
+            }
+            other => unreachable!("expect host closure as entry point, got {other:?}"),
+        };
+        debug_assert_eq!(
+            args.len(),
+            arity,
+            "host closure entry point received the wrong number of arguments"
+        );
+
+        self.pending_call_type_args.clear();
+        self.stack.extend(args.iter().copied());
+        self.stack.push(Value::object(closure));
+
+        let mut bytecode = bytecode::Bytecode {
+            instructions: vec![Instruction::CallIndirect, Instruction::Return],
+            ..bytecode::Bytecode::default()
+        };
+        bytecode.compact = Some(bytecode.lower_to_compact());
+
+        let display_return_type = return_type.to_string();
+        let entry_function = Function {
+            name: "$entry::<host-callable>".to_string(),
+            source_file: String::new(),
+            docstring: None,
+            declared_name: None,
+            arity: 0,
+            real_local_count: 0,
+            bytecode,
+            kind: FunctionKind::Bytecode,
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            return_type,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type,
+            throws_type,
+            origin: FunctionOrigin::Internal,
+            body_meta: None,
+            capture: bex_vm_types::FunctionCaptureProps::disabled(),
+            function_id: 0,
+        };
+        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
         let (call_id, parent_call_id) = self.prof_enter_call(0, None);
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,

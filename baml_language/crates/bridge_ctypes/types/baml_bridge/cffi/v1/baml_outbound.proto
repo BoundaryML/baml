@@ -142,6 +142,8 @@ message BamlValueUnionVariant {
   BamlTy self_type = 4;
   string value_option_name = 5;
   BamlOutboundValue value = 6;
+  // Exact selected occurrence for typed hosts. Appended for compatibility.
+  BamlTy selected_type = 7;
 }
 
 // -----------------------------------------------------------------------------

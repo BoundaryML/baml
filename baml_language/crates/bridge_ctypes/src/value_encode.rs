@@ -110,6 +110,9 @@ pub fn external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
+                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
+                        &metadata.selected_option,
+                    )),
                 },
             )))
         }
@@ -284,6 +287,9 @@ pub(crate) fn artifact_safe_external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
+                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
+                        &metadata.selected_option,
+                    )),
                 },
             )))
         }

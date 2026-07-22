@@ -120,7 +120,9 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             value_satisfies_ty(inner, ty)
         }
 
-        RuntimeTy::Null { .. } => matches!(value, BexExternalValue::Null),
+        RuntimeTy::Null { .. } | RuntimeTy::Void { .. } => {
+            matches!(value, BexExternalValue::Null)
+        }
         RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
         // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
         // `Float`, nor a `Float` value `Int`. A host-returned wire tag must match
@@ -260,6 +262,15 @@ mod tests {
             validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::int()).is_err()
         );
         assert!(validate_host_return(&BexExternalValue::Bool(true), &RuntimeTy::string()).is_err());
+    }
+
+    #[test]
+    fn void_requires_the_null_boundary_value() {
+        let void = RuntimeTy::Void {
+            attr: TyAttr::default(),
+        };
+        assert!(validate_host_return(&BexExternalValue::Null, &void).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &void).is_err());
     }
 
     #[test]

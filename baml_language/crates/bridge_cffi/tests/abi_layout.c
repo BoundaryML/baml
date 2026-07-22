@@ -21,6 +21,23 @@ static void BAML_CFFI_CALL expected_host_dispatch_callback(
   (void)length;
 }
 
+static void BAML_CFFI_CALL expected_host_dispatch_callback_v2(
+    uint64_t host_value_key,
+    uint32_t call_id,
+    uint64_t function_call_id,
+    const uint8_t *args,
+    size_t length) {
+  (void)host_value_key;
+  (void)call_id;
+  (void)function_call_id;
+  (void)args;
+  (void)length;
+}
+
+static void BAML_CFFI_CALL expected_host_cancel_callback(uint32_t call_id) {
+  (void)call_id;
+}
+
 static void BAML_CFFI_CALL expected_host_release_callback(uint64_t host_value_key) {
   (void)host_value_key;
 }
@@ -28,9 +45,13 @@ static void BAML_CFFI_CALL expected_host_release_callback(uint64_t host_value_ke
 int main(void) {
   BamlResultCallback result_callback = expected_result_callback;
   BamlHostDispatchCallback dispatch_callback = expected_host_dispatch_callback;
+  BamlHostDispatchCallbackV2 dispatch_callback_v2 = expected_host_dispatch_callback_v2;
+  BamlHostCancelCallback cancel_callback = expected_host_cancel_callback;
   BamlHostReleaseCallback release_callback = expected_host_release_callback;
   (void)result_callback;
   (void)dispatch_callback;
+  (void)dispatch_callback_v2;
+  (void)cancel_callback;
   (void)release_callback;
   PRINT_SIZE(BamlCffiStatus);
   PRINT_ALIGN(BamlCffiStatus);
@@ -74,5 +95,8 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, media_base64);
   PRINT_OFFSET(BamlApiV1, media_mime_type);
   PRINT_OFFSET(BamlApiV1, register_bridge);
+  PRINT_OFFSET(BamlApiV1, register_host_dispatch_callback_v2);
+  PRINT_OFFSET(BamlApiV1, register_host_cancel_callback);
+  PRINT_OFFSET(BamlApiV1, complete_host_call_v2);
   return 0;
 }

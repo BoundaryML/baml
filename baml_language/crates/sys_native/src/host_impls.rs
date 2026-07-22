@@ -50,7 +50,7 @@ impl io::IoNamespaceHost for NativeSysOps {
     fn call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
+        function_call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: RuntimeTy,
@@ -171,7 +171,7 @@ impl io::IoNamespaceHost for NativeSysOps {
             // fast-fail missing-callable cases before this point — but the
             // engine-side contract has to be self-enforcing for any new
             // bridge that doesn't pre-check.)
-            if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
+            if !host_dispatch::fire_dispatch(host_arc.key, call_id, function_call_id.0, &encoded) {
                 if let Some(c) = host_dispatch::take(call_id) {
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,

@@ -72,6 +72,18 @@ pub type BamlResultCallback = extern "C" fn(call_id: u32, content: *const i8, le
 pub type BamlHostDispatchCallback =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
+/// Append-only host-dispatch callback that also identifies the parent BAML call.
+pub type BamlHostDispatchCallbackV2 = extern "C" fn(
+    host_value_key: u64,
+    call_id: u32,
+    function_call_id: u64,
+    args: *const u8,
+    length: usize,
+);
+
+/// Notifies the host that native cancellation removed an outstanding host call.
+pub type BamlHostCancelCallback = extern "C" fn(call_id: u32);
+
 /// Notifies the host that a host-owned value key can be released.
 ///
 /// Notifications are deferred until an engine safepoint, may occur on any
@@ -93,9 +105,13 @@ pub type BamlCallFunctionFn = extern "C" fn(
 pub type BamlNewFunctionCallFn = extern "C" fn() -> u64;
 pub type BamlCancelFunctionCallFn = extern "C" fn(id: u64) -> i32;
 pub type BamlRegisterHostDispatchCallbackFn = extern "C" fn(callback: BamlHostDispatchCallback);
+pub type BamlRegisterHostDispatchCallbackV2Fn = extern "C" fn(callback: BamlHostDispatchCallbackV2);
+pub type BamlRegisterHostCancelCallbackFn = extern "C" fn(callback: BamlHostCancelCallback);
 pub type BamlRegisterHostReleaseCallbackFn = extern "C" fn(callback: BamlHostReleaseCallback);
 pub type BamlCompleteHostCallFn =
     extern "C" fn(call_id: u32, is_error: i32, content: *const i8, length: usize);
+pub type BamlCompleteHostCallV2Fn =
+    extern "C" fn(call_id: u32, is_error: i32, content: *const i8, length: usize) -> i32;
 pub type BamlHandleCloneFn = unsafe extern "C" fn(key: u64, out_key: *mut u64) -> BamlCffiStatus;
 pub type BamlHandleReleaseFn = unsafe extern "C" fn(key: u64) -> BamlCffiStatus;
 /// Construct media using a raw `BamlCffiMediaKind` value.
@@ -231,6 +247,15 @@ pub struct BamlApiV1 {
     /// process-global, thread-safe, first-successful-call-wins, and idempotent
     /// only for an identical language/version pair.
     pub register_bridge: BamlRegisterBridgeFn,
+    /// Install the append-only V2 host-dispatch callback. When present, native
+    /// dispatch prefers it over the original callback.
+    pub register_host_dispatch_callback_v2: BamlRegisterHostDispatchCallbackV2Fn,
+    /// Install the callback notified when a live host invocation is cancelled.
+    pub register_host_cancel_callback: BamlRegisterHostCancelCallbackFn,
+    /// Complete a host call and return 1 only when native consumed every
+    /// ownership transfer encoded in `content`. On 0 the bridge retains those
+    /// transfers and must release them locally.
+    pub complete_host_call_v2: BamlCompleteHostCallV2Fn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -256,6 +281,9 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     media_base64: crate::baml_media_base64,
     media_mime_type: crate::baml_media_mime_type,
     register_bridge: crate::register_bridge_ffi,
+    register_host_dispatch_callback_v2: crate::register_host_dispatch_callback_v2,
+    register_host_cancel_callback: crate::register_host_cancel_callback,
+    complete_host_call_v2: crate::complete_host_call_v2,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -277,6 +305,12 @@ mod tests {
         let api = unsafe { &*baml_get_api_v1() };
         assert_eq!(api.abi_version, BAML_API_V1_ABI_VERSION);
         assert_eq!(api.struct_size, std::mem::size_of::<BamlApiV1>());
+        assert_eq!(
+            std::mem::offset_of!(BamlApiV1, register_host_dispatch_callback_v2),
+            std::mem::offset_of!(BamlApiV1, register_bridge)
+                + std::mem::size_of::<BamlRegisterBridgeFn>(),
+            "the original V1 prefix must remain byte-for-byte unchanged"
+        );
     }
 
     #[test]
@@ -317,6 +351,15 @@ mod tests {
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
+        assert_same_function!(
+            api.register_host_dispatch_callback_v2,
+            crate::register_host_dispatch_callback_v2
+        );
+        assert_same_function!(
+            api.register_host_cancel_callback,
+            crate::register_host_cancel_callback
+        );
+        assert_same_function!(api.complete_host_call_v2, crate::complete_host_call_v2);
     }
 
     #[test]
@@ -342,6 +385,9 @@ mod tests {
         let _: BamlMediaAccessorFn = api.media_base64;
         let _: BamlMediaAccessorFn = api.media_mime_type;
         let _: BamlRegisterBridgeFn = api.register_bridge;
+        let _: BamlRegisterHostDispatchCallbackV2Fn = api.register_host_dispatch_callback_v2;
+        let _: BamlRegisterHostCancelCallbackFn = api.register_host_cancel_callback;
+        let _: BamlCompleteHostCallV2Fn = api.complete_host_call_v2;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

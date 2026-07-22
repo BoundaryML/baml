@@ -23,8 +23,10 @@ use prost::Message;
 use sys_native::host_dispatch;
 use sys_types::{OpError, SysOp, VmBamlError, VmInternalError};
 
-pub use super::super::api::BamlHostDispatchCallback as HostDispatchFn;
-use super::super::api::BamlHostReleaseCallback;
+use super::super::api::{BamlHostCancelCallback, BamlHostReleaseCallback};
+pub use super::super::api::{
+    BamlHostDispatchCallback as HostDispatchFn, BamlHostDispatchCallbackV2 as HostDispatchFnV2,
+};
 
 /// Register the host dispatch callback. First call wins; subsequent calls
 /// are silently ignored (consistent with `register_callback` semantics).
@@ -38,6 +40,18 @@ use super::super::api::BamlHostReleaseCallback;
 #[unsafe(no_mangle)]
 pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
     host_dispatch::set_dispatch_fn(cb);
+}
+
+/// Register the append-only dispatch callback carrying the parent function ID.
+#[unsafe(no_mangle)]
+pub extern "C" fn register_host_dispatch_callback_v2(cb: HostDispatchFnV2) {
+    host_dispatch::set_dispatch_fn_v2(cb);
+}
+
+/// Register notification for cancellation of an outstanding host invocation.
+#[unsafe(no_mangle)]
+pub extern "C" fn register_host_cancel_callback(cb: BamlHostCancelCallback) {
+    host_dispatch::set_cancel_fn(cb);
 }
 
 /// Register the host release callback. First call wins; subsequent calls
@@ -84,23 +98,49 @@ pub extern "C" fn complete_host_call(
     content: *const i8,
     length: usize,
 ) {
+    let _ = complete_host_call_inner(call_id, is_error, content, length);
+}
+
+/// Complete a host call and report whether native consumed the payload's
+/// transferred ownership. This append-only companion lets bridges safely
+/// return handle-bearing values: `1` means every encoded transfer was decoded
+/// and adopted; `0` means the bridge must roll its transfers back. The host
+/// call itself is still completed with a bridge error when a live call supplied
+/// malformed input.
+#[unsafe(no_mangle)]
+pub extern "C" fn complete_host_call_v2(
+    call_id: u32,
+    is_error: i32,
+    content: *const i8,
+    length: usize,
+) -> i32 {
+    i32::from(complete_host_call_inner(call_id, is_error, content, length))
+}
+
+fn complete_host_call_inner(
+    call_id: u32,
+    is_error: i32,
+    content: *const i8,
+    length: usize,
+) -> bool {
+    // Claim the call before decoding. If cancellation already won, leave the
+    // payload untouched so the host can release every transfer locally.
+    let Some(completion) = host_dispatch::take(call_id) else {
+        return false;
+    };
+
     // A non-zero length with a null pointer is an ABI violation: the caller
     // promised `length` bytes but gave us nothing to read. Don't silently treat
     // it as an empty payload (which would mask the bug as a `Null` return or a
     // "no payload" error) — fail the call explicitly so the host sees it.
     if length > 0 && content.is_null() {
-        host_dispatch::complete_with_error(
-            call_id,
-            OpError::new(
-                SysOp::BamlHostCallHostValue,
-                VmBamlError::Io {
-                    message: format!(
-                        "complete_host_call: null content pointer with length {length}"
-                    ),
-                },
-            ),
-        );
-        return;
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            VmBamlError::Io {
+                message: format!("complete_host_call: null content pointer with length {length}"),
+            },
+        )));
+        return false;
     }
 
     // `from_raw_parts`'s soundness contract requires the slice's *total
@@ -109,16 +149,13 @@ pub extern "C" fn complete_host_call(
     // behaviour inside the slice access or downstream protobuf decoding.
     // Reject as a `BridgeFailure` so the bug surfaces loudly.
     if length > isize::MAX as usize {
-        host_dispatch::complete_with_error(
-            call_id,
-            OpError::new(
-                SysOp::BamlHostCallHostValue,
-                VmInternalError::BridgeFailure {
-                    message: format!("complete_host_call: length {length} exceeds isize::MAX"),
-                },
-            ),
-        );
-        return;
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            VmInternalError::BridgeFailure {
+                message: format!("complete_host_call: length {length} exceeds isize::MAX"),
+            },
+        )));
+        return false;
     }
 
     // SAFETY: caller promises ptr is valid for `length` bytes; the guard above
@@ -134,54 +171,51 @@ pub extern "C" fn complete_host_call(
     // someone repurposing the flag) — surface it as `BridgeFailure` so the
     // bug is loud, instead of silently aliasing into the throw branch.
     if is_error != 0 && is_error != 1 {
-        host_dispatch::complete_with_error(
-            call_id,
-            OpError::new(
-                SysOp::BamlHostCallHostValue,
-                VmInternalError::BridgeFailure {
-                    message: format!(
-                        "complete_host_call: invalid is_error value {is_error}; \
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            VmInternalError::BridgeFailure {
+                message: format!(
+                    "complete_host_call: invalid is_error value {is_error}; \
                          expected 0 (success) or 1 (error)"
-                    ),
-                },
-            ),
-        );
-        return;
+                ),
+            },
+        )));
+        return false;
     }
 
     if is_error == 0 {
         // Success: decode InboundValue → BexExternalValue.
         if bytes.is_empty() {
             // No payload → Null return.
-            host_dispatch::complete_with_value(call_id, BexExternalValue::Null);
-            return;
+            completion.complete(Ok(BexExternalValue::Null));
+            return true;
         }
         let inbound = match InboundValue::decode(bytes) {
             Ok(v) => v,
             Err(e) => {
-                host_dispatch::complete_with_error(
-                    call_id,
-                    OpError::new(
-                        SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
-                            message: format!("complete_host_call decode failure: {e}"),
-                        },
-                    ),
-                );
-                return;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => host_dispatch::complete_with_value(call_id, v),
-            Err(e) => host_dispatch::complete_with_error(
-                call_id,
-                OpError::new(
+                completion.complete(Err(OpError::new(
                     SysOp::BamlHostCallHostValue,
                     VmBamlError::ParseError {
                         message: format!("complete_host_call decode failure: {e}"),
                     },
-                ),
-            ),
+                )));
+                return false;
+            }
+        };
+        match inbound_to_external(inbound, &HANDLE_TABLE) {
+            Ok(v) => {
+                completion.complete(Ok(v));
+                true
+            }
+            Err(e) => {
+                completion.complete(Err(OpError::new(
+                    SysOp::BamlHostCallHostValue,
+                    VmBamlError::ParseError {
+                        message: format!("complete_host_call decode failure: {e}"),
+                    },
+                )));
+                false
+            }
         }
     } else {
         // Throw: decode `InboundValue` → `BexExternalValue` → engine.
@@ -205,48 +239,46 @@ pub extern "C" fn complete_host_call(
             // codegens to `baml.panics.SdkPanic` on the host side), not as
             // `HostContractViolation` (which would falsely accuse the
             // user's callable of returning the wrong shape).
-            host_dispatch::complete_with_error(
-                call_id,
-                OpError::new(
-                    SysOp::BamlHostCallHostValue,
-                    VmInternalError::BridgeFailure {
-                        message: "host bridge called complete_host_call(is_error=1) \
+            completion.complete(Err(OpError::new(
+                SysOp::BamlHostCallHostValue,
+                VmInternalError::BridgeFailure {
+                    message: "host bridge called complete_host_call(is_error=1) \
                                   with no payload; expected a protobuf-encoded \
                                   InboundValue describing the thrown value"
-                            .to_string(),
-                    },
-                ),
-            );
-            return;
+                        .to_string(),
+                },
+            )));
+            return false;
         }
         let inbound = match InboundValue::decode(bytes) {
             Ok(v) => v,
             Err(e) => {
-                host_dispatch::complete_with_error(
-                    call_id,
-                    OpError::new(
-                        SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
-                            message: format!(
-                                "complete_host_call throw-payload decode failure: {e}"
-                            ),
-                        },
-                    ),
-                );
-                return;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => host_dispatch::complete_with_throw(call_id, v),
-            Err(e) => host_dispatch::complete_with_error(
-                call_id,
-                OpError::new(
+                completion.complete(Err(OpError::new(
                     SysOp::BamlHostCallHostValue,
                     VmBamlError::ParseError {
                         message: format!("complete_host_call throw-payload decode failure: {e}"),
                     },
-                ),
-            ),
+                )));
+                return false;
+            }
+        };
+        match inbound_to_external(inbound, &HANDLE_TABLE) {
+            Ok(v) => {
+                completion.complete(Err(OpError::host_thrown_value(
+                    SysOp::BamlHostCallHostValue,
+                    v,
+                )));
+                true
+            }
+            Err(e) => {
+                completion.complete(Err(OpError::new(
+                    SysOp::BamlHostCallHostValue,
+                    VmBamlError::ParseError {
+                        message: format!("complete_host_call throw-payload decode failure: {e}"),
+                    },
+                )));
+                false
+            }
         }
     }
 }
@@ -293,6 +325,32 @@ mod tests {
                 assert!(matches!(value, BexExternalValue::Null));
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
+        }
+    }
+
+    #[tokio::test]
+    async fn complete_host_call_v2_reports_ownership_acceptance_and_stale_calls() {
+        use sys_types::{SysOp, SysOpResult};
+
+        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let id = host_dispatch::next_call_id();
+        assert!(host_dispatch::insert(id, completion));
+
+        assert_eq!(
+            complete_host_call_v2(id, 0, std::ptr::null(), 0),
+            1,
+            "a live call must accept an empty success payload"
+        );
+        assert_eq!(
+            complete_host_call_v2(id, 0, std::ptr::null(), 0),
+            0,
+            "a completion that lost the take race must retain host ownership"
+        );
+        match result {
+            SysOpResult::Async(future) => {
+                assert!(matches!(future.await, Ok(BexExternalValue::Null)));
+            }
+            SysOpResult::Ready(_) => panic!("expected async"),
         }
     }
 

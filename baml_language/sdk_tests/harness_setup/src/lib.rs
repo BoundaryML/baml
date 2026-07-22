@@ -37,6 +37,7 @@ use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
 pub mod cpp;
+pub mod csharp;
 pub mod go;
 pub mod java;
 pub mod python_pydantic2;

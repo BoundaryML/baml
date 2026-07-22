@@ -5,14 +5,15 @@
 
 use std::collections::HashMap;
 
-use bex_project::{BexExternalValue, RuntimeTy};
+use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
 use indexmap::IndexMap;
 use prost::Message;
 
 use crate::{
     baml_bridge::cffi::{
         BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
+        InboundMapValue, InboundUnionValue, InboundValue,
+        inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
@@ -54,6 +55,7 @@ pub fn inbound_to_external(
             InboundValueVariant::MapValue(map) => convert_map(map, handle_table),
             InboundValueVariant::ClassValue(class) => convert_class(class, handle_table),
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
+            InboundValueVariant::UnionValue(union) => convert_union(*union, handle_table),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
@@ -108,14 +110,30 @@ fn convert_list(
     list: InboundListValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
-    let items: Result<Vec<BexExternalValue>, CtypesError> = list
+    let has_item_type = list.item_type.is_some();
+    let element_type = list
+        .item_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(default_scalar_union_ty);
+    let items = list
         .values
         .into_iter()
         .map(|v| inbound_to_external(v, handle_table))
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
+    if has_item_type {
+        for (index, item) in items.iter().enumerate() {
+            validate_collection_occurrence(item, &element_type).map_err(|error| {
+                CtypesError::InvalidCollectionMetadata(format!(
+                    "list item {index} contradicts item_type: {error}"
+                ))
+            })?;
+        }
+    }
     Ok(BexExternalValue::Array {
-        element_type: default_scalar_union_ty(),
-        items: items?,
+        element_type,
+        items,
     })
 }
 
@@ -123,23 +141,76 @@ fn convert_map(
     map: InboundMapValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
+    let has_key_type = map.key_type.is_some();
+    let has_value_type = map.value_type.is_some();
+    let key_type = map
+        .key_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(RuntimeTy::string);
+    let value_type = map
+        .value_type
+        .as_ref()
+        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .transpose()?
+        .unwrap_or_else(default_scalar_union_ty);
+    if has_key_type && !matches!(key_type, RuntimeTy::String { .. }) {
+        return Err(CtypesError::InvalidCollectionMetadata(format!(
+            "map key_type must be string, received `{key_type}`"
+        )));
+    }
     let mut entries = IndexMap::new();
-    for entry in map.entries {
+    for (index, entry) in map.entries.into_iter().enumerate() {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
             .map(|v| inbound_to_external(v, handle_table))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
+        if has_value_type {
+            validate_collection_occurrence(&value, &value_type).map_err(|error| {
+                CtypesError::InvalidCollectionMetadata(format!(
+                    "map value {index} contradicts value_type: {error}"
+                ))
+            })?;
+        }
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type: RuntimeTy::String {
-            attr: baml_type::TyAttr::default(),
-        },
-        value_type: default_scalar_union_ty(),
+        key_type,
+        value_type,
         entries,
     })
+}
+
+fn validate_collection_occurrence(
+    value: &BexExternalValue,
+    expected: &RuntimeTy,
+) -> Result<(), String> {
+    if let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) = value {
+        if tagged_handle_occurrence_matches(ty, expected) {
+            return Ok(());
+        }
+        return Err(format!(
+            "tagged resource type `{ty}` does not match `{expected}`"
+        ));
+    }
+    bex_project::validate_host_return(value, expected).map_err(|error| error.to_string())
+}
+
+fn tagged_handle_occurrence_matches(actual: &RuntimeTy, expected: &RuntimeTy) -> bool {
+    match (actual, expected) {
+        (_, RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::TypeVar(..)) => true,
+        (
+            RuntimeTy::Class(actual_name, actual_args, _),
+            RuntimeTy::Class(expected_name, expected_args, _),
+        ) => actual_name == expected_name && actual_args == expected_args,
+        (actual, RuntimeTy::Union(members, _)) => members
+            .iter()
+            .any(|member| tagged_handle_occurrence_matches(actual, member)),
+        _ => false,
+    }
 }
 
 fn convert_class(
@@ -183,6 +254,46 @@ fn convert_enum(e: InboundEnumValue) -> BexExternalValue {
         enum_name: e.name,
         variant_name: e.value,
     }
+}
+
+fn convert_union(
+    union: InboundUnionValue,
+    handle_table: &CffiHandleTable,
+) -> Result<BexExternalValue, CtypesError> {
+    let self_type = union
+        .self_type
+        .ok_or_else(|| CtypesError::InvalidUnionMetadata("self_type is absent".to_string()))?;
+    let self_type = crate::ty_decode::proto_ty_to_runtime_ty(&self_type)?;
+    let RuntimeTy::Union(members, _) = self_type else {
+        return Err(CtypesError::InvalidUnionMetadata(
+            "self_type is not a union".to_string(),
+        ));
+    };
+    let selected_type = union
+        .selected_type
+        .ok_or_else(|| CtypesError::InvalidUnionMetadata("selected_type is absent".to_string()))?;
+    let selected_type = crate::ty_decode::proto_ty_to_runtime_ty(&selected_type)?;
+    if !members.contains(&selected_type) {
+        return Err(CtypesError::InvalidUnionMetadata(format!(
+            "selected type `{selected_type}` is not a self_type member"
+        )));
+    }
+    if union.value_option_name != selected_type.to_string() {
+        return Err(CtypesError::InvalidUnionMetadata(format!(
+            "value_option_name `{}` does not identify selected type `{selected_type}`",
+            union.value_option_name
+        )));
+    }
+    let value = union
+        .value
+        .ok_or_else(|| CtypesError::InvalidUnionMetadata("selected value is absent".to_string()))?;
+    let value = inbound_to_external(*value, handle_table)?;
+    bex_project::validate_host_return(&value, &selected_type).map_err(|error| {
+        CtypesError::InvalidUnionMetadata(format!(
+            "selected value does not satisfy selected type: {error}"
+        ))
+    })?;
+    Ok(BexExternalValue::union(value, members, selected_type))
 }
 
 fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {

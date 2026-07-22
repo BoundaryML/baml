@@ -39,16 +39,31 @@ message InboundValue {
     // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
+    // Exact selected-arm metadata for typed hosts. Older hosts may continue
+    // sending the selected payload directly.
+    InboundUnionValue union_value = 14;
   }
   // Absent oneof = null value.
 }
 
+message InboundUnionValue {
+  BamlTy self_type = 1;
+  BamlTy selected_type = 2;
+  string value_option_name = 3;
+  InboundValue value = 4;
+}
+
 message InboundListValue {
   repeated InboundValue values = 1;
+  // Optional exact occurrence metadata; absent preserves the legacy fallback.
+  BamlTy item_type = 2;
 }
 
 message InboundMapValue {
   repeated InboundMapEntry entries = 1;
+  // Optional exact occurrence metadata; absent preserves the legacy fallback.
+  BamlTy key_type = 2;
+  BamlTy value_type = 3;
 }
 
 message InboundMapEntry {
