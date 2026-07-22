@@ -113,12 +113,20 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
+static void RunTest(const char* name, void (*test)()) {
+  std::fprintf(stderr, "running %s\n", name);
+  std::fflush(stderr);
+  test();
+  std::fprintf(stderr, "passed %s\n", name);
+  std::fflush(stderr);
+}
+
 int main() {
-  TestVersion();
-  TestBytecodeInitRejectsGarbage();
-  TestCallRegistryRoundTrip();
-  TestArgTwoState();
-  TestOwnedBufferMove();
+  RunTest("version", TestVersion);
+  RunTest("bytecode init", TestBytecodeInitRejectsGarbage);
+  RunTest("call registry", TestCallRegistryRoundTrip);
+  RunTest("argument states", TestArgTwoState);
+  RunTest("owned buffer move", TestOwnedBufferMove);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }

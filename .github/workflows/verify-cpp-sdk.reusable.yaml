@@ -69,6 +69,7 @@ jobs:
 
   verify:
     needs: platform-matrix
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
