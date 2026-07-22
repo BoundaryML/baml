@@ -30,6 +30,13 @@ pub fn inbound_to_external(
         .as_ref()
         .map(crate::ty_decode::proto_ty_to_runtime_ty)
         .transpose()?;
+    // `value_type` identifies the exact type selected for this node. A root
+    // union (including `optional<T>`, which lowers to `T | null`) only repeats
+    // a set of possible types and therefore cannot select an arm. Unions are
+    // still valid below an exact outer type, such as `list<int | string>`.
+    if matches!(value_type, Some(RuntimeTy::Union(..))) {
+        return Err(CtypesError::InvalidInboundValueTypeRootUnion);
+    }
     let decoded = match value.value {
         None => Ok(BexExternalValue::Null),
         Some(variant) => match variant {
@@ -300,6 +307,58 @@ mod tests {
             panic!("expected typed-value carrier")
         };
         assert!(matches!(*value, BexExternalValue::Array { items, .. } if items.is_empty()));
+        assert_eq!(metadata.selected_option, list_type);
+    }
+
+    #[test]
+    fn root_union_value_type_is_rejected() {
+        let error = inbound_to_external(
+            typed_input(
+                &RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+                InboundValueVariant::IntValue(7),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CtypesError::InvalidInboundValueTypeRootUnion
+        ));
+    }
+
+    #[test]
+    fn root_optional_value_type_is_rejected() {
+        let error = inbound_to_external(
+            typed_input(
+                &RuntimeTy::optional(RuntimeTy::int()),
+                InboundValueVariant::IntValue(7),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CtypesError::InvalidInboundValueTypeRootUnion
+        ));
+    }
+
+    #[test]
+    fn nested_union_value_type_is_allowed() {
+        let list_type = RuntimeTy::list(RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]));
+        let decoded = inbound_to_external(
+            typed_input(
+                &list_type,
+                InboundValueVariant::ListValue(InboundListValue { values: vec![] }),
+            ),
+            &CffiHandleTable::new(),
+        )
+        .unwrap();
+
+        let BexExternalValue::Union { metadata, .. } = decoded else {
+            panic!("expected typed-value carrier")
+        };
         assert_eq!(metadata.selected_option, list_type);
     }
 

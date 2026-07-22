@@ -3218,6 +3218,29 @@ fn refine_class_annotation_args(
         .collect()
 }
 
+/// Whether a sparse inbound annotation names an enclosing union rather than
+/// one exact selected type. Follow aliases here because the protobuf decoder
+/// cannot see program-local alias definitions.
+fn inbound_annotation_resolves_to_root_union(
+    annotation: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> bool {
+    let mut current = annotation;
+    let mut visited = std::collections::HashSet::new();
+    loop {
+        match current {
+            RuntimeTy::Union(..) => return true,
+            RuntimeTy::TypeAlias(name, _) if visited.insert(name.clone()) => {
+                let Some(expanded) = aliases.get(name) else {
+                    return false;
+                };
+                current = expanded;
+            }
+            _ => return false,
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn coerce_arg_to_declared_type(
     value: BexExternalValue,
@@ -3237,6 +3260,19 @@ fn coerce_arg_to_declared_type_with_aliases(
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
 ) -> Result<BexExternalValue, EngineError> {
+    // Defense in depth for internally constructed values and aliases. Wire
+    // inputs reject a root union in `inbound_to_external`, but an alias can be
+    // recognized as union-shaped only after the engine has loaded its body.
+    if let BexExternalValue::Union { metadata, .. } = &value
+        && metadata.is_inbound_type_annotation
+        && inbound_annotation_resolves_to_root_union(&metadata.selected_option, aliases)
+    {
+        return Err(EngineError::TypeMismatch {
+            message: "inbound value_type must identify one exact selected type, not a root union or optional"
+                .to_string(),
+        });
+    }
+
     // Recursive aliases are nominal in the public type but transparent to the
     // payload matcher. Expanding one layer here makes its body the effective
     // recursive context; recursive references consume payload structure before
@@ -3862,6 +3898,44 @@ mod union_container_selection_tests {
         };
         assert_eq!(metadata.union_type, declared);
         assert_eq!(metadata.selected_option, RuntimeTy::string());
+    }
+
+    #[test]
+    fn host_root_union_annotation_is_rejected_before_arm_matching() {
+        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+        let typed = BexExternalValue::typed(BexExternalValue::Int(7), declared.clone());
+
+        let error = coerce_arg_to_declared_type(typed, &declared).unwrap_err();
+        assert!(matches!(
+            error,
+            EngineError::TypeMismatch { message }
+                if message.contains("must identify one exact selected type")
+        ));
+    }
+
+    #[test]
+    fn host_alias_to_root_union_annotation_is_rejected() {
+        let alias_name = TypeName::from_dotted_path("user.aliases.Choice");
+        let alias = RuntimeTy::TypeAlias(alias_name.clone(), TyAttr::default());
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(
+            alias_name,
+            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+        );
+        let typed = BexExternalValue::typed(BexExternalValue::Int(7), alias);
+
+        let error = coerce_arg_to_declared_type_with_aliases(
+            typed,
+            &RuntimeTy::int(),
+            &aliases,
+            &indexmap::IndexMap::new(),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            EngineError::TypeMismatch { message }
+                if message.contains("must identify one exact selected type")
+        ));
     }
 
     #[test]
