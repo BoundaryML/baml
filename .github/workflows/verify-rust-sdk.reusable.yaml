@@ -128,6 +128,7 @@ jobs:
           echo "dylib=$(abspath "$dylib")" >> "$GITHUB_OUTPUT"
 
       - name: Assert version triple (crate == dylib version() == plan canonical)
+        working-directory: baml_language
         run: |
           set -euo pipefail
           crate_version="$(basename "${{ steps.art.outputs.crate }}" .crate)"
@@ -135,7 +136,9 @@ jobs:
           [[ "$crate_version" == "$CANONICAL" ]] || {
             echo "::error::crate version ${crate_version} != plan canonical ${CANONICAL}"; exit 1; }
           # dylib version() must equal the plan canonical too.
-          python3 scripts/smoke-bridge-cffi.py "${{ steps.art.outputs.dylib }}" "$CANONICAL"
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
+            "${{ steps.art.outputs.dylib }}" \
+            "$CANONICAL"
 
       - name: Extract baml-cli from the same-plan toolchain artifact
         id: cli
