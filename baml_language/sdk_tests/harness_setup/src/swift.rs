@@ -1,12 +1,12 @@
 //! Swift sdk-test target — build-script side.
 //!
-//! Mirrors [`crate::python_pydantic2`] / [`crate::typescript_node`] but
+//! Mirrors [`crate::python_pydantic2`] / [`crate::typescript`] but
 //! for the Swift toolchain (SwiftPM + XCTest).
 //!
 //! `sdkgen_swift` is still an early emitter, so codegen runs under
 //! `catch_unwind` and failures downgrade into [`BuildDiagnostics`]
 //! records instead of aborting the build (the same soft-fail posture
-//! typescript_node used while its emitter was a stub).
+//! the TypeScript target used while its emitter was a stub).
 //!
 //! **Native build steps live in `sdk_tests/crates/swift/setup.sh`**,
 //! NOT in build.rs. `cargo nextest run` invokes it automatically via a
@@ -25,7 +25,7 @@
 //! + scaffold emit — it writes each fixture's `Package.swift` and test
 //! overlay that `swift build` / `swift test` consume.
 //!
-//! Fixture enforcement is per-fixture: names in [`ENFORCED_FIXTURES`]
+//! Fixture enforcement is per-fixture: names in `ENFORCED_FIXTURES`
 //! get real `#[test]`s; everything else is `#[ignore]`d until its
 //! capability phase lands. Non-macOS hosts ignore the toolchain tests
 //! entirely (no swift binary on Linux CI runners).
