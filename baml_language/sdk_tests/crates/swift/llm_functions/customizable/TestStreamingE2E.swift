@@ -22,7 +22,10 @@ final class TestStreamingE2E: XCTestCase {
                     break loop
                 case .value:
                     results += 1
-                    XCTAssertLessThan(results, 10_000, "stream never finished")
+                    if results >= 10_000 {
+                        XCTFail("stream never finished")
+                        break
+                    }
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
@@ -43,7 +46,10 @@ final class TestStreamingE2E: XCTestCase {
                     break loop
                 case .value:
                     results += 1
-                    XCTAssertLessThan(results, 10_000, "stream never finished")
+                    if results >= 10_000 {
+                        XCTFail("stream never finished")
+                        break
+                    }
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
@@ -75,7 +81,10 @@ final class TestStreamingE2E: XCTestCase {
                     // Python asserts hasattr(v, "title"); the Swift
                     // analog is the typed partial's field access.
                     if let partial { _ = partial.title }
-                    XCTAssertLessThan(results, 10_000, "stream never finished")
+                    if results >= 10_000 {
+                        XCTFail("stream never finished")
+                        break
+                    }
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)
@@ -95,7 +104,10 @@ final class TestStreamingE2E: XCTestCase {
                     break loop
                 case .value:
                     results += 1
-                    XCTAssertLessThan(results, 10_000, "stream never finished")
+                    if results >= 10_000 {
+                        XCTFail("stream never finished")
+                        break
+                    }
                 }
             }
             XCTAssertGreaterThanOrEqual(results, 10)

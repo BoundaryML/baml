@@ -266,6 +266,11 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
         ));
     } else {
         buf.push_str("::sdk_test_harness_runner::build_diagnostics!();\n");
+        // The Swift setup script only runs on macOS (nextest binding is
+        // host-gated); off-macOS the fixture tests are #[ignore]d, so
+        // the guard must not fire there either or a Linux/Windows
+        // nextest run of this crate panics before reaching the ignores.
+        buf.push_str("#[cfg(target_os = \"macos\")]\n");
         buf.push_str(&format!(
             "::sdk_test_harness_runner::setup_guard!({SETUP_ENV_VAR:?});\n"
         ));

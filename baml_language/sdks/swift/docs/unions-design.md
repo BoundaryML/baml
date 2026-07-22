@@ -10,7 +10,7 @@ BAML unions are represented by **one reusable generic family** in the runtime li
 enum per structural union shape. **No synthesized public type names** (`IntOrString`,
 `CardPaymentOrWirePayment`, …) are ever emitted.
 
-```
+```text
 int | string                 →  BamlUnion2<Swift.Int, Swift.String>
 int | null | string          →  BamlUnion2<Swift.Int, Swift.String>?     (null strips to Optional)
 int | string | MyType        →  BamlUnion3<Swift.Int, Swift.String, Baml.ns.MyType>
