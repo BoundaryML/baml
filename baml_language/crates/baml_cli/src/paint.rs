@@ -22,69 +22,6 @@ use baml_project::ProjectDatabase;
 use console::Style;
 use text_size::{TextRange, TextSize};
 
-// ── Output mode (color / hyperlinks) ───────────────────────────────────────────
-
-/// When to emit color and hyperlinks. Mirrors the conventional `--color` flag.
-#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ColorChoice {
-    /// Color on an interactive terminal; off when piped or inside an AI agent.
-    #[default]
-    Auto,
-    /// Always emit color/hyperlinks.
-    Always,
-    /// Never emit color/hyperlinks.
-    Never,
-}
-
-/// Environment variables that signal a non-interactive AI agent is capturing
-/// output, where ANSI color and hyperlinks are noise rather than UI. Sourced
-/// from each agent's docs and from maintained detection matrices
-/// (`@vercel/detect-agent`, Bun's agent checks).
-const AGENT_ENV_VARS: &[&str] = &[
-    "CLAUDECODE",      // Claude Code (code.claude.com/docs/en/env-vars)
-    "CODEX_SANDBOX",   // OpenAI Codex CLI (set in its sandbox)
-    "PI_CODING_AGENT", // Pi (earendil-works/pi)
-    "OPENCODE_CLIENT", // opencode
-    "AI_AGENT",        // @vercel/detect-agent universal var (+ custom agents)
-    "CURSOR_TRACE_ID", // Cursor agent terminal
-    "REPL_ID",         // Replit
-    "AGENT",           // generic (Codex `AGENT=codex`, Bun)
-];
-
-fn env_truthy(var: &str) -> bool {
-    std::env::var(var).is_ok_and(|v| !v.is_empty() && v != "0")
-}
-
-/// Whether output is being captured by a known AI coding agent.
-fn running_in_agent() -> bool {
-    AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
-}
-
-/// Resolve color/hyperlink output once at startup, applying the decision to both
-/// stdout and stderr so the two streams agree (avoids leaking codes into a
-/// redirected stream or dropping color on a redirected sibling).
-pub fn init_color(choice: ColorChoice) {
-    match choice {
-        ColorChoice::Always => {
-            console::set_colors_enabled(true);
-            console::set_colors_enabled_stderr(true);
-        }
-        ColorChoice::Never => {
-            console::set_colors_enabled(false);
-            console::set_colors_enabled_stderr(false);
-        }
-        ColorChoice::Auto => {
-            // An explicit `CLICOLOR_FORCE` (honored by console's defaults) always
-            // wins; only suppress for agents when color was not force-requested.
-            if !env_truthy("CLICOLOR_FORCE") && running_in_agent() {
-                console::set_colors_enabled(false);
-                console::set_colors_enabled_stderr(false);
-            }
-            // Otherwise leave console's per-stream TTY / NO_COLOR / CLICOLOR defaults.
-        }
-    }
-}
-
 /// Style for a semantic token, honoring its modifiers.
 ///
 /// Colors are restricted to the terminal's *named* ANSI palette plus the
@@ -94,9 +31,9 @@ pub fn init_color(choice: ColorChoice) {
 /// attributes the way editor themes do: declarations are bold, stdlib
 /// entities italic, deprecated ones struck through.
 ///
-/// Styling is **forced** so emission is decided by the caller per output stream
-/// (gating on `colors_enabled()` for stdout vs `colors_enabled_stderr()` for
-/// stderr), not by console's ambient stdout flag.
+/// Styling is **forced** so emission is decided by the caller from the resolved
+/// output policy for the destination stream, not by console's ambient stdout
+/// flag.
 fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
     use SemanticTokenType as T;
     // (base color, dimmed) — dim is a *base* trait of quiet token types, kept
@@ -298,28 +235,33 @@ fn file_uri(path: &Path) -> String {
 /// helpers never have to guess which stream they're feeding (which previously
 /// risked leaking codes into a redirected sibling stream).
 pub struct Painter {
-    enabled: bool,
+    color: bool,
+    hyperlinks: bool,
 }
 
 impl Painter {
     /// Painter for stdout-bound output.
     pub fn stdout() -> Self {
+        let policy = crate::output::policy().stdout;
         Self {
-            enabled: console::colors_enabled(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 
     /// Painter for stderr-bound output.
     pub fn stderr() -> Self {
+        let policy = crate::output::policy().stderr;
         Self {
-            enabled: console::colors_enabled_stderr(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body
     /// rendering fork in `describe` (a behavior choice, not just a color toggle).
     pub fn enabled(&self) -> bool {
-        self.enabled
+        self.color
     }
 
     /// A dotted name: namespace-colored qualifiers, leaf colored by `leaf_kind`.
@@ -329,7 +271,7 @@ impl Painter {
 
     /// Like [`Painter::fqn`] but the leaf kind is optional (`None` => namespace).
     pub fn fqn_opt(&self, name: &str, leaf_kind: Option<DefinitionKind>) -> String {
-        if self.enabled {
+        if self.color {
             highlight_fqn_opt(name, leaf_kind)
         } else {
             name.to_string()
@@ -338,7 +280,7 @@ impl Painter {
 
     /// A name whose *visible* width is padded to `width` columns.
     pub fn name_padded(&self, name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
-        if self.enabled {
+        if self.color {
             highlight_name_padded(name, leaf_kind, width)
         } else {
             format!("{name:<width$}")
@@ -348,7 +290,7 @@ impl Painter {
     /// A definition-kind label padded to `width` columns, colored by kind.
     pub fn kind_label(&self, kind: DefinitionKind, width: usize) -> String {
         let label = kind.as_str();
-        if self.enabled {
+        if self.color {
             kind_style(kind)
                 .apply_to(format!("{label:<width$}"))
                 .to_string()
@@ -359,7 +301,7 @@ impl Painter {
 
     /// An arbitrary BAML fragment with no source backing (signatures, examples).
     pub fn fragment(&self, text: &str) -> String {
-        if self.enabled {
+        if self.color {
             highlight_str(text)
         } else {
             text.to_string()
@@ -368,7 +310,7 @@ impl Painter {
 
     /// `text` styled as a keyword (for keyword-doc headers).
     pub fn keyword(&self, text: &str) -> String {
-        if self.enabled {
+        if self.color {
             style_for_plain(SemanticTokenType::Keyword)
                 .apply_to(text)
                 .to_string()
@@ -378,12 +320,12 @@ impl Painter {
     }
 
     /// A `display:line_label` location, rendered as a clickable `file://`
-    /// hyperlink when this stream is colored and `abs_path` is a real (absolute)
+    /// hyperlink when enabled and `abs_path` is a real (absolute)
     /// file. Plain `display:line_label` otherwise (pipes / JSON / tests / builtin
     /// `<...>` paths).
     pub fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
         let text = format!("{display}:{line_label}");
-        if self.enabled && abs_path.is_absolute() {
+        if self.hyperlinks && abs_path.is_absolute() {
             osc8(&file_uri(abs_path), &text)
         } else {
             text
