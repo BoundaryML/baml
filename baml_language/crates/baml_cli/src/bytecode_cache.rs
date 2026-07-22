@@ -45,7 +45,7 @@ use baml_db::{
         generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
         generate_stdlib_program, reuse_throws_mismatches,
     },
-    baml_compiler2_hir,
+    baml_compiler2_hir, baml_compiler2_ppir,
 };
 use baml_project::ProjectDatabase;
 use bex_cache::{
@@ -744,50 +744,38 @@ fn last_segment(name: &str) -> &str {
 
 /// Last-segment names of every item `file` defines, from the HIR item tree.
 fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
-    use baml_compiler2_hir::{
-        contributions::Definition,
-        loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+    use baml_compiler2_hir::contributions::Definition;
+    use baml_compiler2_ppir::item_data::{
+        file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
     };
     use baml_db::baml_compiler2_mir::def_to_item_ref;
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+
     let mut names: Vec<String> = Vec::new();
-    for local_id in item_tree.functions.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::Function(FunctionLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    let push = |def, names: &mut Vec<String>| {
+        names.push(last_segment(&def_to_item_ref(db, def).to_string()).to_string());
+    };
+    for &loc in file_functions(db, file) {
+        push(Definition::Function(loc), &mut names);
     }
-    for local_id in item_tree.lets.keys() {
-        let fq = def_to_item_ref(db, Definition::Let(LetLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_lets(db, file) {
+        push(Definition::Let(loc), &mut names);
     }
-    for local_id in item_tree.classes.keys() {
-        let fq = def_to_item_ref(db, Definition::Class(ClassLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_classes(db, file) {
+        push(Definition::Class(loc), &mut names);
     }
-    for local_id in item_tree.enums.keys() {
-        let fq = def_to_item_ref(db, Definition::Enum(EnumLoc::new(db, file, *local_id)));
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_enums(db, file) {
+        push(Definition::Enum(loc), &mut names);
     }
-    for local_id in item_tree.interfaces.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::Interface(InterfaceLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_interfaces(db, file) {
+        push(Definition::Interface(loc), &mut names);
     }
     // Type aliases are erased into their consumers (a non-recursive alias is
     // expanded inline at every use), so an alias whose RHS changes must reach
     // the change-propagation set by *name*: a consumer that named the alias
     // would otherwise splice the stale expansion. `def_to_item_ref` handles
     // `TypeAlias` like any other named item.
-    for local_id in item_tree.type_aliases.keys() {
-        let fq = def_to_item_ref(
-            db,
-            Definition::TypeAlias(TypeAliasLoc::new(db, file, *local_id)),
-        );
-        names.push(last_segment(&fq.to_string()).to_string());
+    for &loc in file_type_aliases(db, file) {
+        push(Definition::TypeAlias(loc), &mut names);
     }
     names.sort_unstable();
     names.dedup();
@@ -864,86 +852,106 @@ fn is_builtin_type_word(word: &str) -> bool {
 /// file to the dirty set, never removes one — while every real type name is
 /// always present as an identifier run. The floor this guarantees: any file
 /// naming a changed type in a signature is dirtied.
+/// The firewall-`TypeRef` twin of [`add_type_display`]: render one type
+/// reference from an item's `type_refs` arena and tokenize its name into `out`.
+fn add_type_ref_display(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    out: &mut HashSet<String>,
+) {
+    add_type_display(&store.display(id), out);
+}
+
 fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<String> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    use baml_compiler2_ppir::item_data::{
+        ImplSubjectData, class_data, file_classes, file_functions, file_impls, file_interfaces,
+        file_template_strings, file_type_aliases, function_data, impl_block_data, interface_data,
+        template_string_data, type_alias_data,
+    };
     let mut names: HashSet<String> = HashSet::new();
 
-    for func in item_tree.functions.values() {
-        for te in func.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_functions(db, file) {
+        let func = function_data(db, loc);
+        for id in func.params.iter().filter_map(|p| p.type_ref) {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        if let Some(te) = &func.return_type {
-            add_type_display(te, &mut names);
+        if let Some(id) = func.return_type {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        if let Some(te) = &func.throws {
-            add_type_display(te, &mut names);
+        if let Some(id) = func.throws {
+            add_type_ref_display(&func.type_refs, id, &mut names);
         }
-        for te in func.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
-        }
-    }
-    for ts in item_tree.template_strings.values() {
-        for te in ts.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+        for id in func.generic_param_bounds.iter().flatten() {
+            add_type_ref_display(&func.type_refs, *id, &mut names);
         }
     }
-    for class in item_tree.classes.values() {
-        for te in class.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_template_strings(db, file) {
+        let ts = template_string_data(db, loc);
+        for id in ts.params.iter().filter_map(|p| p.type_ref) {
+            add_type_ref_display(&ts.type_refs, id, &mut names);
         }
-        for te in class.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
+    }
+    for &loc in file_classes(db, file) {
+        let class = class_data(db, loc);
+        for id in class.fields.iter().filter_map(|f| f.type_ref) {
+            add_type_ref_display(&class.type_refs, id, &mut names);
+        }
+        for id in class.generic_param_bounds.iter().flatten() {
+            add_type_ref_display(&class.type_refs, *id, &mut names);
         }
         for block in &class.implements {
-            add_type_display(&block.target, &mut names);
+            add_type_ref_display(&class.type_refs, block.target, &mut names);
         }
     }
-    for iface in item_tree.interfaces.values() {
-        for te in iface.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
-            add_type_display(te, &mut names);
+    for &loc in file_interfaces(db, file) {
+        let iface = interface_data(db, loc);
+        for id in iface.fields.iter().filter_map(|f| f.type_ref) {
+            add_type_ref_display(&iface.type_refs, id, &mut names);
         }
-        for te in &iface.requires {
-            add_type_display(te, &mut names);
+        for id in &iface.requires {
+            add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
-        for te in iface.generic_param_bounds.iter().flatten() {
-            add_type_display(te, &mut names);
+        for id in iface.generic_param_bounds.iter().flatten() {
+            add_type_ref_display(&iface.type_refs, *id, &mut names);
         }
         for method in &iface.required_methods {
-            for te in method.params.iter().filter_map(|p| p.type_expr.as_ref()) {
-                add_type_display(te, &mut names);
+            for id in method.params.iter().filter_map(|p| p.type_ref) {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &method.return_type {
-                add_type_display(te, &mut names);
+            if let Some(id) = method.return_type {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &method.throws {
-                add_type_display(te, &mut names);
+            if let Some(id) = method.throws {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            for te in method.generic_param_bounds.iter().flatten() {
-                add_type_display(te, &mut names);
+            for id in method.generic_param_bounds.iter().flatten() {
+                add_type_ref_display(&iface.type_refs, *id, &mut names);
             }
         }
         for assoc in &iface.associated_types {
-            if let Some(te) = &assoc.bound {
-                add_type_display(te, &mut names);
+            if let Some(id) = assoc.bound {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
-            if let Some(te) = &assoc.default {
-                add_type_display(te, &mut names);
+            if let Some(id) = assoc.default {
+                add_type_ref_display(&iface.type_refs, id, &mut names);
             }
         }
     }
-    for alias in item_tree.type_aliases.values() {
-        if let Some(te) = &alias.type_expr {
-            add_type_display(te, &mut names);
+    for &loc in file_type_aliases(db, file) {
+        let alias = type_alias_data(db, loc);
+        if let Some(id) = alias.value {
+            add_type_ref_display(&alias.type_refs, id, &mut names);
         }
     }
-    for imp in item_tree.impls.values() {
-        add_type_display(&imp.interface_target, &mut names);
-        // Out-of-body (`Free`) impls carry an explicit for-target `TypeExpr`; an
-        // in-class impl's for-target is the class itself (no `TypeExpr` to
-        // display). `names` is a set, so the interface_target added above is not
+    for &loc in file_impls(db, file) {
+        let block = impl_block_data(db, loc);
+        add_type_ref_display(&block.type_refs, block.interface_target, &mut names);
+        // Out-of-body (`Free`) impls carry an explicit for-target; an in-class
+        // impl's for-target is the class itself (no header type to display).
+        // `names` is a set, so the interface_target added above is not
         // double-counted for free impls.
-        if let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } = &imp.subject {
-            add_type_display(for_target, &mut names);
+        if let ImplSubjectData::Free { for_target, .. } = &block.subject {
+            add_type_ref_display(&block.type_refs, *for_target, &mut names);
         }
     }
     names
@@ -956,11 +964,13 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
 /// against; a *modified* file instead compares its [`file_layout_hash`] so a
 /// function-only edit in a type-defining file no longer trips the sentinel.
 fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    !item_tree.classes.is_empty()
-        || !item_tree.enums.is_empty()
-        || !item_tree.interfaces.is_empty()
-        || !item_tree.type_aliases.is_empty()
+    use baml_compiler2_ppir::item_data::{
+        file_classes, file_enums, file_interfaces, file_type_aliases,
+    };
+    !file_classes(db, file).is_empty()
+        || !file_enums(db, file).is_empty()
+        || !file_interfaces(db, file).is_empty()
+        || !file_type_aliases(db, file).is_empty()
 }
 
 /// Whether `file` declares any interface-`impl` construct — an `impl` block, an
@@ -968,10 +978,13 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// `IMPL_SENTINEL`: only a change to such a file can move the package's impl set
 /// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
 fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    // The unified `impls` map holds both in-class and out-of-body impl blocks; a
-    // class `implements` block is a distinct construct, so it needs its own check.
-    !item_tree.impls.is_empty() || item_tree.classes.values().any(|c| !c.implements.is_empty())
+    use baml_compiler2_ppir::item_data::{class_data, file_classes, file_impls};
+    // `file_impls` holds both in-class and out-of-body impl blocks; a class
+    // `implements` block is a distinct construct, so it needs its own check.
+    !file_impls(db, file).is_empty()
+        || file_classes(db, file)
+            .iter()
+            .any(|&loc| !class_data(db, loc).implements.is_empty())
 }
 
 /// Last-segment names referenced by each user file's compiled bytecode,
@@ -3168,13 +3181,13 @@ mod tests {
         )]);
         let file = file_named(&db, "a.baml");
         let (f_id, g_id) = {
-            let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+            use baml_compiler2_ppir::item_data::{file_functions, function_data};
             let mut f_id = None;
             let mut g_id = None;
-            for (lid, func) in &item_tree.functions {
-                match func.name.as_str() {
-                    "f" => f_id = Some(*lid),
-                    "g" => g_id = Some(*lid),
+            for &loc in file_functions(&db, file) {
+                match function_data(&db, loc).name.as_str() {
+                    "f" => f_id = Some(loc.id(&db)),
+                    "g" => g_id = Some(loc.id(&db)),
                     _ => {}
                 }
             }

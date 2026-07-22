@@ -405,7 +405,7 @@ fn load_callable_throws(
 #[cfg(test)]
 mod tests {
     use baml_db::{
-        Name, baml_compiler2_hir,
+        Name, baml_compiler2_hir, baml_compiler2_ppir,
         baml_compiler2_tir::{
             callable::callable_throws, package_interface, throw_inference::file_throw_facts,
         },
@@ -515,9 +515,11 @@ mod tests {
 
     fn first_func_throws(db: &ProjectDatabase, file: &str) -> String {
         let sf = source_file(db, file);
-        let it = baml_compiler2_hir::file_item_tree(db, sf);
-        let local_id = *it.functions.keys().next().expect("one function");
-        let loc = baml_compiler2_hir::loc::FunctionLoc::new(db, sf, local_id);
+        // The fixture defines exactly one function; the firewall enumeration is
+        // source-ordered, so the first loc is that function.
+        let loc = *baml_compiler2_ppir::item_data::file_functions(db, sf)
+            .first()
+            .expect("one function");
         format!("{:?}", callable_throws(db, loc))
     }
 

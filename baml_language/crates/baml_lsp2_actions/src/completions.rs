@@ -28,7 +28,7 @@
 //! - `package_items(builtin_pkg_id)` — builtin definitions from the `baml`
 //!   and `env` packages.
 //! - `resolve_class_fields(class_loc)` — fields for field-access completions.
-//! - `file_item_tree(file)[enum_loc.id]` — variants for field-access on enums.
+//! - `enum_data(enum_loc)` — variants for field-access on enums.
 
 use std::collections::HashSet;
 
@@ -981,12 +981,10 @@ fn completions_for_class_methods(
     class_loc: baml_compiler2_hir::loc::ClassLoc<'_>,
     mode: BuiltinMethodMode,
 ) -> Vec<Completion> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-    let class_data = &item_tree[class_loc.id(db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
     let mut items = Vec::new();
 
-    for method_id in &class_data.methods {
-        let func_loc = FunctionLoc::new(db, class_loc.file(db), *method_id);
+    for &func_loc in &class_data.methods {
         let has_self = method_has_self_param(db, func_loc);
         if mode != BuiltinMethodMode::All
             && !matches!(
@@ -997,7 +995,7 @@ fn completions_for_class_methods(
             continue;
         }
 
-        let method = &item_tree[*method_id];
+        let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         items.push(
             Completion::new(method.name.as_str(), CompletionKind::Method)
                 .with_detail(format_builtin_method_signature(db, func_loc, mode))
@@ -1142,11 +1140,10 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
                 );
             }
 
-            // Methods from item tree.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
-            for method_id in &class_data.methods {
-                let method = &item_tree[*method_id];
+            // Methods from the class's firewall data.
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            for &func_loc in &class_data.methods {
+                let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
                 items.push(
                     Completion::new(method.name.as_str(), CompletionKind::Method)
                         .with_detail("method")
@@ -1167,8 +1164,7 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
                 return Vec::new();
             };
 
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
-            let enum_data = &item_tree[enum_loc.id(db)];
+            let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
 
             enum_data
                 .variants
@@ -1214,8 +1210,7 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class = &item_tree[class_loc.id(db)];
+            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(
                 baml_compiler2_tir::ty::QualifiedTypeName::new(
@@ -1228,8 +1223,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             ))
         }
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
-            let enum_data = &item_tree[enum_loc.id(db)];
+            let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(
                 baml_compiler2_tir::ty::QualifiedTypeName::new(
@@ -1260,7 +1254,6 @@ fn local_variable_ty(
     match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
             // Get declared type from function or lambda signature.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
             let scope_id = index.scope_at_offset(at_offset, None);
             let ancestors = index.ancestor_scopes(scope_id);
 
@@ -1277,12 +1270,8 @@ fn local_variable_ty(
                 ScopeKind::Function => {
                     // Function parameter — look up from function signature.
                     let func_scope_range = enclosing_scope_data.range;
-                    let (func_local_id, _) = item_tree
-                        .functions
-                        .iter()
-                        .find(|(_, f)| f.span == func_scope_range)?;
                     let func_loc =
-                        baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+                        crate::utils::function_at_scope_range(db, file, func_scope_range)?;
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -1347,7 +1336,6 @@ fn find_binding_ty_for_local(
     site: baml_compiler2_hir::semantic_index::DefinitionSite,
 ) -> Option<Ty> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     let pat_id = match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
@@ -1373,11 +1361,7 @@ fn find_binding_ty_for_local(
 
             // 2. Start from the outermost Function scope → find its body.
             let func_range = func_range?;
-            let (func_local_id, _) = item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == func_range)?;
-            let func_loc = FunctionLoc::new(db, file, *func_local_id);
+            let func_loc = crate::utils::function_at_scope_range(db, file, func_range)?;
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(ref top_body) = *body else {
                 return None;
@@ -1553,8 +1537,7 @@ fn completions_for_value_position(
                     (CompletionKind::RetryPolicy, "retry_policy".to_string())
                 }
                 Definition::Let(loc) => {
-                    let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-                    match item_tree[loc.id(db)].origin {
+                    match baml_compiler2_ppir::item_data::let_data(db, *loc).origin {
                         baml_compiler2_ast::ast::LetOrigin::Client => {
                             (CompletionKind::Client, "client".to_string())
                         }

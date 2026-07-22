@@ -2,6 +2,53 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.MayFailIntOrString(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb4, 1: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const 42_i64;
+    }
+
+    bb4: {
+        throw const "string error";
+    }
+}
+
+fn user.CatchAllPanicsWildcard(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: unknown // e
+
+    bb0: {
+        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb2, unwind: bb1];
+    }
+
+    bb1: {
+        _0 = const "caught all";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.CatchAllPanicsTyped(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -43,26 +90,6 @@ fn user.CatchAllPanicsTyped(x: int) -> string {
     }
 }
 
-fn user.CatchAllPanicsWildcard(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-    let _2: unknown // e
-
-    bb0: {
-        _0 = call const fn user.MayFailIntOrString(copy _1) -> [bb2, unwind: bb1];
-    }
-
-    bb1: {
-        _0 = const "caught all";
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.CatchThenCatchAllPanics(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -91,32 +118,5 @@ fn user.CatchThenCatchAllPanics(x: int) -> string {
 
     bb4: {
         return;
-    }
-}
-
-fn user.MayFailIntOrString(x: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        switch copy _1 [0: bb4, 1: bb3, otherwise: bb1];
-    }
-
-    bb1: {
-        _0 = const "ok";
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-
-    bb3: {
-        throw const 42_i64;
-    }
-
-    bb4: {
-        throw const "string error";
     }
 }
