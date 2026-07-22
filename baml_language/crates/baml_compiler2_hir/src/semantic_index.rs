@@ -232,6 +232,13 @@ pub struct FileSemanticIndex<'db> {
     pub item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
 
     /// Per-file item tree — maps `LocalItemId` to item data.
+    ///
+    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
+    /// crates are `pub(crate)`, and everything downstream uses the PPIR
+    /// `item_data` firewall queries instead. This field stays `pub` solely
+    /// because PPIR (a separate crate) builds and reads the index; do not read
+    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
+    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.
