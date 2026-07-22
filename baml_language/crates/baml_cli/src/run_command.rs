@@ -187,13 +187,6 @@ impl RunArgs {
         }
     }
 
-    /// Keep execution silent even when legacy call sites still pass
-    /// diagnostics-oriented strings through `vlog`. `--verbose` only affects
-    /// explicit listing output, not successful program execution.
-    fn vlog(&self, args: std::fmt::Arguments<'_>) {
-        let _ = args;
-    }
-
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
     /// Warnings are intentionally not surfaced by `baml run`: successful
     /// execution should print only the program output.
@@ -404,9 +397,6 @@ impl RunArgs {
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
             if let Some(script_tokens) = scripts.get(target) {
-                self.vlog(format_args!(
-                    "Expanding script `{target}`: {script_tokens:?}"
-                ));
                 let expansion = parse_script_body(script_tokens)?;
                 let func = expansion.function.ok_or_else(|| {
                     anyhow!(
@@ -584,14 +574,12 @@ impl RunArgs {
         json_args: Option<serde_json::Value>,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
-        self.vlog(format_args!("Calling {function_name}"));
         // Preserve the old cleanup call shape before program output.
         reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let output_format = self.output_format;
-        let start = std::time::Instant::now();
         let dispatch_result = rt.block_on(baml_exec::dispatch_target(
             Arc::clone(&engine),
             function_name,
@@ -599,8 +587,6 @@ impl RunArgs {
             json_args,
             output_format,
         ));
-
-        self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
         match dispatch_result {
             Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Success),
@@ -684,14 +670,9 @@ impl RunArgs {
         }
 
         let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
-        self.vlog(format_args!(
-            "Loading project from {}",
-            resolved.root.display()
-        ));
         if resolved.files.is_empty() {
             anyhow::bail!("No .baml files found in {}", resolved.root.display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", resolved.files.len()));
         let needs_format_hint = resolved
             .files
             .iter()
@@ -708,7 +689,6 @@ impl RunArgs {
             && let Some(ctx) = &cache
             && let Some(program) = ctx.load()
         {
-            self.vlog(format_args!("Bytecode cache hit — skipping compile"));
             match BexEngine::new(
                 program,
                 Arc::new(sys_native::SysOps::native()),
@@ -728,13 +708,6 @@ impl RunArgs {
         let (reuse_plan, stdlib_interface_hit) = match &cache {
             Some(ctx) => {
                 let prep = ctx.prepare_warm_db(&mut db);
-                if let Some(plan) = &prep.reuse_plan {
-                    self.vlog(format_args!(
-                        "Per-file reuse: {} clean, {} dirty",
-                        plan.clean_files.len(),
-                        plan.dirty_files.len()
-                    ));
-                }
                 (prep.reuse_plan, prep.stdlib_interface_hit)
             }
             None => (None, false),
@@ -760,7 +733,6 @@ impl RunArgs {
             self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
             None
         };
-        self.vlog(format_args!("Compiling..."));
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             &db,
             &baml_compiler2_emit::CompileOptions {
@@ -799,10 +771,6 @@ impl RunArgs {
         let program = compiled.program;
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
-        self.vlog(format_args!(
-            "Compiled {} user function(s)",
-            engine.user_functions().len()
-        ));
         Ok((db, engine, needs_format_hint))
     }
 
@@ -818,10 +786,6 @@ impl RunArgs {
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let display = file_path.display().to_string();
         let canonical = resolve_standalone_file(file_path)?;
-        self.vlog(format_args!(
-            "Standalone mode: loading {}",
-            canonical.display()
-        ));
 
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
@@ -842,10 +806,6 @@ impl RunArgs {
             reporter,
         )?;
         let engine = self.compile_to_engine(&db, argv)?;
-        self.vlog(format_args!(
-            "Compiled {} function(s) from standalone file",
-            engine.user_functions().len()
-        ));
         Ok((db, engine, needs_format_hint))
     }
 
@@ -862,30 +822,17 @@ impl RunArgs {
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
     fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        self.vlog(format_args!(
-            "Expression mode: evaluating {} byte(s)",
-            expr_body.len()
-        ));
-
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
         let (mut db, project_root) = if find_project_root_from(self.from.as_deref())?.is_some() {
-            let (db_with_project, root, baml_files) =
-                load_project_or_default(self.from.as_deref())?;
-            self.vlog(format_args!(
-                "Project context: loaded {} file(s)",
-                baml_files.len()
-            ));
+            let (db_with_project, root, _) = load_project_or_default(self.from.as_deref())?;
             (db_with_project, root)
         } else {
             let tmp = std::env::temp_dir().join("baml_expr");
             std::fs::create_dir_all(&tmp).ok();
             let mut db = ProjectDatabase::new();
             db.set_project_root(&tmp);
-            self.vlog(format_args!(
-                "Project context: none (standalone expression)"
-            ));
             (db, tmp)
         };
 
