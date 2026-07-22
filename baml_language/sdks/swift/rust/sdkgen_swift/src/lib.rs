@@ -34,10 +34,9 @@ use std::{
     path::PathBuf,
 };
 
-use base64::Engine as _;
-
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
+use base64::Engine as _;
 use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_type_alias, sort_key,

@@ -15,8 +15,10 @@
 
 use baml_codegen_types::{Class, Function, Ty, TypeAlias};
 
-use crate::emit::ty_contains_type_var;
-use crate::translate_ty::{TranslateCtx, translate_optional_arg_inner, translate_ty};
+use crate::{
+    emit::ty_contains_type_var,
+    translate_ty::{TranslateCtx, translate_optional_arg_inner, translate_ty},
+};
 
 pub(crate) struct Skip {
     pub fqn: String,
