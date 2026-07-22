@@ -254,6 +254,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/bridge_cffi/include/**' \
+            ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
+            ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -751,6 +754,23 @@ jobs:
         run: pnpm build:debug
         working-directory: baml_language/sdks/typescript/bridge_typescript
 
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
+
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
@@ -761,6 +781,8 @@ jobs:
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi
             baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
             typescript2/pkg-proto
           )
           README="baml_language/crates/bridge_ctypes/README.md"

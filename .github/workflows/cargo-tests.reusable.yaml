@@ -547,6 +547,19 @@ jobs:
                 "timeout": 40,
               },
               {
+                // Swift is macOS-only: the fixtures need SwiftPM/XCTest,
+                // and the nextest-bound setup script assembles the
+                // BamlBridgeFFI xcframework (host slice) before the run.
+                "sdk-label": "swift",
+                "package-name": "sdk_test_swift",
+                "sdk-path": "swift",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
                 "sdk-label": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
