@@ -51,6 +51,8 @@ defaults:
 
 jobs:
   platform-matrix:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.derive.outputs.matrix }}
