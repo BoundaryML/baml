@@ -6,6 +6,7 @@ fn main() {
     for (package, file) in [
         ("baml", "nativefunctions_generated.rs"),
         ("reflect", "reflectfunctions_generated.rs"),
+        ("boundary", "boundaryfunctions_generated.rs"),
     ] {
         let (vm_builtins, _io_builtins, class_defs) =
             baml_builtins2_codegen::extract_native_builtins_for(package)
