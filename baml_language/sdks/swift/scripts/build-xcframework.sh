@@ -95,6 +95,20 @@ case "$MODE" in
         "$(lib_for_target x86_64-apple-ios)" \
         -output "$STAGE/libbridge_swift-iossim.a"
     cp "$(lib_for_target aarch64-apple-ios)" "$STAGE/libbridge_swift-ios.a"
+    # Strip embedded LLVM bitcode from the release slices. Fat LTO's
+    # embed-bitcode leaves ~2/3 of each archive as __LLVM sections that
+    # ld64 provably discards at consumer link time (bitcode bundling is
+    # dead since Xcode 14) — pure download weight. Use the pinned
+    # toolchain's llvm-objcopy so local and CI strip identically.
+    rustup component add llvm-tools 2>/dev/null \
+        || rustup component add llvm-tools-preview 2>/dev/null || true
+    OBJCOPY="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-objcopy"
+    [ -x "$OBJCOPY" ] || { echo "error: llvm-objcopy not found at $OBJCOPY" >&2; exit 1; }
+    for a in "$STAGE"/libbridge_swift-*.a; do
+        before=$(stat -f %z "$a")
+        "$OBJCOPY" --remove-section=__LLVM,__bitcode --remove-section=__LLVM,__cmdline "$a"
+        echo "bitcode-stripped $(basename "$a"): $((before / 1048576))MB -> $(($(stat -f %z "$a") / 1048576))MB"
+    done
     LIB_ARGS+=(
         -library "$STAGE/libbridge_swift-macos.a" -headers "$INCLUDE_DIR"
         -library "$STAGE/libbridge_swift-ios.a" -headers "$INCLUDE_DIR"
