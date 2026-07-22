@@ -15,16 +15,16 @@ use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::normalize::TypeContext as _;
 pub use coherence::*;
 pub use impl_rules::*;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::{
     generics,
     lower_type_expr::qualify_def,
-    ty::{FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{QualifiedTypeName, Ty, TyAttr},
     type_context::AliasEquivCtx,
+    unify::{TypeBindings, contains_bound_typevar},
 };
 
-pub type TypeBindings = FxHashMap<Name, Ty>;
 pub type AssociatedBindings = Vec<(Name, Ty)>;
 pub type InterfaceClosureEntry<'db> = (
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -721,45 +721,6 @@ fn bind_type_var(
     }
 }
 
-fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
-    match ty {
-        Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Union(args, _) => args
-            .iter()
-            .any(|arg| contains_bound_typevar(arg, generic_params)),
-        Ty::Interface(_, args, associated_bindings, _) => {
-            args.iter()
-                .any(|arg| contains_bound_typevar(arg, generic_params))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
-        }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_bound_typevar(inner, generic_params)
-        }
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _)
-        | Ty::Future(k, v, _) => {
-            contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|FunctionParamTy { ty, .. }| contains_bound_typevar(ty, generic_params))
-                || contains_bound_typevar(ret, generic_params)
-                || contains_bound_typevar(throws, generic_params)
-        }
-        _ => false,
-    }
-}
-
 /// Resolve a `TypeExprKind::Path` to an interface declaration and its fully
 /// qualified identity. Returns `None` when the path doesn't resolve to an
 /// interface.
@@ -1237,22 +1198,6 @@ mod tests {
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
-    }
-
-    #[test]
-    fn contains_bound_typevar_checks_interface_associated_bindings() {
-        let ty = Ty::Interface(
-            qtn(&[], "Source"),
-            vec![],
-            vec![(
-                Name::new("Item"),
-                Ty::List(Box::new(type_var("T")), TyAttr::default()),
-            )],
-            TyAttr::default(),
-        );
-
-        assert!(contains_bound_typevar(&ty, &[Name::new("T")]));
-        assert!(!contains_bound_typevar(&ty, &[Name::new("U")]));
     }
 
     #[test]

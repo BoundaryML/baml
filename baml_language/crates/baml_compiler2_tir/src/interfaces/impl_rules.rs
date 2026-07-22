@@ -7,11 +7,12 @@ use baml_type::{QualifiedTypeName, Ty, normalize::TypeContext};
 use crate::{
     generics::{contains_typevar, substitute_ty},
     interfaces::{
-        InterfaceImplOrigin, TypeBindings, lower_interface_associated_bindings, match_ty_patterns,
+        InterfaceImplOrigin, lower_interface_associated_bindings, match_ty_patterns,
         normalized_arg_implements_bound, resolve_ref_to_interface,
     },
     lower_type_expr::qualify_def,
     type_context::AliasEquivCtx,
+    unify::TypeBindings,
 };
 
 /// Fully-resolved data for one `implements` block, keyed by its stable
