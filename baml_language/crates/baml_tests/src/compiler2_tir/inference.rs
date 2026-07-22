@@ -524,9 +524,8 @@ implements ToJson for Dog {
 "#,
     );
 
-    let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.free_impls.len(),
+        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
@@ -698,13 +697,15 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         .expect("lambda scope");
     let lambda_inference = infer_scope_types(&db, lambda_scope_id);
 
-    let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
-    let (main_id, _) = item_tree
-        .functions
+    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
         .iter()
-        .find(|(_, func)| func.name.as_str() == "main")
+        .find(|&&loc| {
+            baml_compiler2_ppir::item_data::function_data(&db, loc)
+                .name
+                .as_str()
+                == "main"
+        })
         .expect("main function");
-    let main_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, main_id);
     let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");

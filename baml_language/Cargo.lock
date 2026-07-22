@@ -771,6 +771,7 @@ dependencies = [
  "sdkgen_java",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
+ "sdkgen_swift",
  "sdkgen_typescript_shared",
  "serde",
  "serde_json",
@@ -1269,6 +1270,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "reqwest",
+ "rustls",
  "sha2",
  "tempfile",
 ]
@@ -1667,6 +1669,13 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "bridge_swift"
+version = "0.0.0-beta"
+dependencies = [
+ "bridge_cffi",
 ]
 
 [[package]]
@@ -6598,6 +6607,7 @@ dependencies = [
  "sdkgen_java",
  "sdkgen_python_pydantic2",
  "sdkgen_rust",
+ "sdkgen_swift",
  "sdkgen_typescript_shared",
 ]
 
@@ -6629,6 +6639,14 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_rust"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_swift"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6703,6 +6721,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "sdkgen_swift"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "baml_version",
+ "base64",
+ "indexmap",
+ "pretty_assertions",
 ]
 
 [[package]]

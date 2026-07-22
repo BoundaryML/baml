@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13513
 ---
 === MIR2 ===
 fn user.MakeWrapper() -> Wrapper {
@@ -9,6 +8,104 @@ fn user.MakeWrapper() -> Wrapper {
 
     bb0: {
         _0 = user.Wrapper { const null };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnNull() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnBool() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnInt() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnFloat() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const 3.14_f64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnString() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnArray() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = [const 1_i64, const 2_i64, const 3_i64]: baml.json.json[];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ReturnMap() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+    // Locals:
+    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
+
+    bb0: {
+        _0 = { const "key": const "value" }: map<string, baml.json.json>;
         goto -> bb1;
     }
 
@@ -68,104 +165,6 @@ fn user.MatchJson(j: int | float | string | bool | null | baml.json.json[] | map
     }
 
     bb9: {
-        return;
-    }
-}
-
-fn user.ReturnArray() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = [const 1_i64, const 2_i64, const 3_i64]: baml.json.json[];
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnBool() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = const true;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnFloat() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = const 3.14_f64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnInt() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = const 42_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnMap() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = { const "key": const "value" }: map<string, baml.json.json>;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnNull() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ReturnString() -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
-    // Locals:
-    let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
-
-    bb0: {
-        _0 = const "hello";
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }
