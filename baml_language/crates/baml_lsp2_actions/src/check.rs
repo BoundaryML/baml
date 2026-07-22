@@ -429,7 +429,8 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let parameter_defaults =
                 baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
             builder.check_function_parameter_defaults(
-                &func_data.params,
+                &baml_compiler2_ppir::item_data::function_data(db, func_loc).params,
+                &baml_compiler2_ppir::item_data::function_source_map(db, func_loc).param_spans,
                 &parameter_defaults,
                 &param_types,
             );
@@ -594,13 +595,8 @@ fn check_interfaces(db: &dyn Db, file: SourceFile, file_id: FileId) -> Vec<Diagn
     // `validate_impl_signatures(loc)` (type conformance) each yield
     // `(TirTypeError, ImplDiagnosticLocation)` pairs anchored via the same source
     // map; a `Method` / field-link / binding location may mark several sites.
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    for impl_id in item_tree.impls.keys() {
-        let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
-        let Some(sm) = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc).as_ref()
-        else {
-            continue;
-        };
+    for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
+        let sm = baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc);
         // `impl_data` owns an impl's structural diagnostics whether or not it
         // fully resolves: an unresolved interface target still carries the
         // diagnostics it lowered (the bad target, the for-target, the bounds). A
@@ -1862,6 +1858,10 @@ fn source_aware_tir_type_error_message(
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
             format!("`.as<T>` requires an interface target, got {}", ty(target))
         }
+        TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
+            "`$id` at a call site expects `boundary.LocalId`, got {}",
+            ty(got)
+        ),
         _ => error.to_string(),
     }
 }
@@ -1964,9 +1964,16 @@ fn tir_type_error_to_diagnostic_id(
         // a name-resolution failure.
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
-        | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        | TirTypeError::DuplicateRuntimeIdArgument
+        | TirTypeError::RuntimeIdArgumentMustBeLast
+        | TirTypeError::RuntimeIdArgumentTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
+        // Builtin interfaces (BEP-062, E0153/E0154).
+        TirTypeError::BuiltinInterfaceNotImplementable { .. } => {
+            DiagnosticId::BuiltinInterfaceNotImplementable
+        }
+        TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
         // Generic-parameter / associated-type declaration hygiene.
@@ -1983,6 +1990,9 @@ fn tir_type_error_to_diagnostic_id(
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
+        TirTypeError::GenericSysOpMethodInInterfaceImpl { .. } => {
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl
+        }
         TirTypeError::OutOfBodyImplementsFieldInterface { .. } => {
             DiagnosticId::OutOfBodyImplementsFieldInterface
         }
@@ -2363,6 +2373,39 @@ function TakeGuess(person: Person) -> string {
                 .iter()
                 .any(|message| message == "`self` cannot have a default value"),
             "missing self-default diagnostic; got {messages:#?}"
+        );
+    }
+
+    #[test]
+    fn check_file_renders_runtime_id_mismatch_type_in_file_namespace() {
+        let test = CursorTest::with_filename(
+            "billing/test.baml",
+            r#"class WrongId {
+  value int
+}
+
+function target(value: int) -> int {
+  value
+}
+
+function main(value: WrongId) -> int {
+  target(1, $id = value)
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| {
+                diag.id == DiagnosticId::TypeMismatch
+                    && diag.message.contains("expects `boundary.LocalId`")
+            })
+            .expect("runtime-id type mismatch diagnostic");
+
+        assert_eq!(
+            diag.message,
+            "`$id` at a call site expects `boundary.LocalId`, got WrongId"
         );
     }
 

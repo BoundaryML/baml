@@ -601,12 +601,10 @@ fn lower_path(
                         .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
                         .collect();
 
-                    let class_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                    let expected_type_args = class_tree
-                        .classes
-                        .get(&class_loc.id(db))
-                        .map(|class| class.generic_params.len())
-                        .unwrap_or(0);
+                    let expected_type_args =
+                        baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                            .generic_params
+                            .len();
                     // A bare generic name (`generic_args.is_empty()`) is left
                     // unchecked here: it is a deliberate wildcard in several
                     // positions (`reflect.type_of<Box>()`, construction
@@ -653,12 +651,8 @@ fn lower_path(
                         .iter()
                         .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
                         .collect();
-                    let iface_tree = baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
-                    let expected_type_args = iface_tree
-                        .interfaces
-                        .get(&iface_loc.id(db))
-                        .map(|iface| iface.generic_params.len())
-                        .unwrap_or(0);
+                    let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+                    let expected_type_args = iface_data.generic_params.len();
                     if !generic_args.is_empty() && generic_args.len() != expected_type_args {
                         diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
                             type_name: short.clone(),
@@ -666,17 +660,11 @@ fn lower_path(
                             got: generic_args.len(),
                         });
                     }
-                    let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
-                        .interfaces
-                        .get(&iface_loc.id(db))
-                        .map(|iface| {
-                            iface
-                                .associated_types
-                                .iter()
-                                .map(|assoc| assoc.name.clone())
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                    let known_associated_types: FxHashSet<baml_base::Name> = iface_data
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .collect();
                     let iface_qtn = qualify_def(db, def, short);
                     let mut seen_associated_bindings = FxHashSet::default();
                     let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
@@ -715,20 +703,12 @@ fn lower_path(
                     // default (`type Items = Self.Item[]`) reduces against them. The
                     // default is lowered once — with a symbolic `Self` — by
                     // `interface_associated_type_default`, and substituted here.
-                    let (iface_generic_params, iface_assoc_names): (Vec<_>, Vec<_>) = iface_tree
-                        .interfaces
-                        .get(&iface_loc.id(db))
-                        .map(|iface| {
-                            (
-                                iface.generic_params.clone(),
-                                iface
-                                    .associated_types
-                                    .iter()
-                                    .map(|assoc| assoc.name.clone())
-                                    .collect(),
-                            )
-                        })
-                        .unwrap_or_default();
+                    let iface_generic_params = iface_data.generic_params.clone();
+                    let iface_assoc_names: Vec<_> = iface_data
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .collect();
                     let mut associated_bindings = lowered_associated_bindings;
                     for assoc_name in iface_assoc_names {
                         if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
@@ -822,8 +802,7 @@ fn lower_path(
                     // otherwise `Status.Typo` would silently produce a
                     // bogus `Ty::EnumVariant` and downstream code would
                     // never see `UnresolvedType`.
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-                    let enum_data = &item_tree[enum_loc.id(db)];
+                    let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
                     if enum_data.variants.iter().any(|v| v.name == *variant) {
                         return Ty::EnumVariant(
                             qualify_def(db, def, enum_short),
@@ -905,25 +884,50 @@ pub fn qualify_def(
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }
 
+/// [`crate::self_type::self_type_for_class`] for callers holding firewall
+/// [`ClassData`](baml_compiler2_ppir::item_data::ClassData) rather than a raw
+/// item-tree `Class` — the same receiver type (declared generics as `TypeVar`
+/// args, builtin-container sugar via
+/// [`receiver_type_for_class_at`](crate::self_type::receiver_type_for_class_at)).
+pub(crate) fn self_type_for_class_data(
+    class_data: &baml_compiler2_ppir::item_data::ClassData<'_>,
+    ns_path: &[baml_base::Name],
+    package: baml_base::Name,
+) -> Ty {
+    let qtn = QualifiedTypeName::new(package, ns_path.to_vec(), class_data.name.clone());
+    let args: Vec<Ty> = class_data
+        .generic_params
+        .iter()
+        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+        .collect();
+    crate::self_type::receiver_type_for_class_at(qtn, args)
+}
+
 /// Lower a declaration's generic-parameter interface bounds to a [`TypeVarBoundsMap`],
-/// with unbounded parameters omitted. Delegates the per-bound lowering to
-/// [`crate::builder::lower_generic_param_bounds`] (every sibling parameter in scope, so a
-/// bound naming another parameter resolves); bound-lowering diagnostics are discarded — the
-/// declaration's bounds are checked where the declaration is, not here.
+/// with unbounded parameters omitted — for callers holding firewall data
+/// (`class_data` / `interface_data` / `function_data`), whose bounds are
+/// [`TypeRefId`](baml_compiler2_hir::type_ref::TypeRefId)s into the item's own
+/// store. Delegates the per-bound lowering to
+/// [`crate::builder::lower_generic_param_bound_refs`] (every sibling parameter
+/// in scope, so a bound naming another parameter resolves); bound-lowering
+/// diagnostics are discarded — the declaration's bounds are checked where the
+/// declaration is, not here.
 ///
 /// Each bound is kept as a [`baml_type::Interface`] *constraint* (a bare `T extends Iterator`
 /// pins no associated types), never a [`Ty::Interface`] existential; a bound that does not
 /// lower to an interface is dropped.
-pub(crate) fn lower_decl_generic_param_bounds(
+pub(crate) fn lower_decl_generic_param_bound_refs(
     db: &dyn crate::Db,
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
-    generic_param_bounds: &[Option<TypeExpr>],
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    generic_param_bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
 ) -> TypeVarBoundsMap {
     let mut diagnostics = Vec::new();
-    crate::builder::lower_generic_param_bounds(
+    crate::builder::lower_generic_param_bound_refs(
         db,
+        store,
         generic_param_bounds,
         package_items,
         ns_context,
@@ -949,18 +953,16 @@ pub fn class_generic_param_bounds<'db>(
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
 ) -> TypeVarBoundsMap {
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let Some(class) = item_tree.classes.get(&class_loc.id(db)) else {
-        return TypeVarBoundsMap::default();
-    };
+    let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let package_items =
         baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
-    lower_decl_generic_param_bounds(
+    lower_decl_generic_param_bound_refs(
         db,
         package_items,
         &pkg_info.namespace_path,
         &class.generic_params,
+        &class.type_refs,
         &class.generic_param_bounds,
     )
 }
@@ -972,18 +974,16 @@ pub fn interface_generic_param_bounds<'db>(
     interface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> TypeVarBoundsMap {
     let file = interface_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let Some(interface) = item_tree.interfaces.get(&interface_loc.id(db)) else {
-        return TypeVarBoundsMap::default();
-    };
+    let interface = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let package_items =
         baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
-    lower_decl_generic_param_bounds(
+    lower_decl_generic_param_bound_refs(
         db,
         package_items,
         &pkg_info.namespace_path,
         &interface.generic_params,
+        &interface.type_refs,
         &interface.generic_param_bounds,
     )
 }
@@ -999,10 +999,6 @@ pub fn function_in_scope_generic_param_bounds<'db>(
     function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> TypeVarBoundsMap {
     let file = function_loc.file(db);
-    // PPIR's tree is the canonical one (it includes synthesized companions);
-    // reading HIR's here while the owner index reads PPIR's would mix the two.
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let function_id = function_loc.id(db);
     let mut bounds = TypeVarBoundsMap::default();
     match baml_compiler2_ppir::item_data::method_owner(db, function_loc) {
         Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
@@ -1013,7 +1009,7 @@ pub fn function_in_scope_generic_param_bounds<'db>(
             );
         }
         Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
-            let interface = &item_tree[iface_loc.id(db)];
+            let interface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             bounds.extend(
                 interface_generic_param_bounds(db, iface_loc)
                     .iter()
@@ -1055,18 +1051,18 @@ pub fn function_in_scope_generic_param_bounds<'db>(
         }
         None => {}
     }
-    if let Some(function) = item_tree.functions.get(&function_id) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let package_items =
-            baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
-        bounds.extend(lower_decl_generic_param_bounds(
-            db,
-            package_items,
-            &pkg_info.namespace_path,
-            &function.generic_params,
-            &function.generic_param_bounds,
-        ));
-    }
+    let function = baml_compiler2_ppir::item_data::function_data(db, function_loc);
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let package_items =
+        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+    bounds.extend(lower_decl_generic_param_bound_refs(
+        db,
+        package_items,
+        &pkg_info.namespace_path,
+        &function.generic_params,
+        &function.type_refs,
+        &function.generic_param_bounds,
+    ));
     bounds
 }
 
@@ -1583,19 +1579,18 @@ mod tests {
         else {
             panic!("Iterator interface should resolve");
         };
-        let file = iface_loc.file(&db);
-        let tree = baml_compiler2_hir::file_item_tree(&db, file);
-        let iface_data = tree
-            .interfaces
-            .get(&iface_loc.id(&db))
-            .expect("Iterator item-tree data");
-        let fn_id = iface_data
+        let iface_data = baml_compiler2_ppir::item_data::interface_data(&db, iface_loc);
+        let fn_loc = iface_data
             .default_methods
             .iter()
             .copied()
-            .find(|&id| tree[id].name.as_str() == "first")
+            .find(|&loc| {
+                baml_compiler2_ppir::item_data::function_data(&db, loc)
+                    .name
+                    .as_str()
+                    == "first"
+            })
             .expect("`first` default method");
-        let fn_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, fn_id);
         let scope_id = baml_compiler2_ppir::item_data::function_scope(&db, fn_loc)
             .expect("`first`'s body scope");
 
@@ -3365,6 +3360,63 @@ function needs<T extends Marker>(x: T) -> int throws never {
                 .iter()
                 .any(|e| matches!(e, TirTypeError::MissingInterfaceMethod { .. })),
             "a provided method should not be reported missing, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn generic_sysop_method_in_implements_block_is_rejected() {
+        // A `$rust_io_function` override with method-level generics is only reachable
+        // through interface dispatch, which cannot supply the sys-op's synthetic
+        // type-argument slots — rejected at the declaration (E0153). (`$rust_io_function`
+        // outside a builtin file also draws the builtin-only-syntax diagnostic, but that
+        // travels the HIR channel and does not gate body lowering, so the impl-conformance
+        // guard under test still sees a sys-op body here.)
+        let diags = impl_diagnostics(
+            "interface Codec {\n  function decode<T>(self, raw: string) -> T throws never\n}\n\
+             class Wire {\n  implements Codec {\n    \
+             function decode<T>(self, raw: string) -> T throws never { $rust_io_function }\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::GenericSysOpMethodInInterfaceImpl { method, .. }
+                    if method.as_str() == "decode"
+            )),
+            "expected GenericSysOpMethodInInterfaceImpl for `decode`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn non_generic_sysop_method_in_implements_block_is_accepted() {
+        // A sys-op override with no method-level generics dispatches fine virtually
+        // (its arity already counts the receiver) — e.g. `SystemRandom`'s `Rng` impl.
+        let diags = impl_diagnostics(
+            "interface Source {\n  function read(self, n: int) -> string throws never\n}\n\
+             class Device {\n  implements Source {\n    \
+             function read(self, n: int) -> string throws never { $rust_io_function }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::GenericSysOpMethodInInterfaceImpl { .. })),
+            "a non-generic sys-op override must not be rejected, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn generic_vm_builtin_method_in_implements_block_is_not_flagged_as_sysop() {
+        // The guard is specific to `$rust_io_function` (sys-ops); a `$rust_function`
+        // VM builtin with method generics is a different dispatch mechanism.
+        let diags = impl_diagnostics(
+            "interface Codec {\n  function decode<T>(self, raw: string) -> T throws never\n}\n\
+             class Wire {\n  implements Codec {\n    \
+             function decode<T>(self, raw: string) -> T throws never { $rust_function }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::GenericSysOpMethodInInterfaceImpl { .. })),
+            "a $rust_function override must not draw the sys-op diagnostic, got {diags:?}"
         );
     }
 

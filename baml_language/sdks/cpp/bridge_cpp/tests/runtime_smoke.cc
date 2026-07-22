@@ -39,9 +39,11 @@ static void TestCallRegistryRoundTrip() {
   const std::vector<int8_t> payload = {1, 2, 3, 4};
   baml_cpp_result_trampoline(started.correlation_id, payload.data(),
                              payload.size());
-  auto status = started.envelope.wait_for(std::chrono::seconds(1));
-  assert(status == std::future_status::ready);
-  const std::vector<uint8_t> got = started.envelope.get();
+  if (!started.state->wait_until(std::chrono::steady_clock::now() +
+                                 std::chrono::seconds(1))) {
+    throw std::runtime_error("call registry round trip timed out");
+  }
+  const std::vector<uint8_t>& got = started.state->wait();
   assert(got.size() == 4 && got[0] == 1 && got[3] == 4);
   std::printf("call registry round trip ok\n");
 }

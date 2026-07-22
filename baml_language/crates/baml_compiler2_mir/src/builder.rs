@@ -614,6 +614,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 
@@ -656,6 +657,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 

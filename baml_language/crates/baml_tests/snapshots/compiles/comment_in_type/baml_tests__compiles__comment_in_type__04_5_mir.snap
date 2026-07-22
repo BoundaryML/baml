@@ -16,7 +16,7 @@ fn user.CommentAfterArrow(client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -44,7 +44,7 @@ fn user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.http.Re
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -71,7 +71,7 @@ fn user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) -> baml.
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -98,7 +98,7 @@ fn user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.Pro
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -128,7 +128,7 @@ fn user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -> stri
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -158,7 +158,7 @@ fn user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.C
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -187,7 +187,7 @@ fn user.FunctionWithComments$build_request_stream(a: string, b: int, client: bam
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -216,7 +216,7 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.C
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const item user.TestClient;
         goto -> bb2;
     }
 

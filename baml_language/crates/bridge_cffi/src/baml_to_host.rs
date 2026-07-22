@@ -308,6 +308,7 @@ pub async fn call_and_encode(
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
+    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()

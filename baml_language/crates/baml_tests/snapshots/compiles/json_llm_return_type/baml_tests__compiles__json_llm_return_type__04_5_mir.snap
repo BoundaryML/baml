@@ -16,7 +16,7 @@ fn user.ExtractAny(client: baml.llm.Client) -> int | float | string | bool | nul
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -44,7 +44,7 @@ fn user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Request {
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -71,7 +71,7 @@ fn user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.http.Re
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -98,7 +98,7 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
     }
 
     bb1: {
-        _1 = const fn user.TestClient;
+        _1 = const item user.TestClient;
         goto -> bb2;
     }
 

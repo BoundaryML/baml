@@ -71,13 +71,13 @@ pub enum Type {
 impl Type {
     /// Subtyping for the Jinja template type lattice.
     ///
-    /// This is a **third** subtyping implementation alongside
-    /// `baml_compiler2_tir::normalize::is_subtype_of` (the TIR) and
-    /// `baml_type::Ty::is_subtype_of` (runtime / SAP). It is intentionally
-    /// isolated: Jinja templates have their own value semantics
-    /// (`Bigint` never widens to anything — see the `Bigint` arm below),
-    /// so this impl mirrors neither the TIR coercive scalar rules nor the
-    /// coercion-free container rules.
+    /// This is a subtyping implementation for a **separate dialect**, distinct
+    /// from BAML's single canonical relation `baml_type::normalize::is_subtype`
+    /// (behind the `TypeContext` trait, shared by the compiler and the runtime).
+    /// It is intentionally isolated: Jinja templates have their own value
+    /// semantics (`Bigint` never widens to anything — see the `Bigint` arm
+    /// below), so this impl mirrors neither the scalar nor the container rules of
+    /// the BAML algebra.
     ///
     /// Do **not** keep this in sync with the TIR rules by reflex — it is
     /// a separate dialect by design. Any change here should be motivated

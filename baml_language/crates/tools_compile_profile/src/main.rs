@@ -878,7 +878,7 @@ fn print_human(
         entry.1 += row.cache_hits;
     }
     let mut phase_rows: Vec<_> = phase_totals.into_iter().collect();
-    phase_rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    phase_rows.sort_by_key(|row| std::cmp::Reverse(row.1.0));
     println!();
     println!("--- Query events by phase ---");
     println!(
@@ -953,7 +953,7 @@ fn print_human(
         .iter()
         .filter(|r| r.executed >= 100 && r.executed >= r.cache_hits * 2)
         .collect();
-    suspect.sort_by(|a, b| b.executed.cmp(&a.executed));
+    suspect.sort_by_key(|row| std::cmp::Reverse(row.executed));
     println!();
     println!("--- Suspect: high exec, low cache hit (exec ≥ 100, exec ≥ 2× hits) ---");
     if suspect.is_empty() {

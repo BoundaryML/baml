@@ -263,8 +263,7 @@ pub fn resolve_enum_variant(
     let Definition::Enum(enum_loc) = def else {
         return false;
     };
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-    item_tree[enum_loc.id(db)]
+    baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
         .variants
         .iter()
         .any(|v| v.name == *variant)
@@ -291,20 +290,14 @@ pub fn resolve_field(
         return false;
     };
     match def {
-        Definition::Class(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            item_tree[loc.id(db)]
-                .fields
-                .iter()
-                .any(|f| f.name == *field)
-        }
-        Definition::Interface(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
-            item_tree[loc.id(db)]
-                .fields
-                .iter()
-                .any(|f| f.name == *field)
-        }
+        Definition::Class(loc) => baml_compiler2_ppir::item_data::class_data(db, loc)
+            .fields
+            .iter()
+            .any(|f| f.name == *field),
+        Definition::Interface(loc) => baml_compiler2_ppir::item_data::interface_data(db, loc)
+            .fields
+            .iter()
+            .any(|f| f.name == *field),
         _ => false,
     }
 }

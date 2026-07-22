@@ -9,8 +9,8 @@
 //! retargeted per member: deep members (`child: Self`) recurse into themselves;
 //! the shallow `Concrete*` members nest their declared `child`.
 //!
-//! The semantic impls (`render_with`, `is_subtype_of`, `Display`,
-//! `validate_runtime`, the conversions, and the `lower_to_runtime` boundary)
+//! The semantic impls (`render_with`, `Display`, `validate_runtime`, the
+//! conversions, and the `lower_to_runtime` boundary)
 //! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
 
 // The macro-generated accessors, conversions, and borsh impls reference every

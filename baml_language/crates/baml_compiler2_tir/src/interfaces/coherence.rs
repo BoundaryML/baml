@@ -189,9 +189,7 @@ fn package_impls_with_spans<'db>(
         .iter()
         .filter_map(|&loc| {
             let data = impl_data(db, loc).as_ref().ok()?;
-            let span = impl_data_source_map(db, loc)
-                .as_ref()
-                .map(|sm| sm.impl_span)?;
+            let span = impl_data_source_map(db, loc).impl_span;
             Some((data, span))
         })
         .collect()
@@ -666,9 +664,7 @@ fn enum_variant_names(db: &dyn crate::Db, enum_qtn: &TypeName) -> Option<Vec<Nam
     else {
         return None;
     };
-    let file = enum_loc.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let enum_data = &item_tree[enum_loc.id(db)];
+    let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
     Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
 }
 

@@ -818,6 +818,8 @@ mod tests {
         Object::Function(Box::new(Function {
             name: name.to_string(),
             source_file: "user.baml".to_string(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,

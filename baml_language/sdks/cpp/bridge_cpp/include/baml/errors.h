@@ -7,6 +7,16 @@
 #include <utility>
 #include <vector>
 
+// Forward declaration of the protobuf message host_throw encodes into;
+// including the pb header here would cycle with codec.h/proto.h.
+namespace baml_bridge {
+namespace cffi {
+namespace v1 {
+class InboundValue;
+}  // namespace v1
+}  // namespace cffi
+}  // namespace baml_bridge
+
 namespace baml {
 
 // A value thrown by BAML code (the `error` arm of the result envelope).
@@ -79,6 +89,37 @@ class thrown : public error {
 class cancelled : public panic {
  public:
   using panic::panic;
+};
+
+template <typename T>
+struct codec;
+
+// Thrown from inside a host callable to surface a typed BAML error to the
+// BAML caller: `throw baml::host_throw<ValidationError>{value}` crosses
+// the boundary as a real `ValidationError` class value, so a BAML
+// `catch (e: ValidationError)` matches it structurally (the analog of
+// Python's `raise BamlError(ValidationError(...))`). Any other host
+// exception crosses as an opaque `baml.errors.HostCallable` instead.
+class host_throw_base : public std::exception {
+ public:
+  const char* what() const noexcept override {
+    return "BAML host-callable typed throw";
+  }
+  // Writes the thrown value as an InboundValue message body.
+  virtual void encode_value(
+      ::baml_bridge::cffi::v1::InboundValue& value_msg) const = 0;
+};
+
+template <typename T>
+class host_throw : public host_throw_base {
+ public:
+  explicit host_throw(T value) : value(std::move(value)) {}
+  void encode_value(
+      ::baml_bridge::cffi::v1::InboundValue& value_msg) const override {
+    codec<T>::encode(value_msg, value);
+  }
+
+  T value;
 };
 
 }  // namespace baml

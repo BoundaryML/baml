@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 48503
 ---
 Slash "/"
 Slash "/"
@@ -202,11 +201,9 @@ Word "takes_int"
 LParen "("
 Word "$id"
 Equals "="
-Word "baml"
+Word "boundary"
 Dot "."
 Word "id"
-Dot "."
-Word "new"
 LParen "("
 RParen ")"
 RParen ")"

@@ -47,7 +47,7 @@ fn user.Greet(name: string, client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _2 = const fn user.Fast;
+        _2 = const item user.Fast;
         goto -> bb2;
     }
 
@@ -106,7 +106,7 @@ fn user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.
     }
 
     bb1: {
-        _2 = const fn user.Fast;
+        _2 = const item user.Fast;
         goto -> bb2;
     }
 
@@ -164,7 +164,7 @@ fn user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> bam
     }
 
     bb1: {
-        _2 = const fn user.Fast;
+        _2 = const item user.Fast;
         goto -> bb2;
     }
 
@@ -222,7 +222,7 @@ fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.P
     }
 
     bb1: {
-        _2 = const fn user.Fast;
+        _2 = const item user.Fast;
         goto -> bb2;
     }
 

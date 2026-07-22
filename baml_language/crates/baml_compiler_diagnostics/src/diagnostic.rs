@@ -14,7 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
+/// (e.g., in `baml_tests` snapshots).
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
@@ -233,7 +233,7 @@ pub enum DiagnosticId {
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
 
-    // Interface diagnostics (BEP-044; E0112-E0120)
+    // Interface diagnostics (BEP-044)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
     /// A class is missing the body of a required interface method.
@@ -253,6 +253,11 @@ pub enum DiagnosticId {
     /// A method body in `implements I {}` has a signature that doesn't match
     /// the interface's declared signature for that method.
     InterfaceMethodSignatureMismatch,
+    /// A `$rust_io_function` (sys-op) method in an `implements` block declares
+    /// its own generic parameters. Such a method is reached only through
+    /// interface (virtual) dispatch, which cannot carry the sys-op's
+    /// method-level type arguments.
+    GenericSysOpMethodInInterfaceImpl,
     /// Two `implements` blocks on the same class declare methods with the
     /// same name — unqualified calls would be ambiguous (BEP-044
     /// §"Method Disambiguation").
@@ -348,6 +353,16 @@ pub enum DiagnosticId {
     /// a digit invalid for the base (`0b12`), or an integer literal whose
     /// magnitude exceeds `i64::MAX`.
     InvalidNumericLiteral,
+
+    // Builtin interfaces (BEP-062, E0153/E0154)
+    /// An `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (every function type implements it) and cannot be written by hand.
+    BuiltinInterfaceNotImplementable,
+    /// A generic parameter's bound (`T extends X`) names a compiler-builtin
+    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// (an existential), never as a bound.
+    BuiltinInterfaceNotABound,
 }
 
 impl DiagnosticId {
@@ -548,6 +563,7 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
+            DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
             // Aliasing lints
             DiagnosticId::ArrayFilledAliasing => "E0148",
@@ -560,6 +576,8 @@ impl DiagnosticId {
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",
+            DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
+            DiagnosticId::BuiltinInterfaceNotABound => "E0154",
         }
     }
 }

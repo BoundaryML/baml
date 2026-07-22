@@ -10,6 +10,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
     load_type pkg.inner.AutoBox<int>
     load_var j

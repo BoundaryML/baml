@@ -10,7 +10,7 @@ function user.$id() -> int  [expr] {
   {  } 1
 }
 function user.call_site_label() -> int  [expr] {
-  {  } takes_int($id = baml.id.new())
+  {  } takes_int($id = boundary.id())
 }
 function user.compound_assignment() -> string  [expr] {
   { $id Add= "-suffix" } $id

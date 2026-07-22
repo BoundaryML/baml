@@ -17,9 +17,11 @@ import {
     completeHostCall,
 } from './native.js';
 import { BamlStream } from './stream.js';
-import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
+import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, type BamlErrorDetail } from './errors.js';
+import { handleExitPanic } from './platform.js';
 import {
     registerHostOpaque,
+    releaseHostOpaque,
     tryRehydrateHostValueByKey,
 } from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
@@ -52,17 +54,25 @@ export class HostCallableSyncError extends Error {
  * Per-encode state threaded through {@link setInboundValue}.
  *
  * - `syncMode`: when true, encountering a host callable fast-fails. The
- *   sync call path blocks the Node main thread on a tokio `block_on`, which
- *   starves libuv so the `ThreadsafeFunction` dispatch can never run — the
- *   user callback would never fire, `completeHostCall` would never be
- *   called, and the engine would await the in-flight `call_id` forever. We
- *   reject before blocking instead of hanging.
+ *   synchronous call path occupies the single JavaScript/bridge event loop,
+ *   so a callback that requires a future turn can never complete. We reject
+ *   before entering the bridge instead of hanging.
  * - `registered`: keys minted while encoding this call, so an encode error
  *   on a later kwarg can roll back the registrations of earlier ones.
  */
 interface EncodeCtx {
     syncMode: boolean;
     registered: HandleKey[];
+}
+
+function rollbackHostCallables(keys: HandleKey[]): void {
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+        try {
+            releaseHostCallable(keys[index]);
+        } catch {
+            // Best-effort cleanup; never mask the original encode failure.
+        }
+    }
 }
 
 export interface EncodeCallArgsOptions {
@@ -125,8 +135,8 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         if (ctx.syncMode && value.handleType === BamlHandleType.HOST_VALUE_CALLABLE) {
             throw new HostCallableSyncError(
                 'host callables are only supported on the async call path; use the async API ' +
-                '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
-                'thread, so the host callback can never run and the call would hang.'
+                '(callFunction) instead of callFunctionSync. The sync path occupies the single ' +
+                'JavaScript/bridge event loop, so the host callback cannot await a future turn.'
             );
         }
         // The Rust inbound decoder drains handle-table entries. Send a fresh
@@ -158,8 +168,8 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
         if (ctx.syncMode) {
             throw new HostCallableSyncError(
                 'host callables are only supported on the async call path; use the async API ' +
-                '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
-                'thread, so the host callback can never run and the call would hang.'
+                '(callFunction) instead of callFunctionSync. The sync path occupies the single ' +
+                'JavaScript/bridge event loop, so the host callback cannot await a future turn.'
             );
         }
         // JS callable → register a dispatch wrapper in the host-value
@@ -314,13 +324,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
         // they don't leak in the registry (and pin the libuv loop) for the
         // life of the process — the call never reaches the engine, so the
         // engine would never release them.
-        for (const k of ctx.registered) {
-            try {
-                releaseHostCallable(k);
-            } catch {
-                // Best-effort cleanup; never mask the original error.
-            }
-        }
+        rollbackHostCallables(ctx.registered);
         throw err;
     }
 }
@@ -663,6 +667,19 @@ function cancellationAbortError(message: string): BamlAbortError {
     });
 }
 
+function errorForClassName(formatted: string, detail: BamlErrorDetail): BamlError {
+    switch (detail.className) {
+        case 'baml.errors.InvalidArgument':
+            return new BamlInvalidArgumentError(formatted, detail);
+        case 'baml.errors.GenericSdkError':
+        case 'baml.errors.CompilationError':
+        case 'baml.errors.AccessError':
+            return new BamlClientError(formatted, detail);
+        default:
+            return new BamlError(formatted, detail);
+    }
+}
+
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
@@ -697,30 +714,24 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             if (className === CANCELLED_PANIC_CLASS) {
                 throw cancellationAbortError(formatted);
             }
-            throw new BamlError(
-                formatted,
-                { value, bamlTrace: trace, className },
-            );
+            throw errorForClassName(formatted, { value, bamlTrace: trace, className });
         }
         case 'panic': {
             const panic = result.panic;
-            if (panic?.isExitPanic) {
-                // Clean process-exit panic: exit after flushing telemetry (the
-                // registered `process.once('exit', flushEvents)` hook fires
-                // synchronously inside process.exit), rather than throwing.
-                const code = Number(panic.exitCode ?? 0);
-                process.exit(code);
-            }
             const { value, className, message } = decodeThrown(panic?.value);
             const trace = panic?.trace ?? [];
             const formatted = formatThrownMessage('panic', className ?? '', message, trace);
             if (className === CANCELLED_PANIC_CLASS) {
                 throw cancellationAbortError(formatted);
             }
-            throw new BamlPanic(
+            const fallback = new BamlPanic(
                 formatted,
                 { value, bamlTrace: trace, className },
             );
+            if (panic?.isExitPanic) {
+                handleExitPanic(Number(panic.exitCode ?? 0), fallback);
+            }
+            throw fallback;
         }
         case 'ok':
         default:
@@ -822,13 +833,7 @@ function sendHostCallableResult(callId: number, value: unknown): void {
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());
     } catch (err) {
-        for (const k of ctx.registered) {
-            try {
-                releaseHostCallable(k);
-            } catch {
-                // Best-effort cleanup; never mask the original error.
-            }
-        }
+        rollbackHostCallables(ctx.registered);
         sendHostCallableError(callId, err);
         return;
     }
@@ -865,10 +870,8 @@ function buildHostCallableInbound(
         stringField('message', message),
         stringField('class_name', className),
         stringField('language', 'nodejs'),
+        stringField('traceback', traceback ?? ''),
     ];
-    if (traceback != null) {
-        fields.push(stringField('traceback', traceback));
-    }
     fields.push(handleField);
     return InboundValue.create({
         classValue: InboundClassValue.create({
@@ -892,6 +895,40 @@ function buildHostCallableInbound(
 // napi class with private fields; protobufjs only reads the public
 // `{low, high}` shape and the wire serializes them identically.
 const UNRESOLVED_HOST_ERROR_KEY = { low: 0, high: 0 } as unknown as HandleKey;
+
+/** Encode a BamlError's wrapped value with its concrete generated-class FQN.
+ * Ordinary function arguments may use a bare map because the declared
+ * parameter supplies the target class. A thrown value has no such coercion
+ * context: the engine must see the class identity before it can validate the
+ * callable's declared `throws` contract. */
+function setInboundTypedThrowValue(
+    iv: baml_bridge.cffi.v1.IInboundValue,
+    value: unknown,
+    ctx: EncodeCtx,
+): void {
+    if (value !== null && typeof value === 'object') {
+        const proto = Object.getPrototypeOf(value);
+        const isClassInstance = proto !== Object.prototype && proto !== null;
+        if (isClassInstance) {
+            const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+            if (fqn) {
+                const params = genericParamNames(value);
+                const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
+                const typeArgs = params?.map((param) => lowerTypeToWireTy(userTypes?.[param])) ?? [];
+                const fields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
+                for (const [key, fieldValue] of Object.entries(value)) {
+                    if (typeof fieldValue === 'function' || key === '$types') continue;
+                    const child: baml_bridge.cffi.v1.IInboundValue = {};
+                    setInboundValue(child, fieldValue, ctx);
+                    fields.push({ stringKey: key, value: child });
+                }
+                iv.classValue = { classTy: { name: fqn, typeArgs }, fields };
+                return;
+            }
+        }
+    }
+    setInboundValue(iv, value, ctx);
+}
 
 function sendHostCallableError(callId: number, err: unknown): void {
     // Normal error path: never leaves the call uncompleted. If building or
@@ -924,7 +961,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
             const ctx: EncodeCtx = { syncMode: false, registered: [] };
             try {
                 const iv = InboundValue.create({});
-                setInboundValue(iv, err.value, ctx);
+                setInboundTypedThrowValue(iv, err.value, ctx);
                 const bytes = Buffer.from(InboundValue.encode(iv).finish());
                 completeHostCall(callId, 1, bytes);
                 return;
@@ -939,13 +976,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
                 // and leak the remaining registrations (mirrors the other
                 // rollback sites in `setInboundValue` and
                 // `sendHostCallableResult`).
-                for (const key of ctx.registered) {
-                    try {
-                        releaseHostCallable(key);
-                    } catch {
-                        // Best-effort cleanup; never mask the original error.
-                    }
-                }
+                rollbackHostCallables(ctx.registered);
             }
         }
 
@@ -965,19 +996,19 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // original Proxy. Identity loss here is the right trade — the
         // alternative is hanging the call.
         //
-        // Registration-leak edge case (rare, bounded): if encoding succeeds
-        // through `registerHostOpaque` but `buildHostCallableInbound` or
-        // `InboundValue.encode` fails after, the TS map entry stays alive
-        // with no corresponding engine-side `HostValueArc` to release it,
-        // so it lives until process exit. Both downstream calls are deeply
-        // mechanical (build a proto message, serialize fixed-shape fields)
-        // and don't depend on `err`'s shape, so this is effectively
-        // unreachable outside protobufjs / native-binding corruption.
+        // Register transactionally: if fixed-shape payload construction,
+        // encoding, or delivery fails before Rust retains the handle, remove
+        // the opaque entry before falling back to the last-resort payload.
         const { className, message, stack } = describeError(err);
         const handleKey = registerHostOpaque(err);
-        const inbound = buildHostCallableInbound(className, message, stack, handleKey);
-        const bytes = Buffer.from(InboundValue.encode(inbound).finish());
-        completeHostCall(callId, 1, bytes);
+        try {
+            const inbound = buildHostCallableInbound(className, message, stack, handleKey);
+            const bytes = Buffer.from(InboundValue.encode(inbound).finish());
+            completeHostCall(callId, 1, bytes);
+        } catch (innerErr) {
+            releaseHostOpaque(handleKey);
+            throw innerErr;
+        }
     } catch (innerErr) {
         completeHostCallLastResort(callId, innerErr);
     }
@@ -1026,16 +1057,30 @@ function safeStringify(err: unknown): string {
 
 function describeError(err: unknown): { className: string; message: string; stack: string | undefined } {
     if (err instanceof Error) {
+        const rawName = err.name;
+        const rawMessage = err.message;
+        const rawStack = err.stack;
         return {
-            className: err.name || err.constructor.name || 'Error',
-            message: err.message || String(err),
-            stack: err.stack ?? undefined,
+            className: typeof rawName === 'string' && rawName.length > 0
+                ? rawName
+                : err.constructor.name || 'Error',
+            message: typeof rawMessage === 'string' && rawMessage.length > 0
+                ? rawMessage
+                : safeStringify(err),
+            stack: rawStack == null
+                ? undefined
+                : typeof rawStack === 'string'
+                    ? rawStack
+                    : safeStringify(rawStack),
         };
     }
     if (err != null && typeof err === 'object') {
         const ctor = (err as { constructor?: { name?: string } }).constructor;
-        const className = ctor?.name && ctor.name !== 'Object' ? ctor.name : 'Error';
-        return { className, message: String(err), stack: undefined };
+        const rawName = ctor?.name;
+        const className = typeof rawName === 'string' && rawName.length > 0 && rawName !== 'Object'
+            ? rawName
+            : 'Error';
+        return { className, message: safeStringify(err), stack: undefined };
     }
-    return { className: 'Error', message: String(err), stack: undefined };
+    return { className: 'Error', message: safeStringify(err), stack: undefined };
 }

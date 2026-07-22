@@ -104,36 +104,21 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_errors.rs",
         Gate::Later("needs rich error decoding"),
     ),
-    (
-        "function_calls",
-        "test_generic_calls.rs",
-        Gate::Later("needs generics"),
-    ),
-    (
-        "function_calls",
-        "test_generic_inference.rs",
-        Gate::Later("needs generics"),
-    ),
-    (
-        "function_calls",
-        "test_host_callables.rs",
-        Gate::Later("needs host callables"),
-    ),
-    (
-        "function_calls",
-        "test_methods_on_classes.rs",
-        Gate::Later("needs methods on classes"),
-    ),
+    ("function_calls", "test_generic_calls.rs", Gate::Now),
+    // Intentionally empty: the Rust SDK does no inference (rustc solves type
+    // params at compile time; bindings are always sent explicitly).
+    ("function_calls", "test_generic_inference.rs", Gate::Now),
+    ("function_calls", "test_host_callables.rs", Gate::Now),
+    // Rust-only: typed error surfaces from callback-throws inference (python/TS
+    // erase `throws`, so there is no cross-language counterpart).
+    ("function_calls", "test_callback_throws.rs", Gate::Now),
+    ("function_calls", "test_methods_on_classes.rs", Gate::Now),
     (
         "function_calls",
         "test_optional_args.rs",
         Gate::Later("needs the optional-arg matrix and methods on classes"),
     ),
-    (
-        "function_calls",
-        "test_raises.rs",
-        Gate::Later("needs throws docs; asserts on generated source text"),
-    ),
+    ("function_calls", "test_raises.rs", Gate::Now),
     (
         "function_calls",
         "test_stdlib_entrypoints.rs",
@@ -156,11 +141,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ),
     ("type_shapes", "test_main.rs", Gate::Now),
     ("type_shapes", "test_complex_models.rs", Gate::Now),
-    (
-        "type_shapes",
-        "test_generic.rs",
-        Gate::Later("needs generics"),
-    ),
+    ("type_shapes", "test_generic.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_aliases.rs", Gate::Now),
     (
         "type_shapes",
@@ -168,16 +149,14 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Now,
     ),
     ("type_shapes", "roundtrip_tests/test_enums.rs", Gate::Now),
+    // `GNode<T>`'s round trip is a permanent DIVERGENCE (param used only
+    // recursively — not representable as a Rust struct); the rest runs.
     (
         "type_shapes",
         "roundtrip_tests/test_forward_refs.rs",
-        Gate::Later("needs generics (GNode<T>)"),
+        Gate::Now,
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_generics.rs",
-        Gate::Later("needs generics"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_generics.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_handles.rs",

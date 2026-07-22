@@ -2175,7 +2175,7 @@ function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
 }
 
 function exceptions.named_wrapper_value_catches_callback_throw_fn() -> string {
-    load_global user.exceptions.s17_risky_cb
+    load_const user.exceptions.s17_risky_cb
     call user.exceptions.s17_forward_cb
     jump L2
     load_var e

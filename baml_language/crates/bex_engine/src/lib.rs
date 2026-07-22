@@ -898,10 +898,14 @@ struct SpawnParamsData {
 /// `baml.errors.HostCallable`.
 ///
 /// The check reads the value's runtime BAML type via
-/// [`value_runtime_baml_ty`] and tests `value_ty ⊑ contract` via
-/// [`RuntimeTy::is_subtype_of`] — `BuiltinUnknown` accepts everything (the
-/// "throws unknown" fallback for undeclared host contracts); concrete
-/// classes reject anything not in their subtype lattice.
+/// [`value_runtime_baml_ty`] and tests `value_ty ⊑ contract` via the canonical,
+/// program-aware type algebra ([`baml_type::normalize::is_subtype`] over the VM
+/// as its [`TypeContext`](baml_type::normalize::TypeContext)), so a thrown
+/// concrete that *implements* a declared interface contract is on-contract (the
+/// context-free `RuntimeTy::is_subtype_of` fork could not see that membership).
+/// `BuiltinUnknown` accepts everything (the "throws unknown" fallback for
+/// undeclared host contracts); concrete classes reject anything not in their
+/// subtype lattice.
 ///
 /// Panic-class values (`baml.panics.*`) bypass the contract entirely:
 /// panics are not catchable errors and a fn's `throws E` clause never
@@ -927,9 +931,11 @@ fn enforce_host_throw_contract(
     {
         return value;
     }
-    let on_contract = runtime_ty
-        .as_ref()
-        .is_some_and(|rt: &RuntimeTy| rt.is_subtype_of(contract));
+    let on_contract = runtime_ty.as_ref().is_some_and(|rt: &RuntimeTy| {
+        // The VM is the runtime `TypeContext`; operands upcast to `Ty` by a
+        // zero-cost borrow.
+        baml_type::normalize::is_subtype(rt.as_ty(), contract.as_ty(), &thread.vm)
+    });
     if on_contract {
         return value;
     }
@@ -2748,6 +2754,20 @@ impl BexEngine {
         // inner function (its `self` is supplied positionally).
         let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
             Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
+            // A plain (or `foo<int>`-instantiated) function reference: the
+            // pooled wrapper over the function's global slot (see emit's
+            // `emit_pooled_function_value`). Resolve to the underlying
+            // `Function` object; its `type_args` seed the frame.
+            Object::GenericFunction(gf) => {
+                let type_args = gf.type_args.to_vec();
+                let inner = thread.vm.globals.get(thread.proof(), gf.function);
+                let func_ptr = inner.as_object_ptr().ok_or_else(|| {
+                    EngineError::Other(
+                        "call_callable: function wrapper resolves to no object".to_string(),
+                    )
+                })?;
+                (func_ptr, None, type_args, func_ptr)
+            }
             Object::Closure(closure) => (
                 entry_ptr,
                 None,
@@ -4765,8 +4785,15 @@ impl BexEngine {
                                 // this sys-op call is a normal `store_var`
                                 // / projection / whatever the surrounding
                                 // expression expected — no implicit await.
-                                let value =
-                                    self.convert_external_to_vm_value(&mut thread, external)?;
+                                let value = if operation == SysOp::BamlHostCallHostValue {
+                                    self.convert_external_to_vm_value_with_ty(
+                                        &mut thread,
+                                        external,
+                                        host_ret_ty.as_ref(),
+                                    )?
+                                } else {
+                                    self.convert_external_to_vm_value(&mut thread, external)?
+                                };
                                 if let Some((call_id, mask)) = sysop_origin_capture {
                                     thread
                                         .vm
