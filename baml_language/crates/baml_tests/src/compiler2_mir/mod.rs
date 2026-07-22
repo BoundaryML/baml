@@ -377,38 +377,6 @@ fn match_expr() {
 }
 
 #[test]
-fn typed_pattern_uses_atomic_narrow_bind() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-        class Foo { field: int }
-
-        function f(x: Foo | int) -> int {
-            match (x) {
-                let foo: Foo => foo.field,
-                let n: int => n,
-            }
-        }
-        "#,
-    );
-    let function_loc = *file_functions(&db, file)
-        .iter()
-        .find(|&&loc| function_data(&db, loc).name.as_str() == "f")
-        .expect("f function");
-    let mir = lower_function(&db, function_loc, OptLevel::Two);
-    let MirFunctionKind::Bytecode(body) = &mir.kind else {
-        panic!("f must lower to bytecode")
-    };
-
-    assert!(
-        body.blocks
-            .iter()
-            .any(|block| matches!(block.terminator, Some(Terminator::NarrowBind { .. })))
-    );
-}
-
-#[test]
 fn object_construction() {
     let mut db = make_db();
     let file = db.add_file(

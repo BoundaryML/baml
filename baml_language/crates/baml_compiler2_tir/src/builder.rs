@@ -1353,7 +1353,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn local_is_narrowable(&self, subject: ExprId, name: &Name) -> bool {
+    fn local_is_uncaptured(&self, subject: ExprId, name: &Name) -> bool {
         if !self.locals.contains_key(name) {
             return false;
         }
@@ -1374,13 +1374,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             .is_some_and(|bindings| !bindings.captured_bindings.contains(&binding_id))
     }
 
-    fn narrow_local_if_stable(&mut self, subject: ExprId, name: Name, ty: Ty) {
-        if self.local_is_narrowable(subject, &name) {
-            self.narrow_local(name, ty);
+    fn narrow_uncaptured_local(&mut self, subject: ExprId, name: &Name, ty: Ty) {
+        if self.local_is_uncaptured(subject, name) {
+            self.narrow_local(name.clone(), ty);
         }
     }
 
-    fn stable_condition_narrowings(
+    fn uncaptured_condition_narrowings(
         &self,
         condition: ExprId,
         body: &ExprBody,
@@ -1392,7 +1392,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &self.pattern_types,
         )
         .into_iter()
-        .filter(|narrowing| self.local_is_narrowable(narrowing.subject, &narrowing.name))
+        .filter(|narrowing| self.local_is_uncaptured(narrowing.subject, &narrowing.name))
         .collect()
     }
 
@@ -4583,7 +4583,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = self.stable_condition_narrowings(*condition, body);
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -6726,7 +6726,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = self.stable_condition_narrowings(*condition, body);
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -7264,11 +7264,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // register the pattern bindings for the body only, then restore.
                 let snapshot = self.snapshot_scoped_locals();
                 if let Some(name) = &scrutinee_name {
-                    self.narrow_local_if_stable(
-                        *scrutinee,
-                        name.clone(),
-                        result.matched_ty.clone(),
-                    );
+                    self.narrow_uncaptured_local(*scrutinee, name, result.matched_ty.clone());
                 }
                 self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
                 self.loop_depth += 1;
@@ -7643,7 +7639,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         if let Some(matched_ty) = self.pattern_types.get(&pattern).cloned() {
                             let complement =
                                 crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                            self.narrow_local_if_stable(scrutinee, name, complement);
+                            self.narrow_uncaptured_local(scrutinee, &name, complement);
                         }
                     }
                 }
@@ -7679,7 +7675,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
                 self.infer_expr(condition, body);
-                let narrowings = self.stable_condition_narrowings(condition, body);
+                let narrowings = self.uncaptured_condition_narrowings(condition, body);
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).
@@ -7865,7 +7861,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Narrow the scrutinee local for the arm body.
             if let Some(name) = &scrutinee_name {
-                self.narrow_local_if_stable(scrutinee_expr_id, name.clone(), narrowed.clone());
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, narrowed.clone());
             }
 
             self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
@@ -8053,7 +8049,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pattern bindings, then infer/check the body.
         let snapshot = self.snapshot_scoped_locals();
         if let Some(name) = &scrutinee_name {
-            self.narrow_local_if_stable(scrutinee_expr_id, name.clone(), matched_ty.clone());
+            self.narrow_uncaptured_local(scrutinee_expr_id, name, matched_ty.clone());
         }
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         let then_ty = match expected {
@@ -8069,7 +8065,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(name) = &scrutinee_name {
                 let complement =
                     crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                self.narrow_local_if_stable(scrutinee_expr_id, name.clone(), complement);
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, complement);
             }
             let ty = match expected {
                 Some(exp) => self.check_expr(else_expr, body, exp),

@@ -552,20 +552,18 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
             }
         }
         // Terminator destinations also count as definitions.
-        if let Some(Terminator::NarrowBind { destination, .. }) = &block.terminator {
-            defs[destination.0] += 1;
-        }
         if let Some(dest) = match &block.terminator {
-            Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::VirtualCall { destination, .. }) => Some(destination),
-            Some(Terminator::SysOp { destination, .. }) => Some(destination),
-            Some(Terminator::Spawn { future, .. }) => Some(future),
-            Some(Terminator::Await { destination, .. }) => Some(destination),
-            Some(Terminator::AwaitAny { destination, .. }) => Some(destination),
-            Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            Some(Terminator::Call { destination, .. })
+            | Some(Terminator::VirtualCall { destination, .. })
+            | Some(Terminator::SysOp { destination, .. })
+            | Some(Terminator::Await { destination, .. })
+            | Some(Terminator::AwaitAny { destination, .. })
+            | Some(Terminator::ShortCircuit { destination, .. }) => Some(destination.base_local()),
+            Some(Terminator::Spawn { future, .. }) => Some(future.base_local()),
             _ => None,
         } {
-            defs[dest.base_local().0] += 1;
+            defs[dest.0] += 1;
         }
     }
 

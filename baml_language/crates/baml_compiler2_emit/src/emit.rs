@@ -2058,20 +2058,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // ========================================================================
 
     fn emit_narrow_bind(&mut self, ty_template: &TyTemplate, destination: Local) {
-        let before = self.bytecode.instructions.len();
         unwrap_infallible(PullSink::is_type(self, ty_template));
-        let Some(last) = self.bytecode.instructions.last_mut() else {
-            unreachable!("is_type must emit bytecode")
-        };
+        let last = self
+            .bytecode
+            .instructions
+            .last_mut()
+            .expect("is_type emits bytecode");
         if let Instruction::IsType(ty) = *last {
             debug_assert!(!self.captured_locals.contains(&destination));
-            let destination_slot = self.local_slots[&destination];
             *last = Instruction::NarrowBind {
                 ty,
-                destination: destination_slot,
+                destination: self.local_slots[&destination],
             };
-        } else {
-            debug_assert!(self.bytecode.instructions.len() > before);
         }
     }
 

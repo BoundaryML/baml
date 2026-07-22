@@ -633,8 +633,8 @@ pub enum Instruction {
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
 
-    /// Test the top value and store that exact value in `destination` on success.
-    /// Pops the value and pushes the `Bool` result.
+    /// Pops and tests the top value, stores it in `destination` on success,
+    /// and pushes the `Bool` result.
     NarrowBind {
         ty: usize,
         destination: usize,

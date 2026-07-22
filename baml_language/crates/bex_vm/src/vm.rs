@@ -1792,14 +1792,13 @@ impl BexVm {
         raw_const: &ConstValue,
         resolved_const: Value,
     ) -> bool {
+        let frame_type_args = match &self.frames[frame_idx] {
+            Frame::Bytecode(frame) => frame.type_args.as_slice(),
+            _ => &[],
+        };
         match raw_const {
             ConstValue::Type(template) => {
-                let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[frame_idx] {
-                    bf.type_args.clone()
-                } else {
-                    vec![]
-                };
-                crate::type_match::value_matches_template(self, value, template, &frame_type_args)
+                crate::type_match::value_matches_template(self, value, template, frame_type_args)
             }
             ConstValue::ClassWithTypeArgs {
                 class_obj,
@@ -1809,19 +1808,13 @@ impl BexVm {
                 match value.as_object_ptr() {
                     Some(val_ptr) => match self.get_object(val_ptr) {
                         Object::Instance(inst) if inst.class == class_ptr => {
-                            let frame_type_args =
-                                if let Frame::Bytecode(bf) = &self.frames[frame_idx] {
-                                    bf.type_args.clone()
-                                } else {
-                                    vec![]
-                                };
                             type_args_templates.len() == inst.class_type_args.len()
                                 && type_args_templates.iter().zip(&inst.class_type_args).all(
                                     |(template, actual)| {
                                         crate::type_match::template_relates(
                                             self,
                                             template,
-                                            &frame_type_args,
+                                            frame_type_args,
                                             actual.as_ty(),
                                             crate::type_match::Variance::Invariant,
                                         )
