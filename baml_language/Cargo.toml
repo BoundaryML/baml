@@ -171,7 +171,6 @@ crossbeam-channel = { version = "0.5" }
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).
 crossbeam-utils = { version = "0.8" }
-ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"

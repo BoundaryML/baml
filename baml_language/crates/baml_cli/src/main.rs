@@ -1,8 +1,3 @@
-// TODO: This file has been simplified to remove baml_runtime/baml_log dependencies.
-
-// TODO: baml_runtime is disabled for now
-// use baml_runtime::RuntimeCliDefaults;
-
 use std::io::Write as _;
 
 /// The compiler workload is dominated by small short-lived allocations
@@ -15,9 +10,6 @@ use std::io::Write as _;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
-    // TODO: baml_log is disabled for now
-    // baml_log::init()?;
-
     warn_if_direct_invocation();
 
     let argv: Vec<String> = std::env::args().collect();

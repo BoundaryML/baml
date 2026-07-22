@@ -121,49 +121,6 @@ pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
     cli.run()
 }
 
-// TODO: Original run_cli that used RuntimeCliDefaults is commented out
-// pub fn run_cli(
-//     argv: Vec<String>,
-//     caller_type: baml_runtime::RuntimeCliDefaults,
-// ) -> Result<ExitCode> {
-//     let mut cli = commands::RuntimeCli::parse_from_smart(argv);
-//     if !matches!(cli.command, commands::Commands::Test(_)) {
-//         // We only need to set the exit handlers if we're not running tests
-//         // and the caller is Python.
-//         if caller_type.output_type == baml_types::GeneratorOutputType::PythonPydantic {
-//             set_exit_handlers();
-//         }
-//     }
-//
-//     let exit_code = cli.run(caller_type)?;
-//
-//     match exit_code {
-//         ExitCode::Success => Ok(ExitCode::Success),
-//         // Use the same exit code mechanism as Clap uses for invalid arguments (error.exit())
-//         _ => std::process::exit(exit_code.into()),
-//     }
-// }
-
-fn set_exit_handlers() {
-    // SIGINT (Ctrl+C) Handling Implementation
-    let (interrupt_send, interrupt_recv) = std::sync::mpsc::channel();
-
-    ctrlc::set_handler(move || {
-        #[allow(clippy::print_stderr)]
-        {
-            eprintln!("\nShutting Down BAML...");
-        }
-        interrupt_send.send(()).ok();
-    })
-    .expect("Error setting Ctrl-C handler");
-
-    std::thread::spawn(move || {
-        if interrupt_recv.recv().is_ok() {
-            std::process::exit(130);
-        }
-    });
-}
-
 #[cfg(test)]
 mod exit_code_tests {
     use super::*;
