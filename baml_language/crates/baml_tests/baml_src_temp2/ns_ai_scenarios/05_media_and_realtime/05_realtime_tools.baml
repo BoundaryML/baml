@@ -1,6 +1,6 @@
 test "guide 05.05: realtime tasks retain the same tool roster" {
   let task = VoiceSupport_task("look up the account", root.ai.FakeRealtimeProvider { transcript: "done" });
-  let with_tools = task.with_tools([account_tool()]);
+  let with_tools = task.with_tools([lookup_account]);
   assert.equal(with_tools.tools[0].name, "lookup_account")
 }
 
@@ -12,11 +12,11 @@ testset "integ-test-guide-05-realtime-tools" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       output_audio: false,
     };
-    let tool = account_tool();
+    let tool = root.ai.normalize_tool(lookup_account);
     let task = VoiceSupport_task(
       "Call lookup_account with customer_id C-1. Then report the returned status and tier.",
       provider,
-    ).with_tools([tool]);
+    ).with_tools([lookup_account]);
     let channel = root.ai.RecordingChannel { frames: [] };
     let live = task.run(runner = root.ai.run.Realtime.new(channel));
     let requested = live.events();

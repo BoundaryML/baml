@@ -8,9 +8,8 @@ class McpLookupOrderArgs {
 
 function add_mcp_server_tool(broker: McpServerBroker) -> root.ai.Tool throws never {
   root.ai.tool(
-    "add_mcp_server",
-    "Connect an MCP server and add its tools on the next agent turn. Available server: orders.",
     broker.request_server,
+    name = "add_mcp_server",
   )
 }
 
@@ -46,6 +45,7 @@ class McpServerBroker {
   pending_servers: string[],
   connected_servers: string[],
 
+  /// Connect an MCP server and add its tools on the next agent turn. Available server: orders.
   function request_server(self, server: string) -> json throws never {
     if (server != "orders") {
       return { "server": server, "status": "unknown_server" };

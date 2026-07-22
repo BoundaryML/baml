@@ -5,10 +5,10 @@ test "guide 03.04: prepare_step can switch providers through conversation import
     provider_name: "fake-tools-secondary",
   };
   let hooks = GuideHooks { ...no_op_hooks(), switch_after_step: second };
-  let task = ResolveTicketWithTools_task(sample_ticket(), first, [knowledge_tool()]);
+  let task = ResolveTicketWithTools_task(sample_ticket(), first, [search_knowledge]);
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(
-      tools = [knowledge_tool()],
+      tools = [search_knowledge],
       hooks = hooks,
     ),
   );
@@ -108,12 +108,12 @@ testset "integ-test-guide-03-switch-between-turns" {
     let observer = GuideObserver { kinds: [] };
     let task = ToolInstructions_task(
       first,
-      [knowledge_tool()],
+      [search_knowledge],
       `Call search_knowledge with query "duplicate charge". After its result the run will move to another provider; that provider must return the final resolution from the imported conversation.`,
     );
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(
-        tools = [knowledge_tool()],
+        tools = [search_knowledge],
         hooks = hooks,
         observers = [observer],
       ),

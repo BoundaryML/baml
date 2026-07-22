@@ -1,5 +1,5 @@
 test "guide 02.08: a handoff tool returns control to the application" {
-    let handoff_tool = account_tool().as_handoff();
+    let handoff_tool = root.ai.tool(lookup_account).as_handoff();
     let provider = fake_tool_provider([root.ai.ToolCall { id: "handoff-1", name: "lookup_account", args: { "customer_id": "C-1" } }]);
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff_tool]);
     let outcome = task.run(
@@ -13,10 +13,10 @@ test "guide 02.08: a handoff tool returns control to the application" {
 
 test "guide 02.08: a step budget returns resumable state" {
     let runner = root.ai.run.Agent<Resolution>.new(
-        tools = [knowledge_tool()],
+        tools = [search_knowledge],
         budget = root.ai.Budget { max_steps: 1, max_cost_usd: null },
     );
-    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [knowledge_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge]);
     let outcome = task.run(runner = runner);
     match (outcome) {
         let stopped: root.ai.BudgetReached => {
@@ -47,10 +47,10 @@ test "guide 02.08: a cost budget stops between provider steps" {
         },
     };
     let runner = root.ai.run.Agent<Resolution>.new(
-        tools = [knowledge_tool()],
+        tools = [search_knowledge],
         budget = root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
     );
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
     let outcome = task.run(runner = runner);
     match (outcome) {
         let stopped: root.ai.BudgetReached => {
@@ -104,12 +104,12 @@ testset "integ-test-guide-02-budgets" {
     test "guide 02.08 live OpenAI: step budget stops after one real provider turn" {
         let provider = live_openai();
         let runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool()],
+            tools = [search_knowledge],
             budget = root.ai.Budget { max_steps: 1, max_cost_usd: null },
         );
         let task = ToolInstructions_task(
             provider,
-            [knowledge_tool()],
+            [search_knowledge],
             `Call search_knowledge with query "duplicate charge" before returning a final resolution.`,
         );
         let outcome = task.run(runner = runner);
@@ -129,12 +129,12 @@ testset "integ-test-guide-02-budgets" {
     test "guide 02.08 live OpenAI: cost budget stops after metered real provider usage" {
         let provider = LiveCostedToolProvider { inner: live_openai(), cost_per_step_usd: 0.02 };
         let runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool()],
+            tools = [search_knowledge],
             budget = root.ai.Budget { max_steps: null, max_cost_usd: 0.01 },
         );
         let task = ToolInstructions_task(
             provider,
-            [knowledge_tool()],
+            [search_knowledge],
             `Call search_knowledge with query "duplicate charge" before returning a final resolution.`,
         );
         let outcome = task.run(runner = runner);

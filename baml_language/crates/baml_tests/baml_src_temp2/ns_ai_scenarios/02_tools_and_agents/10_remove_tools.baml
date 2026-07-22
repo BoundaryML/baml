@@ -40,7 +40,7 @@ function tool_roster_hooks() -> ToolRosterHooks throws never {
 }
 
 test "guide 02.09: remove one application tool between provider steps" {
-  let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
+  let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), remove_name: "lookup_account" };
   let runner = root.ai.run.Agent<Resolution>.new(
     tools = [],
@@ -70,13 +70,13 @@ test "guide 02.09: remove one application tool between provider steps" {
 test "guide 02.09: an explicit empty list removes all application tools" {
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), application_tools: [] };
   let runner = root.ai.run.Agent<Resolution>.new(
-    tools = [knowledge_tool(), account_tool()],
+    tools = [search_knowledge, lookup_account],
     hooks = hooks,
   );
   let task = ResolveTicketWithTools_task(
     sample_ticket(),
     fake_tool_provider([one_knowledge_call()]),
-    [knowledge_tool(), account_tool()],
+    [search_knowledge, lookup_account],
   );
   let outcome = task.run(
     runner = runner,
@@ -91,7 +91,7 @@ test "guide 02.09: an explicit empty list removes all application tools" {
 }
 
 test "guide 02.09: an empty replacement updates the registry and persists" {
-  let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
+  let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), clear_roster: true };
   let runner = root.ai.run.Agent<Resolution>.new(
     tools = [],
@@ -134,10 +134,10 @@ test "guide 02.09: remove application and provider-owned tools together" {
     next_provider: without_builtins,
   };
   let runner = root.ai.run.Agent<Resolution>.new(
-    tools = [knowledge_tool()],
+    tools = [search_knowledge],
     hooks = hooks,
   );
-  let task = ResolveTicketWithTools_task(sample_ticket(), initial, [knowledge_tool()]);
+  let task = ResolveTicketWithTools_task(sample_ticket(), initial, [search_knowledge]);
   let outcome = task.run(
     runner = runner,
   );
@@ -156,7 +156,7 @@ test "guide 02.09: remove application and provider-owned tools together" {
 
 testset "integ-test-guide-02-remove-tools" {
   test "guide 02.09 live OpenAI: removing a tool changes the next provider request" {
-    let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
+    let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
     let hooks = ToolRosterHooks { ...tool_roster_hooks(), remove_name: "lookup_account" };
     let observer = GuideObserver { kinds: [] };
     let provider = live_openai();

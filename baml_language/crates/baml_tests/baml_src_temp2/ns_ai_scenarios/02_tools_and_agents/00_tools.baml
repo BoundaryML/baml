@@ -1,3 +1,4 @@
+/// Search the support knowledge base.
 function search_knowledge(query: string) -> json throws never {
   {
     "query": query,
@@ -5,6 +6,7 @@ function search_knowledge(query: string) -> json throws never {
   }
 }
 
+/// Look up a customer account.
 function lookup_account(customer_id: string) -> json throws never {
   {
     "customer_id": customer_id,
@@ -13,6 +15,7 @@ function lookup_account(customer_id: string) -> json throws never {
   }
 }
 
+/// Look up an account with optional history.
 function lookup_account_with_history(
   customer_id: string,
   include_history: bool = false,
@@ -26,6 +29,7 @@ function lookup_account_with_history(
 class BoundAccountTools {
   tenant_id: string,
 
+  /// Look up an account with a bound application service.
   function lookup(
     self,
     customer_id: string,
@@ -34,42 +38,20 @@ class BoundAccountTools {
   }
 }
 
-function knowledge_tool() -> root.ai.Tool throws never {
-  root.ai.tool(
-    "search_knowledge",
-    "Search the support knowledge base.",
-    search_knowledge,
-  )
-}
-
-function account_tool() -> root.ai.Tool throws never {
-  root.ai.tool(
-    "lookup_account",
-    "Look up a customer account.",
-    lookup_account,
-  )
-}
-
 test "AnyFunction tool schema distinguishes required and defaulted arguments" {
-  let tool = root.ai.tool(
-    "lookup_account_with_history",
-    "Look up an account with optional history.",
-    lookup_account_with_history,
-  );
+  let tool = root.ai.tool(lookup_account_with_history);
   let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
   let required = baml.json.path<string[]>(tool.input_schema, ".required");
 
+  assert.equal(tool.name, "lookup_account_with_history");
+  assert.equal(tool.description, "Look up an account with optional history.");
   assert.is_true(properties.keys().includes("customer_id"));
   assert.is_true(properties.keys().includes("include_history"));
   assert.equal(required, ["customer_id"])
 }
 
 test "AnyFunction tool invocation applies ordinary function defaults" {
-  let tool = root.ai.tool(
-    "lookup_account_with_history",
-    "Look up an account with optional history.",
-    lookup_account_with_history,
-  );
+  let tool = root.ai.tool(lookup_account_with_history);
   let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
     id: "default-1",
     name: tool.name,
@@ -81,11 +63,7 @@ test "AnyFunction tool invocation applies ordinary function defaults" {
 }
 
 test "AnyFunction tool invocation returns a correlated error for invalid arguments" {
-  let tool = root.ai.tool(
-    "lookup_account_with_history",
-    "Look up an account with optional history.",
-    lookup_account_with_history,
-  );
+  let tool = root.ai.tool(lookup_account_with_history);
   let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
     id: "invalid-1",
     name: tool.name,
@@ -100,11 +78,11 @@ test "AnyFunction tool invocation returns a correlated error for invalid argumen
 test "AnyFunction tool closure captures application state outside its schema" {
   let tenant_id = "tenant-42";
   let tool = root.ai.tool(
-    "tenant_lookup",
-    "Look up an account for the captured tenant.",
     (customer_id: string) -> json {
       { "tenant_id": tenant_id, "customer_id": customer_id }
     },
+    name = "tenant_lookup",
+    description = "Look up an account for the captured tenant.",
   );
   let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
   let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
@@ -119,11 +97,7 @@ test "AnyFunction tool closure captures application state outside its schema" {
 
 test "AnyFunction bound method excludes self from its tool schema" {
   let methods = BoundAccountTools { tenant_id: "tenant-42" };
-  let tool = root.ai.tool(
-    "bound_account_lookup",
-    "Look up an account with a bound application service.",
-    methods.lookup,
-  );
+  let tool = root.ai.tool(methods.lookup);
   let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
   let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
     id: "bound-1",
@@ -131,8 +105,25 @@ test "AnyFunction bound method excludes self from its tool schema" {
     args: { "customer_id": "C-2" },
   });
 
+  assert.equal(tool.name, "lookup");
+  assert.equal(tool.description, "Look up an account with a bound application service.");
   assert.equal(properties.keys(), ["customer_id"]);
   assert.equal(baml.json.path<string>(result.output, ".tenant_id"), "tenant-42")
+}
+
+test "Agent.new accepts bare functions and explicit tool overrides" {
+  let runner = root.ai.run.Agent<Resolution>.new(tools = [
+    search_knowledge,
+    root.ai.tool(lookup_account, name = "legacy_lookup"),
+  ]);
+  let tools: root.ai.Tool[] = runner.tools ?? [];
+
+  assert.equal(tools.map((tool: root.ai.Tool) -> string { tool.name }), [
+    "search_knowledge",
+    "legacy_lookup",
+  ]);
+  assert.equal(tools[0].description, "Search the support knowledge base.")
+  assert.equal(tools[1].description, "Look up a customer account.")
 }
 
 // Future compiler lowering:
@@ -141,7 +132,7 @@ test "AnyFunction bound method excludes self from its tool schema" {
 function ResolveTicketWithTools_task(
   ticket: SupportTicket,
   provider: root.ai.Provider,
-  tools: root.ai.Tool[],
+  tools: root.ai.ToolInput[],
 ) -> root.ai.Task<Resolution> throws never {
   root.ai.task_named<Resolution>(
     provider,
@@ -162,7 +153,7 @@ function ResolveTicketWithTools_task(
 
 function ToolInstructions_task(
   provider: root.ai.Provider,
-  tools: root.ai.Tool[],
+  tools: root.ai.ToolInput[],
   instructions: string,
 ) -> root.ai.Task<Resolution> throws never {
   root.ai.task_named<Resolution>(
@@ -188,7 +179,11 @@ function ResolveTicketWithTools_manual(
   agent: root.ai.Provider,
   tools: root.ai.Tool[],
 ) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
-  root.ai.drivers.complete<Resolution>(ResolveTicketWithTools_task(ticket, agent, tools))
+  root.ai.drivers.complete<Resolution>(ResolveTicketWithTools_task(
+    ticket,
+    agent,
+    root.ai.tool_inputs_from_tools(tools),
+  ))
 }
 
 class GuideObserver {

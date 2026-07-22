@@ -3340,7 +3340,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             )]
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
-            | TyTemplate::Interface(..)
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::TypeArgRefOrWildcard(_)
             | TyTemplate::Interface(..)

@@ -14,7 +14,7 @@ class Agent<T> {
 
   function new(
     budget: root.ai.Budget? = null,
-    tools: root.ai.Tool[]? = null,
+    tools: root.ai.ToolInput[]? = null,
     tool_registry: root.ai.ToolRegistry? = null,
     hooks: root.ai.AgentHooks? = null,
     observers: root.ai.AgentObserver[] = [],
@@ -25,7 +25,10 @@ class Agent<T> {
   ) -> Agent<T> throws never {
     Agent<T> {
       budget: budget,
-      tools: tools,
+      tools: match (tools) {
+        let inputs: root.ai.ToolInput[] => root.ai.normalize_tools(inputs),
+        null => null,
+      },
       tool_registry: tool_registry,
       hooks: hooks,
       observers: observers,

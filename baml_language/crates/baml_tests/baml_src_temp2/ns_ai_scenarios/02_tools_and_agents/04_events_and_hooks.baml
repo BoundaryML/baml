@@ -1,10 +1,10 @@
 test "guide 02.04: observers and post-tool hooks see the run" {
     let observer = GuideObserver { kinds: [] };
     let hooks = no_op_hooks();
-    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [knowledge_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge]);
     let outcome = task.run(
         runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool()],
+            tools = [search_knowledge],
             hooks = hooks,
             observers = [observer],
         ),
@@ -21,12 +21,12 @@ testset "integ-test-guide-02-events-and-hooks" {
         let provider = live_openai();
         let task = ToolInstructions_task(
             provider,
-            [knowledge_tool()],
+            [search_knowledge],
             `Call search_knowledge exactly once with query "duplicate charge", then use its result to return the final resolution.`,
         );
         let outcome = task.run(
             runner = root.ai.run.Agent<Resolution>.new(
-                tools = [knowledge_tool()],
+                tools = [search_knowledge],
                 hooks = hooks,
                 observers = [observer],
             ),

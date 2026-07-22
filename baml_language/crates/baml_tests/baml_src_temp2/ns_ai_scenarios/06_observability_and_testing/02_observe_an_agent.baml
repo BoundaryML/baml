@@ -2,9 +2,9 @@ test "guide 06.02: an observer receives model, tool, and completion events" {
     //# Attach an observer directly to the agent runner
     let observer = GuideObserver { kinds: [] };
     //# Run an observable tool loop
-    ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [knowledge_tool()])
+    ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge])
         .run(runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool()],
+            tools = [search_knowledge],
             observers = [observer],
         ));
     //# Verify model and completion events
@@ -17,12 +17,12 @@ testset "integ-test-guide-06-observe-agent" {
         let observer = GuideObserver { kinds: [] };
         let task = ToolInstructions_task(
             live_openai(),
-            [knowledge_tool()],
+            [search_knowledge],
             "Call search_knowledge exactly once for duplicate charges, then answer from its result.",
         );
         // The runner owns lifecycle policy; each Tool owns its AnyFunction handler.
         let outcome = task.run(runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool()],
+            tools = [search_knowledge],
             observers = [observer],
         ));
         match (outcome) {

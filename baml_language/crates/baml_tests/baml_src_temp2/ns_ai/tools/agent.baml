@@ -177,7 +177,7 @@ function run_agent<T>(
   //# Build the active tool registry
   let registry = match (tool_registry) {
     let existing: ToolRegistry => existing,
-    null => ToolRegistry.new(tools ?? task.tools),
+    null => ToolRegistry.new(tool_inputs_from_tools(tools ?? task.tools)),
   };
   //# Initialize cumulative usage
   let usage = Usage {
@@ -243,7 +243,7 @@ function run_agent<T>(
         }
         // A non-null plan contains the complete next roster.
         match (plan.tools) {
-          let replacement: Tool[] => registry.replace_all(replacement),
+          let replacement: Tool[] => registry.replace_all(tool_inputs_from_tools(replacement)),
           null => {},
         }
         //### Import portable messages before switching providers

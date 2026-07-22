@@ -38,7 +38,7 @@ Configured lifecycles expose their immutable state directly:
 ```baml
 let outcome = task.run(
   runner = root.ai.run.Agent<Resolution>.new(
-    tools = [knowledge_tool()],
+    tools = [search_knowledge, lookup_account],
     budget = root.ai.Budget { max_steps: 8, max_cost_usd: null },
   ),
 )

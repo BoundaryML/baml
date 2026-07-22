@@ -6,7 +6,7 @@ test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
     api_key: "unused",
   };
   let conversation = provider.begin<Resolution>(
-    ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
+    ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]),
   );
   //# Save and restore provider-owned wire state
   let token = root.ai.run.SaveConversation.new(conversation).run(provider);
@@ -18,23 +18,24 @@ test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
 test "guide 04.05: an agent resumes the supplied conversation instead of starting over" {
   //# Advance a provider conversation through its first turn
   let provider = fake_tool_provider([one_knowledge_call()]);
-  let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
+  let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
   let conversation = provider.begin<Resolution>(task);
-  let first = provider.step<Resolution>(conversation, [knowledge_tool()]);
+  let tools = root.ai.normalize_tools([search_knowledge]);
+  let first = provider.step<Resolution>(conversation, tools);
   let calls = match (first.outcome) {
     let value: root.ai.ToolCalls => value,
     let value: Resolution => baml.sys.panic("expected first tool turn"),
   };
   //# Submit tool results before handing control to the agent
   let results = calls.calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-    root.ai.invoke_tool(knowledge_tool(), call)
+    root.ai.invoke_tool(tools[0], call)
   });
   let resumed = provider.submit(conversation, results);
   let hooks = no_op_hooks();
   //# Resume the agent from existing continuation state
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(
-      tools = [knowledge_tool()],
+      tools = [search_knowledge],
       hooks = hooks,
       conversation = resumed,
     ),
@@ -67,11 +68,12 @@ testset "integ-test-guide-04-save-and-resume" {
     let provider = live_openai();
     let task = ToolInstructions_task(
       provider,
-      [knowledge_tool()],
+      [search_knowledge],
       `Call search_knowledge exactly once with query "duplicate charge". After its result, return the final resolution.`,
     );
     let conversation = provider.begin<Resolution>(task);
-    let first = provider.step<Resolution>(conversation, [knowledge_tool()]);
+    let tools = root.ai.normalize_tools([search_knowledge]);
+    let first = provider.step<Resolution>(conversation, tools);
     let calls = match (first.outcome) {
       let value: root.ai.ToolCalls => value,
       let value: Resolution => baml.sys.panic("expected a live tool request before save"),
@@ -79,13 +81,13 @@ testset "integ-test-guide-04-save-and-resume" {
     let token = root.ai.run.SaveConversation.new(conversation).run(provider);
     let restored = root.ai.run.RestoreConversation.new(token).run(provider);
     let results = calls.calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-      root.ai.invoke_tool(knowledge_tool(), call)
+      root.ai.invoke_tool(tools[0], call)
     });
     let resumed = provider.submit(restored, results);
     let hooks = no_op_hooks();
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(
-        tools = [knowledge_tool()],
+        tools = [search_knowledge],
         hooks = hooks,
         conversation = resumed,
       ),

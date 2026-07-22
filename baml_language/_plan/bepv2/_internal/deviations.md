@@ -28,7 +28,7 @@ main improvements that would let the final API stay both typed and small:
 | Generic aliases | Generic type aliases | Repeated inline `Done<T> | BudgetReached | Handoff` unions |
 | Capability bounds | A concise way to require several interfaces or name a capability intersection | Custom drivers that need, for example, generation plus transcript import |
 | Compiler surface | The reserved top-level `ai` namespace, `$provider`, and declaration-only `.task(...)` selector | D-002 and D-004 manual spellings |
-| Function types | BEP-062 `Function`, tuples, named optional parameters, spread/rest, and `reflect.call` | D-009's global JSON dispatcher |
+| Function types | Complete BEP-062 ergonomics with parameter documentation and safe explicit array widening | Manual parameter descriptions and `tool_inputs_from_tools` at invariant-array boundaries |
 | Runtime reflection | Stable standard JSON Schema from any runtime `type`, with provider adapters allowed to transform the returned `json` | Hand-built provider schemas and unsafe string assembly |
 
 These are language/runtime opportunities, not reasons to move lifecycle policy
@@ -129,30 +129,24 @@ entirely in BAML and cannot construct a richer provider-neutral render adapter.
 providers. Keep it pure and separate from execution capabilities; do not make
 display names or descriptors into equality keys.
 
-### D-009: Function-backed tools still need a separate dispatcher
+### D-009: Function-backed tool dispatch is resolved
 
-**Normative design after BEP-062:** `ai.tool(name, description, function)`
-retains the function's associated parameter, return, and throws types. Its
-erased `Tool.invoke` validates JSON arguments and calls the function through
-`reflect.call`.
+**Normative and reference design after BEP-062:** bare function references are
+the default configuration API:
 
-**Reference-code spelling:** `Tool` stores `parameters: type` and standard
-`input_schema: json`, while `AgentOptions.dispatch` is a separate
-`(ToolCall[]) -> ToolResult[]` function. Scenario code manually connects tool
-names to typed handlers. For that reason, the executable `AgentOptions.new`
-constructor takes `tools` and `dispatch` as its two required parameters before
-the fields with named defaults. The normative constructor does not need that
-dispatch parameter once tools own their handlers.
+```baml
+Agent.new(tools = [search_knowledge, lookup_account])
+```
 
-**Why:** BEP-062 is proposed but not implemented in the language used by this
-reference. Today's BAML lacks the builtin `Function` abstraction, positional
-tuples, named optional-parameter tuples, signature-preserving spread/rest, and
-the corresponding reflective call.
+The public `ToolInput` union accepts either a function or an already-normalized
+`Tool`. The runner derives the function's declared name, docstring, parameter
+schema, and handler from `reflect.signature`, then dispatches checked named
+arguments with `reflect.call_any`. No separate name-based dispatcher remains.
 
-**Follow-up:** Implement BEP-062, initially restrict `ai.tool` to one required
-class argument, and move dispatch into the function-backed `Tool`
-implementation. Keep runtime-schema MCP tools and provider-owned tools as
-separate implementations; they do not require BAML function values.
+`ai.tool(handler, name = ..., description = ...)` remains only as the explicit
+escape hatch for aliases, anonymous closures, description overrides, handoffs,
+and runtime/MCP schemas. Provider-owned tools remain separate provider
+configuration and do not acquire application handlers.
 
 ### D-010: Provider-owned tool removal uses a deterministic provider
 

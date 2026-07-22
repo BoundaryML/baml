@@ -2,9 +2,9 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
   //# Configure a provider with one tool call
   let provider = fake_tool_provider([one_knowledge_call()]);
   //# Run the tool-enabled agent
-  let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
+  let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
   let outcome = task.run(
-    runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
+    runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
   );
   //# Verify typed completion
   match (outcome) {
@@ -25,21 +25,22 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
   //# Begin a prompt-based provider conversation
   let provider = root.ai.PromptToolProvider { inner: inner };
   let conversation = provider.begin<Resolution>(
-    ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
+    ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]),
   );
   let state = match (conversation) {
     let value: root.ai.PromptToolConversation => value,
     _ => baml.sys.panic("expected prompt tool conversation"),
   };
+  let tools = root.ai.normalize_tools([search_knowledge]);
   //# Render active tools into the output contract
   let rendered = baml.llm.prompt_to_text(root.ai.prompt_tool_turn<Resolution | root.ai.ToolCalls>(
     provider,
     state,
-    [knowledge_tool()],
-    root.ai.prompt_tool_output_suffix([knowledge_tool()]),
+    tools,
+    root.ai.prompt_tool_output_suffix(tools),
   ).prompt);
   //# Execute one prompt-tool turn
-  let turn = provider.step<Resolution>(conversation, [knowledge_tool()]);
+  let turn = provider.step<Resolution>(conversation, tools);
   match (turn.outcome) {
     let calls: root.ai.ToolCalls => assert.equal(calls.calls[0].name, "search_knowledge"),
     let value: Resolution => assert.is_true(false),
@@ -66,7 +67,10 @@ test "guide 02.01: ModelStep preserves a union task result" {
   );
   //# Execute through the prompt-tool adapter
   let conversation = provider.begin<Resolution | string>(task);
-  let turn = provider.step<Resolution | string>(conversation, [knowledge_tool()]);
+  let turn = provider.step<Resolution | string>(
+    conversation,
+    root.ai.normalize_tools([search_knowledge]),
+  );
   match (turn.outcome) {
     let value: string => assert.equal(value, "done"),
     let value: Resolution => assert.is_true(false),
@@ -83,9 +87,9 @@ testset "integ-test-guide-02-one-tool" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
     //# Run the live tool loop
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
+      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     //# Verify the live typed result
     match (outcome) {
@@ -102,9 +106,9 @@ testset "integ-test-guide-02-one-tool" {
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
     };
     //# Run the live prompt-tool loop
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
+      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     //# Verify the live typed result
     match (outcome) {

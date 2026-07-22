@@ -3,11 +3,11 @@ test "guide 02.02: Agent runner owns the application tool loop" {
   let task = ResolveTicketWithTools_task(
     sample_ticket(),
     provider,
-    [knowledge_tool()],
+    [search_knowledge],
   );
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(
-      tools = [knowledge_tool()],
+      tools = [search_knowledge],
       budget = root.ai.Budget { max_steps: 3, max_cost_usd: null },
     ),
   );
@@ -25,11 +25,11 @@ testset "integ-test-guide-02-agent-runner" {
     let task = ResolveTicketWithTools_task(
       sample_ticket(),
       live_openai(),
-      [knowledge_tool()],
+      [search_knowledge],
     );
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(
-        tools = [knowledge_tool()],
+        tools = [search_knowledge],
         budget = root.ai.Budget { max_steps: 4, max_cost_usd: null },
         hooks = hooks,
       ),

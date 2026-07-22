@@ -1,6 +1,9 @@
 test "guide 02.06: a hook can add a tool before the next model step" {
-  let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
-  let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
+  let registry = root.ai.ToolRegistry.new([search_knowledge]);
+  let hooks = GuideHooks {
+    ...no_op_hooks(),
+    tool_to_add: root.ai.normalize_tool(lookup_account),
+  };
   let runner = root.ai.run.Agent<Resolution>.new(
     tools = [],
     tool_registry = registry,
@@ -24,8 +27,8 @@ test "guide 02.06: a hook can add a tool before the next model step" {
 }
 
 test "guide 02.06: duplicate tool names fail instead of shadowing" {
-  let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
-  let outcome = registry.add(knowledge_tool()) catch (e) {
+  let registry = root.ai.ToolRegistry.new([search_knowledge]);
+  let outcome = registry.add(search_knowledge) catch (e) {
     let collision: baml.errors.ToolError => "collision",
   };
   assert.equal(outcome, "collision")
@@ -33,11 +36,10 @@ test "guide 02.06: duplicate tool names fail instead of shadowing" {
 }
 
 test "guide 02.06: replacement is explicit" {
-  let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
+  let registry = root.ai.ToolRegistry.new([search_knowledge]);
   let replacement = root.ai.tool(
-    "search_knowledge",
-    "Replacement handler contract.",
     search_knowledge,
+    description = "Replacement handler contract.",
   );
   assert.is_true(registry.replace(replacement))
   assert.equal(registry.snapshot()[0].description, "Replacement handler contract.")
@@ -53,7 +55,7 @@ class AddAccountAfterFirstStepHooks {
       }).length() > 0;
       if (context.step == 1 && !has_account) {
         let next_tools = context.tools.slice(0, context.tools.length());
-        next_tools.push(account_tool());
+        next_tools.push(root.ai.normalize_tool(lookup_account));
         return root.ai.StepPlan { provider: null, tools: next_tools, stop: null };
       }
       root.ai.StepPlan { provider: null, tools: null, stop: null }
@@ -68,7 +70,7 @@ class AddAccountAfterFirstStepHooks {
 
 testset "integ-test-guide-02-dynamic-tool-registry" {
   test "guide 02.06 live OpenAI: a tool added after turn one is used on turn two" {
-    let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
+    let registry = root.ai.ToolRegistry.new([search_knowledge]);
     let hooks = AddAccountAfterFirstStepHooks { after_calls: [] };
     let observer = GuideObserver { kinds: [] };
     let provider = live_openai();

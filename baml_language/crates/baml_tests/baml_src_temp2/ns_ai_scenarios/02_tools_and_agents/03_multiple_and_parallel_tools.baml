@@ -4,10 +4,10 @@ test "guide 02.03: one model step may dispatch multiple tool calls" {
         root.ai.ToolCall { id: "call-2", name: "lookup_account", args: { "customer_id": "C-1" } },
     ];
     let provider = fake_tool_provider(calls);
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool(), account_tool()]);
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge, lookup_account]);
     let outcome = task.run(
         runner = root.ai.run.Agent<Resolution>.new(
-            tools = [knowledge_tool(), account_tool()],
+            tools = [search_knowledge, lookup_account],
         ),
     );
     match (outcome) {
@@ -24,12 +24,12 @@ testset "integ-test-guide-02-parallel-tools" {
         let provider = live_openai();
         let task = ToolInstructions_task(
             provider,
-            [knowledge_tool(), account_tool()],
+            [search_knowledge, lookup_account],
             `Resolve ticket T-100. In your first response you must call both search_knowledge with query "duplicate charge" and lookup_account with customer_id "C-1" as parallel tool calls. Wait for both results before returning the final value.`,
         );
         let outcome = task.run(
             runner = root.ai.run.Agent<Resolution>.new(
-                tools = [knowledge_tool(), account_tool()],
+                tools = [search_knowledge, lookup_account],
                 hooks = hooks,
             ),
         );

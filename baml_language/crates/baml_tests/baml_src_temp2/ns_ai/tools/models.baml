@@ -16,6 +16,11 @@ class Tool {
   }
 }
 
+// Public tool inputs accept ordinary BAML functions. Tool is the normalized
+// representation used after configuration crosses into the runner/provider
+// machinery.
+type ToolInput = Tool | baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>
+
 function coarse_schema(type_name: string) -> json throws never {
   let schema: json = { "type": type_name };
   schema
@@ -59,25 +64,40 @@ function schema_for_function(
 }
 
 // Function-backed application tool. AnyFunction preserves the callable's
-// signature for schema derivation and reflect.call_any performs checked named
-// argument dispatch, including ordinary BAML default arguments.
+// declared name, docstring, and signature. Explicit metadata is only needed
+// for anonymous callables or when the external tool contract intentionally
+// differs from the underlying function declaration. reflect.call_any performs
+// checked named argument dispatch, including ordinary BAML default arguments.
 function tool(
-  name: string,
-  description: string,
   handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+  name: string? = null,
+  description: string? = null,
 ) -> Tool throws never {
   let signature = reflect.signature(handler);
   Tool {
-    name: name,
-    description: if (description.length() > 0) {
-      description
-    } else {
-      signature.docstring ?? ""
-    },
+    name: name ?? signature.name ?? "",
+    description: description ?? signature.docstring ?? "",
     input_schema: schema_for_function(handler),
     handler: handler,
     handoff: false,
   }
+}
+
+function normalize_tool(input: ToolInput) -> Tool throws never {
+  match (input) {
+    let existing: Tool => existing,
+    let handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError> => tool(handler),
+  }
+}
+
+function normalize_tools(inputs: ToolInput[]) -> Tool[] throws never {
+  inputs.map((input: ToolInput) -> Tool { normalize_tool(input) })
+}
+
+// Arrays are invariant, so normalized internals widen element-by-element when
+// they need to re-enter a public ToolInput boundary.
+function tool_inputs_from_tools(tools: Tool[]) -> ToolInput[] throws never {
+  tools.map((tool: Tool) -> ToolInput { tool })
 }
 
 // Escape hatch for MCP and other dynamically described tools. Runtime
@@ -175,14 +195,15 @@ class ToolRegistry {
   roster: Tool[],
   version: int,
 
-  function new(tools: Tool[]) -> ToolRegistry throws baml.errors.ToolError {
+  function new(tools: ToolInput[]) -> ToolRegistry throws baml.errors.ToolError {
     let registry = ToolRegistry { roster: [], version: 0 };
     //# Seed the registry through validated insertion
-    for (let tool in tools) { registry.add(tool); }
+    for (let input in tools) { registry.add(input); }
     registry
   }
 
-  function add(self, tool: Tool) -> null throws baml.errors.ToolError {
+  function add(self, input: ToolInput) -> null throws baml.errors.ToolError {
+    let tool = normalize_tool(input);
     //# Reject duplicate tool names
     for (let existing in self.roster) {
       if (existing.name == tool.name) {
@@ -197,10 +218,11 @@ class ToolRegistry {
     null
   }
 
-  function add_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
-    let combined = self.snapshot();
+  function add_all(self, tools: ToolInput[]) -> null throws baml.errors.ToolError {
+    let combined: ToolInput[] = [];
+    for (let existing in self.roster) { combined.push(existing); }
     //# Stage the combined tool roster
-    for (let tool in tools) { combined.push(tool); }
+    for (let input in tools) { combined.push(input); }
     //# Validate before replacing live registry state
     let replacement = ToolRegistry.new(combined);
     self.roster = replacement.roster;
@@ -216,7 +238,8 @@ class ToolRegistry {
     self.roster.find((tool: Tool) -> bool { tool.name == name })
   }
 
-  function replace(self, tool: Tool) -> bool throws never {
+  function replace(self, input: ToolInput) -> bool throws never {
+    let tool = normalize_tool(input);
     let replaced = false;
     //# Replace the matching tool without reordering
     self.roster = self.roster.map((existing: Tool) -> Tool {
@@ -231,7 +254,7 @@ class ToolRegistry {
     replaced
   }
 
-  function replace_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
+  function replace_all(self, tools: ToolInput[]) -> null throws baml.errors.ToolError {
     //# Validate the complete replacement roster
     let replacement = ToolRegistry.new(tools);
     self.roster = replacement.roster;

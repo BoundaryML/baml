@@ -75,13 +75,13 @@ class Task<T> {
     }
   }
 
-  function with_tools(self, tools: Tool[]) -> Task<T> throws never {
+  function with_tools(self, tools: ToolInput[]) -> Task<T> throws never {
     Task<T> {
       provider: self.provider,
       prompt: self.prompt,
       identity: self.identity,
       arguments: self.arguments,
-      tools: tools,
+      tools: normalize_tools(tools),
       tags: self.tags,
       _render: self._render,
     }
@@ -99,7 +99,7 @@ function task_named<T>(
   provider: Provider,
   name: string,
   arguments: map<string, unknown>,
-  tools: Tool[],
+  tools: ToolInput[],
   template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 ) -> Task<T> throws never {
   let recipe = PromptRenderRecipe { template: template };
@@ -108,7 +108,7 @@ function task_named<T>(
     prompt: recipe.render(provider, reflect.type_of<T>()),
     identity: TaskIdentity { name: name, package: "bepv2_reference" },
     arguments: arguments,
-    tools: tools,
+    tools: normalize_tools(tools),
     tags: {},
     _render: recipe,
   }

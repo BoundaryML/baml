@@ -14,7 +14,7 @@ let task = ResolveTicket.task(ticket, provider = provider)
 
 let outcome = task.run(
   runner = ai.run.Agent.new(
-    tools = [lookup_account_tool],
+    tools = [search_knowledge, lookup_account],
     budget = ai.Budget { max_steps: 8, max_cost_usd: 0.25 },
   ),
 )
@@ -284,7 +284,8 @@ class Tool {
 }
 ```
 
-User code is concise and remains typed at definition time:
+Bare function references are the normal user API and remain typed at
+definition time:
 
 ```baml
 function lookup_account(
@@ -294,16 +295,23 @@ function lookup_account(
   // ...
 }
 
-let tool = ai.tool(
-  "lookup_account",
-  "Look up a customer account.",
-  lookup_account,
+let outcome = task.run(
+  runner = ai.run.Agent.new(
+    tools = [lookup_account],
+  ),
 )
 ```
 
-`reflect.signature(handler)` supplies parameter names, parameter types,
-defaulted parameters, return type, error type, and documentation. `ai.tool`
-derives an object schema in which defaulted arguments are optional.
+At the public boundary, `ToolInput = Tool | baml.AnyFunction`. The runner
+normalizes every function into `Tool` using `reflect.signature(handler)` for
+its declared name, docstring, parameter names, parameter types, defaults,
+return type, and error type. Defaulted arguments are optional in the derived
+object schema.
+
+`ai.tool(handler, name = ..., description = ...)` is the explicit escape hatch
+for aliases, anonymous closures, description overrides, handoffs, and runtime
+or MCP schemas. Bare functions and explicit `Tool` values may be mixed in the
+same `tools` list.
 
 The Agent runner dispatches with:
 
