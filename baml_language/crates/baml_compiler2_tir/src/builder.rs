@@ -10521,6 +10521,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Check class fields
                 let class_fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = class_fields.get(member) {
+                    if self.class_has_inherent_method(class_name, member) {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
                     // Store field resolution for LSP navigation
                     if let Some(class_loc) = self.resolve_class_loc(class_name) {
                         self.resolutions.insert(
@@ -12146,6 +12151,23 @@ impl<'db> TypeInferenceBuilder<'db> {
             Definition::Interface(interface_loc) => Some(interface_loc),
             _ => None,
         }
+    }
+
+    fn class_has_inherent_method(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        method_name: &Name,
+    ) -> bool {
+        let Some(class_loc) = self.resolve_class_loc(class_name) else {
+            return false;
+        };
+        let db = self.context.db();
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+
+        class_data.methods.iter().copied().any(|method| {
+            baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
+                && baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+        })
     }
 
     /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.
