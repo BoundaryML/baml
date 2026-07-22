@@ -712,7 +712,11 @@ impl ImplResolver<'_> {
         self,
         rule: &RuntimeImplRule,
     ) -> (Vec<RealizedTy>, Vec<(Name, RealizedTy)>) {
-        let args = if rule.interface_args.iter().any(template_has_type_arg_ref) {
+        let args = if rule
+            .interface_args
+            .iter()
+            .any(|template| max_type_arg_ref(template).is_some())
+        {
             Vec::new()
         } else {
             rule.interface_args
@@ -723,7 +727,7 @@ impl ImplResolver<'_> {
         let assoc = if rule
             .interface_assoc
             .iter()
-            .any(|(_, t)| template_has_type_arg_ref(t))
+            .any(|(_, template)| max_type_arg_ref(template).is_some())
         {
             Vec::new()
         } else {
@@ -799,46 +803,6 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
             .max(),
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => None,
-    }
-}
-
-/// Whether a template references any impl generic parameter (a `TypeArgRef`).
-fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
-    match t {
-        #[expect(deprecated)]
-        TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
-        TyTemplate::List(inner, _) => template_has_type_arg_ref(inner),
-        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
-            template_has_type_arg_ref(key) || template_has_type_arg_ref(value)
-        }
-        TyTemplate::Union(parts, _) => parts.iter().any(template_has_type_arg_ref),
-        TyTemplate::Class(_, args, _) => args.iter().any(template_has_type_arg_ref),
-        TyTemplate::Interface(_, args, assoc, _) => {
-            args.iter().any(template_has_type_arg_ref)
-                || assoc.iter().any(|(_, t)| template_has_type_arg_ref(t))
-        }
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params.iter().any(|p| template_has_type_arg_ref(&p.ty))
-                || template_has_type_arg_ref(ret)
-                || template_has_type_arg_ref(throws)
-        }
-        TyTemplate::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            template_has_type_arg_ref(base)
-                || interface.generics.iter().any(template_has_type_arg_ref)
-                || interface
-                    .associated_types
-                    .iter()
-                    .any(|(_, t)| template_has_type_arg_ref(t))
-        }
-        // Realized leaves and `Wildcard` carry no frame ref.
-        _ => false,
     }
 }
 
