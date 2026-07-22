@@ -122,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build
-          cmake --build smoke-build -j
+          cmake --build smoke-build --target runtime_smoke -j
           out="$(./smoke-build/runtime_smoke)"
           echo "$out"
           echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"
@@ -137,7 +137,7 @@ jobs:
             ${{ matrix.smoke_container }} \
             sh -c 'apk add --no-cache bash g++ cmake make git linux-headers && \
               cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build && \
-              cmake --build smoke-build -j && \
+              cmake --build smoke-build --target runtime_smoke -j && \
               out="$(./smoke-build/runtime_smoke)" && echo "$out" && \
               echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"'
 
@@ -154,7 +154,7 @@ jobs:
           cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
           # Debug config: the smoke asserts must stay compiled in (NDEBUG off).
-          cmake --build smoke-build -j --config Debug
+          cmake --build smoke-build --target runtime_smoke -j --config Debug
           if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
           $out = & .\smoke-build\Debug\runtime_smoke.exe
           if ($LASTEXITCODE -ne 0) { throw "runtime_smoke exited with $LASTEXITCODE" }
