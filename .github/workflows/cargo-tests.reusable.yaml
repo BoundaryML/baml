@@ -115,7 +115,7 @@ jobs:
         working-directory: baml_language
 
       # `baml_tests`, `baml_cli`, and `baml_lsp2_actions` already run on linux
-      # with `--all-features` in the dedicated `snapshot-tests` job, so this
+      # with `--all-features` in the dedicated `baml-tests-linux` job, so this
       # job neither builds nor runs them — their test binaries are also the
       # heaviest links in the workspace. (A nextest `-E` filter would only
       # skip *running* them; the cargo-level `--exclude` skips building them
@@ -211,7 +211,7 @@ jobs:
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
-      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+      # the dedicated `baml-tests-linux` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here —
       # at the cargo level (`--exclude`), not a nextest `-E` filter, so their
       # test binaries (the heaviest links in the workspace) aren't built.
@@ -327,7 +327,7 @@ jobs:
         working-directory: baml_language
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
-      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
+      # `baml-tests-linux` job. The `sdk_test_*` crates need uv and run in the
       # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
       # level (`--exclude`), not a nextest `-E` filter, so their test binaries
       # (the heaviest links, and on Windows the largest PDBs) aren't built.
@@ -1032,10 +1032,26 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-doc.html
           if-no-files-found: ignore
 
-  snapshot-tests:
-    name: "snapshot tests"
+  baml-tests-linux:
+    name: "BAML tests (linux)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: baml
+          POSTGRES_PASSWORD: baml
+          POSTGRES_DB: baml_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baml -d baml_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BAML_TEST_POSTGRES_URL: postgres://baml:baml@127.0.0.1:5432/baml_test
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -1073,6 +1089,13 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
+      - name: "Verify PostgreSQL test configuration"
+        run: |
+          if [[ -z "${BAML_TEST_POSTGRES_URL:-}" ]]; then
+            echo "::error::BAML_TEST_POSTGRES_URL must be set so PostgreSQL integration tests do not silently skip"
+            exit 1
+          fi
+
       - name: "Build tests with --timings"
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
         working-directory: baml_language
@@ -1084,7 +1107,7 @@ jobs:
       # pack`'s ELF embed/extract path (the team develops on macOS, where
       # libsui takes the Mach-O path, so an ELF writer bug — see
       # crates/baml_cli/src/pack_elf.rs — once shipped uncaught).
-      - name: "Run snapshot tests"
+      - name: "Run BAML, CLI, LSP, snapshot, and integration tests"
         run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
         working-directory: baml_language
 
@@ -1115,26 +1138,26 @@ jobs:
 
       - name: "Dump sccache stats (json)"
         if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+        run: sccache --show-stats --stats-format json > sccache-stats-baml-tests-linux.json
 
       - name: "Upload sccache stats"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sccache-stats-snapshot
-          path: sccache-stats-snapshot.json
+          name: sccache-stats-baml-tests-linux
+          path: sccache-stats-baml-tests-linux.json
           if-no-files-found: ignore
 
       - name: "Rename cargo timings"
         if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-baml-tests-linux.html
         working-directory: baml_language
       - name: "Upload cargo timings"
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cargo-timings-snapshot
-          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          name: cargo-timings-baml-tests-linux
+          path: baml_language/target/cargo-timings/cargo-timing-baml-tests-linux.html
           if-no-files-found: ignore
 
   cargo-timings:
@@ -1148,7 +1171,7 @@ jobs:
       - cargo-test-wasm
       - cargo-build-msrv
       - cargo-doc
-      - snapshot-tests
+      - baml-tests-linux
     steps:
       - name: "Merge cargo timings artifacts"
         uses: actions/upload-artifact/merge@v4
@@ -1167,7 +1190,7 @@ jobs:
       - cargo-test-wasm
       - cargo-build-msrv
       - cargo-doc
-      - snapshot-tests
+      - baml-tests-linux
     steps:
       - name: "Merge sccache stats artifacts"
         uses: actions/upload-artifact/merge@v4

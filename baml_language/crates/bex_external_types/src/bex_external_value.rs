@@ -705,6 +705,15 @@ impl AsBexExternalValue for Vec<String> {
     }
 }
 
+impl AsBexExternalValue for Vec<BexExternalValue> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Array {
+            element_type: baml_type::RuntimeTy::unknown(),
+            items: self,
+        }
+    }
+}
+
 impl AsBexExternalValue for Vec<u8> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Uint8Array(self)

@@ -1769,6 +1769,171 @@ impl io::IoClassRandomSystemRandom for DefaultIoOps {
 
 impl io::IoNamespaceRandom for DefaultIoOps {}
 
+fn sql_unsupported<T>() -> SysOpOutput<T> {
+    SysOpOutput::err(VmBamlError::Unsupported {
+        message: "SQL operations are not supported on this platform".to_string(),
+    })
+}
+
+impl io::IoClassSqlDatabase for DefaultIoOps {
+    fn _close(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Database,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        sql_unsupported()
+    }
+    fn _execute(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Database,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sql::CommandResult> {
+        sql_unsupported()
+    }
+    fn _query(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Database,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: Option<i64>,
+        _: baml_type::RuntimeTy,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<BexExternalValue>> {
+        sql_unsupported()
+    }
+    fn _scalar(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Database,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: i64,
+        _: baml_type::RuntimeTy,
+        _: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        sql_unsupported()
+    }
+    fn _begin(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Database,
+        _: Option<io::owned::sql::TransactionOptions>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sql::Transaction> {
+        sql_unsupported()
+    }
+}
+
+impl io::IoClassSqlTransaction for DefaultIoOps {
+    fn _execute(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Transaction,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sql::CommandResult> {
+        sql_unsupported()
+    }
+    fn _query(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Transaction,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: Option<i64>,
+        _: baml_type::RuntimeTy,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<BexExternalValue>> {
+        sql_unsupported()
+    }
+    fn _scalar(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Transaction,
+        _: io::owned::sql::Statement,
+        _: Option<Arc<num_bigint::BigInt>>,
+        _: i64,
+        _: baml_type::RuntimeTy,
+        _: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        sql_unsupported()
+    }
+    fn _commit(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Transaction,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        sql_unsupported()
+    }
+    fn _rollback_if_open(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: io::owned::sql::Transaction,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        sql_unsupported()
+    }
+}
+
+impl io::IoNamespaceSql for DefaultIoOps {
+    fn _connect(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: String,
+        _: Option<io::owned::sql::ConnectOptions>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<io::owned::sql::Database> {
+        sql_unsupported()
+    }
+    fn _connect_postgres(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: String,
+        _: Option<io::owned::sql_dpostgres::PostgresOptions>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        sql_unsupported()
+    }
+    fn _open_sqlite(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: String,
+        _: Option<io::owned::sql_dsqlite::SqliteOptions>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        sql_unsupported()
+    }
+    fn _memory_sqlite(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        _: Option<io::owned::sql_dsqlite::SqliteOptions>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        sql_unsupported()
+    }
+}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.

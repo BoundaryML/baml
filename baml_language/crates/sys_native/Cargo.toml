@@ -35,6 +35,7 @@ bundle-http = [
 ]
 
 [dependencies]
+baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
@@ -43,6 +44,7 @@ bridge_ctypes = { workspace = true, default-features = false }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
+bigdecimal = { workspace = true }
 bytes = { workspace = true, optional = true }
 futures = { workspace = true }
 getrandom = { workspace = true }
@@ -52,12 +54,15 @@ hyper-util = { workspace = true, optional = true }
 indexmap = { workspace = true }
 jiff = { workspace = true }
 num-bigint = { workspace = true }
+num-traits = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
+time = { workspace = true }
 tokio = { workspace = true, features = [
   "sync",
   "fs",
@@ -69,6 +74,8 @@ tokio = { workspace = true, features = [
 ] }
 tokio-rustls = { workspace = true, optional = true }
 tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [lints]

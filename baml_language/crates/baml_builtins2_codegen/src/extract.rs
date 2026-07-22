@@ -1352,5 +1352,20 @@ mod tests {
             .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
             .unwrap();
         assert_eq!(specialize.throws, throws(&["RenderPrompt", "LlmClient"]));
+
+        let sqlite_memory = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.sql.sqlite._memory_sqlite")
+            .expect("missing nested SQLite sys-op");
+        assert_eq!(
+            sqlite_memory.throws,
+            throws(&["root.sql.SqlError", "Unsupported"])
+        );
+
+        let sql_query = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.sql.Database._query")
+            .expect("missing SQL query sys-op");
+        assert_eq!(sql_query.throws, throws(&["SqlError"]));
     }
 }

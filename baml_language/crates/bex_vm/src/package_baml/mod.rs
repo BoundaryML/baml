@@ -39,6 +39,7 @@ mod resolve;
 pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
+mod sql;
 mod stack_trace;
 mod string;
 mod sys;

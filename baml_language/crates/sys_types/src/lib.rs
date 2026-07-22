@@ -160,9 +160,10 @@ impl std::fmt::Display for CallId {
 /// is tied to the operation (`fn_name`) that was being called; the inner
 /// `payload` is either a normal VM error (treated like a `$rust_function`
 /// error or `throw` opcode and delivered through the VM's exception-
-/// unwinding path) or a *host throw* — a decoded `BexExternalValue` that
-/// the engine runs through `materialize_host_throw` for the
-/// declared-throws contract check against the surrounding callable's `E`.
+/// unwinding path), a native-created BAML throw, or a *host throw* — a
+/// decoded `BexExternalValue` that the engine runs through
+/// `materialize_host_throw` for the declared-throws contract check against
+/// the surrounding callable's `E`.
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpError {
     pub fn_name: SysOp,
@@ -172,6 +173,8 @@ pub struct OpError {
 /// Payload of an [`OpError`] — exactly one of:
 /// - [`Self::Vm`]: a normal sysop error (catchable `BamlError`, panic,
 ///   internal fault, or pre-built thrown value).
+/// - [`Self::BamlThrown`]: a native sysop constructed a typed BAML exception
+///   as an external value for the engine to materialize into the VM.
 /// - [`Self::HostThrown`]: the bridge invoked a host callable and the
 ///   callable raised something the bridge decoded to a `BexExternalValue`.
 ///   The engine's `materialize_host_throw` reads this and either re-injects
@@ -182,11 +185,36 @@ pub struct OpError {
 #[derive(Debug, PartialEq, Clone)]
 pub enum OpErrorPayload {
     Vm(bex_vm_types::errors::VmRustFnError),
+    /// A catchable BAML value constructed by a native system operation.
+    /// This is the async counterpart of `VmRustFnError::Thrown`.
+    BamlThrown(Box<BexExternalValue>),
     /// Boxed because `BexExternalValue` is ~3x the size of
     /// `VmRustFnError`; keeping it inline would bloat every `OpError` on
     /// the hot success path. The host-thrown payload is rare and the
     /// extra indirection only fires on the throw branch.
     HostThrown(Box<BexExternalValue>),
+}
+
+fn format_thrown_value(
+    f: &mut std::fmt::Formatter<'_>,
+    prefix: &str,
+    value: &BexExternalValue,
+) -> std::fmt::Result {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            let message = fields.get("message").and_then(|value| match value {
+                BexExternalValue::String(message) => Some(message.as_str()),
+                _ => None,
+            });
+            match message {
+                Some(message) => write!(f, "{prefix} {class_name}: {message}"),
+                None => write!(f, "{prefix} {class_name}"),
+            }
+        }
+        other => write!(f, "{prefix} {other:?}"),
+    }
 }
 
 impl OpErrorPayload {
@@ -195,21 +223,8 @@ impl OpErrorPayload {
     fn display_summary(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Vm(e) => std::fmt::Display::fmt(e, f),
-            Self::HostThrown(boxed) => match boxed.as_ref() {
-                BexExternalValue::Instance {
-                    class_name, fields, ..
-                } => {
-                    let message = fields.get("message").and_then(|v| match v {
-                        BexExternalValue::String(s) => Some(s.as_str()),
-                        _ => None,
-                    });
-                    match message {
-                        Some(m) => write!(f, "host thrown {class_name}: {m}"),
-                        None => write!(f, "host thrown {class_name}"),
-                    }
-                }
-                other => write!(f, "host thrown {other:?}"),
-            },
+            Self::BamlThrown(value) => format_thrown_value(f, "thrown", value),
+            Self::HostThrown(value) => format_thrown_value(f, "host thrown", value),
         }
     }
 }
@@ -225,7 +240,7 @@ impl std::error::Error for OpError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.payload {
             OpErrorPayload::Vm(e) => e.source(),
-            OpErrorPayload::HostThrown(_) => None,
+            OpErrorPayload::BamlThrown(_) | OpErrorPayload::HostThrown(_) => None,
         }
     }
 }
@@ -261,6 +276,14 @@ impl OpError {
             payload: OpErrorPayload::HostThrown(Box::new(value)),
         }
     }
+
+    /// Construct an `OpError` carrying a native-created BAML exception.
+    pub fn baml_thrown_value(fn_name: SysOp, value: BexExternalValue) -> Self {
+        Self {
+            fn_name,
+            payload: OpErrorPayload::BamlThrown(Box::new(value)),
+        }
+    }
 }
 
 pub use bex_vm_types::{
@@ -279,6 +302,13 @@ pub struct OpErrorBody {
 }
 
 impl OpErrorBody {
+    /// Construct a sys-op body error carrying a native-created BAML exception.
+    pub fn baml_thrown_value(value: BexExternalValue) -> Self {
+        Self {
+            payload: OpErrorPayload::BamlThrown(Box::new(value)),
+        }
+    }
+
     /// Construct an `OpErrorBody` carrying a host-thrown value. The engine
     /// reads the value through `materialize_host_throw`.
     pub fn host_thrown_value(value: BexExternalValue) -> Self {
@@ -916,10 +946,43 @@ impl SysOpResult {
 mod tests {
     use std::collections::HashMap;
 
+    use indexmap::IndexMap;
+
     use super::*;
 
     fn map(pairs: &[(&str, i32)]) -> HashMap<String, i32> {
         pairs.iter().map(|(k, v)| ((*k).to_string(), *v)).collect()
+    }
+
+    #[test]
+    fn thrown_payload_summaries_preserve_instance_and_value_formatting() {
+        let instance = |message: Option<BexExternalValue>| BexExternalValue::Instance {
+            class_name: "example.Error".to_string(),
+            type_args: vec![],
+            fields: message
+                .map(|message| IndexMap::from([("message".to_string(), message)]))
+                .unwrap_or_default(),
+        };
+
+        assert_eq!(
+            OpErrorBody::baml_thrown_value(instance(Some(BexExternalValue::String(
+                "details".into(),
+            ))))
+            .to_string(),
+            "thrown example.Error: details"
+        );
+        assert_eq!(
+            OpErrorBody::host_thrown_value(instance(None)).to_string(),
+            "host thrown example.Error"
+        );
+        assert_eq!(
+            OpErrorBody::baml_thrown_value(instance(Some(BexExternalValue::Int(1)))).to_string(),
+            "thrown example.Error"
+        );
+        assert_eq!(
+            OpErrorBody::host_thrown_value(BexExternalValue::Int(7)).to_string(),
+            "host thrown Int(7)"
+        );
     }
 
     #[test]
