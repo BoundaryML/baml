@@ -2117,6 +2117,7 @@ fn find_unannotated_inbound_member_with_aliases(
     members: &[RuntimeTy],
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<RuntimeTy, EngineError> {
     let mut matching: Vec<&RuntimeTy> = Vec::new();
     for member in members.iter().filter(|member| {
@@ -2143,6 +2144,23 @@ fn find_unannotated_inbound_member_with_aliases(
                     members
                 ),
             }),
+        _ if ambiguity_policy == crate::InboundUnionAmbiguityPolicy::SelectDefault => {
+            // Dynamic host values do not carry a generated union wrapper. Use
+            // the same specificity preference as normal BAML selection, then
+            // fall back to the first declared structural match. This makes an
+            // empty Python/TypeScript list deterministic while still letting
+            // an exact literal/enum-variant beat its broad parent type.
+            matching
+                .iter()
+                .find(|member| {
+                    matches!(member, RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..))
+                })
+                .or_else(|| matching.first())
+                .map(|member| (**member).clone())
+                .ok_or_else(|| EngineError::TypeMismatch {
+                    message: "dynamic default selection had no matching union member".to_string(),
+                })
+        }
         _ => Err(EngineError::TypeMismatch {
             message: format!(
                 "value of type `{}` matches multiple union members; add an inbound `value_type` annotation to select one",
@@ -3149,6 +3167,7 @@ impl BexEngine {
             ty,
             self.sys_op_ctx.type_alias_definitions.as_ref(),
             self.sys_op_ctx.class_definitions.as_ref(),
+            crate::inbound_config::inbound_union_ambiguity_policy(),
         )
     }
 }
@@ -3251,6 +3270,22 @@ pub(crate) fn coerce_arg_to_declared_type(
         ty,
         &indexmap::IndexMap::new(),
         &indexmap::IndexMap::new(),
+        crate::InboundUnionAmbiguityPolicy::Reject,
+    )
+}
+
+#[cfg(test)]
+fn coerce_arg_to_declared_type_with_policy(
+    value: BexExternalValue,
+    ty: &RuntimeTy,
+    policy: crate::InboundUnionAmbiguityPolicy,
+) -> Result<BexExternalValue, EngineError> {
+    coerce_arg_to_declared_type_with_aliases(
+        value,
+        ty,
+        &indexmap::IndexMap::new(),
+        &indexmap::IndexMap::new(),
+        policy,
     )
 }
 
@@ -3259,6 +3294,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition>,
+    ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
 ) -> Result<BexExternalValue, EngineError> {
     // Defense in depth for internally constructed values and aliases. Wire
     // inputs reject a root union in `inbound_to_external`, but an alias can be
@@ -3281,7 +3317,13 @@ fn coerce_arg_to_declared_type_with_aliases(
         && name.display_name().as_str() != "baml.json.json"
         && let Some(expanded) = aliases.get(name)
     {
-        return coerce_arg_to_declared_type_with_aliases(value, expanded, aliases, classes);
+        return coerce_arg_to_declared_type_with_aliases(
+            value,
+            expanded,
+            aliases,
+            classes,
+            ambiguity_policy,
+        );
     }
 
     match (value, ty) {
@@ -3322,8 +3364,13 @@ fn coerce_arg_to_declared_type_with_aliases(
                     }
                 }
             };
-            let annotation_coerced =
-                coerce_arg_to_declared_type_with_aliases(*value, value_type, aliases, classes)?;
+            let annotation_coerced = coerce_arg_to_declared_type_with_aliases(
+                *value,
+                value_type,
+                aliases,
+                classes,
+                ambiguity_policy,
+            )?;
             if !value_matches_type_with_definitions(
                 &annotation_coerced,
                 value_type,
@@ -3342,6 +3389,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 &selected_type,
                 aliases,
                 classes,
+                ambiguity_policy,
             )?;
             if !value_matches_type_with_definitions(&coerced, &selected_type, aliases, classes) {
                 return Err(EngineError::TypeMismatch {
@@ -3373,8 +3421,13 @@ fn coerce_arg_to_declared_type_with_aliases(
                     ),
                 });
             };
-            let annotation_coerced =
-                coerce_arg_to_declared_type_with_aliases(*value, value_type, aliases, classes)?;
+            let annotation_coerced = coerce_arg_to_declared_type_with_aliases(
+                *value,
+                value_type,
+                aliases,
+                classes,
+                ambiguity_policy,
+            )?;
             if !value_matches_type_with_definitions(
                 &annotation_coerced,
                 value_type,
@@ -3393,6 +3446,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                 effective_type,
                 aliases,
                 classes,
+                ambiguity_policy,
             )?;
             Ok(BexExternalValue::typed(coerced, effective_type.clone()))
         }
@@ -3407,6 +3461,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                             expected_element,
                             aliases,
                             classes,
+                            ambiguity_policy,
                         )
                     })
                     .collect::<Result<_, _>>()?,
@@ -3430,6 +3485,7 @@ fn coerce_arg_to_declared_type_with_aliases(
                         expected_value,
                         aliases,
                         classes,
+                        ambiguity_policy,
                     )
                     .map(|value| (name, value))
                 })
@@ -3454,7 +3510,13 @@ fn coerce_arg_to_declared_type_with_aliases(
                     ),
                 });
             }
-            coerce_arg_to_declared_type_with_aliases(data, media_ty, aliases, classes)
+            coerce_arg_to_declared_type_with_aliases(
+                data,
+                media_ty,
+                aliases,
+                classes,
+                ambiguity_policy,
+            )
         }
         // ── Class / enum naming (incoming only) ──────────────────────────
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
@@ -3494,14 +3556,25 @@ fn coerce_arg_to_declared_type_with_aliases(
         }
 
         // An unannotated node in a union context is selected from payload
-        // shape. Ambiguous payloads must carry `value_type`; an annotation was
-        // handled by the union-carrier arm above.
+        // shape. Typed bridges reject ambiguous payloads unless they carry
+        // `value_type`; dynamic bridges use their registered default policy.
+        // An annotation was handled by the union-carrier arm above.
         (value, declared @ RuntimeTy::Union(members, _)) => {
             let value = coerce_numeric_to_declared_type(value, declared)?;
-            let selected =
-                find_unannotated_inbound_member_with_aliases(&value, members, aliases, classes)?;
-            let coerced =
-                coerce_arg_to_declared_type_with_aliases(value, &selected, aliases, classes)?;
+            let selected = find_unannotated_inbound_member_with_aliases(
+                &value,
+                members,
+                aliases,
+                classes,
+                ambiguity_policy,
+            )?;
+            let coerced = coerce_arg_to_declared_type_with_aliases(
+                value,
+                &selected,
+                aliases,
+                classes,
+                ambiguity_policy,
+            )?;
             Ok(BexExternalValue::Union {
                 value: Box::new(coerced),
                 metadata: UnionMetadata::new(declared.clone(), selected),
@@ -3929,6 +4002,7 @@ mod union_container_selection_tests {
             &RuntimeTy::int(),
             &aliases,
             &indexmap::IndexMap::new(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap_err();
         assert!(matches!(
@@ -4093,6 +4167,7 @@ mod union_container_selection_tests {
             &declared,
             &aliases,
             &indexmap::IndexMap::new(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
         )
         .unwrap();
         let BexExternalValue::Union { metadata, value } = coerced else {
@@ -4167,6 +4242,60 @@ mod union_container_selection_tests {
                 if message.contains("multiple union members")
                     && message.contains("value_type")
         ));
+    }
+
+    #[test]
+    fn dynamic_default_selects_first_matching_empty_container_arm() {
+        let int_list = list(RuntimeTy::int());
+        let string_list = list(RuntimeTy::string());
+        let declared = RuntimeTy::union([int_list.clone(), string_list]);
+        let value = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![],
+        };
+
+        let coerced = coerce_arg_to_declared_type_with_policy(
+            value,
+            &declared,
+            crate::InboundUnionAmbiguityPolicy::SelectDefault,
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, value } = coerced else {
+            panic!("expected selected union")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &int_list
+        ));
+        assert!(matches!(
+            *value,
+            BexExternalValue::Array {
+                ref element_type,
+                ref items,
+            } if items.is_empty()
+                && runtime_ty_structurally_equal(element_type, &RuntimeTy::int())
+        ));
+    }
+
+    #[test]
+    fn dynamic_default_prefers_exact_literal_over_broad_primitive() {
+        let literal = string_literal("draft");
+        let declared = RuntimeTy::union([RuntimeTy::string(), literal.clone()]);
+
+        let coerced = coerce_arg_to_declared_type_with_policy(
+            BexExternalValue::String("draft".into()),
+            &declared,
+            crate::InboundUnionAmbiguityPolicy::SelectDefault,
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, value } = coerced else {
+            panic!("expected selected union")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &literal
+        ));
+        assert!(matches!(*value, BexExternalValue::String(ref value) if value == "draft"));
     }
 
     #[test]

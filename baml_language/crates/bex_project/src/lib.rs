@@ -13,7 +13,8 @@ pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, is_cancelled_engine_error,
+    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, is_cancelled_engine_error,
+    register_inbound_union_ambiguity_policy,
     value_capture::{
         CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
         TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,

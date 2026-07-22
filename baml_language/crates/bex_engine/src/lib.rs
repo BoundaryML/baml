@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+mod inbound_config;
 mod thread;
 pub mod trace_heap;
 mod trace_value_encode;
@@ -113,6 +114,7 @@ pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, CaptureDefaults, FunctionCallContext,
     FunctionCallContextBuilder,
 };
+pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_ambiguity_policy};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
