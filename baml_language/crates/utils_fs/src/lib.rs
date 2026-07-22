@@ -26,6 +26,12 @@ pub enum NativePathError {
     InvalidVfsPath(String),
 }
 
+impl From<NativePathError> for vfs::VfsError {
+    fn from(error: NativePathError) -> Self {
+        vfs::VfsError::from(vfs::error::VfsErrorKind::Other(error.to_string()))
+    }
+}
+
 impl NativePathBuf {
     pub fn new(path: PathBuf) -> Result<Self, NativePathError> {
         if path.is_absolute() {

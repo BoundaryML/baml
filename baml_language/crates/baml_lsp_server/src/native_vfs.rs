@@ -1,10 +1,11 @@
 //! Native filesystem VFS for `bex_project::BamlVFS`.
 //!
-//! Wraps `vfs::PhysicalFS` and implements `BulkReadFileSystem` by walking
+//! Implements `vfs::FileSystem` over `std::fs` and implements
+//! `BulkReadFileSystem` by walking
 //! only the glob's base directory (not the entire filesystem).
 
 use std::io::Read;
-use utils_windows::{NativePathBuf, NativePathError};
+use utils_fs::NativePathBuf;
 
 /// Native filesystem adapter for BAML's slash-oriented VFS path domain.
 #[derive(Debug, Clone, Copy, Default)]
@@ -16,11 +17,7 @@ impl NativeVfs {
     }
 
     fn native_path(path: &str) -> vfs::VfsResult<NativePathBuf> {
-        NativePathBuf::from_vfs_path(path).map_err(Self::path_error)
-    }
-
-    fn path_error(error: NativePathError) -> vfs::VfsError {
-        vfs::VfsError::from(vfs::error::VfsErrorKind::Other(error.to_string()))
+        Ok(NativePathBuf::from_vfs_path(path)?)
     }
 }
 
@@ -112,8 +109,7 @@ impl bex_project::BulkReadFileSystem for NativeVfs {
         let base_dir = glob_base_dir(glob);
         let pattern = glob_to_regex(glob);
 
-        let base = NativePathBuf::from_vfs_path(base_dir.trim_end_matches('/'))
-            .map_err(Self::path_error)?;
+        let base = NativePathBuf::from_vfs_path(base_dir.trim_end_matches('/'))?;
         if !base.as_path().is_dir() {
             return Ok(Vec::new());
         }
@@ -135,9 +131,7 @@ fn walk_dir_native(
         if path.is_dir() {
             walk_dir_native(&path, pattern, results)?;
         } else if path.is_file() {
-            let path_str = NativePathBuf::new(path.clone())
-                .and_then(|path| path.to_vfs_path())
-                .map_err(NativeVfs::path_error)?;
+            let path_str = NativePathBuf::new(path.clone())?.to_vfs_path()?;
             if pattern.is_match(&path_str) {
                 let mut file = std::fs::File::open(&path)?;
                 let mut buf = Vec::new();

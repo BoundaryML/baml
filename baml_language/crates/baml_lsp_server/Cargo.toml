@@ -37,7 +37,7 @@ bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http" ] }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
-utils_windows = { workspace = true }
+utils_fs = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }

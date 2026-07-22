@@ -1,7 +1,7 @@
 use std::{io::Read, path::Path};
 
 use crate::LspError;
-use utils_windows::NativePathBuf;
+use utils_fs::NativePathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FsPath(String);
