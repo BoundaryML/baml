@@ -31,9 +31,9 @@ use text_size::{TextRange, TextSize};
 /// attributes the way editor themes do: declarations are bold, stdlib
 /// entities italic, deprecated ones struck through.
 ///
-/// Styling is **forced** so emission is decided by the caller per output stream
-/// (gating on `colors_enabled()` for stdout vs `colors_enabled_stderr()` for
-/// stderr), not by console's ambient stdout flag.
+/// Styling is **forced** so emission is decided by the caller from the resolved
+/// output policy for the destination stream, not by console's ambient stdout
+/// flag.
 fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
     use SemanticTokenType as T;
     // (base color, dimmed) — dim is a *base* trait of quiet token types, kept
@@ -242,17 +242,19 @@ pub struct Painter {
 impl Painter {
     /// Painter for stdout-bound output.
     pub fn stdout() -> Self {
+        let policy = crate::output::policy().stdout;
         Self {
-            color: console::colors_enabled(),
-            hyperlinks: crate::output::stdout_hyperlinks_enabled(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 
     /// Painter for stderr-bound output.
     pub fn stderr() -> Self {
+        let policy = crate::output::policy().stderr;
         Self {
-            color: console::colors_enabled_stderr(),
-            hyperlinks: crate::output::stderr_hyperlinks_enabled(),
+            color: policy.color,
+            hyperlinks: policy.hyperlinks,
         }
     }
 

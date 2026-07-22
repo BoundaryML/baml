@@ -1,12 +1,9 @@
 //! Unified CLI output policy.
 //!
-//! A preset supplies defaults for each independent output dial. Explicit CLI
-//! flags and their environment-variable equivalents override those defaults.
+//! A preset produces a concrete output policy. Explicit CLI flags and their
+//! environment-variable equivalents override individual fields afterward.
 
-use std::{
-    io::IsTerminal,
-    sync::atomic::{AtomicBool, AtomicU8, Ordering},
-};
+use std::{io::IsTerminal, sync::RwLock};
 
 use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig};
 use clap::{Args, ValueEnum};
@@ -93,12 +90,22 @@ pub(crate) enum DiagnosticFormatChoice {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct OutputConfig {
-    stdout_color: bool,
-    stderr_color: bool,
-    stdout_hyperlinks: bool,
-    stderr_hyperlinks: bool,
-    diagnostic_format: DiagnosticFormat,
+pub(crate) struct OutputPolicy {
+    pub stdout: StreamPolicy,
+    pub stderr: StreamPolicy,
+    pub diagnostics: DiagnosticPolicy,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StreamPolicy {
+    pub color: bool,
+    pub hyperlinks: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DiagnosticPolicy {
+    pub format: DiagnosticFormat,
+    pub show_error_codes: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -111,81 +118,108 @@ struct OutputSignals {
     stderr_is_terminal: bool,
 }
 
-const HUMAN_FORMAT: u8 = 0;
-const AGENT_FORMAT: u8 = 1;
-const CONCISE_FORMAT: u8 = 2;
+const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
+    stdout: StreamPolicy {
+        color: false,
+        hyperlinks: false,
+    },
+    stderr: StreamPolicy {
+        color: false,
+        hyperlinks: false,
+    },
+    diagnostics: DiagnosticPolicy {
+        format: DiagnosticFormat::Ariadne,
+        show_error_codes: true,
+    },
+};
 
-static STDOUT_HYPERLINKS: AtomicBool = AtomicBool::new(false);
-static STDERR_HYPERLINKS: AtomicBool = AtomicBool::new(false);
-static DIAGNOSTIC_FORMAT: AtomicU8 = AtomicU8::new(HUMAN_FORMAT);
+static OUTPUT_POLICY: RwLock<OutputPolicy> = RwLock::new(DEFAULT_POLICY);
 
 /// Resolve and install the process-wide output policy before a command writes.
 pub(crate) fn init(args: OutputArgs) {
-    let config = resolve(args, output_signals());
-    console::set_colors_enabled(config.stdout_color);
-    console::set_colors_enabled_stderr(config.stderr_color);
-    STDOUT_HYPERLINKS.store(config.stdout_hyperlinks, Ordering::Relaxed);
-    STDERR_HYPERLINKS.store(config.stderr_hyperlinks, Ordering::Relaxed);
-    DIAGNOSTIC_FORMAT.store(format_to_u8(config.diagnostic_format), Ordering::Relaxed);
+    let policy = resolve(args, output_signals());
+    console::set_colors_enabled(policy.stdout.color);
+    console::set_colors_enabled_stderr(policy.stderr.color);
+    *OUTPUT_POLICY
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = policy;
 }
 
-pub(crate) fn stdout_hyperlinks_enabled() -> bool {
-    STDOUT_HYPERLINKS.load(Ordering::Relaxed)
+pub(crate) fn policy() -> OutputPolicy {
+    *OUTPUT_POLICY
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-pub(crate) fn stderr_hyperlinks_enabled() -> bool {
-    STDERR_HYPERLINKS.load(Ordering::Relaxed)
-}
-
-/// Compiler diagnostic configuration derived from the same resolved output
-/// policy used by the rest of the CLI.
-pub(crate) fn diagnostic_render_config() -> RenderConfig {
-    RenderConfig {
-        format: match DIAGNOSTIC_FORMAT.load(Ordering::Relaxed) {
-            AGENT_FORMAT => DiagnosticFormat::Agent,
-            CONCISE_FORMAT => DiagnosticFormat::Concise,
-            _ => DiagnosticFormat::Ariadne,
-        },
-        color: console::colors_enabled_stderr(),
-        show_error_codes: true,
+impl OutputPolicy {
+    pub(crate) fn diagnostic_render_config(self) -> RenderConfig {
+        RenderConfig {
+            format: self.diagnostics.format,
+            color: self.stderr.color,
+            show_error_codes: self.diagnostics.show_error_codes,
+        }
     }
 }
 
-fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputConfig {
+fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
     let preset = match args.preset {
         OutputPreset::Auto if signals.running_in_agent => OutputPreset::Agent,
         OutputPreset::Auto => OutputPreset::Human,
         explicit => explicit,
     };
+    let mut policy = preset.policy(signals);
 
-    let default_color = match preset {
-        OutputPreset::Agent if !signals.color_forced => ColorChoice::Never,
-        OutputPreset::Agent => ColorChoice::Always,
-        OutputPreset::Human | OutputPreset::Auto => ColorChoice::Auto,
-    };
-    let default_hyperlinks = match preset {
-        OutputPreset::Agent => HyperlinkChoice::Never,
-        OutputPreset::Human | OutputPreset::Auto => HyperlinkChoice::Auto,
-    };
-    let default_format = match preset {
-        OutputPreset::Agent => DiagnosticFormatChoice::Agent,
-        OutputPreset::Human | OutputPreset::Auto => DiagnosticFormatChoice::Human,
-    };
-
-    let color = args.color.unwrap_or(default_color);
-    let hyperlinks = args.hyperlinks.unwrap_or(default_hyperlinks);
-    let diagnostic_format = args.diagnostic_format.unwrap_or(default_format);
-
-    OutputConfig {
-        stdout_color: resolve_color(color, signals.stdout_auto_color),
-        stderr_color: resolve_color(color, signals.stderr_auto_color),
-        stdout_hyperlinks: resolve_hyperlinks(hyperlinks, signals.stdout_is_terminal),
-        stderr_hyperlinks: resolve_hyperlinks(hyperlinks, signals.stderr_is_terminal),
-        diagnostic_format: match diagnostic_format {
+    if let Some(color) = args.color {
+        policy.stdout.color = resolve_color(color, signals.stdout_auto_color);
+        policy.stderr.color = resolve_color(color, signals.stderr_auto_color);
+    }
+    if let Some(hyperlinks) = args.hyperlinks {
+        policy.stdout.hyperlinks = resolve_hyperlinks(hyperlinks, signals.stdout_is_terminal);
+        policy.stderr.hyperlinks = resolve_hyperlinks(hyperlinks, signals.stderr_is_terminal);
+    }
+    if let Some(format) = args.diagnostic_format {
+        policy.diagnostics.format = match format {
             DiagnosticFormatChoice::Human => DiagnosticFormat::Ariadne,
             DiagnosticFormatChoice::Agent => DiagnosticFormat::Agent,
             DiagnosticFormatChoice::Concise => DiagnosticFormat::Concise,
-        },
+        };
+    }
+
+    policy
+}
+
+impl OutputPreset {
+    fn policy(self, signals: OutputSignals) -> OutputPolicy {
+        match self {
+            Self::Agent => OutputPolicy {
+                stdout: StreamPolicy {
+                    color: signals.color_forced,
+                    hyperlinks: false,
+                },
+                stderr: StreamPolicy {
+                    color: signals.color_forced,
+                    hyperlinks: false,
+                },
+                diagnostics: DiagnosticPolicy {
+                    format: DiagnosticFormat::Agent,
+                    show_error_codes: true,
+                },
+            },
+            Self::Human | Self::Auto => OutputPolicy {
+                stdout: StreamPolicy {
+                    color: signals.stdout_auto_color,
+                    hyperlinks: signals.stdout_is_terminal,
+                },
+                stderr: StreamPolicy {
+                    color: signals.stderr_auto_color,
+                    hyperlinks: signals.stderr_is_terminal,
+                },
+                diagnostics: DiagnosticPolicy {
+                    format: DiagnosticFormat::Ariadne,
+                    show_error_codes: true,
+                },
+            },
+        }
     }
 }
 
@@ -245,14 +279,6 @@ fn running_in_agent() -> bool {
     AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
 }
 
-const fn format_to_u8(format: DiagnosticFormat) -> u8 {
-    match format {
-        DiagnosticFormat::Ariadne => HUMAN_FORMAT,
-        DiagnosticFormat::Agent => AGENT_FORMAT,
-        DiagnosticFormat::Concise => CONCISE_FORMAT,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,7 +303,7 @@ mod tests {
 
     #[test]
     fn auto_selects_agent_defaults_when_agent_is_detected() {
-        let config = resolve(
+        let policy = resolve(
             args(OutputPreset::Auto),
             OutputSignals {
                 running_in_agent: true,
@@ -285,16 +311,16 @@ mod tests {
             },
         );
 
-        assert!(!config.stdout_color);
-        assert!(!config.stderr_color);
-        assert!(!config.stdout_hyperlinks);
-        assert!(!config.stderr_hyperlinks);
-        assert_eq!(config.diagnostic_format, DiagnosticFormat::Agent);
+        assert!(!policy.stdout.color);
+        assert!(!policy.stderr.color);
+        assert!(!policy.stdout.hyperlinks);
+        assert!(!policy.stderr.hyperlinks);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
     }
 
     #[test]
     fn human_preset_uses_per_stream_terminal_capabilities() {
-        let config = resolve(
+        let policy = resolve(
             args(OutputPreset::Human),
             OutputSignals {
                 stdout_auto_color: false,
@@ -305,11 +331,11 @@ mod tests {
             },
         );
 
-        assert!(!config.stdout_color);
-        assert!(config.stderr_color);
-        assert!(!config.stdout_hyperlinks);
-        assert!(config.stderr_hyperlinks);
-        assert_eq!(config.diagnostic_format, DiagnosticFormat::Ariadne);
+        assert!(!policy.stdout.color);
+        assert!(policy.stderr.color);
+        assert!(!policy.stdout.hyperlinks);
+        assert!(policy.stderr.hyperlinks);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Ariadne);
     }
 
     #[test]
@@ -319,18 +345,18 @@ mod tests {
         output_args.hyperlinks = Some(HyperlinkChoice::Always);
         output_args.diagnostic_format = Some(DiagnosticFormatChoice::Human);
 
-        let config = resolve(output_args, INTERACTIVE);
+        let policy = resolve(output_args, INTERACTIVE);
 
-        assert!(config.stdout_color);
-        assert!(config.stderr_color);
-        assert!(config.stdout_hyperlinks);
-        assert!(config.stderr_hyperlinks);
-        assert_eq!(config.diagnostic_format, DiagnosticFormat::Ariadne);
+        assert!(policy.stdout.color);
+        assert!(policy.stderr.color);
+        assert!(policy.stdout.hyperlinks);
+        assert!(policy.stderr.hyperlinks);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Ariadne);
     }
 
     #[test]
     fn conventional_force_color_overrides_agent_preset() {
-        let config = resolve(
+        let policy = resolve(
             args(OutputPreset::Agent),
             OutputSignals {
                 color_forced: true,
@@ -338,10 +364,10 @@ mod tests {
             },
         );
 
-        assert!(config.stdout_color);
-        assert!(config.stderr_color);
-        assert!(!config.stdout_hyperlinks);
-        assert!(!config.stderr_hyperlinks);
-        assert_eq!(config.diagnostic_format, DiagnosticFormat::Agent);
+        assert!(policy.stdout.color);
+        assert!(policy.stderr.color);
+        assert!(!policy.stdout.hyperlinks);
+        assert!(!policy.stderr.hyperlinks);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
     }
 }

@@ -123,6 +123,6 @@ pub(crate) fn render_project_diagnostics(
         diagnostics,
         &sources,
         &file_paths,
-        &crate::output::diagnostic_render_config(),
+        &crate::output::policy().diagnostic_render_config(),
     )
 }
