@@ -1776,6 +1776,11 @@ impl BexVm {
             Frame::Native(_) => &[],
         };
         match raw_const {
+            // Structural type test against a complete `TyTemplate` (a
+            // container element type, a bare frame ref, …), matched with the
+            // canonical type algebra — emitted for element-discriminating
+            // containers, unions, and frame refs (see the emitter's
+            // `is_type`).
             ConstValue::Type(template) => {
                 crate::type_match::value_matches_template(self, value, template, frame_type_args)
             }
@@ -1786,16 +1791,30 @@ impl BexVm {
                 let class_ptr = self.idx_to_ptr(*class_obj);
                 match value.as_object_ptr() {
                     Some(val_ptr) => match self.get_object(val_ptr) {
+                        // Class-pointer identity (above) fixes the class; each
+                        // type arg is then related *invariantly* through the
+                        // canonical algebra (BAML generics are invariant). No
+                        // covariance is needed for a reified frame type-param
+                        // that inference widened to a union (`T = Shape | Sq`
+                        // vs a value's narrower `Shape`): the algebra knows
+                        // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
+                        // the invariant relation already holds — the retired
+                        // guard needed a covariant band-aid only because it
+                        // could not see that membership.
                         Object::Instance(inst) if inst.class == class_ptr => {
+                            debug_assert_eq!(
+                                type_args_templates.len(),
+                                inst.class_type_args.len(),
+                                "Class should have consistent number of generic parameters",
+                            );
                             type_args_templates.len() == inst.class_type_args.len()
                                 && type_args_templates.iter().zip(&inst.class_type_args).all(
                                     |(template, actual)| {
-                                        crate::type_match::template_relates(
+                                        crate::type_match::class_type_arg_matches(
                                             self,
                                             template,
                                             frame_type_args,
                                             actual.as_ty(),
-                                            crate::type_match::Variance::Invariant,
                                         )
                                     },
                                 )
@@ -1807,6 +1826,11 @@ impl BexVm {
             }
             _ => {
                 if let Some(expected_ptr) = resolved_const.as_object_ptr() {
+                    // Class- or enum-pointer identity: `is Foo` checks the
+                    // instance's class object; `is Color` checks the variant's
+                    // enum object. Enum-type tests dispatch on enum identity
+                    // because the shared `ENUM` type tag cannot tell `Color`
+                    // from `Status`.
                     match value.as_object_ptr() {
                         Some(val_ptr) => match self.get_object(val_ptr) {
                             Object::Instance(instance) => instance.class == expected_ptr,

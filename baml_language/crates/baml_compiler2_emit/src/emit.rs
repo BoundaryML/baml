@@ -788,6 +788,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.place_reads_spawn_captured_local(place, seen)
             }
             Rvalue::IsType { operand, .. }
+            | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
@@ -3308,15 +3309,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::IsType(c));
             this.set_operand(inst, OperandMeta::Const(template.to_string()));
         };
-        // A template position is a match-any hole (`_`) when it is a bare
-        // `Wildcard` — the only leaf that matches any type at its slot.
-        let is_match_any = |t: &TyTemplate| matches!(t, TyTemplate::Wildcard);
-
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
             // Every class (monomorphic `Foo`, concrete `Foo<int>`, or generic
             // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
-            // so the VM compares each arg; empty args → class-pointer identity.
+            // so the VM compares each arg invariantly; empty args →
+            // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
@@ -3338,41 +3336,17 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
 
-            // ── Containers ───────────────────────────────────────────────────
-            // A list/map whose element positions are all match-any holes is
-            // exactly the coarse "any list" / "any map" check, so the cheap type
-            // tag suffices — and this preserves an erased `T[]` / `_[]` pattern's
-            // "any list" semantics. When an element carries a discriminating type
-            // the tag would conflate `int[]` with `string[]`, so route the whole
-            // template through the structural matcher instead.
-            TyTemplate::List(elem, _) if is_match_any(elem) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::LIST));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-            TyTemplate::Map { key, value, .. } if is_match_any(key) && is_match_any(value) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::MAP));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-
             // ── Structural (value matcher) ───────────────────────────────────
-            // Element/key/value discriminates, a bare frame reference (`T`,
-            // `T[]`), an interface existential (membership resolved at runtime
-            // against the impl registry — never a compile-time implementor
-            // enumeration), or a union that may carry any of these: the VM value
-            // matcher. The deprecated `TypeArgRefOrWildcard` is no longer
-            // produced (typevars now lower to `TypeArgRef`), but is still routed
-            // here defensively — `substitute` resolves it to the same frame slot
-            // as `TypeArgRef`.
-            #[expect(
-                deprecated,
-                reason = "TypeArgRefOrWildcard is a still-defined (unemitted) template variant until type erasure is removed"
-            )]
+            // A container (element/key/value may discriminate — a coarse tag
+            // would conflate `int[]` with `string[]`; the proven-sufficient
+            // coarse test is its own `is_type_tag` sink), a bare frame
+            // reference (`T`), an interface existential (membership resolved at
+            // runtime against the impl registry — never a compile-time
+            // implementor enumeration), or a union that may carry any of these:
+            // the VM value matcher.
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::TypeArgRef(_)
-            | TyTemplate::TypeArgRefOrWildcard(_)
             | TyTemplate::Interface(..)
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
@@ -3395,12 +3369,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
             }
-
-            // A bare wildcard is the erased/unrepresentable fallback — an
-            // unresolved `Self` or associated projection lowered to a hole. Keep
-            // it constant-false rather than over-matching every value; faithful
-            // `Self` and projection lowering land in later units.
-            TyTemplate::Wildcard => emit_false(self),
 
             // Everything else keeps its existing coarse check.
             other => {
@@ -3453,6 +3421,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error> {
+        // The proven coarse-tag test: identical `IsType`-against-`Int` bytecode
+        // to the tag checks `is_type` emits for realized leaves. The operand
+        // meta reproduces the strings the wildcarded container templates used
+        // to render (`_[]` / `map<_, _>`) so bytecode display stays stable
+        // across the `IsTypeTag` re-home; other tags have no MIR producer.
+        let c = self.add_constant(ConstValue::Int(tag));
+        let inst = self.emit(Instruction::IsType(c));
+        let meta = match tag {
+            baml_type::typetag::LIST => "_[]".to_string(),
+            baml_type::typetag::MAP => "map<_, _>".to_string(),
+            other => format!("type tag {other}"),
+        };
+        self.set_operand(inst, OperandMeta::Const(meta));
         Ok(())
     }
 

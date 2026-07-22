@@ -12030,7 +12030,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _21: baml.json.JsonDecodeError
 
     bb0: {
-        _2 = is_type(copy _1, map<_, _>);
+        _2 = is_type_tag(copy _1, MAP);
         branch copy _2 -> [bb2, bb1];
     }
 

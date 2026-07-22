@@ -413,11 +413,7 @@ impl<'vm> ImplResolver<'vm> {
         }
 
         match pattern {
-            TyTemplate::Wildcard => true,
-            // `TypeArgRefOrWildcard` is a de Bruijn ref like `TypeArgRef` (substitution
-            // treats them identically); bind it the same way here.
-            #[expect(deprecated)]
-            TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => {
+            TyTemplate::TypeArgRef(n) => {
                 match bindings.get_mut(*n as usize) {
                     Some(slot @ None) => {
                         *slot = Some(concrete.clone());
@@ -756,8 +752,7 @@ impl ImplResolver<'_> {
 /// The largest `TypeArgRef` de Bruijn index anywhere in `t`, if any.
 fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
     match t {
-        #[expect(deprecated)]
-        TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => Some(*n),
+        TyTemplate::TypeArgRef(n) => Some(*n),
         TyTemplate::List(inner, _) => max_type_arg_ref(inner),
         TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
             max_type_arg_ref(key).max(max_type_arg_ref(value))
@@ -797,7 +792,7 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
                     ),
             )
             .max(),
-        // Realized leaves and `Wildcard` carry no frame ref.
+        // Realized leaves carry no frame ref.
         _ => None,
     }
 }
@@ -805,8 +800,7 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
 /// Whether a template references any impl generic parameter (a `TypeArgRef`).
 fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
     match t {
-        #[expect(deprecated)]
-        TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
+        TyTemplate::TypeArgRef(_) => true,
         TyTemplate::List(inner, _) => template_has_type_arg_ref(inner),
         TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
             template_has_type_arg_ref(key) || template_has_type_arg_ref(value)
@@ -837,7 +831,7 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
                     .iter()
                     .any(|(_, t)| template_has_type_arg_ref(t))
         }
-        // Realized leaves and `Wildcard` carry no frame ref.
+        // Realized leaves carry no frame ref.
         _ => false,
     }
 }

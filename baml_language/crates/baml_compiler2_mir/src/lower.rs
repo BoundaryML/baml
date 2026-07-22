@@ -442,22 +442,20 @@ fn infer_interface_class_bindings(
             //
             // Unpinned assoc bindings are safe because dispatch never relies
             // on them for correctness:
-            // 1. every arm first checks the receiver's concrete class
-            //    identity (`InterfaceDispatchGuard::Class { impl_tn, .. }`),
-            //    so an unpinned binding can never capture another class's
-            //    instance;
-            // 2. two arms for the SAME class can only coexist when their
+            // 1. every selected candidate's runtime guard checks the
+            //    receiver's concrete class identity, so an unpinned binding
+            //    can never capture another class's instance;
+            // 2. two candidates for the SAME class can only coexist when their
             //    positional interface args differ — blocks differing only in
             //    assoc bindings are rejected at HIR (E0114; pinned by
             //    `duplicate_implements_differing_only_in_assoc_bindings_is_compile_error`)
             //    — and positional args keep strict pairwise pinning above
-            //    precisely so they stay discriminating;
+            //    precisely so they stay discriminating at *selection* time;
             // 3. a receiver whose runtime bindings don't satisfy the request
             //    cannot reach the switch in a well-typed program (the
-            //    receiver's static type IS the requested view); guards
-            //    discriminate among candidates, they are not a soundness
-            //    barrier — a request that omits type args entirely already
-            //    produces `InterfaceClassGuard::Any`.
+            //    receiver's static type IS the requested view); selection
+            //    discriminates among candidates, the runtime guard is not a
+            //    soundness barrier.
             assoc_union_wildcard
                 && fparts.iter().any(&is_class_param)
                 && fparts.iter().all(|f| {
@@ -472,26 +470,41 @@ fn infer_interface_class_bindings(
     }
 }
 
-fn interface_class_guard_for_args(
+/// Whether one in-body `implements` block provides the *requested* interface
+/// view — the compile-time candidate selection for the interface field switch.
+///
+/// This selection is the whole discrimination story; the runtime guard per
+/// selected candidate is bare class identity. That is sufficient because:
+///
+/// - field links exist only in **in-body** blocks (E0126 forces field-declaring
+///   interfaces in-body), and an in-body block always covers the class's whole
+///   type constructor;
+/// - coherence rejects overlapping same-interface blocks, so for a given
+///   *concrete* request at most one block per class unifies here — there is
+///   never a same-class sibling arm for a runtime guard to tell apart;
+/// - a receiver that doesn't satisfy the request cannot reach the switch in a
+///   well-typed program (its static type IS the requested view), so re-checking
+///   the pinned positions at runtime proved nothing.
+fn implements_block_matches_request(
     impl_iface_args: &[Tir2Ty],
     impl_iface_assoc: &[(Name, Tir2Ty)],
     requested_iface_args: &[Tir2Ty],
     requested_iface_assoc: &[(Name, Tir2Ty)],
     class_params: &[Name],
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
-) -> Option<InterfaceClassGuard> {
+) -> bool {
     // An *uninstantiated* request (no type args) matches any implementor
     // instantiation — e.g. `self: Container` inside a generic interface's
     // default method dispatches to `IntBox` (which implements `Container<int>`).
     // The runtime IsType on the concrete class still discriminates.
     let request_omits_type_args = requested_iface_args.is_empty() && !impl_iface_args.is_empty();
     if request_omits_type_args && requested_iface_assoc.is_empty() {
-        return Some(InterfaceClassGuard::Any);
+        return true;
     }
     let mut bindings = FxHashMap::default();
     if !request_omits_type_args {
         if impl_iface_args.len() != requested_iface_args.len() {
-            return None;
+            return false;
         }
         for (impl_arg, requested_arg) in impl_iface_args.iter().zip(requested_iface_args.iter()) {
             if !infer_interface_class_bindings(
@@ -502,14 +515,17 @@ fn interface_class_guard_for_args(
                 &mut bindings,
                 false,
             ) {
-                return None;
+                return false;
             }
         }
     }
     for (requested_name, requested_ty) in requested_iface_assoc {
-        let (_, impl_ty) = impl_iface_assoc
+        let Some((_, impl_ty)) = impl_iface_assoc
             .iter()
-            .find(|(impl_name, _)| impl_name == requested_name)?;
+            .find(|(impl_name, _)| impl_name == requested_name)
+        else {
+            return false;
+        };
         if !infer_interface_class_bindings(
             impl_ty,
             requested_ty,
@@ -518,7 +534,7 @@ fn interface_class_guard_for_args(
             &mut bindings,
             true,
         ) {
-            return None;
+            return false;
         }
     }
     let substituted_args: Vec<_> = impl_iface_args
@@ -532,7 +548,7 @@ fn interface_class_guard_for_args(
             aliases,
         )
     {
-        return None;
+        return false;
     }
     let substituted_assoc: Vec<_> = impl_iface_assoc
         .iter()
@@ -544,11 +560,14 @@ fn interface_class_guard_for_args(
         })
         .collect();
     for (requested_name, requested_ty) in requested_iface_assoc {
-        let (_, impl_ty) = substituted_assoc
+        let Some((_, impl_ty)) = substituted_assoc
             .iter()
-            .find(|(impl_name, _)| impl_name == requested_name)?;
-        // A substituted binding still containing class params is a deliberate
-        // wildcard (unpinnable typevar union): the runtime class guard plus
+            .find(|(impl_name, _)| impl_name == requested_name)
+        else {
+            return false;
+        };
+        // A substituted binding still containing class params is deliberately
+        // left unpinned (unpinnable typevar union): the runtime class guard plus
         // instance-seeded frame args carry the discrimination instead. This
         // skip is only reachable after `infer_interface_class_bindings` has
         // structurally vetted the same (formal, requested) pairs above — it
@@ -557,24 +576,10 @@ fn interface_class_guard_for_args(
             continue;
         }
         if !tir_type_satisfies_dispatch_request(impl_ty, requested_ty, aliases) {
-            return None;
+            return false;
         }
     }
-    if class_params.is_empty() {
-        return Some(InterfaceClassGuard::Any);
-    }
-    // Per class type-param: `Some` when the requested interface args pinned it,
-    // `None` (wildcard) otherwise. Crucially we no longer collapse to `Any` when
-    // *some* params are unbound — that's exactly the `Pair<L,R>` case where one
-    // block pins `L` and the other pins `R`; a partial guard keeps them distinct.
-    let class_args: Vec<Option<Tir2Ty>> = class_params
-        .iter()
-        .map(|param| bindings.get(param).cloned())
-        .collect();
-    if class_args.iter().all(Option::is_none) {
-        return Some(InterfaceClassGuard::Any);
-    }
-    Some(InterfaceClassGuard::Exact(class_args))
+    true
 }
 
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
@@ -848,15 +853,12 @@ pub fn tir2_to_template(
         // to the realized top type `unknown` — the same honest reflection an
         // unspecialized generic slot gets (the out-of-range `TypeArgRef` rule
         // in `TyTemplate::substitute`), decided and documented here at compile
-        // time rather than smuggled through a `Wildcard` hole for the runtime
-        // to erase (a hole has no concrete form, so `substitute` rejects it as
-        // an internal error). Dispatch-guard positions never reach this arm:
-        // `tir2_to_dispatch_guard_template` intercepts every `TypeVar` before
-        // delegating here, and there `Self` stays a `Wildcard` hole (matching
-        // "any" — over-matching in nested positions like `Foo<Self>`). Give
-        // `Self` a real frame slot so it lowers to a `TypeArgRef` (interface
-        // default-method / class-body work), fix the guard over-match with the
-        // same slot, and delete this arm.
+        // time. Pattern positions never reach this arm:
+        // `tir2_to_pattern_template` intercepts every `TypeVar` before
+        // delegating here, reporting a slotless `Self` as `None` (the pattern
+        // test fails closed). Give `Self` a real frame slot so it lowers to a
+        // `TypeArgRef` (interface default-method / class-body work) and delete
+        // this arm.
         Tir2Ty::TypeVar(name, _) if name == "Self" => realized_leaf_template(&RuntimeTy::unknown()),
         Tir2Ty::TypeVar(name, _) => {
             let Some(n) = generic_params.iter().position(|p| p == name) else {
@@ -985,69 +987,74 @@ fn realized_leaf_template(ty: &RuntimeTy) -> TyTemplate {
     )
 }
 
-fn tir2_to_dispatch_guard_template(
+/// Convert a TIR pattern type into a complete [`TyTemplate`], or `None` when
+/// any position is *unresolvable* (an associated projection, a type variable
+/// with no frame slot) — validated here at construction, never erased to a
+/// type or smuggled onward. The caller emits a fail-closed branch for `None`
+/// (`emit_pattern_template_test`).
+fn tir2_to_pattern_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
     generic_params: &[baml_base::Name],
-) -> TyTemplate {
+) -> Option<TyTemplate> {
     match ty {
-        Tir2Ty::AssociatedTypeProjection { .. } => TyTemplate::Wildcard,
-        Tir2Ty::TypeVar(name, _) => generic_params
-            .iter()
-            .position(|p| p == name)
-            .map(|n| {
-                // A frame type-parameter lowers to its `TypeArgRef` slot. It used
-                // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
-                // reified-and-widened `T` (`Shape | Sq`) would match a value's
-                // narrower `Shape`; that is unnecessary now the runtime relates
-                // type args through the canonical algebra, which absorbs
-                // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
-                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
-            })
-            .unwrap_or(TyTemplate::Wildcard),
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::list(
-            tir2_to_dispatch_guard_template(inner, resolved, generic_params),
-        ),
+        // FIXME(typevar-templates): resolvable through the frame once
+        // projection patterns lower to projection templates over frame refs.
+        Tir2Ty::AssociatedTypeProjection { .. } => None,
+        Tir2Ty::TypeVar(name, _) => generic_params.iter().position(|p| p == name).map(|n| {
+            // A frame type-parameter lowers to its `TypeArgRef` slot. It used
+            // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
+            // reified-and-widened `T` (`Shape | Sq`) would match a value's
+            // narrower `Shape`; that is unnecessary now the runtime relates
+            // type args through the canonical algebra, which absorbs
+            // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
+            TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
+        }),
+        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
+            tir2_to_pattern_template(inner, resolved, generic_params)?,
+        )),
         Tir2Ty::Map {
             key: k, value: v, ..
         }
-        | Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::map(
-            tir2_to_dispatch_guard_template(k, resolved, generic_params),
-            tir2_to_dispatch_guard_template(v, resolved, generic_params),
-        ),
-        Tir2Ty::Union(parts, _) => TyTemplate::union(
+        | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
+            tir2_to_pattern_template(k, resolved, generic_params)?,
+            tir2_to_pattern_template(v, resolved, generic_params)?,
+        )),
+        Tir2Ty::Union(parts, _) => Some(TyTemplate::union(
             parts
                 .iter()
-                .map(|p| tir2_to_dispatch_guard_template(p, resolved, generic_params)),
-        ),
-        Tir2Ty::Class(qtn, type_args, _) => TyTemplate::class(
+                .map(|p| tir2_to_pattern_template(p, resolved, generic_params))
+                .collect::<Option<Vec<_>>>()?,
+        )),
+        Tir2Ty::Class(qtn, type_args, _) => Some(TyTemplate::class(
             qtn.clone(),
             type_args
                 .iter()
-                .map(|arg| tir2_to_dispatch_guard_template(arg, resolved, generic_params))
-                .collect(),
-        ),
-        Tir2Ty::Interface(qtn, type_args, assoc, _) => TyTemplate::interface(
+                .map(|arg| tir2_to_pattern_template(arg, resolved, generic_params))
+                .collect::<Option<Vec<_>>>()?,
+        )),
+        Tir2Ty::Interface(qtn, type_args, assoc, _) => Some(TyTemplate::interface(
             qtn.clone(),
             type_args
                 .iter()
-                .map(|arg| tir2_to_dispatch_guard_template(arg, resolved, generic_params))
-                .collect(),
+                .map(|arg| tir2_to_pattern_template(arg, resolved, generic_params))
+                .collect::<Option<Vec<_>>>()?,
             assoc
                 .iter()
                 .map(|(name, ty)| {
-                    (
+                    Some((
                         name.clone(),
-                        tir2_to_dispatch_guard_template(ty, resolved, generic_params),
-                    )
+                        tir2_to_pattern_template(ty, resolved, generic_params)?,
+                    ))
                 })
-                .collect(),
-        ),
-        other => tir2_to_template(other, resolved, generic_params),
+                .collect::<Option<Vec<_>>>()?,
+        )),
+        other => Some(tir2_to_template(other, resolved, generic_params)),
     }
 }
 
-/// Convert an already-resolved `baml_type::RuntimeTy` back to a `TyTemplate`.
+/// Convert an already-resolved `baml_type::RuntimeTy` into a complete
+/// [`TyTemplate`], or `None` when any position is unresolvable.
 ///
 /// This is used for `IsType` pattern-matching where the pattern type comes
 /// through `convert_tir_ty_for_runtime`, which keeps type variables faithful —
@@ -1055,71 +1062,82 @@ fn tir2_to_dispatch_guard_template(
 /// type becomes a `Concrete`-equivalent leaf (the VM's tag / class-identity
 /// fast paths); a composite decomposes structurally.
 ///
-/// FIXME(typevar-templates): a residual `TypeVar`/projection maps to `Wildcard`,
-/// a temporary bandaid that reproduces the old `Concrete(TypeVar)` "matches
-/// nothing" at the top level (it OVER-matches nested — see the `Self` note in
-/// `tir2_to_template`). Only `Self` legitimately survives here; any other
-/// unresolved type variable is a lowering defect or a real user error that must
-/// be resolved to a `TypeArgRef` or diagnosed. Remove this fallback once
-/// typevars reaching a template are always resolved.
-pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
+/// FIXME(typevar-templates): a residual `TypeVar`/projection yields `None` —
+/// validated here at construction, and emitted as a fail-closed branch by
+/// `emit_pattern_template_test` — rather than being erased to a type. This
+/// conversion has no frame context, so even a frame-resolvable type variable
+/// is unresolvable *here*; only `Self` legitimately survives to this point on
+/// the TIR side. Resolve the residuals (a `Self` frame slot; TIR-side
+/// threading like the destructure headers) or diagnose them at TIR, then
+/// collapse this into the infallible realized conversion.
+pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<TyTemplate> {
     match ty {
-        // See the FIXME above: an unresolved type variable or projection is held
-        // as a `Wildcard` hole rather than smuggled by name.
-        RuntimeTy::TypeVar(..) | RuntimeTy::AssociatedTypeProjection { .. } => TyTemplate::Wildcard,
-        // Composites decompose so a nested residual type variable is a hole at
-        // its own position, not the whole container.
-        RuntimeTy::List(inner, _) => TyTemplate::list(ty_to_template_from_resolved_ty(inner)),
-        RuntimeTy::Map { key, value, .. } => TyTemplate::map(
-            ty_to_template_from_resolved_ty(key),
-            ty_to_template_from_resolved_ty(value),
-        ),
-        RuntimeTy::Union(members, _) => {
-            TyTemplate::union(members.iter().map(ty_to_template_from_resolved_ty))
-        }
-        RuntimeTy::Class(tn, args, _) if !args.is_empty() => TyTemplate::class(
+        // See the FIXME above: an unresolved type variable or projection is
+        // reported at construction rather than smuggled by name.
+        RuntimeTy::TypeVar(..) | RuntimeTy::AssociatedTypeProjection { .. } => None,
+        RuntimeTy::List(inner, _) => Some(TyTemplate::list(
+            ty_to_pattern_template_from_resolved_ty(inner)?,
+        )),
+        RuntimeTy::Map { key, value, .. } => Some(TyTemplate::map(
+            ty_to_pattern_template_from_resolved_ty(key)?,
+            ty_to_pattern_template_from_resolved_ty(value)?,
+        )),
+        RuntimeTy::Union(members, _) => Some(TyTemplate::union(
+            members
+                .iter()
+                .map(ty_to_pattern_template_from_resolved_ty)
+                .collect::<Option<Vec<_>>>()?,
+        )),
+        RuntimeTy::Class(tn, args, _) if !args.is_empty() => Some(TyTemplate::class(
             tn.clone(),
-            args.iter().map(ty_to_template_from_resolved_ty).collect(),
-        ),
+            args.iter()
+                .map(ty_to_pattern_template_from_resolved_ty)
+                .collect::<Option<Vec<_>>>()?,
+        )),
         // Interfaces decompose so the membership test keeps its instantiation
-        // (args + associated bindings), with a nested residual type variable a
-        // hole at its own position rather than a panic in the realized-leaf path.
-        RuntimeTy::Interface(tn, args, assoc, _) => TyTemplate::interface(
+        // (args + associated bindings).
+        RuntimeTy::Interface(tn, args, assoc, _) => Some(TyTemplate::interface(
             tn.clone(),
-            args.iter().map(ty_to_template_from_resolved_ty).collect(),
+            args.iter()
+                .map(ty_to_pattern_template_from_resolved_ty)
+                .collect::<Option<Vec<_>>>()?,
             assoc
                 .iter()
-                .map(|(name, ty)| (name.clone(), ty_to_template_from_resolved_ty(ty)))
-                .collect(),
-        ),
+                .map(|(name, ty)| {
+                    Some((name.clone(), ty_to_pattern_template_from_resolved_ty(ty)?))
+                })
+                .collect::<Option<Vec<_>>>()?,
+        )),
         RuntimeTy::Function {
             params,
             ret,
             throws,
             ..
-        } => TyTemplate::Function {
+        } => Some(TyTemplate::Function {
             params: params
                 .iter()
-                .map(|p| baml_type::TyTemplateFunctionParamTy {
-                    name: p.name.clone(),
-                    ty: ty_to_template_from_resolved_ty(&p.ty),
-                    mode: p.mode,
+                .map(|p| {
+                    Some(baml_type::TyTemplateFunctionParamTy {
+                        name: p.name.clone(),
+                        ty: ty_to_pattern_template_from_resolved_ty(&p.ty)?,
+                        mode: p.mode,
+                    })
                 })
-                .collect(),
-            ret: Box::new(ty_to_template_from_resolved_ty(ret)),
-            throws: Box::new(ty_to_template_from_resolved_ty(throws)),
+                .collect::<Option<Vec<_>>>()?,
+            ret: Box::new(ty_to_pattern_template_from_resolved_ty(ret)?),
+            throws: Box::new(ty_to_pattern_template_from_resolved_ty(throws)?),
             attr: TyAttr::default(),
-        },
-        RuntimeTy::Future(value, error, _) => TyTemplate::Future(
-            Box::new(ty_to_template_from_resolved_ty(value)),
-            Box::new(ty_to_template_from_resolved_ty(error)),
+        }),
+        RuntimeTy::Future(value, error, _) => Some(TyTemplate::Future(
+            Box::new(ty_to_pattern_template_from_resolved_ty(value)?),
+            Box::new(ty_to_pattern_template_from_resolved_ty(error)?),
             TyAttr::default(),
-        ),
+        )),
         // A realized leaf (incl. a monomorphic class): narrow and widen. A
         // non-realized value would be a composite handled above or a residual
         // type variable handled at the top — a failure is a compiler invariant
         // violation, not silent erasure.
-        other => realized_leaf_template(other),
+        other => Some(realized_leaf_template(other)),
     }
 }
 
@@ -1134,21 +1152,6 @@ fn flatten_runtime_union(ty: &RuntimeTy, out: &mut Vec<RuntimeTy>) {
             }
         }
         other => out.push(other.clone()),
-    }
-}
-
-/// Replace a container template's immediate element position(s) with `Wildcard`
-/// so the emitter lowers it to a coarse `LIST`/`MAP` type tag rather than a
-/// structural element check. A non-container template is returned unchanged.
-fn wildcard_container_elements(template: TyTemplate) -> TyTemplate {
-    match template {
-        TyTemplate::List(_, attr) => TyTemplate::List(Box::new(TyTemplate::Wildcard), attr),
-        TyTemplate::Map { attr, .. } => TyTemplate::Map {
-            key: Box::new(TyTemplate::Wildcard),
-            value: Box::new(TyTemplate::Wildcard),
-            attr,
-        },
-        other => other,
     }
 }
 
@@ -1874,20 +1877,13 @@ struct DispatchCallLowering<'a> {
     dest: &'a Place,
 }
 
-#[derive(Clone)]
-enum InterfaceClassGuard {
-    Any,
-    /// One entry per class type-param. `Some(ty)` pins that position; `None`
-    /// is a wildcard (BEP-044: a partial guard, e.g. `implements Getter<L>`
-    /// requested as `Getter<string>` pins `L` but leaves `R` free, so two
-    /// blocks on the same class instantiate to distinguishable guards).
-    Exact(Vec<Option<Tir2Ty>>),
-}
-
+/// One selected candidate for an interface field read: the implementor class
+/// (its runtime guard is bare class identity — see
+/// [`implements_block_matches_request`] for why that suffices) and the linked
+/// class field's slot.
 #[derive(Clone)]
 struct InterfaceFieldCandidate {
     impl_tn: TypeName,
-    guard: InterfaceClassGuard,
     field_idx: usize,
 }
 
@@ -10902,7 +10898,6 @@ impl<'db> LoweringContext<'db> {
                     {
                         resolved.push(InterfaceFieldCandidate {
                             impl_tn: class_tn,
-                            guard: InterfaceClassGuard::Any,
                             field_idx,
                         });
                     } else {
@@ -10954,6 +10949,25 @@ impl<'db> LoweringContext<'db> {
     /// Emit a runtime class-tag switch that reads `field` from `recv_local`
     /// using whichever `InterfaceFieldCandidate` matches. Returns false
     /// (emitting nothing) when there are no candidates.
+    ///
+    /// BUG(symbolic-view-field-read): two axes matter here, and only one is
+    /// handled. The *class*-instantiation axis is fully covered by the coarse
+    /// per-candidate class test: an in-body block spans the class's whole type
+    /// constructor, so the receiver's class args can never affect which field
+    /// is linked. The unhandled axis is the *interface* instantiation: a class
+    /// may carry several same-family in-body blocks at disjoint interface args
+    /// with different links (`implements Slot<int> { value as int_value }` /
+    /// `implements Slot<string> { value as string_value }`), and the block is
+    /// selected by the requested *view*, not by anything on the receiver. A
+    /// compile-time-concrete view selects its block during candidate
+    /// resolution; a symbolic view (`function read<T>(g: Slot<T>) { g.value }`)
+    /// cannot be selected there, and no runtime test of the receiver — coarse
+    /// or arg-precise — can discriminate either, because the receiver is the
+    /// same object under both views. The discriminant is the frame's `T`;
+    /// today this switch takes the first same-class arm and reads the wrong
+    /// field for the other view. Fix: open-world resolution (virtual field
+    /// access reading the requested view off the wire), or a compile error on
+    /// symbolic-view field reads of multi-block classes until then.
     fn emit_interface_field_candidate_switch(
         &mut self,
         recv_local: Local,
@@ -10981,7 +10995,6 @@ impl<'db> LoweringContext<'db> {
             self.emit_interface_class_guard_branch(
                 recv_local,
                 &candidate.impl_tn,
-                &candidate.guard,
                 bb_body,
                 bb_next,
             );
@@ -11252,16 +11265,16 @@ impl<'db> LoweringContext<'db> {
                     {
                         continue;
                     }
-                    let Some(guard) = interface_class_guard_for_args(
+                    if !implements_block_matches_request(
                         &target_view_args,
                         &target_view_assoc,
                         requested_args,
                         requested_assoc,
                         &class_data.generic_params,
                         &self.resolved_aliases.aliases,
-                    ) else {
+                    ) {
                         continue;
-                    };
+                    }
                     let class_field = impl_block
                         .field_links
                         .iter()
@@ -11276,7 +11289,6 @@ impl<'db> LoweringContext<'db> {
                     {
                         out.push(InterfaceFieldCandidate {
                             impl_tn: impl_tn.clone(),
-                            guard,
                             field_idx,
                         });
                     }
@@ -11287,43 +11299,27 @@ impl<'db> LoweringContext<'db> {
         out
     }
 
+    /// Branch on the receiver being an instance of `impl_tn` — the per-candidate
+    /// runtime guard of the interface field switch, bare class-pointer identity.
+    /// Type-arg discrimination happens at compile time (candidate selection in
+    /// [`implements_block_matches_request`]); coherence guarantees a concrete
+    /// request selects at most one block per class, so there is never a
+    /// same-class sibling arm to tell apart at runtime.
     fn emit_interface_class_guard_branch(
         &mut self,
         recv_local: Local,
         impl_tn: &TypeName,
-        guard: &InterfaceClassGuard,
         success: BlockId,
         failure: BlockId,
     ) {
-        let ty_template = match guard {
-            InterfaceClassGuard::Any => TyTemplate::class(impl_tn.clone(), Vec::new()),
-            InterfaceClassGuard::Exact(args) => {
-                let generic_params = self.enclosing_generic_params();
-                TyTemplate::class(
-                    impl_tn.clone(),
-                    args.iter()
-                        .map(|arg| match arg {
-                            Some(arg) => tir2_to_dispatch_guard_template(
-                                arg,
-                                self.resolved_aliases,
-                                &generic_params,
-                            ),
-                            None => TyTemplate::Wildcard,
-                        })
-                        .collect(),
-                )
-            }
+        let test = Rvalue::IsType {
+            operand: Operand::Copy(Place::Local(recv_local)),
+            ty_template: TyTemplate::class(impl_tn.clone(), Vec::new()),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
-        self.builder.assign(
-            Place::local(test_local),
-            Rvalue::IsType {
-                operand: Operand::Copy(Place::Local(recv_local)),
-                ty_template,
-            },
-        );
+        self.builder.assign(Place::local(test_local), test);
         self.builder
             .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
@@ -12805,30 +12801,82 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
-            // Convert RuntimeTy → TyTemplate so the emitter can handle generic class
-            // checks (RuntimeTy::Class with concrete args maps to a `Class`
-            // template the emitter lowers to `ClassWithTypeArgs`). For non-generic
-            // types the template is a realized leaf — the emitter's tag /
-            // class-identity fast path.
-            let ty_template = ty_to_template_from_resolved_ty(&ty);
             // If this is a container arm whose element the emitter would otherwise
             // check structurally, but the enclosing match's scrutinee statically
-            // proves a coarse `LIST`/`MAP` tag suffices, wildcard the element so
-            // the emitter keeps the cheap tag. Guarded on the scrutinee local so
-            // an `is` / nested test against a different value stays element-precise.
-            let ty_template =
-                if self
-                    .match_scrutinee
-                    .as_ref()
-                    .is_some_and(|(local, scrutinee_ty)| {
-                        *local == scrutinee && container_arm_tag_sufficient(&ty, scrutinee_ty)
-                    })
-                {
-                    wildcard_container_elements(ty_template)
-                } else {
-                    ty_template
+            // proves a coarse `LIST`/`MAP` tag suffices, emit the tag test
+            // directly. Guarded on the scrutinee local so an `is` / nested test
+            // against a different value stays element-precise.
+            if self
+                .match_scrutinee
+                .as_ref()
+                .is_some_and(|(local, scrutinee_ty)| {
+                    *local == scrutinee && container_arm_tag_sufficient(&ty, scrutinee_ty)
+                })
+            {
+                let tag = match &ty {
+                    RuntimeTy::List(..) => baml_type::typetag::LIST,
+                    RuntimeTy::Map { .. } => baml_type::typetag::MAP,
+                    // `container_arm_tag_sufficient` returns false for every
+                    // non-container arm.
+                    other => unreachable!("tag-sufficient non-container arm: {other}"),
                 };
-            self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
+                self.emit_is_type_tag_branch(scrutinee, tag, success, failure);
+                return;
+            }
+            // Convert RuntimeTy → template so generic class checks (a
+            // `RuntimeTy::Class` with concrete args) become an arg-precise
+            // `Class` test. For non-generic types the template is a realized
+            // leaf — the emitter's tag / class-identity fast path. A residual
+            // symbolic position becomes a guard hole the pattern test refuses.
+            let guard = ty_to_pattern_template_from_resolved_ty(&ty);
+            self.emit_pattern_template_test(scrutinee, guard, success, failure);
+        }
+    }
+
+    /// Emit an `IsTypeTag` coarse-tag test + branch (the container arm of a
+    /// match whose scrutinee proves the tag sufficient).
+    fn emit_is_type_tag_branch(
+        &mut self,
+        scrutinee: Local,
+        tag: i64,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let test = Rvalue::IsTypeTag {
+            operand: Operand::Copy(Place::Local(scrutinee)),
+            tag,
+        };
+        let test_local = self.builder.temp(RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), test);
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+    }
+
+    /// Emit a `match`/`is` pattern test from a pattern-template build.
+    ///
+    /// A pattern denotes exactly one type per frame; the builders report an
+    /// unresolvable position (an unresolved `Self`, an associated projection,
+    /// a type variable without a frame slot) as `None` at construction, and
+    /// such a pattern has no complete test — it is fail-closed: branch
+    /// straight to `failure`.
+    ///
+    /// FIXME(typevar-templates): the sound fix for the fail-closed cases is
+    /// to resolve them (a `Self` frame slot; projection templates over frame
+    /// refs) or reject them at TIR — never to match-any.
+    fn emit_pattern_template_test(
+        &mut self,
+        scrutinee: Local,
+        template: Option<TyTemplate>,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        match template {
+            Some(ty_template) => {
+                self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
+            }
+            None => self.builder.goto(failure),
         }
     }
 
@@ -12932,15 +12980,22 @@ impl LoweringContext<'_> {
                 }
             }
             Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
-                let erased = self.resolved_aliases.convert(ty);
+                // Build the header test TIR-side so the enclosing function's
+                // type variables lower to `TypeArgRef` frame slots (an
+                // arg-precise, invariant instantiation test) instead of being
+                // erased by `convert` into unresolvable names. Residual
+                // symbolic args (`Self`, projections) make the build `None`,
+                // failing the test closed.
+                let generic_params = self.enclosing_generic_params();
+                let header = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
                 let class_fields = self.lookup_tir_class_fields(qtn, type_args);
                 if class_fields.is_empty() {
-                    self.emit_is_type_branch(scrutinee, erased, success, failure);
+                    self.emit_pattern_template_test(scrutinee, header, success, failure);
                     return;
                 }
 
                 let class_success = self.builder.create_block();
-                self.emit_is_type_branch(scrutinee, erased, class_success, failure);
+                self.emit_pattern_template_test(scrutinee, header, class_success, failure);
                 self.builder.set_current_block(class_success);
 
                 let key = format!("{qtn:?}<{type_args:?}>");
@@ -13003,9 +13058,8 @@ impl LoweringContext<'_> {
             // `TypeArgRef` frame slots, resolved at runtime.
             Tir2Ty::Interface(..) => {
                 let generic_params = self.enclosing_generic_params();
-                let template =
-                    tir2_to_dispatch_guard_template(ty, self.resolved_aliases, &generic_params);
-                self.emit_is_type_template_branch(scrutinee, template, success, failure);
+                let guard = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
+                self.emit_pattern_template_test(scrutinee, guard, success, failure);
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
@@ -13591,20 +13645,21 @@ impl LoweringContext<'_> {
                     // comparison could not see that membership, which is why this
                     // used to need a covariant `TypeArgRefOrWildcard` band-aid.)
                     //
-                    // `tir2_to_dispatch_guard_template` (rather than
-                    // `tir2_to_template`) is still used because it also maps an
-                    // unresolved associated projection in the pattern to a match-any
-                    // `Wildcard` — a separate erasure concern.
+                    // `tir2_to_pattern_template` (rather than
+                    // `tir2_to_template`) is used because it reports an
+                    // unresolvable position — an associated projection, a
+                    // slotless type variable — as `None`, which
+                    // `emit_pattern_template_test` fails closed, instead of
+                    // panicking or erasing.
                     //
-                    // `Self`-carrying patterns are excluded: `Self` has no frame
-                    // slot yet, so the guard builder would lower it to a
-                    // match-anything `Wildcard`. Keeping them on the erased path
-                    // loses no precision — there a bare `Self` is constant-false
-                    // (`Wildcard` → `emit_false`), while a nested `Self` (e.g.
-                    // `Box<Self>`) already over-matches its container through the
-                    // same residual-typevar `Wildcard` bandaid. The `Self` units
-                    // replace this (class bodies substitute the enclosing class;
-                    // interface default methods gain a frame slot).
+                    // `Self`-carrying patterns are excluded: `Self` has no
+                    // frame slot yet, so the pattern builder would report it
+                    // unresolvable and the test would fail closed either way;
+                    // the erased path reaches the same fail-closed branch
+                    // through `ty_to_pattern_template_from_resolved_ty`. The
+                    // `Self` frame-slot work replaces this (class bodies
+                    // substitute the enclosing class; interface default
+                    // methods gain a slot).
                     if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                         && !baml_compiler2_tir::generics::contains_typevar_where(
                             &pat_tir_ty,
@@ -13612,12 +13667,12 @@ impl LoweringContext<'_> {
                         )
                     {
                         let generic_params = self.enclosing_generic_params();
-                        let template = tir2_to_dispatch_guard_template(
+                        let guard = tir2_to_pattern_template(
                             &pat_tir_ty,
                             self.resolved_aliases,
                             &generic_params,
                         );
-                        self.emit_is_type_template_branch(scrutinee, template, success, failure);
+                        self.emit_pattern_template_test(scrutinee, guard, success, failure);
                         return;
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
@@ -14722,36 +14777,30 @@ mod tests {
     }
 
     #[test]
-    fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
+    fn block_selection_checks_assoc_when_request_omits_generic_args() {
         let aliases = HashMap::new();
         let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
         let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
 
         let int_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
-        assert!(matches!(
-            interface_class_guard_for_args(
-                &impl_args,
-                &int_impl_assoc,
-                &requested_args,
-                &requested_assoc,
-                &[],
-                &aliases,
-            ),
-            Some(InterfaceClassGuard::Any)
+        assert!(implements_block_matches_request(
+            &impl_args,
+            &int_impl_assoc,
+            &requested_args,
+            &requested_assoc,
+            &[],
+            &aliases,
         ));
 
         let string_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::String))];
-        assert!(
-            interface_class_guard_for_args(
-                &impl_args,
-                &string_impl_assoc,
-                &requested_args,
-                &requested_assoc,
-                &[],
-                &aliases,
-            )
-            .is_none()
-        );
+        assert!(!implements_block_matches_request(
+            &impl_args,
+            &string_impl_assoc,
+            &requested_args,
+            &requested_assoc,
+            &[],
+            &aliases,
+        ));
     }
 }

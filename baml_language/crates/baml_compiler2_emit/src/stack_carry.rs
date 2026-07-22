@@ -1372,6 +1372,15 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn is_type_tag(&mut self, _tag: i64) -> Result<(), Self::Error> {
+        // Same stack shape as `is_type`: consume the operand, push the bool.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
         self.sim.push();
