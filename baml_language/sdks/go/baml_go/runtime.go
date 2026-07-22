@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"sort"
 	"strings"
@@ -86,6 +87,7 @@ func ensureNativeRuntime(ctx context.Context) error {
 		nativeCloseAfterLoadFailure()
 		return err
 	}
+	nativeRegisterUnhandledSpawnErrorCallback()
 	if expectedVersion != "" && actualVersion != expectedVersion {
 		nativeCloseAfterLoadFailure()
 		return fmt.Errorf("BAML runtime version mismatch: artifact is %s but library reports %s", expectedVersion, actualVersion)
@@ -94,6 +96,31 @@ func ensureNativeRuntime(ctx context.Context) error {
 	nativeRuntime.path = path
 	nativeRuntime.version = actualVersion
 	return nil
+}
+
+// Shutdown waits for spawned work, reports unreachable errors through Go's
+// panic handler, and releases the process-wide runtime.
+func Shutdown() error {
+	if err := nativeRuntime.acquire(context.Background()); err != nil {
+		return err
+	}
+	defer nativeRuntime.release()
+	if !nativeRuntime.loaded {
+		return nil
+	}
+	return nativeShutdown()
+}
+
+func reportUnhandledSpawnError(payload []byte, cancelled bool) {
+	_, err := decodeResult(payload)
+	if err == nil {
+		err = errors.New("BAML spawned work failed without an error result")
+	}
+	if cancelled {
+		log.Printf("BAML spawned work was cancelled: %v", err)
+		return
+	}
+	panic(err)
 }
 
 // Input is a value supplied to a BAML callable.

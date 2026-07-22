@@ -2,14 +2,75 @@
 #define BAML_RUNTIME_H_
 
 #include <baml/buffer.h>
+#include <baml/codec.h>
 #include <baml/detail/loader.h>
 #include <baml/errors.h>
 #include <baml_cffi.h>
 
 #include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <iostream>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace baml {
+
+namespace detail {
+
+using unhandled_spawn_error_handler = void (*)(std::exception_ptr, bool);
+
+inline void host_default_unhandled_spawn_error(std::exception_ptr error,
+                                               bool cancelled) {
+  if (cancelled) {
+    try {
+      std::rethrow_exception(error);
+    } catch (const std::exception& exception) {
+      std::cerr << "BAML spawned work was cancelled: " << exception.what()
+                << std::endl;
+    }
+    return;
+  }
+  std::rethrow_exception(error);
+}
+
+inline unhandled_spawn_error_handler& unhandled_spawn_error_handler_storage() {
+  static unhandled_spawn_error_handler handler =
+      host_default_unhandled_spawn_error;
+  return handler;
+}
+
+inline void report_unhandled_spawn_error(std::vector<uint8_t> payload,
+                                         bool cancelled) {
+  try {
+    pb::BamlOutboundResult result = parse_result_envelope(payload);
+    if (result.result_case() == pb::BamlOutboundResult::kOk) {
+      throw error("BAML spawned work failed without an error result");
+    }
+    throw_from_result(result);
+  } catch (...) {
+    unhandled_spawn_error_handler_storage()(std::current_exception(),
+                                            cancelled);
+  }
+}
+
+}  // namespace detail
+
+extern "C" inline void baml_cpp_unhandled_spawn_error_trampoline(
+    const int8_t* content, size_t length, int32_t cancelled) {
+  std::vector<uint8_t> payload;
+  if (content != nullptr && length != 0) {
+    payload.assign(reinterpret_cast<const uint8_t*>(content),
+                   reinterpret_cast<const uint8_t*>(content) + length);
+  }
+  std::thread([payload = std::move(payload), cancelled]() mutable {
+    detail::report_unhandled_spawn_error(std::move(payload), cancelled != 0);
+  }).detach();
+}
+
+inline void shutdown_runtime();
 
 // Canonical BAML version of the loaded native runtime.
 inline std::string version() {
@@ -25,10 +86,29 @@ inline void initialize_runtime_from_bytecode(const uint8_t* bytecode,
                                              size_t length,
                                              const char* sdk_version) {
   detail::ensure_registered(sdk_version);
+  detail::api().register_unhandled_spawn_error_callback(
+      baml_cpp_unhandled_spawn_error_trampoline);
+  static std::once_flag shutdown_hook;
+  std::call_once(shutdown_hook, [] {
+    std::atexit([] {
+      try {
+        shutdown_runtime();
+      } catch (const std::exception& exception) {
+        std::cerr << exception.what() << std::endl;
+      }
+    });
+  });
   detail::owned_buffer failure{
       detail::api().initialize_runtime_from_bytecode(bytecode, length)};
   if (!failure.empty()) {
     throw error("BAML_RUNTIME_INITIALIZATION_FAILED: " + failure.to_string());
+  }
+}
+
+inline void shutdown_runtime() {
+  detail::owned_buffer failure{detail::api().shutdown_runtime()};
+  if (!failure.empty()) {
+    throw error("BAML_RUNTIME_SHUTDOWN_FAILED: " + failure.to_string());
   }
 }
 

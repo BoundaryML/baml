@@ -6423,13 +6423,7 @@ impl BexVm {
                             .into());
                         };
                         match awaiting.read() {
-                            // ErrorPending: the future HAS failed but its error
-                            // value is parked engine-side — yield exactly like
-                            // Pending so the engine's `future_ready` consumes
-                            // the parked error (settling the real `Error`) and
-                            // this Await re-executes against it.
-                            FutureRead::Pending(future_id)
-                            | FutureRead::ErrorPending(future_id) => {
+                            FutureRead::Pending(future_id) => {
                                 // Rewind pc to the Await opcode so the outer loop
                                 // saves a position that re-executes Await once the
                                 // future completes.
@@ -6437,10 +6431,10 @@ impl BexVm {
                                 return Ok(Some(VmExecState::Await(future_id)));
                             }
                             FutureRead::Ready(v) => v,
-                            // Reserved for future user-callable async functions
-                            // that throw BAML values; the engine today routes all
-                            // sys-op errors through `internal_error_future`.
-                            FutureRead::Error(value) => return Err(VmError::Thrown(value)),
+                            FutureRead::Error(value) => {
+                                awaiting.mark_observed();
+                                return Err(VmError::Thrown(value));
+                            }
                             FutureRead::Cancelled => {
                                 return Err(VmError::Thrown(
                                     self.panic_to_exception_value(VmPanic::Cancelled),

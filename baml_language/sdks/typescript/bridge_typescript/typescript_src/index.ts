@@ -26,6 +26,7 @@ export {
     getRuntime,
     getVersion,
     flushEvents,
+    shutdownRuntime,
 } from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
@@ -79,6 +80,8 @@ export function newFunctionCall(): bigint {
 export function cancelFunctionCall(callId: bigint): boolean {
     return nativeCancelFunctionCall(callId.toString());
 }
+
+import './unhandled_spawn.js';
 
 export class FunctionResult {
     private _value: unknown;

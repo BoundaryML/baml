@@ -10,9 +10,19 @@ Run with:
     uv run pytest tests/ -v
 """
 
+import threading
+
 import pytest
 
-from baml_bridge import BamlRuntime, FunctionResult, HostSpanManager, get_version, call_function, call_function_sync
+from baml_bridge import (
+    BamlRuntime,
+    FunctionResult,
+    HostSpanManager,
+    get_version,
+    call_function,
+    call_function_sync,
+    shutdown_runtime,
+)
 
 
 # ============================================================================
@@ -65,9 +75,37 @@ function ReturnFloat(f: float) -> float {
 
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
-    return BamlRuntime.initialize_runtime(
-        ".", {"main.baml": baml_source}
-    )
+    return BamlRuntime.initialize_runtime(".", {"main.baml": baml_source})
+
+
+def test_unhandled_spawn_error_uses_host_default():
+    source = """\
+function bad() -> int throws string { throw "boom" }
+function main() -> int {
+    spawn { bad() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    1
+}
+"""
+    seen = []
+    reported = threading.Event()
+    original_hook = threading.excepthook
+
+    def capture(args):
+        seen.append(args.exc_value)
+        reported.set()
+
+    threading.excepthook = capture
+    try:
+        runtime = make_runtime(source)
+        assert call_function_sync(runtime, "main", {}).result() == 1
+        shutdown_runtime()
+        assert reported.wait(1)
+    finally:
+        threading.excepthook = original_hook
+
+    assert len(seen) == 1
+    assert "boom" in str(seen[0])
 
 
 # ============================================================================
@@ -94,15 +132,11 @@ class TestBasics:
         """initialize_runtime raises on invalid BAML source (type error)."""
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
-            BamlRuntime.initialize_runtime(
-                ".", {"bad.baml": bad_baml}
-            )
+            BamlRuntime.initialize_runtime(".", {"bad.baml": bad_baml})
 
     def test_initialize_runtime_empty(self):
         """initialize_runtime succeeds with empty source (no functions)."""
-        rt = BamlRuntime.initialize_runtime(
-            ".", {"empty.baml": ""}
-        )
+        rt = BamlRuntime.initialize_runtime(".", {"empty.baml": ""})
         assert rt is not None
 
 
@@ -116,19 +150,19 @@ class TestCallFunctionSync:
 
     def test_return_one(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"ReturnOne", {})
+        result = call_function_sync(rt, "ReturnOne", {})
         assert isinstance(result, FunctionResult)
         assert result.result() == 1
 
     def test_return_number(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"ReturnNumber", {"n": 42})
+        result = call_function_sync(rt, "ReturnNumber", {"n": 42})
         assert result.result() == 42
 
     def test_call_return_one(self):
         """Function calling another function."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"CallReturnOne", {})
+        result = call_function_sync(rt, "CallReturnOne", {})
         assert result.result() == 1
 
     @pytest.mark.xfail(
@@ -137,37 +171,37 @@ class TestCallFunctionSync:
     def test_chained_calls(self):
         """Chained function calls: ReturnNumber(CallReturnOne())."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"ChainedCalls", {})
+        result = call_function_sync(rt, "ChainedCalls", {})
         assert result.result() == 1
 
     def test_add_numbers(self):
         """Multiple arguments in correct order."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"AddNumbers", {"a": 10, "b": 32})
+        result = call_function_sync(rt, "AddNumbers", {"a": 10, "b": 32})
         assert result.result() == 42
 
     def test_bool_to_int(self):
         """Boolean argument → int result via if/else."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        assert call_function_sync(rt,"BoolToInt", {"b": True}).result() == 1
-        assert call_function_sync(rt,"BoolToInt", {"b": False}).result() == 0
+        assert call_function_sync(rt, "BoolToInt", {"b": True}).result() == 1
+        assert call_function_sync(rt, "BoolToInt", {"b": False}).result() == 0
 
     def test_identity_string(self):
         """String argument round-trip."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"Identity", {"s": "hello world"})
+        result = call_function_sync(rt, "Identity", {"s": "hello world"})
         assert result.result() == "hello world"
 
     def test_return_null(self):
         """Null return type."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"ReturnNull", {})
+        result = call_function_sync(rt, "ReturnNull", {})
         assert result.result() is None
 
     def test_return_float(self):
         """Float argument round-trip."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
+        result = call_function_sync(rt, "ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
 
     def test_missing_argument_raises(self):
@@ -179,13 +213,13 @@ class TestCallFunctionSync:
         """
         rt = make_runtime(EXPR_FUNCS_BAML)
         with pytest.raises(Exception, match="argument"):
-            call_function_sync(rt,"ReturnNumber", {})
+            call_function_sync(rt, "ReturnNumber", {})
 
     def test_function_not_found_raises(self):
         """Calling a nonexistent function raises an error."""
         rt = make_runtime(EXPR_FUNCS_BAML)
         with pytest.raises(Exception, match="not found"):
-            call_function_sync(rt,"NoSuchFunction", {})
+            call_function_sync(rt, "NoSuchFunction", {})
 
 
 # ============================================================================
@@ -199,20 +233,20 @@ class TestCallFunctionAsync:
     @pytest.mark.asyncio
     async def test_return_one_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await call_function(rt,"ReturnOne", {})
+        result = await call_function(rt, "ReturnOne", {})
         assert isinstance(result, FunctionResult)
         assert result.result() == 1
 
     @pytest.mark.asyncio
     async def test_add_numbers_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await call_function(rt,"AddNumbers", {"a": 100, "b": 200})
+        result = await call_function(rt, "AddNumbers", {"a": 100, "b": 200})
         assert result.result() == 300
 
     @pytest.mark.asyncio
     async def test_identity_string_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await call_function(rt,"Identity", {"s": "async hello"})
+        result = await call_function(rt, "Identity", {"s": "async hello"})
         assert result.result() == "async hello"
 
 

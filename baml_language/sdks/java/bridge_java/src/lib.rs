@@ -131,6 +131,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     REGISTER_HOST_CALLBACKS.call_once(|| {
         bridge_cffi::register_host_dispatch_callback(host_dispatch_trampoline);
         bridge_cffi::register_host_release_callback(host_release_trampoline);
+        bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
     });
 
     // Register this bridge with the versioned ABI (idempotent; mirrors
@@ -153,6 +154,18 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
 
     if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes) {
         throw_runtime_exception(&mut env, &format!("runtime initialization failed: {e}"));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    let result = bridge_cffi::get_tokio_runtime()
+        .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime()));
+    if let Err(error) = result {
+        throw_runtime_exception(&mut env, &format!("runtime shutdown failed: {error}"));
     }
 }
 
@@ -233,6 +246,8 @@ const HOST_DISPATCH_SIG: &str = "(JJ[B)V";
 /// The Java host-release route: `static void hostRelease(long)`.
 const HOST_RELEASE_METHOD: &str = "hostRelease";
 const HOST_RELEASE_SIG: &str = "(J)V";
+const UNHANDLED_SPAWN_ERROR_METHOD: &str = "unhandledSpawnError";
+const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 
 /// Guards the one-time `register_host_{dispatch,release}_callback` install so a
 /// runtime re-init (`nativeInitFromBytecode` replaces the runtime) does not
@@ -410,6 +425,47 @@ fn deliver_completion_inner(call_id: u64, bytes: &[u8]) -> Result<(), String> {
         // so the (reused) daemon worker thread is left in a clean state.
         let _ = env.exception_clear();
         return Err(format!("completeCall invocation failed: {e}"));
+    }
+    Ok(())
+}
+
+extern "C" fn unhandled_spawn_error_trampoline(content: *const i8, length: usize, cancelled: i32) {
+    let bytes = if content.is_null() || length == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: bridge_cffi keeps the borrowed callback buffer valid until return.
+        unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) }.to_vec()
+    };
+    if let Err(error) = deliver_unhandled_spawn_error(&bytes, cancelled != 0) {
+        eprintln!("bridge_java: failed to deliver unhandled spawn error: {error}");
+    }
+}
+
+fn deliver_unhandled_spawn_error(bytes: &[u8], cancelled: bool) -> Result<(), String> {
+    let vm = JVM
+        .get()
+        .ok_or("JavaVM was not captured before unhandled spawn error")?;
+    let class = BAML_FFI_CLASS
+        .get()
+        .ok_or("BamlFfi class ref was not captured before unhandled spawn error")?;
+    let mut env = vm
+        .attach_current_thread_as_daemon()
+        .map_err(|error| format!("attach failed: {error}"))?;
+    let payload = env
+        .byte_array_from_slice(bytes)
+        .map_err(|error| format!("error array allocation failed: {error}"))?;
+    let outcome = env.call_static_method(
+        class,
+        UNHANDLED_SPAWN_ERROR_METHOD,
+        UNHANDLED_SPAWN_ERROR_SIG,
+        &[
+            JValue::from(&payload),
+            JValue::Bool(if cancelled { 1 } else { 0 }),
+        ],
+    );
+    if let Err(error) = outcome {
+        let _ = env.exception_clear();
+        return Err(format!("unhandledSpawnError invocation failed: {error}"));
     }
     Ok(())
 }

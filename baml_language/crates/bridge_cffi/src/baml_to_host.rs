@@ -222,6 +222,14 @@ pub fn result_to_outbound(
     }
 }
 
+pub fn unhandled_spawn_error_to_outbound(value: BexExternalValue) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_in_process();
+    BamlOutboundResult {
+        result: Some(thrown_arm(value, Vec::new(), &options)),
+    }
+    .encode_to_vec()
+}
+
 /// Encode a pre-call host-boundary [`BridgeError`] as `BamlOutboundResult`
 /// envelope bytes (32c). These failures never entered the VM, so they carry an
 /// empty trace and ride the *same* decode path as engine errors via

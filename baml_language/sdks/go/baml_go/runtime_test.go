@@ -16,6 +16,27 @@ func TestCallRejectsNULInFunctionNameBeforeRuntimeInitialization(t *testing.T) {
 	}
 }
 
+func TestUnhandledSpawnError(t *testing.T) {
+	t.Run("unhandled_spawn_error_uses_host_default", func(t *testing.T) {
+		payload, err := proto.Marshal(&cffi.BamlOutboundResult{
+			Result: &cffi.BamlOutboundResult_Error{
+				Error: &cffi.BamlOutboundError{
+					Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "boom"}},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Fatal("default unhandled-spawn handler did not panic")
+			}
+		}()
+		reportUnhandledSpawnError(payload, false)
+	})
+}
+
 func TestRuntimeInitializationWaitHonorsCancellation(t *testing.T) {
 	state := newNativeRuntimeState()
 	if err := state.acquire(context.Background()); err != nil {

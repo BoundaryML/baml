@@ -317,11 +317,25 @@ pub extern "C" fn initialize_runtime_from_bytecode(bytecode: *const u8, length: 
     }
 }
 
-/// Destroy the BAML runtime.
-/// This is a no-op since the global engine persists for the process lifetime.
+/// Destroy the process-wide BAML runtime after its spawned work settles.
 #[unsafe(no_mangle)]
 pub extern "C" fn destroy_baml_runtime(_runtime: *const libc::c_void) {
-    // No-op: global engine persists
+    crate::free_buffer(shutdown_runtime());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn shutdown_runtime() -> Buffer {
+    let result = std::panic::catch_unwind(|| {
+        crate::get_tokio_runtime()
+            .map_err(|error| error.to_string())?
+            .block_on(crate::shutdown_runtime())
+            .map_err(|error| error.to_string())
+    });
+    match result {
+        Ok(Ok(())) => Buffer::from(Vec::new()),
+        Ok(Err(error)) => Buffer::from(error.into_bytes()),
+        Err(_) => Buffer::from(b"panic while shutting down BAML runtime".to_vec()),
+    }
 }
 
 /// Invoke the BAML CLI.

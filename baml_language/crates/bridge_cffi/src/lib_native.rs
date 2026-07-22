@@ -51,8 +51,10 @@ pub use ffi::{
         BamlBridgeInfoV1, BridgeInfo, BridgeLanguage, create_baml_runtime, destroy_baml_runtime,
         ensure_version_compatible,
         initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_ffi,
-        invoke_runtime_cli, register_bridge, register_bridge_ffi, registered_bridge, version,
+        invoke_runtime_cli, register_bridge, register_bridge_ffi, registered_bridge,
+        shutdown_runtime as shutdown_runtime_ffi, version,
     },
+    unhandled_spawn::register_unhandled_spawn_error_callback,
 };
 
 /// Global Bex runtime. Uses RwLock to allow replacing the runtime.
@@ -101,7 +103,8 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
+    let rt: Arc<dyn Bex> = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
+    crate::install_unhandled_spawn_error_handler(&rt);
     replace_runtime(rt.clone())?;
     Ok(rt)
 }
@@ -110,8 +113,23 @@ pub(crate) fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    *guard = Some(rt);
+    let previous = guard.replace(rt);
+    drop(guard);
+    if let Some(previous) = previous {
+        get_tokio_runtime()?.spawn(previous.shutdown());
+    }
     Ok(())
+}
+
+pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
+    RUNTIME_INSTANCE
+        .write()
+        .map_err(|_| BridgeError::LockPoisoned)
+        .map(|mut runtime| runtime.take())
+}
+
+pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) {
+    ffi::unhandled_spawn::dispatch(content, cancelled);
 }
 
 /// Call a BAML function asynchronously.

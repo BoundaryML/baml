@@ -24,9 +24,14 @@ static int baml_is_musl(void) {
 }
 
 extern void bamlGoResultCallback(uint32_t call_id, int8_t *content, size_t length);
+extern void bamlGoUnhandledSpawnErrorCallback(int8_t *content, size_t length, int32_t cancelled);
 
 static void baml_go_result_callback(uint32_t call_id, const int8_t *content, size_t length) {
 	bamlGoResultCallback(call_id, (int8_t *)content, length);
+}
+
+static void baml_go_unhandled_spawn_error_callback(const int8_t *content, size_t length, int32_t cancelled) {
+	bamlGoUnhandledSpawnErrorCallback((int8_t *)content, length, cancelled);
 }
 
 static void *baml_library_handle = NULL;
@@ -70,6 +75,12 @@ static const char *baml_open_library(const char *path) {
 		dlclose(handle);
 		return baml_loader_error;
 	}
+	const size_t required_size = offsetof(BamlApiV1, shutdown_runtime) + sizeof(api->shutdown_runtime);
+	if (api->struct_size < required_size) {
+		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
+		dlclose(handle);
+		return baml_loader_error;
+	}
 	if (api->version == NULL || api->initialize_runtime_from_bytecode == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
@@ -81,7 +92,9 @@ static const char *baml_open_library(const char *path) {
 		api->media_from_file == NULL || api->media_from_base64 == NULL ||
 		api->media_url == NULL || api->media_file == NULL ||
 		api->media_base64 == NULL || api->media_mime_type == NULL ||
-		api->register_bridge == NULL) {
+		api->register_bridge == NULL ||
+		api->register_unhandled_spawn_error_callback == NULL ||
+		api->shutdown_runtime == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		dlclose(handle);
 		return baml_loader_error;
@@ -115,6 +128,8 @@ static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) {
 }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
 static void baml_register_go_callback(void) { baml_api->register_callback(baml_go_result_callback); }
+static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->register_unhandled_spawn_error_callback(baml_go_unhandled_spawn_error_callback); }
+static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static void baml_call_function(const char *name, const uint8_t *args, size_t length, uint32_t callback_id) {
 	baml_api->call_function(name, args, length, callback_id);
@@ -179,6 +194,19 @@ func nativeInitialize(bytecode []byte) error {
 	return fmt.Errorf("initialize BAML runtime: %s", message)
 }
 
+func nativeRegisterUnhandledSpawnErrorCallback() {
+	C.baml_register_go_unhandled_spawn_error_callback()
+}
+
+func nativeShutdown() error {
+	buffer := C.baml_shutdown()
+	defer C.baml_free_buffer(buffer)
+	if buffer.len == 0 {
+		return nil
+	}
+	return fmt.Errorf("shutdown BAML runtime: %s", C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len)))
+}
+
 func nativeRegisterCallback() { C.baml_register_go_callback() }
 
 func nativeNewFunctionCall() uint64 { return uint64(C.baml_new_function_call()) }
@@ -230,4 +258,10 @@ func bamlGoResultCallback(callID C.uint32_t, content *C.int8_t, length C.size_t)
 	call := value.(*pendingCall)
 	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
 	call.result <- payload
+}
+
+//export bamlGoUnhandledSpawnErrorCallback
+func bamlGoUnhandledSpawnErrorCallback(content *C.int8_t, length C.size_t, cancelled C.int32_t) {
+	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
+	go reportUnhandledSpawnError(payload, cancelled != 0)
 }
