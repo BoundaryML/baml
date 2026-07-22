@@ -2246,41 +2246,62 @@ jobs:
 
   notify-slack:
     name: Notify Slack on failure
-    needs: [plan, publish-pkg-boundaryml-com]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pkg-boundaryml-com.result == 'failure' }}
+    needs:
+      - plan
+      - build-matrix
+      - build-toolchain
+      - build-vsix
+      - build-wrapper
+      - build-python-sdk
+      - build-nodejs-sdk
+      - build-java-sdk
+      - build-web-sdk
+      - build-bridge-cffi
+      - build-go-sdk
+      - verify-cpp-sdk
+      - build-rust-sdk
+      - verify-rust-sdk
+      - all-builds
+      - publish-pypi
+      - publish-nodejs-sdk
+      - publish-web-sdk
+      - publish-maven
+      - publish-gradle-plugin
+      - publish-toolchain-release
+      - publish-wrapper-release
+      - publish-bridge-cffi-release
+      - publish-go-sdk
+      - publish-crates-io
+      - publish-pkg-boundaryml-com
+      - smoke-go-release
+      - dispatch-nightly-after-canary
+      - publish-homebrew
+      - publish-aur
+      - dry-run-artifacts
+      - dry-run-summary
+    # Use the dispatch input so a failure in plan itself is still reportable.
+    # This job must run after failed dependencies; the script posts only when the run contains failures.
+    if: ${{ always() && inputs.dry_run == false && github.ref_name == 'canary' }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
     steps:
-      - name: Send Slack failure notification
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.source_sha || github.sha }}
+          sparse-checkout: |
+            .github/actions/setup-mise
+            mise.toml
+            tools/notify-release-failure.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: uv
+      - name: Find failures and notify Slack
         env:
+          GH_TOKEN: ${{ github.token }}
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${SLACK_BOT_TOKEN:-}" ]]; then
-            echo "::error::SLACK_BOUNDARY_BOT_TOKEN secret is not set"
-            exit 1
-          fi
-          
-          message="❌ BAML Language $VERSION ($CHANNEL) release failed!"
-          
-          curl -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            -H "Content-Type: application/json; charset=utf-8" \
-            -d @- <<EOF
-          {
-            "channel": "$SLACK_CHANNEL",
-            "text": "$message",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "$message\n\n*Version:* $VERSION\n*Channel:* $CHANNEL\n*Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
-                }
-              }
-            ]
-          }
-          EOF
+        run: uv run --script tools/notify-release-failure.py
