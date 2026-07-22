@@ -65,6 +65,8 @@ class InvalidArgumentError {
 /// Usage:
 ///   let sig = reflect.signature(f)
 ///   sig.returns.to_string()
+//baml:mut_vm
+//baml:fallible
 function signature(f: baml.AnyFunction) -> Signature throws never {
   $rust_function
 }
@@ -78,6 +80,8 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
 /// `AnyFunction<Returns = json, Throws = ToolError>` yields typed results
 /// and an exhaustive catch; a bare `AnyFunction` returns `unknown` and
 /// throws `unknown` (which covers `InvalidArgumentError`).
+//baml:mut_vm
+//baml:may_yield
 function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError {
   $rust_function
 }

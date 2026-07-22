@@ -405,7 +405,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                         // `reflect.type_of` is a compiler intrinsic whose
                         // declaration still exists as an unresolved function
                         // object but is never dispatched through CALL.
-                        crate::package_reflect::get_native_fn(function.name.as_str())
+                        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn(
+                            function.name.as_str(),
+                        )
                     } else {
                         None
                     };

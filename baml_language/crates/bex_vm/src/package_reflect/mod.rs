@@ -1,33 +1,76 @@
 //! Native implementations for the `reflect` stdlib package (BEP-062):
-//! `reflect.signature` and `reflect.call_any`. Hand-wired like
-//! [`crate::package_boundary`] (the package is small enough not to warrant the
-//! generated trait machinery); `reflect.type_of` is a compiler intrinsic and
-//! never dispatches here.
+//! `reflect.signature` and `reflect.call_any`.
+//!
+//! Dispatch and the class constructors are generated from `reflect.baml` by
+//! `baml_builtins2_codegen`, exactly as for [`crate::package_baml`]: declaring
+//! a `$rust_function` adds a required trait method here, and each class gets a
+//! `copy::` struct whose fields are checked by the compiler. Adding to the
+//! package is therefore a single edit to `reflect.baml` plus the implementation
+//! it demands. (`reflect.type_of` is a compiler intrinsic, so it never reaches
+//! a native at all.)
 
 use baml_type::{RealizedTy, Ty, TyAttr, normalize};
 use bex_heap::TlabHolder;
+// `Instance`/`Type`/the read guards are referenced by the generated module.
 use bex_vm_types::{
-    HeapPtr,
-    types::{Object, Value},
+    ArrayReadGuard, MapReadGuard,
+    types::{Instance, Value},
 };
 use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
-    package_baml::{NativeCallResult, NativeFunction, PassThroughContinuation},
+    errors::{VmBamlError, VmRustFnError},
+    package_baml::{
+        NativeCallResult, NativeFunction, NativeFunctionResult, PassThroughContinuation,
+    },
     vm::CallableSignature,
 };
 
-const SIGNATURE_FQN: &str = "reflect.Signature";
+/// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
+/// instances themselves are built through the generated `copy::` structs.
 const ARG_FQN: &str = "reflect.Arg";
-const INVALID_ARGUMENT_ERROR_FQN: &str = "reflect.InvalidArgumentError";
 
-pub fn get_native_fn(path: &str) -> Option<NativeFunction> {
-    match path.strip_prefix("reflect.")? {
-        "signature" => Some(signature),
-        "call_any" => Some(call_any),
-        _ => None,
+// The `BamlPackageReflect` trait and its `get_native_fn` dispatcher, generated
+// from `reflect.baml` exactly like the `baml` package's (see
+// `crate::package_baml`). Declaring a `$rust_function` there adds a required
+// trait method here, so the two can never drift.
+#[allow(
+    unused_variables,
+    unsafe_code,
+    non_camel_case_types,
+    clippy::wildcard_imports,
+    clippy::pub_underscore_fields,
+    clippy::used_underscore_binding,
+    clippy::elidable_lifetime_names,
+    clippy::get_first,
+    clippy::iter_not_returning_iterator,
+    clippy::needless_lifetimes,
+    clippy::redundant_closure_call,
+    clippy::new_ret_no_self,
+    clippy::too_many_arguments,
+    non_snake_case
+)]
+mod generated {
+    use super::*;
+    include!(concat!(env!("OUT_DIR"), "/reflectfunctions_generated.rs"));
+}
+pub use generated::*;
+
+/// The VM's `reflect` native implementations.
+pub struct PackageReflectImpl;
+
+impl BamlPackageReflect for PackageReflectImpl {
+    fn signature(vm: &mut BexVm, f: &Value) -> Result<Value, VmRustFnError> {
+        signature_impl(vm, *f)
+    }
+
+    fn call_any(
+        vm: &mut BexVm,
+        f: &Value,
+        args: &IndexMap<bex_str::BexStr, Value>,
+    ) -> NativeCallResult {
+        call_any_impl(vm, *f, args)
     }
 }
 
@@ -40,11 +83,10 @@ fn ty_never() -> RealizedTy {
 /// The two natives' parameters are statically `baml.AnyFunction`, so a
 /// non-callable here means the coercion rule and the runtime disagree — an
 /// internal invariant break, not a user error.
-fn non_callable_error(what: &str) -> NativeCallResult {
+fn non_callable_error(what: &str) -> VmRustFnError {
     VmRustFnError::BamlError(VmBamlError::InvalidArgument {
         message: format!("{what} expects a function value"),
     })
-    .into()
 }
 
 /// The `reflect.Arg` class type, for array/map element tags.
@@ -56,46 +98,38 @@ fn ty_arg() -> RealizedTy {
     )
 }
 
-/// Allocate one `reflect.Arg { name, type }` instance. A nameless positional
-/// (a host callable from a language without parameter-name introspection)
-/// gets the `$argN` placeholder for its position: `$` is unwritable in user
-/// identifiers, so the placeholder cannot collide with any declared
-/// parameter or named-argument key.
+/// Build one `reflect.Arg`. A nameless positional (a host callable from a
+/// language without parameter-name introspection) gets the `$argN`
+/// placeholder for its position: `$` is unwritable in user identifiers, so a
+/// placeholder can never collide with a declared parameter or a
+/// named-argument key.
 fn alloc_arg(
     vm: &mut BexVm,
-    arg_class: HeapPtr,
     name: Option<&baml_type::Name>,
     position: usize,
     ty: RealizedTy,
 ) -> Value {
-    let name_val = match name {
+    let name = match name {
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
-    let ty_val = Value::object(vm.tlab.alloc_type(ty));
-    Value::object(vm.alloc_instance(arg_class, vec![name_val, ty_val]))
+    let ty = Value::object(vm.tlab.alloc_type(ty));
+    copy::Arg { name, r#type: ty }.to_value(vm)
+}
+
+/// A `string?` field: the string, or null.
+fn opt_string(vm: &mut BexVm, value: Option<&String>) -> Value {
+    match value {
+        Some(v) => Value::object(vm.alloc_string(v.as_str())),
+        None => Value::NULL,
+    }
 }
 
 /// `reflect.signature(f) -> reflect.Signature`.
-fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> {
     use baml_type::FunctionParamMode;
-    let Some(&f_val) = args.first() else {
-        return VmInternalError::MissingNativeFunction {
-            name: "reflect.signature".to_string(),
-        }
-        .into();
-    };
     let Some(sig) = vm.callable_signature(f_val) else {
-        return non_callable_error("reflect.signature");
-    };
-    let (Some(class_ptr), Some(arg_class)) = (
-        vm.lookup_type_by_fqn(SIGNATURE_FQN),
-        vm.lookup_type_by_fqn(ARG_FQN),
-    ) else {
-        return VmInternalError::MissingNativeFunction {
-            name: SIGNATURE_FQN.to_string(),
-        }
-        .into();
+        return Err(non_callable_error("reflect.signature"));
     };
     let mut positional = Vec::new();
     let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
@@ -103,14 +137,8 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         match param.mode {
             FunctionParamMode::Required => {
                 let position = positional.len();
-                let arg_val = alloc_arg(
-                    vm,
-                    arg_class,
-                    param.name.as_ref(),
-                    position,
-                    param.ty.clone(),
-                );
-                positional.push(arg_val);
+                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone());
+                positional.push(arg);
             }
             FunctionParamMode::Optional => {
                 // An optional parameter always has a source name; a nameless
@@ -118,41 +146,27 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
                 // it by), so it is simply absent from `opts`. Placeholders
                 // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
-                    let arg_val = alloc_arg(
-                        vm,
-                        arg_class,
-                        Some(name),
-                        positional.len(),
-                        param.ty.clone(),
-                    );
-                    opts.insert(bex_str::BexStr::from(name.as_str()), arg_val);
+                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone());
+                    opts.insert(bex_str::BexStr::from(name.as_str()), arg);
                 }
             }
         }
     }
-    let args_val = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
-    let opts_val = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
-    let returns_val = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
-    let errors_val = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
-    let docstring_val = match &sig.docstring {
-        Some(doc) => Value::object(vm.alloc_string(doc.as_str())),
-        None => Value::NULL,
-    };
-    let name_val = match &sig.name {
-        Some(name) => Value::object(vm.alloc_string(name.as_str())),
-        None => Value::NULL,
-    };
-    NativeCallResult::Done(Value::object(vm.alloc_instance(
-        class_ptr,
-        vec![
-            name_val,
-            args_val,
-            opts_val,
-            returns_val,
-            errors_val,
-            docstring_val,
-        ],
-    )))
+    let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
+    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
+    let returns = Value::object(vm.tlab.alloc_type(sig.ret.clone()));
+    let errors = Value::object(vm.tlab.alloc_type(sig.throws.unwrap_or_else(ty_never)));
+    let docstring = opt_string(vm, sig.docstring.as_ref());
+    let name = opt_string(vm, sig.name.as_ref());
+    Ok(copy::Signature {
+        name,
+        args,
+        opts,
+        returns,
+        errors,
+        docstring,
+    }
+    .to_value(vm))
 }
 
 /// Throw `reflect.InvalidArgumentError { argument, expected, got }`.
@@ -162,18 +176,16 @@ fn raise_invalid_argument(
     expected: RealizedTy,
     got: RealizedTy,
 ) -> NativeCallResult {
-    let Some(class_ptr) = vm.lookup_type_by_fqn(INVALID_ARGUMENT_ERROR_FQN) else {
-        return VmInternalError::MissingNativeFunction {
-            name: INVALID_ARGUMENT_ERROR_FQN.to_string(),
-        }
-        .into();
-    };
-    let argument_val = Value::object(vm.alloc_string(argument));
-    let expected_val = Value::object(vm.tlab.alloc_type(expected));
-    let got_val = Value::object(vm.tlab.alloc_type(got));
-    NativeCallResult::Error(VmRustFnError::Thrown(Value::object(
-        vm.alloc_instance(class_ptr, vec![argument_val, expected_val, got_val]),
-    )))
+    let argument = Value::object(vm.alloc_string(argument));
+    let expected = Value::object(vm.tlab.alloc_type(expected));
+    let got = Value::object(vm.tlab.alloc_type(got));
+    let err = copy::InvalidArgumentError {
+        argument,
+        expected,
+        got,
+    }
+    .to_value(vm);
+    NativeCallResult::Error(VmRustFnError::Thrown(err))
 }
 
 /// The callee's whole function type, for arity / unknown-name mismatches.
@@ -232,32 +244,18 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 /// as `OMITTED_ARG`, so a bytecode callee's own default prologue fires; the
 /// callee's throw unwinds transparently past the native frame to the caller,
 /// which is exactly the declared `throws E` channel.
-fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+fn call_any_impl(
+    vm: &mut BexVm,
+    f_val: Value,
+    provided: &IndexMap<bex_str::BexStr, Value>,
+) -> NativeCallResult {
     use baml_type::FunctionParamMode;
-    let (Some(&f_val), Some(&args_val)) = (args.first(), args.get(1)) else {
-        return VmInternalError::MissingNativeFunction {
-            name: "reflect.call_any".to_string(),
-        }
-        .into();
-    };
-
     let Some(f_ptr) = f_val.as_object_ptr() else {
-        return non_callable_error("reflect.call_any");
+        return non_callable_error("reflect.call_any").into();
     };
     let Some(sig) = vm.callable_signature(f_val) else {
-        return non_callable_error("reflect.call_any");
+        return non_callable_error("reflect.call_any").into();
     };
-
-    let provided: IndexMap<bex_str::BexStr, Value> =
-        match args_val.as_object_ptr().map(|p| vm.get_object(p)) {
-            Some(Object::Map(map)) => map.to_index_map(),
-            _ => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "reflect.call_any expects a map of arguments".to_string(),
-                })
-                .into();
-            }
-        };
 
     // Walk the parameters in declaration order, resolving each from the map
     // by its addressable name and assembling the callee's frame as we go.
