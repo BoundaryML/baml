@@ -382,9 +382,8 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
 // =============================================================================
 
 /// The stdlib packages whose natives this VM implements, each paired with its
-/// dispatcher. `baml` and `reflect` dispatch through their generated root
-/// traits (see `baml_builtins2_codegen`), so their entries cannot drift from
-/// the `.baml` declarations; `boundary` is still hand-wired.
+/// dispatcher. Every one dispatches through its generated root trait (see `baml_builtins2_codegen`), so no entry can drift from its
+/// `.baml` declarations.
 ///
 /// One entry per package drives both resolution and the missing-native check,
 /// so adding a package is a single line here plus its `build.rs` generation.
@@ -396,7 +395,10 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
-    ("boundary.", crate::package_boundary::get_native_fn),
+    (
+        "boundary.",
+        <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
+    ),
 ];
 
 /// Resolves native function pointers for unresolved native functions in objects.
