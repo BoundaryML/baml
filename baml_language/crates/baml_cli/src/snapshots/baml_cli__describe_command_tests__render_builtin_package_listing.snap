@@ -30,7 +30,8 @@ function         baml._from_json_shim             <builtin>/baml/conversions.bam
 function         baml.deep_copy                   <builtin>/baml/core.baml:3
 function         baml.deep_equals                 <builtin>/baml/core.baml:9
 interface        baml.Concrete                    <builtin>/baml/core.baml:15
-class            baml.TaggedString                <builtin>/baml/core.baml:30
+interface        baml.AnyFunction                 <builtin>/baml/core.baml:30
+class            baml.TaggedString                <builtin>/baml/core.baml:42
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
 class            baml.Int                         <builtin>/baml/int.baml:14

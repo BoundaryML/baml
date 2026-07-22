@@ -2754,6 +2754,20 @@ impl BexEngine {
         // inner function (its `self` is supplied positionally).
         let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
             Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
+            // A plain (or `foo<int>`-instantiated) function reference: the
+            // pooled wrapper over the function's global slot (see emit's
+            // `emit_pooled_function_value`). Resolve to the underlying
+            // `Function` object; its `type_args` seed the frame.
+            Object::GenericFunction(gf) => {
+                let type_args = gf.type_args.to_vec();
+                let inner = thread.vm.globals.get(thread.proof(), gf.function);
+                let func_ptr = inner.as_object_ptr().ok_or_else(|| {
+                    EngineError::Other(
+                        "call_callable: function wrapper resolves to no object".to_string(),
+                    )
+                })?;
+                (func_ptr, None, type_args, func_ptr)
+            }
             Object::Closure(closure) => (
                 entry_ptr,
                 None,

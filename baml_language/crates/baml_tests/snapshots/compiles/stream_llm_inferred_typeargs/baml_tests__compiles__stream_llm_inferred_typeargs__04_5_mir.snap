@@ -40,7 +40,7 @@ fn user.TestFunc(input: string, client: baml.llm.Client) -> string {
     }
 
     bb1: {
-        _2 = const fn user.TestClient;
+        _2 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -69,7 +69,7 @@ fn user.TestFunc$build_request(input: string, client: baml.llm.Client) -> baml.h
     }
 
     bb1: {
-        _2 = const fn user.TestClient;
+        _2 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -97,7 +97,7 @@ fn user.TestFunc$build_request_stream(input: string, client: baml.llm.Client) ->
     }
 
     bb1: {
-        _2 = const fn user.TestClient;
+        _2 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -125,7 +125,7 @@ fn user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.l
     }
 
     bb1: {
-        _2 = const fn user.TestClient;
+        _2 = const item user.TestClient;
         goto -> bb2;
     }
 
@@ -150,7 +150,7 @@ fn user.call_stream_inferred() -> baml.llm.Stream<string | null, string> {
         _1 = { const "input": const "world" }: map<string, unknown>;
         _2 = load_type(null | string);
         _3 = load_type(string);
-        _0 = call const fn baml.llm.stream_llm_function<copy _2, copy _3>(const fn user.TestClient, const "TestFunc", copy _1, const <omitted>) -> [bb1];
+        _0 = call const fn baml.llm.stream_llm_function<copy _2, copy _3>(const item user.TestClient, const "TestFunc", copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {

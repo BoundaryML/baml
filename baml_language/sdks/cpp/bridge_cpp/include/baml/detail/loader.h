@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -202,15 +203,6 @@ inline void* open_library(const std::string& path, std::string& error) {
 #endif
 }
 
-inline void* resolve_symbol(void* library, const char* name) {
-#if defined(_WIN32)
-  return reinterpret_cast<void*>(
-      GetProcAddress(reinterpret_cast<HMODULE>(library), name));
-#else
-  return ::dlsym(library, name);
-#endif
-}
-
 struct loaded_api {
   const BamlApiV1* table = nullptr;
 };
@@ -289,8 +281,16 @@ inline const loaded_api& load_api() {
     }
 
     using get_api_fn = const BamlApiV1* (*)();
-    auto get_api = reinterpret_cast<get_api_fn>(
-        resolve_symbol(library, "baml_get_api_v1"));
+    get_api_fn get_api = nullptr;
+#if defined(_WIN32)
+    FARPROC symbol =
+        GetProcAddress(reinterpret_cast<HMODULE>(library), "baml_get_api_v1");
+    static_assert(sizeof(symbol) == sizeof(get_api),
+                  "Windows function pointer size mismatch");
+    std::memcpy(&get_api, &symbol, sizeof(get_api));
+#else
+    get_api = reinterpret_cast<get_api_fn>(::dlsym(library, "baml_get_api_v1"));
+#endif
     if (get_api == nullptr) {
       throw runtime_error(
           "BAML_RUNTIME_ABI_MISMATCH",
