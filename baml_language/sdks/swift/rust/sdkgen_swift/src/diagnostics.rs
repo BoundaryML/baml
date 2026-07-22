@@ -13,6 +13,8 @@
 //! the same order the renderer does, so the first reported cause is the
 //! same one that made the renderer bail.
 
+use std::fmt::Write as _;
+
 use baml_codegen_types::{Class, Function, Ty, TypeAlias};
 
 use crate::{
@@ -135,18 +137,20 @@ pub(crate) fn render_manifest(skips: &[Skip]) -> String {
     // baseline is a constant, engine-wide deferral set — warning on it
     // every build would teach people to ignore the warning.
     if !user.is_empty() {
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "\n#warning(\"BAML codegen skipped {} symbol{} from this project — \
              see _BamlSkipped.swift for reasons\")\n",
             user.len(),
             if user.len() == 1 { "" } else { "s" }
-        ));
+        );
         out.push_str("\n// ===== This project =====\n");
         for skip in &user {
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "// SKIPPED {} `{}`\n//   {}\n",
                 skip.kind, skip.fqn, skip.reason
-            ));
+            );
         }
     } else {
         out.push_str("//\n// All symbols in this project's own package were emitted.\n");
@@ -157,10 +161,11 @@ pub(crate) fn render_manifest(skips: &[Skip]) -> String {
              // Known engine-wide deferrals; identical across projects.\n",
         );
         for skip in &toolchain {
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "// SKIPPED {} `{}`\n//   {}\n",
                 skip.kind, skip.fqn, skip.reason
-            ));
+            );
         }
     }
     out

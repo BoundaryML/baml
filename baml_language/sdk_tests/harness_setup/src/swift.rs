@@ -21,9 +21,10 @@
 //! setup.sh builds the `bridge_swift` staticlib for the host arch and
 //! assembles `sdks/swift/Binaries/BamlBridgeFFI.xcframework`, which
 //! every fixture's path dependency on `sdks/swift` links against.
-//! Re-run it after bridge Rust changes. build.rs's job is just codegen
-//! + scaffold emit — it writes each fixture's `Package.swift` and test
-//! overlay that `swift build` / `swift test` consume.
+//! Re-run it after bridge Rust changes. build.rs's job is just
+//! codegen and scaffold emit — it writes each fixture's
+//! `Package.swift` and test overlay that `swift build` / `swift test`
+//! consume.
 //!
 //! Fixture enforcement is per-fixture: names in `ENFORCED_FIXTURES`
 //! get real `#[test]`s; everything else is `#[ignore]`d until its

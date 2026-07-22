@@ -253,6 +253,25 @@ pub(crate) fn render_callable(
     kind: FnKind,
     ctx: &TranslateCtx,
 ) -> Option<String> {
+    // Items before statements (clippy::items_after_statements).
+    enum Param {
+        Required {
+            name: String,
+            ty: String,
+        },
+        Optional {
+            name: String,
+            inner: String,
+        },
+        /// A host callable: `ty` is the closure type; `wrapper` is a
+        /// body-prelude statement building the erased `BamlHostCallable`.
+        Callable {
+            name: String,
+            ty: String,
+            wrapper: String,
+        },
+    }
+
     let raw_name = function.name.as_str();
     // `$` is not a Swift identifier character. Companion names map it
     // to `_`: `classify$stream` → `classify_stream`, `$build_request`
@@ -292,24 +311,6 @@ pub(crate) fn render_callable(
                 .join(", ")
         )
     };
-
-    enum Param {
-        Required {
-            name: String,
-            ty: String,
-        },
-        Optional {
-            name: String,
-            inner: String,
-        },
-        /// A host callable: `ty` is the closure type; `wrapper` is a
-        /// body-prelude statement building the erased BamlHostCallable.
-        Callable {
-            name: String,
-            ty: String,
-            wrapper: String,
-        },
-    }
 
     let mut params = Vec::new();
     for arg in &function.arguments {
@@ -380,9 +381,9 @@ pub(crate) fn render_callable(
         }
     }
     if has_optionals {
-        let _ = write!(
+        let _ = writeln!(
             args_setup,
-            "\tvar args: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]\n"
+            "\tvar args: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
         );
         for p in &params {
             if let Param::Optional { name, .. } = p {
@@ -416,7 +417,7 @@ pub(crate) fn render_callable(
     if let Some(thrown) = &function.throws {
         let names = thrown_leaf_names(thrown);
         if !names.is_empty() {
-            doc.push_str(&format!("/// - Throws: {}\n", names.join(", ")));
+            let _ = writeln!(doc, "/// - Throws: {}", names.join(", "));
         }
     }
 
@@ -457,7 +458,7 @@ pub(crate) fn render_callable(
     Some(out)
 }
 
-/// Does `ty` mention TypeVar `name` in a position the engine can infer
+/// Does `ty` mention `TypeVar` `name` in a position the engine can infer
 /// from a VALUE? Deliberately does NOT recurse into `Callable` — host
 /// callables are opaque handles, so their parameter/return types carry
 /// no inferable value (Python's `apply<T, R>` needs `_types=` for the
@@ -490,7 +491,7 @@ pub(crate) fn indent_lines(block: &str, depth: usize) -> String {
 
 /// A recursive union alias (`type RecList = int | RecList[]`) can't be
 /// a `typealias` (no self-reference), so it becomes a nominal
-/// `indirect enum` under the USER'S name with the exact BamlUnionN
+/// `indirect enum` under the USER'S name with the exact `BamlUnionN`
 /// surface: positional cases, type-directed inits, accessors, `match`,
 /// `value(as:)`/`holds`/`anyValue`, and the same metadata-first codec.
 pub(crate) fn render_recursive_union_alias(

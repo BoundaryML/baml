@@ -27,7 +27,7 @@ pub(crate) struct TranslateCtx {
 }
 
 impl TranslateCtx {
-    fn named_ref(&self, name: &Name, pool: &BTreeSet<String>) -> Option<String> {
+    fn named_ref(name: &Name, pool: &BTreeSet<String>) -> Option<String> {
         let fqn = name.to_string();
         if pool.contains(&fqn) {
             Some(swift_type_path(name))
@@ -135,7 +135,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 let final_ty = translate_ty(&args[1], ctx)?;
                 return Some(format!("BamlStream<{partial}, {final_ty}>"));
             }
-            let path = ctx.named_ref(name, &ctx.supported_classes)?;
+            let path = TranslateCtx::named_ref(name, &ctx.supported_classes)?;
             if args.is_empty() {
                 return Some(path);
             }
@@ -151,9 +151,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // valid inside the generic declaration that binds it, which is
         // the only place the pool produces it.
         Ty::TypeVar(name, _) => Some(crate::escape_ident(name.as_str())),
-        Ty::Enum(name, _) => ctx.named_ref(name, &ctx.supported_enums),
+        Ty::Enum(name, _) => TranslateCtx::named_ref(name, &ctx.supported_enums),
         Ty::TypeAlias(name, _) => {
-            let path = ctx.named_ref(name, &ctx.supported_aliases)?;
+            let path = TranslateCtx::named_ref(name, &ctx.supported_aliases)?;
             if ctx.nullable_aliases.contains(&name.to_string()) {
                 Some(format!("{path}?"))
             } else {
@@ -169,7 +169,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     }
 }
 
-/// Largest `BamlUnionN` shipped in the BamlBridge runtime. Wider
+/// Largest `BamlUnionN` shipped in the `BamlBridge` runtime. Wider
 /// unions are unsupported (symbol skipped, soft) until the family is
 /// extended — an additive runtime-library change.
 pub(crate) const MAX_UNION_ARITY: usize = 8;
