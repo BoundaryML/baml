@@ -165,6 +165,13 @@ pub(crate) fn display_instruction(
         | Instruction::InitInstance(_) => operand_meta
             .map(|m| format!("({})", m.as_str()))
             .unwrap_or_default(),
+        Instruction::NarrowBind { ty, destination } => {
+            let destination = function
+                .local_names
+                .get(*destination)
+                .map_or("?", String::as_str);
+            format!("(type {ty}, {destination})")
+        }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
         | Instruction::JumpIfFalse(offset) => {
@@ -423,6 +430,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
+        | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
@@ -907,6 +915,10 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("is_type {name}")
         }
+        Instruction::NarrowBind { ty, destination } => {
+            let name = meta_str(ty);
+            format!("narrow_bind {name}, slot={destination}")
+        }
         Instruction::LoadType(const_idx) => {
             let name = meta_str(const_idx);
             format!("load_type {name}")
@@ -1386,7 +1398,7 @@ pub fn display_compact_bytecode(
             }
 
             // Two u32 operands (operand-movement superinstructions)
-            OpCode::LoadVar2 | OpCode::StoreVar2 => {
+            OpCode::LoadVar2 | OpCode::StoreVar2 | OpCode::NarrowBind => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;

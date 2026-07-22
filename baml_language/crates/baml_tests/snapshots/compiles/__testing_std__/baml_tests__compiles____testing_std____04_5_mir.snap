@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4966
 ---
 === MIR2 ===
 
@@ -143,13 +142,13 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
     let _13: int
     let _14: testing.TestReport | testing.TestSetReport
     let _15: "error" | "fail" | "pass" // outcome
-    let _16: bool
+    let _16: testing.TestReport | testing.TestSetReport
     let _17: testing.TestReport // report
     let _18: testing.TestSetReport // report
     let _19: bool
     let _20: "error" | "fail" | "pass"
     let _21: string[] // child_failed_names
-    let _22: bool
+    let _22: testing.TestReport | testing.TestSetReport
     let _23: string
     let _24: testing.TestSetReport // report
     let _25: bool
@@ -205,8 +204,8 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
     }
 
     bb4: {
-        _16 = is_type(copy _12, testing.TestReport);
-        branch copy _16 -> [bb6, bb5];
+        _16 = copy _12;
+        _16 = narrow_bind copy _16 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestReport" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb5];
     }
 
     bb5: {
@@ -216,7 +215,7 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
     }
 
     bb6: {
-        _17 = copy _12;
+        _17 = copy _16;
         _15 = copy _17.0;
         goto -> bb7;
     }
@@ -232,8 +231,8 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
 
     bb9: {
         _3 = copy _3 + const 1_i64;
-        _22 = is_type(copy _12, testing.TestReport);
-        branch copy _22 -> [bb14, bb10];
+        _22 = copy _12;
+        _22 = narrow_bind copy _22 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestReport" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb10];
     }
 
     bb10: {
@@ -427,7 +426,7 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     let _5: bool
     let _6: testing.TestReport | testing.TestSetReport
     let _7: testing.TestReport | testing.TestSetReport // r
-    let _8: bool
+    let _8: testing.TestReport | testing.TestSetReport
     let _9: testing.TestReport // tr
     let _10: testing.RunReport[]
     let _11: baml.iter.Iterator<Error = never, Item = testing.RunReport>
@@ -439,7 +438,7 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     let _17: "error" | "fail" | "pass"
     let _18: bool
     let _19: string | null
-    let _20: bool
+    let _20: string | null
     let _21: string // m
     let _22: int
     let _23: string
@@ -464,8 +463,8 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
         _6 = copy _4;
         fresh_cell(_7);
         _7 = copy _6;
-        _8 = is_type(copy _7, testing.TestReport);
-        branch copy _8 -> [bb5, bb4];
+        _8 = copy _7;
+        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestReport" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb4];
     }
 
     bb4: {
@@ -475,7 +474,7 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     }
 
     bb5: {
-        _9 = copy _7;
+        _9 = copy _8;
         _10 = copy _9.1;
         _11 = virtual_call iter as baml.iter.Iterable<Item = testing.RunReport, Error = never>(copy _10) -> [bb6];
     }
@@ -504,12 +503,12 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
 
     bb10: {
         _19 = copy _15.2;
-        _20 = is_type(copy _19, string);
-        branch copy _20 -> [bb11, bb6];
+        _20 = copy _19;
+        _20 = narrow_bind copy _20 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb11, bb6];
     }
 
     bb11: {
-        _21 = copy _19;
+        _21 = copy _20;
         _23 = copy _21;
         _22 = call const fn baml.Array.push(copy _2, copy _23) -> [bb6];
     }
@@ -693,7 +692,7 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
     let _10: testing.TestReport | testing.TestSetReport
     let _11: testing.TestReport | testing.TestSetReport // r
     let _12: testing.LeafCounts // delta
-    let _13: bool
+    let _13: testing.TestReport | testing.TestSetReport
     let _14: testing.TestReport // tr
     let _15: bool
     let _16: "error" | "fail" | "pass"
@@ -742,8 +741,8 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
         _10 = copy _8;
         fresh_cell(_11);
         _11 = copy _10;
-        _13 = is_type(copy _11, testing.TestReport);
-        branch copy _13 -> [bb12, bb4];
+        _13 = copy _11;
+        _13 = narrow_bind copy _13 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestReport" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
     }
 
     bb4: {
@@ -795,7 +794,7 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
     }
 
     bb12: {
-        _14 = copy _11;
+        _14 = copy _13;
         _16 = copy _14.0;
         _15 = call const fn baml.ops.equals_equals(copy _16, const "pass") -> [bb13];
     }
@@ -973,7 +972,7 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     let _5: string
     let _6: type
     let _7: type
-    let _8: bool
+    let _8: null | testing.TestRegistry
     let _9: testing.TestRegistry // existing
     let _10: int // start
     let _11: testing.TestCollector // sub_collector
@@ -1006,8 +1005,8 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     }
 
     bb1: {
-        _8 = is_type(copy _3, testing.TestRegistry);
-        branch copy _8 -> [bb7, bb2];
+        _8 = copy _3;
+        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestRegistry" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb7, bb2];
     }
 
     bb2: {
@@ -1049,7 +1048,7 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
     }
 
     bb7: {
-        _9 = copy _3;
+        _9 = copy _8;
         _0 = copy _9;
         goto -> bb8;
     }
@@ -1355,7 +1354,7 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     let _40: int
     let _41: int
     let _42: string
-    let _43: bool
+    let _43: int | null
     let _44: int // idx
     let _45: int
     let _46: int
@@ -1464,8 +1463,8 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     }
 
     bb17: {
-        _43 = is_type(copy _38, int);
-        branch copy _43 -> [bb19, bb18];
+        _43 = copy _38;
+        _43 = narrow_bind copy _43 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb19, bb18];
     }
 
     bb18: {
@@ -1474,7 +1473,7 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     }
 
     bb19: {
-        _44 = copy _38;
+        _44 = copy _43;
         _46 = copy _27;
         _47 = copy _44;
         _45 = copy _46 + copy _47;
@@ -1640,7 +1639,7 @@ fn testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     let _7: string // s
     let _8: void
     let _9: int | null
-    let _10: bool
+    let _10: int | null
     let _11: int // idx
     let _12: testing.FilterPat
     let _13: string
@@ -1677,8 +1676,8 @@ fn testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     }
 
     bb4: {
-        _10 = is_type(copy _9, int);
-        branch copy _10 -> [bb7, bb5];
+        _10 = copy _9;
+        _10 = narrow_bind copy _10 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb7, bb5];
     }
 
     bb5: {
@@ -1694,7 +1693,7 @@ fn testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     }
 
     bb7: {
-        _11 = copy _9;
+        _11 = copy _10;
         _14 = copy _11;
         _13 = call const fn baml.String.substring(copy _7, const 0_i64, copy _14) -> [bb8];
     }
@@ -2377,19 +2376,36 @@ fn .<lambda(run_test, 0)>() -> null {
     let _3: unknown // e
     let _4: void
     let _5: () -> void throws unknown
-    let _6: int
-    let _7: baml.panics.UserPanic // p
-    let _8: string
-    let _9: baml.panics.AssertionFailed // p
-    let _10: string
-    let _11: "error" | "fail" | "pass"
-    let _12: testing.RunReport[]
-    let _13: testing.RunReport
-    let _14: "error" | "fail" | "pass"
-    let _15: int
-    let _16: int
-    let _17: int
-    let _18: string | null
+    let _6: unknown
+    let _7: unknown
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: bool
+    let _17: bool
+    let _18: bool
+    let _19: bool
+    let _20: bool
+    let _21: bool
+    let _22: bool
+    let _23: bool
+    let _24: baml.panics.UserPanic // p
+    let _25: string
+    let _26: baml.panics.AssertionFailed // p
+    let _27: string
+    let _28: "error" | "fail" | "pass"
+    let _29: testing.RunReport[]
+    let _30: testing.RunReport
+    let _31: "error" | "fail" | "pass"
+    let _32: int
+    let _33: int
+    let _34: int
+    let _35: string | null
 
     bb0: {
         _1 = call const fn baml.sys.now_ms() -> [bb1];
@@ -2402,59 +2418,144 @@ fn .<lambda(run_test, 0)>() -> null {
 
     bb2: {
         _2 = testing.RunReport { const "pass", const 0_i64, const null };
-        goto -> bb9;
+        goto -> bb26;
     }
 
     bb3: {
-        _6 = type_tag(_3);
-        switch copy _6 [UserPanic: bb8, AssertionFailed: bb7, DivisionByZero: bb6, IndexOutOfBounds: bb6, InvalidFieldAccess: bb6, MapKeyNotFound: bb6, StackOverflow: bb6, Unreachable: bb6, Cancelled: bb6, Exit: bb6, AllocFailure: bb6, HostUnavailable: bb6, NegativeBitShift: bb6, SdkPanic: bb6, HostContractViolation: bb6, IntegerOverflow: bb6, otherwise: bb4];
+        _6 = copy _3;
+        _6 = narrow_bind copy _6 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "UserPanic" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb25, bb4];
     }
 
     bb4: {
-        throw_if_panic copy _3 -> bb5;
+        _7 = copy _3;
+        _7 = narrow_bind copy _7 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["panics"], name: "AssertionFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb24, bb5];
     }
 
     bb5: {
-        _2 = testing.RunReport { const "fail", const 0_i64, const null };
-        goto -> bb9;
+        _8 = is_type(copy _3, baml.panics.DivisionByZero);
+        branch copy _8 -> [bb23, bb6];
     }
 
     bb6: {
-        _2 = testing.RunReport { const "fail", const 0_i64, const null };
-        goto -> bb9;
+        _9 = is_type(copy _3, baml.panics.IndexOutOfBounds);
+        branch copy _9 -> [bb23, bb7];
     }
 
     bb7: {
-        _9 = copy _3;
-        _10 = copy _9.0;
-        _2 = testing.RunReport { const "fail", const 0_i64, copy _10 };
-        goto -> bb9;
+        _10 = is_type(copy _3, baml.panics.InvalidFieldAccess);
+        branch copy _10 -> [bb23, bb8];
     }
 
     bb8: {
-        _7 = copy _3;
-        _8 = copy _7.0;
-        _2 = testing.RunReport { const "fail", const 0_i64, copy _8 };
-        goto -> bb9;
+        _11 = is_type(copy _3, baml.panics.MapKeyNotFound);
+        branch copy _11 -> [bb23, bb9];
     }
 
     bb9: {
-        _11 = copy _2.0;
-        _14 = copy _2.0;
-        _16 = call const fn baml.sys.now_ms() -> [bb10];
+        _12 = is_type(copy _3, baml.panics.StackOverflow);
+        branch copy _12 -> [bb23, bb10];
     }
 
     bb10: {
-        _17 = copy _1;
-        _15 = copy _16 - copy _17;
-        _18 = copy _2.2;
-        _13 = testing.RunReport { copy _14, copy _15, copy _18 };
-        _12 = [copy _13]: testing.RunReport[];
-        _0 = testing.TestReport { copy _11, copy _12 };
-        goto -> bb11;
+        _13 = is_type(copy _3, baml.panics.AssertionFailed);
+        branch copy _13 -> [bb23, bb11];
     }
 
     bb11: {
+        _14 = is_type(copy _3, baml.panics.Unreachable);
+        branch copy _14 -> [bb23, bb12];
+    }
+
+    bb12: {
+        _15 = is_type(copy _3, baml.panics.Cancelled);
+        branch copy _15 -> [bb23, bb13];
+    }
+
+    bb13: {
+        _16 = is_type(copy _3, baml.panics.UserPanic);
+        branch copy _16 -> [bb23, bb14];
+    }
+
+    bb14: {
+        _17 = is_type(copy _3, baml.panics.Exit);
+        branch copy _17 -> [bb23, bb15];
+    }
+
+    bb15: {
+        _18 = is_type(copy _3, baml.panics.AllocFailure);
+        branch copy _18 -> [bb23, bb16];
+    }
+
+    bb16: {
+        _19 = is_type(copy _3, baml.panics.HostUnavailable);
+        branch copy _19 -> [bb23, bb17];
+    }
+
+    bb17: {
+        _20 = is_type(copy _3, baml.panics.NegativeBitShift);
+        branch copy _20 -> [bb23, bb18];
+    }
+
+    bb18: {
+        _21 = is_type(copy _3, baml.panics.SdkPanic);
+        branch copy _21 -> [bb23, bb19];
+    }
+
+    bb19: {
+        _22 = is_type(copy _3, baml.panics.HostContractViolation);
+        branch copy _22 -> [bb23, bb20];
+    }
+
+    bb20: {
+        _23 = is_type(copy _3, baml.panics.IntegerOverflow);
+        branch copy _23 -> [bb23, bb21];
+    }
+
+    bb21: {
+        throw_if_panic copy _3 -> bb22;
+    }
+
+    bb22: {
+        _2 = testing.RunReport { const "fail", const 0_i64, const null };
+        goto -> bb26;
+    }
+
+    bb23: {
+        _2 = testing.RunReport { const "fail", const 0_i64, const null };
+        goto -> bb26;
+    }
+
+    bb24: {
+        _26 = copy _7;
+        _27 = copy _26.0;
+        _2 = testing.RunReport { const "fail", const 0_i64, copy _27 };
+        goto -> bb26;
+    }
+
+    bb25: {
+        _24 = copy _6;
+        _25 = copy _24.0;
+        _2 = testing.RunReport { const "fail", const 0_i64, copy _25 };
+        goto -> bb26;
+    }
+
+    bb26: {
+        _28 = copy _2.0;
+        _31 = copy _2.0;
+        _33 = call const fn baml.sys.now_ms() -> [bb27];
+    }
+
+    bb27: {
+        _34 = copy _1;
+        _32 = copy _33 - copy _34;
+        _35 = copy _2.2;
+        _30 = testing.RunReport { copy _31, copy _32, copy _35 };
+        _29 = [copy _30]: testing.RunReport[];
+        _0 = testing.TestReport { copy _28, copy _29 };
+        goto -> bb28;
+    }
+
+    bb28: {
         return;
     }
 }
@@ -2712,7 +2813,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _21: string
     let _22: type
     let _23: type
-    let _24: bool
+    let _24: null | testing.TestRegistry
     let _25: testing.TestRegistry // sub
     let _26: testing.SerializedTestSet
     let _27: string
@@ -2771,8 +2872,8 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 
     bb8: {
-        _24 = is_type(copy _19, testing.TestRegistry);
-        branch copy _24 -> [bb10, bb9];
+        _24 = copy _19;
+        _24 = narrow_bind copy _24 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestRegistry" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb10, bb9];
     }
 
     bb9: {
@@ -2782,7 +2883,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 
     bb10: {
-        _25 = copy _19;
+        _25 = copy _24;
         _27 = copy _17.0;
         _28 = call const fn testing.TestRegistry.serialize(copy _25) -> [bb11];
     }
@@ -2808,7 +2909,7 @@ fn testing.split_top(path: string) -> testing.NameSplit {
     let _0: testing.NameSplit // _0 // return
     let _1: string // path // param
     let _2: int | null
-    let _3: bool
+    let _3: int | null
     let _4: int // idx
     let _5: string
     let _6: int
@@ -2822,8 +2923,8 @@ fn testing.split_top(path: string) -> testing.NameSplit {
     }
 
     bb1: {
-        _3 = is_type(copy _2, int);
-        branch copy _3 -> [bb3, bb2];
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
     }
 
     bb2: {
@@ -2832,7 +2933,7 @@ fn testing.split_top(path: string) -> testing.NameSplit {
     }
 
     bb3: {
-        _4 = copy _2;
+        _4 = copy _3;
         _6 = copy _4;
         _5 = call const fn baml.String.substring(copy _1, const 0_i64, copy _6) -> [bb4];
     }
@@ -3837,7 +3938,7 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     let _13: string
     let _14: testing.TestReport | testing.TestSetReport
     let _15: "error" | "fail" | "pass" // outcome
-    let _16: bool
+    let _16: testing.TestReport | testing.TestSetReport
     let _17: testing.TestReport // r
     let _18: testing.TestSetReport // r
     let _19: bool
@@ -3876,8 +3977,8 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     }
 
     bb5: {
-        _16 = is_type(copy _9, testing.TestReport);
-        branch copy _16 -> [bb7, bb6];
+        _16 = copy _9;
+        _16 = narrow_bind copy _16 as Class(QualifiedTypeName { pkg: Dep("testing"), namespace: [], name: "TestReport" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb7, bb6];
     }
 
     bb6: {
@@ -3887,7 +3988,7 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     }
 
     bb7: {
-        _17 = copy _9;
+        _17 = copy _16;
         _15 = copy _17.0;
         goto -> bb8;
     }

@@ -344,6 +344,15 @@ pub enum Terminator {
         else_block: BlockId,
     },
 
+    /// Test one value and bind that same value to `destination` on success.
+    NarrowBind {
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+
     /// Multi-way branch based on integer discriminant.
     Switch {
         discriminant: Operand,
@@ -564,6 +573,11 @@ impl Terminator {
         match self {
             Terminator::Goto { target } => vec![*target],
             Terminator::Branch {
+                then_block,
+                else_block,
+                ..
+            } => vec![*then_block, *else_block],
+            Terminator::NarrowBind {
                 then_block,
                 else_block,
                 ..

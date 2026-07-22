@@ -489,6 +489,12 @@ fn simulate_terminator_stack(
             }
             sim.pop_n(1)
         }
+        Terminator::NarrowBind { source, .. } => {
+            if !simulate_operand_pull_stack(source, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            sim.pop_n(1)
+        }
         Terminator::Switch { discriminant, .. } => {
             // All switch strategies pull the discriminant first; that's the carried-use point.
             simulate_operand_pull_stack(discriminant, sim, carried_local, classifications, def_use)

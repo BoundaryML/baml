@@ -35,6 +35,58 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
 }
 
 #[test]
+fn typed_pattern_emits_atomic_narrow_bind() {
+    use bex_vm_types::Instruction;
+
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+
+function main(x: Foo | int) -> int {
+  let task = spawn { x = 0; };
+  match (x) {
+    let foo: Foo => foo.field,
+    let n: int => n,
+  }
+}
+"#,
+    );
+    let program = compile(&db);
+    let main_idx = program.function_indices["user.main"];
+    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
+        panic!("expected user.main to be a function")
+    };
+
+    let destination = main
+        .bytecode
+        .instructions
+        .iter()
+        .find_map(|instruction| match instruction {
+            Instruction::NarrowBind { destination, .. } => Some(*destination),
+            _ => None,
+        })
+        .expect("narrow_bind instruction");
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .any(|instruction| match instruction {
+                Instruction::LoadVar(slot) | Instruction::StoreVarLoadVar(slot) => {
+                    *slot == destination
+                }
+                Instruction::LoadVar2(first, second) => {
+                    *first == destination || *second == destination
+                }
+                _ => false,
+            }),
+        "{:?}",
+        main.bytecode.instructions
+    );
+}
+
+#[test]
 fn explicit_local_id_selects_runtime_id_bytecodes_only_for_tagged_calls() {
     use bex_vm_types::Instruction;
 

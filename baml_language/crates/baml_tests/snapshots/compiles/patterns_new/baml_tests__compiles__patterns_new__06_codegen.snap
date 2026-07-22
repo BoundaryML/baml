@@ -59,7 +59,9 @@ function user.call_int_callback(cb: (int) -> int throws never) -> int {
 
 function user.call_with_callback(runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) -> int {
     load_var runner
-    is_type ((int) -> int throws never) -> int throws never
+    store_var _2
+    load_var _2
+    narrow_bind ((int) -> int throws never) -> int throws never, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -71,7 +73,7 @@ function user.call_with_callback(runner: (((int) -> int throws never) -> int thr
 
   L1:
     make_closure .<lambda(call_with_callback, 0)>, 0
-    load_var runner
+    load_var _2
     call_indirect
 
   L2:
@@ -135,13 +137,17 @@ function user.catch_widening_chain(mode: int) -> int {
     call user.risky_error
     jump L4
     load_var e
-    is_type string
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var e
-    is_type AppError
+    store_var _4
+    load_var _4
+    narrow_bind AppError, slot=4
     pop_jump_if_false L1
     jump L2
 
@@ -162,7 +168,9 @@ function user.catch_widening_chain(mode: int) -> int {
 
 function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     load_var v
-    is_type int
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -171,7 +179,7 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     jump L2
 
   L1:
-    load_var v
+    load_var _2
 
   L2:
     return
@@ -179,7 +187,9 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
 
 function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
     load_var cb
-    is_type (int) -> int throws never
+    store_var _2
+    load_var _2
+    narrow_bind (int) -> int throws never, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -189,7 +199,7 @@ function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> s
 
   L1:
     load_const 0
-    load_var cb
+    load_var _2
     call_indirect
 
   L2:
@@ -369,13 +379,17 @@ function user.or_with_repeated_bare_binding(v: int) -> int {
 
 function user.or_with_repeated_typed_binding(v: int | string) -> int {
     load_var v
-    is_type int
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var v
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -384,11 +398,11 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int {
     jump L4
 
   L2:
-    load_var v
+    load_var _4
     jump L4
 
   L3:
-    load_var v
+    load_var _2
 
   L4:
     return
@@ -396,13 +410,17 @@ function user.or_with_repeated_typed_binding(v: int | string) -> int {
 
 function user.paren_chains_in_or(v: int) -> int {
     load_var v
-    is_type int
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var v
-    is_type int
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=3
     pop_jump_if_false L2
     load_const 1
     jump L2
@@ -433,7 +451,9 @@ function user.risky_error(mode: int) -> int {
 
 function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     load_var f
-    is_type (int) -> ((int) -> ((int) -> int throws never) throws never) throws never
+    store_var _2
+    load_var _2
+    narrow_bind (int) -> ((int) -> ((int) -> int throws never) throws never) throws never, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -443,7 +463,7 @@ function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) 
 
   L1:
     load_const 1
-    load_var f
+    load_var _2
     call_indirect
     store_var _5
     load_const 2
@@ -460,22 +480,26 @@ function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) 
 
 function user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     load_var cb
-    is_type (int) -> #0 throws never
+    store_var _2
+    load_var _2
+    narrow_bind (int) -> #0 throws never, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var cb
-    is_type (string) -> #0 throws never
+    store_var _5
+    load_var _5
+    narrow_bind (string) -> #0 throws never, slot=3
     pop_jump_if_false L3
     load_const ""
-    load_var cb
+    load_var _5
     call_indirect
     jump L2
 
   L1:
     load_const 0
-    load_var cb
+    load_var _2
     call_indirect
 
   L2:
