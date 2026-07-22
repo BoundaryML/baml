@@ -615,3 +615,34 @@ function f(x: Foo | int) -> int {
     );
     assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
 }
+
+#[test]
+fn destructured_field_local_is_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Bar { value: int }
+class Foo { field: Bar | int }
+
+function f(x: Foo | int) -> int {
+  match (x) {
+    Foo => {
+      let Foo { field } = x;
+      match (field) {
+        Bar => field.value,
+        int => field,
+      }
+    },
+    int => x,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("field.value : int") && output.contains("field : int"),
+        "destructured field local should narrow in each match arm:\n{output}"
+    );
+    assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
+}
