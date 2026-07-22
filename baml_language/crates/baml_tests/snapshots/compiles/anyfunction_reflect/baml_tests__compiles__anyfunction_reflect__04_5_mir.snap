@@ -100,18 +100,18 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     }
 
     bb1: {
-        _6 = copy _2.2;
+        _6 = copy _2.3;
         _5 = call const fn baml.TypeValue.baml.ToString.to_string(copy _6) -> [bb2];
     }
 
     bb2: {
-        _8 = copy _2.3;
+        _8 = copy _2.4;
         _7 = call const fn baml.TypeValue.baml.ToString.to_string(copy _8) -> [bb3];
     }
 
     bb3: {
         _4 = copy _5 + copy _7;
-        _11 = copy _2.0;
+        _11 = copy _2.1;
         _10 = len(_11);
         goto -> bb4;
     }
@@ -123,7 +123,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
 
     bb5: {
         _3 = copy _4 + copy _9;
-        _13 = copy _2.0;
+        _13 = copy _2.1;
         _14 = virtual_call iter as baml.iter.Iterable<Item = reflect.Arg, Error = never>(copy _13) -> [bb6];
     }
 
@@ -153,7 +153,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
     }
 
     bb10: {
-        _25 = copy _2.1;
+        _25 = copy _2.2;
         _26 = load_type(string);
         _27 = load_type(reflect.Arg);
         _24 = call const fn baml.Map.keys<copy _26, copy _27>(copy _25) -> [bb11];
@@ -176,7 +176,7 @@ fn user.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown
         _31 = copy _29;
         fresh_cell(_32);
         _32 = copy _31;
-        _34 = copy _2.1;
+        _34 = copy _2.2;
         _35 = copy _32;
         _36 = load_type(string);
         _37 = load_type(reflect.Arg);

@@ -16,7 +16,6 @@ use crate::{
     BexVm,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
     package_baml::{NativeCallResult, NativeFunction, PassThroughContinuation},
-    type_context::RuntimeTypeContext,
     vm::CallableSignature,
 };
 
@@ -139,15 +138,27 @@ fn signature(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         Some(doc) => Value::object(vm.alloc_string(doc.as_str())),
         None => Value::NULL,
     };
+    let name_val = match &sig.name {
+        Some(name) => Value::object(vm.alloc_string(name.as_str())),
+        None => Value::NULL,
+    };
     NativeCallResult::Done(Value::object(vm.alloc_instance(
         class_ptr,
-        vec![args_val, opts_val, returns_val, errors_val, docstring_val],
+        vec![
+            name_val,
+            args_val,
+            opts_val,
+            returns_val,
+            errors_val,
+            docstring_val,
+        ],
     )))
 }
 
-/// Throw `reflect.InvalidArgumentError { expected, got }`.
+/// Throw `reflect.InvalidArgumentError { argument, expected, got }`.
 fn raise_invalid_argument(
     vm: &mut BexVm,
+    argument: &str,
     expected: RealizedTy,
     got: RealizedTy,
 ) -> NativeCallResult {
@@ -157,10 +168,11 @@ fn raise_invalid_argument(
         }
         .into();
     };
+    let argument_val = Value::object(vm.alloc_string(argument));
     let expected_val = Value::object(vm.tlab.alloc_type(expected));
     let got_val = Value::object(vm.tlab.alloc_type(got));
     NativeCallResult::Error(VmRustFnError::Thrown(Value::object(
-        vm.alloc_instance(class_ptr, vec![expected_val, got_val]),
+        vm.alloc_instance(class_ptr, vec![argument_val, expected_val, got_val]),
     )))
 }
 
@@ -170,27 +182,6 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
         params: sig.params.clone(),
         ret: Box::new(sig.ret.clone()),
         throws: Box::new(sig.throws.clone().unwrap_or_else(ty_never)),
-        attr: TyAttr::default(),
-    }
-}
-
-/// The call's shape as a function type: each provided named argument as a
-/// parameter carrying the value's reconstructed type, with `unknown`
-/// return/throws.
-fn call_shape_ty(vm: &BexVm, provided: &IndexMap<bex_str::BexStr, Value>) -> RealizedTy {
-    use baml_type::{FunctionParamMode, RealizedFunctionParamTy};
-    let params = provided
-        .iter()
-        .map(|(k, &v)| RealizedFunctionParamTy {
-            name: Some(baml_type::Name::new(k.as_str())),
-            ty: value_realized_ty(vm, v),
-            mode: FunctionParamMode::Required,
-        })
-        .collect();
-    RealizedTy::Function {
-        params,
-        ret: Box::new(RealizedTy::unknown()),
-        throws: Box::new(RealizedTy::unknown()),
         attr: TyAttr::default(),
     }
 }
@@ -226,7 +217,8 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
         };
     }
     let expected: Ty = expected.clone().into();
-    normalize::is_subtype(&actual, &expected, &RuntimeTypeContext::new(vm))
+    // The VM itself is the runtime `TypeContext`.
+    normalize::is_subtype(&actual, &expected, vm)
 }
 
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.
@@ -273,6 +265,7 @@ fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
     // prologue replaces them; a native callee's glue reads them as "not
     // supplied". A nameless optional is unaddressable and always omitted.
     let mut final_args = Vec::with_capacity(sig.params.len());
+    let mut addressable: Vec<String> = Vec::with_capacity(sig.params.len());
     let mut matched = 0usize;
     let mut positional_idx = 0usize;
     for param in &sig.params {
@@ -284,32 +277,49 @@ fn call_any(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         if param.mode == FunctionParamMode::Required {
             positional_idx += 1;
         }
-        let value = key.and_then(|k| provided.get(k.as_str()).copied());
+        let value = key.as_deref().and_then(|k| provided.get(k).copied());
+        if let Some(k) = key.clone() {
+            addressable.push(k);
+        }
         match (param.mode, value) {
             (_, Some(value)) => {
                 if !value_fits(vm, value, &param.ty) {
                     let expected = param.ty.clone();
                     let got = value_realized_ty(vm, value);
-                    return raise_invalid_argument(vm, expected, got);
+                    return raise_invalid_argument(vm, key.as_deref().unwrap_or(""), expected, got);
                 }
                 matched += 1;
                 final_args.push(value);
             }
             (FunctionParamMode::Required, None) => {
-                let expected = callee_fn_ty(&sig);
-                let got = call_shape_ty(vm, &provided);
-                return raise_invalid_argument(vm, expected, got);
+                // Missing required parameter: its type against `never` (no
+                // value was supplied at all).
+                return raise_invalid_argument(
+                    vm,
+                    key.as_deref().unwrap_or(""),
+                    param.ty.clone(),
+                    ty_never(),
+                );
             }
             (FunctionParamMode::Optional, None) => final_args.push(Value::OMITTED_ARG),
         }
     }
 
     // Every provided key must have matched a parameter (names are unique, so
-    // the counts agree exactly when no key was extraneous).
+    // the counts agree exactly when no key was extraneous). Name the first
+    // key that addresses no parameter.
     if matched != provided.len() {
+        let unknown = provided
+            .keys()
+            .find(|k| !addressable.iter().any(|a| a == k.as_str()))
+            .map(|k| k.as_str().to_string())
+            .unwrap_or_default();
+        let got = provided
+            .get(unknown.as_str())
+            .copied()
+            .map_or_else(RealizedTy::unknown, |v| value_realized_ty(vm, v));
         let expected = callee_fn_ty(&sig);
-        let got = call_shape_ty(vm, &provided);
-        return raise_invalid_argument(vm, expected, got);
+        return raise_invalid_argument(vm, &unknown, expected, got);
     }
 
     NativeCallResult::YieldToCall {

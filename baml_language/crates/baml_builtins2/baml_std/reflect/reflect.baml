@@ -33,6 +33,9 @@ class Arg {
 /// declaration order; named/optional parameters appear in `opts`, keyed by
 /// name. A bound method reports its receiver-adjusted signature (no `self`).
 class Signature {
+  /// The name the function was declared with; null for host callables and
+  /// compiler-synthesized callables (including lambdas).
+  name string?
   /// Positional (required) parameters, in order.
   args Arg[]
   /// Named/optional parameters, keyed by parameter name.
@@ -46,12 +49,13 @@ class Signature {
 }
 
 /// Thrown by `reflect.call_any` when the supplied arguments do not fit the
-/// callee's runtime signature: wrong positional arity, a named argument the
-/// callee does not declare, or a value that does not fit its parameter's
-/// type. For a single bad value, `expected`/`got` are the parameter's and the
-/// value's types; for an arity or unknown-name mismatch they are the callee's
-/// function type and the call's shape.
+/// callee's runtime signature. `argument` names the offending key (`$argN`
+/// placeholders included). An ill-typed value reports the parameter's and
+/// the value's types; a missing required parameter reports the parameter's
+/// type and `never`; a key naming no parameter reports the callee's whole
+/// function type and the value's type.
 class InvalidArgumentError {
+  argument string
   expected type
   got type
 }

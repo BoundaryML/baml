@@ -1024,6 +1024,70 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 }
 
 // ============================================================================
+// On-contract throw via interface membership: a callback declares
+//         `throws HasMessage` (an interface) and the host throws a
+//         `baml.errors.HostCallable`, which *implements* `HasMessage` (via a
+//         standalone `implement HasMessage for baml.errors.HostCallable` block).
+//         The throws-contract check must see the membership and treat the throw
+//         as on-contract — surfacing it as a catchable `HostCallable`, NOT a
+//         `HostContractViolation` panic.
+//
+//         Pins the fix that routes the contract check through the canonical,
+//         program-aware type algebra (`baml_type::normalize::is_subtype` over the
+//         VM as its `TypeContext`), which resolves interface membership. The prior
+//         context-free `RuntimeTy::is_subtype_of` fork saw no membership —
+//         `Class <: Interface` was simply `false` — and would have wrongly
+//         rejected this throw as a contract violation.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
+    // A method interface (not a field interface — those may only be implemented
+    // in-body, E0126) so `HostCallable` can implement it out-of-body.
+    let source = r#"
+        interface Failure {
+            function kind(self) -> string throws never
+        }
+        implement Failure for baml.errors.HostCallable {
+            function kind(self) -> string throws never { "host" }
+        }
+        function call_typed(f: (int) -> int throws Failure, x: int) -> int {
+            return f(x);
+        }
+    "#;
+
+    // The fake dispatch materializes every throw as a `baml.errors.HostCallable`
+    // instance (per `complete_with_test_error`). `HostCallable` implements the
+    // declared `throws Failure` interface, so the throw is on-contract and must
+    // propagate as a catchable value rather than a contract-violation panic.
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_typed",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_host_callable_throw(&result);
+    drop(arc);
+}
+
+// ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The FFI entry boundary normalizes the synthesized effect
 //         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::BuiltinUnknown` so the contract

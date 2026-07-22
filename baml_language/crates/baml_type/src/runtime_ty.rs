@@ -214,12 +214,15 @@ impl RuntimeTy {
         }
     }
 
-    // --- Rendering / subtyping ---
+    // --- Rendering ---
     //
-    // These reuse `Ty`'s implementation so the structural logic lives in exactly
+    // These reuse `Ty`'s implementation so the rendering logic lives in exactly
     // one place. The upcast is [`RuntimeTy::as_ty`] — a zero-cost borrow, not a
     // clone — so sharing the algorithm costs nothing; the value remains a
-    // statically runtime-safe `RuntimeTy`.
+    // statically runtime-safe `RuntimeTy`. (Subtyping/equivalence have no method
+    // form: they need nominal facts, so callers go through
+    // [`crate::normalize`]'s `TypeContext` entry points with the richest context
+    // the site can reach.)
 
     /// User-facing rendering — see [`Ty::render_user_facing`].
     pub fn render_user_facing(&self) -> String {
@@ -234,11 +237,6 @@ impl RuntimeTy {
     /// Render with a custom strategy — see [`Ty::render_with`].
     pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
         self.as_ty().render_with(s)
-    }
-
-    /// Structural subtyping — see [`Ty::is_subtype_of`].
-    pub fn is_subtype_of(&self, other: &RuntimeTy) -> bool {
-        self.as_ty().is_subtype_of(other.as_ty())
     }
 }
 

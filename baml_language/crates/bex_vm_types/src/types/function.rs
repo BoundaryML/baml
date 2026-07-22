@@ -197,6 +197,14 @@ pub struct Function {
     /// without docs and synthesized functions.
     pub docstring: Option<String>,
 
+    /// The name the function was declared with (`greet`, `bump`), recorded
+    /// at lowering.
+    /// `None` for callables that have no source-level name: lambdas and
+    /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
+    /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection
+    /// (BEP-062 `reflect.signature`); never inferred from [`Self::name`].
+    pub declared_name: Option<String>,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 

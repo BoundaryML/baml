@@ -3235,6 +3235,7 @@ fn emit_file_group(
                 name: "$init_test".to_string(),
                 source_file: String::new(), // synthesized, no source file
                 docstring: None,
+                declared_name: None,
                 arity: 1,
                 real_local_count: 1, // the registry param
                 bytecode,
@@ -3372,6 +3373,7 @@ fn apply_signature_metadata(f: &mut Function, sig: &baml_compiler2_mir::RuntimeS
     f.return_type = sig.return_type.clone();
     f.throws_type.clone_from(&sig.throws_type);
     f.docstring.clone_from(&sig.docstring);
+    f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
     f.display_param_types.clone_from(&sig.display_param_types);
     f.display_return_type.clone_from(&sig.display_return_type);
@@ -3754,6 +3756,7 @@ fn compute_function_metadata_from_item_tree(
         // clause (a declared clause is a firewall the inference respects).
         throws_type: compute_throws_type(db, file, &func_data.name, cache),
         docstring: func_data.docstring.clone(),
+        name: Some(func_data.name.to_string()),
         display_type_params,
         display_param_types,
         display_return_type,
@@ -4697,6 +4700,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         name: fq_name.to_string(),
         source_file: String::new(), // builtins have no source file
         docstring: None,
+        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode: Bytecode::default(),
@@ -5014,6 +5018,7 @@ fn compile_init_function<'db>(
                     name: format!("$init_let_{i}"),
                     source_file: String::new(), // synthesized, no source file
                     docstring: None,
+                    declared_name: None,
                     arity: 0,
                     real_local_count: 0,
                     bytecode,
@@ -5088,6 +5093,7 @@ fn compile_init_function<'db>(
         name: "$init".to_string(),
         source_file: String::new(), // synthesized, no source file
         docstring: None,
+        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode,

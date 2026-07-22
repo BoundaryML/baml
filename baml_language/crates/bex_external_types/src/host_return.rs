@@ -123,9 +123,9 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         RuntimeTy::Null { .. } => matches!(value, BexExternalValue::Null),
         RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
         // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
-        // `Float`, nor a `Float` value `Int`. The numeric-widening that
-        // `RuntimeTy::is_subtype_of` allows for *static* typing must not silently
-        // reinterpret a host's returned tag.
+        // `Float`, nor a `Float` value `Int`. A host-returned wire tag must match
+        // the declared representation exactly — never silently reinterpreted (the
+        // int→float/bigint conversions are boundary coercions, not subtyping).
         RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
         RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
         RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),

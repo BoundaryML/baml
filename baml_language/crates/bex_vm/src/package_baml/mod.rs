@@ -36,7 +36,7 @@ mod ops;
 mod ops_math;
 mod random;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
+pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
 mod stack_trace;
@@ -429,6 +429,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 name: function.name,
                 source_file: function.source_file,
                 docstring: function.docstring,
+                declared_name: function.declared_name,
                 arity: function.arity,
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,

@@ -42,6 +42,7 @@ fn inject_function(
         name: fn_name.to_string(),
         source_file: String::new(),
         docstring: None,
+        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
