@@ -14,7 +14,14 @@
 #include <vector>
 
 static void TestVersion() {
+  std::fprintf(stderr, "loading runtime API\n");
+  std::fflush(stderr);
+  (void)baml::detail::api();
+  std::fprintf(stderr, "loaded runtime API\n");
+  std::fflush(stderr);
   const std::string v = baml::version();
+  std::fprintf(stderr, "called runtime version\n");
+  std::fflush(stderr);
   assert(!v.empty());
   std::printf("version: %s\n", v.c_str());
 }
