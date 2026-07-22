@@ -15,15 +15,15 @@ runtime_path="${BAML_RUNTIME_PATH:-}"
 if [[ -z "$runtime_path" ]]; then
     target="${BAML_CPP_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
     libdir="target/$target/release-bridge-cffi"
-    if ! ls "$libdir"/libbridge_cffi.* "$libdir"/bridge_cffi.dll > /dev/null 2>&1; then
-        cargo build --profile release-bridge-cffi -p bridge_cffi --target "$target" \
-            ${BAML_CPP_FEATURES:+--no-default-features --features "$BAML_CPP_FEATURES"}
-    fi
     case "$target" in
         *apple*) runtime_lib="libbridge_cffi.dylib" ;;
         *windows*) runtime_lib="bridge_cffi.dll" ;;
         *) runtime_lib="libbridge_cffi.so" ;;
     esac
+    if [[ ! -f "$libdir/$runtime_lib" ]]; then
+        cargo build --profile release-bridge-cffi -p bridge_cffi --target "$target" \
+            ${BAML_CPP_FEATURES:+--no-default-features --features "$BAML_CPP_FEATURES"}
+    fi
     runtime_path="$PWD/$libdir/$runtime_lib"
 fi
 [[ -f "$runtime_path" ]] || { echo "bridge_cffi library not found: $runtime_path" >&2; exit 1; }
