@@ -93,6 +93,13 @@ function ColorOrPoint(useColor: bool) -> Color | Point {
     if (useColor) { Color.Green } else { Point { x: 1, y: 2 } }
 }
 
+function ClassifyAmbiguousEmptyList(value: int[] | string[]) -> string {
+    match (value) {
+        let ints: int[] => "ints",
+        let strings: string[] => "strings",
+    }
+}
+
 // ── Lists and maps ──
 
 function MakeIntList(a: int, b: int, c: int) -> int[] {
@@ -225,6 +232,11 @@ describe('callFunctionSync', () => {
     it('ColorOrPoint(false) → class branch (Point)', () => {
         const result = callFunctionSync(rt, 'ColorOrPoint', { useColor: false });
         expect(result.result()).toEqual({ x: 1, y: 2 });
+    });
+
+    it('raw [] uses the dynamic default for int[] | string[]', () => {
+        const result = callFunctionSync(rt, 'ClassifyAmbiguousEmptyList', { value: [] });
+        expect(result.result()).toBe('ints');
     });
 
     // ── Lists and maps ──
