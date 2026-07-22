@@ -185,6 +185,7 @@
   },
   "active": "c1cf60264c354175",
   "lastOpenFiles": [
+    "bepv2/_internal/runner-provider-responsibilities.md",
     "bepv2/_internal/driver-functions-vs-interface-values.md",
     "bepv2/pages/guide-external-harnesses.md",
     "bepv2/pages/guide-production.md",
@@ -212,7 +213,6 @@
     "bepv2/pages/guide-observability-and-testing/03-usage-and-cost.md",
     "bepv2/pages/guide-observability-and-testing/04-test-one-task-across-providers.md",
     "bepv2/pages/guide-observability-and-testing/02-observe-an-agent.md",
-    "bepv2/pages/guide-observability-and-testing/01-observe-a-call.md",
     "bepv2/pages/guide-observability-and-testing",
     "bepv2/pages/guide-media-and-realtime",
     "bepv2/pages/guide-conversations-and-state",

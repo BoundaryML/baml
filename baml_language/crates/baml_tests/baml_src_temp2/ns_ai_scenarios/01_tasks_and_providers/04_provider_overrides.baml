@@ -23,8 +23,8 @@ testset "integ-test-guide-01-provider-overrides" {
     assert.equal(original.provider_name(), "openai")
     assert.equal(overridden.provider_name(), "anthropic")
     assert.contains(baml.llm.prompt_to_text(overridden.prompt), "Charged twice")
-    let response = overridden.drive(
-      root.ai.driver.generate_with_meta<Resolution>(),
+    let response = overridden.run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     log.info("live provider override " + {
       "before": original.provider_name(),

@@ -28,7 +28,7 @@ interface SessionProvider requires Provider {
 class FakeSession {
   owner: FakeSessionProvider,
   session_id: string,
-  history: Conversation,
+  history: MessageHistory,
   is_cleaned: bool,
   cleanup_count: int,
 
@@ -51,14 +51,14 @@ class FakeSession {
           message: ["session has been cleaned up"],
         };
       }
-      //# Resolve the session drive provider
-      let drive = match (self.owner.inner) {
-        let value: DriveProvider => value,
-        _ => throw baml.errors.Unsupported { message: "session inner cannot drive" },
+      //# Resolve the session completion provider
+      let completion = match (self.owner.inner) {
+        let value: CompletionProvider => value,
+        _ => throw baml.errors.Unsupported { message: "session inner cannot complete" },
       };
       //# Run and retain the latest conversation
-      let response = drive.drive<T>(task.with_provider(self.owner.inner));
-      self.history = task.messages().to_conversation();
+      let response = completion.complete<T>(task.with_provider(self.owner.inner));
+      self.history = task.messages().to_history();
       response
     }
     function token(self) -> SessionToken throws never {
@@ -89,7 +89,7 @@ implements SessionProvider for FakeSessionProvider {
     let session = FakeSession {
       owner: self,
       session_id: options.session_id ?? "session-" + (self.sessions.length() + 1).to_string(),
-      history: Conversation.empty(),
+      history: MessageHistory.empty(),
       is_cleaned: false,
       cleanup_count: 0,
     };

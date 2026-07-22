@@ -1,9 +1,8 @@
 test "guide 02.06: a hook can add a tool before the next model step" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
   let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
-  let options = root.ai.AgentOptions.new(
-    [],
-    guide_dispatch,
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [],
     tool_registry = registry,
     hooks = hooks,
   );
@@ -12,12 +11,12 @@ test "guide 02.06: a hook can add a tool before the next model step" {
     fake_tool_provider([one_knowledge_call()]),
     [],
   );
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = runner,
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.FakeToolTranscript => assert.equal(transcript.last_tools.length(), 2),
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.FakeToolConversation => assert.equal(conversation.last_tools.length(), 2),
       _ => assert.is_true(false),
     },
     _ => assert.is_true(false),
@@ -35,9 +34,10 @@ test "guide 02.06: duplicate tool names fail instead of shadowing" {
 
 test "guide 02.06: replacement is explicit" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
-  let replacement = root.ai.Tool.typed<KnowledgeLookupArgs>(
+  let replacement = root.ai.tool(
     "search_knowledge",
     "Replacement handler contract.",
+    search_knowledge,
   );
   assert.is_true(registry.replace(replacement))
   assert.equal(registry.snapshot()[0].description, "Replacement handler contract.")
@@ -77,14 +77,13 @@ testset "integ-test-guide-02-dynamic-tool-registry" {
       [],
       `First call search_knowledge with query "duplicate charge". A lookup_account tool will be added after that result. Then call lookup_account with customer_id "C-1" before returning the final resolution.`,
     );
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [],
-        guide_dispatch,
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [],
         tool_registry = registry,
         hooks = hooks,
         observers = [observer],
-      )),
+      ),
     );
     log.info("live dynamic registry " + {
       "calls": hooks.after_calls,

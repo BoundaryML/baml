@@ -2,8 +2,8 @@ test "guide 08.01: a harness owns its session while returning typed output" {
   //# Configure an in-process model harness
   let harness = fake_model_harness();
   //# Submit a typed task through a harness session
-  let run = InvestigateRepository_task(sample_ticket(), harness.inner).drive(
-    root.ai.driver.harness<Resolution>(harness, harness_options()),
+  let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
+    runner = harness_runner<Resolution>(harness),
   );
   //# Verify output and resumable token ownership
   assert.equal(run.value.category, "billing")
@@ -33,8 +33,8 @@ testset "integ-test-guide-08-model-harness" {
       sessions: [],
     };
     //# Execute a typed harness run
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner).drive(
-      root.ai.driver.harness<Resolution>(harness, harness_options()),
+    let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
+      runner = harness_runner<Resolution>(harness),
     );
     //# Verify live typed output
     assert.is_true(run.value.reply.length() > 0)
@@ -51,8 +51,8 @@ testset "integ-test-guide-08-model-harness" {
       sessions: [],
     };
     //# Execute through the same harness contract
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner).drive(
-      root.ai.driver.harness<Resolution>(harness, harness_options()),
+    let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
+      runner = harness_runner<Resolution>(harness),
     );
     //# Verify live typed output
     assert.is_true(run.value.summary.length() > 0)

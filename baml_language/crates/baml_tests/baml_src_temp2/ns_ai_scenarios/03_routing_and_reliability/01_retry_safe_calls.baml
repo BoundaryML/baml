@@ -36,8 +36,8 @@ testset "integ-test-guide-03-retry" {
   test "guide 03.01 live OpenAI: a retryable failure causes exactly one retry" {
     let flaky = FlakyOnceLiveGeneration { inner: live_openai(), attempts: 0 };
     let task = ResolveTicket_task(sample_ticket(), root.ai.retry(flaky, 2));
-    let response = task.drive(
-      root.ai.driver.generate_with_meta<Resolution>(),
+    let response = task.run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     log.info("live retry " + {
       "attempts": flaky.attempts,

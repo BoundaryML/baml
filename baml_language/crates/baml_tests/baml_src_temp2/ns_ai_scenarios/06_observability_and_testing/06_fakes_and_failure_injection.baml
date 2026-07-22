@@ -1,14 +1,14 @@
 test "guide 06.06: fakes can inject failures before a valid typed output" {
   let fake = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
-  let failed = ResolveTicket_task(sample_ticket(), fake).drive(
-    root.ai.driver.generate<Resolution>(),
+  let failed = ResolveTicket_task(sample_ticket(), fake).run(
+    runner = root.ai.run.Generation<Resolution>.new(),
   ) catch (e) {
     _ => "failed",
   };
   assert.equal(failed, "failed")
   assert.equal(
-    ResolveTicket_task(sample_ticket(), fake).drive(
-      root.ai.driver.generate<Resolution>(),
+    ResolveTicket_task(sample_ticket(), fake).run(
+      runner = root.ai.run.Generation<Resolution>.new(),
     ).category,
     "billing",
   )
@@ -23,8 +23,8 @@ testset "integ-test-guide-06-failure-injection" {
       failure_mode: root.ai.FakeFailureMode.Retryable,
     };
     let chain = root.ai.fallback([injected, live_openai()]);
-    let response = ResolveTicket_task(sample_ticket(), chain).drive(
-      root.ai.driver.generate_with_meta<Resolution>(),
+    let response = ResolveTicket_task(sample_ticket(), chain).run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     log.info(baml.json.stringify({
       "guide": "06.06",

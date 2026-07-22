@@ -25,8 +25,8 @@ implements GenerationProvider for Anthropic {
   }
 }
 
-implements DriveProvider for Anthropic {
-  function drive<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+implements CompletionProvider for Anthropic {
+  function complete<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
     self.generate<T>(task)
   }
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {

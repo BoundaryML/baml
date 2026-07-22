@@ -27,7 +27,7 @@ class ProviderChangedEvent {
   id: string?,
   from_provider: string,
   to_provider: string,
-  fidelity: TranscriptFidelity,
+  fidelity: ConversationFidelity,
   warnings: string[],
   implements AgentEvent {
     function kind(self) -> string throws never { "provider_changed" }

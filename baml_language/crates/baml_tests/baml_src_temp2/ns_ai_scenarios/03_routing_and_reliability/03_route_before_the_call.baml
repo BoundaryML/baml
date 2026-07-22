@@ -22,7 +22,9 @@ testset "integ-test-guide-03-route-before-call" {
       TierRouter { fast: fast, careful: careful },
     );
     assert.equal(routed.provider_name(), "anthropic")
-    let response = routed.drive(root.ai.driver.generate_with_meta<Resolution>());
+    let response = routed.run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+    );
     log.info("live route " + {
       "tag": task.tags.get("tier"),
       "selected": routed.provider_name(),

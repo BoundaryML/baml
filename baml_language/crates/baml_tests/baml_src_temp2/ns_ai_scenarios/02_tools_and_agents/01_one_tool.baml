@@ -3,10 +3,8 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
   let provider = fake_tool_provider([one_knowledge_call()]);
   //# Run the tool-enabled agent
   let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(
-      root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
-    ),
+  let outcome = task.run(
+    runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
   );
   //# Verify typed completion
   match (outcome) {
@@ -24,14 +22,14 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
       "args": {"query": "duplicate charge"}
     }]
   }`);
-  //# Begin a prompt-based tool transcript
+  //# Begin a prompt-based provider conversation
   let provider = root.ai.PromptToolProvider { inner: inner };
-  let transcript = provider.begin<Resolution>(
+  let conversation = provider.begin<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]),
   );
-  let state = match (transcript) {
-    let value: root.ai.PromptToolTranscript => value,
-    _ => baml.sys.panic("expected prompt tool transcript"),
+  let state = match (conversation) {
+    let value: root.ai.PromptToolConversation => value,
+    _ => baml.sys.panic("expected prompt tool conversation"),
   };
   //# Render active tools into the output contract
   let rendered = baml.llm.prompt_to_text(root.ai.prompt_tool_turn<Resolution | root.ai.ToolCalls>(
@@ -41,7 +39,7 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
     root.ai.prompt_tool_output_suffix([knowledge_tool()]),
   ).prompt);
   //# Execute one prompt-tool turn
-  let turn = provider.step<Resolution>(transcript, [knowledge_tool()]);
+  let turn = provider.step<Resolution>(conversation, [knowledge_tool()]);
   match (turn.outcome) {
     let calls: root.ai.ToolCalls => assert.equal(calls.calls[0].name, "search_knowledge"),
     let value: Resolution => assert.is_true(false),
@@ -67,8 +65,8 @@ test "guide 02.01: ModelStep preserves a union task result" {
     },
   );
   //# Execute through the prompt-tool adapter
-  let transcript = provider.begin<Resolution | string>(task);
-  let turn = provider.step<Resolution | string>(transcript, [knowledge_tool()]);
+  let conversation = provider.begin<Resolution | string>(task);
+  let turn = provider.step<Resolution | string>(conversation, [knowledge_tool()]);
   match (turn.outcome) {
     let value: string => assert.equal(value, "done"),
     let value: Resolution => assert.is_true(false),
@@ -86,10 +84,8 @@ testset "integ-test-guide-02-one-tool" {
     };
     //# Run the live tool loop
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(
-        root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
-      ),
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
     );
     //# Verify the live typed result
     match (outcome) {
@@ -107,10 +103,8 @@ testset "integ-test-guide-02-one-tool" {
     };
     //# Run the live prompt-tool loop
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [knowledge_tool()]);
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(
-        root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch),
-      ),
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(tools = [knowledge_tool()]),
     );
     //# Verify the live typed result
     match (outcome) {

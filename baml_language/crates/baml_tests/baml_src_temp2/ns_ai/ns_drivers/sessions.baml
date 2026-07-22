@@ -1,22 +1,22 @@
-function save_transcript(
+function save_conversation(
   provider: root.ai.Provider,
-  transcript: root.ai.Transcript,
-) -> root.ai.TranscriptToken throws baml.errors.UnknownError | baml.errors.Unsupported {
-  //# Require resumable transcript support
+  conversation: root.ai.Conversation,
+) -> root.ai.ConversationToken throws baml.errors.UnknownError | baml.errors.Unsupported {
+  //# Require resumable conversation support
   match (provider) {
-    let resumable: root.ai.ResumableToolCallingProvider => resumable.save_transcript(transcript),
-    _ => throw baml.errors.Unsupported { message: "provider cannot save transcripts" },
+    let resumable: root.ai.ResumableToolCallingProvider => resumable.save_conversation(conversation),
+    _ => throw baml.errors.Unsupported { message: "provider cannot save conversations" },
   }
 }
 
-function restore_transcript(
+function restore_conversation(
   provider: root.ai.Provider,
-  token: root.ai.TranscriptToken,
-) -> root.ai.Transcript throws baml.errors.UnknownError | baml.errors.Unsupported {
-  //# Require resumable transcript support
+  token: root.ai.ConversationToken,
+) -> root.ai.Conversation throws baml.errors.UnknownError | baml.errors.Unsupported {
+  //# Require resumable conversation support
   match (provider) {
-    let resumable: root.ai.ResumableToolCallingProvider => resumable.restore_transcript(token),
-    _ => throw baml.errors.Unsupported { message: "provider cannot restore transcripts" },
+    let resumable: root.ai.ResumableToolCallingProvider => resumable.restore_conversation(token),
+    _ => throw baml.errors.Unsupported { message: "provider cannot restore conversations" },
   }
 }
 

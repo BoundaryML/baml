@@ -1,18 +1,20 @@
-test "guide 03.04: prepare_step can switch providers through transcript import" {
+test "guide 03.04: prepare_step can switch providers through conversation import" {
   let first = fake_tool_provider([one_knowledge_call()]);
   let second = root.ai.FakeToolProvider {
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
   let hooks = GuideHooks { ...no_op_hooks(), switch_after_step: second };
-  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
   let task = ResolveTicketWithTools_task(sample_ticket(), first, [knowledge_tool()]);
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = root.ai.run.Agent<Resolution>.new(
+      tools = [knowledge_tool()],
+      hooks = hooks,
+    ),
   );
   match (outcome) {
     let done: root.ai.Done<Resolution> => assert.equal(
-      done.transcript.provider().name(),
+      done.conversation.provider().name(),
       "fake-tools-secondary",
     ),
     _ => assert.is_true(false),
@@ -27,7 +29,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
     "type": "function",
     "function": { "name": "search_knowledge", "arguments": "{}" },
   }];
-  let conversation = root.ai.Conversation { entries: [
+  let history = root.ai.MessageHistory { entries: [
     root.ai.ChatMessage {
       message_role: root.ai.MessageRole.Assistant,
       content: [root.ai.ProviderDataPart {
@@ -45,9 +47,9 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
       metadata: null,
     },
   ] };
-  let imported = provider.import_conversation(conversation);
-  match (imported.transcript) {
-    let state: root.ai.OpenAiToolTranscript => {
+  let imported = provider.import_messages(history);
+  match (imported.conversation) {
+    let state: root.ai.OpenAiConversation => {
       assert.equal(state.wire_messages.length(), 2)
       assert.equal(baml.json.path_or(state.wire_messages[0], ".role", ""), "assistant")
       assert.equal(baml.json.path_or(state.wire_messages[0], ".tool_calls[0].id", ""), "call-1")
@@ -69,29 +71,29 @@ class NamedOpenAiToolProvider {
 }
 
 implements root.ai.ToolCallingProvider for NamedOpenAiToolProvider {
-  function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Transcript
+  function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
       throws baml.errors.ToolError | baml.errors.UnknownError {
     self.inner.begin<T>(task.with_provider(self.inner))
   }
 
-  function step<T>(self, transcript: root.ai.Transcript, tools: root.ai.Tool[])
+  function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.Tool[])
       -> root.ai.ModelStep<T> throws baml.errors.ToolError | baml.errors.UnknownError {
-    self.inner.step<T>(transcript, tools)
+    self.inner.step<T>(conversation, tools)
   }
 
   function submit(
     self,
-    transcript: root.ai.Transcript,
+    conversation: root.ai.Conversation,
     results: root.ai.ToolResult[],
-  ) -> root.ai.Transcript throws baml.errors.ToolError | baml.errors.UnknownError {
-    self.inner.submit(transcript, results)
+  ) -> root.ai.Conversation throws baml.errors.ToolError | baml.errors.UnknownError {
+    self.inner.submit(conversation, results)
   }
 }
 
-implements root.ai.TranscriptImportProvider for NamedOpenAiToolProvider {
-  function import_conversation(self, conversation: root.ai.Conversation)
-      -> root.ai.TranscriptImport throws baml.errors.UnknownError {
-    self.inner.import_conversation(conversation)
+implements root.ai.ConversationImportProvider for NamedOpenAiToolProvider {
+  function import_messages(self, messages: root.ai.Messages)
+      -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    self.inner.import_messages(messages)
   }
 }
 
@@ -109,13 +111,12 @@ testset "integ-test-guide-03-switch-between-turns" {
       [knowledge_tool()],
       `Call search_knowledge with query "duplicate charge". After its result the run will move to another provider; that provider must return the final resolution from the imported conversation.`,
     );
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [knowledge_tool()],
-        guide_dispatch,
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [knowledge_tool()],
         hooks = hooks,
         observers = [observer],
-      )),
+      ),
     );
     log.info("live provider switch " + {
       "events": observer.kinds,

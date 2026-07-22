@@ -22,34 +22,26 @@ class OpenAiToolResponse {
   usage: OpenAiToolUsage?,
 }
 
-class OpenAiToolTranscript {
+class OpenAiConversation {
   owner: OpenAi,
-  history: Conversation,
+  history: MessageHistory,
   tools_json: json[],
   wire_messages: json[],
 
-  implements Transcript {
+  implements Conversation {
     function provider(self) -> Provider throws never { self.owner }
     function messages(self) -> Messages throws never { self.history }
-    function conversation(self) -> Conversation throws never { self.history }
   }
 }
 
-function openai_tool_schemas(tools: Tool[]) -> json[] throws baml.errors.UnknownError {
+function openai_tool_schemas(tools: Tool[]) -> json[] throws never {
   tools.map((tool: Tool) -> json {
-    let schema = if (tool.input_schema != null) {
-      tool.input_schema
-    } else {
-      baml.schema.json_schema(tool.parameters) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["tool schema generation failed"] },
-      }
-    };
     {
       "type": "function",
       "function": {
         "name": tool.name,
         "description": tool.description,
-        "parameters": schema,
+        "parameters": tool.input_schema,
         "strict": false,
       },
     }
@@ -57,11 +49,10 @@ function openai_tool_schemas(tools: Tool[]) -> json[] throws baml.errors.Unknown
 }
 
 implements ToolCallingProvider for OpenAi {
-  function begin<T>(self, task: Task<T>) -> Transcript
-      throws baml.errors.UnknownError {
-    //# Start the native OpenAI tool transcript
-    let history = task.messages().to_conversation();
-    OpenAiToolTranscript {
+  function begin<T>(self, task: Task<T>) -> Conversation throws never {
+    //# Start the native OpenAI conversation
+    let history = task.messages().to_history();
+    OpenAiConversation {
       owner: self,
       history: history,
       tools_json: openai_tool_schemas(task.tools),
@@ -72,12 +63,12 @@ implements ToolCallingProvider for OpenAi {
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
+  function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
-    //# Resume the native OpenAI tool transcript
-    let state = match (transcript) {
-      let value: OpenAiToolTranscript => value,
-      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's transcript" },
+    //# Resume the native OpenAI conversation
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
     };
     //# Build the request from the active tool roster
     state.tools_json = openai_tool_schemas(tools);
@@ -155,7 +146,7 @@ implements ToolCallingProvider for OpenAi {
     //# Return tool calls or the typed final value
     match (message.tool_calls) {
       let raw_calls: json[] => {
-        //## Preserve native tool calls in the transcript
+        //## Preserve native tool calls in the conversation
         state.wire_messages.push({ "role": "assistant", "tool_calls": raw_calls });
         state.history.entries.push(ChatMessage {
           message_role: MessageRole.Assistant,
@@ -185,12 +176,12 @@ implements ToolCallingProvider for OpenAi {
     }
   }
 
-  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
+  function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
       throws baml.errors.ToolError {
-    //# Resume the transcript receiving tool results
-    let state = match (transcript) {
-      let value: OpenAiToolTranscript => value,
-      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's transcript" },
+    //# Resume the conversation receiving tool results
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
     };
     //# Append every tool result to provider wire state
     for (let result in results) {
@@ -237,10 +228,11 @@ function openai_message_provider_data(message: Message) -> json? throws never {
   null
 }
 
-implements TranscriptImportProvider for OpenAi {
-  function import_conversation(self, conversation: Conversation) -> TranscriptImport throws never {
+implements ConversationImportProvider for OpenAi {
+  function import_messages(self, messages: Messages) -> ConversationImport throws never {
+    let history = messages.to_history();
     let wire: json[] = [];
-    for (let message in conversation.entries) {
+    for (let message in history.entries) {
       let provider_data = openai_message_provider_data(message);
       match (message.role()) {
         MessageRole.Assistant => {
@@ -288,27 +280,27 @@ implements TranscriptImportProvider for OpenAi {
         },
       }
     }
-    TranscriptImport {
-      transcript: OpenAiToolTranscript {
+    ConversationImport {
+      conversation: OpenAiConversation {
         owner: self,
-        history: conversation,
+        history: history,
         tools_json: [],
         wire_messages: wire,
       },
-      fidelity: TranscriptFidelity.MessagesOnly,
+      fidelity: ConversationFidelity.MessagesOnly,
       warnings: ["message import; matching OpenAI tool-call frames were retained when available"],
     }
   }
 }
 
 implements ResumableToolCallingProvider for OpenAi {
-  function save_transcript(self, transcript: Transcript) -> TranscriptToken
+  function save_conversation(self, conversation: Conversation) -> ConversationToken
       throws baml.errors.UnknownError {
-    let state = match (transcript) {
-      let value: OpenAiToolTranscript => value,
-      _ => throw baml.errors.UnknownError { data: null, message: ["wrong OpenAI transcript"] },
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.UnknownError { data: null, message: ["wrong OpenAI conversation"] },
     };
-    TranscriptToken {
+    ConversationToken {
       provider: self.name(),
       version: 1,
       sealed: baml.json.stringify({
@@ -318,20 +310,20 @@ implements ResumableToolCallingProvider for OpenAi {
     }
   }
 
-  function restore_transcript(self, token: TranscriptToken) -> Transcript
+  function restore_conversation(self, token: ConversationToken) -> Conversation
       throws baml.errors.UnknownError {
     if (token.provider != self.name() || token.version != 1) {
       throw baml.errors.UnknownError {
         data: token,
-        message: ["OpenAI transcript token has the wrong provider or version"],
+        message: ["OpenAI conversation token has the wrong provider or version"],
       };
     }
     let state = baml.json.parse(token.sealed) catch (e) {
-      _ => throw baml.errors.UnknownError { data: e, message: ["invalid OpenAI transcript token"] },
+      _ => throw baml.errors.UnknownError { data: e, message: ["invalid OpenAI conversation token"] },
     };
-    OpenAiToolTranscript {
+    OpenAiConversation {
       owner: self,
-      history: Conversation.empty(),
+      history: MessageHistory.empty(),
       tools_json: baml.json.path_or<json[]>(state, ".tools", []),
       wire_messages: baml.json.path_or<json[]>(state, ".messages", []),
     }

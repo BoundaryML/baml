@@ -8,16 +8,16 @@ This copy keeps the same scenario names and assertions as `baml_src_temp`, but
 explicit lifecycle selection uses nominal values where possible:
 
 ```baml
-// Function-driven baseline.
+// Function-driven baseline used by the implementation layer.
 let response = root.ai.drivers.generate_with_meta<Resolution>(task)
 
-// Interface-driven comparison.
-let response = task.drive(
-  root.ai.driver.generate_with_meta<Resolution>(),
+// User-facing runner selection keeps the task identity visible.
+let response = task.run(
+  runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
 )
 ```
 
-When a task is not the natural receiver, the driver value receives the honest
+When a task is not the natural receiver, the runner value receives the honest
 plural/provider input instead. Methods on an already-open resource remain
 methods on that resource.
 
@@ -27,7 +27,7 @@ call for every local policy assertion:
 - tasks/providers: OpenAI and Anthropic direct calls and structured streaming
 - tools/agents: real OpenAI tool calls, dynamic rosters, hooks, events, and handoff
 - routing/reliability: real OpenAI retry path and Anthropic fallback target
-- conversations/state: real OpenAI transcript serialization; no network is
+- conversations/state: real OpenAI conversation serialization; no network is
   needed to test sealing/restoration
 - media/realtime: real OpenAI image input, WebSocket realtime text, and tool calls
 - observability/testing: the same task matrix over OpenAI and Anthropic

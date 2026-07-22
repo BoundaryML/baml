@@ -39,17 +39,17 @@ implements GenerationProvider for Fallback {
   }
 }
 
-implements DriveProvider for Fallback {
-  function drive<T>(self, task: Task<T>) -> Response<T>
+implements CompletionProvider for Fallback {
+  function complete<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
     //# Try drive providers in order
     for (let member in self.members) {
       //## Select a drive-capable member
       match (member) {
-        let provider: DriveProvider => {
+        let provider: CompletionProvider => {
           let policy = provider.replay_policy<T>(task.with_provider(member));
           //### Attempt provider drive
-          let response = provider.drive<T>(task.with_provider(member)) catch (e) {
+          let response = provider.complete<T>(task.with_provider(member)) catch (e) {
             let failure: baml.errors.Failure => {
               //#### Continue only after a replay-safe failure
               if (may_replay(policy, failure)) { continue; }
@@ -75,7 +75,7 @@ implements DriveProvider for Fallback {
     for (let member in self.members) {
       //## Inspect each member policy
       match (member) {
-        let provider: DriveProvider => {
+        let provider: CompletionProvider => {
           let policy = provider.replay_policy<T>(task.with_provider(member));
           if (policy.kind != ReplayKind.Safe) {
             return ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null };

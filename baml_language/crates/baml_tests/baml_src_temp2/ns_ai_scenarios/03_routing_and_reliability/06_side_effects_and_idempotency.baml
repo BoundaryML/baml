@@ -1,4 +1,4 @@
-test "guide 03.06: retry rejects a drive operation without replay evidence" {
+test "guide 03.06: retry rejects a completion without replay evidence" {
   let inner = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let effectful = EffectfulProvider { inner: inner };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(effectful, 2)) catch (e) {
@@ -65,11 +65,11 @@ class EffectfulAfterLiveResponse {
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
   }
 
-  implements root.ai.DriveProvider {
-    function drive<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
+  implements root.ai.CompletionProvider {
+    function complete<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       self.calls = self.calls + 1;
-      let response = self.inner.drive<T>(task.with_provider(self.inner));
+      let response = self.inner.complete<T>(task.with_provider(self.inner));
       self.observed_request_ids.push(response.meta.request_id ?? "missing");
       throw LiveEffectCommittedFailure { request_id: response.meta.request_id };
     }

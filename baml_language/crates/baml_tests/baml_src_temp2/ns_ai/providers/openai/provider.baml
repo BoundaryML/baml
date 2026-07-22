@@ -25,8 +25,8 @@ implements GenerationProvider for OpenAi {
   }
 }
 
-implements DriveProvider for OpenAi {
-  function drive<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+implements CompletionProvider for OpenAi {
+  function complete<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
     self.generate<T>(task)
   }
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {

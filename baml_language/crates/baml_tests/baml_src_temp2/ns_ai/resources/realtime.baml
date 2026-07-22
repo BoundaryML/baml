@@ -145,29 +145,22 @@ class OpenAiRealtime {
 }
 
 function openai_realtime_tool_schemas(tools: Tool[]) -> json[]
-    throws baml.errors.UnknownError {
+    throws never {
   tools.map((tool: Tool) -> json {
-    let schema = if (tool.input_schema != null) {
-      tool.input_schema
-    } else {
-      baml.schema.json_schema(tool.parameters) catch (e) {
-        _ => throw baml.errors.UnknownError {
-          data: e,
-          message: ["realtime tool schema generation failed"],
-        },
-      }
-    };
     {
       "type": "function",
       "name": tool.name,
       "description": tool.description,
-      "parameters": schema,
+      "parameters": tool.input_schema,
     }
   })
 }
 
-function openai_realtime_response_create(tools: Tool[], output_audio: bool, voice: string) -> string
-    throws baml.errors.UnknownError {
+function openai_realtime_response_create(
+  tools: Tool[],
+  output_audio: bool,
+  voice: string,
+) -> string throws never {
   let schemas = openai_realtime_tool_schemas(tools);
   if (output_audio) {
     if (schemas.length() > 0) {

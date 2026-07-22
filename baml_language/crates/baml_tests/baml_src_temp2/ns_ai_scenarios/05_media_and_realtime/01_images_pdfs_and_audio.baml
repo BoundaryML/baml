@@ -25,7 +25,7 @@ testset "integ-test-guide-05-image-input" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );
-    let value = task.drive(root.ai.driver.drive<string>());
+    let value = task.run(runner = root.ai.run.Completion<string>.new());
     assert.is_true(value.length() > 0)
   }
 
@@ -37,7 +37,7 @@ testset "integ-test-guide-05-image-input" {
       ),
       live_anthropic(),
     );
-    let value = task.drive(root.ai.driver.drive<string>());
+    let value = task.run(runner = root.ai.run.Completion<string>.new());
     log.info(baml.json.stringify({
       "guide": "05.01",
       "media": "pdf",

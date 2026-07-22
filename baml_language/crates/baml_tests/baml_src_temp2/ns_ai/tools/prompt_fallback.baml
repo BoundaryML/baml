@@ -14,42 +14,29 @@ implements Provider for PromptToolProvider {
   }
 }
 
-class PromptToolTranscript {
+class PromptToolConversation {
   owner: PromptToolProvider,
-  history: Conversation,
+  history: MessageHistory,
   recipe: PromptRenderRecipe,
   identity: TaskIdentity?,
   arguments: map<string, unknown>,
-  options: TaskOptions,
   tags: map<string, string>,
 
-  implements Transcript {
+  implements Conversation {
     function provider(self) -> Provider throws never { self.owner }
     function messages(self) -> Messages throws never { self.history }
-    function conversation(self) -> Conversation throws never { self.history }
   }
 }
 
-function prompt_tool_schema(tool: Tool) -> json throws baml.errors.UnknownError {
-  let schema = if (tool.input_schema != null) {
-    tool.input_schema
-  } else {
-    baml.schema.json_schema(tool.parameters) catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["prompt tool schema generation failed for " + tool.name],
-      },
-    }
-  };
+function prompt_tool_schema(tool: Tool) -> json throws never {
   {
     "name": tool.name,
     "description": tool.description,
-    "parameters": schema,
+    "parameters": tool.input_schema,
   }
 }
 
-function prompt_tool_output_suffix(tools: Tool[]) -> string
-    throws baml.errors.UnknownError {
+function prompt_tool_output_suffix(tools: Tool[]) -> string throws never {
   let schemas = tools.map((tool: Tool) -> json { prompt_tool_schema(tool) });
   "\n\n" + `The output contract above permits either the final result or a ToolCalls value.
 To use tools, return ToolCalls with one or more calls. Each call must have a
@@ -74,7 +61,7 @@ function prompt_tool_role(role: MessageRole) -> string throws never {
   }
 }
 
-function prompt_tool_history(history: Conversation) -> string throws never {
+function prompt_tool_history(history: MessageHistory) -> string throws never {
   if (history.entries.length() <= 1) { return ""; }
   history.entries.slice(1, history.entries.length()).map(
     (message: Message) -> string {
@@ -85,7 +72,7 @@ function prompt_tool_history(history: Conversation) -> string throws never {
 
 function prompt_tool_turn<T>(
   provider: PromptToolProvider,
-  state: PromptToolTranscript,
+  state: PromptToolConversation,
   tools: Tool[],
   output_suffix: string,
 ) -> Task<T> throws never {
@@ -114,34 +101,31 @@ function prompt_tool_turn<T>(
     identity: state.identity,
     arguments: state.arguments,
     tools: tools,
-    options: state.options,
     tags: state.tags,
-    transcript: null,
     _render: recipe,
   }
 }
 
 implements ToolCallingProvider for PromptToolProvider {
-  function begin<T>(self, task: Task<T>) -> Transcript
+  function begin<T>(self, task: Task<T>) -> Conversation
       throws never {
-    PromptToolTranscript {
+    PromptToolConversation {
       owner: self,
-      history: task.messages().to_conversation(),
+      history: task.messages().to_history(),
       recipe: task._render,
       identity: task.identity,
       arguments: task.arguments,
-      options: task.options,
       tags: task.tags,
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
+  function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
-    //# Resume the prompt-tool transcript
-    let state = match (transcript) {
-      let value: PromptToolTranscript => value,
+    //# Resume the prompt-tool conversation
+    let state = match (conversation) {
+      let value: PromptToolConversation => value,
       _ => throw baml.errors.ToolError {
-        message: "prompt tool adapter received another provider's transcript",
+        message: "prompt tool adapter received another provider's conversation",
       },
     };
     //# Resolve the backing generation provider
@@ -187,13 +171,13 @@ implements ToolCallingProvider for PromptToolProvider {
     }
   }
 
-  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
+  function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
       throws baml.errors.ToolError {
-    //# Resume the prompt transcript receiving results
-    let state = match (transcript) {
-      let value: PromptToolTranscript => value,
+    //# Resume the prompt conversation receiving results
+    let state = match (conversation) {
+      let value: PromptToolConversation => value,
       _ => throw baml.errors.ToolError {
-        message: "prompt tool adapter received another provider's transcript",
+        message: "prompt tool adapter received another provider's conversation",
       },
     };
     //# Append tool results to prompt history

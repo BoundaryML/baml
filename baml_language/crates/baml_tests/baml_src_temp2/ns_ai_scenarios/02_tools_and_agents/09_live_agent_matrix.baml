@@ -10,22 +10,21 @@ testset "integ-test-guide-02-agent-capabilities" {
     let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
     let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
     let observer = GuideObserver { kinds: [] };
-    let options = root.ai.AgentOptions.new(
-      [],
-      guide_dispatch,
+    let runner = root.ai.run.Agent<Resolution>.new(
+      tools = [],
       tool_registry = registry,
       hooks = hooks,
       observers = [observer],
     );
     //# Run the live agent with dynamic capabilities
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(options),
+    let outcome = task.run(
+      runner = runner,
     );
-    //# Inspect transcript and emitted events
+    //# Inspect the provider conversation and emitted events
     match (outcome) {
-      let done: root.ai.Done<Resolution> => match (done.transcript) {
-        let transcript: root.ai.OpenAiToolTranscript => assert.equal(transcript.tools_json.length(), 2),
+      let done: root.ai.Done<Resolution> => match (done.conversation) {
+        let conversation: root.ai.OpenAiConversation => assert.equal(conversation.tools_json.length(), 2),
         _ => assert.is_true(false),
       },
       _ => assert.is_true(false),
@@ -44,10 +43,8 @@ testset "integ-test-guide-02-agent-capabilities" {
     let handoff = account_tool().as_handoff();
     //# Run until the handoff boundary
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff]);
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(
-        root.ai.AgentOptions.new([handoff], guide_dispatch),
-      ),
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(tools = [handoff]),
     );
     //# Verify control was transferred
     match (outcome) {

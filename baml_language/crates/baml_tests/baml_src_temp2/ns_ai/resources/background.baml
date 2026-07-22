@@ -202,7 +202,7 @@ class OpenAiBackgroundJob<T> {
           attributes: { "polls": self.polls, "background": true },
           raw: raw,
         },
-        transcript: null,
+        conversation: null,
       }
     }
 

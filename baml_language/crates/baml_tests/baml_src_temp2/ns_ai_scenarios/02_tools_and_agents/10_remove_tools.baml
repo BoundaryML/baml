@@ -42,9 +42,8 @@ function tool_roster_hooks() -> ToolRosterHooks throws never {
 test "guide 02.09: remove one application tool between provider steps" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), remove_name: "lookup_account" };
-  let options = root.ai.AgentOptions.new(
-    [],
-    guide_dispatch,
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [],
     tool_registry = registry,
     hooks = hooks,
   );
@@ -53,14 +52,14 @@ test "guide 02.09: remove one application tool between provider steps" {
     fake_tool_provider([one_knowledge_call()]),
     [],
   );
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = runner,
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.FakeToolTranscript => {
-        assert.equal(transcript.last_tools.length(), 1);
-        assert.equal(transcript.last_tools[0].name, "search_knowledge");
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.FakeToolConversation => {
+        assert.equal(conversation.last_tools.length(), 1);
+        assert.equal(conversation.last_tools[0].name, "search_knowledge");
       },
       _ => assert.is_true(false),
     },
@@ -70,9 +69,8 @@ test "guide 02.09: remove one application tool between provider steps" {
 
 test "guide 02.09: an explicit empty list removes all application tools" {
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), application_tools: [] };
-  let options = root.ai.AgentOptions.new(
-    [knowledge_tool(), account_tool()],
-    guide_dispatch,
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [knowledge_tool(), account_tool()],
     hooks = hooks,
   );
   let task = ResolveTicketWithTools_task(
@@ -80,12 +78,12 @@ test "guide 02.09: an explicit empty list removes all application tools" {
     fake_tool_provider([one_knowledge_call()]),
     [knowledge_tool(), account_tool()],
   );
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = runner,
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.FakeToolTranscript => assert.equal(transcript.last_tools.length(), 0),
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.FakeToolConversation => assert.equal(conversation.last_tools.length(), 0),
       _ => assert.is_true(false),
     },
     _ => assert.is_true(false),
@@ -95,9 +93,8 @@ test "guide 02.09: an explicit empty list removes all application tools" {
 test "guide 02.09: an empty replacement updates the registry and persists" {
   let registry = root.ai.ToolRegistry.new([knowledge_tool(), account_tool()]);
   let hooks = ToolRosterHooks { ...tool_roster_hooks(), clear_roster: true };
-  let options = root.ai.AgentOptions.new(
-    [],
-    guide_dispatch,
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [],
     tool_registry = registry,
     hooks = hooks,
   );
@@ -106,14 +103,14 @@ test "guide 02.09: an empty replacement updates the registry and persists" {
     fake_tool_provider([one_knowledge_call()]),
     [],
   );
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = runner,
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.FakeToolTranscript => {
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.FakeToolConversation => {
         assert.equal(registry.snapshot().length(), 0);
-        assert.equal(transcript.last_tools.length(), 0);
+        assert.equal(conversation.last_tools.length(), 0);
       },
       _ => assert.is_true(false),
     },
@@ -136,17 +133,20 @@ test "guide 02.09: remove application and provider-owned tools together" {
     application_tools: [],
     next_provider: without_builtins,
   };
-  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [knowledge_tool()],
+    hooks = hooks,
+  );
   let task = ResolveTicketWithTools_task(sample_ticket(), initial, [knowledge_tool()]);
-  let outcome = task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  let outcome = task.run(
+    runner = runner,
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.FakeToolTranscript => {
-        assert.equal(transcript.owner.name(), "fake-tools");
-        assert.equal(transcript.last_tools.length(), 0);
-        assert.equal(transcript.last_provider_tools.length(), 0);
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.FakeToolConversation => {
+        assert.equal(conversation.owner.name(), "fake-tools");
+        assert.equal(conversation.last_tools.length(), 0);
+        assert.equal(conversation.last_provider_tools.length(), 0);
       },
       _ => assert.is_true(false),
     },
@@ -165,19 +165,18 @@ testset "integ-test-guide-02-remove-tools" {
       [],
       `First call search_knowledge with query "duplicate charge". After its result, lookup_account will be removed. Return the final resolution without calling a removed tool.`,
     );
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [],
-        guide_dispatch,
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [],
         tool_registry = registry,
         hooks = hooks,
         observers = [observer],
-      )),
+      ),
     );
     match (outcome) {
-      let done: root.ai.Done<Resolution> => match (done.transcript) {
-        let transcript: root.ai.OpenAiToolTranscript => {
-          let names = transcript.tools_json.map((schema: json) -> string {
+      let done: root.ai.Done<Resolution> => match (done.conversation) {
+        let conversation: root.ai.OpenAiConversation => {
+          let names = conversation.tools_json.map((schema: json) -> string {
             baml.json.path_or<string>(schema, ".function.name", "")
           });
           log.info("live removed tools " + {

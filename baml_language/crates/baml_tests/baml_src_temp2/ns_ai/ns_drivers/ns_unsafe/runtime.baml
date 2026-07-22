@@ -1,8 +1,8 @@
 // Runtime-negotiated escape hatches. With D-001, the executable reference
 // already erases P; this namespace preserves the proposed call-site signal.
-function drive<T>(task: root.ai.Task<T>) -> T
+function complete<T>(task: root.ai.Task<T>) -> T
     throws baml.errors.CallError | baml.errors.UnknownError {
-  root.ai.drivers.drive<T>(task)
+  root.ai.drivers.complete<T>(task)
 }
 
 function generate<T>(task: root.ai.Task<T>) -> T

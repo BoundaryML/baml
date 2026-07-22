@@ -15,14 +15,14 @@ class HarnessSessionToken {
 
 interface HarnessSession requires Resource {
   function id(self) -> string throws never
-  function conversation(self) -> Conversation throws never
+  function messages(self) -> Messages throws never
   function stopped(self) -> bool throws never
 }
 
 class LocalHarnessSession {
   session_id: string,
   options: HarnessOptions,
-  history: Conversation,
+  history: MessageHistory,
   is_stopped: bool,
   is_cleaned: bool,
   steering: string[],
@@ -38,7 +38,7 @@ class LocalHarnessSession {
 
   implements HarnessSession {
     function id(self) -> string throws never { self.session_id }
-    function conversation(self) -> Conversation throws never { self.history }
+    function messages(self) -> Messages throws never { self.history }
     function stopped(self) -> bool throws never { self.is_stopped }
   }
   implements Resource {}
@@ -48,7 +48,7 @@ class HarnessRun<T> {
   value: T,
   events: AgentEvent[],
   token: HarnessSessionToken,
-  conversation: Conversation,
+  history: MessageHistory,
 }
 
 // A harness stream owns the provider stream and the session it is updating.

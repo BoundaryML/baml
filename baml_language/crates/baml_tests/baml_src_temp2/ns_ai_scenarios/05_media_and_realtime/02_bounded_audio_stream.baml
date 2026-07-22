@@ -5,10 +5,7 @@ test "guide 05.02: AudioStream means finite input, not a live channel" {
     channels: 1,
   };
   let provider = root.ai.FakeTranscriptionProvider { output: "hello", received_chunks: [] };
-  let response = root.ai.driver.transcribe_with_meta(
-    provider,
-    root.ai.TranscriptionOptions { language: "en", prompt: null },
-  ).drive(stream);
+  let response = root.ai.run.TranscribeWithMeta.new(provider, language = "en").run(stream);
   assert.equal(response.value, "hello")
   assert.equal(provider.received_chunks.length(), 1)
   assert.equal(response.meta.attributes["sample_rate_hz"], 24000)
@@ -31,10 +28,11 @@ testset "integ-test-guide-05-bounded-audio" {
       },
       received_chunks: 0,
     };
-    let response = root.ai.driver.transcribe_with_meta(
+    let response = root.ai.run.TranscribeWithMeta.new(
       provider,
-      root.ai.TranscriptionOptions { language: "en", prompt: "a short weather question" },
-    ).drive(stream);
+      language = "en",
+      prompt = "a short weather question",
+    ).run(stream);
     log.info(baml.json.stringify({
       "guide": "05.02",
       "provider": response.meta.provider,

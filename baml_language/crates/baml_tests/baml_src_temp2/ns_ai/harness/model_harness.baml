@@ -1,4 +1,4 @@
-// A small in-process harness adapter backed by any DriveProvider. It is useful
+// A small in-process harness adapter backed by any CompletionProvider. It is useful
 // both as a real OpenAI/Anthropic integration adapter and as the blueprint for
 // an external coding-harness implementation.
 class ModelHarness {
@@ -100,7 +100,7 @@ class ModelHarnessEventStream<TPartial, T> {
         },
       };
       self.is_closed = true;
-      self.session.history = self.task.messages().to_conversation();
+      self.session.history = self.task.messages().to_history();
       let finished: AgentEvent = RunFinishedEvent {
         id: self.session.session_id,
         outcome: "done",
@@ -110,7 +110,7 @@ class ModelHarnessEventStream<TPartial, T> {
         value: value,
         events: self.emitted,
         token: self.owner.save_session(self.session),
-        conversation: self.session.history,
+        history: self.session.history,
       };
       self.cached_run = run;
       run
@@ -124,8 +124,8 @@ implements Provider for ModelHarness {
   function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
 }
 
-implements DriveProvider for ModelHarness {
-  function drive<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+implements CompletionProvider for ModelHarness {
+  function complete<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
     //# Open an isolated harness session
     let session = self.open(HarnessOptions {
       cwd: null,
@@ -147,7 +147,7 @@ implements DriveProvider for ModelHarness {
         attributes: {},
         raw: null,
       },
-      transcript: null,
+      conversation: null,
     }
   }
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
@@ -161,7 +161,7 @@ implements Harness for ModelHarness {
     let session = LocalHarnessSession {
       session_id: "session-" + (self.sessions.length() + 1).to_string(),
       options: options,
-      history: Conversation.empty(),
+      history: MessageHistory.empty(),
       is_stopped: false,
       is_cleaned: false,
       steering: [],
@@ -181,18 +181,18 @@ implements Harness for ModelHarness {
     if (local.is_stopped) {
       throw baml.errors.UnknownError { data: null, message: ["harness session is stopped"] };
     }
-    //# Resolve the backing drive provider
+    //# Resolve the backing completion provider
     let provider = match (self.inner) {
-      let capability: DriveProvider => capability,
-      _ => throw baml.errors.UnknownError { data: null, message: ["harness inner cannot drive"] },
+      let capability: CompletionProvider => capability,
+      _ => throw baml.errors.UnknownError { data: null, message: ["harness inner cannot complete"] },
     };
     //# Run the model through the harness
     let effective_task = model_harness_task<T>(self.inner, local, task);
-    let response = provider.drive<T>(effective_task) catch (e) {
+    let response = provider.complete<T>(effective_task) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["harness model run failed"] },
     };
     //# Save conversation and resumable coordinates
-    local.history = effective_task.messages().to_conversation();
+    local.history = effective_task.messages().to_history();
     let events: AgentEvent[] = [ModelStartedEvent {
       id: local.session_id,
       provider: self.inner.name(),
@@ -206,7 +206,7 @@ implements Harness for ModelHarness {
       value: response.value,
       events: events,
       token: self.save_session(local),
-      conversation: local.history,
+      history: local.history,
     }
   }
 

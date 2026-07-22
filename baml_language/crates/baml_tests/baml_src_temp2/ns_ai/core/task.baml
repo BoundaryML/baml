@@ -3,15 +3,6 @@ class TaskIdentity {
   package: string,
 }
 
-class TaskOptions {
-  tool_registry: ToolRegistry?,
-  dispatch: ((ToolCall[]) -> ToolResult[] throws never)?,
-  hooks: AgentHooks?,
-  observers: AgentObserver[],
-  recorders: AgentRecorder[],
-  run_id: string?,
-}
-
 class PromptRenderRecipe {
   template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 
@@ -19,7 +10,7 @@ class PromptRenderRecipe {
     self.render_with_output_format(provider, output_type, "")
   }
 
-  // Drivers that add another model-visible result branch, such as the
+  // Runners that add another model-visible result branch, such as the
   // prompt/SAP tool fallback, extend ctx.output_format here. The LLM function
   // still owns where that contract appears in its prompt.
   function render_with_output_format(
@@ -47,18 +38,17 @@ class Task<T> {
   identity: TaskIdentity?,
   arguments: map<string, unknown>,
   tools: Tool[],
-  options: TaskOptions,
   tags: map<string, string>,
-  transcript: Transcript?,
   _render: PromptRenderRecipe,
 
-  // Experimental interface-driven surface. The concrete driver determines
-  // both the return value and the error channel through associated types.
-  function drive<Output, Error, D extends Driver<Task<T>, Output = Output, Error = Error>>(
+  // The concrete runner determines both the return value and error channel
+  // through associated types. The named argument makes the execution policy
+  // explicit at every non-default call site.
+  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
     self,
-    driver: D,
+    runner: R,
   ) -> Output throws Error {
-    driver.drive(self)
+    runner.run(self)
   }
 
   function output_type(self) -> type throws never {
@@ -70,10 +60,7 @@ class Task<T> {
   }
 
   function messages(self) -> Messages throws never {
-    match (self.transcript) {
-      let value: Transcript => value.messages(),
-      null => prompt_to_messages(self.prompt),
-    }
+    prompt_to_messages(self.prompt)
   }
 
   function with_provider(self, provider: Provider) -> Task<T> throws never {
@@ -83,9 +70,7 @@ class Task<T> {
       identity: self.identity,
       arguments: self.arguments,
       tools: self.tools,
-      options: self.options,
       tags: self.tags,
-      transcript: self.transcript,
       _render: self._render,
     }
   }
@@ -97,23 +82,7 @@ class Task<T> {
       identity: self.identity,
       arguments: self.arguments,
       tools: tools,
-      options: self.options,
       tags: self.tags,
-      transcript: self.transcript,
-      _render: self._render,
-    }
-  }
-
-  function with_transcript(self, transcript: Transcript) -> Task<T> throws never {
-    Task<T> {
-      provider: self.provider,
-      prompt: self.prompt,
-      identity: self.identity,
-      arguments: self.arguments,
-      tools: self.tools,
-      options: self.options,
-      tags: self.tags,
-      transcript: transcript,
       _render: self._render,
     }
   }
@@ -123,14 +92,7 @@ function task<T>(
   provider: Provider,
   template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 ) -> Task<T> throws never {
-  task_named<T>(provider, "anonymous", {}, [], TaskOptions {
-    tool_registry: null,
-    dispatch: null,
-    hooks: null,
-    observers: [],
-    recorders: [],
-    run_id: null,
-  }, template)
+  task_named<T>(provider, "anonymous", {}, [], template)
 }
 
 function task_named<T>(
@@ -138,7 +100,6 @@ function task_named<T>(
   name: string,
   arguments: map<string, unknown>,
   tools: Tool[],
-  options: TaskOptions,
   template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 ) -> Task<T> throws never {
   let recipe = PromptRenderRecipe { template: template };
@@ -148,9 +109,7 @@ function task_named<T>(
     identity: TaskIdentity { name: name, package: "bepv2_reference" },
     arguments: arguments,
     tools: tools,
-    options: options,
     tags: {},
-    transcript: null,
     _render: recipe,
   }
 }

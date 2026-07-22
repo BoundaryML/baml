@@ -10,7 +10,6 @@ function InvestigateRepository_task(
     "InvestigateRepository",
     { "ticket": ticket },
     [],
-    default_task_options(),
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
@@ -24,12 +23,12 @@ function InvestigateRepository_task(
 }
 
 // Future compiler lowering for the direct form when the harness implements
-// DriveProvider by owning the complete session lifecycle.
+// CompletionProvider by owning the complete session lifecycle.
 function InvestigateRepository_manual(
   ticket: SupportTicket,
   harness: root.ai.Provider,
 ) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
-  root.ai.drivers.drive<Resolution>(InvestigateRepository_task(ticket, harness))
+  root.ai.drivers.complete<Resolution>(InvestigateRepository_task(ticket, harness))
 }
 
 function harness_options() -> root.ai.HarnessOptions throws never {
@@ -39,6 +38,17 @@ function harness_options() -> root.ai.HarnessOptions throws never {
     sandbox: "workspace",
     attributes: { "team": "support" },
   }
+}
+
+function harness_runner<T>(harness: root.ai.Harness) -> root.ai.run.Harness<T> throws never {
+  let options = harness_options();
+  root.ai.run.Harness<T>.new(
+    harness,
+    cwd = options.cwd,
+    permission_mode = options.permission_mode,
+    sandbox = options.sandbox,
+    attributes = options.attributes,
+  )
 }
 
 function fake_model_harness() -> root.ai.ModelHarness throws never {

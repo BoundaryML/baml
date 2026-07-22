@@ -1,5 +1,5 @@
 class NamedHarness {
-  inner: root.ai.ModelHarness,
+    inner: root.ai.ModelHarness,
 }
 
 implements root.ai.Harness for NamedHarness {
@@ -26,32 +26,35 @@ implements root.ai.Harness for NamedHarness {
 }
 
 test "guide 08.06: a custom harness composes through out-of-body implements" {
-  let harness = NamedHarness { inner: fake_model_harness() };
-  let run = InvestigateRepository_task(sample_ticket(), harness.inner.inner).drive(
-    root.ai.driver.harness<Resolution>(harness, harness_options()),
-  );
-  assert.equal(harness.label(), "custom-coding-harness")
-  assert.equal(run.value.category, "billing")
+    let harness = NamedHarness { inner: fake_model_harness() };
+    let run = InvestigateRepository_task(sample_ticket(), harness.inner.inner)
+        .run(runner = harness_runner<Resolution>(harness));
+    assert.equal(harness.label(), "custom-coding-harness");
+    assert.equal(run.value.category, "billing")
 }
 
 testset "integ-test-guide-08-custom-harness" {
-  test "guide 08.06 live OpenAI: out-of-body adapter preserves typed execution" {
-    let inner = live_openai_model_harness();
-    let harness = NamedHarness { inner: inner };
-    //# Execute a real provider through the custom out-of-body Harness impl
-    let run = InvestigateRepository_task(sample_ticket(), inner.inner).drive(
-      root.ai.driver.harness<Resolution>(harness, harness_options()),
-    );
-    log.info(baml.json.stringify({
-      "guide": "08.06",
-      "adapter": harness.label(),
-      "runtime": run.token.runtime,
-      "event_count": run.events.length(),
-      "result_length": run.value.reply.length(),
-    }));
-    assert.equal(harness.label(), "custom-coding-harness")
-    assert.equal(run.token.runtime, "baml")
-    assert.is_true(run.events.length() >= 2)
-    assert.is_true(run.value.reply.length() > 0)
-  }
+    test "guide 08.06 live OpenAI: out-of-body adapter preserves typed execution" {
+        let inner = live_openai_model_harness();
+        let harness = NamedHarness { inner: inner };
+        //# Execute a real provider through the custom out-of-body Harness impl
+        let run = InvestigateRepository_task(sample_ticket(), inner.inner)
+            .run(runner = harness_runner<Resolution>(harness));
+        log.info(
+            baml.json
+                .stringify(
+                    {
+                        "guide": "08.06",
+                        "adapter": harness.label(),
+                        "runtime": run.token.runtime,
+                        "event_count": run.events.length(),
+                        "result_length": run.value.reply.length(),
+                    },
+                ),
+        );
+        assert.equal(harness.label(), "custom-coding-harness");
+        assert.equal(run.token.runtime, "baml");
+        assert.is_true(run.events.length() >= 2);
+        assert.is_true(run.value.reply.length() > 0)
+    }
 }

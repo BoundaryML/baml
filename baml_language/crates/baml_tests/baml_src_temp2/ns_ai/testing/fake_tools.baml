@@ -1,14 +1,13 @@
-class FakeToolTranscript {
+class FakeToolConversation {
   owner: FakeToolProvider,
-  history: Conversation,
+  history: MessageHistory,
   turn: int,
   last_tools: Tool[],
   last_provider_tools: ProviderTool[],
 
-  implements Transcript {
+  implements Conversation {
     function provider(self) -> Provider throws never { self.owner }
     function messages(self) -> Messages throws never { self.history }
-    function conversation(self) -> Conversation throws never { self.history }
   }
 }
 
@@ -35,27 +34,27 @@ implements GenerationProvider for FakeToolProvider {
         provider: self.provider_name, model: "fake", request_id: null,
         finish_reason: "stop", usage: null, attributes: {}, raw: null,
       },
-      transcript: null,
+      conversation: null,
     }
   }
 }
 
 implements ToolCallingProvider for FakeToolProvider {
-  function begin<T>(self, task: Task<T>) -> Transcript throws never {
-    FakeToolTranscript {
+  function begin<T>(self, task: Task<T>) -> Conversation throws never {
+    FakeToolConversation {
       owner: self,
-      history: task.messages().to_conversation(),
+      history: task.messages().to_history(),
       turn: 0,
       last_tools: task.tools,
       last_provider_tools: self.provider_tools,
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
+  function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.UnknownError {
-    let state = match (transcript) {
-      let value: FakeToolTranscript => value,
-      _ => throw baml.errors.UnknownError { data: null, message: ["wrong fake transcript"] },
+    let state = match (conversation) {
+      let value: FakeToolConversation => value,
+      _ => throw baml.errors.UnknownError { data: null, message: ["wrong fake conversation"] },
     };
     state.last_tools = tools;
     state.last_provider_tools = self.provider_tools;
@@ -75,38 +74,37 @@ implements ToolCallingProvider for FakeToolProvider {
     }
   }
 
-  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript throws never {
-    transcript
+  function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation throws never {
+    conversation
   }
 }
 
-implements TranscriptImportProvider for FakeToolProvider {
-  function import_conversation(self, conversation: Conversation) -> TranscriptImport throws never {
-    TranscriptImport {
-      transcript: FakeToolTranscript {
+implements ConversationImportProvider for FakeToolProvider {
+  function import_messages(self, messages: Messages) -> ConversationImport throws never {
+    ConversationImport {
+      conversation: FakeToolConversation {
         owner: self,
-        history: conversation,
+        history: messages.to_history(),
         turn: 0,
         last_tools: [],
         last_provider_tools: self.provider_tools,
       },
-      fidelity: TranscriptFidelity.MessagesOnly,
+      fidelity: ConversationFidelity.MessagesOnly,
       warnings: [],
     }
   }
 }
 
-class ScriptedToolTranscript {
+class ScriptedToolConversation {
   owner: ScriptedToolProvider,
-  history: Conversation,
+  history: MessageHistory,
   turn: int,
   observed_tool_rosters: string[][],
   submitted_results: ToolResult[][],
 
-  implements Transcript {
+  implements Conversation {
     function provider(self) -> Provider throws never { self.owner }
     function messages(self) -> Messages throws never { self.history }
-    function conversation(self) -> Conversation throws never { self.history }
   }
 }
 
@@ -122,23 +120,23 @@ implements Provider for ScriptedToolProvider {
 }
 
 implements ToolCallingProvider for ScriptedToolProvider {
-  function begin<T>(self, task: Task<T>) -> Transcript throws never {
-    ScriptedToolTranscript {
+  function begin<T>(self, task: Task<T>) -> Conversation throws never {
+    ScriptedToolConversation {
       owner: self,
-      history: task.messages().to_conversation(),
+      history: task.messages().to_history(),
       turn: 0,
       observed_tool_rosters: [],
       submitted_results: [],
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
+  function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.UnknownError {
-    let state = match (transcript) {
-      let value: ScriptedToolTranscript => value,
+    let state = match (conversation) {
+      let value: ScriptedToolConversation => value,
       _ => throw baml.errors.UnknownError {
         data: null,
-        message: ["wrong scripted tool transcript"],
+        message: ["wrong scripted tool conversation"],
       },
     };
     state.observed_tool_rosters.push(
@@ -164,13 +162,13 @@ implements ToolCallingProvider for ScriptedToolProvider {
     }
   }
 
-  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
+  function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
       throws baml.errors.UnknownError {
-    let state = match (transcript) {
-      let value: ScriptedToolTranscript => value,
+    let state = match (conversation) {
+      let value: ScriptedToolConversation => value,
       _ => throw baml.errors.UnknownError {
         data: null,
-        message: ["wrong scripted tool transcript"],
+        message: ["wrong scripted tool conversation"],
       },
     };
     state.submitted_results.push(results);

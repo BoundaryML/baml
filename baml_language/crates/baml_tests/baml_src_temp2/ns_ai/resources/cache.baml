@@ -202,7 +202,7 @@ class GeminiManagedCache {
           },
           raw: raw,
         },
-        transcript: null,
+        conversation: null,
       }
     }
 

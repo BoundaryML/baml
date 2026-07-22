@@ -2,8 +2,8 @@ test "guide 03.05: failure-aware switching is an explicit fallback policy" {
   let failed = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let good = fake_resolution();
   let task = ResolveTicket_task(sample_ticket(), root.ai.fallback([failed, good]));
-  let result = task.drive(
-    root.ai.driver.generate_with_meta<Resolution>(),
+  let result = task.run(
+    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
   );
   assert.equal(result.value.category, "billing")
 }
@@ -19,8 +19,8 @@ testset "integ-test-guide-03-switch-after-failure" {
       sample_ticket(),
       root.ai.fallback([failed, live_anthropic()]),
     );
-    let response = task.drive(
-      root.ai.driver.generate_with_meta<Resolution>(),
+    let response = task.run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     log.info("live failure switch " + {
       "primary_calls": failed.calls,

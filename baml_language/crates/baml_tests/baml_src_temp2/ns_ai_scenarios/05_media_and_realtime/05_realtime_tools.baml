@@ -12,20 +12,13 @@ testset "integ-test-guide-05-realtime-tools" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       output_audio: false,
     };
-    let base = VoiceSupport_task(
+    let tool = account_tool();
+    let task = VoiceSupport_task(
       "Call lookup_account with customer_id C-1. Then report the returned status and tier.",
       provider,
-    );
-    let task = root.ai.Task<null> {
-      ...base,
-      tools: [account_tool()],
-      options: root.ai.TaskOptions {
-        ...base.options,
-        dispatch: guide_dispatch,
-      },
-    };
+    ).with_tools([tool]);
     let channel = root.ai.RecordingChannel { frames: [] };
-    let live = task.drive(root.ai.driver.live(channel));
+    let live = task.run(runner = root.ai.run.Realtime.new(channel));
     let requested = live.events();
     let calls: root.ai.ToolCall[] = [];
     for (let event in requested) {
@@ -39,7 +32,9 @@ testset "integ-test-guide-05-realtime-tools" {
     assert.equal(calls.length(), 1)
     assert.equal(calls[0].name, "lookup_account")
     assert.equal(baml.json.path_or(calls[0].args, ".customer_id", ""), "C-1")
-    let results = guide_dispatch(calls);
+    let results = calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+      root.ai.invoke_tool(tool, call)
+    });
     assert.equal(results.length(), 1)
     assert.is_true(!results[0].is_error)
     live.submit_tool_results(results);

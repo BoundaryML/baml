@@ -4,8 +4,8 @@ test "guide 03.02: fallback re-renders and tries the next provider" {
   let good = root.ai.FakeProvider { ...fake_resolution(), provider_name: "second" };
   //# Execute the ordered fallback chain
   let task = ResolveTicket_task(sample_ticket(), root.ai.fallback([failed, good]));
-  let response = task.drive(
-    root.ai.driver.generate_with_meta<Resolution>(),
+  let response = task.run(
+    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
   );
   //# Verify the fallback provider completed
   assert.equal(response.meta.provider, "second")
@@ -26,8 +26,8 @@ testset "integ-test-guide-03-fallback" {
     ];
     //# Execute the live fallback chain
     let task = ResolveTicket_task(sample_ticket(), root.ai.fallback(providers));
-    let response = task.drive(
-      root.ai.driver.generate_with_meta<Resolution>(),
+    let response = task.run(
+      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     //# Verify Anthropic completed the task
     assert.equal(response.meta.provider, "anthropic")

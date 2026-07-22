@@ -96,6 +96,6 @@ function primitive_generate<T>(
       attributes: {},
       raw: raw,
     },
-    transcript: null,
+    conversation: null,
   }
 }

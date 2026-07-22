@@ -129,12 +129,12 @@ class ChatMessage {
 interface Messages {
   function items(self) -> Message[] throws never
   function append(self, message: Message) -> Messages throws never
-  function to_conversation(self) -> Conversation throws never
+  function to_history(self) -> MessageHistory throws never
 }
 
 // Editable, serializable application state. Exact provider continuation data
-// remains on Transcript rather than being reconstructed from this class.
-class Conversation {
+// remains on Conversation rather than being reconstructed from this class.
+class MessageHistory {
   entries: Message[],
 
   implements Messages {
@@ -142,54 +142,55 @@ class Conversation {
     function append(self, message: Message) -> Messages throws never {
       let entries = self.entries.slice(0, self.entries.length());
       entries.push(message);
-      Conversation { entries: entries }
+      MessageHistory { entries: entries }
     }
-    function to_conversation(self) -> Conversation throws never { self }
+    function to_history(self) -> MessageHistory throws never { self }
   }
 
-  function empty() -> Conversation throws never { Conversation { entries: [] } }
+  function empty() -> MessageHistory throws never { MessageHistory { entries: [] } }
 }
 
-interface Transcript {
+// Provider-owned continuation state. Concrete implementations retain wire
+// identifiers, encrypted reasoning blocks, cache handles, or any other state
+// needed for exact resumption while exposing a portable Messages projection.
+interface Conversation {
   function provider(self) -> Provider throws never
   function messages(self) -> Messages throws never
-  function conversation(self) -> Conversation throws never
 }
 
-// A provider-controlled in-process transcript. `sealed_state` stands in for
+// A provider-controlled in-process conversation. `sealed_state` stands in for
 // wire IDs, thinking signatures, encrypted blocks, and other exact state.
-class ProviderTranscript {
+class ProviderConversation {
   owner: Provider,
-  history: Conversation,
+  history: MessageHistory,
   sealed_state: json,
 
-  implements Transcript {
+  implements Conversation {
     function provider(self) -> Provider throws never { self.owner }
     function messages(self) -> Messages throws never { self.history }
-    function conversation(self) -> Conversation throws never { self.history }
   }
 }
 
-class TranscriptToken {
+class ConversationToken {
   provider: string,
   version: int,
   sealed: string,
 }
 
-enum TranscriptFidelity {
+enum ConversationFidelity {
   Exact
   MessagesOnly
   Lossy
 }
 
-class TranscriptImport {
-  transcript: Transcript,
-  fidelity: TranscriptFidelity,
+class ConversationImport {
+  conversation: Conversation,
+  fidelity: ConversationFidelity,
   warnings: string[],
 }
 
 function prompt_to_messages(prompt: baml.llm.PromptAst) -> Messages throws never {
-  Conversation {
+  MessageHistory {
     entries: [ChatMessage.user(baml.llm.prompt_to_text(prompt))],
   }
 }

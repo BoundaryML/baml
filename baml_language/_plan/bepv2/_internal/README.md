@@ -12,6 +12,9 @@ published package consists only of `../README.md` and `../pages/`.
 - [Driver functions vs nominal driver values](./driver-functions-vs-interface-values.md)
   defines the side-by-side `baml_src_temp` / `baml_src_temp2` experiment and
   its decision gate.
+- [Tasks, runners, providers, and executable tools](./runner-provider-responsibilities.md)
+  records the current runner-oriented direction, naming, ownership boundaries,
+  `AnyFunction` tool design, conversation model, and validation invariants.
 
 The API contract lives in the [specification](../pages/specification.md) and
 [API reference](../pages/specification/api-reference.md).

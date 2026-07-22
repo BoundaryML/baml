@@ -35,7 +35,7 @@ implements TranscriptionProvider for FakeTranscriptionProvider {
         },
         raw: null,
       },
-      transcript: null,
+      conversation: null,
     }
   }
 }
@@ -73,14 +73,6 @@ class OpenAiAudioTranscription {
           "language": language,
         },
         [],
-        TaskOptions {
-          tool_registry: null,
-          dispatch: null,
-          hooks: null,
-          observers: [],
-          recorders: [],
-          run_id: null,
-        },
         (ctx: baml.llm.Context) -> baml.llm.PromptAst {
           baml.llm.assemble_prompt_ast(
             [

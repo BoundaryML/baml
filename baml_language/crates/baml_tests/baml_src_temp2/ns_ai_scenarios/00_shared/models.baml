@@ -60,17 +60,6 @@ function live_anthropic() -> root.ai.Anthropic throws baml.errors.Io | baml.erro
   }
 }
 
-function default_task_options() -> root.ai.TaskOptions throws never {
-  root.ai.TaskOptions {
-    tool_registry: null,
-    dispatch: null,
-    hooks: null,
-    observers: [],
-    recorders: [],
-    run_id: null,
-  }
-}
-
 // Future compiler lowering:
 //   ResolveTicket.task(ticket, $provider = provider)
 // becomes this hand-written ResolveTicket_task companion. It creates a task
@@ -84,7 +73,6 @@ function ResolveTicket_task(
     "ResolveTicket",
     { "ticket": ticket },
     [],
-    default_task_options(),
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
@@ -99,22 +87,22 @@ function ResolveTicket_task(
 
 // Future compiler lowering:
 //   ResolveTicket(ticket, $provider = provider)
-// becomes root.ai.drivers.drive(ResolveTicket_task(ticket, provider)).
+// becomes an ordinary completion run over ResolveTicket_task(ticket, provider).
 function ResolveTicket_manual(
   ticket: SupportTicket,
   provider: root.ai.Provider,
 ) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
-  root.ai.drivers.drive<Resolution>(ResolveTicket_task(ticket, provider))
+  root.ai.drivers.complete<Resolution>(ResolveTicket_task(ticket, provider))
 }
 
 function drain_resolution_stream(
   task: root.ai.Task<Resolution>,
 ) -> Resolution throws baml.errors.UnknownError | baml.errors.StreamError
     | baml.errors.Unsupported | baml.errors.Io | baml.errors.LlmClient {
-  // Concrete dispatch preserves the exact throws union inside an explicitly
-  // annotated helper; Task.drive currently leaks its generic Error here.
-  let driver = root.ai.driver.stream<Resolution$stream, Resolution>();
-  let stream = driver.drive(task);
+  // Concrete execution preserves the exact throws union inside an explicitly
+  // annotated helper; Task.run currently leaks its generic Error here.
+  let runner = root.ai.run.Stream<Resolution$stream, Resolution>.new();
+  let stream = runner.run(task);
   // final() drains the provider's SSE response and validates the typed result.
   stream.final()
 }

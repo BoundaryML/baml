@@ -6,10 +6,11 @@ class McpLookupOrderArgs {
   order_id: string,
 }
 
-function add_mcp_server_tool() -> root.ai.Tool throws never {
-  root.ai.Tool.typed<AddMcpServerArgs>(
+function add_mcp_server_tool(broker: McpServerBroker) -> root.ai.Tool throws never {
+  root.ai.tool(
     "add_mcp_server",
     "Connect an MCP server and add its tools on the next agent turn. Available server: orders.",
+    broker.request_server,
   )
 }
 
@@ -19,7 +20,7 @@ class FakeMcpConnection {
 
   function tools(self) -> root.ai.Tool[] throws never {
     self.discoveries = self.discoveries + 1;
-    [root.ai.Tool.from_json_schema(
+    [root.ai.tool_from_json_schema(
       "mcp__orders__lookup_order",
       "Look up an order through the connected orders MCP server.",
       {
@@ -27,38 +28,33 @@ class FakeMcpConnection {
         "properties": { "order_id": { "type": "string" } },
         "required": ["order_id"],
       },
+      self.lookup_order,
     )]
   }
 
-  function call(self, call: root.ai.ToolCall) -> root.ai.ToolResult throws never {
-    let args = baml.json.from_json<McpLookupOrderArgs>(call.args) catch (e) {
-      _ => return root.ai.ToolResult.error(call, "invalid MCP lookup_order arguments"),
-    };
-    self.looked_up_orders.push(args.order_id);
-    root.ai.ToolResult.ok(call, { "order_id": args.order_id, "status": "shipped" })
+  function lookup_order(self, order_id: string) -> json throws never {
+    self.looked_up_orders.push(order_id);
+    { "order_id": order_id, "status": "shipped" }
   }
 }
 
 // The bootstrap tool changes application state. The prepare-step hook turns
-// pending requests into a complete next roster, which the driver validates and
+// pending requests into a complete next roster, which the runner validates and
 // applies before the next provider step.
 class McpServerBroker {
   connection: FakeMcpConnection,
   pending_servers: string[],
   connected_servers: string[],
 
-  function request_server(self, call: root.ai.ToolCall) -> root.ai.ToolResult throws never {
-    let args = baml.json.from_json<AddMcpServerArgs>(call.args) catch (e) {
-      _ => return root.ai.ToolResult.error(call, "invalid add_mcp_server arguments"),
-    };
-    if (args.server != "orders") {
-      return root.ai.ToolResult.error(call, "unknown MCP server: " + args.server);
+  function request_server(self, server: string) -> json throws never {
+    if (server != "orders") {
+      return { "server": server, "status": "unknown_server" };
     }
-    if (self.connected_servers.filter((name: string) -> bool { name == args.server }).length() == 0
-        && self.pending_servers.filter((name: string) -> bool { name == args.server }).length() == 0) {
-      self.pending_servers.push(args.server);
+    if (self.connected_servers.filter((name: string) -> bool { name == server }).length() == 0
+        && self.pending_servers.filter((name: string) -> bool { name == server }).length() == 0) {
+      self.pending_servers.push(server);
     }
-    root.ai.ToolResult.ok(call, { "server": args.server, "status": "connection_requested" })
+    { "server": server, "status": "connection_requested" }
   }
 
   function activate_pending(self, current_tools: root.ai.Tool[]) -> root.ai.Tool[]? throws never {
@@ -94,28 +90,15 @@ class McpBootstrapHooks {
   }
 }
 
-function dispatch_with_mcp_bootstrap(
-  broker: McpServerBroker,
-  calls: root.ai.ToolCall[],
-) -> root.ai.ToolResult[] throws never {
-  calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-    if (call.name == "add_mcp_server") {
-      broker.request_server(call)
-    } else if (call.name == "mcp__orders__lookup_order") {
-      broker.connection.call(call)
-    } else {
-      root.ai.ToolResult.error(call, "unknown bootstrap or MCP tool")
-    }
-  })
-}
-
-function McpBootstrap_task(provider: root.ai.Provider) -> root.ai.Task<Resolution> throws never {
+function McpBootstrap_task(
+  provider: root.ai.Provider,
+  bootstrap_tool: root.ai.Tool,
+) -> root.ai.Task<Resolution> throws never {
   root.ai.task_named<Resolution>(
     provider,
     "McpBootstrap",
     { "order_id": "O-42" },
-    [add_mcp_server_tool()],
-    default_task_options(),
+    [bootstrap_tool],
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
@@ -139,7 +122,8 @@ function mcp_broker() -> McpServerBroker throws never {
 test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   //# Start with only the MCP bootstrap tool
   let broker = mcp_broker();
-  let registry = root.ai.ToolRegistry.new([add_mcp_server_tool()]);
+  let bootstrap_tool = add_mcp_server_tool(broker);
+  let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
   let provider = root.ai.ScriptedToolProvider {
     turns: [
       root.ai.ToolCalls { calls: [root.ai.ToolCall {
@@ -161,32 +145,29 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
     }`,
     usage_per_step: null,
   };
-  let options = root.ai.AgentOptions.new(
-    [],
-    (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
-      dispatch_with_mcp_bootstrap(broker, calls)
-    },
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [],
     tool_registry = registry,
     hooks = McpBootstrapHooks { broker: broker },
   );
 
   //# Run across bootstrap, discovery, MCP execution, and completion
-  let task = McpBootstrap_task(provider);
-  let outcome = task.drive(root.ai.driver.agent<Resolution>(options));
+  let task = McpBootstrap_task(provider, bootstrap_tool);
+  let outcome = task.run(runner = runner);
 
   //# Verify the model caused discovery rather than a step-number rule
   assert.equal(broker.connected_servers, ["orders"])
   assert.equal(broker.connection.discoveries, 1)
   assert.equal(broker.connection.looked_up_orders, ["O-42"])
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.transcript) {
-      let transcript: root.ai.ScriptedToolTranscript => {
-        assert.equal(transcript.observed_tool_rosters[0], ["add_mcp_server"]);
+    let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let conversation: root.ai.ScriptedToolConversation => {
+        assert.equal(conversation.observed_tool_rosters[0], ["add_mcp_server"]);
         assert.equal(
-          transcript.observed_tool_rosters[1],
+          conversation.observed_tool_rosters[1],
           ["add_mcp_server", "mcp__orders__lookup_order"],
         );
-        assert.equal(transcript.submitted_results.length(), 2);
+        assert.equal(conversation.submitted_results.length(), 2);
       },
       _ => assert.is_true(false),
     },
@@ -197,24 +178,22 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
 testset "integ-test-guide-02-mcp-bootstrap" {
   test "guide 02.07 live OpenAI: the model adds and uses an MCP server" {
     let broker = mcp_broker();
-    let registry = root.ai.ToolRegistry.new([add_mcp_server_tool()]);
+    let bootstrap_tool = add_mcp_server_tool(broker);
+    let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
     let observer = GuideObserver { kinds: [] };
     let provider = root.ai.OpenAi {
       ...root.ai.openai(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
-    let task = McpBootstrap_task(provider);
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [],
-        (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
-          dispatch_with_mcp_bootstrap(broker, calls)
-        },
+    let task = McpBootstrap_task(provider, bootstrap_tool);
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [],
         tool_registry = registry,
         hooks = McpBootstrapHooks { broker: broker },
         observers = [observer],
-      )),
+      ),
     );
     log.info("live MCP bootstrap " + {
       "connected_servers": broker.connected_servers,

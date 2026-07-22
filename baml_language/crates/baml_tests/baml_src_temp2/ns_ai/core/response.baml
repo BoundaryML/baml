@@ -19,6 +19,5 @@ class Meta {
 class Response<T> {
   value: T,
   meta: Meta,
-  transcript: Transcript?,
+  conversation: Conversation?,
 }
-

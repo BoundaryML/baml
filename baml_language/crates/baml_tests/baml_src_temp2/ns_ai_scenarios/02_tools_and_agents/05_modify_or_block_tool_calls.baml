@@ -1,8 +1,7 @@
 test "guide 02.05: before-tool hooks may rewrite a call" {
   let hooks = GuideHooks { ...no_op_hooks(), replace_name: "lookup_account" };
-  let options = root.ai.AgentOptions.new(
-    [knowledge_tool(), account_tool()],
-    guide_dispatch,
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [knowledge_tool(), account_tool()],
     hooks = hooks,
   );
   let task = ResolveTicketWithTools_task(
@@ -10,30 +9,34 @@ test "guide 02.05: before-tool hooks may rewrite a call" {
     fake_tool_provider([one_knowledge_call()]),
     [knowledge_tool(), account_tool()],
   );
-  task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  task.run(
+    runner = runner,
   );
   assert.equal(hooks.after_calls, ["lookup_account"])
 }
 
 test "guide 02.05: before-tool hooks may block a call" {
   let hooks = GuideHooks { ...no_op_hooks(), block_name: "search_knowledge" };
-  let options = root.ai.AgentOptions.new([knowledge_tool()], guide_dispatch, hooks = hooks);
+  let runner = root.ai.run.Agent<Resolution>.new(
+    tools = [knowledge_tool()],
+    hooks = hooks,
+  );
   let task = ResolveTicketWithTools_task(
     sample_ticket(),
     fake_tool_provider([one_knowledge_call()]),
     [knowledge_tool()],
   );
-  task.drive(
-    root.ai.driver.agent<Resolution>(options),
+  task.run(
+    runner = runner,
   );
   assert.equal(hooks.after_calls.length(), 0)
 }
 
 function account_alias_tool() -> root.ai.Tool throws never {
-  root.ai.Tool.typed<AccountLookupArgs>(
+  root.ai.tool(
     "search_knowledge",
     "Legacy account lookup alias. Call with customer_id.",
+    lookup_account,
   )
 }
 
@@ -46,12 +49,11 @@ testset "integ-test-guide-02-modify-or-block-tools" {
       [account_alias_tool(), account_tool()],
       `Call search_knowledge exactly once with customer_id "C-1". After its result, return the final resolution.`,
     );
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [account_alias_tool(), account_tool()],
-        guide_dispatch,
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [account_alias_tool(), account_tool()],
         hooks = hooks,
-      )),
+      ),
     );
     log.info("live rewritten tool call " + { "after_calls": hooks.after_calls }.to_string());
     assert.equal(hooks.after_calls, ["lookup_account"])
@@ -70,13 +72,12 @@ testset "integ-test-guide-02-modify-or-block-tools" {
       [knowledge_tool()],
       `Call search_knowledge once with query "duplicate charge". If policy blocks it, do not retry the tool; return a final resolution explaining that the lookup was unavailable.`,
     );
-    let outcome = task.drive(
-      root.ai.driver.agent<Resolution>(root.ai.AgentOptions.new(
-        [knowledge_tool()],
-        guide_dispatch,
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [knowledge_tool()],
         hooks = hooks,
         observers = [observer],
-      )),
+      ),
     );
     log.info("live blocked tool call " + {
       "after_calls": hooks.after_calls,

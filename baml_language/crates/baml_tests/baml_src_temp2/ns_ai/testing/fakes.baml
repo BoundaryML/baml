@@ -77,13 +77,13 @@ implements GenerationProvider for FakeProvider {
         attributes: {},
         raw: null,
       },
-      transcript: null,
+      conversation: null,
     }
   }
 }
 
-implements DriveProvider for FakeProvider {
-  function drive<T>(self, task: Task<T>) -> Response<T>
+implements CompletionProvider for FakeProvider {
+  function complete<T>(self, task: Task<T>) -> Response<T>
       throws baml.errors.CallError | baml.errors.UnknownError {
     self.generate<T>(task)
   }

@@ -5,7 +5,7 @@ class StepContext {
   tools: Tool[],
   usage: Usage,
   state: map<string, unknown>,
-  transcript: Transcript,
+  conversation: Conversation,
 }
 
 class AgentStop {

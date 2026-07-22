@@ -1,40 +1,138 @@
+function search_knowledge(query: string) -> json throws never {
+  {
+    "query": query,
+    "article": "Duplicate charges are normally pending authorizations.",
+  }
+}
+
+function lookup_account(customer_id: string) -> json throws never {
+  {
+    "customer_id": customer_id,
+    "status": "active",
+    "tier": "pro",
+  }
+}
+
+function lookup_account_with_history(
+  customer_id: string,
+  include_history: bool = false,
+) -> json throws never {
+  {
+    "customer_id": customer_id,
+    "include_history": include_history,
+  }
+}
+
+class BoundAccountTools {
+  tenant_id: string,
+
+  function lookup(
+    self,
+    customer_id: string,
+  ) -> json throws never {
+    { "tenant_id": self.tenant_id, "customer_id": customer_id }
+  }
+}
+
 function knowledge_tool() -> root.ai.Tool throws never {
-  root.ai.Tool.typed<KnowledgeLookupArgs>(
+  root.ai.tool(
     "search_knowledge",
     "Search the support knowledge base.",
+    search_knowledge,
   )
 }
 
 function account_tool() -> root.ai.Tool throws never {
-  root.ai.Tool.typed<AccountLookupArgs>(
+  root.ai.tool(
     "lookup_account",
     "Look up a customer account.",
+    lookup_account,
   )
 }
 
-function guide_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
-  calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-    if (call.name == "search_knowledge") {
-      let args = baml.json.from_json<KnowledgeLookupArgs>(call.args) catch (e) {
-        _ => return root.ai.ToolResult.error(call, "invalid search_knowledge arguments"),
-      };
-      root.ai.ToolResult.ok(call, {
-        "query": args.query,
-        "article": "Duplicate charges are normally pending authorizations.",
-      })
-    } else if (call.name == "lookup_account") {
-      let args = baml.json.from_json<AccountLookupArgs>(call.args) catch (e) {
-        _ => return root.ai.ToolResult.error(call, "invalid lookup_account arguments"),
-      };
-      root.ai.ToolResult.ok(call, {
-        "customer_id": args.customer_id,
-        "status": "active",
-        "tier": "pro",
-      })
-    } else {
-      root.ai.ToolResult.error(call, "unknown tool")
-    }
-  })
+test "AnyFunction tool schema distinguishes required and defaulted arguments" {
+  let tool = root.ai.tool(
+    "lookup_account_with_history",
+    "Look up an account with optional history.",
+    lookup_account_with_history,
+  );
+  let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
+  let required = baml.json.path<string[]>(tool.input_schema, ".required");
+
+  assert.is_true(properties.keys().includes("customer_id"));
+  assert.is_true(properties.keys().includes("include_history"));
+  assert.equal(required, ["customer_id"])
+}
+
+test "AnyFunction tool invocation applies ordinary function defaults" {
+  let tool = root.ai.tool(
+    "lookup_account_with_history",
+    "Look up an account with optional history.",
+    lookup_account_with_history,
+  );
+  let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
+    id: "default-1",
+    name: tool.name,
+    args: { "customer_id": "C-1" },
+  });
+
+  assert.is_true(!result.is_error);
+  assert.equal(baml.json.path<bool>(result.output, ".include_history"), false)
+}
+
+test "AnyFunction tool invocation returns a correlated error for invalid arguments" {
+  let tool = root.ai.tool(
+    "lookup_account_with_history",
+    "Look up an account with optional history.",
+    lookup_account_with_history,
+  );
+  let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
+    id: "invalid-1",
+    name: tool.name,
+    args: { "customer_id": 42 },
+  });
+
+  assert.equal(result.id, "invalid-1");
+  assert.is_true(result.is_error);
+  assert.contains(baml.json.stringify(result.output), "invalid arguments")
+}
+
+test "AnyFunction tool closure captures application state outside its schema" {
+  let tenant_id = "tenant-42";
+  let tool = root.ai.tool(
+    "tenant_lookup",
+    "Look up an account for the captured tenant.",
+    (customer_id: string) -> json {
+      { "tenant_id": tenant_id, "customer_id": customer_id }
+    },
+  );
+  let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
+  let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
+    id: "closure-1",
+    name: tool.name,
+    args: { "customer_id": "C-1" },
+  });
+
+  assert.equal(properties.keys(), ["customer_id"]);
+  assert.equal(baml.json.path<string>(result.output, ".tenant_id"), "tenant-42")
+}
+
+test "AnyFunction bound method excludes self from its tool schema" {
+  let methods = BoundAccountTools { tenant_id: "tenant-42" };
+  let tool = root.ai.tool(
+    "bound_account_lookup",
+    "Look up an account with a bound application service.",
+    methods.lookup,
+  );
+  let properties = baml.json.path<map<string, json>>(tool.input_schema, ".properties");
+  let result = root.ai.invoke_tool(tool, root.ai.ToolCall {
+    id: "bound-1",
+    name: tool.name,
+    args: { "customer_id": "C-2" },
+  });
+
+  assert.equal(properties.keys(), ["customer_id"]);
+  assert.equal(baml.json.path<string>(result.output, ".tenant_id"), "tenant-42")
 }
 
 // Future compiler lowering:
@@ -50,7 +148,6 @@ function ResolveTicketWithTools_task(
     "ResolveTicketWithTools",
     { "ticket": ticket },
     tools,
-    default_task_options(),
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
@@ -73,7 +170,6 @@ function ToolInstructions_task(
     "ToolInstructions",
     { "instructions": instructions },
     tools,
-    default_task_options(),
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
@@ -85,14 +181,14 @@ function ToolInstructions_task(
 
 // Future compiler lowering:
 //   ResolveTicketWithTools(ticket, $provider = agent)
-// becomes root.ai.drivers.drive(ResolveTicketWithTools_task(...)). The selected
-// provider must be a DriveProvider such as root.ai.Agent.
+// becomes a completion run over ResolveTicketWithTools_task(...). A provider
+// that owns the full remote lifecycle implements CompletionProvider.
 function ResolveTicketWithTools_manual(
   ticket: SupportTicket,
   agent: root.ai.Provider,
   tools: root.ai.Tool[],
 ) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
-  root.ai.drivers.drive<Resolution>(ResolveTicketWithTools_task(ticket, agent, tools))
+  root.ai.drivers.complete<Resolution>(ResolveTicketWithTools_task(ticket, agent, tools))
 }
 
 class GuideObserver {

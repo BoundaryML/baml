@@ -1,9 +1,11 @@
-# Driver Functions vs Nominal Driver Values
+# Driver Functions vs Nominal Runner Values
 
-> **Status:** Comparative design experiment. This is not a normative BEPv2
-> decision. The function-driven reference remains in
-> `crates/baml_tests/baml_src_temp`; the interface-driven comparison lives in
-> `crates/baml_tests/baml_src_temp2`.
+> **Status:** Historical comparison and decision record. The experiment has
+> selected the nominal direction and renamed its public concepts to `Runner`,
+> `Task.run(runner = ...)`, and `ai.run.*`. The authoritative current design is
+> [Tasks, runners, providers, and executable tools](./runner-provider-responsibilities.md).
+> Older `Driver`, `.drive(...)`, and `ai.driver.*` snippets below preserve the
+> terminology used while evaluating the two approaches.
 
 ## Question
 
@@ -18,8 +20,8 @@ The competing design represents a driver as a nominal value implementing one
 protocol, with `Task<T>.drive(...)` as the unary convenience:
 
 ```baml
-let response = task.drive(ai.driver.generate_with_meta<Resolution>())
-let run = task.drive(ai.driver.agent<Resolution>(options))
+let response = task.drive(ai.driver.GenerateWithMeta<Resolution> {})
+let run = task.drive(ai.driver.RunAgent<Resolution> { options: options })
 ```
 
 This note records how to compare the designs across the entire BEPv2 lifecycle
@@ -74,18 +76,22 @@ interface Driver<Input> {
 A generation driver binds all three pieces:
 
 ```baml
-class GenerateWithMeta<T> {}
+class GenerateWithMeta<T> {
+  implements Driver<Task<T>> {
+    type Output = Response<T>
+    type Error = baml.errors.CallError | baml.errors.UnknownError
 
-implements<T> Driver<Task<T>> for GenerateWithMeta<T> {
-  type Output = Response<T>
-  type Error = baml.errors.CallError | baml.errors.UnknownError
-
-  function drive(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
-    ai.drivers.generate_with_meta<T>(task)
+    function drive(self, task: Task<T>) -> Response<T>
+        throws baml.errors.CallError | baml.errors.UnknownError {
+      ai.drivers.generate_with_meta<T>(task)
+    }
   }
 }
 ```
+
+Purpose-built driver classes keep their immutable fields and their single
+`Driver` implementation together. Out-of-body implementations are reserved for
+genuinely retroactive or blanket conformance, not used as routine ceremony.
 
 `Task<T>` provides the unary convenience. The explicit `Output` and `Error`
 bindings in this signature are intentional: they make the projection concrete
@@ -113,11 +119,11 @@ and arity shapes.
 
 | Shape | Function-driven | Interface-driven experiment |
 | --- | --- | --- |
-| Unary task | `ai.drivers.stream(task)` | `task.drive(ai.driver.stream<T>())` |
-| Configured unary task | `ai.drivers.run_agent(task, options)` | `task.drive(ai.driver.agent<T>(options))` |
-| Task plus caller resource | `ai.drivers.open_live(task, channel)` | `task.drive(ai.driver.live(channel))` |
-| Plural task operation | `ai.drivers.submit_batch(provider, tasks, options)` | `ai.driver.batch<T>(provider, options).drive(tasks)` |
-| Provider-only construction | `ai.drivers.open_session(provider, options)` | `ai.driver.open_session(options).drive(provider)` |
+| Unary task | `ai.drivers.stream(task)` | `task.drive(ai.driver.Stream<T$stream, T> {})` |
+| Configured unary task | `ai.drivers.run_agent(task, options)` | `task.drive(ai.driver.RunAgent<T> { options: options })` |
+| Task plus caller resource | `ai.drivers.open_live(task, channel)` | `task.drive(ai.driver.Live { channel: channel })` |
+| Plural task operation | `ai.drivers.submit_batch(provider, tasks, options)` | `ai.driver.BatchSubmission<T> { provider: provider, options: options }.drive(tasks)` |
+| Provider-only construction | `ai.drivers.open_session(provider, options)` | `ai.driver.OpenSession { options: options }.drive(provider)` |
 | Existing state owner | `session.run(task)` | `session.run(task)` |
 | Specialized media input | `ai.drivers.transcribe(provider, audio, options)` | driver value over a typed media input or a captured provider/options value |
 
@@ -156,20 +162,20 @@ The prototype therefore gives these driver classes a generic `T`. Today the
 call normally writes it explicitly:
 
 ```baml
-task.drive(ai.driver.generate_with_meta<Resolution>())
+task.drive(ai.driver.GenerateWithMeta<Resolution> {})
 ```
 
 The ideal call omits it:
 
 ```baml
-task.drive(ai.driver.generate_with_meta())
+task.drive(ai.driver.GenerateWithMeta {})
 ```
 
-That requires outside-in inference from `Task<T>.drive` into the zero-argument
-factory result. Reusable polymorphic driver values are a separate question:
+That requires outside-in inference from `Task<T>.drive` into the generic class
+literal. Reusable polymorphic driver values are a separate question:
 
 ```baml
-let stream = ai.driver.stream()
+let stream = ai.driver.Stream {}
 task_a.drive(stream)
 task_b.drive(stream)
 ```
@@ -191,7 +197,10 @@ A mutable `Task<T>[]` queue is invariant. Widening `Task<A>` and `Task<B>` to
 result. The interface experiment should therefore use either:
 
 ```baml
-ai.driver.batch<Resolution>(provider, options).drive(tasks)
+ai.driver.BatchSubmission<Resolution> {
+  provider: provider,
+  options: options,
+}.drive(tasks)
 ```
 
 or a separate stateful homogeneous queue:
@@ -203,8 +212,8 @@ let batch = queue.submit()
 ```
 
 A heterogeneous queue needs typed item handles or tuple-shaped results and is a
-separate design. `task.drive(ai.driver.batch(queue))` is not used: adding work
-to a queue is not the same event as starting that work.
+separate design. `task.drive(ai.driver.BatchSubmission { queue: queue })` is not
+used: adding work to a queue is not the same event as starting that work.
 
 ## Discoverability
 
@@ -215,8 +224,8 @@ curated namespace:
 
 ```text
 ai.drivers.*  function-driven operations
-ai.driver.*   interface-driver factories
-acme.driver.* third-party factories
+ai.driver.*   interface-driver classes
+acme.driver.* third-party classes
 ```
 
 The comparison should test completion quality, required imports, hover
@@ -253,6 +262,8 @@ The comparison package follows these rules:
 1. No compiler edits and no desugaring work.
 2. Do not change provider wire behavior or test fixtures to favor either API.
 3. `ai.driver.*` values are immutable configuration.
+   Purpose-built classes declare that state and their `Driver` implementation
+   together; do not add a factory that only wraps a class literal.
 4. Mutable registries, streams, sessions, jobs, batches, caches, and observers
    remain explicit stateful resources.
 5. Preserve the exact output and error types through associated types.
@@ -279,7 +290,7 @@ surface and consider a general language-level pipe/UFCS feature for postfix
 ergonomics. That would benefit ordinary and third-party driver functions
 without introducing driver-specific compiler behavior.
 
-## Prototype findings — 2026-07-20
+## Prototype findings — 2026-07-20, refined 2026-07-21
 
 The first complete migration establishes that the interface design is viable
 with BAML's existing generic interfaces and associated types. It does not need
@@ -302,10 +313,10 @@ The experiment exposed several concrete usability differences.
 Unary execution is compact and puts the intent first:
 
 ```baml
-let response = task.drive(ai.driver.generate_with_meta<Resolution>())
-let run = task.drive(ai.driver.agent<Resolution>(options))
-let job = task.drive(ai.driver.background<Resolution>(options))
-let live = voice_task.drive(ai.driver.live(channel))
+let response = task.drive(ai.driver.GenerateWithMeta<Resolution> {})
+let run = task.drive(ai.driver.RunAgent<Resolution> { options: options })
+let job = task.drive(ai.driver.Background<Resolution> { options: options })
+let live = voice_task.drive(ai.driver.Live { channel: channel })
 ```
 
 Realtime is especially clean because `Live` implements exactly
@@ -315,26 +326,35 @@ realtime capability cannot accidentally drive an arbitrary `Task<T>`.
 The non-unary cases also found honest receivers instead of fake task methods:
 
 ```baml
-let batch = ai.driver.batch<Resolution>(provider, options).drive(tasks)
-let session = ai.driver.open_session(options).drive(provider)
-let cache = ai.driver.create_cache(messages, options).drive(provider)
-let transcript = ai.driver.transcribe_with_meta(provider, options).drive(audio)
+let batch = ai.driver.BatchSubmission<Resolution> {
+  provider: provider,
+  options: options,
+}.drive(tasks)
+let session = ai.driver.OpenSession { options: options }.drive(provider)
+let cache = ai.driver.CreateCache {
+  messages: messages,
+  options: options,
+}.drive(provider)
+let transcript = ai.driver.TranscribeWithMeta {
+  provider: provider,
+  options: options,
+}.drive(audio)
 ```
 
 Once a resource exists, its operations remain ordinary resource methods.
 
 Third-party extensibility stays fully typed. The direct-provider-access
-scenario defines a package-local driver class, associated output/error types,
-an implementation, and a factory without touching `Task`, a registry, or the
-compiler.
+scenario defines a package-local driver class whose state and associated
+output/error implementation are colocated, without touching `Task`, a registry,
+or the compiler.
 
 ### What remains awkward
 
-Factories currently repeat the task result type:
+Generic driver class literals currently repeat the task result type:
 
 ```baml
-task.drive(ai.driver.generate<Resolution>())
-task.drive(ai.driver.stream<Resolution$stream, Resolution>())
+task.drive(ai.driver.Generate<Resolution> {})
+task.drive(ai.driver.Stream<Resolution$stream, Resolution> {})
 ```
 
 Outside-in inference could remove this repetition. Until then the function
@@ -345,11 +365,12 @@ inline construction can become deeply nested:
 
 ```baml
 let options = ai.AgentOptions.new(...)
-let run = task.drive(ai.driver.agent<Resolution>(options))
+let driver = ai.driver.RunAgent<Resolution> { options: options }
+let run = task.drive(driver)
 ```
 
 This is clearer than placing the complete `AgentOptions.new(...)` expression
-inside `agent(...)` inside `drive(...)`.
+inside the driver literal inside `drive(...)`.
 
 The `baml-cli` compiler path currently needs explicit associated bindings on
 the generic `Task.drive` method. The shorter, semantically equivalent method:
@@ -372,10 +393,10 @@ Provider-first facades currently accept erased `Provider` and retain a runtime
 interface design should make those driver implementations generic over the
 precise provider capability so unsupported combinations fail statically.
 
-The interface authoring cost is real: a custom lifecycle needs a class,
-associated bindings, an `implements` block, and usually a factory. A generic
-function expresses the same behavior in one declaration. The usability review
-must decide whether nominal discovery and value composition repay that cost.
+The interface authoring cost is real: a custom lifecycle needs a class and an
+inline implementation with associated bindings. A generic function expresses
+the same behavior in one declaration. The usability review must decide whether
+nominal discovery, colocated state, and value composition repay that cost.
 
 The live seed test is declared and selectable as
 `integ-test-interface-driver-e2e::`. Its attempted credentialed run in this

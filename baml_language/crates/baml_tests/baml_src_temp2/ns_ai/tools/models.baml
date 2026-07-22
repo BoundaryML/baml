@@ -1,38 +1,99 @@
 class Tool {
   name: string,
   description: string,
-  parameters: type,
   input_schema: json,
+  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
   handoff: bool,
-
-  function typed<A>(name: string, description: string) -> Tool throws never {
-    Tool {
-      name: name,
-      description: description,
-      parameters: reflect.type_of<A>(),
-      input_schema: null,
-      handoff: false,
-    }
-  }
-
-  function from_json_schema(name: string, description: string, input_schema: json) -> Tool throws never {
-    Tool {
-      name: name,
-      description: description,
-      parameters: reflect.type_of<json>(),
-      input_schema: input_schema,
-      handoff: false,
-    }
-  }
 
   function as_handoff(self) -> Tool throws never {
     Tool {
       name: self.name,
       description: self.description,
-      parameters: self.parameters,
       input_schema: self.input_schema,
+      handler: self.handler,
       handoff: true,
     }
+  }
+}
+
+function coarse_schema(type_name: string) -> json throws never {
+  let schema: json = { "type": type_name };
+  schema
+}
+
+function schema_for_function(
+  handler: baml.AnyFunction,
+) -> json throws never {
+  let signature = reflect.signature(handler);
+  let properties: map<string, json> = {};
+  let required: string[] = [];
+
+  //# Derive required positional parameters
+  for (let arg in signature.args) {
+    let schema = baml.schema.json_schema(arg.type) catch (e) {
+      _ => coarse_schema(arg.type.to_string()),
+    };
+    let _ = properties.set(arg.name, schema);
+    required.push(arg.name);
+  }
+
+  //# Derive defaulted/named parameters without marking them required
+  for (let name in signature.opts.keys()) {
+    match (signature.opts.get(name)) {
+      let arg: reflect.Arg => {
+        let schema = baml.schema.json_schema(arg.type) catch (e) {
+          _ => coarse_schema(arg.type.to_string()),
+        };
+        let _ = properties.set(name, schema);
+      },
+      null => {},
+    }
+  }
+
+  {
+    "type": "object",
+    "properties": properties,
+    "required": baml.json.to_json(required) catch (e) { _ => null },
+    "additionalProperties": false,
+  }
+}
+
+// Function-backed application tool. AnyFunction preserves the callable's
+// signature for schema derivation and reflect.call_any performs checked named
+// argument dispatch, including ordinary BAML default arguments.
+function tool(
+  name: string,
+  description: string,
+  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+) -> Tool throws never {
+  let signature = reflect.signature(handler);
+  Tool {
+    name: name,
+    description: if (description.length() > 0) {
+      description
+    } else {
+      signature.docstring ?? ""
+    },
+    input_schema: schema_for_function(handler),
+    handler: handler,
+    handoff: false,
+  }
+}
+
+// Escape hatch for MCP and other dynamically described tools. Runtime
+// argument validation is still performed by the supplied handler.
+function tool_from_json_schema(
+  name: string,
+  description: string,
+  input_schema: json,
+  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+) -> Tool throws never {
+  Tool {
+    name: name,
+    description: description,
+    input_schema: input_schema,
+    handler: handler,
+    handoff: false,
   }
 }
 
@@ -62,6 +123,31 @@ class ToolResult {
   function error(call: ToolCall, message: string) -> ToolResult throws never {
     ToolResult { id: call.id, output: { "error": message }, is_error: true }
   }
+}
+
+function invoke_tool(tool: Tool, call: ToolCall) -> ToolResult throws never {
+  //# Require a JSON object so named arguments can be checked by call_any
+  let args = baml.json.from_json<map<string, unknown>>(call.args) catch (e) {
+    _ => return ToolResult.error(call, "tool arguments must be an object"),
+  };
+
+  //# Invoke the original BAML function with signature-aware named arguments
+  let output = reflect.call_any(tool.handler, args) catch (e) {
+    let invalid: reflect.InvalidArgumentError => return ToolResult.error(
+      call,
+      `invalid arguments: expected ${invalid.expected}, received ${invalid.got}`,
+    ),
+    let failure: baml.errors.ToolError => return ToolResult.error(
+      call,
+      `tool failed: ${failure}`,
+    ),
+  };
+
+  //# Normalize arbitrary typed function results at the provider boundary
+  let encoded = baml.json.to_json(output) catch (e) {
+    _ => return ToolResult.error(call, "tool result could not be serialized"),
+  };
+  ToolResult.ok(call, encoded)
 }
 
 class ToolCalls {
@@ -124,6 +210,10 @@ class ToolRegistry {
 
   function contains(self, name: string) -> bool throws never {
     self.roster.filter((tool: Tool) -> bool { tool.name == name }).length() == 1
+  }
+
+  function get(self, name: string) -> Tool? throws never {
+    self.roster.find((tool: Tool) -> bool { tool.name == name })
   }
 
   function replace(self, tool: Tool) -> bool throws never {
