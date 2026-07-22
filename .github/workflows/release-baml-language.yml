@@ -2243,3 +2243,44 @@ jobs:
             echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  notify-slack:
+    name: Notify Slack
+    needs: [plan, publish-pkg-boundaryml-com]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    environment: boundary-tools-dev
+    steps:
+      - name: Send Slack notification
+        env:
+          SLACK_CHANNEL_ID: C03KV1PJ6EM
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SLACK_BOT_TOKEN:-}" ]]; then
+            echo "::error::SLACK_BOUNDARY_BOT_TOKEN secret is not set"
+            exit 1
+          fi
+          
+          message="🚀 BAML Language $VERSION ($CHANNEL) has been released!"
+          
+          curl -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d @- <<EOF
+          {
+            "channel": "$SLACK_CHANNEL_ID",
+            "text": "$message",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "$message\n\n*Version:* $VERSION\n*Channel:* $CHANNEL\n*Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              }
+            ]
+          }
+          EOF
