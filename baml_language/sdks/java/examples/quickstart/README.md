@@ -1,25 +1,32 @@
 # BAML Java quickstart
 
-Minimal consumer of the `com.boundaryml:baml-bridge` Maven artifact.
+The complete setup is one plugin line — write BAML in `baml_src/`, build, done:
 
-```sh
-# 1. Generate the typed SDK from baml_src/ (writes ./baml_sdk/)
-baml generate
-
-# 2. Build & run — resolves baml-bridge from mavenLocal()/Central and
-#    loads the engine from the embedded native jar (no env vars).
-gradle run -PbamlVersion=<published version>
+```kotlin
+// build.gradle.kts
+plugins {
+    java
+    application
+    id("com.boundaryml.baml") version "0.15.0-nightly.1"
+}
+repositories { mavenCentral() }
 ```
 
-Expected output:
+The plugin resolves from the Gradle Plugin Portal, runs `baml generate`
+before compilation (incrementally — no cost when `.baml` files are
+unchanged), registers the generated sources for the compiler and IDE,
+and injects the version-locked `com.boundaryml:baml-bridge` runtime
+plus the correct `natives-<platform>` jar for your machine (Kotlin
+projects also get `baml-bridge-kotlin`). Overrides live on the `baml {}`
+extension (`nativePlatforms`, `manageDependencies`, `bamlExecutable`).
+
+Requirements: JDK 17+, the `baml` CLI on PATH at a version matching the
+plugin (install via the standard BAML install flow — the CLI, plugin,
+and runtime artifacts publish together at one version).
+
+Run it:
 
 ```
-add(2, 3) = 5
-Hello, Maven!
+gradle run
+# add(2, 3) = 5
 ```
-
-The Gradle wiring is three ideas: `mavenLocal()`/`mavenCentral()` +
-the `baml-bridge` dependency (plus its `natives-<platform>` classifier
-jar), the generated tree registered as a source root (parent of
-`baml_sdk/`, resources include the `.b64` bytecode), and
-`options.release = 17`.
