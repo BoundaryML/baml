@@ -152,6 +152,7 @@ jobs:
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation `
             -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
+          $env:BAML_RUNTIME_PATH = (Resolve-Path .\runtime-dist\bridge_cffi.dll).Path
           cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
           cmake --build smoke-build --target runtime_smoke -j --config Release
