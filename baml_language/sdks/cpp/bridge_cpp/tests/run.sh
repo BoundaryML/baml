@@ -46,6 +46,7 @@ build_dir="target/bridge-cpp-smoke"
 cmake -B "$build_dir" -S "$bridge_cpp_dir/tests" \
     -DFETCHCONTENT_SOURCE_DIR_PROTOBUF="$PWD/target/cpp-protobuf-src" \
     -DFETCHCONTENT_SOURCE_DIR_ABSL="$PWD/target/cpp-absl-src" > /dev/null
-cmake --build "$build_dir" -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" > /dev/null
+cmake --build "$build_dir" --target runtime_smoke \
+    -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" > /dev/null
 
 BAML_RUNTIME_PATH="$runtime_path" "$build_dir/runtime_smoke"
