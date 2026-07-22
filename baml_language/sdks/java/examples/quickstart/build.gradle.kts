@@ -12,6 +12,10 @@
 plugins {
     java
     application
+    // The plugin/runtime/CLI publish together at one family version — the
+    // version here must match the installed `baml` CLI. Until the first
+    // fully-matched family nightly ships, treat this example as the shape
+    // of the setup rather than a copy-paste-runnable snapshot.
     id("com.boundaryml.baml") version "0.15.0-nightly.1"
 }
 
