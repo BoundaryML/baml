@@ -104,12 +104,6 @@ fn baml_src_links_byte_identical() {
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
     let sources: Vec<(std::path::PathBuf, String)> = discover_baml_files(&root)
-        .unwrap_or_else(|e| {
-            panic!(
-                "failed to discover .baml files under {}: {e}",
-                root.display()
-            )
-        })
         .into_iter()
         .map(|p| {
             let c = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));

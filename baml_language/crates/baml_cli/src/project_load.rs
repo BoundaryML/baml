@@ -281,12 +281,6 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
 
     let walk_root = project_source_root(&canonical);
     let files = discover_baml_files(&walk_root)
-        .with_context(|| {
-            format!(
-                "Failed to discover BAML files under {}",
-                walk_root.display()
-            )
-        })?
         .into_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)
@@ -334,12 +328,7 @@ fn build_project_db(
 
     let mut db = ProjectDatabase::new();
     db.set_project_root(&canonical);
-    let baml_files = discover_baml_files(&walk_root).with_context(|| {
-        format!(
-            "Failed to discover BAML files under {}",
-            walk_root.display()
-        )
-    })?;
+    let baml_files = discover_baml_files(&walk_root);
     for file_path in &baml_files {
         on_file(file_path);
         let content = std::fs::read_to_string(file_path)

@@ -5194,7 +5194,7 @@ pub(crate) fn read_files_from_disk(path: &Path) -> Result<HashMap<PathBuf, Strin
     let mut files = HashMap::new();
 
     if path.is_dir() {
-        let discovered = baml_workspace::discover_baml_files(path)?;
+        let discovered = baml_workspace::discover_baml_files(path);
         for file_path in discovered {
             if let Ok(content) = std::fs::read_to_string(&file_path) {
                 files.insert(file_path, content);

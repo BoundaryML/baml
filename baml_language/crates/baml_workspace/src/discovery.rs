@@ -10,16 +10,15 @@ use ignore::WalkBuilder;
 /// Discover all BAML files in a project directory.
 ///
 /// Standard ignore files and hidden entries are respected, directory links are
-/// followed, and traversal errors are returned to the caller. The returned
-/// paths are sorted for deterministic ordering.
-pub fn discover_baml_files(root: &Path) -> Result<Vec<PathBuf>, ignore::Error> {
+/// followed, and individual traversal errors are skipped. The returned paths
+/// are sorted for deterministic ordering.
+pub fn discover_baml_files(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
     let mut builder = WalkBuilder::new(root);
     builder.standard_filters(true).follow_links(true);
 
-    for entry in builder.build() {
-        let entry = entry?;
+    for entry in builder.build().filter_map(Result::ok) {
         let path = entry.path();
         if path.is_file() && path.extension() == Some(OsStr::new("baml")) {
             files.push(entry.into_path());
@@ -27,7 +26,7 @@ pub fn discover_baml_files(root: &Path) -> Result<Vec<PathBuf>, ignore::Error> {
     }
 
     files.sort();
-    Ok(files)
+    files
 }
 
 #[cfg(test)]
@@ -51,7 +50,7 @@ mod tests {
         write(&nested);
         write(&root.join("not-baml.txt"));
 
-        assert_eq!(discover_baml_files(root).unwrap(), vec![nested, top_level]);
+        assert_eq!(discover_baml_files(root), vec![nested, top_level]);
     }
 
     #[test]
@@ -86,7 +85,7 @@ mod tests {
             write(path);
         }
 
-        assert_eq!(discover_baml_files(root).unwrap(), vec![kept, main]);
+        assert_eq!(discover_baml_files(root), vec![kept, main]);
     }
 
     #[test]
@@ -100,15 +99,15 @@ mod tests {
         write(&main);
         write(&root.join("ignored/ignored.baml"));
 
-        assert_eq!(discover_baml_files(root).unwrap(), vec![main]);
+        assert_eq!(discover_baml_files(root), vec![main]);
     }
 
     #[test]
-    fn reports_a_missing_root() {
+    fn missing_roots_are_empty() {
         let temp = tempfile::tempdir().unwrap();
         let missing = temp.path().join("missing");
 
-        assert!(discover_baml_files(&missing).is_err());
+        assert!(discover_baml_files(&missing).is_empty());
     }
 
     #[cfg(any(unix, windows))]
@@ -140,8 +139,28 @@ mod tests {
         }
 
         assert_eq!(
-            discover_baml_files(&root).unwrap(),
+            discover_baml_files(&root),
             vec![root.join("linked/linked.baml"), root.join("main.baml")]
         );
+    }
+
+    #[test]
+    #[cfg(any(unix, windows))]
+    fn skips_link_errors_and_keeps_discovered_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root");
+        let main = root.join("main.baml");
+        write(&main);
+
+        if let Err(error) = link_directory(&root, &root.join("loop")) {
+            #[cfg(windows)]
+            if error.raw_os_error() == Some(1314) {
+                // Windows requires Developer Mode or symlink privileges.
+                return;
+            }
+            panic!("failed to create directory loop: {error}");
+        }
+
+        assert_eq!(discover_baml_files(&root), vec![main]);
     }
 }

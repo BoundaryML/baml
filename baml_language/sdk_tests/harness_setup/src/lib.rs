@@ -183,12 +183,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 
     let mut db = ProjectDatabase::new();
     db.set_project_root(&canonical);
-    let baml_files = baml_workspace::discover_baml_files(&canonical).unwrap_or_else(|error| {
-        panic!(
-            "fixture `{fixture}`: failed to discover .baml files under {}: {error}",
-            canonical.display()
-        )
-    });
+    let baml_files = baml_workspace::discover_baml_files(&canonical);
     assert!(
         !baml_files.is_empty(),
         "fixture `{fixture}`: no .baml files under {}",

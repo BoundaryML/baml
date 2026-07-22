@@ -234,12 +234,7 @@ fn discover_project_sources(path: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
     } else {
         canonical.clone()
     };
-    let files = discover_baml_files(&walk_root).with_context(|| {
-        format!(
-            "failed to discover BAML files under {}",
-            walk_root.display()
-        )
-    })?;
+    let files = discover_baml_files(&walk_root);
     Ok((canonical, files))
 }
 

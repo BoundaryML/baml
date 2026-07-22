@@ -19,12 +19,6 @@ use baml_workspace::discover_baml_files;
 /// Read every `.baml` file under `root` into memory, in discovery order.
 fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
     discover_baml_files(root)
-        .unwrap_or_else(|e| {
-            panic!(
-                "failed to discover .baml files under {}: {e}",
-                root.display()
-            )
-        })
         .into_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)

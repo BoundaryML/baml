@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_fmt::FormatOptions;
 use baml_workspace::discover_baml_files;
 use clap::Args;
@@ -54,7 +54,7 @@ impl FormatArgs {
                 }
             }
         } else {
-            expand_explicit_paths(&self.paths)?
+            expand_explicit_paths(&self.paths)
         };
 
         if paths.is_empty() {
@@ -155,14 +155,12 @@ impl FormatArgs {
     }
 }
 
-fn expand_explicit_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     let mut expanded = Vec::new();
 
     for path in paths {
         if path.is_dir() {
-            expanded.extend(discover_baml_files(path).with_context(|| {
-                format!("Failed to discover BAML files under {}", path.display())
-            })?);
+            expanded.extend(discover_baml_files(path));
         } else {
             expanded.push(path.clone());
         }
@@ -170,7 +168,7 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
 
     let mut seen = HashSet::new();
     expanded.retain(|path| seen.insert(path.clone()));
-    Ok(expanded)
+    expanded
 }
 
 /// Walk a resolved project root and return every `.baml` file inside it.
@@ -187,14 +185,7 @@ fn discover_project_files(from: Option<&Path>) -> Result<Option<Vec<PathBuf>>> {
     };
     let baml_src = root.join("baml_src");
     let walk_root = if baml_src.is_dir() { baml_src } else { root };
-    Ok(Some(discover_baml_files(&walk_root).with_context(
-        || {
-            format!(
-                "Failed to discover BAML files under {}",
-                walk_root.display()
-            )
-        },
-    )?))
+    Ok(Some(discover_baml_files(&walk_root)))
 }
 
 #[cfg(test)]
@@ -257,8 +248,7 @@ mod tests {
             main.clone(),
             nested_dir.clone(),
             nested.clone(),
-        ])
-        .unwrap();
+        ]);
 
         assert_eq!(expanded, vec![main, nested]);
     }
