@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:19:9]
+ 19 │         let t: T if true => "T",
+    ·         ────┬───
+    ·             ╰── expected `string | int`, found `T`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:33:9]
+ 33 │         let p: DeadPair<T, T> if true => "pair",
+    ·         ──────────┬──────────
+    ·                   ╰── expected `DeadPair<int, string>`, found `DeadPair<T, T>`
+    ╰────

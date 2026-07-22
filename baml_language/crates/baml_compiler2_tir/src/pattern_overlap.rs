@@ -87,10 +87,6 @@ pub(crate) struct PatternOverlapEnv<'a> {
 /// conservatively meet (their value sets nest by structural subtyping). Inside
 /// invariant constructor arguments all of that collapses to equality — `Box<1>` and
 /// `Box<int>` are disjoint — which is exactly [`unify_into`].
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "pattern-narrowing consumer not yet wired in")
-)]
 pub(crate) fn pattern_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Overlap {
     pattern_overlap_at(pat, member, env, 0)
 }

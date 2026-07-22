@@ -824,6 +824,12 @@ pub struct TypeInferenceBuilder<'db> {
     /// reference to the Salsa-cached `package_resolved_aliases` value so it is
     /// not cloned per scope (it used to be rebuilt for every scope inference).
     aliases: &'db HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Alias map in `unify::nf` canonical union form, for the pattern
+    /// reachability oracle ([`crate::pattern_overlap`]) — the raw `aliases`
+    /// bodies would mis-decide alias-obscured unions at invariant positions.
+    /// Built lazily on the first oracle consultation: most scopes have no
+    /// rigid-carrying `Never` narrowings, so they never pay for it.
+    normalized_overlap_aliases: std::cell::OnceCell<HashMap<crate::ty::QualifiedTypeName, Ty>>,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -1157,6 +1163,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             scope,
             declared_return_ty: None,
             aliases,
+            normalized_overlap_aliases: std::cell::OnceCell::new(),
             ns_context,
             implements_block_interface: None,
             generic_param_bounds: rustc_hash::FxHashMap::default(),
@@ -8797,6 +8804,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         Self::ty_contains_unknown_like(ty, false)
     }
 
+    /// Narrow a scrutinee's flow type (`incoming`) through a pattern's type
+    /// (`constraint`) — the pattern-side entry to [`Self::intersect_types`],
+    /// used for match/`is` arm narrowing and pattern ascriptions.
     fn intersect_pattern_flow_types(&self, incoming: &Ty, constraint: &Ty) -> Ty {
         if matches!(incoming, Ty::Unknown { .. } | Ty::Error { .. }) {
             return constraint.clone();
@@ -8804,7 +8814,69 @@ impl<'db> TypeInferenceBuilder<'db> {
         if matches!(constraint, Ty::Unknown { .. } | Ty::Error { .. }) {
             return incoming.clone();
         }
-        self.intersect_types(incoming, constraint)
+        let intersected = self.intersect_types(incoming, constraint);
+        // `Never`-rescue for rigid-carrying pairs. `intersect_types` is an
+        // equality/subtype meet, so an in-scope rigid type variable (or residual
+        // projection) against anything but an identical type falls through to
+        // `Never` — wrongly declaring a *potentially*-matching arm dead
+        // (`let b: Box<T>` against a `Box<int>` member matches whenever `T`
+        // realizes to `int`). Only when that happens, ask the overlap oracle
+        // whether some realization of the rigid variables could give the two
+        // types a common value. If so, the arm's matched type is the pattern's
+        // own type: the runtime `IsType` test is invariant and frame-realized,
+        // so any value that passes it belongs to the pattern type as written.
+        // Provably-impossible pairs keep `Never` (and are reported as a type
+        // error by `check_pattern_vs_scrut_subtype`). Rescue-only scoping keeps
+        // every currently-succeeding intersection — e.g. `T | null` vs `null`
+        // → `null` — untouched.
+        if matches!(intersected, Ty::Never { .. })
+            && (self.contains_in_scope_rigid_or_projection(incoming)
+                || self.contains_in_scope_rigid_or_projection(constraint))
+            && self.pattern_overlap_verdict(constraint, incoming) != crate::unify::Overlap::No
+        {
+            return constraint.clone();
+        }
+        intersected
+    }
+
+    /// Whether `ty` mentions an in-scope rigid type parameter
+    /// (`self.generic_params`, which includes `Self` in interface-owned bodies)
+    /// or an associated-type projection — the inputs whose reachability the
+    /// equality/subtype relations cannot decide and the overlap oracle can.
+    fn contains_in_scope_rigid_or_projection(&self, ty: &Ty) -> bool {
+        crate::generics::contains_ty_where(ty, &|t| match t {
+            Ty::TypeVar(name, _) => self.generic_params.contains(name),
+            Ty::AssociatedTypeProjection { .. } => true,
+            _ => false,
+        })
+    }
+
+    /// The pattern reachability oracle over this scope: can `pat` and `member`
+    /// share a value under some realization of the in-scope rigid params? See
+    /// [`crate::pattern_overlap::pattern_overlap`] for the semantics
+    /// (`Yes`/`Unknown` = possible, `No` = provably dead).
+    fn pattern_overlap_verdict(&self, pat: &Ty, member: &Ty) -> crate::unify::Overlap {
+        let db = self.context.db();
+        let aliases = self
+            .normalized_overlap_aliases
+            .get_or_init(|| crate::unify::normalized_alias_map(db, self.package_id));
+        let enum_variants =
+            |qtn: &crate::ty::QualifiedTypeName| crate::unify::enum_variant_names(db, qtn);
+        let implements = |ty: &Ty, iface: &baml_type::Interface| {
+            crate::interfaces::get_implements_block(db, self.package_id, ty, iface, aliases)
+                .is_some()
+        };
+        crate::pattern_overlap::pattern_overlap(
+            pat,
+            member,
+            &crate::pattern_overlap::PatternOverlapEnv {
+                vars: &self.generic_params,
+                bounds: &self.generic_param_bounds,
+                aliases,
+                enum_variants: &enum_variants,
+                implements: &implements,
+            },
+        )
     }
 
     /// Compute the type a pattern expects of its scrutinee, if it can act
@@ -15517,13 +15589,34 @@ impl TypeInferenceBuilder<'_> {
             },
         );
         let scrut_for_check = self.expand_alias_chains(scrut_ty.clone());
-        if !Self::ty_contains_recovery_unknown(&pat_natural)
-            && !Self::ty_contains_recovery_unknown(&scrut_for_check)
-            && !crate::generics::contains_typevar(&pat_natural)
-            && !crate::generics::contains_typevar(&scrut_for_check)
-            && !self.pattern_matchable(&pat_natural, &scrut_for_check)
-            && !self.pattern_overlaps_scrut_member(&pat_natural, &scrut_for_check)
+        if Self::ty_contains_recovery_unknown(&pat_natural)
+            || Self::ty_contains_recovery_unknown(&scrut_for_check)
         {
+            return;
+        }
+        let mismatch = if self.contains_in_scope_rigid_or_projection(&pat_natural)
+            || self.contains_in_scope_rigid_or_projection(&scrut_for_check)
+        {
+            // Rigid-carrying sides: subtype/equality cannot decide reachability
+            // (a rigid variable is only *potentially* unifiable with another
+            // type), so ask the overlap oracle. An arm with provably no common
+            // realization — `Pair<T, T>` against `Pair<int, string>`, or a
+            // bounded `T` against a member outside its bound — is dead code, a
+            // type error exactly like a concrete mismatch. (Previously skipped:
+            // such arms compiled and silently never matched.)
+            self.pattern_overlap_verdict(&pat_natural, &scrut_for_check)
+                == crate::unify::Overlap::No
+        } else if crate::generics::contains_typevar(&pat_natural)
+            || crate::generics::contains_typevar(&scrut_for_check)
+        {
+            // A type variable outside this scope's rigid params is not ours to
+            // judge — skipped, as before the oracle existed.
+            false
+        } else {
+            !self.pattern_matchable(&pat_natural, &scrut_for_check)
+                && !self.pattern_overlaps_scrut_member(&pat_natural, &scrut_for_check)
+        };
+        if mismatch {
             let err = TirTypeError::TypeMismatch {
                 expected: scrut_ty.clone(),
                 got: pat_natural,
@@ -15851,28 +15944,36 @@ impl TypeInferenceBuilder<'_> {
         // pattern (`string`, `null`, a bare class) must not over-claim the
         // open `T` member, or it shadows the dedicated `let v: T` arm and
         // that arm is then reported unreachable (the `tag_or_value<T>` bug).
+        // A residual associated-type projection member (`Self.Item`) is open
+        // in exactly the same way, so it gets the same directional treatment.
         //
-        // So make the overlap directional for `TypeVar` members: claim a
-        // `TypeVar` member only when the pattern itself can genuinely match
-        // open-`T` values — i.e. some atom of the pattern's natural type is a
-        // `TypeVar` (a `let v: T` pattern), or an `Unknown`/`Error` recovery
-        // atom. A pattern whose natural type is a union that *includes* a
-        // `TypeVar` (e.g. a `let p: T | Concrete` binding, as in the
-        // streaming `TStream | StreamNoYield` case) still claims it, because
-        // one of its atoms is a `TypeVar`. Concrete patterns skip the member.
+        // So make the overlap directional for open members: claim one only
+        // when the pattern itself can genuinely match open values — i.e. some
+        // atom of the pattern's natural type is a `TypeVar` or projection, or
+        // an `Unknown`/`Error` recovery atom. A pattern whose natural type is
+        // a union that *includes* a `TypeVar` (e.g. a `let p: T | Concrete`
+        // binding, as in the streaming `TStream | StreamNoYield` case) still
+        // claims it, because one of its atoms is a `TypeVar`. Concrete
+        // patterns skip the member.
         let natural_atoms = {
             let mut atoms = Vec::new();
             self.collect_overlap_atoms(&natural, &mut atoms);
             atoms
         };
-        let pattern_claims_typevar = natural_atoms
-            .iter()
-            .any(|a| matches!(a, Ty::TypeVar(..) | Ty::Unknown { .. } | Ty::Error { .. }));
+        let pattern_claims_open = natural_atoms.iter().any(|a| {
+            matches!(
+                a,
+                Ty::TypeVar(..)
+                    | Ty::AssociatedTypeProjection { .. }
+                    | Ty::Unknown { .. }
+                    | Ty::Error { .. }
+            )
+        });
         union_members
             .iter()
             .filter(|m| {
-                if matches!(m, Ty::TypeVar(..)) {
-                    pattern_claims_typevar
+                if matches!(m, Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. }) {
+                    pattern_claims_open
                 } else {
                     self.types_overlap(&natural, m)
                 }
@@ -16006,6 +16107,17 @@ impl TypeInferenceBuilder<'_> {
             }
             // Never has no values, so it doesn't overlap with anything.
             (Ty::Never { .. }, _) | (_, Ty::Never { .. }) => false,
+            // Two residual projections can realize to the same concrete type
+            // (`Self.Item` on both sides, or `T.Item` vs `U.Item` at a common
+            // instantiation), so a projection pattern targets a projection
+            // member — this is what lets `let x: Self.Item` specialize onto its
+            // own member of a `Done | Self.Item` scrutinee. Projection-vs-
+            // concrete pairs deliberately stay non-overlapping *here*: like a
+            // `TypeVar` member, an open projection member must not be claimed
+            // by concrete patterns (`union_targets_for_pattern`'s directional
+            // gate), and a projection pattern's possible reach into concrete
+            // members is the narrowing oracle's business, not union dispatch's.
+            (Ty::AssociatedTypeProjection { .. }, Ty::AssociatedTypeProjection { .. }) => true,
             // BEP-044: an interface atom overlaps a value whose runtime class
             // could satisfy it — the same/`requires`-related interface, or a
             // class that nominally implements it. This is genuine runtime-tag
