@@ -10,13 +10,13 @@ use ignore::WalkBuilder;
 /// Discover all BAML files in a project directory.
 ///
 /// Standard ignore files and hidden entries are respected, directory links are
-/// not followed, and traversal errors are returned to the caller. The returned
+/// followed, and traversal errors are returned to the caller. The returned
 /// paths are sorted for deterministic ordering.
 pub fn discover_baml_files(root: &Path) -> Result<Vec<PathBuf>, ignore::Error> {
     let mut files = Vec::new();
 
     let mut builder = WalkBuilder::new(root);
-    builder.standard_filters(true).follow_links(false);
+    builder.standard_filters(true).follow_links(true);
 
     for entry in builder.build() {
         let entry = entry?;
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     #[cfg(any(unix, windows))]
-    fn does_not_follow_linked_directories() {
+    fn follows_linked_directories() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("root");
         let outside = temp.path().join("outside");
@@ -141,7 +141,7 @@ mod tests {
 
         assert_eq!(
             discover_baml_files(&root).unwrap(),
-            vec![root.join("main.baml")]
+            vec![root.join("linked/linked.baml"), root.join("main.baml")]
         );
     }
 }
