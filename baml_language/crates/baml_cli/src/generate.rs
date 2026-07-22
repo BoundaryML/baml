@@ -85,7 +85,7 @@ impl GenerateArgs {
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli_auto(),
+                &crate::output::diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");
@@ -119,7 +119,7 @@ impl GenerateArgs {
                 &gen_diags,
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli_auto(),
+                &crate::output::diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");

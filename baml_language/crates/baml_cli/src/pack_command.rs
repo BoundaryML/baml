@@ -432,7 +432,7 @@ fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Re
         &errors.iter().copied().cloned().collect::<Vec<_>>(),
         &sources,
         &file_paths,
-        &render::RenderConfig::cli_auto(),
+        &crate::output::diagnostic_render_config(),
     );
     reporter.abandon();
     eprintln!("{rendered}");

@@ -123,6 +123,6 @@ pub(crate) fn render_project_diagnostics(
         diagnostics,
         &sources,
         &file_paths,
-        &render::RenderConfig::cli_auto(),
+        &crate::output::diagnostic_render_config(),
     )
 }
