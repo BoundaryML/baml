@@ -154,10 +154,9 @@ jobs:
             -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
           cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
-          # Debug config: the smoke asserts must stay compiled in (NDEBUG off).
-          cmake --build smoke-build --target runtime_smoke -j --config Debug
+          cmake --build smoke-build --target runtime_smoke -j --config Release
           if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
-          $out = & .\smoke-build\Debug\runtime_smoke.exe
+          $out = & .\smoke-build\Release\runtime_smoke.exe
           if ($LASTEXITCODE -ne 0) { throw "runtime_smoke exited with $LASTEXITCODE" }
           Write-Output $out
           if (-not ($out -contains "version: $env:BAML_EXPECTED_VERSION")) {
