@@ -21,7 +21,11 @@
 //! let concise = render_diagnostic(&diag, &sources, RenderConfig::concise());
 //! ```
 
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use ariadne::{Fmt, Label, Report, ReportKind, Source};
 use baml_base::{FileId, Span};
@@ -569,10 +573,15 @@ fn shortest_unique_path(file_id: FileId, file_paths: &HashMap<FileId, PathBuf>) 
             .filter(|(other_id, _)| **other_id != file_id)
             .all(|(_, other)| !other.ends_with(&suffix));
         if unique {
-            return suffix.display().to_string();
+            return display_agent_path(&suffix);
         }
     }
-    path.display().to_string()
+    display_agent_path(path)
+}
+
+fn display_agent_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/")
 }
 
 /// Render a diagnostic in concise one-line format.
