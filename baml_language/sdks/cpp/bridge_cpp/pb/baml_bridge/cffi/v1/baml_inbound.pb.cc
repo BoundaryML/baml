@@ -109,8 +109,9 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 
 inline constexpr InboundListValue::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
-      : values_{},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        values_{},
+        item_type_{nullptr} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR InboundListValue::InboundListValue(::_pbi::ConstantInitialized)
@@ -161,8 +162,10 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 
 inline constexpr InboundMapValue::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
-      : entries_{},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        entries_{},
+        key_type_{nullptr},
+        value_type_{nullptr} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR InboundMapValue::InboundMapValue(::_pbi::ConstantInitialized)
@@ -183,6 +186,36 @@ struct InboundMapValueDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InboundMapValueDefaultTypeInternal _InboundMapValue_default_instance_;
+
+inline constexpr InboundUnionValue::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        value_option_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        self_type_{nullptr},
+        selected_type_{nullptr},
+        value_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR InboundUnionValue::InboundUnionValue(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(InboundUnionValue_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct InboundUnionValueDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR InboundUnionValueDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~InboundUnionValueDefaultTypeInternal() {}
+  union {
+    InboundUnionValue _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InboundUnionValueDefaultTypeInternal _InboundUnionValue_default_instance_;
 
 inline constexpr InboundValue::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -382,6 +415,19 @@ void InboundValue::clear_ty_value() {
     clear_has_value();
   }
 }
+void InboundValue::set_allocated_union_value(::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE union_value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_value();
+  if (union_value) {
+    ::google::protobuf::Arena* submessage_arena = union_value->GetArena();
+    if (message_arena != submessage_arena) {
+      union_value = ::google::protobuf::internal::GetOwnedMessage(message_arena, union_value, submessage_arena);
+    }
+    set_has_union_value();
+    _impl_.value_.union_value_ = union_value;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundValue.union_value)
+}
 InboundValue::InboundValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, InboundValue_class_data_.base()) {
@@ -450,6 +496,9 @@ InboundValue::InboundValue(
         break;
       case kTyValue:
         _impl_.value_.ty_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.ty_value_);
+        break;
+      case kUnionValue:
+        _impl_.value_.union_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.union_value_);
         break;
   }
 
@@ -567,6 +616,16 @@ void InboundValue::clear_value() {
       }
       break;
     }
+    case kUnionValue: {
+      if (GetArena() == nullptr) {
+        delete _impl_.value_.union_value_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.value_.union_value_ != nullptr) {
+          _impl_.value_.union_value_->Clear();
+        }
+      }
+      break;
+    }
     case VALUE_NOT_SET: {
       break;
     }
@@ -615,17 +674,17 @@ InboundValue::GetClassData() const {
   return InboundValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 12, 6, 73, 2>
+const ::_pbi::TcParseTable<0, 13, 7, 73, 2>
 InboundValue::_table_ = {
   {
     0,  // no _has_bits_
     0, // no _extensions_
-    13, 0,  // max_field_number, fast_idx_mask
+    14, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294959105,  // skipmap
+    4294950913,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    12,  // num_field_entries
-    6,  // num_aux_entries
+    13,  // num_field_entries
+    7,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -674,6 +733,9 @@ InboundValue::_table_ = {
     // .baml_bridge.cffi.v1.BamlTy ty_value = 13;
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.ty_value_), _Internal::kOneofCaseOffset + 0, 5,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.InboundUnionValue union_value = 14;
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.union_value_), _Internal::kOneofCaseOffset + 0, 6,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundListValue>()},
@@ -682,6 +744,7 @@ InboundValue::_table_ = {
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundEnumValue>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlHandle>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundUnionValue>()},
   }},
   {{
     "\40\14\0\0\0\0\0\0\0\0\0\14\0\0\0\0"
@@ -790,6 +853,12 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
           stream);
       break;
     }
+    case kUnionValue: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          14, *this_._impl_.value_.union_value_, this_._impl_.value_.union_value_->GetCachedSize(), target,
+          stream);
+      break;
+    }
     default:
       break;
   }
@@ -885,6 +954,12 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
     case kTyValue: {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.ty_value_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.InboundUnionValue union_value = 14;
+    case kUnionValue: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_.union_value_);
       break;
     }
     case VALUE_NOT_SET: {
@@ -999,6 +1074,14 @@ void InboundValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::go
         }
         break;
       }
+      case kUnionValue: {
+        if (oneof_needs_init) {
+          _this->_impl_.value_.union_value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_.union_value_);
+        } else {
+          _this->_impl_.value_.union_value_->CheckTypeAndMergeFrom(*from._impl_.value_.union_value_);
+        }
+        break;
+      }
       case VALUE_NOT_SET:
         break;
     }
@@ -1023,10 +1106,414 @@ void InboundValue::InternalSwap(InboundValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL
 
 // ===================================================================
 
-class InboundListValue::_Internal {
+class InboundUnionValue::_Internal {
  public:
+  using HasBits =
+      decltype(::std::declval<InboundUnionValue>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_._has_bits_);
 };
 
+void InboundUnionValue::clear_self_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.self_type_ != nullptr) _impl_.self_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
+void InboundUnionValue::clear_selected_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.selected_type_ != nullptr) _impl_.selected_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000004u;
+}
+InboundUnionValue::InboundUnionValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, InboundUnionValue_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.InboundUnionValue)
+}
+PROTOBUF_NDEBUG_INLINE InboundUnionValue::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::InboundUnionValue& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        value_option_name_(arena, from.value_option_name_) {}
+
+InboundUnionValue::InboundUnionValue(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const InboundUnionValue& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, InboundUnionValue_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  InboundUnionValue* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.self_type_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.self_type_)
+                : nullptr;
+  _impl_.selected_type_ = ((cached_has_bits & 0x00000004u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.selected_type_)
+                : nullptr;
+  _impl_.value_ = ((cached_has_bits & 0x00000008u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.InboundUnionValue)
+}
+PROTOBUF_NDEBUG_INLINE InboundUnionValue::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        value_option_name_(arena) {}
+
+inline void InboundUnionValue::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, self_type_),
+           0,
+           offsetof(Impl_, value_) -
+               offsetof(Impl_, self_type_) +
+               sizeof(Impl_::value_));
+}
+InboundUnionValue::~InboundUnionValue() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.InboundUnionValue)
+  SharedDtor(*this);
+}
+inline void InboundUnionValue::SharedDtor(MessageLite& self) {
+  InboundUnionValue& this_ = static_cast<InboundUnionValue&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.value_option_name_.Destroy();
+  delete this_._impl_.self_type_;
+  delete this_._impl_.selected_type_;
+  delete this_._impl_.value_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL InboundUnionValue::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) InboundUnionValue(arena);
+}
+constexpr auto InboundUnionValue::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(InboundUnionValue),
+                                            alignof(InboundUnionValue));
+}
+constexpr auto InboundUnionValue::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<38>{
+      {
+          &_InboundUnionValue_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &InboundUnionValue::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<InboundUnionValue>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &InboundUnionValue::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<InboundUnionValue>(), &InboundUnionValue::ByteSizeLong,
+              &InboundUnionValue::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.InboundUnionValue",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<38> InboundUnionValue_class_data_ =
+    InboundUnionValue::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+InboundUnionValue::GetClassData() const {
+  return InboundUnionValue_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 3, 63, 2>
+InboundUnionValue::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    3,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    InboundUnionValue_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundUnionValue>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // .baml_bridge.cffi.v1.InboundValue value = 4;
+    {::_pbi::TcParser::FastMtS1,
+     {34, 3, 2, PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.value_)}},
+    // .baml_bridge.cffi.v1.BamlTy self_type = 1;
+    {::_pbi::TcParser::FastMtS1,
+     {10, 1, 0, PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.self_type_)}},
+    // .baml_bridge.cffi.v1.BamlTy selected_type = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 2, 1, PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.selected_type_)}},
+    // string value_option_name = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 0, 0, PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.value_option_name_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // .baml_bridge.cffi.v1.BamlTy self_type = 1;
+    {PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.self_type_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTy selected_type = 2;
+    {PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.selected_type_), _Internal::kHasBitsOffset + 2, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string value_option_name = 3;
+    {PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.value_option_name_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .baml_bridge.cffi.v1.InboundValue value = 4;
+    {PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.value_), _Internal::kHasBitsOffset + 3, 2,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundValue>()},
+  }},
+  {{
+    "\45\0\0\21\0\0\0\0"
+    "baml_bridge.cffi.v1.InboundUnionValue"
+    "value_option_name"
+  }},
+};
+PROTOBUF_NOINLINE void InboundUnionValue::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.InboundUnionValue)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.value_option_name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.self_type_ != nullptr);
+      _impl_.self_type_->Clear();
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      ABSL_DCHECK(_impl_.selected_type_ != nullptr);
+      _impl_.selected_type_->Clear();
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      ABSL_DCHECK(_impl_.value_ != nullptr);
+      _impl_.value_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL InboundUnionValue::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const InboundUnionValue& this_ = static_cast<const InboundUnionValue&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL InboundUnionValue::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const InboundUnionValue& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.InboundUnionValue)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy self_type = 1;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.self_type_, this_._impl_.self_type_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .baml_bridge.cffi.v1.BamlTy selected_type = 2;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.selected_type_, this_._impl_.selected_type_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string value_option_name = 3;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    if (!this_._internal_value_option_name().empty()) {
+      const ::std::string& _s = this_._internal_value_option_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.InboundUnionValue.value_option_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // .baml_bridge.cffi.v1.InboundValue value = 4;
+  if ((cached_has_bits & 0x00000008u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.value_, this_._impl_.value_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.InboundUnionValue)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t InboundUnionValue::ByteSizeLong(const MessageLite& base) {
+  const InboundUnionValue& this_ = static_cast<const InboundUnionValue&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t InboundUnionValue::ByteSizeLong() const {
+  const InboundUnionValue& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.InboundUnionValue)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    // string value_option_name = 3;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_value_option_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_value_option_name());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlTy self_type = 1;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.self_type_);
+    }
+    // .baml_bridge.cffi.v1.BamlTy selected_type = 2;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.selected_type_);
+    }
+    // .baml_bridge.cffi.v1.InboundValue value = 4;
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_);
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void InboundUnionValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<InboundUnionValue*>(&to_msg);
+  auto& from = static_cast<const InboundUnionValue&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.InboundUnionValue)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_value_option_name().empty()) {
+        _this->_internal_set_value_option_name(from._internal_value_option_name());
+      } else {
+        if (_this->_impl_.value_option_name_.IsDefault()) {
+          _this->_internal_set_value_option_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.self_type_ != nullptr);
+      if (_this->_impl_.self_type_ == nullptr) {
+        _this->_impl_.self_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.self_type_);
+      } else {
+        _this->_impl_.self_type_->MergeFrom(*from._impl_.self_type_);
+      }
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      ABSL_DCHECK(from._impl_.selected_type_ != nullptr);
+      if (_this->_impl_.selected_type_ == nullptr) {
+        _this->_impl_.selected_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.selected_type_);
+      } else {
+        _this->_impl_.selected_type_->MergeFrom(*from._impl_.selected_type_);
+      }
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      ABSL_DCHECK(from._impl_.value_ != nullptr);
+      if (_this->_impl_.value_ == nullptr) {
+        _this->_impl_.value_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_);
+      } else {
+        _this->_impl_.value_->MergeFrom(*from._impl_.value_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void InboundUnionValue::CopyFrom(const InboundUnionValue& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.InboundUnionValue)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void InboundUnionValue::InternalSwap(InboundUnionValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.value_option_name_, &other->_impl_.value_option_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.value_)
+      + sizeof(InboundUnionValue::_impl_.value_)
+      - PROTOBUF_FIELD_OFFSET(InboundUnionValue, _impl_.self_type_)>(
+          reinterpret_cast<char*>(&_impl_.self_type_),
+          reinterpret_cast<char*>(&other->_impl_.self_type_));
+}
+
+// ===================================================================
+
+class InboundListValue::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<InboundListValue>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_._has_bits_);
+};
+
+void InboundListValue::clear_item_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.item_type_ != nullptr) _impl_.item_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
 InboundListValue::InboundListValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, InboundListValue_class_data_.base()) {
@@ -1040,8 +1527,9 @@ PROTOBUF_NDEBUG_INLINE InboundListValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     const ::baml_bridge::cffi::v1::InboundListValue& from_msg)
-      : values_{visibility, arena, from.values_},
-        _cached_size_{0} {}
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        values_{visibility, arena, from.values_} {}
 
 InboundListValue::InboundListValue(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1056,17 +1544,22 @@ InboundListValue::InboundListValue(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.item_type_ = ((cached_has_bits & 0x00000001u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.item_type_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.InboundListValue)
 }
 PROTOBUF_NDEBUG_INLINE InboundListValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : values_{visibility, arena},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        values_{visibility, arena} {}
 
 inline void InboundListValue::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.item_type_ = {};
 }
 InboundListValue::~InboundListValue() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.InboundListValue)
@@ -1076,6 +1569,7 @@ inline void InboundListValue::SharedDtor(MessageLite& self) {
   InboundListValue& this_ = static_cast<InboundListValue&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.item_type_;
   this_._impl_.~Impl_();
 }
 
@@ -1131,17 +1625,17 @@ InboundListValue::GetClassData() const {
   return InboundListValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+const ::_pbi::TcParseTable<1, 2, 2, 0, 2>
 InboundListValue::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    1,  // num_aux_entries
+    2,  // num_field_entries
+    2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundListValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1150,6 +1644,9 @@ InboundListValue::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundListValue>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // .baml_bridge.cffi.v1.BamlTy item_type = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 1, PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_.item_type_)}},
     // repeated .baml_bridge.cffi.v1.InboundValue values = 1;
     {::_pbi::TcParser::FastMtR1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_.values_)}},
@@ -1157,11 +1654,15 @@ InboundListValue::_table_ = {
     65535, 65535
   }}, {{
     // repeated .baml_bridge.cffi.v1.InboundValue values = 1;
-    {PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_.values_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_.values_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTy item_type = 2;
+    {PROTOBUF_FIELD_OFFSET(InboundListValue, _impl_.item_type_), _Internal::kHasBitsOffset + 0, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundValue>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
   }},
   {{
   }},
@@ -1174,6 +1675,12 @@ PROTOBUF_NOINLINE void InboundListValue::Clear() {
   (void) cached_has_bits;
 
   _impl_.values_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(_impl_.item_type_ != nullptr);
+    _impl_.item_type_->Clear();
+  }
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -1201,6 +1708,14 @@ PROTOBUF_NOINLINE void InboundListValue::Clear() {
         ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
             1, repfield, repfield.GetCachedSize(),
             target, stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy item_type = 2;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.item_type_, this_._impl_.item_type_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1236,6 +1751,14 @@ PROTOBUF_NOINLINE void InboundListValue::Clear() {
       }
     }
   }
+   {
+    // .baml_bridge.cffi.v1.BamlTy item_type = 2;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.item_type_);
+    }
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
   }
@@ -1246,6 +1769,7 @@ PROTOBUF_NOINLINE void InboundListValue::Clear() {
 void InboundListValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<InboundListValue*>(&to_msg);
   auto& from = static_cast<const InboundListValue&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.InboundListValue)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -1253,6 +1777,16 @@ void InboundListValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const 
 
   _this->_internal_mutable_values()->MergeFrom(
       from._internal_values());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(from._impl_.item_type_ != nullptr);
+    if (_this->_impl_.item_type_ == nullptr) {
+      _this->_impl_.item_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.item_type_);
+    } else {
+      _this->_impl_.item_type_->MergeFrom(*from._impl_.item_type_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -1267,15 +1801,31 @@ void InboundListValue::CopyFrom(const InboundListValue& from) {
 void InboundListValue::InternalSwap(InboundListValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.values_.InternalSwap(&other->_impl_.values_);
+  swap(_impl_.item_type_, other->_impl_.item_type_);
 }
 
 // ===================================================================
 
 class InboundMapValue::_Internal {
  public:
+  using HasBits =
+      decltype(::std::declval<InboundMapValue>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_._has_bits_);
 };
 
+void InboundMapValue::clear_key_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.key_type_ != nullptr) _impl_.key_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
+void InboundMapValue::clear_value_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.value_type_ != nullptr) _impl_.value_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000002u;
+}
 InboundMapValue::InboundMapValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, InboundMapValue_class_data_.base()) {
@@ -1289,8 +1839,9 @@ PROTOBUF_NDEBUG_INLINE InboundMapValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     const ::baml_bridge::cffi::v1::InboundMapValue& from_msg)
-      : entries_{visibility, arena, from.entries_},
-        _cached_size_{0} {}
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        entries_{visibility, arena, from.entries_} {}
 
 InboundMapValue::InboundMapValue(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1305,17 +1856,30 @@ InboundMapValue::InboundMapValue(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.key_type_ = ((cached_has_bits & 0x00000001u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.key_type_)
+                : nullptr;
+  _impl_.value_type_ = ((cached_has_bits & 0x00000002u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_type_)
+                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.InboundMapValue)
 }
 PROTOBUF_NDEBUG_INLINE InboundMapValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : entries_{visibility, arena},
-        _cached_size_{0} {}
+      : _cached_size_{0},
+        entries_{visibility, arena} {}
 
 inline void InboundMapValue::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char *>(&_impl_) +
+               offsetof(Impl_, key_type_),
+           0,
+           offsetof(Impl_, value_type_) -
+               offsetof(Impl_, key_type_) +
+               sizeof(Impl_::value_type_));
 }
 InboundMapValue::~InboundMapValue() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.InboundMapValue)
@@ -1325,6 +1889,8 @@ inline void InboundMapValue::SharedDtor(MessageLite& self) {
   InboundMapValue& this_ = static_cast<InboundMapValue&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.key_type_;
+  delete this_._impl_.value_type_;
   this_._impl_.~Impl_();
 }
 
@@ -1380,17 +1946,17 @@ InboundMapValue::GetClassData() const {
   return InboundMapValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
+const ::_pbi::TcParseTable<2, 3, 3, 0, 2>
 InboundMapValue::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
-    1,  // num_aux_entries
+    3,  // num_field_entries
+    3,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundMapValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -1399,18 +1965,33 @@ InboundMapValue::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapValue>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    {::_pbi::TcParser::MiniParse, {}},
     // repeated .baml_bridge.cffi.v1.InboundMapEntry entries = 1;
     {::_pbi::TcParser::FastMtR1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.entries_)}},
+    // .baml_bridge.cffi.v1.BamlTy key_type = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 0, 1, PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.key_type_)}},
+    // .baml_bridge.cffi.v1.BamlTy value_type = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 1, 2, PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.value_type_)}},
   }}, {{
     65535, 65535
   }}, {{
     // repeated .baml_bridge.cffi.v1.InboundMapEntry entries = 1;
-    {PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.entries_), 0, 0,
+    {PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.entries_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTy key_type = 2;
+    {PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.key_type_), _Internal::kHasBitsOffset + 0, 1,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.BamlTy value_type = 3;
+    {PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.value_type_), _Internal::kHasBitsOffset + 1, 2,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
   }},
   {{
   }},
@@ -1423,6 +2004,18 @@ PROTOBUF_NOINLINE void InboundMapValue::Clear() {
   (void) cached_has_bits;
 
   _impl_.entries_.Clear();
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      ABSL_DCHECK(_impl_.key_type_ != nullptr);
+      _impl_.key_type_->Clear();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(_impl_.value_type_ != nullptr);
+      _impl_.value_type_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -1450,6 +2043,21 @@ PROTOBUF_NOINLINE void InboundMapValue::Clear() {
         ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
             1, repfield, repfield.GetCachedSize(),
             target, stream);
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy key_type = 2;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.key_type_, this_._impl_.key_type_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .baml_bridge.cffi.v1.BamlTy value_type = 3;
+  if ((cached_has_bits & 0x00000002u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.value_type_, this_._impl_.value_type_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1485,6 +2093,19 @@ PROTOBUF_NOINLINE void InboundMapValue::Clear() {
       }
     }
   }
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    // .baml_bridge.cffi.v1.BamlTy key_type = 2;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.key_type_);
+    }
+    // .baml_bridge.cffi.v1.BamlTy value_type = 3;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_type_);
+    }
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
   }
@@ -1495,6 +2116,7 @@ PROTOBUF_NOINLINE void InboundMapValue::Clear() {
 void InboundMapValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<InboundMapValue*>(&to_msg);
   auto& from = static_cast<const InboundMapValue&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.InboundMapValue)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -1502,6 +2124,26 @@ void InboundMapValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const :
 
   _this->_internal_mutable_entries()->MergeFrom(
       from._internal_entries());
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000003u) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      ABSL_DCHECK(from._impl_.key_type_ != nullptr);
+      if (_this->_impl_.key_type_ == nullptr) {
+        _this->_impl_.key_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.key_type_);
+      } else {
+        _this->_impl_.key_type_->MergeFrom(*from._impl_.key_type_);
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      ABSL_DCHECK(from._impl_.value_type_ != nullptr);
+      if (_this->_impl_.value_type_ == nullptr) {
+        _this->_impl_.value_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_type_);
+      } else {
+        _this->_impl_.value_type_->MergeFrom(*from._impl_.value_type_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -1516,7 +2158,14 @@ void InboundMapValue::CopyFrom(const InboundMapValue& from) {
 void InboundMapValue::InternalSwap(InboundMapValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.entries_.InternalSwap(&other->_impl_.entries_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.value_type_)
+      + sizeof(InboundMapValue::_impl_.value_type_)
+      - PROTOBUF_FIELD_OFFSET(InboundMapValue, _impl_.key_type_)>(
+          reinterpret_cast<char*>(&_impl_.key_type_),
+          reinterpret_cast<char*>(&other->_impl_.key_type_));
 }
 
 // ===================================================================

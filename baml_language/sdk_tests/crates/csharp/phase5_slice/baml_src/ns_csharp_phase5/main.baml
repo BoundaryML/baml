@@ -21,9 +21,9 @@ function roundtrip_union(value: string | int) -> string | int {
   value
 }
 
-function roundtrip_duplicate_projection(
-  value: Label | "fixed",
-) -> Label | "fixed" {
+function roundtrip_literal_union(
+  value: int | "fixed",
+) -> int | "fixed" {
   value
 }
 

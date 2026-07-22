@@ -4,6 +4,7 @@
 //! module provides an API that takes a `PermitProof<'_>` (obtained from any
 //! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
+use baml_type::RuntimeTy;
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
@@ -526,11 +527,12 @@ fn convert_object(
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
-        // This deep-copy path has no separate declared type, but collection
-        // heap objects retain their realized descriptors. Preserve them so
-        // callback arguments do not erase closed generic metadata.
+        // Deep-copy path for trace payloads: no declared type is available here,
+        // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {
-            element_type: array.element_ty.as_runtime_ty().clone(),
+            element_type: RuntimeTy::BuiltinUnknown {
+                attr: baml_type::TyAttr::default(),
+            },
             items: array
                 .to_vec()
                 .into_iter()
@@ -538,8 +540,12 @@ fn convert_object(
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => Ok(BexExternalValue::Map {
-            key_type: map.key_ty.as_runtime_ty().clone(),
-            value_type: map.value_ty.as_runtime_ty().clone(),
+            key_type: RuntimeTy::String {
+                attr: baml_type::TyAttr::default(),
+            },
+            value_type: RuntimeTy::BuiltinUnknown {
+                attr: baml_type::TyAttr::default(),
+            },
             entries: map
                 .to_index_map()
                 .into_iter()
@@ -640,7 +646,6 @@ mod tests {
     use bex_external_types::BexExternalValue;
     use bex_str::BexStr;
     use bex_vm_types::RootHaver;
-    use indexmap::IndexMap;
 
     use crate::{BexHeap, BexValue, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
 
@@ -686,52 +691,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(owned, BexExternalValue::String(BexStr::from("<function>")));
-    }
-
-    #[tokio::test]
-    async fn owned_collections_preserve_realized_wire_types() {
-        let heap = BexHeap::new(Vec::new());
-        let manager = HeapPermitManager::new();
-        let mut roots = EmptyRoots {
-            tlab: Tlab::new(Arc::clone(&heap)),
-        };
-
-        let array_element_ty = baml_type::RealizedTy::int();
-        let expected_array_element_ty = array_element_ty.as_runtime_ty().clone();
-        let array = roots
-            .tlab
-            .alloc_array(array_element_ty, vec![bex_vm_types::Value::int(1)]);
-
-        let map_key_ty = baml_type::RealizedTy::string();
-        let expected_map_key_ty = map_key_ty.as_runtime_ty().clone();
-        let map_value_ty = baml_type::RealizedTy::bool();
-        let expected_map_value_ty = map_value_ty.as_runtime_ty().clone();
-        let mut entries = IndexMap::new();
-        entries.insert(BexStr::from("enabled"), bex_vm_types::Value::bool(true));
-        let map = roots.tlab.alloc_map(map_key_ty, map_value_ty, entries);
-
-        let permit = manager.new_permit(roots).await.acquire().await;
-
-        let owned_array = BexValue::HeapPtr(&array)
-            .as_owned_but_very_slow(&heap, permit.proof())
-            .unwrap();
-        let BexExternalValue::Array { element_type, .. } = owned_array else {
-            panic!("expected array");
-        };
-        assert_eq!(element_type, expected_array_element_ty);
-
-        let owned_map = BexValue::HeapPtr(&map)
-            .as_owned_but_very_slow(&heap, permit.proof())
-            .unwrap();
-        let BexExternalValue::Map {
-            key_type,
-            value_type,
-            ..
-        } = owned_map
-        else {
-            panic!("expected map");
-        };
-        assert_eq!(key_type, expected_map_key_ty);
-        assert_eq!(value_type, expected_map_value_ty);
     }
 }

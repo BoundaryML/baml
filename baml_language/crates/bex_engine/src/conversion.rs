@@ -100,12 +100,14 @@ impl BexEngine {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
-                // Prefer the declared occurrence type, but never erase the
-                // realized descriptor already stored on the heap when the
-                // boundary type is `unknown`.
+                // Get element type from declared type, falling back to Null when
+                // the declared type doesn't resolve (e.g., builtin class arrays)
+
                 let element_type = match effective_type {
-                    RuntimeTy::List(elem_ty, _) => elem_ty.as_ref().clone(),
-                    _ => arr.element_ty.as_runtime_ty().clone(),
+                    RuntimeTy::List(elem_ty, _) => elem_ty.as_ref(),
+                    _ => &RuntimeTy::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
                 };
 
                 // Snapshot under the source's lock; the recursive
@@ -113,24 +115,27 @@ impl BexEngine {
                 let snapshot = arr.to_vec();
                 let items: Result<Vec<_>, _> = snapshot
                     .iter()
-                    .map(|v| self.convert_vm_value_to_external_with_type(*v, &element_type, permit))
+                    .map(|v| self.convert_vm_value_to_external_with_type(*v, element_type, permit))
                     .collect();
                 Ok(BexExternalValue::Array {
-                    element_type,
+                    element_type: element_type.clone(),
                     items: items?,
                 })
             }
 
             Object::Map(map) => {
-                // As with arrays, the heap's realized descriptors are the
-                // lossless fallback for a dynamically typed occurrence.
+                // Get key and value types from declared type, falling back to
+                // Null when the declared type doesn't resolve
+
                 let (key_type, value_type) = match effective_type {
-                    RuntimeTy::Map { key, value, .. } => {
-                        (key.as_ref().clone(), value.as_ref().clone())
-                    }
+                    RuntimeTy::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
                     _ => (
-                        map.key_ty.as_runtime_ty().clone(),
-                        map.value_ty.as_runtime_ty().clone(),
+                        &RuntimeTy::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        &RuntimeTy::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
                     ),
                 };
 
@@ -142,16 +147,14 @@ impl BexEngine {
                             Ok((
                                 k.to_string(),
                                 self.convert_vm_value_to_external_with_type(
-                                    *v,
-                                    &value_type,
-                                    permit,
+                                    *v, value_type, permit,
                                 )?,
                             ))
                         })
                         .collect();
                 Ok(BexExternalValue::Map {
-                    key_type,
-                    value_type,
+                    key_type: key_type.clone(),
+                    value_type: value_type.clone(),
                     entries: entries?,
                 })
             }
@@ -632,14 +635,15 @@ impl BexEngine {
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
-        // Opaque structural stash: `RustType` and builtin `unknown` slots cannot
-        // introspect a value's internal structure. Keep the complete external
-        // occurrence (including union selection and collection descriptors)
-        // instead of materializing it into a VM object and discarding metadata.
-        // `try_convert_rust_data` re-emits it unchanged on the way out.
-        if expected_ty.is_some_and(opaque_slot_preserves_external_shape)
-            && is_structural_host_only(&external)
-        {
+        // Structural host-only stash (03b §F/§G): when the declared slot resolves
+        // to `RustType` (the generic var bound to `rust_type`) but the value is a
+        // structural `BexExternalValue` (e.g. an unbound generic instance), ride
+        // it through the VM verbatim as an opaque `Object::RustData` instead of
+        // materializing an introspectable object. `try_convert_rust_data` re-emits
+        // it unchanged on the way out, preserving its identity (an unbound
+        // `GenericBox(value=5)` stays != a bound `GenericBox[int]`, G4). `HostValue`
+        // keeps its dedicated arm below (it carries a release-keyed handle).
+        if expected_ty.and_then(peel_to_rust_type).is_some() && is_structural_host_only(&external) {
             let arc: std::sync::Arc<dyn std::any::Any + Send + Sync> =
                 std::sync::Arc::new(bex_external_types::OpaqueExternalValue(external));
             return Ok(Value::object(
@@ -1491,12 +1495,7 @@ fn is_structural_host_only(value: &BexExternalValue) -> bool {
             | BexExternalValue::Array { .. }
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Uint8Array(_)
-            | BexExternalValue::Union { .. }
     )
-}
-
-fn opaque_slot_preserves_external_shape(ty: &RuntimeTy) -> bool {
-    matches!(ty, RuntimeTy::BuiltinUnknown { .. }) || peel_to_rust_type(ty).is_some()
 }
 
 /// Classify every `TypeVar` occurring in the declared parameter types into
@@ -1788,19 +1787,8 @@ fn find_matching_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
 ) -> Result<RuntimeTy, EngineError> {
-    // Literal arms are more specific than their primitive supertype. Preserve
-    // the actual occurrence even when the declared union orders `string`
-    // before `"fixed"` (and equivalently for the other literal kinds).
     for member in members {
-        if matches!(member, RuntimeTy::Literal(..)) && value_matches_type(value, member) {
-            return Ok(member.clone());
-        }
-    }
-    for member in members {
-        if !matches!(
-            member,
-            RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Literal(..)
-        ) && value_matches_type(value, member)
+        if !matches!(member, RuntimeTy::BuiltinUnknown { .. }) && value_matches_type(value, member)
         {
             return Ok(member.clone());
         }
@@ -1862,23 +1850,13 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Float(_), RuntimeTy::Float { .. }) => true,
         (BexExternalValue::Bool(_), RuntimeTy::Bool { .. }) => true,
         (BexExternalValue::String(_), RuntimeTy::String { .. }) => true,
-        // Literal types match exact values, not merely their primitive tag.
-        (BexExternalValue::Int(value), RuntimeTy::Literal(Literal::Int(literal), _, _)) => {
-            value == literal
-        }
-        (BexExternalValue::Bigint(value), RuntimeTy::Literal(Literal::Bigint(literal), _, _)) => {
-            value == literal
-        }
-        (BexExternalValue::Float(value), RuntimeTy::Literal(Literal::Float(literal), _, _)) => {
-            float_matches_literal(*value, literal)
-        }
+        // Literal types match their corresponding runtime values
+        (BexExternalValue::Int(_), RuntimeTy::Literal(Literal::Int(_), _, _)) => true,
+        (BexExternalValue::Bigint(_), RuntimeTy::Literal(Literal::Bigint(_), _, _)) => true,
+        (BexExternalValue::Float(_), RuntimeTy::Literal(Literal::Float(_), _, _)) => true,
         (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array { .. }) => true,
-        (BexExternalValue::String(value), RuntimeTy::Literal(Literal::String(literal), _, _)) => {
-            value == literal
-        }
-        (BexExternalValue::Bool(value), RuntimeTy::Literal(Literal::Bool(literal), _, _)) => {
-            value == literal
-        }
+        (BexExternalValue::String(_), RuntimeTy::Literal(Literal::String(_), _, _)) => true,
+        (BexExternalValue::Bool(_), RuntimeTy::Literal(Literal::Bool(_), _, _)) => true,
         (BexExternalValue::Array { .. }, RuntimeTy::List(_, _)) => true,
         (BexExternalValue::Map { .. }, RuntimeTy::Map { .. }) => true,
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
@@ -1916,65 +1894,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             members.iter().any(|m| value_matches_type(value, m))
         }
         _ => false,
-    }
-}
-
-#[allow(
-    clippy::float_cmp,
-    reason = "BAML literal membership requires exact semantic equality"
-)]
-fn float_matches_literal(value: f64, literal: &str) -> bool {
-    literal.parse::<f64>().is_ok_and(|literal| value == literal)
-}
-
-#[cfg(test)]
-mod union_occurrence_tests {
-    use baml_type::{Freshness, TyAttr};
-
-    use super::*;
-
-    fn string_ty() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
-    }
-
-    fn string_literal(value: &str) -> RuntimeTy {
-        RuntimeTy::Literal(
-            Literal::String(value.to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
-        )
-    }
-
-    #[test]
-    fn exact_literal_arm_wins_over_earlier_primitive_arm() {
-        let literal = string_literal("fixed");
-        let declared = RuntimeTy::Union(vec![string_ty(), literal.clone()], TyAttr::default());
-
-        let wrapped = maybe_wrap_union(BexExternalValue::String("fixed".into()), &declared)
-            .expect("literal value should satisfy the union");
-
-        let BexExternalValue::Union { metadata, .. } = wrapped else {
-            panic!("expected union metadata");
-        };
-        assert_eq!(metadata.selected_option, literal);
-    }
-
-    #[test]
-    fn nonmatching_literal_falls_back_to_primitive_arm() {
-        let declared = RuntimeTy::Union(
-            vec![string_ty(), string_literal("fixed")],
-            TyAttr::default(),
-        );
-
-        let wrapped = maybe_wrap_union(BexExternalValue::String("other".into()), &declared)
-            .expect("ordinary string should satisfy the union");
-
-        let BexExternalValue::Union { metadata, .. } = wrapped else {
-            panic!("expected union metadata");
-        };
-        assert_eq!(metadata.selected_option, string_ty());
     }
 }
 
@@ -2400,12 +2319,6 @@ fn resolve_effective_type(value: Value, declared_type: &RuntimeTy) -> &RuntimeTy
 
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&RuntimeTy> {
-    if let Some(literal) = members.iter().find(|member| {
-        matches!(member, RuntimeTy::Literal(candidate, _, _) if vm_value_matches_literal(value, candidate))
-    }) {
-        return Some(literal);
-    }
-
     match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, RuntimeTy::Null { .. })),
@@ -2520,31 +2433,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
     }
 }
 
-#[allow(
-    clippy::float_cmp,
-    reason = "BAML literal membership requires exact semantic equality"
-)]
-fn vm_value_matches_literal(value: Value, literal: &Literal) -> bool {
-    match (value.kind(), literal) {
-        (ValueKind::Int(value), Literal::Int(literal)) => value == *literal,
-        (ValueKind::Bool(value), Literal::Bool(literal)) => value == *literal,
-        (ValueKind::Object(ptr), literal) => match unsafe { ptr.get() } {
-            Object::String(value) => {
-                matches!(literal, Literal::String(literal) if value == literal)
-            }
-            Object::Bigint(value) => {
-                matches!(literal, Literal::Bigint(literal) if **value == *literal)
-            }
-            Object::Float(value) => matches!(
-                literal,
-                Literal::Float(literal) if literal.parse::<f64>().is_ok_and(|literal| *value == literal)
-            ),
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
 /// Convert a VM value to a `BexExternalValue` for sys op arguments.
 ///
 /// This is simpler than `vm_value_to_external` because sys ops only receive
@@ -2567,7 +2455,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let items: Vec<BexExternalValue> =
                         snap.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
                     BexExternalValue::Array {
-                        element_type: arr.element_ty.as_runtime_ty().clone(),
+                        element_type: bex_external_types::RuntimeTy::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         items,
                     }
                 }
@@ -2578,8 +2468,12 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
-                        key_type: map.key_ty.as_runtime_ty().clone(),
-                        value_type: map.value_ty.as_runtime_ty().clone(),
+                        key_type: bex_external_types::RuntimeTy::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        value_type: bex_external_types::RuntimeTy::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         entries,
                     }
                 }

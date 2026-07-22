@@ -575,7 +575,11 @@ public readonly partial struct BamlGeneratedCodecContext
         ReadOnlySpan<byte> expectedItemType)
     {
         BamlGeneratedValue required = Require(value);
-        required.RequireTypeMetadata(expectedItemType, required.ItemTypeMetadata, "list item");
+        required.RequireCollectionTypeMetadata(
+            expectedItemType,
+            required.ItemTypeMetadata,
+            "list item",
+            allowCanaryUnknownFallback: true);
         return required.ReadList();
     }
 
@@ -586,7 +590,11 @@ public readonly partial struct BamlGeneratedCodecContext
     {
         BamlGeneratedValue required = Require(value);
         required.RequireTypeMetadata(expectedKeyType, required.KeyTypeMetadata, "map key");
-        required.RequireTypeMetadata(expectedValueType, required.ValueTypeMetadata, "map value");
+        required.RequireCollectionTypeMetadata(
+            expectedValueType,
+            required.ValueTypeMetadata,
+            "map value",
+            allowCanaryUnknownFallback: true);
         return ToReadOnlyDictionary(required.ReadMapEntries(), "map");
     }
 
@@ -1565,6 +1573,30 @@ public sealed class BamlGeneratedValue
                     + (actual is null ? "<missing>" : Convert.ToHexString(actual))
                     + $" at {sourcePath}.");
         }
+    }
+
+    internal void RequireCollectionTypeMetadata(
+        ReadOnlySpan<byte> expected,
+        byte[]? actual,
+        string description,
+        bool allowCanaryUnknownFallback)
+    {
+        if (allowCanaryUnknownFallback && actual is { Length: > 0 })
+        {
+            try
+            {
+                if (BamlTy.Parser.ParseFrom(actual).TyCase == BamlTy.TyOneofCase.Unknown)
+                {
+                    return;
+                }
+            }
+            catch (InvalidProtocolBufferException)
+            {
+                // Preserve the exact metadata diagnostic below.
+            }
+        }
+
+        RequireTypeMetadata(expected, actual, description);
     }
 
     internal void RequireKind(PrimitiveCarrierKind expected)

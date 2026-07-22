@@ -15,14 +15,14 @@ class DynamicBox<T> {
 }
 
 class DynamicChoice {
-  value DynamicLabel | "fixed"
+  value int | "fixed"
 }
 
 class DynamicEnvelope {
   color DynamicColor
   record DynamicRecord
   boxed DynamicBox<int>
-  choice DynamicLabel | "fixed"
+  choice int | "fixed"
 }
 
 class DynamicNode {
@@ -31,6 +31,20 @@ class DynamicNode {
 }
 
 function echo_unknown(value: unknown) -> unknown {
+  value
+}
+
+function echo_unknown_list(value: unknown[]) -> unknown[] {
+  value
+}
+
+function echo_unknown_map(
+  value: map<string, unknown>,
+) -> map<string, unknown> {
+  value
+}
+
+function echo_choice(value: DynamicChoice) -> DynamicChoice {
   value
 }
 

@@ -42,6 +42,11 @@ if (!args.Contains("--native-child", StringComparer.Ordinal))
     {
         File.Delete(counterFile);
         File.Delete(counterFile + ".next");
+        File.Delete(counterFile + ".dispose-ready");
+        File.Delete(counterFile + ".ordered-partials.1");
+        File.Delete(counterFile + ".ordered-partials.2");
+        File.Delete(counterFile + ".structured-partials.1");
+        File.Delete(counterFile + ".structured-partials.2");
     }
 }
 
@@ -93,7 +98,10 @@ Require(
     "second generated FunctionStream was not cold");
 Task<string> earlyFinal = early.GetFinalResponseAsync();
 await WaitForReplayRequestCountAsync(requestsBeforeEarly + 1).ConfigureAwait(false);
-await early.DisposeAsync().ConfigureAwait(false);
+// Select disposal as the terminal outcome before releasing the held response.
+ValueTask earlyDisposal = early.DisposeAsync();
+File.WriteAllText(requestCountFile + ".dispose-ready", "ready");
+await earlyDisposal.ConfigureAwait(false);
 BamlOperationCanceledException disposed =
     await ExpectAsync<BamlOperationCanceledException>(earlyFinal).ConfigureAwait(false);
 Require(
@@ -127,6 +135,10 @@ await using (IAsyncEnumerator<string?> enumerator =
         }
 
         partials.Add(partial);
+        if (partials.Count <= 2)
+        {
+            PublishReplayProgress(".ordered-partials", partials.Count);
+        }
     }
 }
 
@@ -155,6 +167,10 @@ await foreach (StreamEnvelopeStream? partial in
     if (partial is not null)
     {
         structuredPartials.Add(partial);
+        if (structuredPartials.Count <= 2)
+        {
+            PublishReplayProgress(".structured-partials", structuredPartials.Count);
+        }
     }
 }
 
@@ -208,6 +224,11 @@ int ReplayRequestCount()
     return int.Parse(
         reader.ReadToEnd(),
         System.Globalization.CultureInfo.InvariantCulture);
+}
+
+void PublishReplayProgress(string suffix, int value)
+{
+    File.WriteAllText($"{requestCountFile}{suffix}.{value}", "ready");
 }
 
 async Task WaitForReplayRequestCountAsync(int expected)
@@ -405,6 +426,9 @@ internal sealed class ReplayServer : IAsyncDisposable
                 return;
             }
 
+            // Keep SSE frames independently observable on Windows instead of
+            // letting Nagle coalesce the deliberately paced partial updates.
+            client.NoDelay = true;
             using (client)
             {
                 await ServeRequestAsync(client, stopping.Token).ConfigureAwait(false);
@@ -460,16 +484,6 @@ internal sealed class ReplayServer : IAsyncDisposable
             read += count;
         }
 
-        int currentRequest = Interlocked.Increment(ref requestCount);
-        string pendingCounter = counterFile + ".next";
-        File.WriteAllText(
-            pendingCounter,
-            currentRequest.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        File.Move(pendingCounter, counterFile, overwrite: true);
-        bool isStructured = new string(body).Contains(
-            "deterministic replay object",
-            StringComparison.Ordinal);
-        string recording = isStructured ? StructuredRecording : Recording;
         byte[] headers = Encoding.ASCII.GetBytes(
             "HTTP/1.1 200 OK\r\n"
                 + "Content-Type: text/event-stream\r\n"
@@ -477,16 +491,85 @@ internal sealed class ReplayServer : IAsyncDisposable
                 + "Connection: close\r\n\r\n");
         await stream.WriteAsync(headers, cancellationToken).ConfigureAwait(false);
 
+        int currentRequest = Interlocked.Increment(ref requestCount);
+        string pendingCounter = counterFile + ".next";
+        File.WriteAllText(
+            pendingCounter,
+            currentRequest.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        File.Move(pendingCounter, counterFile, overwrite: true);
+
+        // This dedicated replay fixture asserts the same exact dispatch order:
+        // final-only, dispose-early, ordered scalar partials, then structured partials.
+        bool holdForDisposal = currentRequest == 2;
+        bool acknowledgeOrderedPartials = currentRequest == 3;
+        bool acknowledgeStructuredPartials = currentRequest == 4;
+        string recording = acknowledgeStructuredPartials
+            ? StructuredRecording
+            : Recording;
+
         try
         {
-            foreach (string eventText in recording.Split("\n\n", StringSplitOptions.RemoveEmptyEntries))
+            if (holdForDisposal)
             {
+                // Keep this response incomplete until the child has selected
+                // stream disposal, so platform scheduling cannot let success win.
+                string disposalSignal = counterFile + ".dispose-ready";
+                while (!File.Exists(disposalSignal))
+                {
+                    await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+                }
+                return;
+            }
+
+            int eventIndex = 0;
+            // Raw string literals inherit the source checkout's line endings.
+            // Normalize before splitting so Windows does not send one giant SSE event.
+            string normalizedRecording = recording.ReplaceLineEndings("\n");
+            foreach (string eventText in normalizedRecording.Split(
+                "\n\n",
+                StringSplitOptions.RemoveEmptyEntries))
+            {
+                eventIndex++;
                 byte[] eventBytes = Encoding.UTF8.GetBytes(eventText.TrimStart() + "\n\n");
                 byte[] prefix = Encoding.ASCII.GetBytes($"{eventBytes.Length:x}\r\n");
                 await stream.WriteAsync(prefix, cancellationToken).ConfigureAwait(false);
                 await stream.WriteAsync(eventBytes, cancellationToken).ConfigureAwait(false);
                 await stream.WriteAsync("\r\n"u8.ToArray(), cancellationToken).ConfigureAwait(false);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+                if (acknowledgeOrderedPartials && eventIndex == 2)
+                {
+                    await WaitForProgressAsync(
+                            ".ordered-partials",
+                            expected: 1,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (acknowledgeOrderedPartials && eventIndex == 3)
+                {
+                    await WaitForProgressAsync(
+                            ".ordered-partials",
+                            expected: 2,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (acknowledgeStructuredPartials && eventIndex == 6)
+                {
+                    await WaitForProgressAsync(
+                            ".structured-partials",
+                            expected: 1,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else if (acknowledgeStructuredPartials && eventIndex == 7)
+                {
+                    await WaitForProgressAsync(
+                            ".structured-partials",
+                            expected: 2,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
                 await Task.Delay(35, cancellationToken).ConfigureAwait(false);
             }
 
@@ -497,6 +580,18 @@ internal sealed class ReplayServer : IAsyncDisposable
         catch (IOException)
         {
             // Early stream disposal intentionally closes the replay connection.
+        }
+    }
+
+    private async Task WaitForProgressAsync(
+        string suffix,
+        int expected,
+        CancellationToken cancellationToken)
+    {
+        string progressFile = $"{counterFile}{suffix}.{expected}";
+        while (!File.Exists(progressFile))
+        {
+            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
         }
     }
 }

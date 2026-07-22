@@ -115,10 +115,12 @@ arguments for result-only generics, bare nulls, or other calls where C# cannot
 infer `T`. Only canonical BAML mappings are accepted; the bridge rejects
 host-only types and noncanonical substitutes before native dispatch.
 
-BAML unions project to `BamlUnion<T0,...,TN>` (arity 2 through 32). Use the
-explicit `FromTn` factory when two arms share the same CLR type or when a
-literal arm overlaps a broader primitive arm. Match on the active case rather
-than inferring it from the payload type.
+BAML unions project to `BamlUnion<T0,...,TN>` (arity 2 through 32). Generated
+user unions must have distinct CLR projections: for example, `int | "fixed"`
+is supported, while `string | "fixed"` and aliases that erase to the same CLR
+type are rejected because Canary cannot preserve that occurrence identity
+through execution. Use the explicit `FromTn` factory and match on the active
+case rather than inferring it from the payload type.
 
 ## Callbacks
 

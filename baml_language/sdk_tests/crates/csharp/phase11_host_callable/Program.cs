@@ -10,13 +10,13 @@ long synchronousLambda = Functions.InvokeDeferred(
     BamlCallback.FromSync<long, long>(value => value * 2L),
     5L);
 Require(synchronousLambda == 11L, "synchronous callback lambda result changed");
-await RequireRegistryIdleAfterSafepoint("synchronous callback lambda");
+await RequireDispatchIdleAfterCompletion("synchronous callback lambda");
 
 long synchronousMethodGroup = Functions.InvokeDeferred(
     BamlCallback.FromSync<long, long>(DoubleValue),
     6L);
 Require(synchronousMethodGroup == 13L, "synchronous callback method group result changed");
-await RequireRegistryIdleAfterSafepoint("synchronous callback method group");
+await RequireDispatchIdleAfterCompletion("synchronous callback method group");
 
 long synchronousVisited = 0L;
 long synchronousVisitResult = Functions.Visit<long>(
@@ -34,7 +34,7 @@ long zeroValueResult = Functions.Produce<long>(
 Require(
     zeroVoidResult == 1L && zeroVoidCalls == 1 && zeroValueResult == 17L,
     "zero-argument synchronous value or void callback changed");
-await RequireRegistryIdleAfterSafepoint("synchronous void and zero-argument callbacks");
+await RequireDispatchIdleAfterCompletion("synchronous void and zero-argument callbacks");
 
 int synchronousOptionalCalls = 0;
 IReadOnlyList<string> synchronousOptionals = Functions.InvokeOptionals(
@@ -56,7 +56,7 @@ Require(
             new[] { "7:unset:unset", "7:unset:tail", "7:2:both" },
             StringComparer.Ordinal),
     "BamlOptional callback arguments changed through the synchronous adapter");
-await RequireRegistryIdleAfterSafepoint("synchronous optional callback calls");
+await RequireDispatchIdleAfterCompletion("synchronous optional callback calls");
 
 int optionalCalls = 0;
 IReadOnlyList<string> optionals = await Functions.InvokeOptionalsAsync(
@@ -76,7 +76,7 @@ Require(
             new[] { "7:unset:unset", "7:unset:tail", "7:2:both" },
             StringComparer.Ordinal),
     "required and named optional callback arguments changed");
-await RequireRegistryIdleAfterSafepoint("optional callback calls");
+await RequireDispatchIdleAfterCompletion("optional callback calls");
 
 var deferredStarted = new TaskCompletionSource(
     TaskCreationOptions.RunContinuationsAsynchronously);
@@ -94,13 +94,13 @@ await deferredStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 Require(!deferredCall.IsCompleted, "native dispatch did not await the asynchronous callback");
 releaseDeferred.TrySetResult();
 Require(await deferredCall == 11L, "asynchronous callback result changed");
-await RequireRegistryIdleAfterSafepoint("deferred callback call");
+await RequireDispatchIdleAfterCompletion("deferred callback call");
 
 long applied = await Functions.ApplyAsync<long, long>(
     BamlCallback.FromSync<long, long>(value => value + 1L),
     5L);
 Require(applied == 6L, "explicitly closed generic callback result changed");
-await RequireRegistryIdleAfterSafepoint("generic apply callback call");
+await RequireDispatchIdleAfterCompletion("generic apply callback call");
 
 var nominalInput = new CallbackBox<long> { Value = 31L };
 CallbackBox<long> nominalResult = Functions.Apply<CallbackBox<long>, CallbackBox<long>>(
@@ -110,7 +110,7 @@ CallbackBox<long> nominalResult = Functions.Apply<CallbackBox<long>, CallbackBox
 Require(
     nominalResult.Value == 32L,
     "generated nominal callback parameter or result changed through the synchronous adapter");
-await RequireRegistryIdleAfterSafepoint("synchronous nominal callback call");
+await RequireDispatchIdleAfterCompletion("synchronous nominal callback call");
 
 IReadOnlyList<long> genericInput = Array.AsReadOnly([2L, 3L, 5L]);
 string genericListResult = await Functions.ApplyAsync<IReadOnlyList<long>, string>(
@@ -121,7 +121,7 @@ string genericListResult = await Functions.ApplyAsync<IReadOnlyList<long>, strin
     },
     genericInput);
 Require(genericListResult == "2,3,5", "nested generic callback parameter changed");
-await RequireRegistryIdleAfterSafepoint("generic list callback call");
+await RequireDispatchIdleAfterCompletion("generic list callback call");
 
 IReadOnlyDictionary<string, long> genericMapInput = new Dictionary<string, long>
 {
@@ -136,7 +136,7 @@ long genericMapResult = await Functions.ApplyAsync<IReadOnlyDictionary<string, l
     },
     genericMapInput);
 Require(genericMapResult == 21L, "nested generic map callback parameter changed");
-await RequireRegistryIdleAfterSafepoint("generic map callback call");
+await RequireDispatchIdleAfterCompletion("generic map callback call");
 
 IReadOnlyList<string> genericOptionals =
     await Functions.InvokeGenericOptionalsAsync<long, string>(
@@ -155,7 +155,7 @@ Require(
         new[] { "7:unset", "7:11" },
         StringComparer.Ordinal),
     "generic callback optional wire identities changed");
-await RequireRegistryIdleAfterSafepoint("generic optional callback calls");
+await RequireDispatchIdleAfterCompletion("generic optional callback calls");
 
 long visited = 0L;
 long visitResult = await Functions.VisitAsync<long>(
@@ -175,7 +175,7 @@ Require(
             return Task.FromResult(17L);
         }) == 17L,
     "generic result-only callback changed");
-await RequireRegistryIdleAfterSafepoint("generic void and producer callback calls");
+await RequireDispatchIdleAfterCompletion("generic void and producer callback calls");
 
 var callbackBox = new CallbackBox<long> { Value = 19L };
 string transformed = await callbackBox.TransformAsync<string>(
@@ -203,7 +203,7 @@ Require(
         && staticApplied == "static:23"
         && returnedBox.Value == 30L,
     "generic callback class method or generated result codec changed");
-await RequireRegistryIdleAfterSafepoint("generic callback method calls");
+await RequireDispatchIdleAfterCompletion("generic callback method calls");
 
 var synchronousOriginal = new InvalidOperationException("synchronous host sentinel");
 string ThrowSynchronousHostSentinel(long _) => throw synchronousOriginal;
@@ -217,7 +217,7 @@ Require(
             nameof(ThrowSynchronousHostSentinel),
             StringComparison.Ordinal) == true,
     "synchronously thrown callback exception did not restore the exact managed object and stack");
-await RequireRegistryIdleAfterSafepoint("synchronously throwing callback call");
+await RequireDispatchIdleAfterCompletion("synchronously throwing callback call");
 
 using (var unrelatedCancellation = new CancellationTokenSource())
 {
@@ -235,7 +235,7 @@ using (var unrelatedCancellation = new CancellationTokenSource())
                 StringComparison.Ordinal) == true,
         "unrelated cancellation did not restore the exact managed exception and stack");
 }
-await RequireRegistryIdleAfterSafepoint("throwing callback call");
+await RequireDispatchIdleAfterCompletion("throwing callback call");
 
 using (var caller = new CancellationTokenSource())
 {
@@ -269,10 +269,10 @@ using (var caller = new CancellationTokenSource())
             && cancellation.CancellationToken == caller.Token,
         "matching callback cancellation token classification changed");
 }
-await RequireRegistryIdleAfterSafepoint("canceled callback call");
+await RequireDispatchIdleAfterCompletion("canceled callback call");
 
 Require(await Functions.PingAsync() == 42L, "host callbacks poisoned a later native call");
-await RequireRegistryIdleAfterSafepoint("final ping");
+await RequireDispatchIdleAfterCompletion("final ping");
 
 Console.WriteLine("csharp_phase11_host_callable=ok");
 return 0;
@@ -327,17 +327,26 @@ static async Task<BamlOperationCanceledException> ExpectCanceled(Task task)
     throw new InvalidOperationException("expected caller cancellation");
 }
 
-static async Task RequireRegistryIdleAfterSafepoint(string operation)
+static async Task RequireDispatchIdleAfterCompletion(string operation)
 {
     Require(Functions.Ping() == 42L, $"{operation} safepoint call failed");
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-    while (!RegistryIdle())
+    while (!DispatchIdle())
     {
         await Task.Delay(1, timeout.Token);
     }
 
-    RequireRegistryIdle(operation);
+    Require(
+        DispatchIdle(),
+        $"{operation} left dispatch leases or native results pending");
 }
+
+// A committed host value remains registered until Canary's ordinary heap GC
+// sends its release callback. Managed call completion guarantees that no
+// callback invocation or result is still active; it does not force global GC.
+static bool DispatchIdle() =>
+    HostValueRegistry.Shared.InvocationCount == 0
+    && NativeCallbacks.PendingCount == 0;
 
 static bool RegistryIdle() =>
     HostValueRegistry.Shared.EntryCount == 0

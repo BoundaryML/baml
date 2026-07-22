@@ -55,7 +55,7 @@ function serializeValue(val: unknown): InboundValue {
     return {
       value: {
         $case: 'listValue',
-        listValue: { values: val.map(serializeValue) },
+        listValue: { values: val.map(serializeValue), itemType: undefined },
       },
     };
   }
@@ -129,7 +129,10 @@ function serializeValue(val: unknown): InboundValue {
       }),
     );
     return {
-      value: { $case: 'mapValue', mapValue: { entries } },
+      value: {
+        $case: 'mapValue',
+        mapValue: { entries, keyType: undefined, valueType: undefined },
+      },
     };
   }
   throw new Error(

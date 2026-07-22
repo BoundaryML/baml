@@ -834,31 +834,6 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
     value
 }
 
-/// Whether an argument tree contains a host allocation whose final Rust owner
-/// can be moved into a bump-allocated VM heap object. Such objects need a
-/// collection before deferred host releases can be drained at root teardown.
-fn contains_host_value(value: &BexExternalValue) -> bool {
-    match value {
-        BexExternalValue::HostValue(_) => true,
-        BexExternalValue::Array { items, .. } => items.iter().any(contains_host_value),
-        BexExternalValue::Map { entries, .. } => entries.values().any(contains_host_value),
-        BexExternalValue::Instance { fields, .. } => fields.values().any(contains_host_value),
-        BexExternalValue::Union { value, .. } => contains_host_value(value),
-        BexExternalValue::Null
-        | BexExternalValue::Int(_)
-        | BexExternalValue::Bigint(_)
-        | BexExternalValue::Float(_)
-        | BexExternalValue::Bool(_)
-        | BexExternalValue::String(_)
-        | BexExternalValue::Variant { .. }
-        | BexExternalValue::Uint8Array(_)
-        | BexExternalValue::RustData(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Handle(_)
-        | BexExternalValue::Adt(_) => false,
-    }
-}
-
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
 /// (an `Object::Type(Box<RuntimeTy>)`).
 ///
@@ -2456,10 +2431,6 @@ impl BexEngine {
                 BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
             })
             .collect::<Result<_, EngineError>>()?;
-        let has_host_owned_args = args.iter().any(|arg| match arg {
-            BexCallArg::Provided(value) => contains_host_value(value),
-            BexCallArg::OmittedDefault => false,
-        });
 
         // Create the root thread (shared heap, own TLAB) and acquire its
         // permit. This named-entry path is the genuine top-level root run.
@@ -2506,7 +2477,6 @@ impl BexEngine {
             Some(root_input_values),
             cancel,
             copy_objects,
-            has_host_owned_args,
         )
         .await
     }
@@ -2578,7 +2548,6 @@ impl BexEngine {
         root_input_values: Option<Vec<(String, Value)>>,
         cancel: CancellationToken,
         copy_objects: bool,
-        has_host_owned_args: bool,
     ) -> Result<BexCallResult, EngineError> {
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
@@ -2697,14 +2666,13 @@ impl BexEngine {
             )
             .await;
 
-        // Host-owned values are moved into bump-allocated heap objects, whose
-        // Rust destructors do not run merely because the root thread dropped.
-        // Collect before draining so unreachable host values release promptly.
-        if has_host_owned_args {
-            self.collect_garbage(bex_heap::CollectionLevel::Major).await;
-        } else {
-            bex_external_types::host_value::host_release_dispatch::drain();
-        }
+        // Flush any host-value releases queued during this call. The root
+        // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
+        // (taken by value) and has been dropped by the time it returns, so we
+        // hold no heap permit here and the host release callbacks run safely
+        // off the parked-permit window. This makes release prompt even when a
+        // GC never ran during the call.
+        bex_external_types::host_value::host_release_dispatch::drain();
 
         // active_calls cleanup is done by ActiveCallGuard on drop.
         //
@@ -2958,7 +2926,6 @@ impl BexEngine {
                 None => Ok(arg),
             })
             .collect::<Result<_, _>>()?;
-        let has_host_owned_args = coerced.iter().any(contains_host_value);
 
         // Build VM args: the receiver as `self` in slot 0 (bound methods), then
         // the converted user args.
@@ -3015,7 +2982,6 @@ impl BexEngine {
             None,
             cancel,
             copy_objects,
-            has_host_owned_args,
         )
         .await
     }

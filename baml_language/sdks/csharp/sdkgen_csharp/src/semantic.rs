@@ -1053,6 +1053,15 @@ fn collect_classes<'a>(
         {
             continue;
         }
+        if name.package().as_str() == "user" {
+            for property in &class.properties {
+                require_unambiguous_csharp_unions(
+                    &property.ty,
+                    model,
+                    &format!("property `{name}.{}`", property.name),
+                )?;
+            }
+        }
         let fqn = BamlFqn::symbol(name);
         let namespace_requests = namespace_requests(name, CSharpNameOrigin::Source);
         let type_request = source_request(
@@ -1186,6 +1195,13 @@ fn collect_methods<'a>(
             &format!("result of method `{owner}.{}`", method.name),
         );
         result_support?;
+        if owner.package().as_str() == "user" {
+            require_unambiguous_csharp_unions(
+                &result,
+                model,
+                &format!("result of method `{owner}.{}`", method.name),
+            )?;
+        }
         if let Some(partial) = &stream_partial {
             let partial_support = require_supported_type(
                 partial,
@@ -1194,16 +1210,18 @@ fn collect_methods<'a>(
             );
             partial_support?;
         }
-        let argument_support = method.arguments.iter().try_for_each(|argument| {
-            require_supported_argument_type(
-                &argument.ty,
-                model,
-                &format!(
+        let argument_support: Result<(), CSharpGenerationError> =
+            method.arguments.iter().try_for_each(|argument| {
+                let path = format!(
                     "argument `{}` of method `{owner}.{}`",
                     argument.name, method.name
-                ),
-            )
-        });
+                );
+                require_supported_argument_type(&argument.ty, model, &path)?;
+                if owner.package().as_str() == "user" {
+                    require_unambiguous_csharp_unions(&argument.ty, model, &path)?;
+                }
+                Ok(())
+            });
         argument_support?;
         let owner_fqn = BamlFqn::symbol(owner);
         let callable_fqn = owner_fqn.member(&method.name);
@@ -1482,16 +1500,21 @@ fn collect_functions<'a>(
             (function.return_type.clone(), None)
         };
         require_supported_type(&result, model, &format!("result of `{name}`"))?;
+        if name.package().as_str() == "user" {
+            require_unambiguous_csharp_unions(&result, model, &format!("result of `{name}`"))?;
+        }
         if let Some(partial) = &stream_partial {
             require_supported_type(partial, model, &format!("partial result of `{name}`"))?;
         }
-        let argument_support = function.arguments.iter().try_for_each(|argument| {
-            require_supported_argument_type(
-                &argument.ty,
-                model,
-                &format!("argument `{}` of `{name}`", argument.name),
-            )
-        });
+        let argument_support: Result<(), CSharpGenerationError> =
+            function.arguments.iter().try_for_each(|argument| {
+                let path = format!("argument `{}` of `{name}`", argument.name);
+                require_supported_argument_type(&argument.ty, model, &path)?;
+                if name.package().as_str() == "user" {
+                    require_unambiguous_csharp_unions(&argument.ty, model, &path)?;
+                }
+                Ok(())
+            });
         argument_support?;
         let namespace_requests = namespace_requests(name, CSharpNameOrigin::Source);
         let holder_fqn = holder_fqn(name);
@@ -1831,6 +1854,116 @@ fn require_supported_map_key(
             )),
         },
         _ => Err(unsupported(path, &format!("map key `{ty}`"))),
+    }
+}
+
+fn require_unambiguous_csharp_unions(
+    ty: &Ty,
+    model: &CodegenModel,
+    path: &str,
+) -> Result<(), CSharpGenerationError> {
+    match ty {
+        Ty::Union(members, _) => {
+            let mut projections = BTreeSet::new();
+            for member in members
+                .iter()
+                .filter(|member| !matches!(member, Ty::Null { .. }))
+            {
+                let projection = csharp_projection_key(member, model);
+                if !projections.insert(projection.clone()) {
+                    return Err(unsupported(
+                        path,
+                        &format!("union whose arms both project to C# type `{projection}`"),
+                    ));
+                }
+                require_unambiguous_csharp_unions(member, model, path)?;
+            }
+            Ok(())
+        }
+        Ty::List(item, _) => require_unambiguous_csharp_unions(item, model, path),
+        Ty::Map { key, value, .. } => {
+            require_unambiguous_csharp_unions(key, model, path)?;
+            require_unambiguous_csharp_unions(value, model, path)
+        }
+        Ty::Class(_, arguments, _) => arguments
+            .iter()
+            .try_for_each(|argument| require_unambiguous_csharp_unions(argument, model, path)),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for parameter in params {
+                require_unambiguous_csharp_unions(&parameter.ty, model, path)?;
+            }
+            require_unambiguous_csharp_unions(ret, model, path)?;
+            require_unambiguous_csharp_unions(throws, model, path)
+        }
+        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+            Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
+                require_unambiguous_csharp_unions(&alias.resolves_to, model, path)
+            }
+            _ => Ok(()),
+        },
+        _ => Ok(()),
+    }
+}
+
+fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
+    match ty {
+        Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), ..) => "bool".to_string(),
+        Ty::Int { .. } | Ty::Literal(Literal::Int(_), ..) => "long".to_string(),
+        Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), ..) => {
+            "System.Numerics.BigInteger".to_string()
+        }
+        Ty::Float { .. } | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
+        Ty::String { .. } | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
+        Ty::Uint8Array { .. } => "System.ReadOnlyMemory<byte>".to_string(),
+        Ty::Null { .. } | Ty::BuiltinUnknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
+            "Baml.BamlValue".to_string()
+        }
+        Ty::Media(kind, _) => format!("Baml.Media::{kind:?}"),
+        Ty::TypeVar(name, _) => format!("type parameter `{name}`"),
+        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+            Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
+                csharp_projection_key(&alias.resolves_to, model)
+            }
+            _ => format!("alias `{name}`"),
+        },
+        Ty::Class(name, arguments, _) => format!(
+            "class `{name}`<{}>",
+            arguments
+                .iter()
+                .map(|argument| csharp_projection_key(argument, model))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Ty::Enum(name, _) | Ty::EnumVariant(name, ..) => format!("enum `{name}`"),
+        Ty::List(item, _) => format!("list<{}>", csharp_projection_key(item, model)),
+        Ty::Map { key, value, .. } => format!(
+            "map<{},{}>",
+            csharp_projection_key(key, model),
+            csharp_projection_key(value, model)
+        ),
+        Ty::Union(members, _) => format!(
+            "union<{}>",
+            members
+                .iter()
+                .map(|member| csharp_projection_key(member, model))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Ty::Function { params, ret, .. } => format!(
+            "callable<{}->{}>",
+            params
+                .iter()
+                .map(|parameter| csharp_projection_key(&parameter.ty, model))
+                .collect::<Vec<_>>()
+                .join(","),
+            csharp_projection_key(ret, model)
+        ),
+        _ => ty.to_string(),
     }
 }
 
@@ -4871,7 +5004,7 @@ mod tests {
             label_name.clone(),
             Symbol::TypeAlias(baml_codegen_types::TypeAlias {
                 name: label_name.clone(),
-                resolves_to: primitive_string(),
+                resolves_to: primitive_int(),
                 recursive: false,
                 origin: origin(),
             }),
@@ -4888,11 +5021,12 @@ mod tests {
                         "boxed",
                         Ty::Class(box_name, vec![primitive_int()], TyAttr::EMPTY),
                     ),
+                    property("label", Ty::TypeAlias(label_name, TyAttr::EMPTY)),
                     property(
                         "choice",
                         Ty::Union(
                             vec![
-                                Ty::TypeAlias(label_name, TyAttr::EMPTY),
+                                primitive_int(),
                                 Ty::Literal(
                                     Literal::String("fixed".to_string()),
                                     baml_codegen_types::Freshness::Regular,
@@ -5740,11 +5874,9 @@ mod tests {
         let members = [
             primitive_string(),
             primitive_int(),
-            Ty::Literal(
-                Literal::String("fixed".to_string()),
-                baml_codegen_types::Freshness::Regular,
-                TyAttr::EMPTY,
-            ),
+            Ty::Bool {
+                attr: TyAttr::EMPTY,
+            },
         ];
         let permutations = [
             [0, 1, 2],
@@ -5881,7 +6013,7 @@ mod tests {
         assert!(source.contains("global::MixedClosed.Envelope"));
         assert!(source.contains("global::MixedClosed.Color"));
         assert!(source.contains("global::MixedClosed.Record"));
-        assert!(source.contains("global::Baml.BamlUnion<string, string>"));
+        assert!(source.contains("global::Baml.BamlUnion<long, string>"));
         assert!(source.contains("new byte[][]"));
         assert!(source.contains("context.ReadClass(value, \"user.mixed_closed.Box\""));
         assert!(source.contains("builder.RegisterGenericTypeFactory("));
@@ -6196,6 +6328,50 @@ mod tests {
             error
                 .to_string()
                 .contains("union with 33 non-null arms at test.location"),
+        );
+    }
+
+    #[test]
+    fn user_union_with_duplicate_csharp_projection_is_rejected() {
+        let alias_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("projection")],
+            BaseName::new("Label"),
+        );
+        let mut symbols = HashMap::new();
+        symbols.insert(
+            alias_name.clone(),
+            Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+                name: alias_name.clone(),
+                resolves_to: primitive_string(),
+                recursive: false,
+                origin: baml_codegen_types::Origin {
+                    source_file_path: "projection.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        );
+        let model = CodegenModel {
+            symbols,
+            callables: HashMap::new(),
+        };
+        let union = Ty::Union(
+            vec![
+                Ty::TypeAlias(alias_name, TyAttr::EMPTY),
+                Ty::Literal(
+                    Literal::String("fixed".to_string()),
+                    baml_codegen_types::Freshness::Regular,
+                    TyAttr::EMPTY,
+                ),
+            ],
+            TyAttr::EMPTY,
+        );
+        let error = require_unambiguous_csharp_unions(&union, &model, "test.location")
+            .expect_err("overlapping CLR projections must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("union whose arms both project to C# type `string`")
         );
     }
 

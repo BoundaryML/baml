@@ -48,7 +48,9 @@ verify_negative() {
   [[ "$status" -ne 0 ]] || fail "$case_name unexpectedly compiled" "$build_log"
   grep -Eq ': warning [[:alnum:]]+:' "$build_log" \
     && fail "$case_name emitted a warning" "$build_log"
-  mapfile -t codes < <(sed -nE 's/.*: error ([[:alnum:]]+):.*/\1/p' "$build_log")
+  while IFS= read -r code; do
+    codes+=("$code")
+  done < <(sed -nE 's/.*: error ([[:alnum:]]+):.*/\1/p' "$build_log")
   [[ "${#codes[@]}" -eq 1 && "${codes[0]}" == "CS0411" ]] \
     || fail "$case_name did not fail only with CS0411" "$build_log"
   printf '%s=CS0411\n' "$case_name"

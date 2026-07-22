@@ -38,32 +38,22 @@ if (!textResult.IsT1 || textResult.AsT1 != "typed")
     throw new InvalidOperationException("string union case changed");
 }
 
-BamlUnion<string, string> literalCase =
-    BamlUnion<string, string>.FromT0("fixed");
-BamlUnion<string, string> literalCaseResult =
-    Functions.RoundtripDuplicateProjection(literalCase);
-if (!literalCaseResult.IsT0 || literalCaseResult.AsT0 != "fixed")
+BamlUnion<long, string> literalUnionNumber =
+    BamlUnion<long, string>.FromT0(7L);
+BamlUnion<long, string> literalUnionNumberResult =
+    Functions.RoundtripLiteralUnion(literalUnionNumber);
+if (!literalUnionNumberResult.IsT0 || literalUnionNumberResult.AsT0 != 7L)
 {
-    throw new InvalidOperationException("duplicate projection T0 changed");
+    throw new InvalidOperationException("literal union numeric arm changed");
 }
 
-BamlUnion<string, string> aliasCase =
-    BamlUnion<string, string>.FromT1("alias-only");
-BamlUnion<string, string> aliasCaseResult =
-    Functions.RoundtripDuplicateProjection(aliasCase);
-if (!aliasCaseResult.IsT1 || aliasCaseResult.AsT1 != "alias-only")
+BamlUnion<long, string> literalUnionString =
+    BamlUnion<long, string>.FromT1("fixed");
+BamlUnion<long, string> literalUnionStringResult =
+    Functions.RoundtripLiteralUnion(literalUnionString);
+if (!literalUnionStringResult.IsT1 || literalUnionStringResult.AsT1 != "fixed")
 {
-    throw new InvalidOperationException("duplicate projection T1 collapsed into T0");
-}
-
-BamlUnion<string, string> overlappingAliasCase =
-    BamlUnion<string, string>.FromT1("fixed");
-BamlUnion<string, string> overlappingAliasResult =
-    Functions.RoundtripDuplicateProjection(overlappingAliasCase);
-if (!overlappingAliasResult.IsT0 || overlappingAliasResult.AsT0 != "fixed")
-{
-    throw new InvalidOperationException(
-        "overlapping alias value did not select the exact literal result arm");
+    throw new InvalidOperationException("literal union literal arm changed");
 }
 
 string literal = Functions.RoundtripLiteral("fixed");

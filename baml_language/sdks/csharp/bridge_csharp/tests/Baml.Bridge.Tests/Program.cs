@@ -815,6 +815,7 @@ internal static unsafe class Program
         var context = new BamlGeneratedCodecContext(registry);
         BamlTy stringType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString);
         BamlTy intType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveInt);
+        var unknownType = new BamlTy { Unknown = new BamlTyUnknown() };
 
         var outboundList = new BamlValueList { ItemType = stringType.Clone() };
         outboundList.Items.Add(new BamlOutboundValue { StringValue = "first" });
@@ -832,6 +833,16 @@ internal static unsafe class Program
             ((IList<BamlGeneratedValue>)list)[0] = context.String("replacement"));
         Expect<BamlProtocolException>(() =>
             _ = context.ReadList(decodedList, intType.ToByteArray()));
+
+        var canaryFallbackList = new BamlValueList { ItemType = unknownType.Clone() };
+        canaryFallbackList.Items.Add(new BamlOutboundValue { StringValue = "legacy" });
+        IReadOnlyList<BamlGeneratedValue> fallbackList = context.ReadList(
+            PrimitiveProtocol.Decode(
+                new BamlOutboundValue { ListValue = canaryFallbackList }),
+            stringType.ToByteArray());
+        Require(
+            fallbackList.Count == 1 && context.ReadString(fallbackList[0]) == "legacy",
+            "Canary unknown list fallback no longer decodes through a generated type");
 
         var inputItems = new List<BamlGeneratedValue> { context.String("owned") };
         BamlGeneratedValue inputList = context.List(inputItems);
@@ -862,10 +873,34 @@ internal static unsafe class Program
         Require(
             map.Count == 1 && context.ReadInt(map["answer"]) == 42,
             "map decode did not take an owned snapshot");
+        Expect<BamlProtocolException>(() =>
+            _ = context.ReadMap(
+                decodedMap,
+                stringType.ToByteArray(),
+                stringType.ToByteArray()));
         Expect<NotSupportedException>(() =>
             ((IDictionary<string, BamlGeneratedValue>)map).Add(
                 "other",
                 context.Int(1)));
+
+        var canaryFallbackMap = new BamlValueMap
+        {
+            KeyType = stringType.Clone(),
+            ValueType = unknownType.Clone(),
+        };
+        canaryFallbackMap.Entries.Add(new BamlOutboundMapEntry
+        {
+            Key = "legacy",
+            Value = new BamlOutboundValue { IntValue = 7 },
+        });
+        IReadOnlyDictionary<string, BamlGeneratedValue> fallbackMap = context.ReadMap(
+            PrimitiveProtocol.Decode(
+                new BamlOutboundValue { MapValue = canaryFallbackMap }),
+            stringType.ToByteArray(),
+            intType.ToByteArray());
+        Require(
+            fallbackMap.Count == 1 && context.ReadInt(fallbackMap["legacy"]) == 7,
+            "Canary unknown map fallback no longer decodes through a generated type");
 
         var duplicateMap = new BamlValueMap
         {

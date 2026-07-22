@@ -15,10 +15,12 @@ baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
-fs2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

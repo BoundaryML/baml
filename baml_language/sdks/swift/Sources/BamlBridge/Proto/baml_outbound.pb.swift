@@ -587,6 +587,16 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueUnionVariant: @unchecked Sendable
   /// Clears the value of `value`. Subsequent reads from it will return its default value.
   mutating func clearValue() {_uniqueStorage()._value = nil}
 
+  /// Exact selected occurrence for typed hosts. Appended for compatibility.
+  var selectedType: BamlBridge_Cffi_V1_BamlTy {
+    get {_storage._selectedType ?? BamlBridge_Cffi_V1_BamlTy()}
+    set {_uniqueStorage()._selectedType = newValue}
+  }
+  /// Returns true if `selectedType` has been explicitly set.
+  var hasSelectedType: Bool {_storage._selectedType != nil}
+  /// Clears the value of `selectedType`. Subsequent reads from it will return its default value.
+  mutating func clearSelectedType() {_uniqueStorage()._selectedType = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -1678,7 +1688,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueEnum: SwiftProtobuf.Message, S
 
 nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlValueUnionVariant"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}is_optional\0\u{3}is_single_pattern\0\u{3}self_type\0\u{3}value_option_name\0\u{1}value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}is_optional\0\u{3}is_single_pattern\0\u{3}self_type\0\u{3}value_option_name\0\u{1}value\0\u{3}selected_type\0")
 
   fileprivate class _StorageClass {
     var _name: String = String()
@@ -1687,6 +1697,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
     var _selfType: BamlBridge_Cffi_V1_BamlTy? = nil
     var _valueOptionName: String = String()
     var _value: BamlBridge_Cffi_V1_BamlOutboundValue? = nil
+    var _selectedType: BamlBridge_Cffi_V1_BamlTy? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1703,6 +1714,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
       _selfType = source._selfType
       _valueOptionName = source._valueOptionName
       _value = source._value
+      _selectedType = source._selectedType
     }
   }
 
@@ -1727,6 +1739,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._selfType) }()
         case 5: try { try decoder.decodeSingularStringField(value: &_storage._valueOptionName) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._value) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._selectedType) }()
         default: break
         }
       }
@@ -1757,6 +1770,9 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
       try { if let v = _storage._value {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
+      try { if let v = _storage._selectedType {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1772,6 +1788,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
         if _storage._selfType != rhs_storage._selfType {return false}
         if _storage._valueOptionName != rhs_storage._valueOptionName {return false}
         if _storage._value != rhs_storage._value {return false}
+        if _storage._selectedType != rhs_storage._selectedType {return false}
         return true
       }
       if !storagesAreEqual {return false}

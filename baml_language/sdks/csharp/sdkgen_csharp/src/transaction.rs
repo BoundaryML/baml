@@ -8,7 +8,6 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use fs2::FileExt as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -223,7 +222,7 @@ fn commit_generated_tree_with_rename(
         .truncate(false)
         .open(&lock_path)
         .map_err(|source| io_error("open generation lock", &lock_path, source))?;
-    lock.try_lock_exclusive()
+    try_lock_exclusive(&lock)
         .map_err(|source| io_error("acquire generation lock", &lock_path, source))?;
 
     recover_or_clean_backup(&target, &backup, &mut rename)?;
@@ -635,6 +634,23 @@ fn path_lexists(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn try_lock_exclusive(file: &fs::File) -> io::Result<()> {
+    fs2::FileExt::try_lock_exclusive(file)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "share the fallible native locking interface at the target boundary"
+)]
+fn try_lock_exclusive(_file: &fs::File) -> io::Result<()> {
+    // The C# generator is a native CLI surface. This stub keeps the workspace
+    // crate target-compatible without pulling a native file-locking backend
+    // into browser builds; the filesystem transaction is never executed there.
+    Ok(())
+}
+
 fn generation_lock_path(lock_directory: &Path, canonical_parent: &Path, stem: &str) -> PathBuf {
     let target = canonical_parent.join(stem);
     let case_insensitive_identity = target.to_string_lossy().to_lowercase();
@@ -819,6 +835,7 @@ mod tests {
         assert!(valid_root.path().join("baml_client/Value.g.cs").is_file());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn concurrent_writer_is_rejected_without_touching_output() {
         use fs2::FileExt as _;

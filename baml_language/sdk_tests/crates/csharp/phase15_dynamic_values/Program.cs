@@ -29,7 +29,7 @@ CheckDescriptor(
     heterogeneousList.Type,
     BamlTypeDescriptorKind.List,
     [BamlTypeDescriptorKind.Unknown]);
-CheckParity("heterogeneous list snapshot", heterogeneousList);
+CheckListParity("heterogeneous list snapshot", heterogeneousList);
 
 BamlValue emptyList = BamlValue.List([]);
 CheckDescriptor(
@@ -37,7 +37,7 @@ CheckDescriptor(
     emptyList.Type,
     BamlTypeDescriptorKind.List,
     [BamlTypeDescriptorKind.Unknown]);
-CheckParity("empty list", emptyList);
+CheckListParity("empty list", emptyList);
 
 var mapSource = new Dictionary<string, BamlValue>
 {
@@ -51,7 +51,7 @@ CheckDescriptor(
     heterogeneousMap.Type,
     BamlTypeDescriptorKind.Map,
     [BamlTypeDescriptorKind.String, BamlTypeDescriptorKind.Unknown]);
-CheckParity("heterogeneous map snapshot", heterogeneousMap);
+CheckMapParity("heterogeneous map snapshot", heterogeneousMap);
 
 BamlValue emptyMap = BamlValue.Map([]);
 CheckDescriptor(
@@ -59,7 +59,7 @@ CheckDescriptor(
     emptyMap.Type,
     BamlTypeDescriptorKind.Map,
     [BamlTypeDescriptorKind.String, BamlTypeDescriptorKind.Unknown]);
-CheckParity("empty map", emptyMap);
+CheckMapParity("empty map", emptyMap);
 
 BamlValue enumValue = BamlValue.From(DynamicColor.Blue);
 CheckNominal(
@@ -108,7 +108,7 @@ var envelope = new DynamicEnvelope
     Color = DynamicColor.Red,
     Record = record,
     Boxed = boxed,
-    Choice = BamlUnion<string, string>.FromT1("alias-only"),
+    Choice = BamlUnion<long, string>.FromT0(7L),
 };
 BamlValue mixedClosure = BamlValue.From(envelope);
 CheckNominal(
@@ -133,20 +133,22 @@ CheckParity("mixed closure", mixedClosure, value =>
         restored.Color == DynamicColor.Red
             && restored.Record.Label == "record"
             && restored.Boxed.Value == 41
-            && restored.Choice.IsT1
-            && restored.Choice.AsT1 == "alias-only",
+            && restored.Choice.IsT0
+            && restored.Choice.AsT0 == 7L,
         "mixed closure generated projection changed");
 });
 
 CheckUnionParity(
     "literal union",
-    BamlUnion<string, string>.FromT0("fixed"),
+    BamlUnion<long, string>.FromT1("fixed"),
     expectedActiveDescriptorCase: 1,
+    expectedInteger: null,
     expectedLiteral: "fixed");
 CheckUnionParity(
-    "overlapping alias union",
-    BamlUnion<string, string>.FromT1("fixed"),
+    "integer union",
+    BamlUnion<long, string>.FromT0(29L),
     expectedActiveDescriptorCase: 0,
+    expectedInteger: 29L,
     expectedLiteral: null);
 
 byte[] mediaSource = [0x89, 0x50, 0x4e, 0x47];
@@ -207,10 +209,45 @@ void CheckParity(string label, BamlValue input, Action<BamlValue>? inspect = nul
     }
 }
 
+void CheckListParity(string label, BamlValue input)
+{
+    try
+    {
+        IReadOnlyList<BamlValue> echoed = Functions.EchoUnknownList(
+            input.As<IReadOnlyList<BamlValue>>());
+        BamlValue output = BamlValue.List(echoed);
+        Check(
+            output.Equals(input),
+            $"{label} changed from {Describe(input)} to {Describe(output)}");
+    }
+    catch (Exception error)
+    {
+        failures.Add($"{label} threw {error.GetType().Name}: {error.Message}");
+    }
+}
+
+void CheckMapParity(string label, BamlValue input)
+{
+    try
+    {
+        IReadOnlyDictionary<string, BamlValue> echoed = Functions.EchoUnknownMap(
+            input.As<IReadOnlyDictionary<string, BamlValue>>());
+        BamlValue output = BamlValue.Map(echoed);
+        Check(
+            output.Equals(input),
+            $"{label} changed from {Describe(input)} to {Describe(output)}");
+    }
+    catch (Exception error)
+    {
+        failures.Add($"{label} threw {error.GetType().Name}: {error.Message}");
+    }
+}
+
 void CheckUnionParity(
     string label,
-    BamlUnion<string, string> occurrence,
+    BamlUnion<long, string> occurrence,
     int expectedActiveDescriptorCase,
+    long? expectedInteger,
     string? expectedLiteral)
 {
     BamlValue container = BamlValue.From(new DynamicChoice { Value = occurrence });
@@ -225,7 +262,7 @@ void CheckUnionParity(
     Check(
         union.Type.Kind == BamlTypeDescriptorKind.Union
             && union.Type.Arguments.Count == 2
-            && union.Type.Arguments[0].Kind == BamlTypeDescriptorKind.String
+            && union.Type.Arguments[0].Kind == BamlTypeDescriptorKind.Int
             && union.Type.Arguments[0].Literal is null
             && union.Type.Arguments[1].Kind == BamlTypeDescriptorKind.String
             && union.Type.Arguments[1].Literal == "fixed",
@@ -233,22 +270,35 @@ void CheckUnionParity(
     Check(
         union.TryGetUnion(out int activeCase, out BamlValue? selected)
             && activeCase == expectedActiveDescriptorCase
-            && SelectedOccurrenceMatches(selected, expectedLiteral),
+            && SelectedOccurrenceMatches(selected, expectedInteger, expectedLiteral),
         $"{label} setup occurrence identity changed");
-    CheckParity(label, union, output =>
+
+    DynamicChoice echoed = Functions.EchoChoice(new DynamicChoice { Value = occurrence });
+    BamlValue echoedContainer = BamlValue.From(echoed);
+    if (!echoedContainer.TryGetClassFields(out var echoedFields))
     {
-        Check(
-            output.TryGetUnion(out int activeCase, out BamlValue? selected)
-                && activeCase == expectedActiveDescriptorCase
-                && SelectedOccurrenceMatches(selected, expectedLiteral),
-            $"{label} selected occurrence changed to {Describe(output)}");
-    });
+        failures.Add($"{label} output did not encode a class");
+        return;
+    }
+
+    BamlValue output = echoedFields.Single(field => field.Key == "value").Value;
+    Check(output.Equals(union), $"{label} changed from {Describe(union)} to {Describe(output)}");
+    Check(
+        output.TryGetUnion(out int outputCase, out BamlValue? outputSelected)
+            && outputCase == expectedActiveDescriptorCase
+            && SelectedOccurrenceMatches(outputSelected, expectedInteger, expectedLiteral),
+        $"{label} selected occurrence changed to {Describe(output)}");
 }
 
-static bool SelectedOccurrenceMatches(BamlValue selected, string? expectedLiteral) =>
-    expectedLiteral is null
-        ? selected.Type.Literal is null && selected.As<string>() == "fixed"
-        : selected.Kind == BamlValueKind.String && selected.Type.Literal == expectedLiteral;
+static bool SelectedOccurrenceMatches(
+    BamlValue selected,
+    long? expectedInteger,
+    string? expectedLiteral) => expectedInteger is long integer
+        ? selected.Kind == BamlValueKind.Int
+            && selected.Type.Literal is null
+            && selected.As<long>() == integer
+        : selected.Kind == BamlValueKind.String
+            && selected.Type.Literal == expectedLiteral;
 
 void CheckNominal(
     string label,
