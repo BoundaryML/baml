@@ -170,7 +170,9 @@ pub(crate) fn display_instruction(
                 .local_names
                 .get(*destination)
                 .map_or("?", String::as_str);
-            format!("(type {ty}, {destination})")
+            let narrowed_type =
+                operand_meta.map_or_else(|| format!("?{ty}"), |meta| meta.as_str().to_owned());
+            format!("(type {narrowed_type}, {destination})")
         }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)

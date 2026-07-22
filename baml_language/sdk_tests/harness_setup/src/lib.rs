@@ -41,6 +41,7 @@ pub mod go;
 pub mod java;
 pub mod python_pydantic2;
 pub mod rust;
+pub mod swift;
 pub mod typescript;
 pub mod typescript_web;
 

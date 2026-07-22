@@ -164,7 +164,6 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         }
     }
 
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
@@ -191,7 +190,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     diagnostics.extend(check_jinja_templates(
         db,
         file_id,
-        &item_tree,
+        file,
         pkg_items,
         &pkg_info.namespace_path,
         source_text,
@@ -199,11 +198,17 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
     // ── 6. Function signature diagnostics ────────────────────────────────────
     //
+    // FIXME(lsp-validation-antipattern): this re-implements TIR signature
+    // checking off the item-data firewall. Validation logic belongs in TIR/HIR
+    // with check.rs only surfacing diagnostics; it stays here because the
+    // default-signature diagnostics it emits have no TIR home yet.
+    //
     // Build a method → enclosing class list so we can merge class generic params.
     let mut method_to_class = Vec::new();
-    for (class_id, class_data) in &item_tree.classes {
-        for &method_id in &class_data.methods {
-            method_to_class.push((method_id, *class_id));
+    for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        for &method_loc in &class_data.methods {
+            method_to_class.push((method_loc, class_loc));
         }
     }
     // Out-of-body `implement Interface for Type` methods: their `Self` resolves
@@ -211,41 +216,38 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
     // without this their signatures would leave `Self` unresolved here.
     let mut method_to_impl = Vec::new();
-    for impl_id in &item_tree.free_impls {
-        let Some(block) = item_tree.impls.get(impl_id) else {
-            continue;
-        };
-        for &method_id in &block.methods {
-            method_to_impl.push((method_id, block));
+    for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, file) {
+        let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+        for &method_loc in &block.methods {
+            method_to_impl.push((method_loc, impl_loc));
         }
     }
 
-    for (local_id, func_data) in &item_tree.functions {
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        // Expression-body functions already have their signatures checked
-        // during scope inference (step 3). Only check non-expr bodies here.
-        // Read the body discriminant straight off the item tree already in
-        // hand — the `function_body` query clones the whole `ExprBody` arena
-        // on execution, far too expensive for a body-kind test.
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        // Expression-body functions already have their signatures checked during
+        // scope inference (step 3); only check non-expr bodies here. `function_body`
+        // is tracked (its `Arc` is cached per revision), so this body-kind test is
+        // O(1) on repeat rather than re-cloning the `ExprBody` arena each call.
         if matches!(
-            func_data.body,
-            Some(baml_compiler2_ast::FunctionBodyDef::Expr(..))
+            baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Expr(..)
         ) {
             continue;
         }
 
-        let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+        let func_source_map = baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
         let mut type_errors = Vec::new();
         let mut param_types = Vec::new();
 
         // Compute the effective generic params: method params + enclosing class params.
         let mut generic_params = func_data.generic_params.clone();
-        let enclosing_class_id = method_to_class
+        let enclosing_class = method_to_class
             .iter()
-            .find(|(mid, _)| mid == local_id)
-            .map(|(_, class_id)| *class_id);
-        if let Some(class_id) = enclosing_class_id {
-            let class_data = &item_tree[class_id];
+            .find(|(mid, _)| *mid == func_loc)
+            .map(|(_, class_loc)| *class_loc);
+        if let Some(class_loc) = enclosing_class {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             // Prepend class generic params (class params come first, method params after)
             let mut merged = class_data.generic_params.clone();
             merged.extend(generic_params);
@@ -255,29 +257,37 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         // `Self` is the `for` target and the block's generic params are in scope.
         let enclosing_impl = method_to_impl
             .iter()
-            .find(|(mid, _)| mid == local_id)
+            .find(|(mid, _)| *mid == func_loc)
             .map(|(_, imp)| *imp);
-        if let Some(imp) = enclosing_impl
-            && let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &imp.subject
+        let enclosing_impl_data =
+            enclosing_impl.map(|imp| baml_compiler2_ppir::item_data::impl_block_data(db, imp));
+        if let Some(block) = enclosing_impl_data
+            && let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
+                &block.subject
         {
             let mut merged: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             merged.extend(generic_params);
             generic_params = merged;
         }
         // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
-        // signature types, mirroring the body path in `tir::inference`.
-        let self_replacement = enclosing_impl.and_then(|imp| match &imp.subject {
-            baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => {
-                Some(for_target.clone())
+        // signature types, mirroring the body path in `tir::inference`. The
+        // for-target lives in the impl block's own type-ref arena.
+        let self_replacement: Option<(
+            &baml_compiler2_hir::type_ref::TypeRefStore,
+            baml_compiler2_hir::type_ref::TypeRefId,
+        )> = enclosing_impl_data.and_then(|block| match &block.subject {
+            baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
+                Some((&block.type_refs, *for_target))
             }
-            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
+            baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => None,
         });
         // BEP-044: `Self` in an out-of-body impl method's signature is the impl's
         // `for` target. The lowering context carries it as `self_ty`, so `Self`
         // resolves during lowering (no textual substitution).
-        let self_ty: Option<Ty> = self_replacement.as_ref().map(|for_target| {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                for_target,
+        let self_ty: Option<Ty> = self_replacement.map(|(store, id)| {
+            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                store,
+                id,
                 &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -289,12 +299,13 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 &mut Vec::new(),
             )
         });
-        let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
-                            generic_params: &[Name],
-                            diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+        let lower_sig_ref = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                             generic_params: &[Name],
+                             diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
          -> Ty {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                te,
+            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                &func_data.type_refs,
+                id,
                 &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -307,43 +318,35 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             )
         };
 
-        // Check return type — use the span from the item tree's TypeExpr.
-        if let Some(ret_te) = &sig.return_type {
-            lower_sig_te(ret_te, &generic_params, &mut type_errors);
+        // Check return type — anchor diagnostics at the return type's source span.
+        if let Some(ret_id) = func_data.return_type {
+            lower_sig_ref(ret_id, &generic_params, &mut type_errors);
             if !type_errors.is_empty() {
-                if let Some(ret_spanned) = &func_data.return_type {
-                    for error in type_errors.drain(..) {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                tir_type_error_to_diagnostic_id(&error),
-                                error.to_string(),
-                            )
-                            .with_primary_span(Span {
-                                file_id,
-                                range: ret_spanned.span,
-                            })
-                            .with_phase(DiagnosticPhase::Type),
-                        );
-                    }
+                let range = func_source_map.type_refs.span(ret_id);
+                for error in type_errors.drain(..) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            tir_type_error_to_diagnostic_id(&error),
+                            error.to_string(),
+                        )
+                        .with_primary_span(Span { file_id, range })
+                        .with_phase(DiagnosticPhase::Type),
+                    );
                 }
             }
         }
 
-        // Check parameter types — use the type_expr span, not the whole param span.
-        for (i, param) in sig.params.iter().enumerate() {
+        // Check parameter types — anchor diagnostics at each annotation's span.
+        for param in &func_data.params {
             type_errors.clear();
-            let param_ty = if param.name.as_str() == "self"
-                && matches!(
-                    param.ty.kind,
-                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                ) {
+            let param_ty = if param.name.as_str() == "self" && param.type_ref.is_none() {
                 // `self`'s type is the enclosing receiver: the class for an in-body
                 // method, or the impl's `for` target for an out-of-body
                 // `implement I for C` method (mirroring the body path in
                 // `tir::inference`). Falling back to `Unknown` would otherwise
                 // leave `self` untyped in the latter case.
-                if let Some(class_id) = enclosing_class_id.as_ref() {
-                    let class_data = &item_tree[*class_id];
+                if let Some(class_loc) = enclosing_class {
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
                     pkg_items
                         .lookup_type(&pkg_info.namespace_path, &class_data.name)
                         .map(|def| {
@@ -371,9 +374,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
                         })
-                } else if let Some(for_target) = &self_replacement {
-                    baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                        for_target,
+                } else if let Some((store, id)) = self_replacement {
+                    baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                        store,
+                        id,
                         &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                             db,
                             package_items: pkg_items,
@@ -390,32 +394,33 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         attr: TyAttr::default(),
                     }
                 }
+            } else if let Some(param_id) = param.type_ref {
+                lower_sig_ref(param_id, &generic_params, &mut type_errors)
             } else {
-                lower_sig_te(&param.ty, &generic_params, &mut type_errors)
+                // A missing annotation lowered to the `Unknown` sentinel, which
+                // yields `Ty::Unknown` with no diagnostic.
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
             };
             if !type_errors.is_empty() {
-                if let Some(param) = func_data.params.get(i) {
-                    if let Some(type_spanned) = &param.type_expr {
-                        for error in type_errors.drain(..) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    tir_type_error_to_diagnostic_id(&error),
-                                    error.to_string(),
-                                )
-                                .with_primary_span(Span {
-                                    file_id,
-                                    range: type_spanned.span,
-                                })
-                                .with_phase(DiagnosticPhase::Type),
-                            );
-                        }
+                if let Some(type_id) = param.type_ref {
+                    let range = func_source_map.type_refs.span(type_id);
+                    for error in type_errors.drain(..) {
+                        diagnostics.push(
+                            Diagnostic::error(
+                                tir_type_error_to_diagnostic_id(&error),
+                                error.to_string(),
+                            )
+                            .with_primary_span(Span { file_id, range })
+                            .with_phase(DiagnosticPhase::Type),
+                        );
                     }
                 }
             }
             param_types.push((param.name.clone(), param_ty));
         }
 
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
@@ -660,7 +665,6 @@ fn impl_diagnostic_spans(
 #[derive(Debug, Clone)]
 struct ResolvedInterfaceData<'db> {
     loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: baml_compiler2_hir::item_tree::Interface,
     qtn: QualifiedTypeName,
 }
 
@@ -676,11 +680,31 @@ fn resolve_interface_path<'db>(
         pkg_items,
         namespace_path,
     )?;
-    let item_tree = baml_compiler2_hir::file_item_tree(db, resolved.loc.file(db));
-    let iface = item_tree.interfaces.get(&resolved.loc.id(db))?.clone();
     Some(ResolvedInterfaceData {
         loc: resolved.loc,
-        iface,
+        qtn: resolved.qtn,
+    })
+}
+
+/// The `TypeRef`-arena twin of [`resolve_interface_path`], for walking a
+/// `requires` target held as firewall data (`interface_data(…).type_refs` plus a
+/// `TypeRefId`) rather than an AST node.
+fn resolve_interface_ref<'db>(
+    db: &'db dyn Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    namespace_path: &[Name],
+) -> Option<ResolvedInterfaceData<'db>> {
+    let resolved = baml_compiler2_tir::interfaces::resolve_ref_to_interface_identity(
+        db,
+        store,
+        target,
+        pkg_items,
+        namespace_path,
+    )?;
+    Some(ResolvedInterfaceData {
+        loc: resolved.loc,
         qtn: resolved.qtn,
     })
 }
@@ -1184,8 +1208,8 @@ fn associated_type_projection_sources_for_interface_bound(
         if !visited.insert(current.qtn.clone()) {
             continue;
         }
-        if current
-            .iface
+        let iface = baml_compiler2_ppir::item_data::interface_data(db, current.loc);
+        if iface
             .associated_types
             .iter()
             .any(|assoc| assoc.name == *member)
@@ -1197,10 +1221,14 @@ fn associated_type_projection_sources_for_interface_bound(
         let current_pkg_id =
             baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
         let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
-        for parent in &current.iface.requires {
-            if let Some(parent) =
-                resolve_interface_path(db, parent, current_pkg_items, &current_pkg.namespace_path)
-            {
+        for &parent in &iface.requires {
+            if let Some(parent) = resolve_interface_ref(
+                db,
+                &iface.type_refs,
+                parent,
+                current_pkg_items,
+                &current_pkg.namespace_path,
+            ) {
                 stack.push(parent);
             }
         }
@@ -1212,7 +1240,7 @@ fn associated_type_projection_sources_for_interface_bound(
 fn check_jinja_templates(
     db: &dyn Db,
     file_id: FileId,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    file: SourceFile,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     source_text: &str,
@@ -1220,11 +1248,11 @@ fn check_jinja_templates(
     let base_types = build_jinja_types(db, pkg_items, namespace_path);
     let mut diagnostics = Vec::new();
 
-    for func_data in item_tree.functions.values() {
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
         diagnostics.extend(check_llm_prompt_template(
             db,
             file_id,
-            func_data,
+            func_loc,
             pkg_items,
             namespace_path,
             &base_types,
@@ -1232,7 +1260,8 @@ fn check_jinja_templates(
         ));
     }
 
-    for template in item_tree.template_strings.values() {
+    for &template_loc in baml_compiler2_ppir::item_data::file_template_strings(db, file) {
+        let template = baml_compiler2_ppir::item_data::template_string_data(db, template_loc);
         let Some(body) = &template.body else {
             continue;
         };
@@ -1241,16 +1270,16 @@ fn check_jinja_templates(
         types.start_scope();
         for param in &template.params {
             let ty = param
-                .type_expr
-                .as_ref()
-                .map(|type_expr| {
-                    jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path)
+                .type_ref
+                .map(|id| {
+                    jinja_type_from_type_ref(db, &template.type_refs, id, pkg_items, namespace_path)
                 })
                 .unwrap_or(sys_jinja_types::Type::Unknown);
             types.add_variable(param.name.as_str(), ty);
         }
 
-        let range_hint = template.span;
+        let range_hint =
+            baml_compiler2_ppir::item_data::template_string_source_map(db, template_loc).span;
         diagnostics.extend(render_jinja_validation_result(
             file_id,
             source_text,
@@ -1266,26 +1295,25 @@ fn check_jinja_templates(
 fn check_llm_prompt_template(
     db: &dyn Db,
     file_id: FileId,
-    func_data: &baml_compiler2_hir::item_tree::Function,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     base_types: &sys_jinja_types::PredefinedTypes,
     source_text: &str,
 ) -> Vec<Diagnostic> {
-    let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm)) = &func_data.declarative_meta else {
-        return Vec::new();
-    };
-    let Some(prompt) = &llm.prompt else {
+    let Some(prompt) = baml_compiler2_ppir::item_data::function_llm_prompt(db, func_loc) else {
         return Vec::new();
     };
 
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
     let mut types = base_types.clone();
     types.start_scope();
     for param in &func_data.params {
         let ty = param
-            .type_expr
-            .as_ref()
-            .map(|type_expr| jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path))
+            .type_ref
+            .map(|id| {
+                jinja_type_from_type_ref(db, &func_data.type_refs, id, pkg_items, namespace_path)
+            })
             .unwrap_or(sys_jinja_types::Type::Unknown);
         types.add_variable(param.name.as_str(), ty);
     }
@@ -1319,8 +1347,7 @@ fn build_jinja_types(
             continue;
         };
         let file = class_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let class_data = &item_tree[class_loc.id(db)];
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         let class_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let fields = class_data
@@ -1328,10 +1355,15 @@ fn build_jinja_types(
             .iter()
             .map(|field| {
                 let ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|type_expr| {
-                        jinja_type_from_type_expr(db, type_expr, pkg_items, &class_namespace)
+                    .type_ref
+                    .map(|id| {
+                        jinja_type_from_type_ref(
+                            db,
+                            &class_data.type_refs,
+                            id,
+                            pkg_items,
+                            &class_namespace,
+                        )
                     })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (field.name.to_string(), ty)
@@ -1344,8 +1376,7 @@ fn build_jinja_types(
         let Definition::Enum(enum_loc) = *def else {
             continue;
         };
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-        let enum_data = &item_tree[enum_loc.id(db)];
+        let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
         types.add_enum(
             enum_data.name.as_str(),
             enum_data
@@ -1361,14 +1392,19 @@ fn build_jinja_types(
             continue;
         };
         let file = alias_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let alias_data = &item_tree[alias_loc.id(db)];
-        if let Some(type_expr) = &alias_data.type_expr {
+        let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+        if let Some(id) = alias_data.value {
             let alias_namespace =
                 baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
             types.add_alias(
                 alias_data.name.as_str(),
-                jinja_type_from_type_expr(db, type_expr, pkg_items, &alias_namespace),
+                jinja_type_from_type_ref(
+                    db,
+                    &alias_data.type_refs,
+                    id,
+                    pkg_items,
+                    &alias_namespace,
+                ),
             );
         }
     }
@@ -1378,8 +1414,7 @@ fn build_jinja_types(
             continue;
         };
         let file = template_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let template = &item_tree[template_loc.id(db)];
+        let template = baml_compiler2_ppir::item_data::template_string_data(db, template_loc);
         let template_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let args = template
@@ -1387,10 +1422,15 @@ fn build_jinja_types(
             .iter()
             .map(|param| {
                 let ty = param
-                    .type_expr
-                    .as_ref()
-                    .map(|type_expr| {
-                        jinja_type_from_type_expr(db, type_expr, pkg_items, &template_namespace)
+                    .type_ref
+                    .map(|id| {
+                        jinja_type_from_type_ref(
+                            db,
+                            &template.type_refs,
+                            id,
+                            pkg_items,
+                            &template_namespace,
+                        )
                     })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (param.name.to_string(), ty)
@@ -1402,82 +1442,88 @@ fn build_jinja_types(
     types
 }
 
-fn jinja_type_from_type_expr(
+fn jinja_type_from_type_ref(
     db: &dyn Db,
-    type_expr: &baml_compiler2_ast::TypeExpr,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
 ) -> sys_jinja_types::Type {
-    jinja_type_from_type_expr_inner(
+    jinja_type_from_type_ref_inner(
         db,
-        type_expr,
+        store,
+        id,
         pkg_items,
         namespace_path,
         &mut HashSet::new(),
     )
 }
 
-fn jinja_type_from_type_expr_inner(
+fn jinja_type_from_type_ref_inner(
     db: &dyn Db,
-    type_expr: &baml_compiler2_ast::TypeExpr,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     resolving_aliases: &mut HashSet<String>,
 ) -> sys_jinja_types::Type {
-    use baml_compiler2_ast::TypeExprKind;
-    use baml_compiler2_hir::contributions::Definition;
+    use baml_compiler2_hir::{contributions::Definition, type_ref::TypeRefKind};
     use sys_jinja_types::Type;
 
-    match &type_expr.kind {
-        TypeExprKind::Int { .. } => Type::Int,
-        TypeExprKind::Bigint { .. } => Type::Bigint,
-        TypeExprKind::Float { .. } => Type::Float,
-        TypeExprKind::String { .. } => Type::String,
-        TypeExprKind::Bool { .. } => Type::Bool,
-        TypeExprKind::Null { .. } => Type::None,
-        TypeExprKind::Media { kind, .. } => match kind {
+    match &store[id].kind {
+        TypeRefKind::Int => Type::Int,
+        TypeRefKind::Bigint => Type::Bigint,
+        TypeRefKind::Float => Type::Float,
+        TypeRefKind::String => Type::String,
+        TypeRefKind::Bool => Type::Bool,
+        TypeRefKind::Null => Type::None,
+        TypeRefKind::Media { kind } => match kind {
             baml_base::MediaKind::Image => Type::Image,
             baml_base::MediaKind::Audio => Type::Audio,
             _ => Type::Unknown,
         },
-        TypeExprKind::Literal { value, .. } => Type::Literal(value.clone()),
-        TypeExprKind::Optional { inner, .. } => Type::merge([
+        TypeRefKind::Literal { value } => Type::Literal(value.clone()),
+        TypeRefKind::Optional { inner } => Type::merge([
             Type::None,
-            jinja_type_from_type_expr_inner(
+            jinja_type_from_type_ref_inner(
                 db,
-                inner,
+                store,
+                *inner,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             ),
         ]),
-        TypeExprKind::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
+        TypeRefKind::List { inner } => Type::List(Box::new(jinja_type_from_type_ref_inner(
             db,
-            inner,
+            store,
+            *inner,
             pkg_items,
             namespace_path,
             resolving_aliases,
         ))),
-        TypeExprKind::Map { value, .. } => Type::Map(
+        TypeRefKind::Map { value, .. } => Type::Map(
             Box::new(Type::String),
-            Box::new(jinja_type_from_type_expr_inner(
+            Box::new(jinja_type_from_type_ref_inner(
                 db,
-                value,
+                store,
+                *value,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             )),
         ),
-        TypeExprKind::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
-            jinja_type_from_type_expr_inner(
+        TypeRefKind::Union { variants } => Type::merge(variants.iter().map(|&variant| {
+            jinja_type_from_type_ref_inner(
                 db,
+                store,
                 variant,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             )
         })),
-        TypeExprKind::Path { segments, .. } if !segments.is_empty() => {
+        TypeRefKind::Path { segments, .. } if !segments.is_empty() => {
             let (lookup_namespace, name) = jinja_lookup_path(namespace_path, segments);
             let key = format!(
                 "{}::{}",
@@ -1497,17 +1543,16 @@ fn jinja_type_from_type_expr_inner(
                         return Type::RecursiveTypeAlias(name);
                     }
                     let file = alias_loc.file(db);
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                    let alias = &item_tree[alias_loc.id(db)];
+                    let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
                     let alias_namespace =
                         baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
                     let resolved = alias
-                        .type_expr
-                        .as_ref()
-                        .map(|spanned| {
-                            jinja_type_from_type_expr_inner(
+                        .value
+                        .map(|value_id| {
+                            jinja_type_from_type_ref_inner(
                                 db,
-                                spanned,
+                                &alias.type_refs,
+                                value_id,
                                 pkg_items,
                                 &alias_namespace,
                                 resolving_aliases,
@@ -1524,19 +1569,19 @@ fn jinja_type_from_type_expr_inner(
                 _ => Type::Unknown,
             }
         }
-        TypeExprKind::Function { .. } | TypeExprKind::AssociatedTypeProjection { .. } => {
+        TypeRefKind::Function { .. } | TypeRefKind::AssociatedTypeProjection { .. } => {
             Type::Unknown
         }
-        TypeExprKind::Uint8Array { .. }
-        | TypeExprKind::Never { .. }
-        | TypeExprKind::Void { .. }
-        | TypeExprKind::BuiltinUnknown { .. }
-        | TypeExprKind::Type { .. }
-        | TypeExprKind::Rust { .. }
-        | TypeExprKind::Error { .. }
-        | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Infer { .. }
-        | TypeExprKind::Path { .. } => Type::Unknown,
+        TypeRefKind::Uint8Array
+        | TypeRefKind::Never
+        | TypeRefKind::Void
+        | TypeRefKind::BuiltinUnknown
+        | TypeRefKind::Type
+        | TypeRefKind::Rust
+        | TypeRefKind::Error
+        | TypeRefKind::Unknown
+        | TypeRefKind::Infer
+        | TypeRefKind::Path { .. } => Type::Unknown,
     }
 }
 

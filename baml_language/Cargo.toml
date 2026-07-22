@@ -10,6 +10,7 @@ members = [
   "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
+  "sdks/swift/rust/*",
   "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
@@ -20,6 +21,11 @@ members = [
   "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
+  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
+  # (sdkgen_swift is early); the swift toolchain tests themselves are
+  # macOS-only and setup.sh (xcframework assembly) is bound in
+  # .config/nextest.toml for macOS hosts.
+  "sdk_tests/crates/swift",
   "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
@@ -77,6 +83,7 @@ sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_java = { path = "sdks/java/sdkgen_java" }
 bridge_java = { path = "sdks/java/bridge_java" }
+sdkgen_swift = { path = "sdks/swift/rust/sdkgen_swift" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -91,7 +98,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_cache = { path = "crates/bex_cache" }
+bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -467,6 +474,10 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-swift]
 inherits = "release"
 panic = "unwind"
 

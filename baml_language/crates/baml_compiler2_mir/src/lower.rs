@@ -12221,8 +12221,8 @@ impl LoweringContext<'_> {
             if guard.is_some() {
                 return false;
             }
-            // OLD `pat.narrow.is_some()` branch: Chain encodes the narrow
-            // as a `Type` link, so recover it and treat as a TypeTag arm.
+            // Narrowed bindings require NarrowBind's atomic test-and-bind
+            // semantics, which Switch cannot preserve.
             if self.pattern_narrow_type(pattern).is_some() {
                 return false;
             }

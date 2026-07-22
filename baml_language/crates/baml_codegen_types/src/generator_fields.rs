@@ -16,6 +16,9 @@ pub enum OutputType {
     /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
+    /// Swift SDK (`BamlBridge` `SwiftPM` runtime).
+    #[strum(serialize = "swift")]
+    Swift,
     /// Go SDK using the `baml_go` runtime.
     #[strum(serialize = "go")]
     Go,

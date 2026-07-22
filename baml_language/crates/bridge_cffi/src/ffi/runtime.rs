@@ -46,6 +46,7 @@ pub enum BridgeLanguage {
     CSharp = 5,
     Cpp = 6,
     Java = 7,
+    Swift = 8,
 }
 
 impl BridgeLanguage {
@@ -58,6 +59,7 @@ impl BridgeLanguage {
             Self::CSharp => "csharp",
             Self::Cpp => "cpp",
             Self::Java => "java",
+            Self::Swift => "swift",
         }
     }
 
@@ -70,6 +72,7 @@ impl BridgeLanguage {
             Self::CSharp => "C#",
             Self::Cpp => "C++",
             Self::Java => "Java",
+            Self::Swift => "Swift",
         }
     }
 }
@@ -86,6 +89,7 @@ impl TryFrom<u32> for BridgeLanguage {
             5 => Ok(Self::CSharp),
             6 => Ok(Self::Cpp),
             7 => Ok(Self::Java),
+            8 => Ok(Self::Swift),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }

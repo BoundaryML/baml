@@ -59,12 +59,13 @@ function main(x: Foo | int) -> int {
         panic!("expected user.main to be a function")
     };
 
-    let destination = main
+    let (narrow_bind_idx, destination) = main
         .bytecode
         .instructions
         .iter()
-        .find_map(|instruction| match instruction {
-            Instruction::NarrowBind { destination, .. } => Some(*destination),
+        .enumerate()
+        .find_map(|(idx, instruction)| match instruction {
+            Instruction::NarrowBind { destination, .. } => Some((idx, *destination)),
             _ => None,
         })
         .expect("narrow_bind instruction");
@@ -72,6 +73,7 @@ function main(x: Foo | int) -> int {
         main.bytecode
             .instructions
             .iter()
+            .skip(narrow_bind_idx + 1)
             .any(|instruction| match instruction {
                 Instruction::LoadVar(slot) | Instruction::StoreVarLoadVar(slot) => {
                     *slot == destination

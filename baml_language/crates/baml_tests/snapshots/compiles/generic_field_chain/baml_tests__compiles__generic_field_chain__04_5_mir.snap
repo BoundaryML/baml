@@ -2,6 +2,36 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.test_generic_chain(box: Box<User>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Box<User> // box // param
+
+    bb0: {
+        _0 = copy _1.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Box<Box<User>> // box // param
+
+    bb0: {
+        _0 = copy _1.0.0.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.test_generic_capture(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -27,36 +57,6 @@ fn .<lambda(test_generic_capture, 0)>() -> null {
 
     bb0: {
         _0 = copy capture[0].0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_generic_chain(box: Box<User>) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Box<User> // box // param
-
-    bb0: {
-        _0 = copy _1.0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.test_nested_generic_chain(box: Box<Box<User>>) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Box<Box<User>> // box // param
-
-    bb0: {
-        _0 = copy _1.0.0.0;
         goto -> bb1;
     }
 
