@@ -1270,13 +1270,8 @@ fn local_variable_ty(
                 ScopeKind::Function => {
                     // Function parameter — look up from function signature.
                     let func_scope_range = enclosing_scope_data.range;
-                    let func_loc = baml_compiler2_ppir::item_data::file_functions(db, file)
-                        .iter()
-                        .copied()
-                        .find(|&loc| {
-                            baml_compiler2_ppir::item_data::function_source_map(db, loc).span
-                                == func_scope_range
-                        })?;
+                    let func_loc =
+                        crate::utils::function_at_scope_range(db, file, func_scope_range)?;
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -1366,12 +1361,7 @@ fn find_binding_ty_for_local(
 
             // 2. Start from the outermost Function scope → find its body.
             let func_range = func_range?;
-            let func_loc = baml_compiler2_ppir::item_data::file_functions(db, file)
-                .iter()
-                .copied()
-                .find(|&loc| {
-                    baml_compiler2_ppir::item_data::function_source_map(db, loc).span == func_range
-                })?;
+            let func_loc = crate::utils::function_at_scope_range(db, file, func_range)?;
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(ref top_body) = *body else {
                 return None;

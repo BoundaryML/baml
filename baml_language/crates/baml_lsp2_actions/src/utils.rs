@@ -516,3 +516,34 @@ pub fn display_type_ref(
     };
     humanize_type_string(&rendered)
 }
+
+// ── function_at_scope_range ───────────────────────────────────────────────────
+
+/// Resolve the function whose declaration span equals `range`, preferring the
+/// user-authored declaration.
+///
+/// Span equality alone is ambiguous: an LLM function's synthesized companions
+/// (`{parent}$parse`, `{parent}$stream`, …) share their parent's declaration
+/// span, so every companion matches too. Picking by origin makes the
+/// user-authored preference explicit instead of leaning on the enumeration's
+/// name tiebreak (a companion's `{parent}$…` name happens to sort after its
+/// parent's, but that is a naming convention, not a contract).
+pub(crate) fn function_at_scope_range(
+    db: &dyn crate::Db,
+    file: SourceFile,
+    range: TextRange,
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'_>> {
+    use baml_compiler2_ast::ast::FunctionOrigin;
+    baml_compiler2_ppir::item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .filter(|&loc| baml_compiler2_ppir::item_data::function_source_map(db, loc).span == range)
+        .min_by_key(
+            |&loc| match baml_compiler2_ppir::item_data::function_data(db, loc).origin {
+                FunctionOrigin::UserDefined => 0u8,
+                FunctionOrigin::Companion => 1,
+                FunctionOrigin::Internal => 2,
+                FunctionOrigin::AutoDerive => 3,
+            },
+        )
+}

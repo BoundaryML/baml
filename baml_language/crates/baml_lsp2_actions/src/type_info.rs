@@ -640,12 +640,7 @@ fn local_type_info(
     let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
 
     // Match scope range to a function via the firewall enumeration.
-    let func_loc = baml_compiler2_ppir::item_data::file_functions(db, file)
-        .iter()
-        .copied()
-        .find(|&loc| {
-            baml_compiler2_ppir::item_data::function_source_map(db, loc).span == func_scope_range
-        })?;
+    let func_loc = crate::utils::function_at_scope_range(db, file, func_scope_range)?;
 
     match site {
         DefinitionSite::Parameter(param_idx) => {

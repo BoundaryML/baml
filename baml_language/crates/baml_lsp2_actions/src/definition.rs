@@ -129,9 +129,7 @@ fn local_definition_location(
     let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
 
     // Find the function by matching the scope range against its declaration span.
-    let func_loc = *item_data::file_functions(db, file)
-        .iter()
-        .find(|func_loc| item_data::function_source_map(db, **func_loc).span == func_scope_range)?;
+    let func_loc = crate::utils::function_at_scope_range(db, file, func_scope_range)?;
 
     match site {
         DefinitionSite::Statement(stmt_id) => {
