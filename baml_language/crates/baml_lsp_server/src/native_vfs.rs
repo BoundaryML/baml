@@ -5,6 +5,7 @@
 //! entire filesystem).
 
 use std::io::Read;
+
 use utils_fs::{NativePathBuf, VfsPathBuf};
 
 /// Native filesystem adapter for BAML's slash-oriented VFS path domain.
@@ -195,8 +196,10 @@ fn glob_to_regex(glob: &str) -> regex::Regex {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Read as _, Write as _};
-    use std::sync::Arc;
+    use std::{
+        io::{Read as _, Write as _},
+        sync::Arc,
+    };
 
     use bex_project::{BexLsp as _, BulkReadFileSystem as _};
     use vfs::FileSystem as _;

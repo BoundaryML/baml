@@ -1,11 +1,12 @@
 use std::{io::Read, path::Path};
 
-use crate::LspError;
 #[cfg(target_arch = "wasm32")]
 use utils_fs::FsPathError;
 #[cfg(not(target_arch = "wasm32"))]
 use utils_fs::NativePathBuf;
 use utils_fs::VfsPathBuf;
+
+use crate::LspError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FsPath(String);
