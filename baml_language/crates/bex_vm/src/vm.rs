@@ -1794,7 +1794,7 @@ impl BexVm {
     ) -> bool {
         let frame_type_args = match &self.frames[frame_idx] {
             Frame::Bytecode(frame) => frame.type_args.as_slice(),
-            _ => &[],
+            Frame::Native(_) => &[],
         };
         match raw_const {
             ConstValue::Type(template) => {
