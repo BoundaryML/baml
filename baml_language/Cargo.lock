@@ -749,6 +749,7 @@ dependencies = [
  "baml_type",
  "baml_version",
  "baml_workspace",
+ "base64",
  "bex_cache",
  "bex_engine",
  "bex_vm_types",
@@ -785,6 +786,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "uuid",
+ "webbrowser",
  "yaml_serde",
 ]
 
