@@ -547,15 +547,16 @@ The snapshot test infrastructure is the primary debugging tool for the compiler2
 
 **How to use snapshots for debugging:**
 
-1. Write a BAML test case using the `baml_test!` macro.
-2. Run `cargo test` — the snapshot is generated/updated.
-3. Read the snapshot output for the relevant layer.
-4. For TIR: search for `unknown` — any unexpected `unknown` is a bug.
-5. For MIR: read the pretty-printed CFG — it shows basic blocks, terminators, and local types.
+1. Add a `.baml` project under the appropriate `crates/baml_tests/projects/<tier>/<project>/` directory.
+2. Run the generated test module, for example `cargo test -p baml_tests compiles::<project>::`.
+3. Review the pending snapshots, then accept them with `cargo insta accept --all`.
+4. Read the snapshot output for the relevant layer.
+5. For TIR: search for `unknown` — any unexpected `unknown` is a bug.
+6. For MIR: read the pretty-printed CFG — it shows basic blocks, terminators, and local types.
 
 **This debugging loop is highly effective for coding agents.** Agents can write test cases, read snapshot output, identify issues, and iterate. The snapshot format was designed specifically to be readable by both humans and LLMs.
 
-**Test macro:**
+The separate `baml_test!` macro compiles and executes inline BAML from Rust VM tests; it returns a bytecode/result pair and does not create compiler snapshots:
 ```rust
 baml_test!("baml source code here")
 
@@ -649,7 +650,7 @@ For `if (x != null) { ... } else { ... }`:
 
 Unions are represented as `Ty::Union(Vec<Ty>)` — a plain vector with no deduplication or sorting at construction.
 
-`Ty::Optional(Box<Ty>)` is a **separate variant** from `Union`. They are not auto-rewritten into each other. The relationship is defined only at the subtype level.
+Optional syntax is not a separate type variant. `T?` lowers to a flattened `Ty::Union` containing `T` and `null`; repeated optional syntax is idempotent.
 
 ### Subtype rules
 
@@ -657,12 +658,11 @@ Both types are first normalized (all aliases expanded), then structural subtypin
 
 - **`T <: Union(A, B, ...)`** (the "right union" rule): A type is a subtype of a union if it's a subtype of **any** member.
 - **`Union(T1, T2) <: U`** (the "left union" rule): A union is a subtype of something if **all** members are subtypes of it.
-- **`Optional(T) <: Union(types)`**: Requires `null` to be in the union AND `T` to be a subtype of some member.
-- Other rules: `null <: Optional(T)`, `T <: Optional(T)`, `never` is bottom, `unknown` is top, `int <: float`, enum variants are subtypes of their enum, list/map are covariant, functions are contravariant in parameters.
+- Other rules: `never` is bottom, `unknown` is top, literal values are subtypes of their base primitive, enum variants are subtypes of their enum, class/list/map/future type arguments are invariant, and functions are contravariant in parameters and covariant in return/throws types. `int` and `float` are distinct concrete types; numeric coercion is not subtyping.
 
 ### Unions are never simplified automatically
 
-When combining branch types (e.g., if/else), the type checker does flat deduplication only. No simplification of `Union(T, never)`, no removal of subtypes (e.g., `Union(int, float)` stays as-is). Normalization happens on-demand at subtype-check time and does not write back.
+Union construction preserves declared member distinctions important to runtime typing and SAP. Normalization and subtype checking operate on a canonical `NormalTy` view without rewriting the original `Ty`; for example, `int | float` remains a union because neither concrete numeric type is a subtype of the other.
 
 ### Match exhaustiveness with unions
 
@@ -794,8 +794,8 @@ Phases 01 and 02 run per-file. Phases 03–06 run per-project (loading all files
 
 ### Adding a test case
 
-1. Create a directory with `.baml` files in the test projects area.
-2. Run `cargo test` — the build script picks up new directories automatically.
+1. Create a directory with `.baml` files under the appropriate `crates/baml_tests/projects/<tier>/` directory (`broken_syntax`, `diagnostic_errors`, `compiles`, `passing`, or `passing_llm`).
+2. Run `cargo test -p baml_tests <tier>::<project>::` — the build script picks up the new directory automatically.
 3. Run `cargo insta accept --all` to commit initial snapshots.
 
 ### Incremental tests

@@ -70,10 +70,7 @@ immediately with a non-zero exit and zero side effects. `--profile` may name any
 must map to the dev account. (Change the pinned account only by editing `DEV_ACCOUNT` in
 `run-e2e.py`.)
 
-The cloud tier names all resources `baml-systest-e2e-<timestamp>-<pid>` and registers a single
-`trap … EXIT INT TERM` master cleanup, so the EC2 instance, S3 bucket, IAM roles, instance
-profile, and Lambda function are **always** removed — even on Ctrl-C or mid-run failure. After a
-cloud run the script also leaves nothing behind; verify independently with:
+The cloud tier gives every resource a `baml-systest` name containing the `e2e-<timestamp>-<pid>` run suffix and registers a single `finally` master cleanup (with SIGTERM converted to an exit), so the EC2 instance, S3 bucket, IAM roles, instance profile, and Lambda function are **always** removed — even on Ctrl-C or mid-run failure. After a cloud run the script also leaves nothing behind; verify independently with:
 
 ```sh
 aws --profile boundaryml-dev --region us-east-1 ec2 describe-instances \

@@ -14,7 +14,7 @@ The plugin is the entire setup — `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("com.boundaryml.baml") version "0.15.0-nightly.1"
+    id("com.boundaryml.baml") version "0.15.1-nightly.20260722.c"
 }
 
 repositories {
@@ -94,8 +94,8 @@ baml {
     manageDependencies.set(false)
 }
 dependencies {
-    implementation("com.boundaryml:baml-bridge:0.15.0-nightly.1")
-    runtimeOnly("com.boundaryml:baml-bridge:0.15.0-nightly.1:natives-linux-x86_64")
+    implementation("com.boundaryml:baml-bridge:0.15.1-nightly.20260722.c")
+    runtimeOnly("com.boundaryml:baml-bridge:0.15.1-nightly.20260722.c:natives-linux-x86_64")
 }
 ```
 
@@ -156,15 +156,15 @@ generated automatically by `java-gradle-plugin`. Local rehearsals:
 
 ```sh
 # Publish to ~/.m2 (no credentials needed).
-gradle publishToMavenLocal -PbamlVersion=0.15.0-nightly.1
+gradle publishToMavenLocal -PbamlVersion=0.15.1-nightly.20260722.c
 
 # Validate Portal metadata without publishing (needs Portal credentials to
 # reach the auth step; publishes nothing).
-gradle publishPlugins --validate-only -PbamlVersion=0.15.0-nightly.1
+gradle publishPlugins --validate-only -PbamlVersion=0.15.1-nightly.20260722.c
 
 # Stage the signed Central layout (into build/staging-deploy, or a shared tree
 # via -PbamlStagingDir so the plugin + marker join baml-bridge's bundle).
-gradle publishAllPublicationsToStagingRepository -PbamlVersion=0.15.0-nightly.1
+gradle publishAllPublicationsToStagingRepository -PbamlVersion=0.15.1-nightly.20260722.c
 ```
 
 | Property          | Default                  | Meaning                                                                             |

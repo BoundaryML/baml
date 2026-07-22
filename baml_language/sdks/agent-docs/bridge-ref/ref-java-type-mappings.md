@@ -1,13 +1,10 @@
 ---
-date: 2026-07-20
+date: 2026-07-22
 repository: baml4
 ---
 These are the rules that dictate how Java SDK generation works for BAML.
 
-**This document mirrors [`ref-python-type-mappings.md`](./ref-python-type-mappings.md)
-section-for-section and row-for-row, for a 1:1 side-by-side decision review.** Read the two
-files with the Python doc on the left. Every BAML-type row the Python doc documents has a
-Java answer here.
+This document follows the Python bridge-reference section order so the language mappings can be compared directly. Every BAML type consumed by Java codegen has a Java answer here.
 
 **Ground truth.** The Java type translation lives in
 `sdks/java/sdkgen_java/src/translate_ty.rs` (`translate_ty` / `translate_union` /
@@ -20,13 +17,7 @@ mapping was cross-checked against real generated output under
 
 - Java allows fully-qualified names in every type position, so every rendered expression is an
   FQN and there is no import-collection machinery (translate_ty.rs:1–7).
-- **Position matters.** `TyPosition::TopLevel` = field / parameter / return position;
-  `TyPosition::Boxed` = generic type argument or a nullable slot. A primitive is `long` /
-  `double` / `boolean` at top level but `java.lang.Long` / `…Double` / `…Boolean` when boxed —
-  **boxing IS the nullability signal** (a boxed `Long` field is nullable, an unboxed `long` is
-  not), because no `@Nullable` annotation dependency has been decided yet (translate_ty.rs:11–16,
-  `primitive` at :166–171). Where the two positions render identically (already-reference types),
-  the columns show the same value.
+- **Position matters.** `TyPosition::TopLevel` = field / parameter / return position; `TyPosition::Boxed` = generic type argument or a nullable slot. A primitive is `long` / `double` / `boolean` at top level but `java.lang.Long` / `…Double` / `…Boolean` when boxed — boxing permits null for primitives (a boxed `Long` field can be nullable, an unboxed `long` cannot). Genuine nullable positions also carry the fully qualified JSpecify type-use annotation `@org.jspecify.annotations.Nullable`, including reference types and nullable collection elements. Where the two positions render identically (already-reference types), the columns show the same value.
 - **descriptor** = the type-directed decode descriptor the generated binding hands to
   `BamlFfi.callSync/callAsync` (last positional arg) and that `registerClass` carries per field —
   a typed `baml_bridge.BamlType` **data structure** (not a string), produced by `descriptor_expr`
@@ -35,8 +26,7 @@ mapping was cross-checked against real generated output under
   wire-driven); a `TypeVar` passes `BamlType.typeVar("T")` and the union-with-a-TypeVar-arm case
   passes `null`.
 - `> ⚠ **Deviation from Python:** …` flags every divergence from the Python bridge.
-- `**NOT YET IMPLEMENTED IN JAVA**` marks a mapping that is not built yet, with the decided/open
-  status pulled from `thoughts/antonio/java-function-calls-decisions.md`.
+- `**NOT YET IMPLEMENTED IN JAVA**` marks a mapping that the current emitter or runtime does not build.
 
 # Example generated code
 
@@ -136,12 +126,7 @@ Every callable also gets trailing `baml_bridge.BamlCallContext ctx` overloads
 > `Resume$stream`. Python mangles: `$stream` → `_stream`, `$build_request` → `__build_request`.
 > (Same house rule as TS; ref-java-codegen-conventions.md:30–33.)
 
-> ⚠ **Deviation from Python (DECIDED 2026-07-17, Option B — TS-aligned):** `$stream` companion **types** are minted **in
-> package** as `baml_sdk.<ns>.<Name>$stream` (fully emitted, registered, relied on by the
-> 102/102 `type_shapes` typemap). Python routes them to a **parallel** `baml_sdk.stream_types.<ns>.<Name>`
-> package — the owner-decided layout (TS emits companions in place and the compiler
-> no longer reserves `stream_types`; Python's parallel package is a workaround for
-> `$` being illegal there). The ported stream tests were retargeted accordingly.
+> ⚠ **Deviation from Python (DECIDED 2026-07-17, Option B — TS-aligned):** `$stream` companion **types** are minted **in package** as `baml_sdk.<ns>.<Name>$stream` (fully emitted, registered, relied on by the `type_shapes` typemap suite). Python routes them to a **parallel** `baml_sdk.stream_types.<ns>.<Name>` package — the owner-decided layout (TS emits companions in place and the compiler no longer reserves `stream_types`; Python's parallel package is a workaround for `$` being illegal there). The ported stream tests were retargeted accordingly.
 
 ## Exhaustive Ty conversions
 
@@ -196,17 +181,11 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
 | `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `BamlType.list(D)` | n/a |
-| `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `map<…>` | n/a |
+| `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `BamlType.map(BamlType.STRING, D)` | n/a |
 
 Per-row deviation flags:
 
-> ⚠ **Deviation from Python (nullability model — pervasive):** `T?` renders as the **boxed
-> nullable** inner type, **never `java.util.Optional<T>`** and never a union type
-> (translate_union :199–208, `primitive` boxing :166–171). Python uses `typing.Optional[T]`.
-> Reason: Java has no zero-cost `Optional`, and boxing already encodes nullability at the type
-> level (`long` non-null vs `java.lang.Long` nullable) — a dedicated `@Nullable` annotation
-> dependency was deferred (translate_ty.rs:11–16). The null arm is stripped both in the 1-arm
-> collapse and inside multi-arm unions.
+> ⚠ **Deviation from Python (nullability model — pervasive):** `T?` renders as the **boxed nullable** inner type, **never `java.util.Optional<T>`** and never a union type (translate_union :199–208, `primitive` boxing :166–171). Python uses `typing.Optional[T]`. Reason: Java uses nullable references rather than `Optional` in generated signatures. JSpecify's `@Nullable` explicitly marks every nullable type-use, while primitive optionals are also boxed (`long` non-null vs `Long` nullable). The null arm is stripped both in the 1-arm collapse and inside multi-arm unions.
 
 > ⚠ **Deviation from Python (literals):** literal types **erase to their base Java type** — Java
 > has no literal types. `"draft" | "sent"` → `java.lang.String`, `flag true` → `boolean`

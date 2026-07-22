@@ -1,7 +1,6 @@
 ---
-date: 2026-07-20
+date: 2026-07-22
 repository: baml4
-mirrors: baml_language/sdks/agent-docs/bridge-ref/ref-python-inbound-encoding.md
 source_paths:
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlFfi.java
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/internal/ProtoWriter.java
@@ -21,12 +20,7 @@ source_paths:
 
 # Java Inbound Argument Encoding
 
-This file records how generated Java SDK calls encode Java arguments before they
-cross into the BAML engine. It is the section-for-section mirror of
-`ref-python-inbound-encoding.md`, written so the two can be read side by side for
-a 1:1 decision review. It complements `ref-java-codegen-conventions.md` and
-`ref-java-state-of-completeness.md`: those describe the generated Java type
-surface, while this one describes the inbound runtime value path.
+This file records how generated Java SDK calls encode Java arguments before they cross into the BAML engine. It follows the Python bridge-reference section order for direct language comparison. It complements `ref-java-codegen-conventions.md` and `ref-java-state-of-completeness.md`: those describe the generated Java type surface, while this one describes the inbound runtime value path.
 
 The important implementation fact is that the runtime bridge is implemented in
 `baml_language/sdks/java/baml_bridge` (Maven/Gradle artifact `baml-bridge`,
@@ -43,9 +37,7 @@ TypeScript bridges, so this document diverges from the Python one only on the
 > - `> ⚠ **Deviation from Python:**` blockquotes flag every place Java's
 >   mechanism differs from Python's (naming, sentinel strategy, boxed-type
 >   widening, error types, …).
-> - `**NOT YET IMPLEMENTED IN JAVA**` marks kinds the Python encoder emits that
->   the Java encoder does not yet emit, with the decided/open status from
->   `thoughts/antonio/java-function-calls-decisions.md`.
+> - `**NOT YET IMPLEMENTED IN JAVA**` marks kinds the current Java encoder does not emit.
 > - Every Java behavior below cites `file:line`; nothing is invented.
 
 ## Call Path Overview
@@ -352,20 +344,7 @@ collection still round-trips as an empty container, not null
 
 ### Host callables — LANDED (`202883518`); `ty_value` still no-op
 
-- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15): LANDED.** The whole
-  slice is wired end-to-end (`function_calls` 154/0). Encode: `isHostCallable`
-  (`ProtoWriter.java:414-422`) matches a generated `BamlHostCallable` interface or
-  any `java.util.function.*` shape, registers the object in the Java-side registry
-  via `BamlFfi.registerHostCallable(value)`, and emits
-  `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The runtime side holds a single
-  `ConcurrentHashMap<Long,Object>` keyspace (callables + opaque throwables) with an
-  `AtomicLong`, a daemon dispatch `ExecutorService`, the `hostDispatch` /
-  `hostRelease` / `nativeCompleteHostCall` trampolines
-  (`BamlFfi.java:104-105, 582-801`), and `ProtoReader.decodeBamlToHostCall`
-  reshapes the flat declared-order args into positional + optional buckets. The
-  wire constants are `BamlHandle.HOST_VALUE_CALLABLE = 15`,
-  `HOST_VALUE_OPAQUE = 16` (`BamlHandle.java:48-49`); the release path skips both
-  keyspaces (`BamlHandle.java:79-81`).
+- **Host callables — `handle` with `HOST_VALUE_CALLABLE` (15): LANDED.** The whole slice is wired end-to-end (the current fixture inventory is 157 run / 153 pass / 0 fail / 4 intentional skips). Encode: `isHostCallable` (`ProtoWriter.java:414-422`) matches a generated `BamlHostCallable` interface or any `java.util.function.*` shape, registers the object in the Java-side registry via `BamlFfi.registerHostCallable(value)`, and emits `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The runtime side holds a single `ConcurrentHashMap<Long,Object>` keyspace (callables + opaque throwables) with an `AtomicLong`, a daemon dispatch `ExecutorService`, the `hostDispatch` / `hostRelease` / `nativeCompleteHostCall` trampolines (`BamlFfi.java:104-105, 582-801`), and `ProtoReader.decodeBamlToHostCall` reshapes the flat declared-order args into positional + optional buckets. The wire constants are `BamlHandle.HOST_VALUE_CALLABLE = 15`, `HOST_VALUE_OPAQUE = 16` (`BamlHandle.java:48-49`); the release path skips both keyspaces (`BamlHandle.java:79-81`).
 - **`ty_value` (13):** **NOT YET IMPLEMENTED IN JAVA** — and a **no-op parity**
   with Python: no Python encoder branch emits it either (`ProtoWriter.java:29`;
   Python doc row for `ty_value`). Rust can decode it, but neither host encoder

@@ -92,6 +92,8 @@ This publishes, under
 | `bamlVersion`        | `0.0.0-dev`    | Published Maven version.                                    |
 | `bamlNativePlatform` | `linux-x86_64` | Classifier/target: `<os>-<arch>` (`linux`/`macos`/`windows`). |
 | `bamlNativeLib`      | *(unset)*      | Absolute path to the built cdylib for that platform.       |
+| `bamlNativeJarsDir`  | *(unset)*      | Directory of prebuilt `baml-bridge-<version>-natives-*.jar` files to attach in one staging publication. |
+| `bamlSign`           | *(unset)*      | When present, sign the publication through the local GPG agent; CI signing instead activates from `GPG_PRIVATE_KEY`. |
 
 If `bamlNativeLib` is unset, the `nativeJar` task skips gracefully (with a
 message) and the publication contains only the main jar + POM — a plain
@@ -102,27 +104,20 @@ suffix) because the sdk_test_java fixtures link `build/libs/baml-bridge.jar` by
 exact name. Maven publication rewrites the published file name to
 `baml-bridge-<version>.jar` independently, so both hold.
 
-## What CI must inject
+## Release CI
 
-The `build-java-sdk` / `publish-maven` jobs slot into
-`release-baml-language.yml`. CI is responsible for:
+`build-java-sdk` in `.github/workflows/release-baml-language.yml` delegates to `build2-java-sdk.reusable.yaml`, whose matrix comes from `release/platforms.json`. Each target builds `bridge_java` with the `release-bridge-java` profile and packages one `natives-<platform>` jar; experimental musl and Windows ARM64 targets are allowed to fail without blocking the release.
 
-1. **Version** — `-PbamlVersion`. Maven has no dist-tags, so:
-   - canary → plain version, e.g. `0.15.0`;
-   - nightly → suffixed version, e.g. `0.15.0-nightly.YYYYMMDD`.
-2. **Per-platform native builds** — one publish invocation per target in the
-   8-target matrix, each passing that platform's
-   `-PbamlNativePlatform=<os>-<arch>` and `-PbamlNativeLib=<built cdylib>`. The
-   main jar/POM/module are identical across targets (upload once or let Central
-   dedupe); the `natives-*` jars differ by classifier.
-3. **Central credentials** — enable the `central` Maven repository in
-   `build.gradle.kts` (currently a commented placeholder) and provide the
-   Sonatype Central Portal token via the `CENTRAL_USERNAME` / `CENTRAL_PASSWORD`
-   environment variables. Real values live only in CI secrets; local
-   `publishToMavenLocal` never needs them.
-   - Central also requires GPG-signed artifacts; wiring the `signing` plugin
-     with the CI signing key is part of the `publish-maven` job (out of scope
-     for the local flow above).
+The top-level `publish-maven` job then:
+
+1. derives `-PbamlVersion` from the frozen release plan (`canary` is a plain version; nightly is a suffixed canonical version);
+2. checks Maven Central independently for `baml-bridge`, `baml-gradle-plugin`, and `baml-bridge-kotlin`, because published versions are immutable;
+3. downloads all successful native jars and passes their directory as `-PbamlNativeJarsDir` to one `publishMavenPublicationToStagingRepository` invocation;
+4. stages the Gradle plugin, its marker POM, and the Kotlin bridge into the same file-repository layout;
+5. signs every staged publication with the in-memory `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE` secrets; and
+6. zips the layout and uploads it directly to the Central Portal with `CENTRAL_USERNAME` / `CENTRAL_PASSWORD`, polling until Central accepts or rejects it.
+
+Local `publishToMavenLocal` does not require Central credentials or signing. The commented `central` repository block in `build.gradle.kts` is not used by release CI; CI intentionally stages to a local file repository so all three coordinates can be uploaded as one Central bundle.
 
 ## Signing key pin
 

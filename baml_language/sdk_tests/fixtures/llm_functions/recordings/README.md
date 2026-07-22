@@ -1,10 +1,6 @@
 # LLM streaming replay recordings
 
-Checked-in test data for the streaming **replay harness**
-(`thoughts/sam-projects/bridge-generics/streaming/02`). These files let the
-keyless replay tests (in `test_streaming_e2e.py`) drive the full
-bridge → BAML LLM client → HTTP → SSE → stream-consumption pipeline against a
-recorded provider response — **no `OPENAI_API_KEY` required at test time**.
+Checked-in test data for the streaming replay harness. These files let the keyless replay tests (including Python, TypeScript, Rust, and Java siblings) drive the full bridge → BAML LLM client → HTTP → SSE → stream-consumption pipeline against a recorded provider response — **no `OPENAI_API_KEY` required at test time**.
 
 Everything here is **insta-managed**, written by the
 `sdk_test_llm_recordings` crate
@@ -47,16 +43,8 @@ cargo insta review
 INSTA_UPDATE=always infisical run -- cargo nextest run -p sdk_test_llm_recordings
 ```
 
-The Python keyless tests (`test_streaming_e2e.py`) assert only that the stream
-yields >= 10 partials and well-typed values — they do **not** pin the exact
-recorded content — so a re-record needs no Python changes as long as the new
-response still streams (any realistic one does). The TypeScript sibling
-(`streaming_e2e.test.ts`) may still assert exact content; update it if you
-re-record and run the TS suite.
+The keyless SDK tests assert that the stream yields at least 10 partials and well-typed values; the current Python and TypeScript suites do not pin exact recorded content. A re-record needs no host-test change as long as the response still streams and satisfies the declared result shape, but rerun each participating SDK suite.
 
 ## Redaction guarantee
 
-The recorder strips `authorization`-family headers to `REDACTED` and filters
-any OpenAI-style key prefix. CI greps this directory for that prefix and fails
-on a hit, so no key can leak into a committed recording. (This README avoids
-writing the literal prefix so it doesn't trip that grep itself.)
+Only the provider's SSE response body is snapshotted; request headers are passed directly to `curl` and are never written to these files. Insta also filters OpenAI-style key-shaped text from snapshot payloads as a defensive measure. Review new `.snap.sse` data before accepting it; there is no separate repository-wide CI grep that replaces that review.

@@ -1,314 +1,51 @@
-# BEX Engine
+# BEX engine
 
-Async runtime for the BEX virtual machine, coordinating concurrent execution and garbage collection.
+`bex_engine` is the async embedding layer that drives `BexVm`, dispatches system operations, coordinates futures and child threads, converts boundary values, emits runtime events, and coordinates garbage collection.
 
-## Architecture Overview
+## Execution model
 
-```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                                 ARCHITECTURE                                  │
-├───────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │                              BexEngine                                  │  │
-│  │  • Owns: BexHeap (contains Arc internally)                              │  │
-│  │  • Owns: BytecodeProgram (Arc-shared)                                   │  │
-│  │  • Owns: OpContext (Arc-shared, contains ResourceRegistry)              │  │
-│  │  • Owns: env_vars                                                       │  │
-│  │  • Responsibility: Event loop, Handle↔Value conversion, VM↔Sys mediate  │  │
-│  │  • call_function(&self, ...) ← Note: &self, enables concurrency!        │  │
-│  └───────────────┬───────────────────────────────────────┬─────────────────┘  │
-│                  │ clones heap Arc, creates VM           │ calls              │
-│                  ▼                                       ▼                    │
-│  ┌──────────────────────────────────┐    ┌──────────────────────────────────┐ │
-│  │              BexVm               │    │             sys_types              │ │
-│  │  • Has: BexHeap (cloned Arc)     │    │  • Provides: ops::fs, ops::net,  │ │
-│  │  • Owns: EvalStack               │    │              ops::sys, ops::llm  │ │
-│  │  • Owns: frames: Vec<Frame>      │    │  • Receives: BexValue args       │ │
-│  │  • Owns: globals: GlobalPool     │    │  • Returns: BexValue             │ │
-│  │  • Uses: ObjectIndex internally  │    │  • Uses: OpContext for resources │ │
-│  │  • Yields: VmExecState to engine │    │                                  │ │
-│  │                                  │    │  ResourceRegistry (in OpCtx):    │ │
-│  │  NO DEPENDENCY ON sys_types!       │    │  • Files, Network, Shell         │ │
-│  │  (doesn't know about sys ops)    │    │                                  │ │
-│  └──────────────────────────────────┘    └──────────────────────────────────┘ │
-│                  │                                       │                    │
-│                  │ uses types from                       │ uses types from    │
-│                  ▼                                       ▼                    │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │                              bex_vm_types                               │  │
-│  │  • Defines: ObjectIndex, Value, Object                                  │  │
-│  │  • Defines: ExternalOp, SysOp enums (operation descriptors)             │  │
-│  │  • No dependencies (leaf crate)                                         │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                                                               │
-│  KEY INSIGHT: bex_vm and sys_types are SIBLINGS - they never depend on each     │
-│               other. BexEngine is the ONLY component that talks to both.      │
-│                                                                               │
-└───────────────────────────────────────────────────────────────────────────────┘
-```
+`BexEngine::call_function(&self, ...)` can run concurrently. Each root call gets a `BexThread`/`BexVm`, an evaluation stack, and a private TLAB while sharing the immutable program metadata, packages, globals, system-operation provider, future manager, and `Arc<BexHeap>`.
 
-## Async Execution Model
+The engine repeatedly resumes the VM and handles its `VmExecState`:
 
-The engine uses a Deno-inspired event loop where the VM executes synchronously until I/O:
+| VM state | Engine action |
+|---|---|
+| `Complete(Value)` | Convert or return the result and finish the call |
+| `SysOp { operation, args }` | Run the `sys_ops::SysOps` operation, race it with cancellation, push the result, and resume |
+| `Spawn(HeapPtr)` | Create a pending future, start the closure on a child `BexThread`, and push the future |
+| `Await(FutureId)` | Release heap access while waiting, then resume after settlement |
+| `AwaitAny(Vec<FutureId>)` | Wait until one input settles, then resume so the VM can select it |
+| `Event { ... }` | Convert the payload and emit a custom runtime event |
+| `EarlyYield` | Cooperatively yield, honor GC parking if requested, and resume |
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                      EVENT LOOP                                         │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                         │
-│  call_function(&self, name, args)                                                       │
-│        │                                                                                │
-│        ▼                                                                                │
-│  ┌────────────────────────────────────────────────────────────────────────────────┐     │
-│  │  Create VM with cloned heap Arc + TLAB, register with current epoch            │     │
-│  └────────────────────────────────────────────────────────────────────────────────┘     │
-│        │                                                                                │
-│        ▼                                                                                │
-│  ┌────────────────────────────────────────────────────────────────────────────────┐     │
-│  │  VM executes bytecode synchronously                                         ◄──┼──┐  │
-│  └────────────────────────────────────────────────────────────────────────────────┘  │  │
-│        │                                                                             │  │
-│        ├───────────────────┬───────────────────┐                                     │  │
-│        ▼                   ▼                   ▼                                     │  │
-│  ┌───────────┐      ┌────────────┐      ┌────────────┐                               │  │
-│  │ Complete  │      │ Schedule   │      │   Await    │                               │  │
-│  │ (Value)   │      │ Future     │      │ (pending)  │                               │  │
-│  └─────┬─────┘      └─────┬──────┘      └─────┬──────┘                               │  │
-│        │                  │                   │                                      │  │
-│        │                  ▼                   ▼                                      │  │
-│        │           ┌────────────┐      ┌────────────┐                                │  │
-│        │           │ Spawn task │      │ Wait for   │                                │  │
-│        │           │ (tokio)    │      │ completion │                                │  │
-│        │           └─────┬──────┘      └─────┬──────┘                                │  │
-│        │                 │                   ▼                                       │  │
-│        │                 │             ┌────────────┐                                │  │
-│        │                 │             │ Fulfill    │                                │  │
-│        │                 │             │ future     │                                │  │
-│        │                 │             └─────┬──────┘                                │  │
-│        │                 │                   │                                       │  │
-│        │                 └───────────────────┴───────────────────────────────────────┘  │
-│        │                                                                                │
-│        ▼                                                                                │
-│  ┌────────────────────────────────────────────────────────────────────────────────┐     │
-│  │  Unregister from epoch, return BexValue                                        │     │
-│  └────────────────────────────────────────────────────────────────────────────────┘     │
-│                                                                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-```
+System operations use the dedicated single-yield `SysOp` path. The former `ScheduleFuture` state and its two-yield system-operation sequence have been removed. Heap futures remain the representation for explicit concurrency such as `spawn`.
 
-### VmExecState Variants
+## Garbage collection coordination
 
-| State | Meaning |
-|-------|---------|
-| `Complete(Value)` | Execution finished, return result |
-| `ScheduleFuture(ObjectIndex)` | Spawn async op, immediately resume VM |
-| `Await(ObjectIndex)` | Wait for future completion, fulfill, then resume VM |
+The engine uses `HeapPermitManager`:
 
-## Epoch-Based GC Coordination
+1. Every VM thread and other heap-root holder registers a permit. Heap access occurs only while that permit is active.
+2. `collect_garbage` requests parking and drains active permits. Running VMs release at normal async yields or forced early-yield checks; new holders cannot enter during collection.
+3. `HeapGuard` calls `RootHaver::collect_roots` for registered holders and unions those roots with opaque handle roots.
+4. `BexHeap::collect_garbage_generational` performs a minor or major collection and returns forwarding information.
+5. The guard calls `RootHaver::forward_roots`; VM implementations rewrite stacks/frames/continuations and invalidate their TLABs.
+6. Dropping the guard releases parked holders.
 
-VMs register with an epoch at call start. GC advances the epoch, causing old-epoch VMs to park at safepoints:
+This replaces the older epoch-slot coordination model. The heap itself is generational (`Gen0`, `Gen1`, `Gen2`, plus permanent compile-time objects), not a two-space-only runtime heap.
 
-```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                         EPOCH-BASED SAFEPOINT COORDINATION                    │
-├───────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│  Engine State:                                                                │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  current_epoch: AtomicU64 = 5                                           │  │
-│  │                                                                         │  │
-│  │  epoch_states: [EpochState; 2]                                          │  │
-│  │    [0]: { active: 0, parked: 0 }  ← slot for even epochs                │  │
-│  │    [1]: { active: 3, parked: 0 }  ← slot for odd epochs (epoch 5)       │  │
-│  │                                                                         │  │
-│  │  epoch_drained: Notify     ← VMs signal when they park                  │  │
-│  │  gc_complete: Notify       ← GC signals when done                       │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                                                               │
-│  TIMELINE: 3 VMs in epoch 5, GC requested                                     │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │  T0: VM-A, VM-B, VM-C running (epoch 5)                                 │  │
-│  │                                                                         │  │
-│  │  T1: Engine calls collect_garbage()                                     │  │
-│  │      └─ current_epoch.fetch_add(1) → epoch becomes 6                    │  │
-│  │                                                                         │  │
-│  │  T2: New call VM-D starts (gets epoch 6, unaffected by GC)              │  │
-│  │                                                                         │  │
-│  │  T3: VM-A reaches await point                                           │  │
-│  │      ├─ Sees current_epoch(6) > my_epoch(5)                             │  │
-│  │      ├─ parked += 1, notify epoch_drained                               │  │
-│  │      └─ Waits on gc_complete                                            │  │
-│  │                                                                         │  │
-│  │  T4-T5: VM-B, VM-C reach await points and park                          │  │
-│  │         parked(3) >= active(3) → all old-epoch VMs parked               │  │
-│  │                                                                         │  │
-│  │  T6: GC runs (safe - all old-epoch VMs frozen)                          │  │
-│  │      ├─ Collect roots from handles + parked VM stacks                   │  │
-│  │      ├─ Run semi-space collection                                       │  │
-│  │      └─ gc_complete.notify_waiters()                                    │  │
-│  │                                                                         │  │
-│  │  T7: VM-A, VM-B, VM-C wake up and resume with forwarded references      │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                                                               │
-└───────────────────────────────────────────────────────────────────────────────┘
-```
+## Boundary values
 
-### VM State Machine at Safepoints
+- `BexExternalValue` is fully owned and safe outside the heap.
+- `Handle` is an opaque rooted reference to a heap object.
+- Internal `Value`/`HeapPtr` objects are used only while heap access is proven by a permit.
 
-```
-┌───────────┐    await point    ┌─────────────────┐
-│  RUNNING  │ ─────────────────►│  CHECK EPOCH    │
-└───────────┘                   └────────┬────────┘
-     ▲                                   │
-     │                          ┌────────┴────────┐
-     │                    my_epoch ==        my_epoch <
-     │                    current            current
-     │                          │                 │
-     │                          ▼                 ▼
-     │                   ┌────────────┐   ┌─────────────────────┐
-     │                   │ maybe_gc() │   │ PARK                │
-     │                   │ if needed  │   │ ├─ incr parked      │
-     │                   └──────┬─────┘   │ ├─ notify drained   │
-     │                          │         │ └─ wait gc_complete │
-     │                          │         └──────────┬──────────┘
-     │                          │                    │
-     │                          └──────┬─────────────┘
-     │                                 ▼
-     └────────────────────────  CONTINUE EXECUTION
-```
+Conversion code in `conversion.rs` moves between external values and VM values while preserving type metadata, object identity where handles are used, and GC safety.
 
-## Value Boundary Crossing
+## Ownership boundaries
 
-Two value systems: VM-internal and external boundary:
+- `bex_vm` interprets bytecode and yields descriptions of engine work.
+- `sys_ops` implements filesystem, network, LLM, process, and related operations using contexts from `sys_types`.
+- `bex_engine` is the mediator that knows about both layers.
+- `bex_heap` owns allocation, handles, permits, and collection.
 
-```
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                                VALUE TYPE HIERARCHY                               │
-├───────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                   │
-│  VM Internal                           FFI / External Boundary                    │
-│  ┌──────────────────────┐             ┌────────────────────────────────────────┐  │
-│  │   Value              │             │ BexValue (unified boundary type)       │  │
-│  │ ┌──────────────────┐ │             │ ┌────────────────────────────────────┐ │  │
-│  │ │ Null             │ │             │ │                                    │ │  │
-│  │ │ Int(i64)         │ │             │ │ Opaque(Handle)                     │ │  │
-│  │ │ Float(f64)       │ │             │ │   └─ live reference to heap        │ │  │
-│  │ │ Bool(bool)       │ │             │ │      resolve via to_bex_external() │ │  │
-│  │ │ Object(Index) ───┼─┼────────────►│ │                                    │ │  │
-│  │ └──────────────────┘ │             │ │ External(BexExternalValue)         │ │  │
-│  │                      │             │ │   └─ owned data:                   │ │  │
-│  │ Fast, uses indices   │             │ │      Null, Int, Float, Bool,       │ │  │
-│  │ into shared heap     │             │ │      String, Array, Map,           │ │  │
-│  │                      │             │ │      Instance, Variant, Union      │ │  │
-│  │                      │             │ │                                    │ │  │
-│  │                      │             │ └────────────────────────────────────┘ │  │
-│  └──────────────────────┘             └────────────────────────────────────────┘  │
-│                                                                                   │
-└───────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### BexValue Variants
-
-- **`Opaque(Handle)`**: A live reference to a heap-allocated object. Use this when you want
-  to keep a reference without copying data. The handle acts as a GC root, keeping the object
-  alive. Resolve to owned data via `BexEngine::to_bex_external()` when needed.
-
-- **`External(BexExternalValue)`**: Fully owned data that doesn't reference the heap.
-  Use this when passing arguments to functions or when you've already converted a handle.
-  Contains all concrete value types: primitives (Null, Int, Float, Bool), collections
-  (String, Array, Map), and typed values (Instance, Variant, Union).
-
-### Conversion Flow
-
-```
-Arguments:   BexValue → resolve to Value (allocation in VM heap if needed)
-Returns:     Value → BexValue (Opaque for heap objects, External for primitives)
-External Op: BexValue args → perform I/O → BexValue result
-```
-
-## Concurrency Scenarios
-
-### Scenario 1: Independent Concurrent Calls
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Thread 1                          Thread 2                      │
-│  ┌─────────────────────────┐      ┌─────────────────────────┐    │
-│  │ engine.call("foo", [])  │      │ engine.call("bar", [])  │    │
-│  │   │                     │      │   │                     │    │
-│  │   ▼                     │      │   ▼                     │    │
-│  │ VM-1 (TLAB chunk 0-1023)│      │ VM-2 (TLAB chunk 1024+) │    │
-│  │   │                     │      │   │                     │    │
-│  │   │  No contention!     │      │   │  No contention!     │    │
-│  │   │  Exclusive TLAB     │      │   │  Exclusive TLAB     │    │
-│  │   ▼                     │      │   ▼                     │    │
-│  │ Result-1                │      │ Result-2                │    │
-│  └─────────────────────────┘      └─────────────────────────┘    │
-│                                                                  │
-│  Objects never shared between independent calls (no races)       │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Scenario 2: GC During Concurrent Execution
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  VM-1 (epoch 5)     VM-2 (epoch 5)     VM-3 (epoch 6, new)       │
-│  ┌───────────┐      ┌───────────┐      ┌───────────┐             │
-│  │ executing │      │ executing │      │ executing │             │
-│  └─────┬─────┘      └─────┬─────┘      └─────┬─────┘             │
-│        │                  │                  │                   │
-│        │  GC requested (epoch → 6)           │                   │
-│        │                  │                  │                   │
-│        ▼                  ▼                  │                   │
-│  ┌───────────┐      ┌───────────┐            │                   │
-│  │ await →   │      │ await →   │            │ continues         │
-│  │ PARK      │      │ PARK      │            │ normally          │
-│  └─────┬─────┘      └─────┬─────┘            │                   │
-│        │                  │                  │                   │
-│        └──────────┬───────┘                  │                   │
-│                   ▼                          │                   │
-│            ┌─────────────┐                   │                   │
-│            │ GC runs     │                   │                   │
-│            │ (safe)      │                   │                   │
-│            └──────┬──────┘                   │                   │
-│                   │                          │                   │
-│        ┌──────────┴───────┐                  │                   │
-│        ▼                  ▼                  │                   │
-│  ┌───────────┐      ┌───────────┐            │                   │
-│  │ RESUME    │      │ RESUME    │            │                   │
-│  │ (stacks   │      │ (stacks   │            │                   │
-│  │ updated)  │      │ updated)  │            │                   │
-│  └───────────┘      └───────────┘            │                   │
-│                                                                  │
-│  New-epoch calls proceed without waiting for old GC              │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-## Thread Safety Summary
-
-| Component | Mechanism | Notes |
-|-----------|-----------|-------|
-| Heap sharing | `Arc<BexHeap>` | Cheap clones for each VM |
-| Object writes | TLAB exclusivity | Lock-free within reserved region |
-| GC coordination | Epoch-based safepoints | VMs park at await points |
-| Handle access | `RwLock<HashMap>` | Concurrent reads, exclusive GC updates |
-| External ops | `Mutex<ResourceRegistry>` | Clone Arc before release |
-
-## Crate Dependencies
-
-```
-bex_vm_types (no deps, defines Value/Object/ObjectIndex)
-      │
-      ├──────────────┐
-      ▼              ▼
-  bex_heap       sys_types (leaf, external operations)
-      │              │
-      ▼              │
-   bex_vm            │
-      │              │
-      └──────┬───────┘
-             ▼
-        bex_engine (orchestrates everything)
-```
+Focused concurrency, cancellation, future, early-yield, identity, and GC regression tests live under `crates/bex_engine/tests/`.

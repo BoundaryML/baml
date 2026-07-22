@@ -1,12 +1,10 @@
 ---
-date: 2026-07-16
+date: 2026-07-22
 repository: baml4
 ---
 # Java packaging & generated-code placement
 
-How BAML ships today (ground-truthed against canary), and the plan for
-the Java/JVM bridge. Companion to `ref-java-state-of-completeness.md`
-and `ref-java-codegen-conventions.md`.
+How BAML ships today (ground-truthed against canary), including the Java/JVM bridge. Companion to `ref-java-state-of-completeness.md` and `ref-java-codegen-conventions.md`.
 
 ## How BAML ships today (new system)
 
@@ -37,30 +35,18 @@ build toolchain/wrapper/SDKs → publish PyPI/npm/pkg.boundaryml.com/
 homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
 (canary→`latest`, nightly→`nightly`).
 
-## Java plan
+## Java runtime packaging
 
-**One Maven Central artifact family: `com.boundaryml:baml-bridge`.**
+The Java release publishes three Maven Central coordinates at one family version: `com.boundaryml:baml-bridge`, `com.boundaryml:baml-gradle-plugin`, and `com.boundaryml:baml-bridge-kotlin` (detailed below).
 
 - **Main JAR** (pure Java): `BamlRuntime`, error hierarchy,
   `BamlStream`, media wrappers, protobuf codec.
-- **Per-platform native JARs** carrying the `bridge_java` jni-rs
-  cdylib (same 8-target matrix as Node). Platform selection — the
-  Maven answer to npm's `optionalDependencies` — is **Gradle Module
-  Metadata variants**, so a plain
-  `implementation("com.boundaryml:baml-bridge:…")` resolves the
-  right native JAR by OS/arch attributes. Maven-proper users use the
-  `os-maven-plugin` classifier pattern (the gRPC/netty convention).
-  No all-platforms fat JAR: at engine sizes that would be an
-  unreasonable download.
+- **Per-platform native JARs** carrying the `bridge_java` jni-rs cdylib use `natives-<platform>` classifiers over the 8-target matrix in `release/platforms.json`. The Gradle plugin detects the build host and injects the matching classifier; consumers managing dependencies themselves select one explicitly. Automatic Gradle Module Metadata platform variants are not implemented. There is no all-platforms fat JAR.
 - **Channels:** Maven has no dist-tags; canary = plain version
   (`0.15.0`), nightly = suffixed version
   (`0.15.0-nightly.YYYYMMDD`). Publish job slots into
   `release-baml-language.yml` as `build-java-sdk` / `publish-maven`.
-- **CLI:** covered by the wrapper/toolchain tier; nothing to ship via
-  Maven. What Java *does* need is a `"java"` `OutputType` variant in
-  `baml_codegen_types::generator_fields` plus a dispatch arm in
-  `crates/baml_cli/src/generate.rs` calling
-  `sdkgen_java::to_source_code_with_bytecode`.
+- **CLI:** covered by the wrapper/toolchain tier; nothing ships via Maven. `output_type = "java"` is implemented in `baml_codegen_types::generator_fields` and dispatched by `baml_cli` to `sdkgen_java::to_source_code_with_bytecode`.
 
 ## Where generated code goes in a Java project
 
@@ -82,34 +68,11 @@ Three placement patterns, in order of adoption:
   with one-time boilerplate `build.gradle.kts`; the app depends on
   `project(":baml-sdk")`. Keeps app `src/` pristine; generated code
   gets its own compilation unit.
-- **C (SHIPPED 2026-07-16): a Gradle plugin** (`com.boundaryml.baml`, at `sdks/java/gradle-plugin/`), the
-  protobuf-gradle-plugin model: a `generateBaml` task with declared
-  inputs (`baml_src/**`, `baml.toml`, toolchain version) and outputs
-  (`build/generated/sources/baml/java/main`), wired into
-  `compileJava` and the source sets. Generation happens at **build
-  time, incrementally** — Gradle skips the task as `UP-TO-DATE` when
-  no `.baml` input changed; running the built program never invokes
-  generation. v0 of the plugin shells out to the installed `baml`
-  wrapper (which already owns version resolution), erroring helpfully
-  when missing; toolchain self-bootstrap is a later enhancement.
-  Estimated at 2–3 days including publishing; deliberately sequenced
-  **after** the first end-to-end slice works, because it wraps a
-  `generate --output_type java` that must exist and be demonstrable
-  first. A/B and C are compatible: A/B ship in bridge week, C is the
-  first fast-follow.
+- **C (shipped): a Gradle plugin** (`com.boundaryml.baml`, at `sdks/java/gradle-plugin/`), the protobuf-gradle-plugin model: a `generateBaml` task with declared inputs (`baml_src/**`, `baml.toml`, toolchain version) and outputs (`build/generated/sources/baml/java/main`), wired into `compileJava` and the source sets. Generation happens at **build time, incrementally** — Gradle skips the task as `UP-TO-DATE` when no `.baml` input changed; running the built program never invokes generation. v0 of the plugin shells out to the installed `baml` wrapper (which already owns version resolution), erroring helpfully when missing; toolchain self-bootstrap remains a possible enhancement. The plugin cleans its owned output directory before generation, preventing stale Java files after BAML types are renamed or deleted.
 
 ## Open items
 
-- **Stale-file hazard (upstream, affects all languages, bites Java
-  hardest):** `generate` does not clean its output dir; a renamed or
-  deleted BAML class leaves a stale `.java` that still compiles into
-  the user's app. Since generate owns `baml_sdk/` outright,
-  clean-before-write is safe — proposed as an upstream fix alongside
-  the `"java"` OutputType wiring.
-- Gradle Plugin Portal publishing needs an org account (coordinate
-  with the CI/publishing owner); nightly channel on the Portal is
-  awkward (immutable versions) — likely nightly via Maven-style
-  suffixed versions only.
+- **Stale-file hazard (upstream, affects all languages, bites Java hardest):** `generate` does not clean its output dir; a renamed or deleted BAML class leaves a stale `.java` that still compiles into the user's app. Since generate owns `baml_sdk/` outright, clean-before-write is safe. The Gradle plugin already cleans its owned build output before each generation; direct `baml generate` output still needs the upstream clean-before-write policy.
 - Maven-plugin twin of the Gradle plugin: post-GA.
 
 
@@ -135,13 +98,7 @@ The Gradle plugin (`com.boundaryml.baml`) ships through two channels at the fami
   }
   ```
 
-The plugin manages the consumer's dependencies (one-liner UX): it injects the
-version-locked `com.boundaryml:baml-bridge` implementation dep and the host-detected
-`natives-<platform>` classifier (overrides: `baml { nativePlatforms }` incl. `"all"`,
-`baml { manageDependencies.set(false) }`; a pre-existing explicit baml-bridge dep
-suppresses injection). Plugin version == bridge version by construction, published
-from one pipeline. The quickstart example flips to the pure one-liner once the first
-plugin version is live on a registry.
+The plugin manages the consumer's dependencies (one-liner UX): it injects the version-locked `com.boundaryml:baml-bridge` implementation dep and the host-detected `natives-<platform>` classifier (overrides: `baml { nativePlatforms }` incl. `"all"`, `baml { manageDependencies.set(false) }`; a pre-existing explicit baml-bridge dep suppresses injection). Plugin version == bridge version by construction, published from one pipeline. The quickstart uses the Central `pluginManagement` stanza for nightlies; canary/stable Portal releases use the bare `plugins {}` resolution path.
 
 
 ## Maven Central artifacts (family, one pipeline, one version)

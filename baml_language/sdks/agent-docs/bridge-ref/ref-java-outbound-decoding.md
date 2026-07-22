@@ -1,5 +1,5 @@
 ---
-date: 2026-07-20
+date: 2026-07-22
 repository: baml4
 source_paths:
   - baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/internal/ProtoReader.java
@@ -18,26 +18,18 @@ source_paths:
   - baml_language/sdks/java/baml_bridge/src/test/java/baml_bridge/ErrorMappingTest.java
   - baml_language/sdks/java/baml_bridge/src/test/java/baml_bridge/BamlCancelledErrorTest.java
   - baml_language/sdks/java/baml_bridge/src/test/java/baml_bridge/BamlCallContextTest.java
-mirrors: baml_language/sdks/agent-docs/bridge-ref/ref-python-outbound-decoding.md
 ---
 
 # Java Outbound Return Decoding
 
-This file records how the runtime bridge decodes values returned from the BAML
-engine back into generated Java SDK objects. It is the **1:1 Java mirror of**
-`ref-python-outbound-decoding.md` and keeps the same section structure, order,
-and heading names (Python-specific names are adapted to their Java analogs:
-`decode_call_result` → `ProtoReader.decodeOutboundResult`, `BamlTypeMap` →
-`TypeRegistry`, `BamlPyHandle` → `BamlHandle`, and so on).
+This file records how the runtime bridge decodes values returned from the BAML engine back into generated Java SDK objects. It follows the Python bridge-reference section structure, with Python-specific names adapted to their Java analogs: `decode_call_result` → `ProtoReader.decodeOutboundResult`, `BamlTypeMap` → `TypeRegistry`, `BamlPyHandle` → `BamlHandle`, and so on.
 
 **Conventions used in this doc:**
 
 - `> ⚠ **Deviation from Python:** …` flags every point where the Java bridge
   behaves differently from the Python reference. These are the load-bearing
   cells for the side-by-side decision review.
-- `**NOT YET IMPLEMENTED IN JAVA**` marks a capability the Python bridge decodes
-  today but the Java bridge does not yet, with the decided/open status from
-  `thoughts/antonio/java-function-calls-decisions.md`.
+- `**NOT YET IMPLEMENTED IN JAVA**` marks a capability the current Java bridge does not decode.
 - Every behavior is cited to Java `file:line`. Nothing here is invented — it is
   drawn from the decoder source and the offline codec/error tests that pin it
   (`WireCodecTest`, `ErrorMappingTest`, `BamlCancelledErrorTest`,
@@ -475,29 +467,10 @@ return instance;
 >
 > Two consequences:
 >
-> - **All-or-nothing binding.** If any arg falls outside `BamlType`'s minimal
->   grammar (int/string/bool/float primitives, `of(Class)` for a registered
->   class/enum, and reified `of(Class, …)` generics — `BamlType.java:36-43,
->   172-233`), `fromWireTy` returns `null` and the *entire* binding is skipped, to
->   keep De Bruijn positions aligned. Pinned by
->   `WireCodecTest.decode_class_value_out_of_grammar_type_arg_skips_binding` (a
->   `list<int>` arg drops the whole list).
-> - **Weak identity.** The side-table holds the instance only weakly and keys on
->   `System.identityHashCode` (generated value classes may be records with value
->   equality, so two distinct-but-equal instances must not collide);
->   `WeakIdentityKey` expunges cleared entries via a `ReferenceQueue`
->   (`TypeRegistry.java:329-404`). `typeArgsOf` returns `List.of()` for an
->   unbound instance (pinned by `type_args_of_unbound_instance_is_empty`).
+> - **All-or-nothing binding.** `BamlType` supports int/string/bool/float primitives, class/enum and reified generic class tokens, list/map/optional/union tokens, and literal tokens. If any arg falls outside that grammar (for example media/function/rust types or unsupported primitive kinds), `fromWireTy` returns `null` and the *entire* binding is skipped, to keep De Bruijn positions aligned. Pinned by `WireCodecTest.decode_class_value_out_of_grammar_type_arg_skips_binding` (a media arg drops the whole list).
+> - **Weak identity.** The side-table holds the instance only weakly and keys on `System.identityHashCode` (generated value classes have value equality, so two distinct-but-equal instances must not collide); `WeakIdentityKey` expunges cleared entries via a `ReferenceQueue` (`TypeRegistry.java:329-404`). `typeArgsOf` returns `List.of()` for an unbound instance (pinned by `type_args_of_unbound_instance_is_empty`).
 >
-> The emitted **`bamlTypeArgs()`** accessor delegates to `typeArgsOf`
-> (`TypeRegistry.java:315-322`); it is generated on every generic value class
-> alongside a reified `of(BamlType …, T value)` factory (**landed `861414d55`**
-> on the `3991c4fd4` runtime substrate — see `ref-java-examples.md`, "Generics").
-> Pinned by `decode_class_value_binds_reified_type_args` /
-> `…_nested_reified_type_arg` / `…_without_type_args_has_empty_side_table`.
-> **Status:** the readback-naming question is resolved (`bamlTypeArgs()`); the
-> token grammar stays minimal by design (an out-of-grammar arg degrades
-> gracefully rather than erroring).
+> The emitted **`bamlTypeArgs()`** accessor delegates to `typeArgsOf` (`TypeRegistry.java:315-322`); it is generated on every generic value class alongside a reified `of(BamlType …, T value)` factory (**landed `861414d55`** on the `3991c4fd4` runtime substrate — see `ref-java-examples.md`, "Generics"). Pinned by `decode_class_value_binds_reified_type_args` / `…_nested_reified_type_arg` / `…_without_type_args_has_empty_side_table`. **Status:** the readback-naming question is resolved (`bamlTypeArgs()`); the token grammar is deliberately bounded by the public `BamlType` constructors (an out-of-grammar arg degrades gracefully rather than erroring).
 
 ### Enum decoding
 
@@ -619,13 +592,7 @@ registry:
   `bindReifiedTypeArgs` retains any wire `type_args` in the side-table
   (`:814-818`).
 
-Outbound generic args use `BamlTy` metadata. `BamlType.fromWireTy`
-(`BamlType.java:172-233`) is the runtime mirror of the Java codegen's type
-lowering; it recognizes only the minimal grammar (primitive int/string/bool/float,
-`class_ty`, `enum`) and returns `null` for anything else — the all-or-nothing
-gate described above. There is no `cls[args...]` subscript step (Java generics are
-erased); the tokens are simply retained for the emitted `bamlTypeArgs()`
-accessor (which reads them back from the side-table).
+Outbound generic args use `BamlTy` metadata. `BamlType.fromWireTy` is the runtime mirror of the Java codegen's type lowering; it recognizes primitives, `class_ty`, `enum`, list, map, optional, union, and literal tokens and returns `null` for unsupported arms or composites — the all-or-nothing gate described above. There is no `cls[args...]` subscript step (Java generics are erased); the tokens are simply retained for the emitted `bamlTypeArgs()` accessor (which reads them back from the side-table).
 
 ## Handles
 
@@ -977,12 +944,7 @@ by the decoder. The Java-specific twist is unions — type-directed, with the wi
   (`TypeRegistry.typeArgsOf`), read back through the emitted `bamlTypeArgs()`
   accessor — **not** parameterized onto the class the way Python subscripts a
   Pydantic symbol.
-- `BexExternalValue::Instance` carries `type_args`, and `external_to_outbound`
-  encodes them via `runtime_ty_to_proto_ty`, so reified generics survive on the
-  wire. Java retains them all-or-nothing (an out-of-grammar arg poisons the whole
-  binding, to keep De Bruijn positions aligned). Even with empty `type_args`,
-  normal class returns reconstruct via the concrete FQN plus the canonical
-  constructor.
+- `BexExternalValue::Instance` carries `type_args`, and `external_to_outbound` encodes them via `runtime_ty_to_proto_ty`, so reified generics survive on the wire. Java retains them all-or-nothing (an unsupported arg poisons the whole binding, to keep De Bruijn positions aligned). Even with empty `type_args`, normal class returns reconstruct via the concrete FQN plus the canonical constructor.
 - Union wrappers **do** survive into Java values (as registered nominal records
   or generic `Union{k}.Arm{i}`), except for erased literal-over-one-base unions,
   which collapse to the bare value. This is the opposite of Python, where union

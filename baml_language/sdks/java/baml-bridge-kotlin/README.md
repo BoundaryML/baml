@@ -90,7 +90,7 @@ runtime locally while the published POM carries the Maven coordinate):
 ```sh
 # JDK + gradle from the repo-root mise.toml; share the repo Gradle caches.
 export GRADLE_USER_HOME=<repo>/baml_language/target/gradle-home-release
-mise exec -- gradle -p sdks/java/baml-bridge-kotlin test
+mise exec -- gradle -p baml_language/sdks/java/baml-bridge-kotlin test
 ```
 
 Tests run fully offline (the union/fold and `withBamlContext` paths need no

@@ -1,7 +1,6 @@
 ---
-date: 2026-07-20
+date: 2026-07-22
 repository: baml4
-mirrors: sdks/agent-docs/bridge-ref/ref-python-examples.md
 source_fixtures:
   - baml_language/sdk_tests/fixtures/type_shapes/baml_src
   - baml_language/sdk_tests/crates/java/type_shapes/generated/baml_sdk
@@ -18,28 +17,14 @@ runtime:
 
 # Java Codegen Examples From SDK Tests
 
-This file records the Java output that the generated SDK tests exercise today.
-It is written as a **section-for-section mirror of `ref-python-examples.md`**:
-the same headings, the same order, the same fixtures — so the two can be read
-side by side to review every place the Java surface diverges from the Python
-prior art. Each section shows the BAML source (where the Python doc shows it),
-then the **real generated Java** pulled from
-`sdk_tests/crates/java/{type_shapes,function_calls}/generated/baml_sdk/**`
-(regenerate with `bash sdk_tests/crates/java/setup.sh`), then call-site usage.
+This file records the Java output that the generated SDK tests exercise today. It follows the Python bridge-reference section order so the language surfaces can be compared directly. Each section shows the BAML source, then the **real generated Java** pulled from `sdk_tests/crates/java/{type_shapes,function_calls}/generated/baml_sdk/**` (regenerate with `bash sdk_tests/crates/java/setup.sh`), then call-site usage.
 
 **Flag conventions**
 
 - `> ⚠ **Deviation from Python:** …` — a place where the Java surface is
   deliberately shaped differently from Python, with the one-sentence reason and
   an emitter/runtime `file:line` citation so the review can jump to the code.
-- `**NOT YET IMPLEMENTED IN JAVA**` — a capability the Python doc documents that
-  Java has not built yet. The line records the **decided design** (from
-  `thoughts/antonio/java-function-calls-decisions.md`) or the **open decision**.
-
-Every claim below cites code that was read or output that is quoted; no behavior
-is inferred. Snippets are re-quoted from the current generated trees; line
-numbers are indicative (last audited 2026-07-20, after the typed-descriptor,
-host-callable, and streaming landings).
+Every claim below cites code that was read or output that is quoted; no behavior is inferred. Snippets are re-quoted from the current generated trees; line numbers are indicative (last audited 2026-07-22, after the typed-descriptor, host-callable, and streaming landings).
 
 **One structural deviation applies to the entire document**, so it is stated
 once here rather than repeated per section:
@@ -381,15 +366,7 @@ public sealed interface Union2<T0, T1> extends BamlUnion permits Union2.Arm0, Un
 }
 ```
 
-> ⚠ **Deviation from Python:** Python has no compile-time union type — a field is
-> `typing.Union[int, str]` and the runtime Pydantic model discriminates at
-> validation. Java has **no runtime union**, so an anonymous union renders as a
-> **fixed member `Union2`..`Union10`** (`baml_bridge/Union2.java`…`Union10.java`),
-> generic over the arm types in **declaration order** (null arm stripped), and
-> **decode is type-directed** via the per-binding descriptor token
-> (`union[int;string]`). Arity > 10 falls back to `java.lang.Object`.
-> `translate_ty.rs:198-233` (`translate_union`), `304-347` (`descriptor_token`);
-> arm family `baml_bridge/Union2.java:1-25`.
+> ⚠ **Deviation from Python:** Python has no compile-time union type — a field is `typing.Union[int, str]` and the runtime Pydantic model discriminates at validation. Java has **no runtime union**, so an anonymous union renders as a **fixed member `Union2`..`Union10`** (`baml_bridge/Union2.java`…`Union10.java`), generic over the arm types in **declaration order** (null arm stripped), and **decode is type-directed** via the per-binding descriptor (`BamlType.union(BamlType.INT, BamlType.STRING)`). Arity > 10 falls back to `java.lang.Object`. `translate_ty.rs` (`translate_union`, `descriptor_expr`); arm family `baml_bridge/Union2.java:1-25`.
 
 > ⚠ **Deviation from Python:** `singleton_unwrap` (`int | int` after
 > normalization) is a bare `long`, and literal unions over one base erase to the
@@ -838,15 +815,7 @@ that is itself a `Throwable`): `baml_bridge.BamlError` (extends `RuntimeExceptio
 carries the decoded value on `.value()` with `.baml_trace()` / `.class_name()`
 (`BamlError.java`).
 
-> ⚠ **Deviation from Python (error mapping, D2 — runtime, partially landed):**
-> `baml.errors.TypeMismatch` remaps to `IllegalArgumentException` (the only
-> remap, 1:1 with Python's `TypeError`); BAML trace frames are synthesized into
-> real `StackTraceElement`s; and **`BamlPanic` re-parents to `Error`**
-> (`BamlPanic.java:20`) — the JVM analog of Python's `BamlPanic` subclassing
-> `BaseException`, so a bare `catch (Exception)` does not swallow a panic.
-> Async engine-abort cancellation surfaces as `BamlCancelledError extends
-> CancellationException` (`isCancelled()==true`, unwrapped from `join()`/`get()`);
-> sync cancel stays `BamlPanic(Cancelled)` (`BamlCancelledError.java:26-54`).
+> ⚠ **Deviation from Python (error mapping, D2 — runtime):** `baml.errors.TypeMismatch` remaps to `IllegalArgumentException` (the only remap, 1:1 with Python's `TypeError`); BAML trace frames are synthesized into real `StackTraceElement`s; and **`BamlPanic` re-parents to `Error`** (`BamlPanic.java:20`) — the JVM analog of Python's `BamlPanic` subclassing `BaseException`, so a bare `catch (Exception)` does not swallow a panic. Async engine-abort cancellation surfaces as `BamlCancelledError extends CancellationException` (`isCancelled()==true`, unwrapped from `join()`/`get()`); sync cancel stays `BamlPanic(Cancelled)` (`BamlCancelledError.java:26-54`).
 
 ## Host Callable Types
 
@@ -894,9 +863,7 @@ public static java.lang.String call_with_typed_throws_propagating(
 > omitted). `translate_ty.rs:403-435` (arity-≤-2 `java.util.function`),
 > `translate_callable` fallback + emitter (`IntOptCallback.java`).
 
-**Runtime host-callable dispatch (the engine calling back *into* the host):**
-**LANDED** (commit `202883518`, per the owner-accepted A1–F1 brief). The whole
-slice is wired end-to-end — `function_calls` is 154/0:
+**Runtime host-callable dispatch (the engine calling back *into* the host):** **LANDED** (commit `202883518`, per the owner-accepted A1–F1 brief). The whole slice is wired end-to-end — the current fixture inventory is 157 run / 153 pass / 0 fail / 4 intentional skips:
 
 - **Registry (A1):** a Java-side `ConcurrentHashMap<Long,Object>` in `BamlFfi`
   holds callables *and* opaque throwables under one keyspace

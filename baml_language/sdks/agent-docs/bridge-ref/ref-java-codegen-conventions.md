@@ -1,22 +1,10 @@
 ---
-date: 2026-07-15
+date: 2026-07-22
 repository: baml4
 ---
-# Java codegen + test-porting conventions (provisional)
+# Java codegen + test-porting conventions
 
-These are the generated-API conventions the JUnit parity tests in
-`sdk_tests/crates/java/` are written against. They are **provisional
-design commitments** — the tests encode them test-first, and the
-`sdkgen_java` emitter must satisfy them (or this doc and the tests
-change together). Companion to `ref-java-state-of-completeness.md`.
-
-Since first written, several of these have been **owner-decided**
-(D1 cancellation, D2 error mapping) or shipped and parity-tested; each
-such rule is tagged **[decided]**. Rules still awaiting the owner are
-tagged **[open]** with their options and must **not** be resolved here.
-Rationale and the full decided/open log live in the decisions doc
-`thoughts/antonio/java-function-calls-decisions.md` (this file is the
-rules digest, not the rationale log).
+These are the generated-API conventions implemented by `sdkgen_java` and exercised by the JUnit parity tests in `sdk_tests/crates/java/`. Change this document, the emitter, and the tests together. Companion to `ref-java-state-of-completeness.md`.
 
 ## Generated API shape
 
@@ -145,55 +133,14 @@ rules digest, not the rationale log).
     (`BamlFfi.java:371-417`), preserving the decided contract across JDKs.
     New JNI export `nativeCancelFunctionCall` wraps
     `bridge_cffi::cancel_function_call_by_id` (`BamlFfi.java:118`).
-- **Explicit generics — `BamlType` / `BamlTypes`** (D3): the runtime
-  substrate is **[decided]** and shipped (no generated surface reaches it
-  yet); two questions on the emitter surface stay **[open]**.
-  - **[decided]** Call-site binding is a **named bag**
-    `BamlTypes.of("T", BamlType.INT).and("U", …)` passed as a trailing
-    overload arg — 1:1 with the wire's named `BamlTyArg` bindings, partial
-    binding allowed, duplicate name rejected, insertion (De Bruijn) order
-    preserved: enclosing-class params first, then the callee's own
-    `<…>` params (`BamlTypes.java`).
-  - **[decided]** Token grammar is **minimal**: primitive constants
-    `BamlType.INT/STRING/BOOL/FLOAT`, `of(Class)` for a registered
-    generated class/enum, `of(Class, BamlType…)` for a reified generic
-    class; value equality (`BamlType.java`). `of(Class)` is **bimodal on
-    the wire** — enums lower to `BamlTy.enum`, classes to
-    `BamlTy.class_ty` (mirrors Python's `_fill_wire_ty`,
-    `BamlType.java:93-106`).
-  - **[decided]** Wire: the bag encodes as `CallFunctionArgs.type_args`;
-    when absent the output is **byte-identical** to the pre-generics
-    encoder (`ProtoWriter.encodeCallFunctionArgs`,
-    `ProtoWriter.java:110`). The 6-arg `callSync`/`callAsync` that thread
-    the bag are **package-private and not yet reached from generated
-    code** — the emitter surface is deferred (`BamlFfi.java:213`, `290`).
-  - **[decided]** Decode: an outbound `class_value` carrying `type_args`
-    retains its reified tokens in a **weak-identity-keyed** side-table
-    (`TypeRegistry.typeArgsOf`/`bindTypeArgs`,
-    `TypeRegistry.java:315-362`; identity-keyed because value-class
-    records compare equal, so a `WeakHashMap` would collide distinct
-    instances). Binding is **all-or-nothing** to keep De Bruijn positions
-    aligned: because the token grammar is minimal, a reified arg that is a
-    list/map/union/optional/literal produces **no** side-table entry (a
-    nested out-of-grammar arg poisons the whole token —
-    `BamlType.classFromWire`, `BamlType.java:229-231`).
-  - **[decided]** D3 readback (owner, 2026-07-17): per-instance
-    `bamlTypeArgs()` delegating to the side-table, with the `Fns$`-style
-    yield-to-user escape (`bamlTypeArgs$()`) iff a BAML field claims the
-    name. Reified factories `of(BamlType…, fields…)` bind on construct.
-  - **[decided]** D3 overloads (owner, 2026-07-17): trailing-overload
-    matrix, fixed order `f(required…, opts?, types?, ctx?)`; only
-    combinations that exist for the callable are emitted (worst case 16
-    methods for generic+optional). Synthetic param names (`types`, `ctx`)
-    yield to user arguments via trailing-`$` escape.
-  - **[decided]** token grammar (owner: "do B now"): FULL —
-    list/map/optional/union/literal tokens with wire round-trip; the
-    side-table binds whenever every wire arg is representable (residual
-    skips: media/function/rust_type/etc. arms and null/bytes primitive
-    kinds, still all-or-nothing to keep positions aligned).
-  - Known wart: `BamlType.toWireTy()`/`fromWireTy` are `public` only
-    because the codec lives in `baml_bridge.internal`; hiding them needs
-    a package reshuffle.
+- **Explicit generics — `BamlType` / `BamlTypes`** (shipped): the runtime and generated surfaces both support explicit named type bindings and reified class instances.
+  - **[decided]** Call-site binding is a **named bag** `BamlTypes.of("T", BamlType.INT).and("U", …)` passed as a trailing overload arg — 1:1 with the wire's named `BamlTyArg` bindings, with partial binding allowed, duplicate names rejected, and insertion (De Bruijn) order preserved: enclosing-class params first, then the callee's own `<…>` params (`BamlTypes.java`).
+  - **[decided]** The token grammar includes int/string/bool/float primitives, registered class and enum tokens, reified generic class tokens, list/map/optional/union tokens, and literal tokens, all with value equality and wire round-tripping (`BamlType.java`). `of(Class)` is **bimodal on the wire** — enums lower to `BamlTy.enum`, classes to `BamlTy.class_ty`.
+  - **[decided]** Wire: the bag encodes as `CallFunctionArgs.type_args`; when absent the output is **byte-identical** to the pre-generics encoder (`ProtoWriter.encodeCallFunctionArgs`, `ProtoWriter.java:110`). Generated generic functions, factories, and instance methods expose trailing `BamlTypes` overloads that reach the bag-aware `callSync`/`callAsync` path (`emit.rs`, `render_binding_method`).
+  - **[decided]** Decode: an outbound `class_value` carrying `type_args` retains its reified tokens in a **weak-identity-keyed** side-table (`TypeRegistry.typeArgsOf`/`bindTypeArgs`, `TypeRegistry.java:315-362`; identity-keyed because generated value classes compare by value, so a `WeakHashMap` would collide distinct equal instances). Binding is **all-or-nothing** to keep De Bruijn positions aligned: the side-table binds whenever every wire arg is representable, while residual unsupported media/function/rust-type arms and null/bytes/bigint primitive kinds poison the entire binding.
+  - **[decided]** D3 readback (owner, 2026-07-17): per-instance `bamlTypeArgs()` delegates to the side-table, with the `Fns$`-style yield-to-user escape (`bamlTypeArgs$()`) iff a BAML field claims the name. Reified factories `of(BamlType…, fields…)` bind on construction.
+  - **[decided]** D3 overloads (owner, 2026-07-17): trailing-overload matrix, fixed order `f(required…, opts?, types?, ctx?)`; only combinations that exist for the callable are emitted (worst case 16 methods for generic+optional). Synthetic param names (`types`, `ctx`) yield to user arguments via trailing-`$` escape.
+  - Known wart: `BamlType.toWireTy()`/`fromWireTy` are `public` only because the codec lives in `baml_bridge.internal`; hiding them needs a package reshuffle.
 - **Runtime init** **[decided]**: (idempotent) runtime initialization from
   embedded bytecode runs from a static initializer on the root `Baml` anchor —
   the Java analog of Python's root-package import side effect. Note the Java
@@ -291,20 +238,7 @@ rules digest, not the rationale log).
   handle field (`baml.fs.File._handle`, `baml.http.Response._body` →
   `InboundValue.handle{key, handle_type}`) — same drain contract for both
   (`ProtoWriter.java:200-210`, `259-260`).
-- **Host callables** **[open]** (TestHostCallables — nothing in place
-  Java-side yet; the whole slice, decisions A–F, awaits the owner). Load
-  the decisions doc for the end-to-end Python reference and the option
-  write-ups. In brief, still-open choices: (A) callback registration +
-  registry location (Java-side `ConcurrentHashMap<Long,Object>` vs
-  Rust-side `GlobalRef`); (B) dispatch executor/threading (dedicated
-  cached pool vs inline on a tokio worker); (C) async-callable detection
-  (detect `CompletableFuture` in the result handler vs a typed `*Async`
-  overload vs sync-only); (D) exception-identity mechanics for
-  `assertSame` round-trips; (E) `IntOptCallback`-style generated
-  `@FunctionalInterface` + non-null nested `Opts` bag for
-  optional/high-arity callables (replacing the current `java.lang.Object`
-  fallback in `translate_callable`); (F) 1-arg `BamlError(Object value)`
-  throw-direction ctor. Do not resolve here.
+- **Host callables** (shipped): arity-0/1/2 required-only signatures use `java.util.function.*`; optional or higher-arity signatures mint a generated `@FunctionalInterface extends BamlHostCallable` with a non-null nested `Opts` bag. `BamlFfi` retains callables and opaque thrown objects in a Java-side `ConcurrentHashMap<Long,Object>`, dispatches user code on a cached daemon executor, recognizes returned `CompletableFuture` values, and completes the engine host call asynchronously. A native `Throwable` round-trips through `baml.errors.HostCallable` and is rethrown by identity; `BamlError(Object value)` supports typed throws back into BAML.
 
 ## Test-porting rules (Python → JUnit 5)
 

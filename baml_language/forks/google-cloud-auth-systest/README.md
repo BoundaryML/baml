@@ -64,12 +64,7 @@ The script **asserts** every scenario and exits non-zero on failure, so it is ga
 
 ### Safety / teardown
 
-**Dev project only.** Every live tier resolves the active project and **refuses to run
-unless it is `sam-project-vertex-1`** (constant `DEV_PROJECT`), checked before any token is
-minted or VM created — so pointing it at another project aborts immediately with a non-zero
-exit and zero side effects. The cloud tier names resources `gcp-systest-e2e-<ts>-<pid>` and
-registers a single `trap … EXIT INT TERM` that always deletes the VM and GCS bucket, even on
-Ctrl-C or mid-run failure. Verify independently:
+**Dev project only.** Every live tier resolves the active project and **refuses to run unless it is `sam-project-vertex-1`** (constant `DEV_PROJECT`), checked before any token is minted or VM created — so pointing it at another project aborts immediately with a non-zero exit and zero side effects. The cloud tier names the VM `gcp-systest-e2e-<timestamp>-<pid>` and the staging bucket `gcp-systest-<project>-<epoch>`, then registers one `finally` cleanup path that deletes both resources even on Ctrl-C or mid-run failure. Verify independently:
 
 ```sh
 gcloud compute instances list --project sam-project-vertex-1 --filter="name~gcp-systest"

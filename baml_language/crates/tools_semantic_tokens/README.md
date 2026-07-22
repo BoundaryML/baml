@@ -33,8 +33,4 @@ color.
 
 ## How it works
 
-The tool reuses the inline-assertion test harness
-(`baml_lsp2_actions_tests::{parser, runner, updater}`) so the token output, the
-parsed expectations, and "accept" are identical to the Rust tests — there is no
-second implementation to drift. Rendering assumes ASCII source (token positions
-are byte offsets); the committed fixtures are ASCII.
+The tool reuses the inline-assertion test harness (`baml_lsp2_actions_tests::{parser, runner, updater}`) so the token output, parsed expectations, and "accept" are identical to the Rust tests. Snapshot locations remain one-based byte columns, while the viewer converts absolute byte offsets to UTF-16 offsets before slicing JavaScript strings, so non-ASCII source renders correctly.

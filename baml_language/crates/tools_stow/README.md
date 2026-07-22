@@ -4,7 +4,7 @@
 
   <a href="https://crates.io/crates/cargo-stow"><img src="https://img.shields.io/crates/v/cargo-stow.svg" alt="crates.io"></a>
   <a href="https://crates.io/crates/cargo-stow"><img src="https://img.shields.io/crates/d/cargo-stow.svg" alt="downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/crates/l/cargo-stow.svg" alt="license"></a>
+  <a href="../../../LICENSE"><img src="https://img.shields.io/crates/l/cargo-stow.svg" alt="license"></a>
 </div>
 
 ## Features

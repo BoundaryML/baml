@@ -1,228 +1,82 @@
-# BAML SDK Tests
+# BAML SDK tests
 
-The BAML programming language allows users to generate an SDK in their
-host language of choice with bindings to all their BAML types and functions. These
-are the e2e tests for those generated SDKs (which tests both the sdkgen logic and
-underlying FFI interfaces).
+These end-to-end tests generate SDKs from the shared fixtures in `sdk_tests/fixtures/`, overlay host-language tests from `sdk_tests/crates/<target>/<fixture>/customizable/`, prepare the target toolchain, and run compile/type/lint/runtime gates through Rust test scaffolds.
+
+## Running the suites
+
+Run SDK test crates with nextest from `baml_language/`. The nextest setup scripts are load-bearing: they build native bridges and prepare package-manager state before the generated Rust tests launch host tools.
 
 ```bash
-# Run every SDK test target across all fixtures.
-cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript -p sdk_test_typescript_web -p sdk_test_rust
+cargo nextest run \
+  -p sdk_test_python_pydantic2 \
+  -p sdk_test_typescript \
+  -p sdk_test_typescript_web \
+  -p sdk_test_rust \
+  -p sdk_test_java \
+  -p sdk_test_go \
+  -p sdk_test_cpp
+```
 
-# Run SDK tests for a specific generator.
-cargo nextest run -p sdk_test_python_pydantic2
-cargo nextest run -p sdk_test_typescript
-cargo nextest run -p sdk_test_typescript_web
-cargo nextest run -p sdk_test_rust
+Do not substitute `cargo test` for a clean end-to-end run. Plain Cargo does not execute the setup-script bindings in `.config/nextest.toml`, so local generated artifacts may be missing or stale.
 
-# Or run one host-language runner specifically.
+Each generated test name is `<fixture>::<gate>`. Useful focused examples:
+
+```bash
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 cargo nextest run -p sdk_test_typescript_web function_calls::vitest_web
 cargo nextest run -p sdk_test_typescript_web function_calls::vitest_workers
 cargo nextest run -p sdk_test_rust function_calls::cargo_test
+cargo nextest run -p sdk_test_java function_calls::junit
+cargo nextest run -p sdk_test_go function_calls::go_test
+cargo nextest run -p sdk_test_cpp function_calls::run
 ```
 
-> SDK tests are designed to be run using `cargo nextest run` and will > fail in
-> surprising ways if run using `cargo test`. Specifically, `cargo nextest run`
-> is designed to pick up changes in the BAML FFI layers and SDK generators. See
-> [DEVELOPMENT.md](./DEVELOPMENT.md) for more details.
-
-## Filtering pytest/vitest
-
-`cargo nextest` will not pass extra arguments through to `pytest` or `vitest`.
-To apply test filters to pytest/vitest, first run the `nextest` to set up the
-fixture's `generated/` directory, then run the host-language test directly:
+To pass a filter directly to pytest or Vitest, first run the nextest gate so `generated/` is current, then invoke the host tool in that generated directory:
 
 ```bash
-# pytest: run tests matching a keyword expression.
-cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 (cd sdk_tests/crates/python_pydantic2/function_calls/generated && uv run pytest -v -k optional_args)
-
-# vitest: run tests matching a test-name pattern in one runtime.
-cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 (cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.node.config.ts -t optional_args)
 (cd sdk_tests/crates/typescript_web/function_calls/generated && pnpm exec vitest run --config vitest.web.config.ts -t optional_args)
-(cd sdk_tests/crates/typescript_web/function_calls/generated && pnpm exec vitest run --config vitest.workers.config.ts -t optional_args)
-
-# rust: run tests matching a name filter (set CARGO_TARGET_DIR to reuse the
-# shared build cache the nextest-driven runs populate).
-cargo nextest run -p sdk_test_rust function_calls::cargo_test
-(cd sdk_tests/crates/rust/function_calls/generated && CARGO_TARGET_DIR=../../../../../target/sdk-rust-target cargo test optional_args)
 ```
 
-### Rust port gating
+## Target matrix
 
-A Rust test file that references a symbol the generator does not emit yet
-fails to *compile* (unlike pytest/vitest, where it just fails), so ported
-Rust tests are compiled only when the capability they exercise has landed:
-`generated/tests/main.rs` declares the enabled files as `#[path]` modules
-and lists the rest as `// LATER(<reason>)` comments. The single source of
-truth is the `TEST_MODS` table in `sdk_tests/harness_setup/src/rust.rs` —
-enabling a port is a one-line flip there.
+| Crate | Generated SDK / bridge family | Principal gates |
+|---|---|---|
+| `sdk_test_python_pydantic2` | Python Pydantic generator and Python bridge | Ruff, Pyright, pytest |
+| `sdk_test_typescript` | TypeScript generator and native Node bridge | generated ESM, `tsc`, Node Vitest, bridge package `attw` |
+| `sdk_test_typescript_web` | TypeScript generator and Web/Wasm bridge | generated ESM, `tsc`, Chromium Vitest, Workers Vitest |
+| `sdk_test_rust` | Rust generator and `baml_bridge` | rustfmt, Clippy, Cargo tests with the engine library |
+| `sdk_test_java` | Java generator, Java runtime jar, and JNI bridge | Gradle `compileTestJava`, JUnit for currently enabled fixtures |
+| `sdk_test_go` | Go generator and Go bridge | `go test` for the supported source fixtures and synthetic package-edge fixture |
+| `sdk_test_cpp` | C++ generator and C FFI bridge | compile and run scripts per fixture |
 
-## SDK implementation
+Some targets intentionally gate incomplete ports. Rust's source of truth is `TEST_MODS` in `sdk_tests/harness_setup/src/rust.rs`; Java's enabled fixture sets are in `sdk_tests/harness_setup/src/java.rs`.
 
-Each SDK is implemented in two parts: an FFI to provide core runtime bindings and an SDK generator to generate typed bindings.
-
-`sdk_test_python_pydantic2` provides coverage for
-
-  - `sdks/python/rust/bridge_python`
-  - `sdks/python/src/baml_bridge`
-  - `sdks/python/rust/sdkgen_python_pydantic2`
-
-`sdk_test_typescript` provides coverage for
-
-  - `sdks/typescript/bridge_typescript`
-  - `sdks/typescript/sdkgen_typescript_shared`
-
-`sdk_test_typescript_web` provides coverage for
-
-  - `sdks/typescript/bridge_typescript_web`
-  - `sdks/typescript/sdkgen_typescript_shared`
-
-`sdk_test_rust` provides coverage for
-
-  - `sdks/rust/bridge_rust`
-  - `sdks/rust/sdkgen_rust`
-
-## Directory structure
-
-There are two dimensions for SDK tests: generators and fixtures.
-
-There is one Rust crate per SDK generator:
-
-  - `sdk_test_python_pydantic2` for the `python/pydantic2` generator
-  - `sdk_test_typescript` for the Node generator and native bridge
-  - `sdk_test_typescript_web` for the Web generator and browser/Workers runtimes
-  - `sdk_test_rust` for the `rust` generator
-
-Each crate fans out over every **fixture** in `sdk_tests/fixtures/`.
-Each fixture is a single `baml_src/` tree that contains `.baml` source
-for testing different aspects of each SDK.
-
-Host-language test code for each generated SDK/fixture lives in the
-corresponding `customizable/` tree.
+## Layout
 
 ```text
 sdk_tests/
-|-- fixtures/                             # generator-agnostic input only -- baml_src/ and nothing else
-|   |-- function_calls/baml_src/          # .baml source (input to every generator)
-|   |-- llm_functions/baml_src/
-|   `-- type_shapes/baml_src/
-`-- crates/                               # one crate per generator target; per-fixture content nested inside
-    |-- python_pydantic2/
-    |   |-- Cargo.toml                    # name = "sdk_test_python_pydantic2"
-    |   |-- function_calls/
-    |   |   |-- customizable/             # tracked: *.py -- symlinked into generated/
-    |   |   `-- generated/                # gitignored: build output
-    |   |       |-- baml_sdk/             # codegen output
-    |   |       |-- pyproject.toml        # name = "sdk-tests-python-pydantic2-docstrings-etc"
-    |   |       |-- .venv/                # uv sync output
-    |   |       `-- *.py                  # symlinked from ../customizable/
-    |   |-- llm_functions/
-    |   |   |-- customizable/
-    |   |   `-- generated/                # same shape
-    |   `-- type_shapes/
-    |       |-- customizable/
-    |       `-- generated/
-    |-- typescript/
-    |   |-- Cargo.toml                    # name = "sdk_test_typescript"
-    |   |-- function_calls/
-    |   |   |-- customizable/             # tracked: shared *.test.ts with inline runtime filters
-    |   |   `-- generated/                # gitignored: build output
-    |   |       |-- node/baml_sdk/        # Node generator + copied canonical tests
-    |   |       |-- package.json          # native bridge + Node runner tools
-    |   |       |-- tsconfig.node.json
-    |   |       |-- vitest.node.config.ts
-    |   |       `-- node_modules/         # pnpm install output
-    |-- rust/
-    |   |-- Cargo.toml                    # name = "sdk_test_rust"
-    |   |-- function_calls/
-    |   |   |-- customizable/             # tracked: *.rs -- symlinked into generated/customizable/
-    |   |   `-- generated/                # gitignored: the generated SDK is itself a Cargo crate
-    |   |       |-- Cargo.toml            # package = "sdk-tests-rust-function-calls", lib = "baml_sdk"
-    |   |       |-- src/                  # codegen output
-    |   |       |-- customizable/         # symlinked from ../customizable/ (NOT under tests/ --
-    |   |       |                         #   cargo would auto-discover gated-off ports)
-    |   |       `-- tests/main.rs         # gate file: only modules declared here compile;
-    |   |                                 #   rows come from TEST_MODS in harness_setup/src/rust.rs
-    |   |-- llm_functions/
-    |   |   |-- customizable/
-    |   |   `-- generated/
-    |   `-- type_shapes/
-    |       |-- customizable/
-    |       `-- generated/
-    `-- typescript_web/
-        |-- Cargo.toml                    # name = "sdk_test_typescript_web"
-        |-- function_calls/generated/     # no checked-in customizable tree
-        |   |-- web/baml_sdk/             # Web generator + copied canonical tests
-        |   |-- workers/baml_sdk/         # Web generator + copied canonical tests
-        |   |-- package.json              # Web bridge + browser/Workers runner tools
-        |   |-- tsconfig.{web,workers}.json
-        |   |-- vitest.{web,workers}.config.ts
-        |   `-- wrangler.jsonc
-        |-- llm_functions/generated/
-        `-- type_shapes/generated/
+|-- fixtures/<fixture>/baml_src/          # generator-independent BAML input
+|-- crates/<target>/<fixture>/
+|   |-- customizable/                     # checked-in host-language tests or overlays
+|   `-- generated/                        # generated SDK, manifests, copied/symlinked tests; gitignored
+|-- harness_setup/                        # build-time fixture discovery, codegen, staging, scaffold emission
+|-- harness_runner/                       # test-time command runners and scaffold macros
+`-- harness/llm_recordings/               # offline streaming-response recording crate
 ```
 
-### Naming
+The ordinary shared fixtures currently include `docstrings_etc`, `function_calls`, `llm_functions`, `type_shapes`, and `unsupported_only`. Individual targets may run a subset or add a synthetic fixture, as Go does with `package_edges`.
 
-- **Fixture directory** (under `fixtures/` and under each
-  `crates/<generator>/`): lowercase snake (`function_calls`,
-  `llm_functions`, `type_shapes`). The same name appears in both
-  trees -- `fixtures/<F>/baml_src/` is the input;
-  `crates/<G>/<F>/` is the output for one generator.
-- **Generator directory** (under `crates/`): lowercase snake
-  (`python_pydantic2`, `typescript`, `typescript_web`, `rust`). `typescript`
-  owns the canonical checked-in test corpus and Node suite; `typescript_web`
-  owns generated browser and Workers output only.
-- **Rust crate name**: `sdk_test_<generator>` -- one per generator.
+TypeScript keeps the canonical checked-in test corpus under `crates/typescript/<fixture>/customizable/`. The Web target copies that corpus into separate Web and Workers generated trees and rewrites bridge imports. Use `BAML_TEST_RUNTIME` through the generated `test_runtime.js` helper to gate only genuinely platform-specific behavior; portable bridge assertions should run in Node, Chromium, and workerd.
 
-### TypeScript runtime selection
+## Adding a fixture
 
-Every checked-in `*.test.ts` and helper `*.ts` file lives under `crates/typescript/<fixture>/customizable`. The Node build copies the complete corpus into its Node tree, while the Web build reads that sibling source and copies it into its own Chromium and workerd trees. Each Vitest config sets `BAML_TEST_RUNTIME`; import `isTestRuntime` from the generated `test_runtime.js` helper and use `describe.runIf(isTestRuntime("node"))`, `describe.runIf(isTestRuntime("web"))`, or `describe.runIf(isTestRuntime("workers"))` to interleave runtime-specific coverage in one test file.
+1. Add `sdk_tests/fixtures/<name>/baml_src/*.baml`.
+2. Add host tests under each participating target's `sdk_tests/crates/<target>/<name>/customizable/` directory. For Web TypeScript, add canonical tests under the TypeScript target; the Web harness reads them from there.
+3. Run each participating `sdk_test_<target>` crate with the `<name>::` filter, then run each complete target crate before merging.
 
-Portable bridge semantics must run without a runtime gate so the same assertion executes in Node, Chromium, and workerd. Use the smallest capability-specific `describe.runIf` block for platform behavior: local listeners and mutable host files are Node-only, mocked `globalThis.fetch` runs in Chromium and workerd, and synchronous bundle reads are workerd-only. Every remaining runtime gate needs a nearby comment naming the concrete unavailable capability.
+Most targets discover shared fixture directories automatically. Targets with an explicit supported-fixture list or port gate (currently Go, Rust, and Java) must also be updated in their `harness_setup/src/<target>.rs` module.
 
-The full Web parity gate includes generated ESM imports, TypeScript declarations, Chromium Vitest, and workerd Vitest for every fixture:
-
-```bash
-cd baml_language
-cargo nextest run -p sdk_test_typescript_web
-```
-
-Use fixture and runner filters while iterating, but rerun the complete crate before merging:
-
-```bash
-cargo nextest run -p sdk_test_typescript_web function_calls::
-cargo nextest run -p sdk_test_typescript_web type_shapes::vitest_web
-cargo nextest run -p sdk_test_typescript_web type_shapes::vitest_workers
-```
-
-Raw Web bridge boundary tests cover contracts hidden by generated SDKs, including WASM exports, exact package-root exports, declaration synchronization, handle ownership, callable registry cleanup, call contexts, setup errors, and sync deadlock rejection:
-
-```bash
-cd baml_language/sdks/typescript/bridge_typescript_web
-pnpm build:debug
-pnpm test:web
-pnpm test:workers
-```
-
-## Adding a Fixture
-
-1. `mkdir -p sdk_tests/fixtures/<name>/baml_src/` and drop `.baml`
-   files in. Nothing else goes under
-   `sdk_tests/fixtures/<name>/` -- it's the generator-agnostic
-   input only.
-2. For each generator target that should run this fixture, drop a
-   `<name>/customizable/` directory under the generator's crate
-   containing the host-language tests, e.g.
-   `sdk_tests/crates/python_pydantic2/<name>/customizable/test_main.py`
-   and/or
-   `sdk_tests/crates/typescript/<name>/customizable/main.test.ts`.
-3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python, `cargo nextest run -p sdk_test_typescript <name>::` for Node TypeScript, and `cargo nextest run -p sdk_test_typescript_web <name>::` for browser and Workers.
-
-No code edits needed in `build.rs` or `src/lib.rs` -- the fixture
-list is discovered at build time from `sdk_tests/fixtures/` and
-emitted into the generated test scaffold.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the build/setup/scaffold lifecycle.

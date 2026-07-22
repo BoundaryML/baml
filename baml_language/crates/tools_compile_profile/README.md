@@ -2,9 +2,7 @@
 
 Standalone profiling harness for the BAML compiler pipeline.
 
-This is the tool to reach for when someone says **"`baml check` is slow on
-my project"**. It runs the same pipeline `baml check` runs
-(parse → HIR → PPIR → TIR → MIR → emit), and produces:
+This is the tool to reach for when someone says **"compiling my project is slow"**. By default it runs `ProjectDatabase::check()` followed by `get_bytecode()` (parse → HIR → PPIR → TIR → MIR → emit), and produces:
 
 - Wall-clock time split between `db build`, `check` (diagnostics), and
   `emit` (bytecode)
@@ -40,16 +38,11 @@ allocator.
   `DidExecute` event, so it's impossible to bracket a query body from the
   outside. For self-time, use `samply` (which samples the actual thread
   stacks).
-- Not a monitor for the LSP path. It runs `check + get_bytecode` from a
-  fresh database, which mirrors CLI `baml check`, not the incremental
-  editor path.
+- Not a monitor for the LSP path. It runs `check + get_bytecode` from a fresh database, not the incremental editor path. Pass `--check-only` when only diagnostic collection is relevant.
 
 ## Cache mode: cold by default
 
-By default (no `--warm-runs`) every measured run is **cold**: a fresh
-`ProjectDatabase` is built per run, so Salsa's memoization cache starts
-empty. This mirrors `baml check` from the CLI — one process, one db, no
-re-use. `cache hits: 0` in the report is *expected*, not a bug.
+By default (no `--warm-runs`) every measured run is **cold**: a fresh `ProjectDatabase` is built per run, so the in-process Salsa memoization cache starts empty. `cache hits: 0` in the report is expected, not a bug.
 
 There is no other cache to disable. Cargo's build cache is unrelated
 (that only affects compiling Rust; the profiler binary is already built
@@ -163,11 +156,7 @@ below — the same corpus now compiles in ~0.5s):
 
 Reading this:
 
-- **`hits` is 0 everywhere.** That's expected on a cold `baml check` —
-  we build a fresh database, so nothing is in the cache. If you want to
-  measure the incremental path (LSP), you'd need to run twice against
-  the same db (not what this tool models). For CLI `baml check`, cold
-  hits are the realistic case.
+- **`hits` is 0 everywhere.** That's expected for this tool's cold mode — it builds a fresh database, so nothing is in the in-process cache. If you want to measure the incremental path (LSP), you'd need to run twice against the same db; use `--warm-runs` to measure that contrast in this harness.
 - **`tir` is 19k / 26k = 72% of all query work.** Most of the compile is
   scope-level type inference.
 - **`infer_scope_types` alone fires 15k times.** This is per-scope (a
@@ -256,8 +245,7 @@ Two further fixes affected the CLI path rather than the pipeline:
 
 - **No parallelism.** All wins are single-threaded; parallel check/emit
   remains available as a future multiplier.
-- **No on-disk cache.** Verified: the compiler has no bytecode/query
-  cache on disk. Every `baml check` is a cold in-process Salsa run.
+- **No on-disk cache was part of this historical measurement.** Current CLI releases may add caching outside this harness; this tool still reports only the fresh or reused in-process Salsa database that it constructs itself.
 
 ### Known remaining costs (future work)
 

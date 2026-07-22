@@ -26,8 +26,12 @@ cd typescript2/pkg-proto && pnpm generate
 # Go (protoc-gen-go)
 cd sdks/go/bridge_go && ./build.sh
 #   -> sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/*.pb.go
+
+# C++ (pinned vendored protoc; writes the committed protobuf-lite sources)
+cargo test -p sdkgen_cpp --test pb_generation regenerate -- --ignored
+#   -> sdks/cpp/bridge_cpp/pb/baml_bridge/cffi/v1/*.{pb.h,pb.cc}
 ```
 
-Other consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`) use the Rust prost types via `bridge_ctypes` — nothing extra to regenerate. `sdks/rust/bridge_rust` is the exception: it vendors the generated file (see above) because it publishes to crates.io and must not depend on this engine-coupled crate.
+Other Rust consumers (`bridge_cffi`, `bridge_wasm`, `sdks/python/rust/bridge_python`, and `sdks/java/bridge_java`) use the prost types through `bridge_ctypes`; only the vendored Rust bridge file above needs an extra committed copy. The Java runtime jar implements its wire reader/writer directly from the schema's field numbers, so schema changes must update and test `sdks/java/baml_bridge/src/main/java/baml_bridge/internal/{ProtoReader,ProtoWriter}.java` even though there is no Java protoc-generation step.
 
-No clients exist for Ruby, Java/Kotlin, C#/.NET, Swift, or PHP.
+There are currently no wire clients for Ruby, C#/.NET, Swift, or PHP. Kotlin helpers sit on top of the Java bridge rather than owning another wire codec.
