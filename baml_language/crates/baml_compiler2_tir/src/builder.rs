@@ -21,6 +21,7 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     contributions::Definition,
+    loc::{ClassLoc, FunctionLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId},
 };
@@ -72,6 +73,17 @@ struct MemberAccess<'a> {
     member: &'a Name,
     at: ExprId,
     bound: bool,
+}
+
+enum ClassMethodLookup<'db> {
+    Found {
+        ty: Ty,
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    DuplicateInherent,
+    DeferToInterfaces,
+    NotFound,
 }
 
 /// Construct `Ty::Class` for `baml.spawn.SpawnParams<value, error>` (BEP-034
@@ -10149,17 +10161,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     type_name,
                 );
                 // Look up method on this class (no type args for UFCS)
-                if let Some((method_ty, class_loc, func_loc)) =
-                    self.lookup_class_method(&class_qtn, &[], method_name)
-                {
-                    self.resolutions.insert(
-                        expr_id,
-                        crate::inference::MemberResolution::UnboundMethod {
-                            class_loc,
-                            func_loc,
-                        },
-                    );
-                    return Some(method_ty);
+                match self.lookup_class_method(&class_qtn, &[], method_name) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => {
+                        self.resolutions.insert(
+                            expr_id,
+                            crate::inference::MemberResolution::UnboundMethod {
+                                class_loc,
+                                func_loc,
+                            },
+                        );
+                        return Some(ty);
+                    }
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Some(Ty::Error {
+                            attr: TyAttr::default(),
+                        });
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => {}
                 }
             }
         }
@@ -10541,9 +10563,20 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some((ty, class_loc, func_loc)) =
-                    self.lookup_class_method(class_name, type_args, member)
-                {
+                let class_method = match self.lookup_class_method(class_name, type_args, member) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => Some((ty, class_loc, func_loc)),
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => None,
+                };
+                if let Some((ty, class_loc, func_loc)) = class_method {
                     if bound {
                         // Record the receiver's class type args (owner class
                         // generics → concrete args) keyed by this callee, so the
@@ -12187,11 +12220,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// BEP-044 §"Method Disambiguation": when a class's flattened
-    /// method list contains two or more methods sharing `method_name`
-    /// (typically because the class declares them in different
-    /// `implements I {}` blocks), return the list of contributing
-    /// interface names. Returns `None` when the call is unambiguous.
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
@@ -12208,26 +12236,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
         method_name: &Name,
-    ) -> Option<(
-        Ty,
-        baml_compiler2_hir::loc::ClassLoc<'db>,
-        baml_compiler2_hir::loc::FunctionLoc<'db>,
-    )> {
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
+    ) -> ClassMethodLookup<'db> {
+        let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
+            return ClassMethodLookup::NotFound;
+        };
+        let Some(def) = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return ClassMethodLookup::NotFound;
+        };
         let Definition::Class(class_loc) = def else {
-            return None;
+            return ClassMethodLookup::NotFound;
         };
         let db = self.context.db();
         let file = class_loc.file(db);
         let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
-        // `class_data.methods` flattens every `implements I { … }` block's methods together
-        // with class-level ones. A name matching more than one can only come from two distinct
-        // interfaces declaring it (coherence forbids two impls of one interface), so resolving
-        // it here would silently pick the first. Defer to `resolve_member_from_impls`, which
-        // dedups by realized interface and reports the ambiguity (E0121).
+        // `class_data.methods` flattens inherent methods and interface implementations.
+        // Duplicate inherent methods were already diagnosed by HIR, while multiple interface
+        // methods must be resolved through their realized interfaces.
         let materialized: Vec<_> = class_data
             .methods
             .iter()
@@ -12236,8 +12263,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
             })
             .collect();
+        let inherent_count = materialized
+            .iter()
+            .filter(|&&method| {
+                baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+            })
+            .count();
+        if inherent_count > 1 {
+            return ClassMethodLookup::DuplicateInherent;
+        }
         if materialized.len() > 1 {
-            return None;
+            return ClassMethodLookup::DeferToInterfaces;
         }
         // Even a *single* materialized match can be ambiguous: an impl-block override of one
         // interface's method does not shadow a *different* interface's same-named method that
@@ -12267,7 +12303,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if !providers.contains(&realized) {
                         providers.push(realized);
                         if providers.len() > 1 {
-                            return None;
+                            return ClassMethodLookup::DeferToInterfaces;
                         }
                     }
                 }
@@ -12493,10 +12529,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // scope resolve the same names; a name resolvable there but not here
                 // lowers to `Ty::Error` whose diagnostic is silently dropped (`diags`
                 // above is never drained). Keep the two scopes in lockstep.
-                return Some((ty, class_loc, func_loc));
+                return ClassMethodLookup::Found {
+                    ty,
+                    class_loc,
+                    func_loc,
+                };
             }
         }
-        None
+        ClassMethodLookup::NotFound
     }
 
     /// Check if a `FieldAccess` base is a primitive type name used for static
