@@ -99,7 +99,9 @@ function generic_match_typevar.is_t_non_member_fn() -> bool {
 
 function generic_match_typevar.pick(x: T | string) -> string {
     load_var x
-    is_type #0
+    store_var _2
+    load_var _2
+    narrow_bind #0, slot=2
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
@@ -107,7 +109,9 @@ function generic_match_typevar.pick(x: T | string) -> string {
 
   L0:
     load_var x
-    is_type string
+    store_var _3
+    load_var _3
+    narrow_bind string, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -142,7 +146,9 @@ function generic_match_typevar.pick_int_value_fn() -> string {
 
 function generic_match_typevar.pick_list(x: T[] | string[]) -> string {
     load_var x
-    is_type #0[]
+    store_var _2
+    load_var _2
+    narrow_bind #0[], slot=2
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
@@ -150,7 +156,9 @@ function generic_match_typevar.pick_list(x: T[] | string[]) -> string {
 
   L0:
     load_var x
-    is_type string[]
+    store_var _3
+    load_var _3
+    narrow_bind string[], slot=3
     pop_jump_if_false L3
     load_const "string[]"
     jump L2
@@ -197,7 +205,9 @@ function generic_match_typevar.pick_list_string_fn() -> string {
 
 function generic_match_typevar.pick_map(x: map<string, T> | map<string, string>) -> string {
     load_var x
-    is_type map<string, #0>
+    store_var _2
+    load_var _2
+    narrow_bind map<string, #0>, slot=2
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
@@ -205,7 +215,9 @@ function generic_match_typevar.pick_map(x: map<string, T> | map<string, string>)
 
   L0:
     load_var x
-    is_type map<string, string>
+    store_var _3
+    load_var _3
+    narrow_bind map<string, string>, slot=3
     pop_jump_if_false L3
     load_const "map<string>"
     jump L2

@@ -620,9 +620,9 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
         4    load_var 2             (ts)
         5    load_field 0           (name)
         6    call 44 ntypeargs=2    (baml.Map.get)
-        7    store_var 3            (_3)
-        8    load_var 3             (_3)
-        9    is_type 2              
+        7    store_var 3            (_8)
+        8    load_var 3             (_8)
+        9    narrow_bind 2 3        
         10   pop_jump_if_false +2   (to 12)
         11   jump +36               (to 47)
 
@@ -670,7 +670,7 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
   226   45   load_var 7             (sub_registry)
 
   213   46   jump +2                (to 48)
-        47   load_var 3             (_3)
+        47   load_var 3             (_8)
         48   return                 
 }
 
@@ -950,10 +950,10 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         49   load_var 7                         (ts)
         50   load_field 0                       (name)
         51   call 44 ntypeargs=2                (baml.Map.get)
-        52   store_var 8                        (expanded)
 
-  115   53   load_var 8                         (expanded)
-        54   is_type 13                         
+  115   52   store_var 8                        (_24)
+        53   load_var 8                         (_24)
+        54   narrow_bind 13 8                   
         55   pop_jump_if_false +2               (to 57)
         56   jump +9                            (to 65)
 
@@ -966,7 +966,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         63   pop 1                              
         64   jump -30                           (to 34)
 
-  115   65   load_var 8                         (expanded)
+  115   65   load_var 8                         (_24)
         66   store_var 9                        (sub)
 
   118   67   load_var 7                         (ts)
@@ -1091,7 +1091,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
         22    load_var 8                         (_8)
         23    is_type 8                          
         24    pop_jump_if_false +2               (to 26)
-        25    jump +84                           (to 109)
+        25    jump +88                           (to 113)
         26    load_var 8                         (_8)
         27    store_var 9                        (named_result)
 
@@ -1104,131 +1104,135 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
         33    pop 1                              
 
   330   34    load_var 10                        (result)
-        35    is_type 9                          
-        36    pop_jump_if_false +2               (to 38)
-        37    jump +5                            (to 42)
-        38    load_var 10                        (result)
-        39    load_field 0                       (outcome)
-        40    store_var 11                       (outcome)
-        41    jump +4                            (to 45)
-        42    load_var 10                        (result)
-        43    load_field 0                       (outcome)
-        44    store_var 11                       (outcome)
+        35    store_var 12                       (_16)
+        36    load_var 12                        (_16)
+        37    narrow_bind 9 12                   
+        38    pop_jump_if_false +2               (to 40)
+        39    jump +5                            (to 44)
+        40    load_var 10                        (result)
+        41    load_field 0                       (outcome)
+        42    store_var 11                       (outcome)
+        43    jump +4                            (to 47)
+        44    load_var 12                        (_16)
+        45    load_field 0                       (outcome)
+        46    store_var 11                       (outcome)
 
-  334   45    load_var 11                        (outcome)
-        46    load_const 10                      ("pass")
-        47    call 651 ntypeargs=0               (baml.ops.equals_equals)
-        48    pop_jump_if_false +2               (to 50)
-        49    jump +55                           (to 104)
+  334   47    load_var 11                        (outcome)
+        48    load_const 10                      ("pass")
+        49    call 651 ntypeargs=0               (baml.ops.equals_equals)
+        50    pop_jump_if_false +2               (to 52)
+        51    jump +57                           (to 108)
 
-  337   50    load_var 3                         (failed)
-        51    load_const 11                      (1)
-        52    add_int                            
-        53    store_var 3                        (failed)
+  337   52    load_var 3                         (failed)
+        53    load_const 11                      (1)
+        54    add_int                            
+        55    store_var 3                        (failed)
 
-  338   54    load_var 10                        (result)
-        55    is_type 9                          
-        56    pop_jump_if_false +2               (to 58)
-        57    jump +19                           (to 76)
-        58    load_var 10                        (result)
-        59    store_var_load_var 12              (report)
+  338   56    load_var 10                        (result)
+        57    store_var 13                       (_22)
+        58    load_var 13                        (_22)
+        59    narrow_bind 9 13                   
+        60    pop_jump_if_false +2               (to 62)
+        61    jump +19                           (to 80)
+        62    load_var 10                        (result)
+        63    store_var_load_var 14              (report)
 
-  340   60    load_field 4                       (failed_names)
-        61    container_len                      
-        62    store_var 13                       (_26)
-        63    load_var 13                        (_26)
-        64    load_const 0                       (0)
-        65    cmp_int_op >                       
-        66    pop_jump_if_false +2               (to 68)
-        67    jump +6                            (to 73)
+  340   64    load_field 4                       (failed_names)
+        65    container_len                      
+        66    store_var 15                       (_26)
+        67    load_var 15                        (_26)
+        68    load_const 0                       (0)
+        69    cmp_int_op >                       
+        70    pop_jump_if_false +2               (to 72)
+        71    jump +6                            (to 77)
 
-  343   68    load_var 9                         (named_result)
-        69    load_field 0                       (name)
-        70    load_type 2                        
-        71    alloc_array 1                      
+  343   72    load_var 9                         (named_result)
+        73    load_field 0                       (name)
+        74    load_type 2                        
+        75    alloc_array 1                      
 
-  340   72    jump +8                            (to 80)
+  340   76    jump +8                            (to 84)
 
-  341   73    load_var 12                        (report)
-        74    load_field 4                       (failed_names)
+  341   77    load_var 14                        (report)
+        78    load_field 4                       (failed_names)
 
-  340   75    jump +5                            (to 80)
+  340   79    jump +5                            (to 84)
 
-  339   76    load_var 9                         (named_result)
-        77    load_field 0                       (name)
-        78    load_type 2                        
-        79    alloc_array 1                      
+  339   80    load_var 9                         (named_result)
+        81    load_field 0                       (name)
+        82    load_type 2                        
+        83    alloc_array 1                      
 
-  346   80    load_type 12                       
-        81    load_const 13                      ("iter")
-        82    virtual_call nargs=1 ntypeargs=0   
-        83    store_var 14                       (_30)
-        84    load_var 14                        (_30)
-        85    load_type 14                       
-        86    load_const 15                      ("next")
-        87    virtual_call nargs=1 ntypeargs=0   
-        88    store_var 15                       (_31)
-        89    load_var 15                        (_31)
-        90    is_type 8                          
-        91    pop_jump_if_false +2               (to 93)
-        92    jump +5                            (to 97)
+  346   84    load_type 12                       
+        85    load_const 13                      ("iter")
+        86    virtual_call nargs=1 ntypeargs=0   
+        87    store_var 16                       (_30)
+        88    load_var 16                        (_30)
+        89    load_type 14                       
+        90    load_const 15                      ("next")
+        91    virtual_call nargs=1 ntypeargs=0   
+        92    store_var 17                       (_31)
+        93    load_var 17                        (_31)
+        94    is_type 8                          
+        95    pop_jump_if_false +2               (to 97)
+        96    jump +5                            (to 101)
 
-  347   93    load_var2 5 15                     
+  347   97    load_var2 5 17                     
 
-  346   94    call 9 ntypeargs=0                 (baml.Array.push)
-        95    pop 1                              
-        96    jump -12                           (to 84)
+  346   98    call 9 ntypeargs=0                 (baml.Array.push)
+        99    pop 1                              
+        100   jump -12                           (to 88)
 
-  349   97    load_var 11                        (outcome)
-        98    load_const 16                      ("error")
-        99    call 651 ntypeargs=0               (baml.ops.equals_equals)
-        100   pop_jump_if_false -83              (to 17)
+  349   101   load_var 11                        (outcome)
+        102   load_const 16                      ("error")
+        103   call 651 ntypeargs=0               (baml.ops.equals_equals)
+        104   pop_jump_if_false -87              (to 17)
 
-  350   101   load_const 17                      (true)
-        102   store_var 4                        (has_error)
+  350   105   load_const 17                      (true)
+        106   store_var 4                        (has_error)
 
-  349   103   jump -86                           (to 17)
+  349   107   jump -90                           (to 17)
 
-  335   104   load_var 2                         (passed)
-        105   load_const 11                      (1)
-        106   add_int                            
-        107   store_var 2                        (passed)
+  335   108   load_var 2                         (passed)
+        109   load_const 11                      (1)
+        110   add_int                            
+        111   store_var 2                        (passed)
 
-  334   108   jump -91                           (to 17)
+  334   112   jump -95                           (to 17)
 
-  356   109   load_var 4                         (has_error)
-        110   pop_jump_if_false +2               (to 112)
-        111   jump +10                           (to 121)
-        112   load_var 3                         (failed)
-        113   load_const 0                       (0)
-        114   cmp_int_op ==                      
-        115   pop_jump_if_false +2               (to 117)
-        116   jump +3                            (to 119)
-        117   load_const 18                      ("fail")
-        118   jump +4                            (to 122)
-        119   load_const 19                      ("pass")
-        120   jump +2                            (to 122)
-        121   load_const 20                      ("error")
+  356   113   load_var 4                         (has_error)
+        114   pop_jump_if_false +2               (to 116)
+        115   jump +10                           (to 125)
+        116   load_var 3                         (failed)
+        117   load_const 0                       (0)
+        118   cmp_int_op ==                      
+        119   pop_jump_if_false +2               (to 121)
+        120   jump +3                            (to 123)
+        121   load_const 18                      ("fail")
+        122   jump +4                            (to 126)
+        123   load_const 19                      ("pass")
+        124   jump +2                            (to 126)
+        125   load_const 20                      ("error")
 
-  358   122   store_var 16                       (_43)
+  358   126   store_var 18                       (_43)
 
-  359   123   load_var 2                         (passed)
-        124   store_var 17                       (_44)
+  359   127   load_var 2                         (passed)
+        128   store_var 19                       (_44)
 
-  360   125   load_var 3                         (failed)
-        126   store_var 18                       (_45)
+  360   129   load_var 3                         (failed)
+        130   store_var 20                       (_45)
 
-  361   127   load_var 6                         (results)
-        128   container_len                      
-        129   store_var 19                       (_46)
+  361   131   load_var 6                         (results)
+        132   container_len                      
+        133   store_var 21                       (_46)
 
-  357   130   load_var2 16 17                    
-        131   load_var2 18 19                    
+  357   134   load_var2 18 19                    
+        135   load_var2 20 21                    
 
-  362   132   load_var2 5 6                      
+  362   136   load_var2 5 6                      
 
-  363   133   init_instance 0                    (testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results)
-        134   return                             
+  363   137   init_instance 0                    (testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results)
+        138   return                             
 }
 
 function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: string, test_name: string) -> bool {
@@ -1281,58 +1285,62 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
         10   load_var 4                         (_4)
         11   is_type 4                          
         12   pop_jump_if_false +2               (to 14)
-        13   jump +43                           (to 56)
+        13   jump +47                           (to 60)
         14   load_var 4                         (_4)
-        15   store_var_load_var 5               (r)
+        15   store_var 5                        (r)
 
-  662   16   is_type 5                          
-        17   pop_jump_if_false +2               (to 19)
-        18   jump +7                            (to 25)
-        19   load_var 5                         (r)
-        20   load_field 5                       (results)
-        21   load_var 2                         (out)
-        22   call 738 ntypeargs=0               (testing.collect_leaf_messages)
-        23   pop 1                              
-        24   jump -19                           (to 5)
-        25   load_var 5                         (r)
-        26   load_field 1                       (runs)
-        27   load_type 6                        
-        28   load_const 7                       ("iter")
-        29   virtual_call nargs=1 ntypeargs=0   
-        30   store_var 6                        (_11)
+  662   16   load_var 5                         (r)
+        17   store_var 6                        (_8)
+        18   load_var 6                         (_8)
+        19   narrow_bind 5 6                    
+        20   pop_jump_if_false +2               (to 22)
+        21   jump +7                            (to 28)
+        22   load_var 5                         (r)
+        23   load_field 5                       (results)
+        24   load_var 2                         (out)
+        25   call 738 ntypeargs=0               (testing.collect_leaf_messages)
+        26   pop 1                              
+        27   jump -22                           (to 5)
+        28   load_var 6                         (_8)
+        29   load_field 1                       (runs)
+        30   load_type 6                        
+        31   load_const 7                       ("iter")
+        32   virtual_call nargs=1 ntypeargs=0   
+        33   store_var 7                        (_11)
 
-  664   31   load_var 6                         (_11)
-        32   load_type 8                        
-        33   load_const 9                       ("next")
-        34   virtual_call nargs=1 ntypeargs=0   
-        35   store_var 7                        (_12)
-        36   load_var 7                         (_12)
-        37   is_type 4                          
-        38   pop_jump_if_false +2               (to 40)
-        39   jump -34                           (to 5)
-        40   load_var 7                         (_12)
-        41   store_var_load_var 8               (run)
+  664   34   load_var 7                         (_11)
+        35   load_type 8                        
+        36   load_const 9                       ("next")
+        37   virtual_call nargs=1 ntypeargs=0   
+        38   store_var 8                        (_12)
+        39   load_var 8                         (_12)
+        40   is_type 4                          
+        41   pop_jump_if_false +2               (to 43)
+        42   jump -37                           (to 5)
+        43   load_var 8                         (_12)
+        44   store_var_load_var 9               (run)
 
-  665   42   load_field 0                       (outcome)
-        43   load_const 10                      ("pass")
-        44   call 651 ntypeargs=0               (baml.ops.equals_equals)
-        45   unary_op !                         
-        46   pop_jump_if_false -15              (to 31)
+  665   45   load_field 0                       (outcome)
+        46   load_const 10                      ("pass")
+        47   call 651 ntypeargs=0               (baml.ops.equals_equals)
+        48   unary_op !                         
+        49   pop_jump_if_false -15              (to 34)
 
-  666   47   load_var 8                         (run)
-        48   load_field 2                       (message)
-        49   store_var_load_var 9               (_19)
-        50   is_type 11                         
-        51   pop_jump_if_false -20              (to 31)
+  666   50   load_var 9                         (run)
+        51   load_field 2                       (message)
+        52   store_var 10                       (_20)
+        53   load_var 10                        (_20)
+        54   narrow_bind 11 10                  
+        55   pop_jump_if_false -21              (to 34)
 
-  667   52   load_var2 2 9                      
+  667   56   load_var2 2 10                     
 
-  666   53   call 9 ntypeargs=0                 (baml.Array.push)
-        54   pop 1                              
-        55   jump -24                           (to 31)
+  666   57   call 9 ntypeargs=0                 (baml.Array.push)
+        58   pop 1                              
+        59   jump -25                           (to 34)
 
-  660   56   load_const 12                      (null)
-        57   return                             
+  660   60   load_const 12                      (null)
+        61   return                             
 }
 
 function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
@@ -1465,135 +1473,138 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
         18    load_var 8                         (_8)
         19    is_type 5                          
         20    pop_jump_if_false +2               (to 22)
-        21    jump +102                          (to 123)
+        21    jump +105                          (to 126)
         22    load_var 8                         (_8)
-        23    store_var_load_var 9               (r)
+        23    store_var 9                        (r)
 
-  603   24    is_type 6                          
-        25    pop_jump_if_false +2               (to 27)
-        26    jump +51                           (to 77)
-        27    load_var 9                         (r)
-        28    store_var 11                       (tsr)
+  603   24    load_var 9                         (r)
+        25    store_var 11                       (_13)
+        26    load_var 11                        (_13)
+        27    narrow_bind 6 11                   
+        28    pop_jump_if_false +2               (to 30)
+        29    jump +51                           (to 80)
+        30    load_var 9                         (r)
+        31    store_var 12                       (tsr)
 
-  614   29    load_var 2                         (tolerated_by_parent)
-        30    jump_if_false +3                   (to 33)
-        31    store_var 12                       (ft)
-        32    jump +7                            (to 39)
-        33    pop 1                              
-        34    load_var 11                        (tsr)
-        35    load_field 0                       (outcome)
-        36    load_const 7                       ("pass")
-        37    call 651 ntypeargs=0               (baml.ops.equals_equals)
-        38    store_var 12                       (ft)
+  614   32    load_var 2                         (tolerated_by_parent)
+        33    jump_if_false +3                   (to 36)
+        34    store_var 13                       (ft)
+        35    jump +7                            (to 42)
+        36    pop 1                              
+        37    load_var 12                        (tsr)
+        38    load_field 0                       (outcome)
+        39    load_const 7                       ("pass")
+        40    call 651 ntypeargs=0               (baml.ops.equals_equals)
+        41    store_var 13                       (ft)
 
-  615   39    load_var 11                        (tsr)
-        40    load_field 5                       (results)
-        41    container_len                      
-        42    store_var 13                       (_21)
-        43    load_var 13                        (_21)
-        44    load_const 0                       (0)
-        45    cmp_int_op >                       
-        46    pop_jump_if_false +2               (to 48)
-        47    jump +24                           (to 71)
-
-  617   48    load_var 12                        (ft)
+  615   42    load_var 12                        (tsr)
+        43    load_field 5                       (results)
+        44    container_len                      
+        45    store_var 14                       (_21)
+        46    load_var 14                        (_21)
+        47    load_const 0                       (0)
+        48    cmp_int_op >                       
         49    pop_jump_if_false +2               (to 51)
-        50    jump +11                           (to 61)
+        50    jump +24                           (to 74)
 
-  620   51    load_var 11                        (tsr)
-        52    load_field 1                       (passed)
-        53    load_var 11                        (tsr)
-        54    load_field 2                       (failed)
-        55    load_const 0                       (0)
-        56    load_var 11                        (tsr)
-        57    load_field 3                       (total)
-        58    init_instance 0                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        59    store_var 10                       (delta)
+  617   51    load_var 13                        (ft)
+        52    pop_jump_if_false +2               (to 54)
+        53    jump +11                           (to 64)
 
-  617   60    jump +46                           (to 106)
+  620   54    load_var 12                        (tsr)
+        55    load_field 1                       (passed)
+        56    load_var 12                        (tsr)
+        57    load_field 2                       (failed)
+        58    load_const 0                       (0)
+        59    load_var 12                        (tsr)
+        60    load_field 3                       (total)
+        61    init_instance 0                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        62    store_var 10                       (delta)
 
-  618   61    load_var 11                        (tsr)
-        62    load_field 1                       (passed)
-        63    load_const 0                       (0)
-        64    load_var 11                        (tsr)
-        65    load_field 2                       (failed)
-        66    load_var 11                        (tsr)
-        67    load_field 3                       (total)
-        68    init_instance 1                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        69    store_var 10                       (delta)
+  617   63    jump +46                           (to 109)
 
-  617   70    jump +36                           (to 106)
+  618   64    load_var 12                        (tsr)
+        65    load_field 1                       (passed)
+        66    load_const 0                       (0)
+        67    load_var 12                        (tsr)
+        68    load_field 2                       (failed)
+        69    load_var 12                        (tsr)
+        70    load_field 3                       (total)
+        71    init_instance 1                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        72    store_var 10                       (delta)
 
-  616   71    load_var 11                        (tsr)
-        72    load_field 5                       (results)
-        73    load_var 12                        (ft)
-        74    call 735 ntypeargs=0               (testing.count_leaves)
-        75    store_var 10                       (delta)
-        76    jump +30                           (to 106)
+  617   73    jump +36                           (to 109)
 
-  603   77    load_var 9                         (r)
-        78    load_field 0                       (outcome)
-        79    load_const 8                       ("pass")
-        80    call 651 ntypeargs=0               (baml.ops.equals_equals)
+  616   74    load_var 12                        (tsr)
+        75    load_field 5                       (results)
+        76    load_var 13                        (ft)
+        77    call 735 ntypeargs=0               (testing.count_leaves)
+        78    store_var 10                       (delta)
+        79    jump +30                           (to 109)
 
-  605   81    pop_jump_if_false +2               (to 83)
-        82    jump +18                           (to 100)
+  603   80    load_var 11                        (_13)
+        81    load_field 0                       (outcome)
+        82    load_const 8                       ("pass")
+        83    call 651 ntypeargs=0               (baml.ops.equals_equals)
 
-  607   83    load_var 2                         (tolerated_by_parent)
-        84    pop_jump_if_false +2               (to 86)
-        85    jump +8                            (to 93)
+  605   84    pop_jump_if_false +2               (to 86)
+        85    jump +18                           (to 103)
 
-  610   86    load_const 0                       (0)
-        87    load_const 9                       (1)
-        88    load_const 0                       (0)
-        89    load_const 9                       (1)
-        90    init_instance 2                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        91    store_var 10                       (delta)
+  607   86    load_var 2                         (tolerated_by_parent)
+        87    pop_jump_if_false +2               (to 89)
+        88    jump +8                            (to 96)
 
-  607   92    jump +14                           (to 106)
+  610   89    load_const 0                       (0)
+        90    load_const 9                       (1)
+        91    load_const 0                       (0)
+        92    load_const 9                       (1)
+        93    init_instance 2                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        94    store_var 10                       (delta)
 
-  608   93    load_const 0                       (0)
-        94    load_const 0                       (0)
-        95    load_const 9                       (1)
-        96    load_const 9                       (1)
-        97    init_instance 3                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        98    store_var 10                       (delta)
+  607   95    jump +14                           (to 109)
 
-  607   99    jump +7                            (to 106)
+  608   96    load_const 0                       (0)
+        97    load_const 0                       (0)
+        98    load_const 9                       (1)
+        99    load_const 9                       (1)
+        100   init_instance 3                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        101   store_var 10                       (delta)
 
-  606   100   load_const 9                       (1)
-        101   load_const 0                       (0)
-        102   load_const 0                       (0)
-        103   load_const 9                       (1)
-        104   init_instance 4                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        105   store_var 10                       (delta)
+  607   102   jump +7                            (to 109)
 
-  624   106   load_var2 3 10                     
-        107   load_field 0                       (passed)
-        108   add_int                            
-        109   store_var 3                        (passed)
+  606   103   load_const 9                       (1)
+        104   load_const 0                       (0)
+        105   load_const 0                       (0)
+        106   load_const 9                       (1)
+        107   init_instance 4                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        108   store_var 10                       (delta)
 
-  625   110   load_var2 4 10                     
-        111   load_field 1                       (failed)
-        112   add_int                            
-        113   store_var 4                        (failed)
+  624   109   load_var2 3 10                     
+        110   load_field 0                       (passed)
+        111   add_int                            
+        112   store_var 3                        (passed)
 
-  626   114   load_var2 5 10                     
-        115   load_field 2                       (tolerated)
-        116   add_int                            
-        117   store_var 5                        (tolerated)
+  625   113   load_var2 4 10                     
+        114   load_field 1                       (failed)
+        115   add_int                            
+        116   store_var 4                        (failed)
 
-  627   118   load_var2 6 10                     
-        119   load_field 3                       (total)
-        120   add_int                            
-        121   store_var 6                        (total)
+  626   117   load_var2 5 10                     
+        118   load_field 2                       (tolerated)
+        119   add_int                            
+        120   store_var 5                        (tolerated)
 
-  602   122   jump -109                          (to 13)
+  627   121   load_var2 6 10                     
+        122   load_field 3                       (total)
+        123   add_int                            
+        124   store_var 6                        (total)
 
-  629   123   load_var2 3 4                      
-        124   load_var2 5 6                      
-        125   init_instance 5                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
-        126   return                             
+  602   125   jump -112                          (to 13)
+
+  629   126   load_var2 3 4                      
+        127   load_var2 5 6                      
+        128   init_instance 5                    (testing.LeafCounts .passed, .failed, .tolerated, .total)
+        129   return                             
 }
 
 function testing.expansion_error_report(name: string) -> testing.TestSetReport {
@@ -1799,9 +1810,9 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
         67   call 163 ntypeargs=0    (baml.String.substring)
         68   load_var 13             (part)
         69   call 173 ntypeargs=0    (baml.String.index_of)
-        70   store_var 14            (_38)
-        71   load_var 14             (_38)
-        72   is_type 2               
+        70   store_var 14            (_43)
+        71   load_var 14             (_43)
+        72   narrow_bind 2 14        
         73   pop_jump_if_false +2    (to 75)
         74   jump +3                 (to 77)
 
@@ -1900,9 +1911,9 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
   476   19   load_var 5                         (s)
         20   load_const 6                       ("::")
         21   call 173 ntypeargs=0               (baml.String.index_of)
-        22   store_var 6                        (_9)
-        23   load_var 6                         (_9)
-        24   is_type 7                          
+        22   store_var 6                        (_10)
+        23   load_var 6                         (_10)
+        24   narrow_bind 7 6                    
         25   pop_jump_if_false +2               (to 27)
         26   jump +13                           (to 39)
 
@@ -1920,7 +1931,7 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
         37   pop 1                              
         38   jump -30                           (to 8)
 
-  476   39   load_var 6                         (_9)
+  476   39   load_var 6                         (_10)
         40   store_var 7                        (idx)
 
   477   41   load_var 5                         (s)
@@ -2022,7 +2033,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
         13   load_var 5                         (_5)
         14   is_type 5                          
         15   pop_jump_if_false +2               (to 17)
-        16   jump +34                           (to 50)
+        16   jump +36                           (to 52)
         17   load_var 5                         (_5)
         18   store_var_load_var 6               (child)
 
@@ -2038,33 +2049,35 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
         27   pop 1                              
 
   111   28   load_var 7                         (report)
-        29   is_type 6                          
-        30   pop_jump_if_false +2               (to 32)
-        31   jump +5                            (to 36)
-        32   load_var 7                         (report)
-        33   load_field 0                       (outcome)
-        34   store_var 8                        (outcome)
-        35   jump +4                            (to 39)
-        36   load_var 7                         (report)
-        37   load_field 0                       (outcome)
-        38   store_var 8                        (outcome)
+        29   store_var 9                        (_16)
+        30   load_var 9                         (_16)
+        31   narrow_bind 6 9                    
+        32   pop_jump_if_false +2               (to 34)
+        33   jump +5                            (to 38)
+        34   load_var 7                         (report)
+        35   load_field 0                       (outcome)
+        36   store_var 8                        (outcome)
+        37   jump +4                            (to 41)
+        38   load_var 9                         (_16)
+        39   load_field 0                       (outcome)
+        40   store_var 8                        (outcome)
 
-  115   39   load_var 2                         (fail_fast)
-        40   jump_if_false +6                   (to 46)
-        41   pop 1                              
-        42   load_var 8                         (outcome)
-        43   load_const 7                       ("pass")
-        44   call 651 ntypeargs=0               (baml.ops.equals_equals)
-        45   unary_op !                         
-        46   pop_jump_if_false -38              (to 8)
+  115   41   load_var 2                         (fail_fast)
+        42   jump_if_false +6                   (to 48)
+        43   pop 1                              
+        44   load_var 8                         (outcome)
+        45   load_const 7                       ("pass")
+        46   call 651 ntypeargs=0               (baml.ops.equals_equals)
+        47   unary_op !                         
+        48   pop_jump_if_false -40              (to 8)
 
-  116   47   load_var 3                         (named_results)
-        48   call 729 ntypeargs=0               (testing.aggregate_reports)
-        49   jump +3                            (to 52)
+  116   49   load_var 3                         (named_results)
+        50   call 729 ntypeargs=0               (testing.aggregate_reports)
+        51   jump +3                            (to 54)
 
-  121   50   load_var 3                         (named_results)
-        51   call 729 ntypeargs=0               (testing.aggregate_reports)
-        52   return                             
+  121   52   load_var 3                         (named_results)
+        53   call 729 ntypeargs=0               (testing.aggregate_reports)
+        54   return                             
 }
 
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
@@ -2157,9 +2170,9 @@ function testing.split_top(path: string) -> testing.NameSplit {
   463   0    load_var 1             (path)
         1    load_const 0           ("/")
         2    call 173 ntypeargs=0   (baml.String.index_of)
-        3    store_var 2            (_2)
-        4    load_var 2             (_2)
-        5    is_type 1              
+        3    store_var 2            (_3)
+        4    load_var 2             (_3)
+        5    narrow_bind 1 2        
         6    pop_jump_if_false +2   (to 8)
         7    jump +5                (to 12)
 
@@ -2168,7 +2181,7 @@ function testing.split_top(path: string) -> testing.NameSplit {
         10   init_instance 0        (testing.NameSplit .head, .tail)
 
   463   11   jump +16               (to 27)
-        12   load_var 2             (_2)
+        12   load_var 2             (_3)
         13   store_var 3            (idx)
 
   464   14   load_var 1             (path)
@@ -2459,134 +2472,137 @@ function user.http_status(code: int) -> string {
 }
 
 function user.score(input: User | ErrorInfo, threshold: int) -> Report {
-  45   0    load_var 1             (input)
-       1    is_type 0              
-       2    pop_jump_if_false +2   (to 4)
-       3    jump +5                (to 8)
+  45   0     load_var 1              (input)
+       1     store_var 4             (_4)
+       2     load_var 4              (_4)
+       3     narrow_bind 0 4         
+       4     pop_jump_if_false +2    (to 6)
+       5     jump +5                 (to 10)
 
-  47   4    load_var 1             (input)
-       5    load_field 1           (message)
-       6    store_var 3            (name)
+  47   6     load_var 1              (input)
+       7     load_field 1            (message)
+       8     store_var 3             (name)
 
-  45   7    jump +4                (to 11)
+  45   9     jump +4                 (to 13)
+       10    load_var 4              (_4)
+       11    load_field 0            (name)
+       12    store_var 3             (name)
 
-  46   8    load_var 1             (input)
-       9    load_field 0           (name)
-       10   store_var 3            (name)
+  50   13    load_var 1              (input)
+       14    store_var 6             (_8)
+       15    load_var 6              (_8)
+       16    narrow_bind 0 6         
+       17    pop_jump_if_false +2    (to 19)
+       18    jump +6                 (to 24)
 
-  50   11   load_var 1             (input)
-       12   is_type 0              
-       13   pop_jump_if_false +2   (to 15)
-       14   jump +6                (to 20)
+  52   19    load_var 1              (input)
+       20    load_field 0            (code)
+       21    unary_op -              
+       22    store_var 5             (age)
 
-  52   15   load_var 1             (input)
-       16   load_field 0           (code)
-       17   unary_op -             
-       18   store_var 4            (age)
+  50   23    jump +4                 (to 27)
+       24    load_var 6              (_8)
+       25    load_field 1            (age)
+       26    store_var 5             (age)
 
-  50   19   jump +4                (to 23)
+  55   27    load_var 1              (input)
+       28    store_var 8             (_13)
+       29    load_var 8              (_13)
+       30    narrow_bind 0 8         
+       31    pop_jump_if_false +2    (to 33)
+       32    jump +4                 (to 36)
 
-  51   20   load_var 1             (input)
-       21   load_field 1           (age)
-       22   store_var 4            (age)
+  62   33    load_var 2              (threshold)
+       34    store_var 7             (role_mult)
 
-  55   23   load_var 1             (input)
-       24   is_type 0              
-       25   pop_jump_if_false +2   (to 27)
-       26   jump +4                (to 30)
+  55   35    jump +16                (to 51)
+       36    load_var 8              (_13)
+       37    load_field 2            (role)
+       38    discriminant            
+       39    jump_table 0            ([to 49, to 46, to 43, to 40], default to 102)
 
-  62   27   load_var 2             (threshold)
-       28   store_var 5            (role_mult)
+  60   40    load_var 2              (threshold)
+       41    store_var 7             (role_mult)
 
-  55   29   jump +16               (to 45)
+  56   42    jump +9                 (to 51)
 
-  56   30   load_var 1             (input)
-       31   load_field 2           (role)
-       32   discriminant           
-       33   jump_table 0           ([to 43, to 40, to 37, to 34], default to 96)
+  59   43    load_var 2              (threshold)
+       44    store_var 7             (role_mult)
 
-  60   34   load_var 2             (threshold)
-       35   store_var 5            (role_mult)
+  56   45    jump +6                 (to 51)
 
-  56   36   jump +9                (to 45)
+  58   46    load_var 2              (threshold)
+       47    store_var 7             (role_mult)
 
-  59   37   load_var 2             (threshold)
-       38   store_var 5            (role_mult)
+  56   48    jump +3                 (to 51)
 
-  56   39   jump +6                (to 45)
+  57   49    load_var 2              (threshold)
+       50    store_var 7             (role_mult)
 
-  58   40   load_var 2             (threshold)
-       41   store_var 5            (role_mult)
+  65   51    load_var 5              (age)
+       52    load_const 1            (2)
+       53    mul_int                 
+       54    load_var 7              (role_mult)
+       55    add_int                 
+       56    store_var_load_var 9    (base)
 
-  56   42   jump +3                (to 45)
+  66   57    load_var 7              (role_mult)
+       58    cmp_int_op >            
+       59    pop_jump_if_false +2    (to 61)
+       60    jump +4                 (to 64)
 
-  57   43   load_var 2             (threshold)
-       44   store_var 5            (role_mult)
+  69   61    load_var 9              (base)
+       62    store_var 10            (capped)
 
-  65   45   load_var 4             (age)
-       46   load_const 1           (2)
-       47   mul_int                
-       48   load_var 5             (role_mult)
-       49   add_int                
-       50   store_var_load_var 6   (base)
+  66   63    jump +3                 (to 66)
 
-  66   51   load_var 5             (role_mult)
-       52   cmp_int_op >           
-       53   pop_jump_if_false +2   (to 55)
-       54   jump +4                (to 58)
+  67   64    load_var 7              (role_mult)
+       65    store_var 10            (capped)
 
-  69   55   load_var 6             (base)
-       56   store_var 7            (capped)
+  71   66    load_var2 10 7          
+       67    add_int                 
+       68    store_var_load_var 11   (total)
 
-  66   57   jump +3                (to 60)
+  73   69    load_var 2              (threshold)
+       70    cmp_int_op >            
+       71    load_const 2            (true)
+       72    cmp_op ==               
+       73    pop_jump_if_false +2    (to 75)
+       74    jump +4                 (to 78)
 
-  67   58   load_var 5             (role_mult)
-       59   store_var 7            (capped)
+  75   75    load_const 3            (" [LOW]")
+       76    store_var 12            (suffix)
 
-  71   60   load_var2 7 5          
-       61   add_int                
-       62   store_var_load_var 8   (total)
+  73   77    jump +3                 (to 80)
 
-  73   63   load_var 2             (threshold)
-       64   cmp_int_op >           
-       65   load_const 2           (true)
-       66   cmp_op ==              
-       67   pop_jump_if_false +2   (to 69)
-       68   jump +4                (to 72)
+  74   78    load_const 4            (" [HIGH]")
+       79    store_var 12            (suffix)
 
-  75   69   load_const 3           (" [LOW]")
-       70   store_var 9            (suffix)
+  79   80    load_var2 9 10          
+       81    load_var 11             (total)
+       82    load_type 5             
+       83    alloc_array 3           
+       84    store_var 13            (scores)
 
-  73   71   jump +3                (to 74)
+  80   85    load_var 13             (scores)
+       86    load_const 6            (0)
+       87    load_var 11             (total)
+       88    store_array_element     
 
-  74   72   load_const 4           (" [HIGH]")
-       73   store_var 9            (suffix)
+  81   89    load_var 13             (scores)
+       90    load_const 6            (0)
+       91    load_array_element      
 
-  79   74   load_var2 6 7          
-       75   load_var 8             (total)
-       76   load_type 5            
-       77   alloc_array 3          
-       78   store_var 10           (scores)
+  77   92    load_var2 3 12          
+       93    bin_op +                
 
-  80   79   load_var 10            (scores)
-       80   load_const 6           (0)
-       81   load_var 8             (total)
-       82   store_array_element    
-
-  81   83   load_var 10            (scores)
-       84   load_const 6           (0)
-       85   load_array_element     
-
-  77   86   load_var2 3 9          
-       87   bin_op +               
-
-  83   88   load_var2 6 5          
-       89   load_const 7           ("base")
-       90   load_const 8           ("role")
-       91   load_type 9            
-       92   load_type 5            
-       93   alloc_map 2            
-       94   init_instance 0        (user.Report .score, .label, .breakdown)
-       95   return                 
-       96   unreachable            
+  83   94    load_var2 9 7           
+       95    load_const 7            ("base")
+       96    load_const 8            ("role")
+       97    load_type 9             
+       98    load_type 5             
+       99    alloc_map 2             
+       100   init_instance 0         (user.Report .score, .label, .breakdown)
+       101   return                  
+       102   unreachable             
 }
