@@ -195,13 +195,17 @@ pub fn render_diagnostic(
             let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
             render_ariadne(diagnostic, sources, &mut cache, config.color)
         }
-        DiagnosticFormat::Agent => render_agent(
-            diagnostic,
-            sources,
-            file_paths,
-            config.color,
-            config.show_error_codes,
-        ),
+        DiagnosticFormat::Agent => {
+            let mut path_cache = HashMap::new();
+            render_agent(
+                diagnostic,
+                sources,
+                file_paths,
+                &mut path_cache,
+                config.color,
+                config.show_error_codes,
+            )
+        }
         DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
     }
 }
@@ -227,6 +231,7 @@ pub fn render_diagnostics(
     // identical (safe under `BAML_CACHE_VERIFY`).
     let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
         .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
+    let mut path_cache = HashMap::new();
     diagnostics
         .iter()
         .map(|d| match (&config.format, &mut ariadne_cache) {
@@ -237,6 +242,7 @@ pub fn render_diagnostics(
                 d,
                 sources,
                 file_paths,
+                &mut path_cache,
                 config.color,
                 config.show_error_codes,
             ),
@@ -407,6 +413,7 @@ fn render_agent(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
     file_paths: &HashMap<FileId, PathBuf>,
+    path_cache: &mut HashMap<FileId, String>,
     color: bool,
     show_error_codes: bool,
 ) -> String {
@@ -431,7 +438,12 @@ fn render_agent(
     let mut lines =
         Vec::with_capacity(1 + diagnostic.annotations.len() + diagnostic.related_info.len());
     if let Some(index) = primary_index {
-        let location = format_span(diagnostic.annotations[index].span, sources, file_paths);
+        let location = format_span(
+            diagnostic.annotations[index].span,
+            sources,
+            file_paths,
+            path_cache,
+        );
         lines.push(format!("{location} {label}: {}", diagnostic.message));
 
         if diagnostic.annotations[index]
@@ -460,7 +472,7 @@ fn render_agent(
         } else {
             "secondary"
         };
-        let location = format_span(annotation.span, sources, file_paths);
+        let location = format_span(annotation.span, sources, file_paths, path_cache);
         match &annotation.message {
             Some(message) => lines.push(format!("  {kind} {location}: {message}")),
             None => lines.push(format!("  {kind} {location}")),
@@ -469,7 +481,7 @@ fn render_agent(
 
     for related in &diagnostic.related_info {
         let location = related.file_path.as_ref().map_or_else(
-            || format_span(related.span, sources, file_paths),
+            || format_span(related.span, sources, file_paths, path_cache),
             |path| format_span_with_path(related.span, path, sources),
         );
         lines.push(format!("  related {location}: {}", related.message));
@@ -498,9 +510,12 @@ fn format_span(
     span: Span,
     sources: &HashMap<FileId, String>,
     file_paths: &HashMap<FileId, PathBuf>,
+    path_cache: &mut HashMap<FileId, String>,
 ) -> String {
-    let path = shortest_unique_path(span.file_id, file_paths);
-    format_span_with_path(span, &path, sources)
+    let path = path_cache
+        .entry(span.file_id)
+        .or_insert_with(|| shortest_unique_path(span.file_id, file_paths));
+    format_span_with_path(span, path, sources)
 }
 
 fn format_span_with_path(span: Span, path: &str, sources: &HashMap<FileId, String>) -> String {
