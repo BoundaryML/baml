@@ -7365,6 +7365,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         irrefutable_ctx,
                         &flow_ty,
                     );
+                    // A `let … else` pattern is runtime-tested (failure takes
+                    // the else branch), so it may not claim function values.
+                    // A plain `let` emits no test — refutable plain-let
+                    // patterns are already rejected above.
+                    if else_branch.is_some() {
+                        self.check_no_fn_typed_runtime_test(*pattern, body, initializer.unwrap());
+                    }
                     if else_branch.is_some() && !pattern_had_error {
                         let scrut_for_matrix = self.matrix_normalize_scrut(&flow_ty);
                         let report = crate::pattern_lowering::compute_match_usefulness(
@@ -7507,6 +7514,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 }
+
+                // A while-let pattern is tested every iteration, so it may
+                // not claim function values.
+                self.check_no_fn_typed_runtime_test(*pattern, body, *while_body);
 
                 false
             }
@@ -8109,7 +8120,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             scrutinee_ty_for_matrix,
         );
         // Exhaustiveness diagnostic.
-        if report.missing.is_empty() {
+        let exhaustive = report.missing.is_empty();
+        if exhaustive {
             self.exhaustive_matches.insert(match_expr_id);
         } else {
             let missing: Vec<String> = report
@@ -8124,6 +8136,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 match_expr_id,
             );
+        }
+
+        // Function-typed patterns cannot be value-tested at runtime, so they
+        // are only legal where no test is emitted: the final arm of an
+        // exhaustive, guardless, non-Or match (MIR's exhaustive-last-arm
+        // elision — coverage already proved every reaching value matches).
+        // Everywhere else, a pattern claiming function values would compile
+        // into a constant-false test that silently rejects the very values it
+        // names — reject it here instead.
+        for (idx, arm_id) in arms.iter().enumerate() {
+            let arm = &body.match_arms[*arm_id];
+            let elided = exhaustive
+                && idx + 1 == arms.len()
+                && arm.guard.is_none()
+                && !matches!(body.patterns[arm.pattern], ast::Pattern::Or(_));
+            if !elided {
+                self.check_no_fn_typed_runtime_test(arm.pattern, body, arm.body);
+            }
         }
 
         for arm in report.unreachable_arms {
@@ -8286,6 +8316,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
+        // An if-let pattern is always runtime-tested (that's the construct's
+        // point), so it may not claim function values.
+        self.check_no_fn_typed_runtime_test(pattern_id, body, then_branch);
+
         match else_ty {
             Some(else_ty) => Self::join_types(&then_ty, &else_ty),
             None => Ty::Void {
@@ -8326,6 +8360,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         self.restore_scoped_locals(&snapshot);
+
+        // `is` always evaluates its test, so a function-claiming pattern
+        // would be constant-false even for values that ARE members of the
+        // written type — reject rather than mis-answer.
+        self.check_no_fn_typed_runtime_test(pattern_id, body, scrutinee_expr_id);
 
         Ty::Bool {
             attr: TyAttr::default(),
@@ -8506,6 +8545,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm_result =
                     self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, body, arm.body);
                 self.finalize_pattern_lowering(arm.pattern, &arm_result, None, None, &arm_flow);
+
+                // Catch arms are always runtime-tested (an unmatched error
+                // rethrows — there is no elided final arm), so they may not
+                // claim function values.
+                self.check_no_fn_typed_runtime_test(arm.pattern, body, arm.body);
 
                 // In a checking position, adopt the expected type into the
                 // handler body too (not just the catch base) — so e.g. an empty
@@ -8722,33 +8766,36 @@ impl<'db> TypeInferenceBuilder<'db> {
             .is_empty()
     }
 
-    /// Does `ty` contain an unknown-like leaf? `count_builtin` decides whether
-    /// the builtin `unknown` top type counts: callers that want to *skip* a
-    /// check when a type is unconstrained (or-pattern compat, exhaustiveness)
-    /// pass `true`; the `pattern_expected_ty` gate passes `false`, because a
-    /// genuine `unknown` annotation (e.g. `unknown[]`) is a usable expected
-    /// type — only a true resolution failure (`Unknown`/`Error`) disqualifies.
-    fn ty_contains_unknown_like(ty: &Ty, count_builtin: bool) -> bool {
+    /// Does `ty` contain an *unresolved* leaf — an error-recovery sentinel
+    /// (`Ty::Unknown`/`Ty::Error`, minted where resolution already failed and
+    /// was diagnosed at its own site) or a still-in-flight inference
+    /// placeholder (`Ty::Infer`)? Callers skip checks whose subject is not
+    /// (yet) a determined type, so diagnostics don't cascade off an
+    /// already-failed or undetermined input.
+    ///
+    /// The builtin `unknown` top type (`Ty::BuiltinUnknown`) deliberately
+    /// does NOT count: user-written `unknown` is a real, fully-determined
+    /// type — the top of the subtype lattice, invariant in argument positions
+    /// like any other type — and must never behave like a hole. A `let`
+    /// annotation like `unknown[]` is a usable expected type that pins its
+    /// binding (so a later heterogeneous `push` type-checks); an `unknown[]`
+    /// pattern covers exactly the `unknown[]` member.
+    fn ty_contains_unresolved(ty: &Ty) -> bool {
         match ty {
-            Ty::Unknown { .. } | Ty::Error { .. } => true,
-            Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => count_builtin,
-            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => args
-                .iter()
-                .any(|arg| Self::ty_contains_unknown_like(arg, count_builtin)),
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. } => true,
+            Ty::BuiltinUnknown { .. } => false,
+            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
+                args.iter().any(Self::ty_contains_unresolved)
+            }
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
-                Self::ty_contains_unknown_like(base, count_builtin)
-                    || interface
-                        .tys()
-                        .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
+                Self::ty_contains_unresolved(base)
+                    || interface.tys().any(Self::ty_contains_unresolved)
             }
-            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
-                Self::ty_contains_unknown_like(elem, count_builtin)
-            }
+            Ty::List(elem, _) | Ty::EvolvingList(elem, _) => Self::ty_contains_unresolved(elem),
             Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-                Self::ty_contains_unknown_like(key, count_builtin)
-                    || Self::ty_contains_unknown_like(value, count_builtin)
+                Self::ty_contains_unresolved(key) || Self::ty_contains_unresolved(value)
             }
             Ty::Function {
                 params,
@@ -8758,13 +8805,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => {
                 params
                     .iter()
-                    .any(|param| Self::ty_contains_unknown_like(&param.ty, count_builtin))
-                    || Self::ty_contains_unknown_like(ret, count_builtin)
-                    || Self::ty_contains_unknown_like(throws, count_builtin)
+                    .any(|param| Self::ty_contains_unresolved(&param.ty))
+                    || Self::ty_contains_unresolved(ret)
+                    || Self::ty_contains_unresolved(throws)
             }
             Ty::Future(value, error, _) => {
-                Self::ty_contains_unknown_like(value, count_builtin)
-                    || Self::ty_contains_unknown_like(error, count_builtin)
+                Self::ty_contains_unresolved(value) || Self::ty_contains_unresolved(error)
             }
             Ty::Enum(..)
             | Ty::EnumVariant(..)
@@ -8788,25 +8834,29 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Recovery-placeholder check that treats the builtin `unknown` top type as
-    /// unconstrained too — for callers that want to *skip* work when a type is
-    /// either a resolution failure or genuinely `unknown`.
-    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
-        Self::ty_contains_unknown_like(ty, true)
-    }
-
-    /// Strict resolution-failure check: only the recovery placeholders
-    /// (`Unknown`/`Error`) count, NOT the builtin `unknown` top type. A `let`
-    /// annotation like `unknown[]` is a real expected type and must pin the
-    /// binding (so a later heterogeneous `push` type-checks), rather than fall
-    /// back to an evolving `never[]` that locks onto the first pushed value.
-    fn ty_contains_resolution_failure(ty: &Ty) -> bool {
-        Self::ty_contains_unknown_like(ty, false)
-    }
-
     /// Narrow a scrutinee's flow type (`incoming`) through a pattern's type
-    /// (`constraint`) — the pattern-side entry to [`Self::intersect_types`],
-    /// used for match/`is` arm narrowing and pattern ascriptions.
+    /// (`constraint`) — the pattern-side entry point used for match/`is` arm
+    /// narrowing and pattern ascriptions. The result is simultaneously the
+    /// binding's type, the arm-body narrowing, AND the type MIR emits the
+    /// arm's runtime `IsType` test from — so it must never *under*-approximate
+    /// the set of values the written pattern admits, or the arm silently stops
+    /// matching values the spec says it matches.
+    ///
+    /// Two regimes:
+    ///
+    /// - **Concrete (no in-scope rigid vars / projections on either side):**
+    ///   [`Self::intersect_types`] — exact, since concrete meets are decidable.
+    ///
+    /// - **Rigid-involving:** a rigid variable is only *potentially* unifiable
+    ///   with other types, so the equality/subtype meet under-approximates
+    ///   (dropping possibly-inhabited members). The arm therefore matches and
+    ///   binds exactly its **written** pattern type: the runtime test is
+    ///   invariant and frame-realized, so any value that passes belongs to the
+    ///   pattern type as written. Exceptions: an irrefutable arm
+    ///   (`scrutinee <: pattern`) keeps the (narrower, exact) scrutinee type,
+    ///   and a provably-impossible pair — the overlap oracle's `No`, trusted
+    ///   only when every type variable on both sides is in scope — stays
+    ///   `Never` (reported as a type error by `check_pattern_vs_scrut_subtype`).
     fn intersect_pattern_flow_types(&self, incoming: &Ty, constraint: &Ty) -> Ty {
         if matches!(incoming, Ty::Unknown { .. } | Ty::Error { .. }) {
             return constraint.clone();
@@ -8814,35 +8864,51 @@ impl<'db> TypeInferenceBuilder<'db> {
         if matches!(constraint, Ty::Unknown { .. } | Ty::Error { .. }) {
             return incoming.clone();
         }
-        let intersected = self.intersect_types(incoming, constraint);
-        // `Never`-rescue for rigid-carrying pairs. `intersect_types` is an
-        // equality/subtype meet, so an in-scope rigid type variable (or residual
-        // projection) against anything but an identical type falls through to
-        // `Never` — wrongly declaring a *potentially*-matching arm dead
-        // (`let b: Box<T>` against a `Box<int>` member matches whenever `T`
-        // realizes to `int`). Only when that happens, ask the overlap oracle
-        // whether some realization of the rigid variables could give the two
-        // types a common value. If so, the arm's matched type is the pattern's
-        // own type: the runtime `IsType` test is invariant and frame-realized,
-        // so any value that passes it belongs to the pattern type as written.
-        // Provably-impossible pairs keep `Never` (and are reported as a type
-        // error by `check_pattern_vs_scrut_subtype`). Rescue-only scoping keeps
-        // every currently-succeeding intersection — e.g. `T | null` vs `null`
-        // → `null` — untouched.
-        if matches!(intersected, Ty::Never { .. })
-            && (self.contains_in_scope_rigid_or_projection(incoming)
-                || self.contains_in_scope_rigid_or_projection(constraint))
-            && self.pattern_overlap_verdict(constraint, incoming) != crate::unify::Overlap::No
+        if self.contains_in_scope_rigid_or_projection(incoming)
+            || self.contains_in_scope_rigid_or_projection(constraint)
         {
+            let incoming_expanded = self.expand_alias_chains(incoming.clone());
+            let constraint_expanded = self.expand_alias_chains(constraint.clone());
+            // Irrefutable: every scrutinee value matches, and the scrutinee
+            // type is the exact (possibly narrower) description of them.
+            if self.is_subtype(&incoming_expanded, &constraint_expanded) {
+                return incoming.clone();
+            }
+            // Provably dead — only when the oracle's verdict is trustworthy:
+            // a type variable outside `generic_params` is an opaque atom to
+            // the oracle, so a `No` over such a type would be judging a
+            // variable it cannot see (a false dead-arm error).
+            if self.all_type_vars_in_scope(&incoming_expanded)
+                && self.all_type_vars_in_scope(&constraint_expanded)
+                && self.pattern_overlap_verdict(constraint, incoming) == crate::unify::Overlap::No
+            {
+                return Ty::Never {
+                    attr: TyAttr::default(),
+                };
+            }
             return constraint.clone();
         }
-        intersected
+        self.intersect_types(incoming, constraint)
+    }
+
+    /// Whether every type variable occurring in `ty` is one of this scope's
+    /// rigid params — the completeness precondition for trusting the overlap
+    /// oracle's `No` verdicts (see [`crate::pattern_overlap::PatternOverlapEnv`]).
+    fn all_type_vars_in_scope(&self, ty: &Ty) -> bool {
+        !crate::generics::contains_typevar_where(ty, &|name| !self.generic_params.contains(name))
     }
 
     /// Whether `ty` mentions an in-scope rigid type parameter
     /// (`self.generic_params`, which includes `Self` in interface-owned bodies)
     /// or an associated-type projection — the inputs whose reachability the
     /// equality/subtype relations cannot decide and the overlap oracle can.
+    ///
+    /// Synthetic effect parameters (`__effect_param_N`, rendered `callback`)
+    /// count like any other rigid: they ride in a function type's `throws`
+    /// position, where matching follows function-type variance (`throws` is
+    /// covariant), so a pattern that does not care about the effect coarsens
+    /// it — `throws unknown` is a supertype of every `throws E` and the
+    /// ordinary subtype checks decide such pairs without special-casing.
     fn contains_in_scope_rigid_or_projection(&self, ty: &Ty) -> bool {
         crate::generics::contains_ty_where(ty, &|t| match t {
             Ty::TypeVar(name, _) => self.generic_params.contains(name),
@@ -8978,15 +9044,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         // A derived type is a useful bidirectional hint only when it is fully
-        // resolved: not polluted by a recovery placeholder, and not still
-        // carrying an *unspecialized* generic. Declared generics live on the
-        // type as `TypeVar` args now, so an unspecialized class shows up as a
+        // resolved: not polluted by an unresolved leaf (`Unknown`/`Error`
+        // recovery, in-flight `Infer`), and not still carrying an
+        // *unspecialized* generic. Declared generics live on the type as
+        // `TypeVar` args now, so an unspecialized class shows up as a
         // non-rigid type var; the enclosing function's own rigid params (e.g.
         // the `Err` in `AllFailed<Err>`) are already bound and so don't
-        // disqualify it. A genuine `unknown` annotation (e.g. `unknown[]`) is a
-        // usable expected type, so only a true resolution failure (`Unknown`/
-        // `Error`) disqualifies — not the builtin `unknown` top type.
-        if Self::ty_contains_resolution_failure(&ty)
+        // disqualify it. A genuine `unknown` annotation (e.g. `unknown[]`) is
+        // a usable expected type — the builtin `unknown` top type never
+        // disqualifies.
+        if Self::ty_contains_unresolved(&ty)
             || crate::generics::contains_non_rigid_typevar(&ty, &self.generic_params)
         {
             None
@@ -9016,8 +9083,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             for (pat, other_ty) in entries.iter().skip(1) {
-                if Self::ty_contains_recovery_unknown(first_ty)
-                    || Self::ty_contains_recovery_unknown(other_ty)
+                if Self::ty_contains_unresolved(first_ty) || Self::ty_contains_unresolved(other_ty)
                 {
                     continue;
                 }
@@ -15316,7 +15382,12 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
                     Ctor::Single(Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()))
                 })
                 .collect(),
-            Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+            // Ctor args are canonicalized so the arg-sensitive ctor identity
+            // agrees with the (equally canonicalized) pattern-side ctors.
+            Ty::Class(qtn, args, _) => vec![Ctor::Class(
+                qtn.clone(),
+                args.iter().map(|a| self.normalize(a)).collect(),
+            )],
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
             Ty::Interface(_, _, _, _) => vec![Ctor::NonExhaustive],
@@ -15589,8 +15660,8 @@ impl TypeInferenceBuilder<'_> {
             },
         );
         let scrut_for_check = self.expand_alias_chains(scrut_ty.clone());
-        if Self::ty_contains_recovery_unknown(&pat_natural)
-            || Self::ty_contains_recovery_unknown(&scrut_for_check)
+        if Self::ty_contains_unresolved(&pat_natural)
+            || Self::ty_contains_unresolved(&scrut_for_check)
         {
             return;
         }
@@ -15603,9 +15674,14 @@ impl TypeInferenceBuilder<'_> {
             // realization — `Pair<T, T>` against `Pair<int, string>`, or a
             // bounded `T` against a member outside its bound — is dead code, a
             // type error exactly like a concrete mismatch. (Previously skipped:
-            // such arms compiled and silently never matched.)
-            self.pattern_overlap_verdict(&pat_natural, &scrut_for_check)
-                == crate::unify::Overlap::No
+            // such arms compiled and silently never matched.) The verdict is
+            // trusted only when every type variable on both sides is in scope:
+            // an out-of-scope variable is an opaque atom to the oracle, so a
+            // `No` over it would be a judgment about a variable it cannot see.
+            self.all_type_vars_in_scope(&pat_natural)
+                && self.all_type_vars_in_scope(&scrut_for_check)
+                && self.pattern_overlap_verdict(&pat_natural, &scrut_for_check)
+                    == crate::unify::Overlap::No
         } else if crate::generics::contains_typevar(&pat_natural)
             || crate::generics::contains_typevar(&scrut_for_check)
         {
@@ -15625,15 +15701,23 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    /// Whether a pattern of natural type `pat` can match a value of scrutinee type
-    /// `scrut`. A pattern *destructures* (reads) rather than stores, so containers
-    /// are checked **covariantly**: an empty or prefix array pattern (`[]`,
-    /// `[first, ..]`) has element type `never` and matches any `T[]`, and
-    /// `map {}` matches any `map<K, V>` — unlike an invariant store, where
-    /// `never[] </: int[]`. A concretely-typed element pattern still constrains:
-    /// `[x: string]` does not match `int[]`. Non-container pairs fall back to
-    /// bidirectional subtyping (either direction is a possible match — `Dog`
-    /// matches an `Animal` scrutinee, and vice-versa).
+    /// Whether an arm with natural type `pat` is *plausible* against a
+    /// scrutinee of type `scrut` — the arm-validity over-approximation behind
+    /// [`Self::check_pattern_vs_scrut_subtype`]'s `TypeMismatch`. This is NOT a
+    /// coverage or runtime-matching relation (coverage is `dpat_for_type`'s
+    /// strict column-subtype rule; the runtime relation is the canonical
+    /// invariant subtype): it errs toward accepting, and an accepted-but-dead
+    /// arm is caught downstream as unreachable rather than mis-compiled.
+    ///
+    /// The container recursion is deliberately lax in element positions
+    /// because a *structural* array/map pattern's natural type embeds its
+    /// element patterns' types, and element sub-patterns are matched against
+    /// element values with the full (bidirectional) relation: `[]` and
+    /// `[first, ..]` have element type `never` and fit any `T[]`, `[1, 2]`
+    /// (element type `1 | 2`) fits `int[]`. A concretely-disjoint element
+    /// still refutes: `[x: string]` cannot match `int[]`. Non-container pairs
+    /// use bidirectional subtyping (either direction is a possible match —
+    /// `Dog` matches an `Animal` scrutinee, and vice-versa).
     fn pattern_matchable(&self, pat: &Ty, scrut: &Ty) -> bool {
         let pat = self.expand_alias_chains(pat.clone());
         let scrut = self.expand_alias_chains(scrut.clone());
@@ -15701,6 +15785,95 @@ impl TypeInferenceBuilder<'_> {
                 .flat_map(|m| self.flatten_union_optional_members(m))
                 .collect(),
             other => vec![other],
+        }
+    }
+
+    /// Whether `ty` — a pattern's recorded matched type — claims
+    /// function-typed *values* at a value-tested level: a `Ty::Function` at
+    /// the top level or as a union member (after alias expansion). Every
+    /// callable value is fully realized (it curries its complete type
+    /// arguments at creation), but the runtime cannot yet faithfully
+    /// reconstruct every callable's signature (the VM's `value_concrete_ty`:
+    /// the stored `Function` signature erases generic positions, so bound
+    /// methods reconstruct no type and closures from generic frames
+    /// reconstruct coarsened ones) — so an emitted `is_type` test against
+    /// such a type silently misroutes those callables. Fail closed: reject
+    /// the test outright. A function type nested under a class/list
+    /// constructor is fine: there the runtime compares realized type
+    /// *arguments*, a type-level comparison.
+    fn ty_claims_function_values(&self, ty: &Ty) -> bool {
+        self.flatten_union_optional_members(ty)
+            .iter()
+            .any(|m| matches!(m, Ty::Function { .. }))
+    }
+
+    /// Report [`TirTypeError::FunctionTypedPatternNotTestable`] for every
+    /// component of `pat_id` that would receive a runtime *value* test whose
+    /// type claims function values ([`Self::ty_claims_function_values`]).
+    ///
+    /// Callers invoke this only for patterns in tested positions: every match
+    /// arm except the final arm of an exhaustive, guardless, non-Or match
+    /// (whose test MIR elides — the one position where a function-typed
+    /// pattern is sound, because coverage already proved every reaching value
+    /// matches), plus `is` / `if let` / `while let` / `let … else` / `catch`
+    /// patterns, which are always tested. Bare binds and wildcards emit no
+    /// test, and a class-head or array-shape test compares type arguments and
+    /// shape rather than function values, so only their *sub*-patterns
+    /// recurse.
+    fn check_no_fn_typed_runtime_test(&mut self, pat_id: PatId, body: &ExprBody, at_expr: ExprId) {
+        match &body.patterns[pat_id].clone() {
+            ast::Pattern::Wildcard | ast::Pattern::Bind { subpat: None, .. } => {}
+            ast::Pattern::Bind {
+                subpat: Some(sp), ..
+            } => self.check_no_fn_typed_runtime_test(*sp, body, at_expr),
+            ast::Pattern::Or(parts) => {
+                for &p in parts {
+                    self.check_no_fn_typed_runtime_test(p, body, at_expr);
+                }
+            }
+            ast::Pattern::Type(_) => {
+                let Some(ty) = self.pattern_types.get(&pat_id).cloned() else {
+                    return;
+                };
+                if self.ty_claims_function_values(&ty) {
+                    self.report_at_pat_or_expr(
+                        TirTypeError::FunctionTypedPatternNotTestable { ty },
+                        pat_id,
+                        at_expr,
+                    );
+                }
+            }
+            ast::Pattern::Class { fields, .. } => {
+                for fp in fields {
+                    self.check_no_fn_typed_runtime_test(fp.pat, body, at_expr);
+                }
+            }
+            ast::Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ascription,
+            } => {
+                // A `: T` ascription is a value test on the array itself.
+                if ascription.is_some()
+                    && let Some(ty) = self.pattern_types.get(&pat_id).cloned()
+                    && self.ty_claims_function_values(&ty)
+                {
+                    self.report_at_pat_or_expr(
+                        TirTypeError::FunctionTypedPatternNotTestable { ty },
+                        pat_id,
+                        at_expr,
+                    );
+                }
+                for &p in prefix.iter().chain(suffix.iter()) {
+                    self.check_no_fn_typed_runtime_test(p, body, at_expr);
+                }
+                if let Some(rp) = rest
+                    && let Some(rest_pat) = rp.pat
+                {
+                    self.check_no_fn_typed_runtime_test(rest_pat, body, at_expr);
+                }
+            }
         }
     }
 
@@ -15937,24 +16110,19 @@ impl TypeInferenceBuilder<'_> {
         // overlap pairwise on their generic args.
         // A `TypeVar` scrutinee member (e.g. the `T` in `T | string | null`)
         // is an *open* type: at runtime it stands for whatever concrete type
-        // `T` is instantiated to. `atoms_overlap` deliberately reports a
-        // `TypeVar` as overlapping *everything* (a `let v: T` pattern can
-        // match any value). That symmetry is correct for a `TypeVar`
-        // *pattern* but wrong for a `TypeVar` *member*: a purely-concrete
-        // pattern (`string`, `null`, a bare class) must not over-claim the
-        // open `T` member, or it shadows the dedicated `let v: T` arm and
-        // that arm is then reported unreachable (the `tag_or_value<T>` bug).
+        // `T` is instantiated to, so a pattern targets it exactly when the
+        // overlap oracle says some realization could give them a common value
+        // — a concrete `let s: string` arm *does* target the `T` member (it
+        // matches `T = string` values), while a pattern outside a bounded
+        // `T extends I`'s bound does not. Claiming is safe against the old
+        // over-claim shadowing hazard (a concrete arm claiming `T` and being
+        // deemed to cover it, reporting the dedicated `let v: T` arm
+        // unreachable — the `tag_or_value<T>` bug) because coverage is decided
+        // separately by `dpat_for_type`: in a rigid column, a non-reflexive
+        // pattern is a possible-but-not-covering `Single` row, never a cover.
         // A residual associated-type projection member (`Self.Item`) is open
-        // in exactly the same way, so it gets the same directional treatment.
-        //
-        // So make the overlap directional for open members: claim one only
-        // when the pattern itself can genuinely match open values — i.e. some
-        // atom of the pattern's natural type is a `TypeVar` or projection, or
-        // an `Unknown`/`Error` recovery atom. A pattern whose natural type is
-        // a union that *includes* a `TypeVar` (e.g. a `let p: T | Concrete`
-        // binding, as in the streaming `TStream | StreamNoYield` case) still
-        // claims it, because one of its atoms is a `TypeVar`. Concrete
-        // patterns skip the member.
+        // in exactly the same way. Open-atom patterns (`TypeVar`/projection/
+        // recovery atoms in the natural type) keep the oracle-free fast path.
         let natural_atoms = {
             let mut atoms = Vec::new();
             self.collect_overlap_atoms(&natural, &mut atoms);
@@ -15974,6 +16142,7 @@ impl TypeInferenceBuilder<'_> {
             .filter(|m| {
                 if matches!(m, Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. }) {
                     pattern_claims_open
+                        || self.pattern_overlap_verdict(&natural, m) != crate::unify::Overlap::No
                 } else {
                     self.types_overlap(&natural, m)
                 }
@@ -16045,14 +16214,16 @@ impl TypeInferenceBuilder<'_> {
             | (Ty::Bool { .. }, Ty::Literal(baml_base::Literal::Bool(_), _, _)) => true,
             // Two literals: same value (modulo float canonicalization).
             (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
-            // Class: same qtn AND every type-arg pair overlaps.
+            // Class: same qtn AND every type-arg pair could be the same
+            // realized argument (invariant positions — see
+            // [`Self::dispatch_args_compatible`]).
             (Ty::Class(q1, args1, _), Ty::Class(q2, args2, _)) => {
                 q1 == q2
                     && args1.len() == args2.len()
                     && args1
                         .iter()
                         .zip(args2.iter())
-                        .all(|(x, y)| self.types_overlap(x, y))
+                        .all(|(x, y)| self.dispatch_args_compatible(x, y))
             }
             // Enum/EnumVariant: same enum qtn. Variants of the same enum
             // overlap with each other and with the bare enum.
@@ -16060,14 +16231,18 @@ impl TypeInferenceBuilder<'_> {
             (Ty::EnumVariant(q1, v1, _), Ty::EnumVariant(q2, v2, _)) => q1 == q2 && v1 == v2,
             (Ty::Enum(q1, _), Ty::EnumVariant(q2, _, _))
             | (Ty::EnumVariant(q2, _, _), Ty::Enum(q1, _)) => q1 == q2,
-            // List/Map: same head AND inner types overlap. The element /
-            // key / value types are part of the pattern's natural shape
-            // (e.g. `[let x: int]` has natural `List<int>`), so a pattern
-            // targeting `List<int>` does not target `List<string>`.
+            // List/Map: same head AND the element / key / value pairs could
+            // be the same realized argument. These are invariant positions —
+            // a runtime list carries exactly one element type, so a pattern
+            // targeting `List<int>` targets neither `List<string>` nor
+            // `List<int | string>` (`int[]` values are not members of
+            // `(int | string)[]`). The element types are part of the
+            // pattern's natural shape (e.g. `[let x: int]` has natural
+            // `List<int>`).
             (
                 Ty::List(a_elem, _) | Ty::EvolvingList(a_elem, _),
                 Ty::List(b_elem, _) | Ty::EvolvingList(b_elem, _),
-            ) => self.types_overlap(a_elem, b_elem),
+            ) => self.dispatch_args_compatible(a_elem, b_elem),
             (
                 Ty::Map {
                     key: a_k,
@@ -16081,7 +16256,7 @@ impl TypeInferenceBuilder<'_> {
                     ..
                 }
                 | Ty::EvolvingMap(b_k, b_v, _),
-            ) => self.types_overlap(a_k, b_k) && self.types_overlap(a_v, b_v),
+            ) => self.dispatch_args_compatible(a_k, b_k) && self.dispatch_args_compatible(a_v, b_v),
             // Function: arities match AND every param pair overlaps AND
             // returns overlap. A `(int) -> int` pattern can never match a
             // `(string) -> int` value, so they must not be reported as
@@ -16140,6 +16315,91 @@ impl TypeInferenceBuilder<'_> {
             | (Ty::RustType { .. }, Ty::RustType { .. }) => true,
             // Anything else: distinct heads.
             _ => false,
+        }
+    }
+
+    /// Whether two generic-argument types could be the *same* realized
+    /// argument — the invariant-position analogue of [`Self::types_overlap`].
+    /// Runtime dispatch relates argument positions invariantly (an `int[]`
+    /// value is not a member of `(int | string)[]`), so a pattern claims a
+    /// container/class member only when the argument pair could be
+    /// equivalent, not merely overlapping — otherwise the claim leaks into
+    /// the arm's joined `matched_ty`, and the runtime test MIR emits from it
+    /// would admit a foreign member's value at the pattern's wider type.
+    ///
+    /// Open or recovery atoms (type variables, projections, the
+    /// `Unknown`/`Error` sentinels) anywhere in the pair keep the claim lax —
+    /// their realization is not decidable here, and over-claiming is
+    /// fail-safe (coverage stays strict per column). User-written `unknown`
+    /// (`BuiltinUnknown`) is NOT open: it is the decidable top type, and in
+    /// an invariant position it identifies exactly its own member (`unknown[]`
+    /// values are the lists constructed at element type `unknown`; an `int[]`
+    /// member shares none). Literals and enum variants widen to their bases
+    /// first so a structural pattern's natural element type (`[1, 2]` ⇒
+    /// `List<1 | 2>`) still claims its base-typed member (`int[]`).
+    fn dispatch_args_compatible(&self, a: &Ty, b: &Ty) -> bool {
+        let a = self.expand_alias_chains(a.clone());
+        let b = self.expand_alias_chains(b.clone());
+        let open = |t: &Ty| {
+            crate::generics::contains_ty_where(t, &|x| {
+                matches!(
+                    x,
+                    Ty::Unknown { .. }
+                        | Ty::Error { .. }
+                        | Ty::Infer { .. }
+                        | Ty::TypeVar(..)
+                        | Ty::AssociatedTypeProjection { .. }
+                )
+            })
+        };
+        if open(&a) || open(&b) {
+            return true;
+        }
+        match (&a, &b) {
+            (
+                Ty::List(a_elem, _) | Ty::EvolvingList(a_elem, _),
+                Ty::List(b_elem, _) | Ty::EvolvingList(b_elem, _),
+            ) => self.dispatch_args_compatible(a_elem, b_elem),
+            (
+                Ty::Map {
+                    key: a_k,
+                    value: a_v,
+                    ..
+                }
+                | Ty::EvolvingMap(a_k, a_v, _),
+                Ty::Map {
+                    key: b_k,
+                    value: b_v,
+                    ..
+                }
+                | Ty::EvolvingMap(b_k, b_v, _),
+            ) => self.dispatch_args_compatible(a_k, b_k) && self.dispatch_args_compatible(a_v, b_v),
+            (Ty::Class(q1, args1, _), Ty::Class(q2, args2, _)) => {
+                q1 == q2
+                    && args1.len() == args2.len()
+                    && args1
+                        .iter()
+                        .zip(args2.iter())
+                        .all(|(x, y)| self.dispatch_args_compatible(x, y))
+            }
+            _ => self.equivalent(
+                &Self::widen_literal_members(&a),
+                &Self::widen_literal_members(&b),
+            ),
+        }
+    }
+
+    /// Widen top-level literal / enum-variant members to their bases
+    /// ([`Self::widen_literal_base`]), through one level of union. Deeper
+    /// occurrences sit inside containers/classes, which
+    /// [`Self::dispatch_args_compatible`] recurses through before widening.
+    fn widen_literal_members(ty: &Ty) -> Ty {
+        match ty {
+            Ty::Union(members, attr) => Ty::Union(
+                members.iter().map(Self::widen_literal_base).collect(),
+                attr.clone(),
+            ),
+            other => Self::widen_literal_base(other),
         }
     }
 
@@ -16374,7 +16634,7 @@ impl TypeInferenceBuilder<'_> {
     }
 
     /// Build a `DPat` that matches every value of `t`. Used by `Type(t)`
-    /// patterns. Four regimes:
+    /// patterns. Five regimes:
     ///
     /// - Singleton types (`Literal`, `EnumVariant`, `null`) →
     ///   `DPat::single(t, scrut_ty)`.
@@ -16382,7 +16642,14 @@ impl TypeInferenceBuilder<'_> {
     ///   `Optional<T>`, unions of finites) → `DPat::or` of the
     ///   singletons; the algorithm explodes Or rows during specialization.
     /// - Class types → `DPat::class(qtn, [Wildcard for each field])`.
-    /// - Opaque alphabets (raw int/string/float, generics, lists, maps,
+    /// - Rigid-carrying leaves (`T`, `T[]`, `map<string, T>`, `Self.Item`, …):
+    ///   canonically equal to the column type → `DPat::wildcard` (the arm
+    ///   *definitely* covers the column — `let x: Self.Item` over a
+    ///   `Self.Item` member); otherwise → `DPat::single(t, scrut_ty)`, a
+    ///   possible-but-not-covering row (a rigid variable is only
+    ///   *potentially* unifiable with another type, so the arm is reachable
+    ///   but proves no coverage — a `_` after it stays reachable).
+    /// - Opaque concrete alphabets (raw int/string/float, lists, maps,
     ///   functions) → `DPat::wildcard`.
     ///
     /// Callers are expected to project union scrutinees onto a single
@@ -16429,11 +16696,17 @@ impl TypeInferenceBuilder<'_> {
                     .collect();
                 Self::or_combine(alts, scrut_ty)
             }
-            // Classes: structural ctor with all fields wildcarded.
+            // Classes: structural ctor with all fields wildcarded. The ctor's
+            // type args are canonicalized so the matrix's arg-sensitive ctor
+            // identity (`Box<T>` ≠ `Box<int>`, but `Box<IntAlias>` = `Box<int>`)
+            // agrees between the pattern and column sides; the field types are
+            // derived from the same canonical args so nested ctor identities
+            // stay consistent too.
             Ty::Class(qtn, args, _) => {
-                let field_tys = self.class_field_types_ordered(qtn, args);
+                let canonical_args: Vec<Ty> = args.iter().map(|a| self.normalize(a)).collect();
+                let field_tys = self.class_field_types_ordered(qtn, &canonical_args);
                 let fields = field_tys.into_iter().map(DPat::wildcard).collect();
-                DPat::class_inst(qtn.clone(), args.clone(), fields, scrut_ty.clone())
+                DPat::class_inst(qtn.clone(), canonical_args, fields, scrut_ty.clone())
             }
             Ty::Interface(_, _, _, _) => {
                 let field_tys = self
@@ -16443,10 +16716,58 @@ impl TypeInferenceBuilder<'_> {
                 let fields = field_tys.map(DPat::wildcard).collect();
                 DPat::interface(expanded.clone(), fields, scrut_ty.clone())
             }
-            // Opaque alphabets — best-effort: wildcard. Imprecise when
-            // the scrutinee is a union containing this type plus other
-            // members; documented above.
-            _ => DPat::wildcard(scrut_ty.clone()),
+            // Rigid-carrying leaves: reflexivity is a definite cover
+            // (wildcard); anything else is a possible-but-not-covering row.
+            // `Single` deliberately — the column alphabets treat it as outside
+            // their ctor set, so it proves no coverage, and the split includes
+            // present ctors so the row is still specialized (not falsely
+            // flagged unreachable).
+            _ if self.contains_in_scope_rigid_or_projection(&expanded) => {
+                if self.equivalent(&expanded, scrut_ty) {
+                    DPat::wildcard(scrut_ty.clone())
+                } else {
+                    DPat::single(self.normalize(&expanded), scrut_ty.clone())
+                }
+            }
+            // Fallback leaves. A pattern covers its column exactly when the
+            // column is provably a subtype of the pattern — every column value
+            // then matches, under the same canonical relation the runtime test
+            // evaluates (invariant generic arguments; contravariant/covariant
+            // function components). This includes function-typed patterns: a
+            // `throws unknown` pattern covers a `throws E` member because
+            // `E <: unknown` holds for every realization.
+            //
+            // Everything else is a possible-but-not-covering `Single` row: a
+            // concrete pattern over a rigid column (`let s: string` over `T`
+            // matches only the realizations that make `T` its subtype), a
+            // container pattern over a member with a different argument (an
+            // `int[]` value is not a member of `(int | string)[]`), and a
+            // disjoint concrete pair reached through a union wrap (the
+            // `string` alternative of `let p: T | string` lowered against a
+            // claimed `bool` member). The old lax disjunct — covariant
+            // container coverage via `pattern_matchable` — let a
+            // `(int | string)[]` arm cover an `int[]` column: MIR then
+            // skipped the arm's (invariant) test and bound the narrower array
+            // to the wider element type, and pushing through that binding
+            // corrupted the original. Unresolved-carrying patterns or columns
+            // stay wildcards: the resolution failure is already diagnosed,
+            // and coverage must not cascade on top of it — but only genuinely
+            // unresolved types (`Unknown`/`Error` recovery, in-flight
+            // `Infer`) qualify. User-written `unknown` is `BuiltinUnknown`, a
+            // real (top) type that is invariant in argument positions like
+            // any other: an `unknown[]` arm covers the `unknown[]` member and
+            // nothing else.
+            _ => {
+                let scrut_expanded = self.expand_alias_chains(scrut_ty.clone());
+                if self.is_subtype(&scrut_expanded, &expanded)
+                    || Self::ty_contains_unresolved(&expanded)
+                    || Self::ty_contains_unresolved(&scrut_expanded)
+                {
+                    DPat::wildcard(scrut_ty.clone())
+                } else {
+                    DPat::single(self.normalize(&expanded), scrut_ty.clone())
+                }
+            }
         }
     }
 
@@ -16736,8 +17057,16 @@ impl TypeInferenceBuilder<'_> {
             at_expr,
         );
 
+        // Ctor args canonicalized to agree with the column-side ctor identity
+        // (see `normalize`).
+        let canonical_args = args.iter().map(|a| self.normalize(a)).collect();
         PatternResult {
-            dpat: DPat::class_inst(qtn, args, lowered_fields.sub_dpats, scrut_ty.clone()),
+            dpat: DPat::class_inst(
+                qtn,
+                canonical_args,
+                lowered_fields.sub_dpats,
+                scrut_ty.clone(),
+            ),
             required_ty: Some(class_ty.clone()),
             matched_ty: class_ty,
             bindings: lowered_fields.bindings,
@@ -16965,7 +17294,7 @@ impl TypeInferenceBuilder<'_> {
             // a mismatch here than a statically-dead arm. Non-list types
             // (`..let r: int`) fail the same check.
             if let Some(expected) = self.pattern_expected_ty(rest_pat, body)
-                && !Self::ty_contains_recovery_unknown(&rest_ty)
+                && !Self::ty_contains_unresolved(&rest_ty)
                 && !crate::generics::contains_typevar(&rest_ty)
                 && !(self.is_subtype(expected.ty(), &rest_ty)
                     && self.is_subtype(&rest_ty, expected.ty()))

@@ -5,12 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.dead_bounded<T>(x: string | int) -> string throws never {
   { : "T" | "other"
     match (x : string | int) : "T" | "other"
-      t: T if true =>
+      t: T =>
         "T" : "T"
       _ =>
         "other" : "other"
   }
-  !! 885..893: type mismatch: expected string | int, got T
+  !! 765..773: type mismatch: expected string | int, got T
 }
 class user.DeadPair {
   a: A
@@ -19,12 +19,12 @@ class user.DeadPair {
 function user.dead_inconsistent<T>(x: user.DeadPair<int, string>) -> string throws never {
   { : "pair" | "other"
     match (x : user.DeadPair<int, string>) : "pair" | "other"
-      p: DeadPair<T, T> if true =>
+      p: DeadPair<T, T> =>
         "pair" : "pair"
       _ =>
         "other" : "other"
   }
-  !! 1213..1234: type mismatch: expected DeadPair<int, string>, got DeadPair<T, T>
+  !! 1085..1106: type mismatch: expected DeadPair<int, string>, got DeadPair<T, T>
 }
 class user.DeadPair$stream {
   a: A | null

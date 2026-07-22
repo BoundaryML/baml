@@ -86,14 +86,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·     ────────────────────────────
      ╰────
 
-  [type] E0063
-
-  × unreachable arm
-     ╭─[classes.baml:197:21]
- 197 │             null => default,
-     ·                     ───────
-     ╰────
-
   [type] E0003
 
   × unresolved name: `fetch_as`

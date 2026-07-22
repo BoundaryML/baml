@@ -724,21 +724,15 @@ function or_deep_class() -> int {
     }
 }
 
-// dispatch helpers — these were generic in Rust; here we use concrete variants
-// to avoid the type-argument inference issues with generic top-level functions.
-function dispatch_int_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
-    match (cb) {
-        let f: (int) -> int throws never => f(5),
-        let f: (string) -> int throws never => f("x")
-    }
-}
-
-function dispatch_union_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
-    match (cb) {
-        let f: (int) -> int throws never => f(5),
-        let f: (string) -> int throws never => f("hello")
-    }
-}
+// Dispatch-by-signature between two function-typed union members is a compile
+// error now (E0155): a non-final function-typed arm needs a runtime signature
+// test, and the runtime cannot yet faithfully reconstruct every callable's
+// signature (bound methods reconstruct none; closures from generic frames
+// reconstruct coarsened ones), so the language fails closed instead of
+// misrouting those callables. The banned shapes are pinned in the
+// fn_typed_patterns diagnostic project; the former dispatch_int_cb /
+// dispatch_union_cb helpers and their runtime tests were removed with the
+// ruling.
 
 // Per-test helpers that need unique names
 function test_let_or_same_binding() -> int {
@@ -1218,20 +1212,6 @@ test "let_wildcard_discards_value" {
 
 test "match_bind_with_type_ascription" {
     assert.is_true(baml.deep_equals(test_match_bind_type_ascription(), 101))
-}
-
-test "match_dispatches_int_callback" {
-    assert.is_true(baml.deep_equals(
-        dispatch_int_cb((n: int) -> int { n * 10 }),
-        50
-    ))
-}
-
-test "match_dispatches_string_callback" {
-    assert.is_true(baml.deep_equals(
-        dispatch_union_cb((s: string) -> int { 42 }),
-        42
-    ))
 }
 
 test "match_or_of_chain_bindings_swapped" {

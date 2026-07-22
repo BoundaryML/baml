@@ -150,17 +150,20 @@ class ArrayIterator<T> {
     type Error = never
 
     function next(self) -> T | Done throws never {
-      // Bounds-check by index, not by matching `at()` against null: when T is
-      // itself nullable, a stored null element must be yielded, not treated as
-      // the end of iteration.
+      // Bounds-check by index, not by matching the element against null: when
+      // T is itself nullable, a stored null element must be yielded, not
+      // treated as the end of iteration.
       if (self.idx >= self.arr.length()) {
         return Done {};
       }
-      let item = self.arr.at(self.idx);
+      // Index access yields the element at type `T` directly — in-bounds by
+      // the check above. No `at()`-plus-match: a runtime `let value: T` test
+      // is not reliable for every element type (a fn-typed element's value
+      // cannot be type-tested — the reason refutable fn patterns are E0155),
+      // so iteration must not gate elements on one.
+      let item = self.arr[self.idx];
       self.idx += 1;
-      match (item) {
-        let value: T => value,
-      }
+      return item;
     }
   }
 }

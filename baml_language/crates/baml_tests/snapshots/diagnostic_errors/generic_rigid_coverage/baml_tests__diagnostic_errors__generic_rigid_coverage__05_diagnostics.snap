@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive match on type int | string; missing: int, string
+    ╭─[main.baml:12:5]
+ 12 │ ╭─▶     match (x) {
+ 13 │ │           let t: T => "T",
+ 14 │ ╰─▶     }
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:22:14]
+ 22 │         _ => "other",
+    ·              ───────
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type T; missing: _
+    ╭─[main.baml:32:5]
+ 32 │ ╭─▶     match (x) {
+ 33 │ │           let s: string => s,
+ 34 │ ╰─▶     }
+    ╰────

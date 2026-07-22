@@ -3,9 +3,10 @@
 //! [`ty_family!`](baml_type_macros::ty_family) expands the master `Ty` enum
 //! below into the whole family — `Ty`, [`RuntimeTy`], [`CodegenTy`],
 //! [`RealizedTy`], [`ConcreteTy`], [`ConcreteRealizedTy`], [`TyTemplate`] —
-//! plus the per-member `FunctionParamTy` companion structs. Membership is by axis: each variant is
-//! tagged with exactly one `#[axis(..)]`, and each member includes a set of
-//! axes (a variant is present iff its axis is included). Nested positions are
+//! plus the per-member `FunctionParamTy` companion structs. Membership is by
+//! axis: each variant is tagged with exactly one `#[axis(..)]`, and each
+//! member includes a set of axes (a variant is present iff its axis is
+//! included). Nested positions are
 //! retargeted per member: deep members (`child: Self`) recurse into themselves;
 //! the shallow `Concrete*` members nest their declared `child`.
 //!

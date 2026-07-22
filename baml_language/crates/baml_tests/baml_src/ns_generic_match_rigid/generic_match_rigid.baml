@@ -6,10 +6,9 @@
 // `never` and MIR emitted a constant-false test — the arm silently never
 // matched regardless of the realized type.
 //
-// BUG(static-coverage): as in ns_generic_match_typevar, the coverage analysis
-// treats a rigid arm as covering the whole scrutinee, so the `if true` guards
-// below exist solely to keep the later arms statically reachable; remove them
-// when coverage models rigid arms as possible-but-not-covering.
+// Static coverage models these rigid arms as possible-but-not-covering rows:
+// they never statically cover a concrete scrutinee member, so every match here
+// needs (and keeps) its trailing `_` arm, which stays reachable.
 
 // ─── 1. class-generic pattern in a method body (match + `is`) ─────────────────
 
@@ -20,7 +19,7 @@ class RigidBox<T> {
     // only concrete types.
     function match_own(self, other: RigidBox<int> | int) -> string {
         match (other) {
-            let b: RigidBox<T> if true => "box",
+            let b: RigidBox<T> => "box",
             _ => "other",
         }
     }
@@ -97,7 +96,7 @@ function pick_rigid<T>(x: int | string) -> string {
     // Bare `T` against a scrutinee with only concrete members: the arm is
     // reachable (some realization matches each member), decided per-frame.
     match (x) {
-        let t: T if true => "T",
+        let t: T => "T",
         _ => "fallthrough",
     }
 }
@@ -127,7 +126,100 @@ test "fn_generic_arm_rejects_foreign_realization" {
     assert.equal(pick_rigid_foreign_fn(), "fallthrough")
 }
 
-// ─── 3. bounded rigid arm, satisfiable bound (positive polarity) ──────────────
+// ─── 3. concrete arms over rigid scrutinees (the mirror direction) ────────────
+
+// A concrete pattern over a bare-`T` scrutinee is possible-but-not-covering:
+// it matches exactly the realizations that make `T` its subtype, so the `_`
+// arm is statically required (omitting it is a non-exhaustive error, pinned in
+// projects/diagnostic_errors/generic_rigid_coverage) and stays reachable.
+function pick_concrete<T>(x: T) -> string {
+    match (x) {
+        let s: string => s + "!",
+        _ => "other",
+    }
+}
+
+function pick_concrete_miss_fn() -> string {
+    pick_concrete<int>(5)
+}
+
+test "concrete_arm_rejects_foreign_realization" {
+    assert.equal(pick_concrete_miss_fn(), "other")
+}
+
+function pick_concrete_hit_fn() -> string {
+    pick_concrete<string>("hi")
+}
+
+test "concrete_arm_matches_own_realization" {
+    assert.equal(pick_concrete_hit_fn(), "hi!")
+}
+
+// A union arm whose alternatives only partially overlap each scrutinee member
+// must still match the full written union: `let p: T | string` over `T | bool`
+// leaves the boolean arms reachable (they fire when `T` is not `bool`).
+function pick_mixed_union<T>(x: T | bool) -> string {
+    match (x) {
+        let p: T | string => "p",
+        true => "t",
+        false => "f",
+    }
+}
+
+function pick_mixed_union_bool_fn() -> string {
+    pick_mixed_union<int>(true)
+}
+
+test "concrete_arms_after_open_union_arm_reachable" {
+    assert.equal(pick_mixed_union_bool_fn(), "t")
+}
+
+function pick_mixed_union_open_fn() -> string {
+    // T = bool: the value is a member of the `T` alternative, so the union
+    // arm captures it first (set-membership semantics, like the dynamic
+    // first-match capture in ns_generic_match_typevar).
+    pick_mixed_union<bool>(true)
+}
+
+test "open_union_arm_dynamic_first_match_capture" {
+    assert.equal(pick_mixed_union_open_fn(), "p")
+}
+
+// An arm matches and binds exactly its WRITTEN pattern type: alternatives
+// overlapping only a rigid scrutinee member are not dropped from the runtime
+// test. `let v: int | string` over `T | int` matches a `T = string` value.
+function pick_written_union<T>(x: T | int) -> string {
+    match (x) {
+        let v: int | string => "int-or-string",
+        _ => "other",
+    }
+}
+
+function pick_written_union_rigid_hit_fn() -> string {
+    pick_written_union<string>("hi")
+}
+
+test "written_union_arm_matches_rigid_member_realization" {
+    assert.equal(pick_written_union_rigid_hit_fn(), "int-or-string")
+}
+
+function pick_written_union_concrete_hit_fn() -> string {
+    pick_written_union<string>(5)
+}
+
+test "written_union_arm_matches_concrete_member" {
+    assert.equal(pick_written_union_concrete_hit_fn(), "int-or-string")
+}
+
+function pick_written_union_miss_fn() -> string {
+    pick_written_union<bool>(true)
+}
+
+test "written_union_arm_rejects_foreign_realization" {
+    assert.equal(pick_written_union_miss_fn(), "other")
+}
+
+// ─── 4. bounded rigid arm, satisfiable bound (positive polarity) ──────────────
 // The negative polarity — a bound that provably excludes every scrutinee
 // member — is a compile error, pinned in
 // projects/diagnostic_errors/generic_bound_patterns.
@@ -147,7 +239,7 @@ class RigidTagged {
 
 function pick_bounded<T extends RigidMarked>(x: RigidTagged | string) -> string {
     match (x) {
-        let t: T if true => "bounded",
+        let t: T => "bounded",
         _ => "other",
     }
 }

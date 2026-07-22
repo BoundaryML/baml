@@ -760,6 +760,18 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
+    /// A pattern claiming function-typed values sits in a position that emits a runtime value
+    /// test. Every callable value is fully realized (it curries its complete type arguments at
+    /// creation), but the runtime cannot yet faithfully reconstruct every callable's
+    /// signature: the stored `Function` signature erases generic positions instead of
+    /// referencing the frame slots the value's curried arguments would fill, so a bound
+    /// method reconstructs no type (its test is constant-false) and a closure created in a
+    /// generic frame reconstructs a coarsened one. Such a test silently misroutes those
+    /// callables, so fail closed: the one sound position is the final arm of an exhaustive,
+    /// guardless, non-Or `match`, whose test is elided because coverage already proved every
+    /// reaching value matches. (Fixing reconstruction — signature templates substituted with
+    /// the value's curried args — is the path to relaxing this error.)
+    FunctionTypedPatternNotTestable { ty: crate::ty::Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1808,6 +1820,17 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function type must declare an explicit `throws` clause; add `throws never` \
                      if calling it cannot throw"
+                )
+            }
+            TirTypeError::FunctionTypedPatternNotTestable { ty } => {
+                write!(
+                    f,
+                    "cannot test a value against function type `{}` at runtime: callable \
+                     signatures cannot yet be faithfully reconstructed for every value (bound \
+                     methods, closures from generic frames), so this test would silently \
+                     misroute them; make it the final arm of an exhaustive `match` (which \
+                     needs no test) or match on a non-function discriminant",
+                    ty.render_user_facing()
                 )
             }
         }

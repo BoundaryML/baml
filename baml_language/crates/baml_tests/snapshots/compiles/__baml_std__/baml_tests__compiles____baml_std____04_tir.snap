@@ -1324,16 +1324,14 @@ function baml.iter.ArrayIterator.iter(self: baml.iter.ArrayIterator<T>) -> baml.
   }
 }
 function baml.iter.ArrayIterator.next(self: baml.iter.ArrayIterator<T>) -> T | baml.iter.Done throws never {
-  { : T
+  { : never
     if (self.idx >= self.arr.length() : bool) : void
       { : never
         return Done {  } : baml.iter.Done
       }
-    let item = self.arr.at<T>(self.idx) : T | null
+    let item = self.arr[self.idx] : T
     self.idx Add= 1 : int
-    match (item : T | null) : T
-      value: T =>
-        value : T
+    return item : T
   }
 }
 class baml.iter.Range {

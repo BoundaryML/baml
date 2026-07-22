@@ -5,11 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 // in-scope type variables gives the pattern and the scrutinee a common value —
 // are type errors, like any concrete pattern/scrutinee mismatch. (Before the
 // overlap-oracle narrowing fix these compiled and silently never matched.)
-// The diagnostics snapshot is the assertion.
-//
-// The `if true` guards keep the trailing `_` arms statically reachable under
-// the current coverage analysis (which treats a rigid arm as covering the
-// whole scrutinee); they do not affect the reported errors.
+// The diagnostics snapshot is the assertion. The trailing `_` arms stay
+// statically reachable (a rigid arm never covers a concrete member).
 
 interface DeadMarked {
     function tag(self) -> string throws never
@@ -19,7 +16,7 @@ interface DeadMarked {
 // implements `DeadMarked`, so no realization of `T` can match.
 function dead_bounded<T extends DeadMarked>(x: string | int) -> string {
     match (x) {
-        let t: T if true => "T",
+        let t: T => "T",
         _ => "other",
     }
 }
@@ -33,7 +30,7 @@ class DeadPair<A, B> {
 // refutes the arm against every value of the scrutinee type.
 function dead_inconsistent<T>(x: DeadPair<int, string>) -> string {
     match (x) {
-        let p: DeadPair<T, T> if true => "pair",
+        let p: DeadPair<T, T> => "pair",
         _ => "other",
     }
 }

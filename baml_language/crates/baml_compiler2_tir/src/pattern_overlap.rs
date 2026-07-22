@@ -42,9 +42,15 @@ pub(crate) struct PatternOverlapEnv<'a> {
     /// Every in-scope rigid type parameter (function generics, enclosing-type
     /// generics, and `"Self"` in interface-owned bodies). Shared by name across both
     /// sides — the pattern's `T` and the scrutinee's `T` are the *same* variable (one
-    /// scope), unlike coherence's two independently-renamed impls. Must be complete:
-    /// a type variable absent from this set is treated as an opaque atom that
-    /// overlaps nothing but itself.
+    /// scope), unlike coherence's two independently-renamed impls.
+    ///
+    /// **Caller obligation:** a type variable absent from this set is treated as an
+    /// opaque atom that overlaps nothing but itself, so a `No` verdict over a type
+    /// mentioning an out-of-scope variable is a judgment about a variable the oracle
+    /// cannot see. Callers that act on `No` (dead-arm errors, `Never` narrowing)
+    /// must first check that every free type variable of both inputs is in this set
+    /// (see `TypeInferenceBuilder::all_type_vars_in_scope`); `Yes`/`Unknown` are
+    /// safe regardless.
     pub vars: &'a [Name],
     /// Interface bounds of the rigid params (`T extends I`). Bounds only ever
     /// *refute* (a pinned witness that provably fails a bound → `No`); they never

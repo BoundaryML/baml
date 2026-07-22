@@ -2621,18 +2621,19 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<T>)
     jump L1
 
   L0:
-    load_type #0
     load_var self
     load_field .arr
     load_var self
     load_field .idx
-    call baml.Array.at
+    load_array_element
+    store_var item
     load_var self
     copy 0
     load_field .idx
     load_const 1
     bin_op +
     store_field .idx
+    load_var item
     jump L2
 
   L1:

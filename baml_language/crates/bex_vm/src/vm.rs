@@ -1001,9 +1001,19 @@ fn realized_arg(ty: &baml_type::RuntimeTy) -> Option<baml_type::RealizedTy> {
 /// generic that does not narrow to a `RealizedTy` (a bug — see [`realized_arg`]).
 ///
 /// Used to reconstruct the concrete type of a callable value (closure / generic
-/// function). The signature erases unresolved generics to `unknown`
-/// (`Function::param_types` / `return_type`), so a generic callable reconstructs
-/// coarsely — but faithfully to what the runtime object carries.
+/// function).
+///
+/// BUG(erased-signature-reconstruction): every callable VALUE is fully
+/// realized — a `Closure` carries `captured_type_args`, a `BoundMethod` its
+/// complete curried `type_args` — but this reconstruction reads only the
+/// `Function`'s stored signature, which erases generic positions to `unknown`
+/// (`Function::param_types` / `return_type`) instead of referencing the frame
+/// slots those curried args fill. So a callable minted in a generic frame
+/// reconstructs coarsely, faithful only to the erased storage, not to the
+/// value. The fix is to store the signature as a template over the frame's
+/// type-arg slots and substitute the value's curried args here — which would
+/// also let `BoundMethod` reconstruct (its arm currently returns no type) and
+/// unlock relaxing E0155 (function-typed patterns).
 ///
 /// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
 fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::ConcreteRealizedTy> {
@@ -2033,11 +2043,15 @@ impl BexVm {
                 throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
             },
-            // BUG: a `BoundMethod` is a callable value and *should* reconstruct
-            // to its underlying function's type with the bound `self` parameter
-            // dropped, but the receiver-relative generic realization needed to do
-            // that faithfully isn't threaded onto the object — so it reports no
-            // type for now rather than a wrong one.
+            // BUG(erased-signature-reconstruction): a `BoundMethod` is a fully
+            // realized callable value — its complete curried frame IS on the
+            // object (`BoundMethod::type_args`) — and *should* reconstruct to
+            // its underlying function's type with the bound `self` parameter
+            // dropped. What's missing is a stored signature that references
+            // the frame's type-arg slots to substitute those curried args
+            // into (the `Function` signature erases generic positions — see
+            // `function_object_ty`); until then it reports no type rather
+            // than a wrong one.
             Object::BoundMethod(_) => return None,
 
             // `Object::Function` is NOT a function-pointer value — it is the

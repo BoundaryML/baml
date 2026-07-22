@@ -592,6 +592,8 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
 
 /// Symbolic name for a `baml_type::typetag` constant in `is_type_tag` renders.
 /// Class tags (`CLASS_BASE + n`) and anything unrecognized print numerically.
+/// The full tag set is named for robustness, though the only MIR producer
+/// today (`emit_is_type_tag_branch`) emits `LIST`/`MAP`.
 fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
     use baml_type::typetag as t;
     std::borrow::Cow::Borrowed(match tag {

@@ -593,6 +593,14 @@ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
 
 type DoubleMaybe = MaybeResult?
 
+// BUG(matrix-union-flattening): `DoubleMaybe` expands through two alias/
+// optional layers, but the match matrix flattens union members only one level
+// deep (`matrix_normalize_scrut`), so these arms never wrap onto their union
+// members: even the exhaustive form below is wrongly reported non-exhaustive,
+// with duplicated member- and class-shaped witnesses. Pre-existing; the
+// possible-vs-covering coverage rework only changed the error shape (the arms
+// are no longer additionally flagged unreachable).
+
 // Exhaustive: double optional (Result?? should be Success | Failure | null)
 // Note: T?? typically flattens to T? since (T | null) | null = T | null
 function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {

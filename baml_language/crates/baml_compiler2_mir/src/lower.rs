@@ -12150,15 +12150,18 @@ impl LoweringContext<'_> {
             None,
         );
         if !switched {
-            // Whether any non-final arm emits an invariance-sensitive test
-            // (typevar guard or element-discriminating container test). Such
-            // tests are stricter than the lax container relation the static
-            // exhaustiveness proof used, so the final arm's test must be
-            // emitted (with a trap on fall-through) instead of skipped.
+            // Whether any non-final arm's emitted test can reject a value the
+            // static exhaustiveness proof counted as matched (a typevar
+            // template test meeting a callable with no reconstructible type —
+            // see `pattern_test_can_reject_covered_values`). If so, the final
+            // arm's test must be emitted (with a trap on fall-through)
+            // instead of skipped: a wrongly-rejected value falling into an
+            // untested final arm would silently bind at the wrong type,
+            // while the trap fails loud.
             let backstop_last_arm = arms.len().checked_sub(1).is_some_and(|last| {
                 arms[..last]
                     .iter()
-                    .any(|arm| self.pattern_test_invariance_sensitive(arm.pattern))
+                    .any(|arm| self.pattern_test_can_reject_covered_values(arm.pattern))
             });
             self.lower_match_chain(
                 scrutinee_local,
@@ -12621,16 +12624,16 @@ impl LoweringContext<'_> {
             && arm.guard.is_none()
             && !matches!(self.body.patterns[arm.pattern], AstPattern::Or(_))
         {
-            // When a preceding arm's test is invariance-sensitive
-            // (`backstop_last_arm`), "it must match" no longer follows from the
-            // static exhaustiveness proof: that proof used TIR's lax
-            // (element-covariant) container relation, so a laxly-admitted value
-            // (e.g. an `int[]` flowing into a `(int | string)[]` slot) can fail
-            // every arm at runtime under the invariant tests. Emit the final
-            // refutable arm's test anyway and trap on fall-through — a loud
-            // panic instead of silently binding the value to a pattern it does
-            // not match. Irrefutable last arms (wildcard, bare bind) match
-            // everything, so they keep the plain skip.
+            // When a preceding arm's test can reject a value the static
+            // coverage proof counted as matched (`backstop_last_arm` — a
+            // typevar template test meeting a callable with no
+            // reconstructible type), "it must match" no longer follows from
+            // exhaustiveness: the wrongly-rejected value falls through to
+            // this arm. Emit the final refutable arm's test anyway and trap
+            // on fall-through — a loud panic instead of silently binding the
+            // value to a pattern it does not match. Irrefutable last arms
+            // (wildcard, bare bind) match everything, so they keep the plain
+            // skip.
             let last_is_refutable = !matches!(
                 self.body.patterns[arm.pattern],
                 AstPattern::Wildcard | AstPattern::Bind { subpat: None, .. }
@@ -12714,24 +12717,32 @@ impl LoweringContext<'_> {
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
     }
 
-    /// Whether lowering `pat`'s runtime test emits an *invariance-sensitive*
-    /// check — a typevar-carrying dispatch-guard template or an
-    /// element-discriminating (not tag-sufficient) container test. Such tests
-    /// are stricter than the lax (element-covariant) container relation TIR's
-    /// exhaustiveness proof uses, so an exhaustive match containing one cannot
-    /// safely skip its final arm's test (see `lower_match_chain`'s backstop).
+    /// Whether lowering `pat`'s runtime test can *reject a value the static
+    /// coverage proof counted as matched*. TIR's coverage relation is the
+    /// same canonical invariant subtype the emitted tests evaluate, so for
+    /// values with a concrete runtime type the two always agree — with one
+    /// exception: a value whose concrete type the VM cannot yet faithfully
+    /// reconstruct (a bound method or future — `value_concrete_ty` is
+    /// `None`; a closure from a generic frame reconstructs a coarsened
+    /// signature — see the VM's BUG(erased-signature-reconstruction)) can
+    /// fail a structural test whose realized binding IS that value's type. A
+    /// non-final `let v: T` arm can therefore wrongly reject such a callable
+    /// when `T` realizes to a function type, so an exhaustive match
+    /// containing one cannot safely skip its final arm's test (see
+    /// `lower_match_chain`'s backstop).
     ///
     /// Over-approximation is safe — it costs one extra final test plus a dead
-    /// trap block; under-approximation would silently bind a value to a pattern
-    /// it does not match.
-    fn pattern_test_invariance_sensitive(&self, pat_id: AstPatId) -> bool {
+    /// trap block; under-approximation would silently bind a value to a
+    /// pattern it does not match. (Function-typed patterns themselves never
+    /// appear in non-final arms — TIR rejects them, E0155.)
+    fn pattern_test_can_reject_covered_values(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
             AstPattern::Or(parts) => parts
                 .iter()
-                .any(|p| self.pattern_test_invariance_sensitive(*p)),
+                .any(|p| self.pattern_test_can_reject_covered_values(*p)),
             AstPattern::Bind {
                 subpat: Some(sp), ..
-            } => self.pattern_test_invariance_sensitive(*sp),
+            } => self.pattern_test_can_reject_covered_values(*sp),
             // Irrefutable patterns emit no test.
             AstPattern::Wildcard | AstPattern::Bind { subpat: None, .. } => false,
             AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => {
@@ -12739,23 +12750,10 @@ impl LoweringContext<'_> {
                     return false;
                 };
                 // Typevar-carrying patterns route through the dispatch-guard
-                // template (see `lower_pattern_test`), whose realized-binding
-                // comparison is invariant at argument positions.
-                if baml_compiler2_tir::generics::contains_typevar(tir_ty) {
-                    return true;
-                }
-                // Container arms are sensitive exactly when the emitter checks
-                // their elements structurally — i.e. when the coarse tag is not
-                // provably sufficient for this match's scrutinee.
-                let resolved = self.resolved_aliases.convert(tir_ty);
-                let scrutinee_ty = self.match_scrutinee.as_ref().map(|(_, ty)| ty);
-                let mut members = Vec::new();
-                flatten_runtime_union(&resolved, &mut members);
-                members.iter().any(|m| match m {
-                    RuntimeTy::List(..) | RuntimeTy::Map { .. } => !scrutinee_ty
-                        .is_some_and(|scrutinee| container_arm_tag_sufficient(m, scrutinee)),
-                    _ => false,
-                })
+                // template (see `lower_pattern_test`); only their realized
+                // bindings can name a function type a closure would need to
+                // match.
+                baml_compiler2_tir::generics::contains_typevar(tir_ty)
             }
         }
     }

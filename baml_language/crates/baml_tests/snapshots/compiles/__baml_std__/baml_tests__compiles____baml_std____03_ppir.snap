@@ -1077,7 +1077,7 @@ function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr
   {  } baml.iter.Repeat { value: value, count: count }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value }
+  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr[self.idx]; self.idx Add= 1; return item }
 }
 function baml.iter.next(self: ?) -> int | baml.iter.Done  [expr] {
   {  } if (self.i Lt self.max) { let cur = self.i; self.i Add= self.step } cur else {  } baml.iter.Done {  }
