@@ -48,6 +48,3 @@ sdks/java/examples/quickstart/README.md
 
 # C++ SDK style guide
 sdks/cpp/STYLE.md
-
-# Swift bridge design records (referenced from the PR/review docs)
-sdks/swift/docs/*.md
