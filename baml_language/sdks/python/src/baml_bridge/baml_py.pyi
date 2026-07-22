@@ -65,7 +65,7 @@ class BamlCallContext:
     ```python
     ctx = BamlCallContext()
     # Pass to call_function / call_function_sync:
-    result = await call_function(rt, "MyFunc", args, ctx=ctx)
+    result = await call_function(rt, "MyFunc", args, _ctx=ctx)
     # Cancel from another task:
     ctx.abort()
     ```

@@ -1961,6 +1961,7 @@ impl BexEngine {
             if handles.is_empty() {
                 break;
             }
+            #[cfg(not(target_arch = "wasm32"))]
             let count = handles.len();
             let wait = async move {
                 for handle in handles {

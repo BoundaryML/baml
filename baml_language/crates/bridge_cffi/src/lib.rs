@@ -224,6 +224,7 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     Ok(runtime)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
     runtime.set_unhandled_spawn_error_handler(Some(Arc::new(|value, cancelled| {
         platform::dispatch_unhandled_spawn_error(
@@ -232,6 +233,9 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
         );
     })));
 }
+
+#[cfg(target_arch = "wasm32")]
+fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
 pub async fn shutdown_runtime() -> Result<(), BridgeError> {
     if let Some(runtime) = platform::take_runtime()? {

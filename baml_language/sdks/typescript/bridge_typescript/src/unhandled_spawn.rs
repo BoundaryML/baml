@@ -40,6 +40,6 @@ extern "C" fn deliver(content: *const i8, length: usize, cancelled: i32) {
     };
     let _ = callback.call(
         FnArgs::from((Buffer::from(bytes), cancelled != 0)),
-        ThreadsafeFunctionCallMode::NonBlocking,
+        ThreadsafeFunctionCallMode::Blocking,
     );
 }

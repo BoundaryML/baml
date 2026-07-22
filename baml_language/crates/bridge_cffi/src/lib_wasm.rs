@@ -10,7 +10,6 @@ use crate::{BridgeError, call_and_encode, error_to_outbound, function_call_conte
 
 thread_local! {
     static RUNTIME: RefCell<Option<Arc<dyn Bex>>> = RefCell::new(None);
-    static UNHANDLED_SPAWN_ERRORS: RefCell<Vec<(Vec<u8>, bool)>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn replace_runtime(runtime: Arc<dyn Bex>) -> Result<(), BridgeError> {
@@ -25,10 +24,6 @@ pub(crate) fn replace_runtime(runtime: Arc<dyn Bex>) -> Result<(), BridgeError> 
 
 pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
     Ok(RUNTIME.with(|slot| slot.borrow_mut().take()))
-}
-
-pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) {
-    UNHANDLED_SPAWN_ERRORS.with(|errors| errors.borrow_mut().push((content, cancelled)));
 }
 
 pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {

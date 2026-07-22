@@ -13,7 +13,6 @@
 #include <iostream>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace baml {
@@ -65,9 +64,11 @@ extern "C" inline void baml_cpp_unhandled_spawn_error_trampoline(
     payload.assign(reinterpret_cast<const uint8_t*>(content),
                    reinterpret_cast<const uint8_t*>(content) + length);
   }
-  std::thread([payload = std::move(payload), cancelled]() mutable {
+  try {
     detail::report_unhandled_spawn_error(std::move(payload), cancelled != 0);
-  }).detach();
+  } catch (...) {
+    std::terminate();
+  }
 }
 
 inline void shutdown_runtime();

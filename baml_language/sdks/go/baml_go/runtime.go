@@ -89,6 +89,7 @@ func ensureNativeRuntime(ctx context.Context) error {
 	}
 	nativeRegisterUnhandledSpawnErrorCallback()
 	if expectedVersion != "" && actualVersion != expectedVersion {
+		_ = nativeShutdown()
 		nativeCloseAfterLoadFailure()
 		return fmt.Errorf("BAML runtime version mismatch: artifact is %s but library reports %s", expectedVersion, actualVersion)
 	}
