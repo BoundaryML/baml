@@ -658,6 +658,18 @@ fn lower_declared_interface_bound(
             builder.report_at_span(diag, span);
         }
         match &bound_ty {
+            // BEP-062: `baml.AnyFunction` is legal only as a value type (an
+            // existential), never as a bound. Mirrors the impl-side check in
+            // `lower_generic_param_interface_bounds`; the constraint is still
+            // returned below so downstream sees the same shape either way.
+            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                builder.report_at_span(
+                    crate::infer_context::TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn.clone(),
+                    },
+                    span,
+                );
+            }
             Ty::Interface(qtn, generics, assoc, _) => {
                 if generics.is_empty()
                     && let Some(arity) = interface_declared_generic_arity(db, qtn)

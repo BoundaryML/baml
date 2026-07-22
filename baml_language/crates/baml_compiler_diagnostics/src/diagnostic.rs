@@ -353,6 +353,16 @@ pub enum DiagnosticId {
     /// a digit invalid for the base (`0b12`), or an integer literal whose
     /// magnitude exceeds `i64::MAX`.
     InvalidNumericLiteral,
+
+    // Builtin interfaces (BEP-062, E0153/E0154)
+    /// An `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (every function type implements it) and cannot be written by hand.
+    BuiltinInterfaceNotImplementable,
+    /// A generic parameter's bound (`T extends X`) names a compiler-builtin
+    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// (an existential), never as a bound.
+    BuiltinInterfaceNotABound,
 }
 
 impl DiagnosticId {
@@ -566,6 +576,8 @@ impl DiagnosticId {
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",
+            DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
+            DiagnosticId::BuiltinInterfaceNotABound => "E0154",
         }
     }
 }

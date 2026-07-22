@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17033
 ---
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
@@ -9,6 +8,12 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
+}
+
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function user.test_apply_twice_inferred() -> int {

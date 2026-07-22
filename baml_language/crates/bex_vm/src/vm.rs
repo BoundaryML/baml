@@ -344,6 +344,8 @@ pub(crate) mod tests {
         Object::Function(Box::new(Function {
             name: "test_native".to_string(),
             source_file: String::new(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -1043,6 +1045,67 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
     })
 }
 
+/// A callable value's reconstructed signature in the shape the `reflect`
+/// natives consume (BEP-062): parameters in declaration order (a bound
+/// method's receiver dropped), the return type, and the throws type.
+/// `throws: None` means "cannot throw"; its user-visible static spelling is
+/// `never` (deliberately not the `void` convention `function_object_ty`
+/// uses — see `FIXME(function-type-matching)` in emit).
+pub(crate) struct CallableSignature {
+    /// The declaration's fully qualified name; `None` for host closures and
+    /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
+    pub(crate) name: Option<String>,
+    pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
+    pub(crate) ret: baml_type::RealizedTy,
+    pub(crate) throws: Option<baml_type::RealizedTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub(crate) docstring: Option<String>,
+}
+
+/// Reconstruct a [`CallableSignature`] from a raw `Function` object.
+/// `drop_receiver` skips the leading `self` parameter for bound methods.
+///
+/// A stored signature slot that does not realize — a generic function's
+/// unresolved `TypeVar`, a symbolic projection — erases to `unknown` for that
+/// slot rather than dropping the whole callable: `reflect.signature` /
+/// `reflect.call_any` prefer the coarse truth over refusing generic
+/// callables. (This is deliberately looser than [`function_object_ty`], whose
+/// `is`-matching consumers must never affirm a type they cannot prove.)
+fn function_callable_signature(
+    f: &bex_vm_types::types::Function,
+    drop_receiver: bool,
+) -> CallableSignature {
+    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy};
+    let realized_or_unknown =
+        |ty: &baml_type::RuntimeTy| realized_arg(ty).unwrap_or_else(RealizedTy::unknown);
+    let params = f
+        .param_types
+        .iter()
+        .enumerate()
+        .skip(usize::from(drop_receiver))
+        .map(|(i, ty)| RealizedFunctionParamTy {
+            name: f
+                .param_names
+                .get(i)
+                .filter(|n| !n.is_empty())
+                .map(|n| Name::new(n.as_str())),
+            ty: realized_or_unknown(ty),
+            mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
+                FunctionParamMode::Optional
+            } else {
+                FunctionParamMode::Required
+            },
+        })
+        .collect();
+    CallableSignature {
+        name: f.declared_name.clone(),
+        params,
+        ret: realized_or_unknown(&f.return_type),
+        throws: f.throws_type.as_ref().map(realized_or_unknown),
+        docstring: f.docstring.clone(),
+    }
+}
+
 /// Get the type tag for any runtime value.
 ///
 /// This is a free function to avoid borrow checker issues when called
@@ -1722,6 +1785,62 @@ impl BexVm {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
     }
 
+    /// A callable value's [`CallableSignature`] (BEP-062 `reflect`), or `None`
+    /// for a non-callable value.
+    ///
+    /// Every function-pointer value is a wrapper object — a plain reference
+    /// is a pooled empty-type-args `GenericFunction` (see the emit-side
+    /// `emit_pooled_function_value`), so a raw `Object::Function` is never a
+    /// data value and deliberately has no arm here.
+    ///
+    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed
+    /// (receiver dropped) and unresolved slots erase rather than refuse; see
+    /// [`function_callable_signature`] for the coarse-truth rationale.
+    pub(crate) fn callable_signature(&self, value: Value) -> Option<CallableSignature> {
+        use baml_type::RealizedTy;
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => {
+                // SAFETY: `closure.function` points to a live `Function`, the
+                // same invariant `resolve_callable_target` relies on.
+                match unsafe { closure.function.get() } {
+                    Object::Function(f) => Some(function_callable_signature(f, false)),
+                    _ => None,
+                }
+            }
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| self.get_object(p)) {
+                    Some(Object::Function(f)) => Some(function_callable_signature(f, false)),
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(bm) => {
+                // SAFETY: `bm.function` points to a live `Function` (the bind
+                // site stored it), as at `CallIndirect`'s BoundMethod arm.
+                match unsafe { bm.function.get() } {
+                    Object::Function(f) => Some(function_callable_signature(f, true)),
+                    _ => None,
+                }
+            }
+            Object::HostClosure(hc) => Some(CallableSignature {
+                // Host closures are FFI-constructed; they carry no name.
+                name: None,
+                params: (*hc.params).clone(),
+                // Normalize the stored error type into the `None == never`
+                // convention (host closures store a realized `never`/`void`
+                // for a non-throwing callee rather than omitting it).
+                throws: match &*hc.throws_ty {
+                    RealizedTy::Never { .. } | RealizedTy::Void { .. } => None,
+                    ty => Some(ty.clone()),
+                },
+                ret: (*hc.ret_ty).clone(),
+                // Host closures are FFI-constructed; they carry no docs.
+                docstring: None,
+            }),
+            _ => None,
+        }
+    }
+
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
@@ -2285,6 +2404,8 @@ impl BexVm {
         let entry_function = Function {
             name: format!("$entry::{callee_name}"),
             source_file: String::new(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,

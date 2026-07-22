@@ -202,7 +202,7 @@ function functions.fib_main() -> int {
 }
 
 function functions.function_as_value_main() -> int {
-    load_global user.functions.add
+    load_const user.functions.add
     load_const 20
     load_const 1
     call user.functions.call_twice

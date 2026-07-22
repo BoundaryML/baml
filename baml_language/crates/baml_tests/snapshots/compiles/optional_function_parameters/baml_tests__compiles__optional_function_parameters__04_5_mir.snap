@@ -40,7 +40,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     }
 
     bb5: {
-        _4 = const fn user.TestClient;
+        _4 = const item user.TestClient;
         goto -> bb6;
     }
 
@@ -92,7 +92,7 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
     }
 
     bb5: {
-        _4 = const fn user.TestClient;
+        _4 = const item user.TestClient;
         goto -> bb6;
     }
 
@@ -143,7 +143,7 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     }
 
     bb5: {
-        _4 = const fn user.TestClient;
+        _4 = const item user.TestClient;
         goto -> bb6;
     }
 
@@ -194,7 +194,7 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
     }
 
     bb5: {
-        _4 = const fn user.TestClient;
+        _4 = const item user.TestClient;
         goto -> bb6;
     }
 
