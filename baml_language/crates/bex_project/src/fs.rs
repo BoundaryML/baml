@@ -1,7 +1,11 @@
 use std::{io::Read, path::Path};
 
 use crate::LspError;
+#[cfg(target_arch = "wasm32")]
+use utils_fs::FsPathError;
+#[cfg(not(target_arch = "wasm32"))]
 use utils_fs::NativePathBuf;
+use utils_fs::VfsPathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FsPath(String);
@@ -141,10 +145,15 @@ impl BamlVFS {
         raw: &FsPath,
         context: &'static str,
     ) -> Result<vfs::VfsPath, LspError> {
+        let raw =
+            VfsPathBuf::new(raw.as_str().to_string()).map_err(|error| LspError::InvalidPath {
+                path: raw.as_path().to_path_buf(),
+                message: format!("{context}: {error}"),
+            })?;
         vfs::VfsPath::from(self.clone())
             .join(raw.as_str())
             .map_err(|e| LspError::InvalidPath {
-                path: raw.as_path().to_path_buf(),
+                path: Path::new(raw.as_str()).to_path_buf(),
                 message: format!("{context}: {e}"),
             })
     }
@@ -161,14 +170,26 @@ impl BamlVFS {
             raw.to_path_buf()
         };
 
-        let path_as_str = NativePathBuf::new(raw.clone())
-            .and_then(|path| path.to_vfs_path())
-            .map_err(|e| LspError::InvalidPath {
+        #[cfg(not(target_arch = "wasm32"))]
+        let path_as_vfs = NativePathBuf::new(raw.clone())
+            .and_then(|path| VfsPathBuf::try_from(&path))
+            .map_err(|error| LspError::InvalidPath {
                 path: raw.clone(),
-                message: format!("{context}: {e}"),
+                message: format!("{context}: {error}"),
             })?;
+
+        #[cfg(target_arch = "wasm32")]
+        let path_as_vfs = raw
+            .to_str()
+            .ok_or_else(|| FsPathError::NonUnicode(raw.clone()))
+            .and_then(|path| VfsPathBuf::new(path.to_string()))
+            .map_err(|error| LspError::InvalidPath {
+                path: raw.clone(),
+                message: format!("{context}: {error}"),
+            })?;
+
         vfs_path
-            .join(&path_as_str)
+            .join(path_as_vfs.as_str())
             .map_err(|e| LspError::InvalidPath {
                 path: raw.clone(),
                 message: format!("{context}: {e}"),
@@ -258,5 +279,16 @@ mod tests {
             .unwrap();
 
         assert_eq!(path.as_str(), internal.as_str());
+    }
+
+    #[test]
+    fn invalid_internal_vfs_paths_are_rejected_at_the_boundary() {
+        let fs = BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/"))));
+        let invalid = FsPath::from_str("/workspace/../main.baml".to_string());
+
+        assert!(matches!(
+            fs.get_path_from_vfs_path(&invalid, "test internal path"),
+            Err(LspError::InvalidPath { .. })
+        ));
     }
 }

@@ -35,7 +35,7 @@ use std::{
 
 use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 #[cfg(not(target_arch = "wasm32"))]
-use utils_fs::NativePathBuf;
+use utils_fs::{NativePathBuf, VfsPathBuf};
 pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
@@ -652,7 +652,8 @@ impl BexMulitProject {
         // the OS-level walker applies whenever the path really exists on
         // disk. Fall back to the VFS walk otherwise (e.g. in-memory
         // filesystems in tests).
-        let os_root = NativePathBuf::from_vfs_path(root.as_str());
+        let os_root = VfsPathBuf::new(root.as_str().to_string())
+            .and_then(|root| NativePathBuf::try_from(&root));
         if let Ok(os_root) = os_root
             && os_root.as_path().is_dir()
         {

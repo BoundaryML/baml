@@ -1,11 +1,11 @@
 //! Native filesystem VFS for `bex_project::BamlVFS`.
 //!
 //! Implements `vfs::FileSystem` over `std::fs` and implements
-//! `BulkReadFileSystem` by walking
-//! only the glob's base directory (not the entire filesystem).
+//! `BulkReadFileSystem` by walking only the glob's base directory (not the
+//! entire filesystem).
 
 use std::io::Read;
-use utils_fs::NativePathBuf;
+use utils_fs::{NativePathBuf, VfsPathBuf};
 
 /// Native filesystem adapter for BAML's slash-oriented VFS path domain.
 #[derive(Debug, Clone, Copy, Default)]
@@ -17,7 +17,8 @@ impl NativeVfs {
     }
 
     fn native_path(path: &str) -> vfs::VfsResult<NativePathBuf> {
-        Ok(NativePathBuf::from_vfs_path(path)?)
+        let path = VfsPathBuf::new(path.to_string())?;
+        Ok(NativePathBuf::try_from(&path)?)
     }
 }
 
@@ -109,7 +110,10 @@ impl bex_project::BulkReadFileSystem for NativeVfs {
         let base_dir = glob_base_dir(glob);
         let pattern = glob_to_regex(glob);
 
-        let base = NativePathBuf::from_vfs_path(base_dir.trim_end_matches('/'))?;
+        let base_dir = base_dir.trim_end_matches('/');
+        let base_dir = if base_dir.is_empty() { "/" } else { base_dir };
+        let base = VfsPathBuf::new(base_dir.to_string())?;
+        let base = NativePathBuf::try_from(&base)?;
         if !base.as_path().is_dir() {
             return Ok(Vec::new());
         }
@@ -131,12 +135,13 @@ fn walk_dir_native(
         if path.is_dir() {
             walk_dir_native(&path, pattern, results)?;
         } else if path.is_file() {
-            let path_str = NativePathBuf::new(path.clone())?.to_vfs_path()?;
-            if pattern.is_match(&path_str) {
+            let native_path = NativePathBuf::new(path.clone())?;
+            let vfs_path = VfsPathBuf::try_from(&native_path)?;
+            if pattern.is_match(vfs_path.as_str()) {
                 let mut file = std::fs::File::open(&path)?;
                 let mut buf = Vec::new();
                 file.read_to_end(&mut buf)?;
-                results.push((path_str, buf));
+                results.push((vfs_path.into_string(), buf));
             }
         }
     }
@@ -199,10 +204,8 @@ mod tests {
     use super::*;
 
     fn vfs_path(path: &std::path::Path) -> String {
-        NativePathBuf::new(path.to_path_buf())
-            .unwrap()
-            .to_vfs_path()
-            .unwrap()
+        let native = NativePathBuf::new(path.to_path_buf()).unwrap();
+        VfsPathBuf::try_from(&native).unwrap().into_string()
     }
 
     struct NoopSender;
