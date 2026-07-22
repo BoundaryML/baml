@@ -246,6 +246,13 @@ impl GenerateArgs {
                         .collect()
                 }
                 OutputType::Java => sdkgen_java::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                )
+                .into_iter()
+                .map(|(path, content)| (path, content.into_bytes()))
+                .collect(),
                 OutputType::Swift => sdkgen_swift::to_source_code_with_bytecode(
                     &pool,
                     &baml_bytecode,
