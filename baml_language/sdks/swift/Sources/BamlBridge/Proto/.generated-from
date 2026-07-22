@@ -1,0 +1,4 @@
+0e3208141f16f8f981cbf741ba9f2832c5c82882e78a71510ca1f1a6301575f6  baml_bridge/cffi/v1/baml_handle.proto
+f372fc84746ae330b0266b450f4ad478f76e126ad731d6e0794ae993ef0b754d  baml_bridge/cffi/v1/baml_inbound.proto
+78c8676cca18549e198c13a5f06759fce65c17c2efaf9269221b9df874ada82c  baml_bridge/cffi/v1/baml_outbound.proto
+591f7a366955b64ac9ae9fbf5b40f1544f41fc6b74d793e42c77e58f2c06d614  baml_bridge/cffi/v1/baml_type.proto

@@ -38,4 +38,10 @@ protoc \
     "$PROTO_ROOT"/baml_bridge/cffi/v1/baml_inbound.proto \
     "$PROTO_ROOT"/baml_bridge/cffi/v1/baml_outbound.proto
 
+# Record the input hashes: CI's proto-sync job (Linux, no Swift
+# toolchain) regenerates this manifest with sha256sum instead of
+# running protoc-gen-swift — if the protos changed but this file
+# didn't, the checked-in .pb.swift sources are stale.
+(cd "$PROTO_ROOT" && shasum -a 256 baml_bridge/cffi/v1/*.proto) > "$OUT_DIR/.generated-from"
+
 echo "wrote $(ls "$OUT_DIR" | wc -l | tr -d ' ') files to $OUT_DIR"
