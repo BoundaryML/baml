@@ -1398,8 +1398,11 @@ function iter.iter_for_in_array_of_unions() -> int {
 
   L1:
     load_var _5
-    store_var_load_var x
-    is_type int
+    store_var x
+    load_var x
+    store_var _9
+    load_var _9
+    narrow_bind int, slot=5
     pop_jump_if_false L2
     jump L3
 
@@ -1415,7 +1418,7 @@ function iter.iter_for_in_array_of_unions() -> int {
     jump L0
 
   L3:
-    load_var2 1 4
+    load_var2 1 5
     add_int
     store_var total
     jump L0

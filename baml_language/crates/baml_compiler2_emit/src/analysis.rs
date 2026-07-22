@@ -792,6 +792,21 @@ fn collect_uses_in_terminator(
         Terminator::Branch { condition, .. } => {
             collect_uses_in_operand(condition, block, StatementRef::Terminator, def_use);
         }
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(source, block, StatementRef::Terminator, def_use);
+            if let Some(du) = def_use.get_mut(destination) {
+                du.def = Some(DefLocation {
+                    block,
+                    statement_ref: StatementRef::Terminator,
+                    rvalue: Rvalue::Use(source.clone()),
+                });
+                du.all_defs.push((block, StatementRef::Terminator));
+            }
+        }
         Terminator::Switch { discriminant, .. } => {
             collect_uses_in_operand(discriminant, block, StatementRef::Terminator, def_use);
         }
@@ -979,6 +994,14 @@ fn classify_locals(
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
     let mut stack_carry_candidates: HashMap<Local, stack_carry::StackCarryKind> = HashMap::new();
+    let narrow_bind_destinations: HashSet<Local> = body
+        .blocks
+        .iter()
+        .filter_map(|block| match block.terminator.as_ref() {
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            _ => None,
+        })
+        .collect();
 
     for (idx, _local_decl) in body.locals.iter().enumerate() {
         let local = Local(idx);
@@ -1004,6 +1027,8 @@ fn classify_locals(
             // Captured locals must always be Real - they need a stable stack slot
             // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
+            LocalClassification::Real
+        } else if narrow_bind_destinations.contains(&local) {
             LocalClassification::Real
         } else if idx != 0
             && du.uses.is_empty()

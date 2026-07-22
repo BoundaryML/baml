@@ -1946,6 +1946,12 @@ struct LoweringContext<'db> {
     /// guard keeps `is` / standalone tests element-precise even inside one.
     match_scrutinee: Option<(Local, RuntimeTy)>,
 
+    /// Stable values read while testing patterns, keyed by pattern identity.
+    /// Binding lowering reuses these exact values instead of rereading mutable
+    /// captured cells or object fields after a successful test.
+    tested_pattern_values: HashMap<PatMetadataKey, Local>,
+    atomic_pattern_test: bool,
+
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
     current_scope: FileScopeId,
@@ -2837,6 +2843,8 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds,
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
+            tested_pattern_values: HashMap::new(),
+            atomic_pattern_test: false,
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -2928,6 +2936,8 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds: FxHashMap::default(),
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
+            tested_pattern_values: HashMap::new(),
+            atomic_pattern_test: false,
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -12097,8 +12107,6 @@ impl LoweringContext<'_> {
     ) {
         let is_exhaustive = self.tir_is_exhaustive_match(self.expr_metadata_key(expr_id));
 
-        // If scrutinee is a simple variable reference, reuse the local directly
-        // instead of copying into a temp (matches MIR1 behavior).
         let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
             let op = self.lower_to_operand(scrutinee);
             let ty = self.expr_ty(scrutinee);
@@ -12213,25 +12221,10 @@ impl LoweringContext<'_> {
             if guard.is_some() {
                 return false;
             }
-            // OLD `pat.narrow.is_some()` branch: Chain encodes the narrow
-            // as a `Type` link, so recover it and treat as a TypeTag arm.
+            // Narrowed bindings require NarrowBind's atomic test-and-bind
+            // semantics, which Switch cannot preserve.
             if self.pattern_narrow_type(pattern).is_some() {
-                match &switch_kind {
-                    None => switch_kind = Some(SwitchKind::TypeTag),
-                    Some(SwitchKind::TypeTag) => {}
-                    Some(_) => return false,
-                }
-                match self.classify_pattern_type_tag(pattern, scrutinee_static_ty.as_ref()) {
-                    Some(tags) => {
-                        for tag in tags {
-                            if seen_values.insert(tag) {
-                                int_arms.push((tag, i));
-                            }
-                        }
-                    }
-                    None => return false,
-                }
-                continue;
+                return false;
             }
 
             // Helpers that classify a pattern (the arm pattern itself, or a
@@ -12843,16 +12836,26 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        let test = Rvalue::IsType {
-            operand: Operand::Copy(Place::Local(scrutinee)),
-            ty_template,
-        };
-        let test_local = self.builder.temp(RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        });
-        self.builder.assign(Place::local(test_local), test);
-        self.builder
-            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        if self.atomic_pattern_test {
+            self.builder.narrow_bind(
+                Operand::Copy(Place::Local(scrutinee)),
+                ty_template,
+                scrutinee,
+                success,
+                failure,
+            );
+        } else {
+            let test = Rvalue::IsType {
+                operand: Operand::Copy(Place::Local(scrutinee)),
+                ty_template,
+            };
+            let test_local = self.builder.temp(RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), test);
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
     }
 
     fn emit_is_tir_type_branch(
@@ -13408,6 +13411,18 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
+        let scrutinee = if self.atomic_pattern_test {
+            let snapshot = self.builder.temp(self.builder.local_ty(scrutinee));
+            self.builder.assign(
+                Place::local(snapshot),
+                Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+            );
+            self.tested_pattern_values
+                .insert(self.pat_metadata_key(pat_id), snapshot);
+            snapshot
+        } else {
+            scrutinee
+        };
         let pat = self.body.patterns[pat_id].clone();
 
         // Bind sub-pattern: `let x: <pattern>` defers to the sub-
@@ -13417,7 +13432,11 @@ impl LoweringContext<'_> {
             subpat: Some(sp), ..
         } = &pat
         {
-            return self.lower_pattern_test(scrutinee, *sp, success, failure);
+            let saved = self.atomic_pattern_test;
+            self.atomic_pattern_test = true;
+            self.lower_pattern_test(scrutinee, *sp, success, failure);
+            self.atomic_pattern_test = saved;
+            return;
         }
         // Array `: T` ascription emits an `is_type` test before the
         // structural shape test below.
@@ -13810,8 +13829,20 @@ impl LoweringContext<'_> {
         narrow_root: AstPatId,
         fresh_cell: bool,
     ) {
+        let scrutinee = self
+            .tested_pattern_values
+            .get(&self.pat_metadata_key(pat_id))
+            .copied()
+            .unwrap_or(scrutinee);
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, subpat } => {
+                let bound_scrutinee = subpat
+                    .and_then(|subpat| {
+                        self.tested_pattern_values
+                            .get(&self.pat_metadata_key(subpat))
+                            .copied()
+                    })
+                    .unwrap_or(scrutinee);
                 // For Or-patterns we look up `pat_types` against the inner
                 // bind's `pat_id`, not the outer `root`. That's safe because
                 // TIR rejects Or-branches whose shared bindings disagree on
@@ -13833,14 +13864,14 @@ impl LoweringContext<'_> {
                 }
                 self.builder.assign(
                     Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+                    Rvalue::Use(Operand::Copy(Place::Local(bound_scrutinee))),
                 );
                 self.record_pattern_binding_local(root, &name, local);
                 self.locals.insert(name, local);
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(scrutinee, sp, root, sp, fresh_cell);
+                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, fresh_cell);
                 }
             }
             AstPattern::Or(parts) => {

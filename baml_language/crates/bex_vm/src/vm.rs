@@ -1785,6 +1785,66 @@ impl BexVm {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
     }
 
+    fn value_matches_type_constant(
+        &self,
+        frame_idx: usize,
+        value: Value,
+        raw_const: &ConstValue,
+        resolved_const: Value,
+    ) -> bool {
+        let frame_type_args = match &self.frames[frame_idx] {
+            Frame::Bytecode(frame) => frame.type_args.as_slice(),
+            Frame::Native(_) => &[],
+        };
+        match raw_const {
+            ConstValue::Type(template) => {
+                crate::type_match::value_matches_template(self, value, template, frame_type_args)
+            }
+            ConstValue::ClassWithTypeArgs {
+                class_obj,
+                type_args_templates,
+            } => {
+                let class_ptr = self.idx_to_ptr(*class_obj);
+                match value.as_object_ptr() {
+                    Some(val_ptr) => match self.get_object(val_ptr) {
+                        Object::Instance(inst) if inst.class == class_ptr => {
+                            type_args_templates.len() == inst.class_type_args.len()
+                                && type_args_templates.iter().zip(&inst.class_type_args).all(
+                                    |(template, actual)| {
+                                        crate::type_match::template_relates(
+                                            self,
+                                            template,
+                                            frame_type_args,
+                                            actual.as_ty(),
+                                            crate::type_match::Variance::Invariant,
+                                        )
+                                    },
+                                )
+                        }
+                        _ => false,
+                    },
+                    None => false,
+                }
+            }
+            _ => {
+                if let Some(expected_ptr) = resolved_const.as_object_ptr() {
+                    match value.as_object_ptr() {
+                        Some(val_ptr) => match self.get_object(val_ptr) {
+                            Object::Instance(instance) => instance.class == expected_ptr,
+                            Object::Variant(variant) => variant.enm == expected_ptr,
+                            _ => false,
+                        },
+                        None => false,
+                    }
+                } else if let Some(tag) = resolved_const.as_int() {
+                    value_type_tag(value) == tag
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
     /// A callable value's [`CallableSignature`] (BEP-062 `reflect`), or `None`
     /// for a non-callable value.
     ///
@@ -6631,102 +6691,38 @@ impl BexVm {
                 OpCode::IsType => {
                     let const_idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
-                    // Inspect the raw constant first to handle ClassWithTypeArgs
-                    // (parametric class identity check). Other kinds fall through
-                    // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
-                    let result = match raw_const {
-                        // Structural type test against a full `TyTemplate` (a
-                        // container element type, a bare frame ref, a `Wildcard`
-                        // hole, …), matched with the canonical type algebra —
-                        // emitted for element-discriminating containers, unions,
-                        // and frame refs (see the emitter's `is_type`).
-                        ConstValue::Type(template) => {
-                            let frame_type_args =
-                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                    bf.type_args.clone()
-                                } else {
-                                    vec![]
-                                };
-                            crate::type_match::value_matches_template(
-                                self,
-                                value,
-                                template,
-                                &frame_type_args,
-                            )
-                        }
-                        ConstValue::ClassWithTypeArgs {
-                            class_obj,
-                            type_args_templates,
-                        } => {
-                            let class_ptr = self.idx_to_ptr(*class_obj);
-                            match value.as_object_ptr() {
-                                Some(val_ptr) => match self.get_object(val_ptr) {
-                                    Object::Instance(inst) if inst.class == class_ptr => {
-                                        let frame_type_args =
-                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                                bf.type_args.clone()
-                                            } else {
-                                                vec![]
-                                            };
-                                        // Class-pointer identity (above) fixes the
-                                        // class; each type arg is then related
-                                        // *invariantly* through the canonical
-                                        // algebra (BAML generics are invariant; a
-                                        // `Wildcard` arg matches any). No covariance
-                                        // is needed for a reified frame type-param
-                                        // that inference widened to a union (`T =
-                                        // Shape | Sq` vs a value's narrower `Shape`):
-                                        // the algebra knows `Sq <: Shape` and absorbs
-                                        // `Shape | Sq == Shape`, so the invariant
-                                        // relation already holds — the retired guard
-                                        // needed a covariant band-aid only because it
-                                        // could not see that membership.
-                                        type_args_templates.len() == inst.class_type_args.len()
-                                            && type_args_templates
-                                                .iter()
-                                                .zip(&inst.class_type_args)
-                                                .all(|(template, actual)| {
-                                                    crate::type_match::template_relates(
-                                                        self,
-                                                        template,
-                                                        &frame_type_args,
-                                                        actual.as_ty(),
-                                                        crate::type_match::Variance::Invariant,
-                                                    )
-                                                })
-                                    }
-                                    _ => false,
-                                },
-                                None => false,
-                            }
-                        }
-                        _ => {
-                            let expected = &function.bytecode.resolved_constants[const_idx];
-                            if let Some(expected_ptr) = expected.as_object_ptr() {
-                                // Class- or enum-pointer identity: `is Foo` checks
-                                // the instance's class object; `is Color` checks the
-                                // variant's enum object. Enum-type tests dispatch on
-                                // enum identity because the shared `ENUM` type tag
-                                // cannot tell `Color` from `Status`.
-                                match value.as_object_ptr() {
-                                    Some(val_ptr) => match self.get_object(val_ptr) {
-                                        Object::Instance(instance) => {
-                                            instance.class == expected_ptr
-                                        }
-                                        Object::Variant(variant) => variant.enm == expected_ptr,
-                                        _ => false,
-                                    },
-                                    None => false,
-                                }
-                            } else if let Some(tag) = expected.as_int() {
-                                value_type_tag(value) == tag
-                            } else {
-                                false
-                            }
-                        }
-                    };
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let result = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
                     self.stack.push(Value::bool(result));
+                }
+
+                OpCode::NarrowBind => {
+                    let const_idx = { read_u32_unchecked(code, pc) as usize };
+                    let destination = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let raw_const = &function.bytecode.constants[const_idx];
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let matched = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
+                    if matched {
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let destination =
+                            Self::local_slot_stack_index(bf.locals_offset, destination);
+                        self.stack[destination] = value;
+                    }
+                    self.stack.push(Value::bool(matched));
                 }
 
                 // ── DenseTag ──────────────────────────────────────────────────
