@@ -38,8 +38,10 @@ use base64::Engine as _;
 
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
-use emit::{FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
-    render_type_alias, sort_key};
+use emit::{
+    FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
+    render_type_alias, sort_key,
+};
 use translate_ty::{TranslateCtx, normalize_union, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
@@ -281,11 +283,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
 /// and refs behind Optional (null-unions) store inline in a Swift
 /// struct; List/Map contents are already heap-allocated and never
 /// force boxing. Aliases resolve through (they're non-recursive here).
-fn direct_class_targets<'p>(
-    ty: &Ty,
-    pool: &'p SymbolPool,
-    out: &mut Vec<String>,
-) {
+fn direct_class_targets<'p>(ty: &Ty, pool: &'p SymbolPool, out: &mut Vec<String>) {
     match ty {
         // Parameterized targets box exactly like bare ones —
         // `GenericLinkedList<T>` self-references store inline via
@@ -319,7 +317,9 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
     let mut edges: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut field_targets: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (key, symbol) in pool {
-        let Symbol::Class(class) = symbol else { continue };
+        let Symbol::Class(class) = symbol else {
+            continue;
+        };
         let fqn = key.to_string();
         if !ctx.supported_classes.contains(&fqn) {
             continue;
@@ -329,7 +329,10 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
             direct_class_targets(&prop.ty, pool, &mut targets);
             targets.retain(|t| ctx.supported_classes.contains(t));
             if !targets.is_empty() {
-                edges.entry(fqn.clone()).or_default().extend(targets.iter().cloned());
+                edges
+                    .entry(fqn.clone())
+                    .or_default()
+                    .extend(targets.iter().cloned());
                 field_targets.insert((fqn.clone(), prop.name.as_str().to_string()), targets);
             }
         }
@@ -415,7 +418,6 @@ fn render_supported_class(
     Some(render_class(class, key, &fields, &methods))
 }
 
-
 /// `Some(non-null arms)` when this alias is a recursive union with >=2
 /// arms after normalization — the shape that gets a nominal
 /// family-surface enum. Null-bearing recursive union aliases are
@@ -432,7 +434,6 @@ pub(crate) fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, 
         .then_some((non_null, nullable))
 }
 
-
 /// Recursive union aliases whose union carries null (stdlib `json`):
 /// their references need a `?` suffix.
 fn nullable_aliases_for(
@@ -441,7 +442,9 @@ fn nullable_aliases_for(
 ) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for (key, symbol) in pool {
-        let Symbol::TypeAlias(alias) = symbol else { continue };
+        let Symbol::TypeAlias(alias) = symbol else {
+            continue;
+        };
         let fqn = key.to_string();
         if supported_aliases.contains(&fqn)
             && matches!(recursive_union_alias_arms(alias), Some((_, true)))
@@ -474,15 +477,61 @@ fn render_alias(alias: &TypeAlias, key: &Name, ctx: &TranslateCtx) -> Option<Str
 /// Backtick-escape Swift keywords that can appear as BAML identifiers.
 pub(crate) fn escape_ident(name: &str) -> String {
     const KEYWORDS: &[&str] = &[
-        "associatedtype", "class", "deinit", "enum", "extension", "func", "import", "init",
-        "inout", "internal", "let", "operator", "private", "protocol", "public", "static",
-        "struct", "subscript", "typealias", "var", "break", "case", "continue", "default",
-        "defer", "do", "else", "fallthrough", "for", "guard", "if", "in", "repeat", "return",
-        "switch", "where", "while", "as", "catch", "false", "is", "nil", "rethrows", "self",
-        "Self", "super", "throw", "throws", "true", "try",
+        "associatedtype",
+        "class",
+        "deinit",
+        "enum",
+        "extension",
+        "func",
+        "import",
+        "init",
+        "inout",
+        "internal",
+        "let",
+        "operator",
+        "private",
+        "protocol",
+        "public",
+        "static",
+        "struct",
+        "subscript",
+        "typealias",
+        "var",
+        "break",
+        "case",
+        "continue",
+        "default",
+        "defer",
+        "do",
+        "else",
+        "fallthrough",
+        "for",
+        "guard",
+        "if",
+        "in",
+        "repeat",
+        "return",
+        "switch",
+        "where",
+        "while",
+        "as",
+        "catch",
+        "false",
+        "is",
+        "nil",
+        "rethrows",
+        "self",
+        "Self",
+        "super",
+        "throw",
+        "throws",
+        "true",
+        "try",
         // Not keywords, but special in type positions when used as
         // nested type names (metatype syntax, existentials).
-        "Type", "Protocol", "Any",
+        "Type",
+        "Protocol",
+        "Any",
     ];
     if KEYWORDS.contains(&name) {
         format!("`{name}`")

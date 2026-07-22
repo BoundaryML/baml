@@ -294,11 +294,21 @@ pub(crate) fn render_callable(
     };
 
     enum Param {
-        Required { name: String, ty: String },
-        Optional { name: String, inner: String },
+        Required {
+            name: String,
+            ty: String,
+        },
+        Optional {
+            name: String,
+            inner: String,
+        },
         /// A host callable: `ty` is the closure type; `wrapper` is a
         /// body-prelude statement building the erased BamlHostCallable.
-        Callable { name: String, ty: String, wrapper: String },
+        Callable {
+            name: String,
+            ty: String,
+            wrapper: String,
+        },
     }
 
     let mut params = Vec::new();
@@ -309,7 +319,12 @@ pub(crate) fn render_callable(
                 name,
                 inner: translate_optional_arg_inner(&arg.ty, ctx)?,
             });
-        } else if let Ty::Function { params: cparams, ret, .. } = &arg.ty {
+        } else if let Ty::Function {
+            params: cparams,
+            ret,
+            ..
+        } = &arg.ty
+        {
             let (ty, wrapper) = render_callable_param(&name, cparams, ret, ctx)?;
             params.push(Param::Callable { name, ty, wrapper });
         } else {
@@ -348,9 +363,7 @@ pub(crate) fn render_callable(
         required_pair_list.push("(\"self\", self)".to_string());
     }
     required_pair_list.extend(params.iter().filter_map(|p| match p {
-        Param::Required { name, .. } => {
-            Some(format!("(\"{}\", {name})", name.trim_matches('`')))
-        }
+        Param::Required { name, .. } => Some(format!("(\"{}\", {name})", name.trim_matches('`'))),
         Param::Callable { name, .. } => Some(format!(
             "(\"{}\", _baml_{})",
             name.trim_matches('`'),
@@ -408,7 +421,11 @@ pub(crate) fn render_callable(
     }
 
     let mut out = String::new();
-    let static_kw = if kind == FnKind::Instance { "" } else { "static " };
+    let static_kw = if kind == FnKind::Instance {
+        ""
+    } else {
+        "static "
+    };
     match &ret {
         Some(ret_ty) => {
             let _ = write!(
@@ -471,7 +488,6 @@ pub(crate) fn indent_lines(block: &str, depth: usize) -> String {
     out
 }
 
-
 /// A recursive union alias (`type RecList = int | RecList[]`) can't be
 /// a `typealias` (no self-reference), so it becomes a nominal
 /// `indirect enum` under the USER'S name with the exact BamlUnionN
@@ -508,7 +524,10 @@ pub(crate) fn render_recursive_union_alias(
     }
     out.push('\n');
     for (i, ty) in arm_tys.iter().enumerate() {
-        let _ = writeln!(out, "\tpublic init(_ value: {ty}) {{ self = .t{i}(value) }}");
+        let _ = writeln!(
+            out,
+            "\tpublic init(_ value: {ty}) {{ self = .t{i}(value) }}"
+        );
     }
     out.push('\n');
     out.push_str("\tpublic var anyValue: Any {\n\t\tswitch self {\n");
@@ -524,7 +543,9 @@ pub(crate) fn render_recursive_union_alias(
     }
     out.push('\n');
     out.push_str("\tpublic func value<T>(as type: T.Type) -> T? { anyValue as? T }\n");
-    out.push_str("\tpublic func holds<T>(_ type: T.Type) -> Swift.Bool { value(as: type) != nil }\n\n");
+    out.push_str(
+        "\tpublic func holds<T>(_ type: T.Type) -> Swift.Bool { value(as: type) != nil }\n\n",
+    );
 
     let match_params = arm_tys
         .iter()
@@ -532,7 +553,10 @@ pub(crate) fn render_recursive_union_alias(
         .map(|(i, ty)| format!("t{i} onT{i}: ({ty}) throws -> R"))
         .collect::<Vec<_>>()
         .join(", ");
-    let _ = writeln!(out, "\tpublic func match<R>({match_params}) rethrows -> R {{");
+    let _ = writeln!(
+        out,
+        "\tpublic func match<R>({match_params}) rethrows -> R {{"
+    );
     out.push_str("\t\tswitch self {\n");
     for i in 0..n {
         let _ = writeln!(out, "\t\tcase .t{i}(let v): return try onT{i}(v)");
@@ -575,8 +599,6 @@ pub(crate) fn render_recursive_union_alias(
     Some(out)
 }
 
-
-
 /// Unqualified leaf names of a throws contract, for doc rendering.
 fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
     match ty {
@@ -586,7 +608,6 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
         _ => Vec::new(),
     }
 }
-
 
 /// Closure type + erased-wrapper prelude for one host-callable
 /// parameter. The closure is `async throws` uniformly (sync closures
@@ -621,9 +642,7 @@ fn render_callable_param(
     let (ret_ty, wrapper_body) = match ret {
         Ty::Void { .. } | Ty::Never { .. } => (
             "Swift.Void".to_string(),
-            format!(
-                "try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"
-            ),
+            format!("try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"),
         ),
         other => (
             translate_ty(other, ctx)?,
@@ -634,8 +653,7 @@ fn render_callable_param(
         "@escaping @Sendable ({}) async throws -> {ret_ty}",
         sig_parts.join(", ")
     );
-    let wrapper = format!(
-        "\tlet _baml_{bare} = BamlHostCallable {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
-    );
+    let wrapper =
+        format!("\tlet _baml_{bare} = BamlHostCallable {{ _args in\n\t\t{wrapper_body}\n\t}}\n");
     Some((closure_ty, wrapper))
 }

@@ -203,9 +203,7 @@ fn translate_union(members: &[Ty], ctx: &TranslateCtx) -> Option<String> {
     match arms.len() {
         0 => Some("BamlNull".to_string()),
         1 => Some(format!("{}{suffix}", arms[0])),
-        n if n <= MAX_UNION_ARITY => {
-            Some(format!("BamlUnion{n}<{}>{suffix}", arms.join(", ")))
-        }
+        n if n <= MAX_UNION_ARITY => Some(format!("BamlUnion{n}<{}>{suffix}", arms.join(", "))),
         _ => None,
     }
 }
@@ -238,9 +236,7 @@ pub(crate) fn translate_optional_arg_inner(ty: &Ty, ctx: &TranslateCtx) -> Optio
             return match arms.len() {
                 0 => Some("BamlNull".to_string()),
                 1 => Some(arms[0].clone()),
-                n if n <= MAX_UNION_ARITY => {
-                    Some(format!("BamlUnion{n}<{}>", arms.join(", ")))
-                }
+                n if n <= MAX_UNION_ARITY => Some(format!("BamlUnion{n}<{}>", arms.join(", "))),
                 _ => None,
             };
         }
