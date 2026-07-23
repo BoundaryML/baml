@@ -998,10 +998,15 @@ fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
         r#"
 class Left<T> { value T }
 class Right<T> { value T }
+class Wrapper<T, E> { body () -> T throws E }
 
 function infer_from_spread(source: Left<int>) -> int {
   let copy = Left { ...source };
   copy.value
+}
+
+function expected_type_supplies_omitted_arguments() -> Wrapper<int, null> {
+  Wrapper { body: () -> 1 }
 }
 
 function wrong_class() -> Left<int> {
@@ -1015,6 +1020,10 @@ function wrong_type_argument() -> Left<int> {
     );
     let tir = render_tir(&db, file);
     assert!(!tir.contains("cannot infer type parameter `T`"), "{tir}");
+    assert!(
+        !tir.contains("expected Wrapper<int, null>, got Wrapper<int, never>"),
+        "{tir}"
+    );
     assert!(
         tir.contains("type mismatch: expected Left<int>, got Right<int>"),
         "{tir}"

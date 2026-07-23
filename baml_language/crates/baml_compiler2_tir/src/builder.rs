@@ -6019,13 +6019,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         // class that differs from the expected class, it must be a subtype.
         // Keep this out of `check_expr` proper so its temporary lowering
         // state doesn't bloat every recursive checking frame in debug builds.
-        let Ty::Class(..) = expected else {
+        let Ty::Class(expected_qtn, _, _) = expected else {
             return None;
         };
         let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
-        if matches!(&lit_ty, Ty::Class(..)) && !self.is_subtype(&lit_ty, expected) {
+        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
+            lit_qtn != expected_qtn
+                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+        } else {
+            false
+        };
+        if declared_mismatch {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
                 && !self.is_subtype(&inferred, expected)
@@ -6045,6 +6051,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     fn check_object_expr(
         &mut self,
