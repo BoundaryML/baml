@@ -10,10 +10,7 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{
-    project_load::load_project_or_default,
-    util::{line_number_at_offset, relative_path},
-};
+use crate::util::{line_number_at_offset, relative_path};
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -73,7 +70,13 @@ impl GrepArgs {
         // get a stdlib-only default state and an empty user-file set;
         // each grep mode already surfaces "no matches" / "no symbol found"
         // gracefully below, so there's no need to bail up front.
-        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
+        let mut session = crate::project_session::ProjectSession::open_lenient(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadOnly,
+        )?;
+        let _ = session.warm_prep_seeds_only();
+        session.prime();
+        let (db, from) = (session.db, session.resolved.root);
 
         let source_files = db.get_source_files();
         let kind_filter = parse_kind_filter(&self.kind)?;

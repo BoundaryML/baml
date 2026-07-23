@@ -751,6 +751,9 @@ mod tests {
                 sig_referenced_names: Vec::new(),
                 throw_facts: Vec::new(), // poison: honest is non-empty
                 diagnostics: Vec::new(),
+                // Non-empty sentinel bytes: the manifest's verbatim fragment
+                // carry must survive the disk round-trip untouched.
+                callable_throws_fragment: vec![0xca, 0xfe, 0xf0, 0x0d],
                 unit_key: [0u8; 32], // no unit → callable_throws seed empty
             }],
         };
@@ -766,6 +769,22 @@ mod tests {
                 &borsh::to_vec(&manifest).unwrap(),
             )
             .unwrap();
+        let manifest_bytes = cache
+            .load_raw(&bex_cache::manifest_key(
+                &fingerprint,
+                super::LSP_OPT_LEVEL,
+                super::LSP_EMIT_TEST_CASES,
+                &root,
+                None,
+            ))
+            .expect("manifest reloads from disk");
+        let reloaded: bex_cache::ProjectManifest =
+            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
+        assert_eq!(
+            reloaded.files[0].callable_throws_fragment,
+            vec![0xca, 0xfe, 0xf0, 0x0d],
+            "the fragment blob round-trips through disk serialization verbatim"
+        );
 
         // Load from disk: both the stdlib and per-file seeds must decode.
         let loaded = LspSeedCache::load_for_root(&root).expect("blobs must load from disk");

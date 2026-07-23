@@ -17,7 +17,7 @@ use sdkgen_python_pydantic2::{NamingConvention, OutputType};
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
 
-use crate::{commands::release_version, project_load::load_project_for_build, reporter::Reporter};
+use crate::{commands::release_version, reporter::Reporter};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
@@ -53,16 +53,24 @@ impl GenerateArgs {
             "Generating",
             format!("clients with CLI version: {}", release_version()),
         );
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), &reporter, false)?;
-        if baml_files.is_empty() {
+        // Codegen reads types across the whole project, so take the shared
+        // read-only session: warm seeds where they are provably faithful and
+        // the parallel index prime, same as describe/grep.
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadOnly,
+        )?;
+        if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                from.display()
+                session.root().display()
             ));
             return Ok(crate::ExitCode::Other);
         }
+        let _ = session.warm_prep_seeds_only();
+        session.prime();
+        let (db, from) = (session.db, session.resolved.root);
         // Compile-time diagnostics — same shape as run/pack: render the
         // ariadne block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
