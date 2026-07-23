@@ -67,21 +67,7 @@ use sys_types::{BexExternalValue, CompletionHandle, OpError, SysOp, VmBamlError}
 pub type HostDispatchFn =
     extern "C" fn(host_value_key: u64, call_id: u32, args: *const u8, length: usize);
 
-/// Append-only dispatch callback that also identifies the parent BAML call.
-pub type HostDispatchFnV2 = extern "C" fn(
-    host_value_key: u64,
-    call_id: u32,
-    function_call_id: u64,
-    args: *const u8,
-    length: usize,
-);
-
-/// Notification emitted when cancellation evicts a live host invocation.
-pub type HostCancelFn = extern "C" fn(call_id: u32);
-
 static HOST_DISPATCH_FN: OnceCell<HostDispatchFn> = OnceCell::new();
-static HOST_DISPATCH_FN_V2: OnceCell<HostDispatchFnV2> = OnceCell::new();
-static HOST_CANCEL_FN: OnceCell<HostCancelFn> = OnceCell::new();
 
 /// Install the dispatch callback. First-call-wins; subsequent calls are
 /// silently ignored (consistent with `register_callback` semantics).
@@ -89,39 +75,14 @@ pub fn set_dispatch_fn(f: HostDispatchFn) {
     let _ = HOST_DISPATCH_FN.set(f);
 }
 
-/// Install the V2 dispatch callback. First call wins.
-pub fn set_dispatch_fn_v2(f: HostDispatchFnV2) {
-    let _ = HOST_DISPATCH_FN_V2.set(f);
-}
-
-/// Install the host-call cancellation callback. First call wins.
-pub fn set_cancel_fn(f: HostCancelFn) {
-    let _ = HOST_CANCEL_FN.set(f);
-}
-
 /// Invoke the registered dispatch callback.
 ///
 /// Returns `true` if the callback was installed and fired, `false` if
 /// no bridge has registered a dispatcher yet. The caller is responsible
 /// for resolving the in-flight `CompletionHandle` on `false`.
-pub fn fire_dispatch(
-    host_value_key: u64,
-    call_id: u32,
-    function_call_id: u64,
-    args: &[u8],
-) -> bool {
-    match (HOST_DISPATCH_FN_V2.get(), HOST_DISPATCH_FN.get()) {
-        (Some(f), _) => {
-            f(
-                host_value_key,
-                call_id,
-                function_call_id,
-                args.as_ptr(),
-                args.len(),
-            );
-            true
-        }
-        (None, Some(f)) => {
+pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
+    match HOST_DISPATCH_FN.get() {
+        Some(f) => {
             // The dispatch fn is fire-and-return: every bridge hands the call
             // off to the host (spawning a task / goroutine / threadsafe-fn
             // callback) and returns promptly, then later resolves the in-flight
@@ -133,19 +94,13 @@ pub fn fire_dispatch(
             f(host_value_key, call_id, args.as_ptr(), args.len());
             true
         }
-        (None, None) => {
+        None => {
             tracing::warn!(
                 "call_host_value invoked before register_host_dispatch_callback: \
                  no host dispatch fn registered"
             );
             false
         }
-    }
-}
-
-fn fire_cancel(call_id: u32) {
-    if let Some(f) = HOST_CANCEL_FN.get() {
-        f(call_id);
     }
 }
 
@@ -272,12 +227,8 @@ impl InflightGuard {
 impl Drop for InflightGuard {
     fn drop(&mut self) {
         // Evict the entry if it is still present (cancellation). After normal
-        // completion the entry is already gone, so this is a no-op. Notify the
-        // host only when this guard actually removed the live entry.
-        if let Some(completion) = take(self.call_id) {
-            drop(completion);
-            fire_cancel(self.call_id);
-        }
+        // completion the entry is already gone, so this is a no-op.
+        let _ = take(self.call_id);
     }
 }
 

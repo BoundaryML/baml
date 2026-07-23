@@ -35,9 +35,11 @@ jobs:
 
       - id: derive
         name: Derive exact RID runners from the platform contract
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           matrix="$(jq -c '{include: [.targets[]
             | select(.artifacts.csharp != null and .artifacts.cffi != null)
             | {target: .triple,
@@ -218,6 +220,8 @@ jobs:
           test -f "$native"
           dotnet run --project \
             baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj \
+            -p:BamlNativeProbeMode=Direct \
+            -p:NuGetAudit=false \
             -- "$PWD/$native" \
             "$(jq -r .canonical_version release-plan.json)" \
             "$BAML_CSHARP_ABI_PROBE_BYTECODE"

@@ -2,9 +2,12 @@
 
 set -euo pipefail
 
-readonly script_dir="$({ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"; pwd; })"
-readonly project="$script_dir/Phase6Slice.csproj"
-readonly artifact_root="$(mktemp -d "${TMPDIR:-/tmp}/baml-csharp-phase6-compile.XXXXXXXX")"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly script_dir
+project="$script_dir/Phase6Slice.csproj"
+readonly project
+artifact_root="$(mktemp -d "${TMPDIR:-/tmp}/baml-csharp-phase6-compile.XXXXXXXX")"
+readonly artifact_root
 trap 'rm -rf -- "$artifact_root"' EXIT
 
 fail() {

@@ -31,8 +31,7 @@ mod panic;
 
 pub use api::{
     BAML_API_V1_ABI_VERSION, BamlApiV1, BamlCffiHandleType, BamlCffiMediaKind,
-    BamlHostCancelCallback, BamlHostDispatchCallback, BamlHostDispatchCallbackV2,
-    BamlHostReleaseCallback, BamlResultCallback, baml_get_api_v1,
+    BamlHostDispatchCallback, BamlHostReleaseCallback, BamlResultCallback, baml_get_api_v1,
 };
 use ffi::callbacks::send_outbound_result_to_callback;
 pub use ffi::{
@@ -44,9 +43,8 @@ pub use ffi::{
         baml_media_url,
     },
     host_value::{
-        HostDispatchFn, HostDispatchFnV2, complete_host_call, complete_host_call_v2,
-        register_host_cancel_callback, register_host_dispatch_callback,
-        register_host_dispatch_callback_v2, register_host_release_callback,
+        HostDispatchFn, complete_host_call, register_host_dispatch_callback,
+        register_host_release_callback,
     },
     objects::flush_events,
     runtime::{

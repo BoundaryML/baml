@@ -1008,6 +1008,18 @@ internal static unsafe class Program
             selected.CaseIndex == 1 && context.ReadInt(selected.Value) == 7,
             "union metadata decode changed");
 
+        BamlOutboundValue genericUnion = outboundUnion.Clone();
+        genericUnion.UnionVariantValue.ValueOptionName = "T";
+        BamlGeneratedUnionValue genericSelected = context.ReadUnion(
+            PrimitiveProtocol.Decode(genericUnion),
+            unionType.ToByteArray(),
+            options,
+            [stringType.ToByteArray(), intType.ToByteArray()]);
+        Require(
+            genericSelected.CaseIndex == 1
+            && context.ReadInt(genericSelected.Value) == 7,
+            "generic Canary union option did not resolve from its concrete payload");
+
         InboundValue encodedUnion = PrimitiveProtocol.Encode(
             context.Union(
                 unionType.ToByteArray(),
@@ -1015,14 +1027,30 @@ internal static unsafe class Program
                 "int",
                 context.Int(7)));
         Require(
-            encodedUnion.UnionValue.SelfType.Equals(unionType)
-            && encodedUnion.UnionValue.SelectedType.Equals(intType)
-            && encodedUnion.UnionValue.ValueOptionName == "int"
-            && encodedUnion.UnionValue.Value.IntValue == 7,
-            "inbound union case metadata changed");
+            encodedUnion.ValueCase == InboundValue.ValueOneofCase.IntValue
+            && encodedUnion.IntValue == 7,
+            "inbound union did not use Canary's payload encoding");
 
+        BamlTy reorderedUnionType = new() { Union = new BamlTyUnion() };
+        reorderedUnionType.Union.Options.Add(intType.Clone());
+        reorderedUnionType.Union.Options.Add(stringType.Clone());
+        BamlGeneratedUnionValue reordered = context.ReadUnion(
+            decodedUnion,
+            reorderedUnionType.ToByteArray(),
+            options);
+        Require(
+            reordered.CaseIndex == 1 && context.ReadInt(reordered.Value) == 7,
+            "Canary union normalization changed the selected generated case");
+
+        BamlTy boolType = new()
+        {
+            Primitive = new BamlTyPrimitive
+            {
+                Kind = BamlTyPrimitiveKind.BamlTyPrimitiveBool,
+            },
+        };
         BamlTy wrongUnionType = new() { Union = new BamlTyUnion() };
-        wrongUnionType.Union.Options.Add(intType.Clone());
+        wrongUnionType.Union.Options.Add(boolType);
         wrongUnionType.Union.Options.Add(stringType.Clone());
         Expect<BamlProtocolException>(() =>
             _ = context.ReadUnion(
@@ -1114,7 +1142,7 @@ internal static unsafe class Program
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
         Require(sizeof(BamlBridgeInfoV1) == 32, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 append-only layout changed");
+        Require(sizeof(BamlApiV1) == 176, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -1139,9 +1167,6 @@ internal static unsafe class Program
             (nameof(BamlApiV1.MediaBase64), 152),
             (nameof(BamlApiV1.MediaMimeType), 160),
             (nameof(BamlApiV1.RegisterBridge), 168),
-            (nameof(BamlApiV1.RegisterHostDispatchCallbackV2), 176),
-            (nameof(BamlApiV1.RegisterHostCancelCallback), 184),
-            (nameof(BamlApiV1.CompleteHostCallV2), 192),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1153,31 +1178,8 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 176
-                && BamlApiV1Layout.HostDispatchV2Size == 184
-                && BamlApiV1Layout.HostCancelSize == 192
-                && BamlApiV1Layout.CompleteHostCallV2Size == 200,
-            "BamlApiV1 append-only field gates changed");
-        table.StructSize = BamlApiV1Layout.RequiredPrefixSize;
-        NativeApi.ValidateTable(&table);
-        Require(
-            !BamlApiV1Layout.HasHostDispatchV2(&table)
-                && !BamlApiV1Layout.HasHostCancel(&table),
-            "original V1 prefix exposed appended callbacks");
-        table.StructSize = BamlApiV1Layout.HostDispatchV2Size;
-        Require(
-            BamlApiV1Layout.HasHostDispatchV2(&table)
-                && !BamlApiV1Layout.HasHostCancel(&table),
-            "V2 dispatch field gate changed");
-        table.StructSize = BamlApiV1Layout.HostCancelSize;
-        Require(
-            BamlApiV1Layout.HasHostDispatchV2(&table)
-                && BamlApiV1Layout.HasHostCancel(&table),
-            "host cancellation field gate changed");
-        table.StructSize = BamlApiV1Layout.CompleteHostCallV2Size;
-        Require(
-            BamlApiV1Layout.HasCompleteHostCallV2(&table),
-            "host completion V2 field gate changed");
+            BamlApiV1Layout.RequiredPrefixSize == 176,
+            "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
         NativeApi.ValidateTable(&table);
@@ -2403,9 +2405,6 @@ internal static unsafe class Program
         MediaBase64 = &MediaBase64,
         MediaMimeType = &MediaMimeType,
         RegisterBridge = &RegisterBridge,
-        RegisterHostDispatchCallbackV2 = &RegisterHostDispatchV2,
-        RegisterHostCancelCallback = &RegisterHostCancel,
-        CompleteHostCallV2 = &CompleteHostCallV2,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2544,25 +2543,8 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void RegisterHostDispatchV2(
-        delegate* unmanaged[Cdecl]<ulong, uint, ulong, byte*, nuint, void> callback)
-    {
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void RegisterHostCancel(delegate* unmanaged[Cdecl]<uint, void> callback)
-    {
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void CompleteHostCall(uint callId, int isError, byte* content, nuint length)
     {
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int CompleteHostCallV2(uint callId, int isError, byte* content, nuint length)
-    {
-        return 1;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

@@ -54,31 +54,11 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaBase64;
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaMimeType;
     internal delegate* unmanaged[Cdecl]<BamlBridgeInfoV1*, BamlBuffer> RegisterBridge;
-    internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, ulong, byte*, nuint, void>, void> RegisterHostDispatchCallbackV2;
-    internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, void>, void> RegisterHostCancelCallback;
-    internal delegate* unmanaged[Cdecl]<uint, int, byte*, nuint, int> CompleteHostCallV2;
 }
 
 internal static unsafe class BamlApiV1Layout
 {
     internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.RegisterBridge));
-    internal static readonly nuint HostDispatchV2Size = EndOf(
-        nameof(BamlApiV1.RegisterHostDispatchCallbackV2));
-    internal static readonly nuint HostCancelSize = EndOf(
-        nameof(BamlApiV1.RegisterHostCancelCallback));
-    internal static readonly nuint CompleteHostCallV2Size = EndOf(
-        nameof(BamlApiV1.CompleteHostCallV2));
-
-    internal static bool HasHostDispatchV2(BamlApiV1* api) =>
-        api is not null && api->StructSize >= HostDispatchV2Size;
-
-    internal static bool HasHostCancel(BamlApiV1* api) =>
-        api is not null && api->StructSize >= HostCancelSize;
-
-    internal static bool HasCompleteHostCallV2(BamlApiV1* api) =>
-        api is not null
-            && api->StructSize >= CompleteHostCallV2Size
-            && api->CompleteHostCallV2 is not null;
 
     private static nuint EndOf(string field) =>
         checked((nuint)Marshal.OffsetOf<BamlApiV1>(field) + (nuint)IntPtr.Size);

@@ -224,7 +224,47 @@ fn callable_parts(name: &BaseName) -> (BaseName, CallableVariant) {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::TyAttr;
+    use baml_codegen_types::{Function, Origin, Ty};
+
     use super::*;
+
+    fn method(name: &str) -> Function {
+        Function {
+            name: BaseName::new(name),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: Ty::String {
+                attr: TyAttr::default(),
+            },
+            throws: None,
+            watchers: Vec::new(),
+            origin: Origin {
+                source_file_path: "fixture.baml".to_string(),
+                span_start: 0,
+            },
+        }
+    }
+
+    fn class(static_methods: &[&str], instance_methods: &[&str]) -> Class {
+        Class {
+            name: Name::new(BaseName::new("test"), Vec::new(), BaseName::new("Fixture")),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties: Vec::new(),
+            static_methods: static_methods.iter().map(|name| method(name)).collect(),
+            instance_methods: instance_methods.iter().map(|name| method(name)).collect(),
+            origin: Origin {
+                source_file_path: "fixture.baml".to_string(),
+                span_start: 0,
+            },
+        }
+    }
+
+    fn method_names(methods: &[Function]) -> Vec<&str> {
+        methods.iter().map(|method| method.name.as_str()).collect()
+    }
 
     #[test]
     fn companion_suffixes_are_interpreted_inside_the_csharp_generator() {
@@ -238,6 +278,48 @@ mod tests {
         assert_eq!(
             callable_parts(&BaseName::new("Extract")),
             (BaseName::new("Extract"), CallableVariant::Execute)
+        );
+    }
+
+    #[test]
+    fn static_execute_reclassifies_instance_only_companions_as_static() {
+        let class = reclassify_companion_methods(&class(
+            &["Extract"],
+            &["Extract$render_prompt", "Extract$parse"],
+        ));
+
+        assert_eq!(
+            method_names(&class.static_methods),
+            ["Extract", "Extract$render_prompt", "Extract$parse"]
+        );
+        assert!(class.instance_methods.is_empty());
+    }
+
+    #[test]
+    fn instance_execute_reclassifies_static_only_companions_as_instance() {
+        let class = reclassify_companion_methods(&class(
+            &["Extract$build_request", "Extract$stream"],
+            &["Extract"],
+        ));
+
+        assert!(class.static_methods.is_empty());
+        assert_eq!(
+            method_names(&class.instance_methods),
+            ["Extract$build_request", "Extract$stream", "Extract"]
+        );
+    }
+
+    #[test]
+    fn orphan_companions_preserve_their_original_method_kind() {
+        let class = reclassify_companion_methods(&class(
+            &["StaticOnly$parse"],
+            &["InstanceOnly$render_prompt"],
+        ));
+
+        assert_eq!(method_names(&class.static_methods), ["StaticOnly$parse"]);
+        assert_eq!(
+            method_names(&class.instance_methods),
+            ["InstanceOnly$render_prompt"]
         );
     }
 

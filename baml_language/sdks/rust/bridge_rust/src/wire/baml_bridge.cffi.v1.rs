@@ -487,7 +487,7 @@ impl BamlTyFunctionParamMode {
 /// signatures.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundValue {
-    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
 /// Nested message and enum types in `InboundValue`.
@@ -521,40 +521,17 @@ pub mod inbound_value {
         /// argument value so the host can pass types as data.
         #[prost(message, tag = "13")]
         TyValue(super::BamlTy),
-        /// Exact selected-arm metadata for typed hosts. Older hosts may continue
-        /// sending the selected payload directly.
-        #[prost(message, tag = "14")]
-        UnionValue(::prost::alloc::boxed::Box<super::InboundUnionValue>),
     }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InboundUnionValue {
-    #[prost(message, optional, tag = "1")]
-    pub self_type: ::core::option::Option<BamlTy>,
-    #[prost(message, optional, tag = "2")]
-    pub selected_type: ::core::option::Option<BamlTy>,
-    #[prost(string, tag = "3")]
-    pub value_option_name: ::prost::alloc::string::String,
-    #[prost(message, optional, boxed, tag = "4")]
-    pub value: ::core::option::Option<::prost::alloc::boxed::Box<InboundValue>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundListValue {
     #[prost(message, repeated, tag = "1")]
     pub values: ::prost::alloc::vec::Vec<InboundValue>,
-    /// Optional exact occurrence metadata; absent preserves the legacy fallback.
-    #[prost(message, optional, tag = "2")]
-    pub item_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapValue {
     #[prost(message, repeated, tag = "1")]
     pub entries: ::prost::alloc::vec::Vec<InboundMapEntry>,
-    /// Optional exact occurrence metadata; absent preserves the legacy fallback.
-    #[prost(message, optional, tag = "2")]
-    pub key_type: ::core::option::Option<BamlTy>,
-    #[prost(message, optional, tag = "3")]
-    pub value_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundMapEntry {
@@ -842,9 +819,6 @@ pub struct BamlValueUnionVariant {
     pub value_option_name: ::prost::alloc::string::String,
     #[prost(message, optional, boxed, tag = "6")]
     pub value: ::core::option::Option<::prost::alloc::boxed::Box<BamlOutboundValue>>,
-    /// Exact selected occurrence for typed hosts. Appended for compatibility.
-    #[prost(message, optional, tag = "7")]
-    pub selected_type: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BamlValueMedia {

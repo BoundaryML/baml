@@ -27,10 +27,6 @@ internal static class BamlProcessExit
 
 internal static class BamlCancellationTokens
 {
-    internal static CancellationToken CreateEngineToken()
-    {
-        using var source = new CancellationTokenSource();
-        source.Cancel();
-        return source.Token;
-    }
+    internal static CancellationToken CreateEngineToken() =>
+        new(canceled: true);
 }

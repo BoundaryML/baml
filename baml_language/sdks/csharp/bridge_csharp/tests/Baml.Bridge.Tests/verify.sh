@@ -10,6 +10,8 @@ request_client_project="$test_dir/../Baml.Bridge.RequestClient.Tests/Baml.Bridge
 stream_project="$test_dir/../Baml.Bridge.Stream.Tests/Baml.Bridge.Stream.Tests.csproj"
 host_callable_project="$test_dir/../Baml.Bridge.HostCallable.Tests/Baml.Bridge.HostCallable.Tests.csproj"
 documentation_project="$test_dir/../Baml.Bridge.DocumentationConsumer/Baml.Bridge.DocumentationConsumer.csproj"
+generated_contract_project="$test_dir/../Baml.Bridge.GeneratedContract.Tests/Baml.Bridge.GeneratedContract.Tests.csproj"
+emitter_project="$test_dir/../../tools/Baml.BytecodeCarrierEmitter/Baml.BytecodeCarrierEmitter.csproj"
 runtime_project="$test_dir/../../src/Baml.Bridge.csproj"
 generated_source_root="$repo_root/baml_language/sdk_tests/crates/csharp/primitive_slice/baml_client"
 
@@ -39,10 +41,42 @@ dotnet run --project "$project" --configuration Release --no-build --no-restore
 dotnet run --project "$request_client_project" --configuration Release
 dotnet run --project "$stream_project" --configuration Release
 dotnet run --project "$host_callable_project" --configuration Release
+dotnet run --project "$generated_contract_project" \
+  --configuration Release \
+  -p:Version=9.8.7 \
+  -p:NuGetAudit=false
 dotnet build "$documentation_project" \
   --configuration Release \
   -p:BamlBridgeProjectReference="$runtime_project" \
   -p:BamlGeneratedSourceRoot="$generated_source_root"
+
+unsafe_version_log="$work_dir/unsafe-version.log"
+set +e
+dotnet run --project "$emitter_project" \
+  --configuration Release \
+  -p:NuGetAudit=false \
+  -- \
+  --synthesize \
+  1 \
+  "$work_dir/unsafe-version.bytecode" \
+  "$work_dir/unsafe-version.g.cs" \
+  '0.15.0\unsafe' \
+  >"$unsafe_version_log" 2>&1
+unsafe_version_status=$?
+set -e
+if [[ "$unsafe_version_status" -eq 0 ]]; then
+  echo "bytecode carrier accepted a backslash in its generated version" >&2
+  exit 1
+fi
+if ! grep -Fq "version is not a safe generated constant" "$unsafe_version_log"; then
+  echo "bytecode carrier rejected the unsafe version for an unexpected reason" >&2
+  sed -n '1,160p' "$unsafe_version_log" >&2
+  exit 1
+fi
+if [[ -e "$work_dir/unsafe-version.g.cs" ]]; then
+  echo "bytecode carrier wrote source for an unsafe generated version" >&2
+  exit 1
+fi
 
 run_success() {
   local mode="$1"

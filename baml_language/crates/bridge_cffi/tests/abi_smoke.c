@@ -64,15 +64,6 @@ static int baml_required_functions_exist(const BamlApiV1 *api) {
          api->register_bridge != NULL;
 }
 
-static int baml_appended_host_callbacks_exist(const BamlApiV1 *api) {
-  return BAML_API_V1_HAS_FIELD(api, register_host_dispatch_callback_v2) &&
-         api->register_host_dispatch_callback_v2 != NULL &&
-         BAML_API_V1_HAS_FIELD(api, register_host_cancel_callback) &&
-         api->register_host_cancel_callback != NULL &&
-         BAML_API_V1_HAS_FIELD(api, complete_host_call_v2) &&
-         api->complete_host_call_v2 != NULL;
-}
-
 static int baml_test_evolution_checks(const BamlApiV1 *api) {
   BamlApiV1 synthetic = *api;
   synthetic.struct_size = BAML_API_V1_MIN_SIZE - 1;
@@ -83,23 +74,6 @@ static int baml_test_evolution_checks(const BamlApiV1 *api) {
   synthetic.struct_size = BAML_API_V1_MIN_SIZE + sizeof(void *);
   if (!baml_api_v1_is_compatible(&synthetic)) {
     fprintf(stderr, "larger append-only V1 table was rejected\n");
-    return 0;
-  }
-  synthetic.struct_size = BAML_API_V1_MIN_SIZE;
-  if (BAML_API_V1_HAS_FIELD(&synthetic, register_host_dispatch_callback_v2)) {
-    fprintf(stderr, "original V1 prefix exposed the appended V2 dispatch field\n");
-    return 0;
-  }
-  synthetic.struct_size = offsetof(BamlApiV1, register_host_cancel_callback);
-  if (!BAML_API_V1_HAS_FIELD(&synthetic, register_host_dispatch_callback_v2) ||
-      BAML_API_V1_HAS_FIELD(&synthetic, register_host_cancel_callback)) {
-    fprintf(stderr, "append-only host callback field gates are inconsistent\n");
-    return 0;
-  }
-  synthetic.struct_size = offsetof(BamlApiV1, complete_host_call_v2);
-  if (!BAML_API_V1_HAS_FIELD(&synthetic, register_host_cancel_callback) ||
-      BAML_API_V1_HAS_FIELD(&synthetic, complete_host_call_v2)) {
-    fprintf(stderr, "append-only host completion field gate is inconsistent\n");
     return 0;
   }
   synthetic.abi_version = BAML_API_V1_ABI_VERSION + 1;
@@ -137,8 +111,7 @@ int main(int argc, char **argv) {
     baml_close_library(library);
     return 5;
   }
-  if (!baml_required_functions_exist(api) || !baml_appended_host_callbacks_exist(api) ||
-      !baml_test_evolution_checks(api)) {
+  if (!baml_required_functions_exist(api) || !baml_test_evolution_checks(api)) {
     baml_close_library(library);
     return 6;
   }

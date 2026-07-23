@@ -23,15 +23,6 @@ pub enum CtypesError {
     #[error("Invalid bigint hex string ({len} bytes)")]
     InvalidBigint { len: usize },
 
-    #[error("Invalid inbound union metadata: {0}")]
-    InvalidUnionMetadata(String),
-
-    #[error("Invalid inbound collection metadata: {0}")]
-    InvalidCollectionMetadata(String),
-
-    #[error("Invalid {kind} literal type metadata")]
-    InvalidLiteralMetadata { kind: &'static str },
-
     #[error("Internal error: {0}")]
     InternalError(String),
 }

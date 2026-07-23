@@ -153,22 +153,20 @@ class BamlValueEnum(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ..., is_dynamic: bool = ...) -> None: ...
 
 class BamlValueUnionVariant(_message.Message):
-    __slots__ = ("name", "is_optional", "is_single_pattern", "self_type", "value_option_name", "value", "selected_type")
+    __slots__ = ("name", "is_optional", "is_single_pattern", "self_type", "value_option_name", "value")
     NAME_FIELD_NUMBER: _ClassVar[int]
     IS_OPTIONAL_FIELD_NUMBER: _ClassVar[int]
     IS_SINGLE_PATTERN_FIELD_NUMBER: _ClassVar[int]
     SELF_TYPE_FIELD_NUMBER: _ClassVar[int]
     VALUE_OPTION_NAME_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
-    SELECTED_TYPE_FIELD_NUMBER: _ClassVar[int]
     name: str
     is_optional: bool
     is_single_pattern: bool
     self_type: _baml_type_pb2.BamlTy
     value_option_name: str
     value: BamlOutboundValue
-    selected_type: _baml_type_pb2.BamlTy
-    def __init__(self, name: _Optional[str] = ..., is_optional: bool = ..., is_single_pattern: bool = ..., self_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value_option_name: _Optional[str] = ..., value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., selected_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., is_optional: bool = ..., is_single_pattern: bool = ..., self_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value_option_name: _Optional[str] = ..., value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ...) -> None: ...
 
 class BamlValueMedia(_message.Message):
     __slots__ = ("media", "mime_type", "url", "base64", "file")

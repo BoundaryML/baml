@@ -36,7 +36,7 @@
   },
   "scripts": {
     "build:clean": "node typescript_src/clean-dist.js",
-    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w es6 -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_outbound.proto && node typescript_src/generate-proto-dts.js typescript_src/proto/baml_cffi.js typescript_src/proto/baml_cffi.d.ts",
+    "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w es6 -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
     "build:napi-debug": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform",
     "build:napi-release": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform --profile release-bridge-node",
     "build:copy-native-dts": "node typescript_src/copy-native-dts.js",

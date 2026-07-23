@@ -14,19 +14,16 @@ internal static class HostCallableProtocol
     internal static InboundValue Encode(
         BamlGeneratedHostCallable callable,
         NativeApi api,
-        EncodedCallArguments ownership)
+        EncodedCallArguments ownership,
+        ulong functionCallId)
     {
         ArgumentNullException.ThrowIfNull(callable);
         ArgumentNullException.ThrowIfNull(api);
         ArgumentNullException.ThrowIfNull(ownership);
-        if (!api.SupportsHostCallables)
-        {
-            throw new BamlNativeLibraryLoadException(
-                "The loaded native bridge does not expose the V2 host-dispatch and cancellation ABI required by managed host callables.");
-        }
+        functionCallId = NativeApi.RequireFunctionCallIdentifier(functionCallId);
 
         HostValueRegistration registration =
-            HostValueRegistry.Shared.RegisterCallable(callable);
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
         ownership.AddTransfer(registration);
         return new InboundValue
         {

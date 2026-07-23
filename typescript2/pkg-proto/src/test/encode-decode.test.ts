@@ -332,7 +332,6 @@ describe('decodeCallResult', () => {
           selfType: undefined,
           valueOptionName: 'stringValue',
           value: { value: { $case: 'stringValue', stringValue: 'hi' } },
-          selectedType: undefined,
         },
       },
     });

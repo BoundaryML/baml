@@ -22,10 +22,8 @@ internal static unsafe class NativeCallbacks
 
     internal static delegate* unmanaged[Cdecl]<uint, byte*, nuint, void> ResultPointer => &OnResult;
 
-    internal static delegate* unmanaged[Cdecl]<ulong, uint, ulong, byte*, nuint, void>
-        HostDispatchV2Pointer => &OnHostDispatchV2;
-
-    internal static delegate* unmanaged[Cdecl]<uint, void> HostCancelPointer => &OnHostCancel;
+    internal static delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>
+        HostDispatchPointer => &OnHostDispatchV1;
 
     internal static delegate* unmanaged[Cdecl]<ulong, void> HostReleasePointer => &OnHostRelease;
 
@@ -41,11 +39,6 @@ internal static unsafe class NativeCallbacks
         api.Table->RegisterCallback(&OnResult);
         api.Table->RegisterHostReleaseCallback(&OnHostRelease);
         api.Table->RegisterHostDispatchCallback(&OnHostDispatchV1);
-        if (api.SupportsHostCallables)
-        {
-            api.Table->RegisterHostDispatchCallbackV2(&OnHostDispatchV2);
-            api.Table->RegisterHostCancelCallback(&OnHostCancel);
-        }
     }
 
     internal static (uint Id, Task<byte[]> Task) AddPending()
@@ -138,21 +131,11 @@ internal static unsafe class NativeCallbacks
         uint hostCallId,
         byte* content,
         nuint length) =>
-        OnHostDispatch(hostKey, hostCallId, functionCallId: 0, content, length);
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostDispatchV2(
-        ulong hostKey,
-        uint hostCallId,
-        ulong functionCallId,
-        byte* content,
-        nuint length) =>
-        OnHostDispatch(hostKey, hostCallId, functionCallId, content, length);
+        OnHostDispatch(hostKey, hostCallId, content, length);
 
     private static void OnHostDispatch(
         ulong hostKey,
         uint hostCallId,
-        ulong functionCallId,
         byte* content,
         nuint length)
     {
@@ -176,7 +159,6 @@ internal static unsafe class NativeCallbacks
             HostInvocation? invocation = HostValueRegistry.Shared.TryStartInvocation(
                 hostKey,
                 hostCallId,
-                functionCallId,
                 copy,
                 out string? diagnostic);
             if (invocation is null)
@@ -194,21 +176,8 @@ internal static unsafe class NativeCallbacks
             HostCallDispatcher.QueueBoundaryException(
                 api,
                 hostCallId,
-                functionCallId,
+                functionCallId: 0,
                 error);
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostCancel(uint hostCallId)
-    {
-        try
-        {
-            HostValueRegistry.Shared.CancelInvocation(hostCallId);
-        }
-        catch
-        {
-            // No managed exception may unwind across the unmanaged callback boundary.
         }
     }
 

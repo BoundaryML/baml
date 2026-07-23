@@ -22,10 +22,6 @@ internal static unsafe partial class Program
 
     private static readonly nuint RequiredV1PrefixSize = ApiFieldEnd(
         nameof(BamlApiV1.RegisterBridge));
-    private static readonly nuint HostDispatchV2Size = ApiFieldEnd(
-        nameof(BamlApiV1.RegisterHostDispatchCallbackV2));
-    private static readonly nuint HostCancelSize = ApiFieldEnd(
-        nameof(BamlApiV1.RegisterHostCancelCallback));
 
     private static readonly ConcurrentDictionary<
         uint,
@@ -81,9 +77,6 @@ internal static unsafe partial class Program
         Require(
             api->StructSize >= RequiredV1PrefixSize,
             $"truncated BamlApiV1 prefix: {api->StructSize} < {RequiredV1PrefixSize}");
-        Require(
-            api->StructSize >= HostCancelSize,
-            $"BamlApiV1 lacks host callback V2/cancellation fields: {api->StructSize} < {HostCancelSize}");
         ValidateRequiredFunctions(api);
 
         string nativeVersion = ConsumeUtf8Buffer(api, api->Version());
@@ -144,8 +137,6 @@ internal static unsafe partial class Program
         api->RegisterCallback(&OnResult);
         api->RegisterHostDispatchCallback(&OnHostDispatch);
         api->RegisterHostReleaseCallback(&OnHostRelease);
-        api->RegisterHostDispatchCallbackV2(&OnHostDispatchV2);
-        api->RegisterHostCancelCallback(&OnHostCancel);
 
         VerifyCallIdentifiers(api);
 
@@ -218,7 +209,7 @@ internal static unsafe partial class Program
         Console.WriteLine("media_handle_clone_release=ok");
         Console.WriteLine($"owned_buffers_released={_releasedBuffers}");
         Console.WriteLine("callback_boundary=contained");
-        Console.WriteLine("host_callback_abi=v2_cancel");
+        Console.WriteLine("host_callback_abi=v1");
         return 0;
     }
 
@@ -894,14 +885,6 @@ internal static unsafe partial class Program
             api->MediaMimeType is not null,
             "media_mime_type is null");
         Require(api->RegisterBridge is not null, "register_bridge is null");
-        Require(
-            api->StructSize >= HostDispatchV2Size
-                && api->RegisterHostDispatchCallbackV2 is not null,
-            "register_host_dispatch_callback_v2 is unavailable");
-        Require(
-            api->StructSize >= HostCancelSize
-                && api->RegisterHostCancelCallback is not null,
-            "register_host_cancel_callback is unavailable");
     }
 
     private static nuint ApiFieldEnd(string field) =>
@@ -993,55 +976,6 @@ internal static unsafe partial class Program
             {
                 throw new InvalidDataException(
                     "invalid borrowed host-dispatch callback arguments");
-            }
-        }
-        catch (Exception error)
-        {
-            Interlocked.CompareExchange(
-                ref _callbackFailure,
-                ExceptionDispatchInfo.Capture(error),
-                null);
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostDispatchV2(
-        ulong hostValueKey,
-        uint callId,
-        ulong functionCallId,
-        byte* args,
-        nuint length)
-    {
-        try
-        {
-            if (hostValueKey == 0
-                || callId == 0
-                || functionCallId == 0
-                || length > int.MaxValue
-                || (length != 0 && args is null))
-            {
-                throw new InvalidDataException(
-                    "invalid borrowed host-dispatch V2 callback arguments");
-            }
-        }
-        catch (Exception error)
-        {
-            Interlocked.CompareExchange(
-                ref _callbackFailure,
-                ExceptionDispatchInfo.Capture(error),
-                null);
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnHostCancel(uint callId)
-    {
-        try
-        {
-            if (callId == 0)
-            {
-                throw new InvalidDataException(
-                    "host-cancel callback supplied call ID zero");
             }
         }
         catch (Exception error)
@@ -1172,18 +1106,6 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<
             BamlBridgeInfoV1*,
             BamlBuffer> RegisterBridge;
-        public readonly delegate* unmanaged[Cdecl]<
-            delegate* unmanaged[Cdecl]<
-                ulong,
-                uint,
-                ulong,
-                byte*,
-                nuint,
-                void>,
-            void> RegisterHostDispatchCallbackV2;
-        public readonly delegate* unmanaged[Cdecl]<
-            delegate* unmanaged[Cdecl]<uint, void>,
-            void> RegisterHostCancelCallback;
     }
 
     private static partial class NativeMethods

@@ -275,29 +275,6 @@ typedef struct BamlBridgeInfoV1 {
 typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 *info);
 
 /**
- * Append-only host-dispatch callback that also identifies the parent BAML call.
- */
-typedef void (*BamlHostDispatchCallbackV2)(uint64_t host_value_key,
-                                           uint32_t call_id,
-                                           uint64_t function_call_id,
-                                           const uint8_t *args,
-                                           size_t length);
-
-typedef void (*BamlRegisterHostDispatchCallbackV2Fn)(BamlHostDispatchCallbackV2 callback);
-
-/**
- * Notifies the host that native cancellation removed an outstanding host call.
- */
-typedef void (*BamlHostCancelCallback)(uint32_t call_id);
-
-typedef void (*BamlRegisterHostCancelCallbackFn)(BamlHostCancelCallback callback);
-
-typedef int32_t (*BamlCompleteHostCallV2Fn)(uint32_t call_id,
-                                            int32_t is_error,
-                                            const int8_t *content,
-                                            size_t length);
-
-/**
  * First version of the shared BAML C API.
  *
  * The table is immutable runtime-owned storage and remains valid until the
@@ -461,21 +438,6 @@ typedef struct BamlApiV1 {
    * only for an identical language/version pair.
    */
   BamlRegisterBridgeFn register_bridge;
-  /**
-   * Install the append-only V2 host-dispatch callback. When present, native
-   * dispatch prefers it over the original callback.
-   */
-  BamlRegisterHostDispatchCallbackV2Fn register_host_dispatch_callback_v2;
-  /**
-   * Install the callback notified when a live host invocation is cancelled.
-   */
-  BamlRegisterHostCancelCallbackFn register_host_cancel_callback;
-  /**
-   * Complete a host call and return 1 only when native consumed every
-   * ownership transfer encoded in `content`. On 0 the bridge retains those
-   * transfers and must release them locally.
-   */
-  BamlCompleteHostCallV2Fn complete_host_call_v2;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -510,8 +472,5 @@ static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
          api->struct_size >= BAML_API_V1_MIN_SIZE;
 }
-
-/* Check an append-only field before reading it from a possibly older table. */
-#define BAML_API_V1_HAS_FIELD(api, field) ((api) != NULL && (api)->struct_size >= offsetof(BamlApiV1, field) + sizeof(((BamlApiV1 *)0)->field))
 
 #endif /* BAML_CFFI_H */

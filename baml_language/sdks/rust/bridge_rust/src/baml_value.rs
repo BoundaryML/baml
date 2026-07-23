@@ -313,7 +313,6 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     fn to_baml(&self) -> wire::InboundValue {
         inbound(In::ListValue(wire::InboundListValue {
             values: self.iter().map(__BamlValuePrivate::to_baml).collect(),
-            item_type: None,
         }))
     }
 
@@ -373,8 +372,6 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
                     value: Some(v.to_baml()),
                 })
                 .collect(),
-            key_type: None,
-            value_type: None,
         }))
     }
 
@@ -416,8 +413,6 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
                     value: Some(v.to_baml()),
                 })
                 .collect(),
-            key_type: None,
-            value_type: None,
         }))
     }
 

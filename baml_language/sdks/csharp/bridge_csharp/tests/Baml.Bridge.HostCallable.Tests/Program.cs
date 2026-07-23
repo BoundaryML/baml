@@ -170,20 +170,24 @@ internal static class Program
             .ReadHostCallable();
 
         var hostValues = new HostValueRegistry();
-        using (HostValueRegistration unpublished = hostValues.RegisterCallable(callable))
+        using (HostValueRegistration unpublished = hostValues.RegisterCallable(
+            callable,
+            parentFunctionCallId: 90))
         {
             Require(hostValues.EntryCount == 1, "pending callable registration was lost");
         }
         Require(hostValues.EntryCount == 0, "unpublished callable registration did not abort");
 
-        using (HostValueRegistration published = hostValues.RegisterCallable(callable))
+        hostValues.BeginFunctionCall(91, CancellationToken.None);
+        using (HostValueRegistration published = hostValues.RegisterCallable(
+            callable,
+            parentFunctionCallId: 91))
         {
             published.Commit();
             ulong firstKey = published.Key;
             HostInvocation invocation = hostValues.TryStartInvocation(
                 firstKey,
                 hostCallId: 1,
-                functionCallId: 91,
                 new BamlToHostCall().ToByteArray(),
                 out string? diagnostic)
                 ?? throw new InvalidOperationException(diagnostic);
@@ -196,30 +200,37 @@ internal static class Program
                 hostValues.EntryCount == 0,
                 "released callable was not collected after its final dispatch lease");
 
-            using HostValueRegistration replacement = hostValues.RegisterCallable(callable);
+            using HostValueRegistration replacement = hostValues.RegisterCallable(
+                callable,
+                parentFunctionCallId: 91);
             replacement.Commit();
             Require(
                 replacement.Key != firstKey,
                 "a recycled host-value slot reused a stale generation key");
             hostValues.Release(replacement.Key);
         }
+        hostValues.CompleteFunctionCall(91);
 
-        hostValues.CancelInvocation(77);
-        using (HostValueRegistration canceled = hostValues.RegisterCallable(callable))
+        using (var caller = new CancellationTokenSource())
         {
+            hostValues.BeginFunctionCall(92, caller.Token);
+            using HostValueRegistration canceled = hostValues.RegisterCallable(
+                callable,
+                parentFunctionCallId: 92);
             canceled.Commit();
-            HostInvocation invocation = hostValues.TryStartInvocation(
+            caller.Cancel();
+            HostInvocation canceledInvocation = hostValues.TryStartInvocation(
                 canceled.Key,
                 hostCallId: 77,
-                functionCallId: 92,
                 new BamlToHostCall().ToByteArray(),
                 out string? diagnostic)
                 ?? throw new InvalidOperationException(diagnostic);
             Require(
-                invocation.CancellationToken.IsCancellationRequested,
-                "cancel-before-dispatch race did not reach the invocation token");
-            invocation.Complete();
+                canceledInvocation.CancellationToken.IsCancellationRequested,
+                "caller cancellation before dispatch did not reach the invocation token");
+            canceledInvocation.Complete();
             hostValues.Release(canceled.Key);
+            hostValues.CompleteFunctionCall(92);
         }
 
         hostValues.BeginFunctionCall(93, CancellationToken.None);
@@ -347,17 +358,17 @@ internal static class Program
                     (BamlOptional<string>)arguments[1]!,
                     token)))
             .ReadHostCallable();
-        HostValueRegistration registration = HostValueRegistry.Shared.RegisterCallable(callable);
-        registration.Commit();
-        SynchronizationContext.SetSynchronizationContext(null);
-        Ambient.Value = "changed";
-
         const ulong functionCallId = 1001;
         const uint hostCallId = 101;
         HostValueRegistry.Shared.BeginFunctionCall(functionCallId, CancellationToken.None);
+        HostValueRegistration registration =
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
+        registration.Commit();
+        SynchronizationContext.SetSynchronizationContext(null);
+        Ambient.Value = "changed";
         byte[] payload = Call(RequiredInt(12), OptionalString("suffix", "!"))
             .ToByteArray();
-        Dispatch(registration.Key, hostCallId, functionCallId, payload);
+        Dispatch(registration.Key, hostCallId, payload);
         Array.Fill(payload, (byte)0xff);
 
         HostCompletion completion = await NextCompletion();
@@ -407,17 +418,18 @@ internal static class Program
             static (target, _, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<CancellationToken, Task<string>>)target)(token)))
             .ReadHostCallable();
-        HostValueRegistration registration = HostValueRegistry.Shared.RegisterCallable(callable);
-        registration.Commit();
-
         const ulong functionCallId = 1002;
         const uint hostCallId = 102;
-        HostValueRegistry.Shared.BeginFunctionCall(functionCallId, CancellationToken.None);
+        using var caller = new CancellationTokenSource();
+        HostValueRegistry.Shared.BeginFunctionCall(functionCallId, caller.Token);
+        HostValueRegistration registration =
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
+        registration.Commit();
         byte[] payload = new BamlToHostCall().ToByteArray();
-        Dispatch(registration.Key, hostCallId, functionCallId, payload);
+        Dispatch(registration.Key, hostCallId, payload);
 
         CancellationToken supplied = await tokenSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Cancel(hostCallId);
+        caller.Cancel();
         await canceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
         Require(
@@ -441,7 +453,7 @@ internal static class Program
             if (value == 1)
             {
                 byte[] nested = Call(RequiredInt(2)).ToByteArray();
-                Dispatch(hostKey, hostCallId: 104, functionCallId, nested);
+                Dispatch(hostKey, hostCallId: 104, nested);
                 await Task.Yield();
             }
 
@@ -457,12 +469,13 @@ internal static class Program
                     (long)arguments[0]!,
                     token)))
             .ReadHostCallable();
-        HostValueRegistration registration = HostValueRegistry.Shared.RegisterCallable(callable);
+        HostValueRegistry.Shared.BeginFunctionCall(functionCallId, CancellationToken.None);
+        HostValueRegistration registration =
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
         registration.Commit();
         hostKey = registration.Key;
-        HostValueRegistry.Shared.BeginFunctionCall(functionCallId, CancellationToken.None);
         byte[] outer = Call(RequiredInt(1)).ToByteArray();
-        Dispatch(hostKey, hostCallId: 103, functionCallId, outer);
+        Dispatch(hostKey, hostCallId: 103, outer);
 
         HostCompletion first = await NextCompletion();
         HostCompletion second = await NextCompletion();
@@ -498,14 +511,14 @@ internal static class Program
             static (target, _, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<CancellationToken, Task<string>>)target)(token)))
             .ReadHostCallable();
-        HostValueRegistration registration = HostValueRegistry.Shared.RegisterCallable(callable);
-        registration.Commit();
-
         const ulong functionCallId = 1004;
         const uint hostCallId = 105;
         HostValueRegistry.Shared.BeginFunctionCall(functionCallId, CancellationToken.None);
+        HostValueRegistration registration =
+            HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
+        registration.Commit();
         byte[] payload = new BamlToHostCall().ToByteArray();
-        Dispatch(registration.Key, hostCallId, functionCallId, payload);
+        Dispatch(registration.Key, hostCallId, payload);
 
         HostCompletion completion = await NextCompletion();
         Require(
@@ -705,22 +718,17 @@ internal static class Program
     private static unsafe void Dispatch(
         ulong hostKey,
         uint hostCallId,
-        ulong functionCallId,
         byte[] payload)
     {
         fixed (byte* pointer = payload)
         {
-            NativeCallbacks.HostDispatchV2Pointer(
+            NativeCallbacks.HostDispatchPointer(
                 hostKey,
                 hostCallId,
-                functionCallId,
                 pointer,
                 (nuint)payload.Length);
         }
     }
-
-    private static unsafe void Cancel(uint hostCallId) =>
-        NativeCallbacks.HostCancelPointer(hostCallId);
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void CompleteHostCall(
@@ -737,21 +745,6 @@ internal static class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe int CompleteHostCallV2(
-        uint callId,
-        int isError,
-        byte* content,
-        nuint length)
-    {
-        byte[] bytes = length == 0
-            ? []
-            : new ReadOnlySpan<byte>(content, checked((int)length)).ToArray();
-        Completions.Enqueue(new HostCompletion(callId, isError, bytes));
-        Volatile.Read(ref completionSignal).TrySetResult();
-        return 1;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void RegisterResult(
         delegate* unmanaged[Cdecl]<uint, byte*, nuint, void> callback)
     {
@@ -760,18 +753,6 @@ internal static class Program
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void RegisterHostDispatch(
         delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void> callback)
-    {
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void RegisterHostDispatchV2(
-        delegate* unmanaged[Cdecl]<ulong, uint, ulong, byte*, nuint, void> callback)
-    {
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void RegisterHostCancel(
-        delegate* unmanaged[Cdecl]<uint, void> callback)
     {
     }
 
@@ -818,9 +799,6 @@ internal static class Program
                 RegisterHostDispatchCallback = &RegisterHostDispatch,
                 RegisterHostReleaseCallback = &RegisterHostRelease,
                 CompleteHostCall = &CompleteHostCall,
-                RegisterHostDispatchCallbackV2 = &RegisterHostDispatchV2,
-                RegisterHostCancelCallback = &RegisterHostCancel,
-                CompleteHostCallV2 = &CompleteHostCallV2,
             };
             Api = new NativeApi(table, "host-callable-test");
         }

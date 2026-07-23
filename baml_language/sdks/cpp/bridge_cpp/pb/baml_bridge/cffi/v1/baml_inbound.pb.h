@@ -83,10 +83,6 @@ class InboundMapValue;
 struct InboundMapValueDefaultTypeInternal;
 extern InboundMapValueDefaultTypeInternal _InboundMapValue_default_instance_;
 extern const ::google::protobuf::internal::ClassDataLite<36> InboundMapValue_class_data_;
-class InboundUnionValue;
-struct InboundUnionValueDefaultTypeInternal;
-extern InboundUnionValueDefaultTypeInternal _InboundUnionValue_default_instance_;
-extern const ::google::protobuf::internal::ClassDataLite<38> InboundUnionValue_class_data_;
 class InboundValue;
 struct InboundValueDefaultTypeInternal;
 extern InboundValueDefaultTypeInternal _InboundValue_default_instance_;
@@ -154,7 +150,7 @@ class InboundEnumValue final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const InboundEnumValue*>(
         &_InboundEnumValue_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(InboundEnumValue& a, InboundEnumValue& b) { a.Swap(&b); }
   inline void Swap(InboundEnumValue* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -359,7 +355,7 @@ class CallAck final : public ::google::protobuf::MessageLite
     kError = 1,
     RESPONSE_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(CallAck& a, CallAck& b) { a.Swap(&b); }
   inline void Swap(CallAck* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -553,7 +549,7 @@ class InboundClassValue final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const InboundClassValue*>(
         &_InboundClassValue_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(InboundClassValue& a, InboundClassValue& b) { a.Swap(&b); }
   inline void Swap(InboundClassValue* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -756,7 +752,7 @@ class InboundListValue final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const InboundListValue*>(
         &_InboundListValue_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(InboundListValue& a, InboundListValue& b) { a.Swap(&b); }
   inline void Swap(InboundListValue* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -842,7 +838,6 @@ class InboundListValue final : public ::google::protobuf::MessageLite
   // accessors -------------------------------------------------------
   enum : int {
     kValuesFieldNumber = 1,
-    kItemTypeFieldNumber = 2,
   };
   // repeated .baml_bridge.cffi.v1.InboundValue values = 1;
   int values_size() const;
@@ -861,27 +856,12 @@ class InboundListValue final : public ::google::protobuf::MessageLite
   const ::baml_bridge::cffi::v1::InboundValue& values(int index) const;
   ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL add_values();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundValue>& values() const;
-  // .baml_bridge.cffi.v1.BamlTy item_type = 2;
-  bool has_item_type() const;
-  void clear_item_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& item_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_item_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_item_type();
-  void set_allocated_item_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_item_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_item_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_item_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_item_type();
-
-  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundListValue)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   2, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   1, 0,
                                    2>
       _table_;
 
@@ -900,10 +880,8 @@ class InboundListValue final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const InboundListValue& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundValue > values_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE item_type_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -966,7 +944,7 @@ class InboundMapEntry final : public ::google::protobuf::MessageLite
     kEnumKey = 5,
     KEY_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(InboundMapEntry& a, InboundMapEntry& b) { a.Swap(&b); }
   inline void Swap(InboundMapEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1228,7 +1206,7 @@ class InboundMapValue final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const InboundMapValue*>(
         &_InboundMapValue_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(InboundMapValue& a, InboundMapValue& b) { a.Swap(&b); }
   inline void Swap(InboundMapValue* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1314,8 +1292,6 @@ class InboundMapValue final : public ::google::protobuf::MessageLite
   // accessors -------------------------------------------------------
   enum : int {
     kEntriesFieldNumber = 1,
-    kKeyTypeFieldNumber = 2,
-    kValueTypeFieldNumber = 3,
   };
   // repeated .baml_bridge.cffi.v1.InboundMapEntry entries = 1;
   int entries_size() const;
@@ -1334,42 +1310,12 @@ class InboundMapValue final : public ::google::protobuf::MessageLite
   const ::baml_bridge::cffi::v1::InboundMapEntry& entries(int index) const;
   ::baml_bridge::cffi::v1::InboundMapEntry* PROTOBUF_NONNULL add_entries();
   const ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapEntry>& entries() const;
-  // .baml_bridge.cffi.v1.BamlTy key_type = 2;
-  bool has_key_type() const;
-  void clear_key_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& key_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_key_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_key_type();
-  void set_allocated_key_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_key_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_key_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_key_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_key_type();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTy value_type = 3;
-  bool has_value_type() const;
-  void clear_value_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& value_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_value_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_value_type();
-  void set_allocated_value_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_value_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_value_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_value_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_value_type();
-
-  public:
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundMapValue)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   3, 0,
+  static const ::google::protobuf::internal::TcParseTable<0, 1,
+                                   1, 0,
                                    2>
       _table_;
 
@@ -1388,11 +1334,8 @@ class InboundMapValue final : public ::google::protobuf::MessageLite
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const InboundMapValue& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::baml_bridge::cffi::v1::InboundMapEntry > entries_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE key_type_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value_type_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1400,241 +1343,6 @@ class InboundMapValue final : public ::google::protobuf::MessageLite
 };
 
 extern const ::google::protobuf::internal::ClassDataLite<36> InboundMapValue_class_data_;
-// -------------------------------------------------------------------
-
-class InboundUnionValue final : public ::google::protobuf::MessageLite
-/* @@protoc_insertion_point(class_definition:baml_bridge.cffi.v1.InboundUnionValue) */ {
- public:
-  inline InboundUnionValue() : InboundUnionValue(nullptr) {}
-  ~InboundUnionValue() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(InboundUnionValue* PROTOBUF_NONNULL msg, std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(InboundUnionValue));
-  }
-#endif
-
-  template <typename = void>
-  explicit PROTOBUF_CONSTEXPR InboundUnionValue(::google::protobuf::internal::ConstantInitialized);
-
-  inline InboundUnionValue(const InboundUnionValue& from) : InboundUnionValue(nullptr, from) {}
-  inline InboundUnionValue(InboundUnionValue&& from) noexcept
-      : InboundUnionValue(nullptr, ::std::move(from)) {}
-  inline InboundUnionValue& operator=(const InboundUnionValue& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline InboundUnionValue& operator=(InboundUnionValue&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  inline const std::string& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString);
-  }
-  inline std::string* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<std::string>();
-  }
-
-  static const InboundUnionValue& default_instance() {
-    return *reinterpret_cast<const InboundUnionValue*>(
-        &_InboundUnionValue_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 1;
-  friend void swap(InboundUnionValue& a, InboundUnionValue& b) { a.Swap(&b); }
-  inline void Swap(InboundUnionValue* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(InboundUnionValue* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  InboundUnionValue* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::MessageLite::DefaultConstruct<InboundUnionValue>(arena);
-  }
-  void CopyFrom(const InboundUnionValue& from);
-  void MergeFrom(const InboundUnionValue& from) { InboundUnionValue::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(InboundUnionValue* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "baml_bridge.cffi.v1.InboundUnionValue"; }
-
- protected:
-  explicit InboundUnionValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  InboundUnionValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const InboundUnionValue& from);
-  InboundUnionValue(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, InboundUnionValue&& from) noexcept
-      : InboundUnionValue(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kValueOptionNameFieldNumber = 3,
-    kSelfTypeFieldNumber = 1,
-    kSelectedTypeFieldNumber = 2,
-    kValueFieldNumber = 4,
-  };
-  // string value_option_name = 3;
-  void clear_value_option_name() ;
-  const ::std::string& value_option_name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_value_option_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_value_option_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_value_option_name();
-  void set_allocated_value_option_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_value_option_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_value_option_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_value_option_name();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTy self_type = 1;
-  bool has_self_type() const;
-  void clear_self_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& self_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_self_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_self_type();
-  void set_allocated_self_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_self_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_self_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_self_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_self_type();
-
-  public:
-  // .baml_bridge.cffi.v1.BamlTy selected_type = 2;
-  bool has_selected_type() const;
-  void clear_selected_type() ;
-  const ::baml_bridge::cffi::v1::BamlTy& selected_type() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE release_selected_type();
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL mutable_selected_type();
-  void set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE unsafe_arena_release_selected_type();
-
-  private:
-  const ::baml_bridge::cffi::v1::BamlTy& _internal_selected_type() const;
-  ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_selected_type();
-
-  public:
-  // .baml_bridge.cffi.v1.InboundValue value = 4;
-  bool has_value() const;
-  void clear_value() ;
-  const ::baml_bridge::cffi::v1::InboundValue& value() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE release_value();
-  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL mutable_value();
-  void set_allocated_value(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_value(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE unsafe_arena_release_value();
-
-  private:
-  const ::baml_bridge::cffi::v1::InboundValue& _internal_value() const;
-  ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL _internal_mutable_value();
-
-  public:
-  // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundUnionValue)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   3, 63,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const InboundUnionValue& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr value_option_name_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE self_type_;
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE selected_type_;
-    ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_baml_5fbridge_2fcffi_2fv1_2fbaml_5finbound_2eproto;
-};
-
-extern const ::google::protobuf::internal::ClassDataLite<38> InboundUnionValue_class_data_;
 // -------------------------------------------------------------------
 
 class InboundValue final : public ::google::protobuf::MessageLite
@@ -1696,7 +1404,6 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kUint8ArrayValue = 11,
     kBigintValue = 12,
     kTyValue = 13,
-    kUnionValue = 14,
     VALUE_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -1796,7 +1503,6 @@ class InboundValue final : public ::google::protobuf::MessageLite
     kUint8ArrayValueFieldNumber = 11,
     kBigintValueFieldNumber = 12,
     kTyValueFieldNumber = 13,
-    kUnionValueFieldNumber = 14,
   };
   // string string_value = 2;
   bool has_string_value() const;
@@ -1993,25 +1699,6 @@ class InboundValue final : public ::google::protobuf::MessageLite
   ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL _internal_mutable_ty_value();
 
   public:
-  // .baml_bridge.cffi.v1.InboundUnionValue union_value = 14;
-  bool has_union_value() const;
-  private:
-  bool _internal_has_union_value() const;
-
-  public:
-  void clear_union_value() ;
-  const ::baml_bridge::cffi::v1::InboundUnionValue& union_value() const;
-  [[nodiscard]] ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE release_union_value();
-  ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NONNULL mutable_union_value();
-  void set_allocated_union_value(::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_union_value(::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE value);
-  ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE unsafe_arena_release_union_value();
-
-  private:
-  const ::baml_bridge::cffi::v1::InboundUnionValue& _internal_union_value() const;
-  ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NONNULL _internal_mutable_union_value();
-
-  public:
   void clear_value();
   ValueCase value_case() const;
   // @@protoc_insertion_point(class_scope:baml_bridge.cffi.v1.InboundValue)
@@ -2029,12 +1716,11 @@ class InboundValue final : public ::google::protobuf::MessageLite
   void set_has_uint8array_value();
   void set_has_bigint_value();
   void set_has_ty_value();
-  void set_has_union_value();
   inline bool has_value() const;
   inline void clear_has_value();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 13,
-                                   7, 73,
+  static const ::google::protobuf::internal::TcParseTable<0, 12,
+                                   6, 73,
                                    2>
       _table_;
 
@@ -2068,7 +1754,6 @@ class InboundValue final : public ::google::protobuf::MessageLite
       ::google::protobuf::internal::ArenaStringPtr uint8array_value_;
       ::google::protobuf::internal::ArenaStringPtr bigint_value_;
       ::google::protobuf::MessageLite* PROTOBUF_NULLABLE ty_value_;
-      ::google::protobuf::MessageLite* PROTOBUF_NULLABLE union_value_;
     } value_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t _oneof_case_[1];
@@ -2127,7 +1812,7 @@ class BamlTyArg final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const BamlTyArg*>(
         &_BamlTyArg_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BamlTyArg& a, BamlTyArg& b) { a.Swap(&b); }
   inline void Swap(BamlTyArg* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2328,7 +2013,7 @@ class CallFunctionArgs final : public ::google::protobuf::MessageLite
     return *reinterpret_cast<const CallFunctionArgs*>(
         &_CallFunctionArgs_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(CallFunctionArgs& a, CallFunctionArgs& b) { a.Swap(&b); }
   inline void Swap(CallFunctionArgs* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3340,89 +3025,6 @@ inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundValue::mutable_t
   return _msg;
 }
 
-// .baml_bridge.cffi.v1.InboundUnionValue union_value = 14;
-inline bool InboundValue::has_union_value() const {
-  return value_case() == kUnionValue;
-}
-inline bool InboundValue::_internal_has_union_value() const {
-  return value_case() == kUnionValue;
-}
-inline void InboundValue::set_has_union_value() {
-  _impl_._oneof_case_[0] = kUnionValue;
-}
-inline void InboundValue::clear_union_value() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value_case() == kUnionValue) {
-    if (GetArena() == nullptr) {
-      delete _impl_.value_.union_value_;
-    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
-      if (_impl_.value_.union_value_ != nullptr) {
-        _impl_.value_.union_value_->Clear();
-      }
-    }
-    clear_has_value();
-  }
-}
-inline ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE InboundValue::release_union_value() {
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundValue.union_value)
-  if (value_case() == kUnionValue) {
-    clear_has_value();
-    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::InboundUnionValue*>(_impl_.value_.union_value_);
-    if (GetArena() != nullptr) {
-      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.value_.union_value_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::baml_bridge::cffi::v1::InboundUnionValue& InboundValue::_internal_union_value() const {
-  return value_case() == kUnionValue ? *reinterpret_cast<::baml_bridge::cffi::v1::InboundUnionValue*>(_impl_.value_.union_value_) : reinterpret_cast<::baml_bridge::cffi::v1::InboundUnionValue&>(::baml_bridge::cffi::v1::_InboundUnionValue_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::InboundUnionValue& InboundValue::union_value() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundValue.union_value)
-  return _internal_union_value();
-}
-inline ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE InboundValue::unsafe_arena_release_union_value() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:baml_bridge.cffi.v1.InboundValue.union_value)
-  if (value_case() == kUnionValue) {
-    clear_has_value();
-    auto* temp = reinterpret_cast<::baml_bridge::cffi::v1::InboundUnionValue*>(_impl_.value_.union_value_);
-    _impl_.value_.union_value_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void InboundValue::unsafe_arena_set_allocated_union_value(
-    ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NULLABLE value) {
-  // We rely on the oneof clear method to free the earlier contents
-  // of this oneof. We can directly use the pointer we're given to
-  // set the new value.
-  clear_value();
-  if (value) {
-    set_has_union_value();
-    _impl_.value_.union_value_ = reinterpret_cast<::google::protobuf::MessageLite*>(value);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundValue.union_value)
-}
-inline ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NONNULL InboundValue::_internal_mutable_union_value() {
-  if (value_case() != kUnionValue) {
-    clear_value();
-    set_has_union_value();
-    _impl_.value_.union_value_ = reinterpret_cast<::google::protobuf::MessageLite*>(
-        ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::InboundUnionValue>(GetArena()));
-  }
-  return reinterpret_cast<::baml_bridge::cffi::v1::InboundUnionValue*>(_impl_.value_.union_value_);
-}
-inline ::baml_bridge::cffi::v1::InboundUnionValue* PROTOBUF_NONNULL InboundValue::mutable_union_value()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::baml_bridge::cffi::v1::InboundUnionValue* _msg = _internal_mutable_union_value();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundValue.union_value)
-  return _msg;
-}
-
 inline bool InboundValue::has_value() const {
   return value_case() != VALUE_NOT_SET;
 }
@@ -3432,359 +3034,6 @@ inline void InboundValue::clear_has_value() {
 inline InboundValue::ValueCase InboundValue::value_case() const {
   return InboundValue::ValueCase(_impl_._oneof_case_[0]);
 }
-// -------------------------------------------------------------------
-
-// InboundUnionValue
-
-// .baml_bridge.cffi.v1.BamlTy self_type = 1;
-inline bool InboundUnionValue::has_self_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.self_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundUnionValue::_internal_self_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.self_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundUnionValue::self_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundUnionValue.self_type)
-  return _internal_self_type();
-}
-inline void InboundUnionValue::unsafe_arena_set_allocated_self_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.self_type_);
-  }
-  _impl_.self_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.self_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundUnionValue::release_self_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.self_type_;
-  _impl_.self_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundUnionValue::unsafe_arena_release_self_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundUnionValue.self_type)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.self_type_;
-  _impl_.self_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundUnionValue::_internal_mutable_self_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.self_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.self_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.self_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundUnionValue::mutable_self_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_self_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundUnionValue.self_type)
-  return _msg;
-}
-inline void InboundUnionValue::set_allocated_self_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.self_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.self_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.self_type)
-}
-
-// .baml_bridge.cffi.v1.BamlTy selected_type = 2;
-inline bool InboundUnionValue::has_selected_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.selected_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundUnionValue::_internal_selected_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.selected_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundUnionValue::selected_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundUnionValue.selected_type)
-  return _internal_selected_type();
-}
-inline void InboundUnionValue::unsafe_arena_set_allocated_selected_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.selected_type_);
-  }
-  _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000004u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000004u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.selected_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundUnionValue::release_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.selected_type_;
-  _impl_.selected_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundUnionValue::unsafe_arena_release_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundUnionValue.selected_type)
-
-  _impl_._has_bits_[0] &= ~0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.selected_type_;
-  _impl_.selected_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundUnionValue::_internal_mutable_selected_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.selected_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.selected_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundUnionValue::mutable_selected_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000004u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_selected_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundUnionValue.selected_type)
-  return _msg;
-}
-inline void InboundUnionValue::set_allocated_selected_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.selected_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000004u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000004u;
-  }
-
-  _impl_.selected_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.selected_type)
-}
-
-// string value_option_name = 3;
-inline void InboundUnionValue::clear_value_option_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.value_option_name_.ClearToEmpty();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
-inline const ::std::string& InboundUnionValue::value_option_name() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundUnionValue.value_option_name)
-  return _internal_value_option_name();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void InboundUnionValue::set_value_option_name(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.value_option_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.InboundUnionValue.value_option_name)
-}
-inline ::std::string* PROTOBUF_NONNULL InboundUnionValue::mutable_value_option_name()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::std::string* _s = _internal_mutable_value_option_name();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundUnionValue.value_option_name)
-  return _s;
-}
-inline const ::std::string& InboundUnionValue::_internal_value_option_name() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.value_option_name_.Get();
-}
-inline void InboundUnionValue::_internal_set_value_option_name(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  _impl_.value_option_name_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL InboundUnionValue::_internal_mutable_value_option_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_._has_bits_[0] |= 0x00000001u;
-  return _impl_.value_option_name_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE InboundUnionValue::release_value_option_name() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundUnionValue.value_option_name)
-  if ((_impl_._has_bits_[0] & 0x00000001u) == 0) {
-    return nullptr;
-  }
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  auto* released = _impl_.value_option_name_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.value_option_name_.Set("", GetArena());
-  }
-  return released;
-}
-inline void InboundUnionValue::set_allocated_value_option_name(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  _impl_.value_option_name_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.value_option_name_.IsDefault()) {
-    _impl_.value_option_name_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.value_option_name)
-}
-
-// .baml_bridge.cffi.v1.InboundValue value = 4;
-inline bool InboundUnionValue::has_value() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000008u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.value_ != nullptr);
-  return value;
-}
-inline void InboundUnionValue::clear_value() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.value_ != nullptr) _impl_.value_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000008u;
-}
-inline const ::baml_bridge::cffi::v1::InboundValue& InboundUnionValue::_internal_value() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::InboundValue* p = _impl_.value_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::InboundValue&>(::baml_bridge::cffi::v1::_InboundValue_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::InboundValue& InboundUnionValue::value() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundUnionValue.value)
-  return _internal_value();
-}
-inline void InboundUnionValue::unsafe_arena_set_allocated_value(
-    ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.value_);
-  }
-  _impl_.value_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000008u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000008u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.value)
-}
-inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE InboundUnionValue::release_value() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000008u;
-  ::baml_bridge::cffi::v1::InboundValue* released = _impl_.value_;
-  _impl_.value_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE InboundUnionValue::unsafe_arena_release_value() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundUnionValue.value)
-
-  _impl_._has_bits_[0] &= ~0x00000008u;
-  ::baml_bridge::cffi::v1::InboundValue* temp = _impl_.value_;
-  _impl_.value_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL InboundUnionValue::_internal_mutable_value() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.value_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::InboundValue>(GetArena());
-    _impl_.value_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(p);
-  }
-  return _impl_.value_;
-}
-inline ::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NONNULL InboundUnionValue::mutable_value()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000008u;
-  ::baml_bridge::cffi::v1::InboundValue* _msg = _internal_mutable_value();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundUnionValue.value)
-  return _msg;
-}
-inline void InboundUnionValue::set_allocated_value(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.value_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000008u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000008u;
-  }
-
-  _impl_.value_ = reinterpret_cast<::baml_bridge::cffi::v1::InboundValue*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundUnionValue.value)
-}
-
 // -------------------------------------------------------------------
 
 // InboundListValue
@@ -3839,99 +3088,6 @@ InboundListValue::_internal_mutable_values() {
   return &_impl_.values_;
 }
 
-// .baml_bridge.cffi.v1.BamlTy item_type = 2;
-inline bool InboundListValue::has_item_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.item_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundListValue::_internal_item_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.item_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundListValue::item_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundListValue.item_type)
-  return _internal_item_type();
-}
-inline void InboundListValue::unsafe_arena_set_allocated_item_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_type_);
-  }
-  _impl_.item_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundListValue.item_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundListValue::release_item_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.item_type_;
-  _impl_.item_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundListValue::unsafe_arena_release_item_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundListValue.item_type)
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.item_type_;
-  _impl_.item_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundListValue::_internal_mutable_item_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.item_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.item_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.item_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundListValue::mutable_item_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_item_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundListValue.item_type)
-  return _msg;
-}
-inline void InboundListValue::set_allocated_item_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-
-  _impl_.item_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundListValue.item_type)
-}
-
 // -------------------------------------------------------------------
 
 // InboundMapValue
@@ -3984,192 +3140,6 @@ inline ::google::protobuf::RepeatedPtrField<::baml_bridge::cffi::v1::InboundMapE
 InboundMapValue::_internal_mutable_entries() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.entries_;
-}
-
-// .baml_bridge.cffi.v1.BamlTy key_type = 2;
-inline bool InboundMapValue::has_key_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.key_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundMapValue::_internal_key_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.key_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundMapValue::key_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundMapValue.key_type)
-  return _internal_key_type();
-}
-inline void InboundMapValue::unsafe_arena_set_allocated_key_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.key_type_);
-  }
-  _impl_.key_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundMapValue.key_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundMapValue::release_key_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.key_type_;
-  _impl_.key_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundMapValue::unsafe_arena_release_key_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundMapValue.key_type)
-
-  _impl_._has_bits_[0] &= ~0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.key_type_;
-  _impl_.key_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundMapValue::_internal_mutable_key_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.key_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.key_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.key_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundMapValue::mutable_key_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000001u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_key_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundMapValue.key_type)
-  return _msg;
-}
-inline void InboundMapValue::set_allocated_key_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.key_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000001u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000001u;
-  }
-
-  _impl_.key_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundMapValue.key_type)
-}
-
-// .baml_bridge.cffi.v1.BamlTy value_type = 3;
-inline bool InboundMapValue::has_value_type() const {
-  bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
-  PROTOBUF_ASSUME(!value || _impl_.value_type_ != nullptr);
-  return value;
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundMapValue::_internal_value_type() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::baml_bridge::cffi::v1::BamlTy* p = _impl_.value_type_;
-  return p != nullptr ? *p : reinterpret_cast<const ::baml_bridge::cffi::v1::BamlTy&>(::baml_bridge::cffi::v1::_BamlTy_default_instance_);
-}
-inline const ::baml_bridge::cffi::v1::BamlTy& InboundMapValue::value_type() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.InboundMapValue.value_type)
-  return _internal_value_type();
-}
-inline void InboundMapValue::unsafe_arena_set_allocated_value_type(
-    ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.value_type_);
-  }
-  _impl_.value_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  if (value != nullptr) {
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:baml_bridge.cffi.v1.InboundMapValue.value_type)
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundMapValue::release_value_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* released = _impl_.value_type_;
-  _impl_.value_type_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE InboundMapValue::unsafe_arena_release_value_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:baml_bridge.cffi.v1.InboundMapValue.value_type)
-
-  _impl_._has_bits_[0] &= ~0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* temp = _impl_.value_type_;
-  _impl_.value_type_ = nullptr;
-  return temp;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundMapValue::_internal_mutable_value_type() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.value_type_ == nullptr) {
-    auto* p = ::google::protobuf::MessageLite::DefaultConstruct<::baml_bridge::cffi::v1::BamlTy>(GetArena());
-    _impl_.value_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(p);
-  }
-  return _impl_.value_type_;
-}
-inline ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NONNULL InboundMapValue::mutable_value_type()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  _impl_._has_bits_[0] |= 0x00000002u;
-  ::baml_bridge::cffi::v1::BamlTy* _msg = _internal_mutable_value_type();
-  // @@protoc_insertion_point(field_mutable:baml_bridge.cffi.v1.InboundMapValue.value_type)
-  return _msg;
-}
-inline void InboundMapValue::set_allocated_value_type(::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.value_type_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::MessageLite*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    _impl_._has_bits_[0] |= 0x00000002u;
-  } else {
-    _impl_._has_bits_[0] &= ~0x00000002u;
-  }
-
-  _impl_.value_type_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
-  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.InboundMapValue.value_type)
 }
 
 // -------------------------------------------------------------------

@@ -112,14 +112,8 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
                     inner: Some(Box::new(runtime_ty_to_proto_ty(non_null[0]))),
                 }))
             } else {
-                let mut canonical = members.iter().collect::<Vec<_>>();
-                canonical.sort();
-                if let Some(null_index) = canonical.iter().position(|member| member.is_null()) {
-                    let null = canonical.remove(null_index);
-                    canonical.push(null);
-                }
                 TyVariant::Union(BamlTyUnion {
-                    options: canonical.into_iter().map(runtime_ty_to_proto_ty).collect(),
+                    options: members.iter().map(runtime_ty_to_proto_ty).collect(),
                 })
             }
         }

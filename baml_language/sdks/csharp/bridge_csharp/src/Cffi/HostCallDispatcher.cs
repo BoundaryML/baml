@@ -25,17 +25,19 @@ internal static class HostCallDispatcher
             }
 
             BamlGeneratedValue generated = invocation.Callable.Descriptor.Result.Encode(result);
-            using EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(generated, api);
-            if (Complete(api, invocation.HostCallId, isError: false, encoded.Bytes))
-            {
-                encoded.Commit();
-            }
+            using EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(
+                generated,
+                api,
+                invocation.FunctionCallId);
+            Complete(api, invocation.HostCallId, isError: false, encoded.Bytes);
+            encoded.Commit();
         }
         catch (OperationCanceledException error)
             when (invocation.CancellationToken.IsCancellationRequested
                 && error.CancellationToken == invocation.CancellationToken)
         {
-            // Native cancellation owns completion after the exact supplied token wins.
+            // The parent function-call cancellation abandons its native host
+            // invocation, so Canary has no live V1 completion to receive.
         }
         catch (Exception error)
         {
@@ -43,8 +45,7 @@ internal static class HostCallDispatcher
                 api,
                 invocation.HostCallId,
                 invocation.FunctionCallId,
-                ExceptionDispatchInfo.Capture(error),
-                invocation);
+                ExceptionDispatchInfo.Capture(error));
         }
         finally
         {
@@ -70,8 +71,7 @@ internal static class HostCallDispatcher
                 state.Api,
                 state.HostCallId,
                 state.FunctionCallId,
-                state.Error,
-                invocation: null),
+                state.Error),
             work,
             preferLocal: false);
     }
@@ -120,8 +120,7 @@ internal static class HostCallDispatcher
         NativeApi api,
         uint hostCallId,
         ulong functionCallId,
-        ExceptionDispatchInfo error,
-        HostInvocation? invocation)
+        ExceptionDispatchInfo error)
     {
         if (hostCallId == 0)
         {
@@ -130,15 +129,12 @@ internal static class HostCallDispatcher
 
         using HostValueRegistration registration =
             HostValueRegistry.Shared.RegisterException(error, functionCallId);
-        invocation?.AttachExceptionRegistration(registration);
         byte[] bytes = HostCallableProtocol.EncodeException(error.SourceException, registration.Key);
-        if (Complete(api, hostCallId, isError: true, bytes))
-        {
-            registration.Commit();
-        }
+        Complete(api, hostCallId, isError: true, bytes);
+        registration.Commit();
     }
 
-    private static unsafe bool Complete(
+    private static unsafe void Complete(
         NativeApi api,
         uint hostCallId,
         bool isError,
@@ -146,21 +142,11 @@ internal static class HostCallDispatcher
     {
         fixed (byte* pointer = bytes)
         {
-            if (BamlApiV1Layout.HasCompleteHostCallV2(api.Table))
-            {
-                return api.Table->CompleteHostCallV2(
-                    hostCallId,
-                    isError ? 1 : 0,
-                    pointer,
-                    (nuint)bytes.Length) == 1;
-            }
-
             api.Table->CompleteHostCall(
                 hostCallId,
                 isError ? 1 : 0,
                 pointer,
                 (nuint)bytes.Length);
-            return true;
         }
     }
 

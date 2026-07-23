@@ -57,11 +57,6 @@ static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
          api->struct_size >= BAML_API_V1_MIN_SIZE;
 }
 
-/* Check an append-only field before reading it from a possibly older table. */
-#define BAML_API_V1_HAS_FIELD(api, field) \
-  ((api) != NULL && \
-   (api)->struct_size >= offsetof(BamlApiV1, field) + sizeof(((BamlApiV1 *)0)->field))
-
 #endif /* BAML_CFFI_H */"""
 
 [export]
@@ -75,8 +70,6 @@ include = [
   "BamlBridgeInfoV1",
   "BamlResultCallback",
   "BamlHostDispatchCallback",
-  "BamlHostDispatchCallbackV2",
-  "BamlHostCancelCallback",
   "BamlHostReleaseCallback",
   "BamlVersionFn",
   "BamlInitializeRuntimeFromBytecodeFn",
@@ -86,11 +79,8 @@ include = [
   "BamlNewFunctionCallFn",
   "BamlCancelFunctionCallFn",
   "BamlRegisterHostDispatchCallbackFn",
-  "BamlRegisterHostDispatchCallbackV2Fn",
-  "BamlRegisterHostCancelCallbackFn",
   "BamlRegisterHostReleaseCallbackFn",
   "BamlCompleteHostCallFn",
-  "BamlCompleteHostCallV2Fn",
   "BamlHandleCloneFn",
   "BamlHandleReleaseFn",
   "BamlMediaConstructorFn",
@@ -117,11 +107,8 @@ exclude = [
   "baml_media_base64",
   "baml_media_mime_type",
   "register_host_dispatch_callback",
-  "register_host_dispatch_callback_v2",
-  "register_host_cancel_callback",
   "register_host_release_callback",
   "complete_host_call",
-  "complete_host_call_v2",
   "free_buffer",
   "flush_events",
   "version",

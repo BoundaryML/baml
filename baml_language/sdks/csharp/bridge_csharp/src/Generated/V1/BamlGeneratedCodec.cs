@@ -674,7 +674,7 @@ public readonly partial struct BamlGeneratedCodecContext
         }
 
         BamlGeneratedValue required = Require(value);
-        required.RequireTypeMetadata(
+        required.RequireUnionTypeMetadata(
             expectedSelfType,
             required.UnionSelfTypeMetadata,
             "union self");
@@ -728,6 +728,33 @@ public readonly partial struct BamlGeneratedCodecContext
                 {
                     selectedIndex = index;
                     break;
+                }
+            }
+
+            if (selectedIndex < 0 && expectedOptionTypes is not null)
+            {
+                BamlTypeDescriptor payloadType =
+                    BamlTypeDescriptor.FromGenerated(required.ReadUnionPayload());
+                for (int index = 0; index < expectedOptionTypes.Count; index++)
+                {
+                    byte[] optionType = expectedOptionTypes[index]
+                        ?? throw new ArgumentException(
+                            $"Generated union option type {index} is null.",
+                            nameof(expectedOptionTypes));
+                    if (!payloadType.Equals(
+                            BamlTypeDescriptor.FromMetadata(optionType)))
+                    {
+                        continue;
+                    }
+
+                    if (selectedIndex >= 0)
+                    {
+                        throw new BamlProtocolException(
+                            "The native bridge selected an ambiguous generic BAML union option.",
+                            $"Selected option {selected} matched more than one generated payload type.");
+                    }
+
+                    selectedIndex = index;
                 }
             }
         }
@@ -1573,6 +1600,75 @@ public sealed class BamlGeneratedValue
                     + (actual is null ? "<missing>" : Convert.ToHexString(actual))
                     + $" at {sourcePath}.");
         }
+    }
+
+    internal void RequireUnionTypeMetadata(
+        ReadOnlySpan<byte> expected,
+        byte[]? actual,
+        string description)
+    {
+        if (expected.IsEmpty)
+        {
+            throw new ArgumentException(
+                $"The generated {description} type metadata is empty.",
+                nameof(expected));
+        }
+
+        if (actual is not null && expected.SequenceEqual(actual))
+        {
+            return;
+        }
+
+        try
+        {
+            BamlTy expectedType = BamlTy.Parser.ParseFrom(expected);
+            BamlTy? actualType = actual is null
+                ? null
+                : BamlTy.Parser.ParseFrom(actual);
+            if (actualType is not null
+                && UnionOptionsEqualIgnoringOrder(expectedType, actualType))
+            {
+                return;
+            }
+        }
+        catch (InvalidProtocolBufferException)
+        {
+            // Preserve the protocol diagnostic below.
+        }
+
+        throw new BamlProtocolException(
+            $"The native bridge returned contradictory {description} type metadata.",
+            $"Expected {Convert.ToHexString(expected)}, received "
+                + (actual is null ? "<missing>" : Convert.ToHexString(actual))
+                + $" at {sourcePath}.");
+    }
+
+    private static bool UnionOptionsEqualIgnoringOrder(BamlTy expected, BamlTy actual)
+    {
+        if (expected.TyCase != BamlTy.TyOneofCase.Union
+            || actual.TyCase != BamlTy.TyOneofCase.Union
+            || expected.Union.Options.Count != actual.Union.Options.Count)
+        {
+            return false;
+        }
+
+        var unmatched = actual.Union.Options
+            .Select(option => option.ToByteArray())
+            .ToList();
+        foreach (BamlTy option in expected.Union.Options)
+        {
+            byte[] expectedBytes = option.ToByteArray();
+            int match = unmatched.FindIndex(candidate =>
+                candidate.AsSpan().SequenceEqual(expectedBytes));
+            if (match < 0)
+            {
+                return false;
+            }
+
+            unmatched.RemoveAt(match);
+        }
+
+        return unmatched.Count == 0;
     }
 
     internal void RequireCollectionTypeMetadata(

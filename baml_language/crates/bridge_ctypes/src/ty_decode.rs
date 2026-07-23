@@ -11,8 +11,8 @@
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
 use baml_type::{
-    Freshness, FunctionParamMode, Literal, MediaKind, Name, RuntimeFunctionParamTy,
-    RuntimeInterface, RuntimeTy, TyAttr, TypeName,
+    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeInterface, RuntimeTy,
+    TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
@@ -78,7 +78,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .map(proto_ty_to_runtime_ty)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
-        TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
+        TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref()),
         TyVariant::TypeAlias(n) => {
             RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name), TyAttr::default())
         }
@@ -248,31 +248,15 @@ fn function_param_mode(mode: i32) -> FunctionParamMode {
     }
 }
 
-fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, CtypesError> {
-    let Some(lit) = lit else {
-        return Ok(RuntimeTy::unknown());
-    };
-    let literal = match lit {
-        TyLiteralVariant::StringValue(value) => Literal::String(value.clone()),
-        TyLiteralVariant::IntValue(value) => Literal::Int(*value),
-        TyLiteralVariant::BoolValue(value) => Literal::Bool(*value),
-        TyLiteralVariant::BigintValue(value) => Literal::Bigint(
-            num_bigint::BigInt::parse_bytes(value.as_bytes(), 10)
-                .ok_or(CtypesError::InvalidLiteralMetadata { kind: "bigint" })?,
-        ),
-        TyLiteralVariant::FloatValue(value) => {
-            let parsed = value
-                .parse::<f64>()
-                .map_err(|_| CtypesError::InvalidLiteralMetadata { kind: "float" })?;
-            if !parsed.is_finite() {
-                return Err(CtypesError::InvalidLiteralMetadata { kind: "float" });
-            }
-            Literal::Float(value.clone())
-        }
-    };
-    Ok(RuntimeTy::Literal(
-        literal,
-        Freshness::Regular,
-        TyAttr::default(),
-    ))
+fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> RuntimeTy {
+    // Literal types widen to their base primitive: binding a TypeVar to a
+    // literal is exotic, and the base type is the safe lowering.
+    match lit {
+        Some(TyLiteralVariant::StringValue(_)) => RuntimeTy::string(),
+        Some(TyLiteralVariant::IntValue(_)) => RuntimeTy::int(),
+        Some(TyLiteralVariant::BoolValue(_)) => RuntimeTy::bool(),
+        Some(TyLiteralVariant::BigintValue(_)) => RuntimeTy::bigint(),
+        Some(TyLiteralVariant::FloatValue(_)) => RuntimeTy::float(),
+        None => RuntimeTy::unknown(),
+    }
 }

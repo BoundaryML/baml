@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Baml.Generated.V1;
 
 internal static class Program
@@ -17,6 +19,11 @@ internal static class Program
             registry.CreateArgumentsBuilder(echo);
         arguments.Add(value, "hello");
         _ = arguments.Build();
+        string runtimeVersion = typeof(Baml.BamlValue).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion
+            ?? throw new InvalidOperationException(
+                "Baml.Bridge is missing its informational package version.");
 
         try
         {
@@ -24,8 +31,8 @@ internal static class Program
                 BamlGeneratedContract.Version,
                 new byte[] { 1, 2, 3 },
                 new string('0', 64),
-                "0.15.0",
-                "0.15.0",
+                runtimeVersion,
+                runtimeVersion,
                 registry);
         }
         catch (Baml.BamlProgramIntegrityException)

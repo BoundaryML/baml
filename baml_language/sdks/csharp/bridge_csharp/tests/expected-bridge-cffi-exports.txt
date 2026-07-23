@@ -21,8 +21,6 @@ initialize_runtime_from_bytecode
 invoke_runtime_cli
 new_function_call
 register_callback
-register_host_cancel_callback
 register_host_dispatch_callback
-register_host_dispatch_callback_v2
 register_host_release_callback
 version

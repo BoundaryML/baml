@@ -29,12 +29,6 @@ internal sealed unsafe partial class NativeApi
 
     internal BamlApiV1* Table => table;
 
-    internal bool SupportsHostCallables =>
-        BamlApiV1Layout.HasHostDispatchV2(table)
-        && table->RegisterHostDispatchCallbackV2 is not null
-        && BamlApiV1Layout.HasHostCancel(table)
-        && table->RegisterHostCancelCallback is not null;
-
     internal BamlSafeHandle OwnHandle(ulong key)
     {
         if (key == 0)

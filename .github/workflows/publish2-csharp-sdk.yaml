@@ -129,6 +129,7 @@ jobs:
 
       - name: Restore and execute the exact public version from a clean cache
         env:
+          DIGEST: ${{ steps.package.outputs.digest }}
           VERSION: ${{ steps.package.outputs.version }}
         run: |
           set -euo pipefail
@@ -191,6 +192,6 @@ jobs:
             | cut -d ' ' -f 1)"
           {
             echo "Verified public baml-bridge $VERSION."
-            echo "Verified artifact SHA-256: ${{ steps.package.outputs.digest }}"
+            echo "Verified artifact SHA-256: $DIGEST"
             echo "Repository-served SHA-256: $registry_digest"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -7,18 +7,14 @@ namespace Baml.Cffi;
 
 internal sealed class HostValueRegistry
 {
-    private const int EarlyCancellationLimit = 4096;
-
     private readonly object gate = new();
     private readonly List<Slot> slots = [];
     private readonly Stack<int> freeSlots = [];
     private readonly Dictionary<ulong, Operation> operations = [];
     private readonly Dictionary<ulong, HashSet<ulong>> operationExceptions = [];
     private readonly Dictionary<uint, HostInvocation> invocations = [];
-    private readonly HashSet<uint> earlyCancellations = [];
     private long staleReleases;
     private long staleDispatches;
-    private long staleCancellations;
 
     internal static HostValueRegistry Shared { get; } = new();
 
@@ -48,17 +44,19 @@ internal sealed class HostValueRegistry
 
     internal long StaleDispatches => Interlocked.Read(ref staleDispatches);
 
-    internal long StaleCancellations => Interlocked.Read(ref staleCancellations);
-
-    internal HostValueRegistration RegisterCallable(BamlGeneratedHostCallable callable)
+    internal HostValueRegistration RegisterCallable(
+        BamlGeneratedHostCallable callable,
+        ulong parentFunctionCallId)
     {
         ArgumentNullException.ThrowIfNull(callable);
+        parentFunctionCallId =
+            NativeApi.RequireFunctionCallIdentifier(parentFunctionCallId);
         var entry = new Entry(
             EntryKind.Callable,
             callable,
             ExecutionContext.Capture(),
             exception: null,
-            parentFunctionCallId: 0,
+            parentFunctionCallId,
             operationSettled: false);
         return Register(entry);
     }
@@ -156,14 +154,12 @@ internal sealed class HostValueRegistry
     internal HostInvocation? TryStartInvocation(
         ulong hostKey,
         uint hostCallId,
-        ulong functionCallId,
         byte[] arguments,
         out string? diagnostic)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         diagnostic = null;
         HostInvocation? invocation;
-        bool cancelImmediately;
         lock (gate)
         {
             if (hostCallId == 0)
@@ -191,6 +187,7 @@ internal sealed class HostValueRegistry
             }
 
             entry.ActiveLeases = checked(entry.ActiveLeases + 1);
+            ulong functionCallId = entry.ParentFunctionCallId;
             CancellationToken callerToken = operations.TryGetValue(
                 functionCallId,
                 out Operation? operation)
@@ -207,49 +204,9 @@ internal sealed class HostValueRegistry
                 entry.ExecutionContext,
                 cancellation);
             invocations.Add(hostCallId, invocation);
-            cancelImmediately = earlyCancellations.Remove(hostCallId);
-        }
-
-        if (cancelImmediately)
-        {
-            invocation.Cancel();
         }
 
         return invocation;
-    }
-
-    internal void CancelInvocation(uint hostCallId)
-    {
-        if (hostCallId == 0)
-        {
-            Interlocked.Increment(ref staleCancellations);
-            return;
-        }
-
-        HostInvocation? invocation;
-        lock (gate)
-        {
-            if (invocations.TryGetValue(hostCallId, out invocation))
-            {
-                // Cancellation runs outside the registry lock.
-            }
-            else
-            {
-                Interlocked.Increment(ref staleCancellations);
-                if (earlyCancellations.Add(hostCallId))
-                {
-                    if (earlyCancellations.Count > EarlyCancellationLimit)
-                    {
-                        earlyCancellations.Clear();
-                        _ = earlyCancellations.Add(hostCallId);
-                    }
-                }
-
-                return;
-            }
-        }
-
-        invocation.Cancel();
     }
 
     internal void CompleteInvocation(HostInvocation invocation)
@@ -357,20 +314,6 @@ internal sealed class HostValueRegistry
         lock (gate)
         {
             if (!TryGetEntry(key, out Entry? entry) || entry.Committed)
-            {
-                return;
-            }
-
-            entry.Aborted = true;
-            TryCollect(key, entry);
-        }
-    }
-
-    internal void Revoke(ulong key)
-    {
-        lock (gate)
-        {
-            if (!TryGetEntry(key, out Entry? entry))
             {
                 return;
             }
@@ -539,20 +482,6 @@ internal sealed class HostValueRegistration : IDisposable
         }
     }
 
-    internal void Revoke()
-    {
-        lock (gate)
-        {
-            if (state == 2)
-            {
-                return;
-            }
-
-            registry.Revoke(Key);
-            state = 2;
-        }
-    }
-
     public void Dispose()
     {
         lock (gate)
@@ -570,9 +499,6 @@ internal sealed class HostInvocation
 {
     private readonly HostValueRegistry registry;
     private readonly CancellationTokenSource cancellation;
-    private readonly object cancellationGate = new();
-    private HostValueRegistration? exceptionRegistration;
-    private bool nativeCancellationObserved;
 
     internal HostInvocation(
         HostValueRegistry registry,
@@ -607,36 +533,6 @@ internal sealed class HostInvocation
     internal ExecutionContext? ExecutionContext { get; }
 
     internal CancellationToken CancellationToken => cancellation.Token;
-
-    internal void Cancel()
-    {
-        lock (cancellationGate)
-        {
-            nativeCancellationObserved = true;
-            exceptionRegistration?.Revoke();
-        }
-
-        try
-        {
-            cancellation.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-    }
-
-    internal void AttachExceptionRegistration(HostValueRegistration registration)
-    {
-        ArgumentNullException.ThrowIfNull(registration);
-        lock (cancellationGate)
-        {
-            exceptionRegistration = registration;
-            if (nativeCancellationObserved)
-            {
-                registration.Revoke();
-            }
-        }
-    }
 
     internal void Complete() => registry.CompleteInvocation(this);
 

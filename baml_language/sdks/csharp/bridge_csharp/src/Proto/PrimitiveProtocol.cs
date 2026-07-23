@@ -16,14 +16,15 @@ internal static class PrimitiveProtocol
 
     internal static EncodedCallArguments EncodeOwnedValue(
         BamlGeneratedValue value,
-        NativeApi api)
+        NativeApi api,
+        ulong functionCallId)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(api);
         var ownership = new EncodedCallArguments([]);
         try
         {
-            ownership.SetBytes(Encode(value, api, ownership).ToByteArray());
+            ownership.SetBytes(Encode(value, api, ownership, functionCallId).ToByteArray());
             return ownership;
         }
         catch
@@ -50,7 +51,7 @@ internal static class PrimitiveProtocol
                 call.Kwargs.Add(new InboundMapEntry
                 {
                     StringKey = argument.WireIdentity,
-                    Value = Encode(value, api, ownership),
+                    Value = Encode(value, api, ownership, callId),
                 });
             }
 
@@ -81,7 +82,7 @@ internal static class PrimitiveProtocol
                 call.Kwargs.Add(new InboundMapEntry
                 {
                     StringKey = argument.WireIdentity,
-                    Value = Encode(value, api, ownership),
+                    Value = Encode(value, api, ownership, callId),
                 });
             }
 
@@ -516,12 +517,13 @@ internal static class PrimitiveProtocol
     }
 
     internal static InboundValue Encode(BamlGeneratedValue value) =>
-        Encode(value, api: null, ownership: null);
+        Encode(value, api: null, ownership: null, functionCallId: 0);
 
     private static InboundValue Encode(
         BamlGeneratedValue value,
         NativeApi? api,
-        EncodedCallArguments? ownership)
+        EncodedCallArguments? ownership,
+        ulong functionCallId)
     {
         ArgumentNullException.ThrowIfNull(value);
         return value.Kind switch
@@ -542,11 +544,11 @@ internal static class PrimitiveProtocol
             {
                 BigintValue = FormatBigInt(value.ReadBigInt()),
             },
-            PrimitiveCarrierKind.List => EncodeList(value, api, ownership),
-            PrimitiveCarrierKind.Map => EncodeMap(value, api, ownership),
-            PrimitiveCarrierKind.Class => EncodeClass(value, api, ownership),
+            PrimitiveCarrierKind.List => EncodeList(value, api, ownership, functionCallId),
+            PrimitiveCarrierKind.Map => EncodeMap(value, api, ownership, functionCallId),
+            PrimitiveCarrierKind.Class => EncodeClass(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Enum => EncodeEnum(value),
-            PrimitiveCarrierKind.Union => EncodeUnion(value, api, ownership),
+            PrimitiveCarrierKind.Union => EncodeUnion(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Media => MediaProtocol.Encode(
                 RequireNativeApi(api, value.Kind),
                 RequireOwnership(ownership, value.Kind),
@@ -557,7 +559,8 @@ internal static class PrimitiveProtocol
             PrimitiveCarrierKind.HostCallable => HostCallableProtocol.Encode(
                 value.ReadHostCallable(),
                 RequireNativeApi(api, value.Kind),
-                RequireOwnership(ownership, value.Kind)),
+                RequireOwnership(ownership, value.Kind),
+                functionCallId),
             _ => throw Unsupported(value.Kind),
         };
     }
@@ -631,16 +634,13 @@ internal static class PrimitiveProtocol
     private static InboundValue EncodeList(
         BamlGeneratedValue value,
         NativeApi? api,
-        EncodedCallArguments? ownership)
+        EncodedCallArguments? ownership,
+        ulong functionCallId)
     {
         var list = new InboundListValue();
-        if (value.ItemTypeMetadata is { Length: > 0 } itemTypeMetadata)
-        {
-            list.ItemType = ParseTypeMetadata(itemTypeMetadata, "list item");
-        }
         foreach (BamlGeneratedValue item in value.ReadList())
         {
-            list.Values.Add(Encode(item, api, ownership));
+            list.Values.Add(Encode(item, api, ownership, functionCallId));
         }
 
         return new InboundValue { ListValue = list };
@@ -649,23 +649,16 @@ internal static class PrimitiveProtocol
     private static InboundValue EncodeMap(
         BamlGeneratedValue value,
         NativeApi? api,
-        EncodedCallArguments? ownership)
+        EncodedCallArguments? ownership,
+        ulong functionCallId)
     {
         var map = new InboundMapValue();
-        if (value.KeyTypeMetadata is { Length: > 0 } keyTypeMetadata)
-        {
-            map.KeyType = ParseTypeMetadata(keyTypeMetadata, "map key");
-        }
-        if (value.ValueTypeMetadata is { Length: > 0 } valueTypeMetadata)
-        {
-            map.ValueType = ParseTypeMetadata(valueTypeMetadata, "map value");
-        }
         foreach ((string key, BamlGeneratedValue item) in value.ReadMapEntries())
         {
             map.Entries.Add(new InboundMapEntry
             {
                 StringKey = key,
-                Value = Encode(item, api, ownership),
+                Value = Encode(item, api, ownership, functionCallId),
             });
         }
 
@@ -675,7 +668,8 @@ internal static class PrimitiveProtocol
     private static InboundValue EncodeClass(
         BamlGeneratedValue value,
         NativeApi? api,
-        EncodedCallArguments? ownership)
+        EncodedCallArguments? ownership,
+        ulong functionCallId)
     {
         var @class = new InboundClassValue
         {
@@ -690,7 +684,7 @@ internal static class PrimitiveProtocol
             @class.Fields.Add(new InboundMapEntry
             {
                 StringKey = name,
-                Value = Encode(field, api, ownership),
+                Value = Encode(field, api, ownership, functionCallId),
             });
         }
 
@@ -710,21 +704,9 @@ internal static class PrimitiveProtocol
     private static InboundValue EncodeUnion(
         BamlGeneratedValue value,
         NativeApi? api,
-        EncodedCallArguments? ownership) =>
-        new()
-        {
-            UnionValue = new InboundUnionValue
-            {
-                SelfType = ParseTypeMetadata(
-                    value.UnionSelfTypeMetadata,
-                    "union self"),
-                SelectedType = ParseTypeMetadata(
-                    value.UnionSelectedTypeMetadata,
-                    "union selected option"),
-                ValueOptionName = value.ReadUnionOptionName(),
-                Value = Encode(value.ReadUnionPayload(), api, ownership),
-            },
-        };
+        EncodedCallArguments? ownership,
+        ulong functionCallId) =>
+        Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
 
     private static InboundValue EncodeHandle(
         global::Baml.BamlHandle value,
@@ -1056,19 +1038,11 @@ internal static class PrimitiveProtocol
             api,
             budget,
             depth + 1);
-        return union.SelectedType is null
-            || union.SelectedType.TyCase == BamlTy.TyOneofCase.None
-            ? BamlGeneratedValue.CreateUnion(
-                selfType,
-                union.ValueOptionName,
-                payload,
-                path)
-            : BamlGeneratedValue.CreateInboundUnion(
-                selfType,
-                Metadata(union.SelectedType, path, "union selected option"),
-                union.ValueOptionName,
-                payload,
-                path);
+        return BamlGeneratedValue.CreateUnion(
+            selfType,
+            union.ValueOptionName,
+            payload,
+            path);
     }
 
     private static BamlGeneratedValue DecodeLiteral(BamlLiteralValue literal, string path)

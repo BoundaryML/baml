@@ -28,7 +28,7 @@ string output = RequireAbsolutePath(
     mustExist: false);
 string version = args[argumentOffset + 2];
 if (String.IsNullOrWhiteSpace(version)
-    || version.Any(character => character is '"' or '\r' or '\n'))
+    || version.Any(character => character is '"' or '\\' or '\r' or '\n'))
 {
     throw new ArgumentException("version is not a safe generated constant");
 }
