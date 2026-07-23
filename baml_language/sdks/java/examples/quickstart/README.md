@@ -15,9 +15,11 @@ repositories { mavenCentral() }
 > The plugin, runtime artifacts, and `baml` CLI publish together at one
 > family version; the version in the `plugins` block must match your
 > installed CLI. This example pins a published, end-to-end-verified
-> version. Plugin resolution needs no repository configuration on any
-> channel: stables live on the Gradle Plugin Portal, and the Portal
-> proxies Maven Central for the rest.
+> version. Stable plugin versions resolve from the Gradle Plugin Portal
+> with zero configuration; for nightlies (published to Maven Central)
+> the example's `settings.gradle.kts` carries the standard
+> `pluginManagement` stanza so resolution rests on documented Gradle
+> behavior rather than the Portal's Central-proxying.
 
 The plugin resolves from the Gradle Plugin Portal, runs `baml generate`
 before compilation (incrementally — it reruns only when a generation
