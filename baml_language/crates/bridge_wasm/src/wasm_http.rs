@@ -17,6 +17,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
 use crate::{
+    error::js_error_message,
     registry::{WasmRegistry, WasmResponseBody, WasmSseStreamHandle},
     send_wrapper::SendFuture,
 };
@@ -53,6 +54,39 @@ impl WasmHttp {
 
     fn fetch_fn(&self) -> &Function {
         self.fetch_fn.inner()
+    }
+
+    fn read_response_body<T: Send + 'static>(
+        &self,
+        response: &io::owned::http::Response,
+        decode: impl FnOnce(wasm_bindgen::JsValue) -> Result<T, VmBamlError> + 'static,
+    ) -> SysOpOutput<T> {
+        let registry = Arc::clone(&self.registry);
+        let body = response
+            ._body
+            .downcast_ref::<WasmResponseBody>()
+            .map(|body| body.key);
+        let Some(key) = body else {
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Response body handle is not a WasmResponseBody".into(),
+            });
+        };
+
+        SysOpOutput::async_op(SendFuture(async move {
+            let promise =
+                registry
+                    .take_body_promise(key)
+                    .ok_or_else(|| VmBamlError::InvalidArgument {
+                        message: "Response body has already been consumed or handle is invalid"
+                            .into(),
+                    })?;
+            let value = JsFuture::from(promise)
+                .await
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to read response body: {}", js_error_message(&error)),
+                })?;
+            decode(value).map_err(VmRustFnError::from)
+        }))
     }
 
     /// Shared implementation for both `fetch` (GET) and `send` (arbitrary method).
@@ -110,13 +144,7 @@ impl WasmHttp {
             let result = match JsFuture::from(promise).await {
                 Ok(result) => result,
                 Err(e) => {
-                    let msg = e
-                        .as_string()
-                        .or_else(|| {
-                            e.dyn_ref::<js_sys::Error>()
-                                .map(|err| String::from(err.message()))
-                        })
-                        .unwrap_or_else(|| format!("{e:?}"));
+                    let msg = js_error_message(&e);
                     if let Some(host_call_id) = &host_call_id
                         && let Some(patch) = run_store.ingest_fetch_updated(
                             host_call_id,
@@ -232,44 +260,11 @@ impl IoClassHttpResponse for WasmHttp {
         response: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let registry = Arc::clone(&self.registry);
-        let body = response
-            ._body
-            .downcast_ref::<WasmResponseBody>()
-            .map(|b| b.key);
-        let Some(key) = body else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Response body handle is not a WasmResponseBody".into(),
-            });
-        };
-
-        SysOpOutput::async_op(SendFuture(async move {
-            let promise =
-                registry
-                    .take_body_promise(key)
-                    .ok_or_else(|| VmBamlError::InvalidArgument {
-                        message: "Response body has already been consumed or handle is invalid"
-                            .into(),
-                    })?;
-            let value = JsFuture::from(promise).await.map_err(|e| {
-                let msg = e
-                    .as_string()
-                    .or_else(|| {
-                        e.dyn_ref::<js_sys::Error>()
-                            .map(|err| String::from(err.message()))
-                    })
-                    .unwrap_or_else(|| format!("{e:?}"));
-                VmBamlError::Io {
-                    message: format!("Failed to read response body: {msg}"),
-                }
-            })?;
-            value
-                .as_string()
-                .ok_or_else(|| VmBamlError::Io {
-                    message: "Response body did not resolve to a string".into(),
-                })
-                .map_err(VmRustFnError::from)
-        }))
+        self.read_response_body(&response, |value| {
+            value.as_string().ok_or_else(|| VmBamlError::Io {
+                message: "Response body did not resolve to a string".into(),
+            })
+        })
     }
 
     fn bytes(
@@ -279,37 +274,7 @@ impl IoClassHttpResponse for WasmHttp {
         response: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        let registry = Arc::clone(&self.registry);
-        let body = response
-            ._body
-            .downcast_ref::<WasmResponseBody>()
-            .map(|b| b.key);
-        let Some(key) = body else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Response body handle is not a WasmResponseBody".into(),
-            });
-        };
-
-        SysOpOutput::async_op(SendFuture(async move {
-            let promise =
-                registry
-                    .take_body_promise(key)
-                    .ok_or_else(|| VmBamlError::InvalidArgument {
-                        message: "Response body has already been consumed or handle is invalid"
-                            .into(),
-                    })?;
-            let value = JsFuture::from(promise).await.map_err(|e| {
-                let msg = e
-                    .as_string()
-                    .or_else(|| {
-                        e.dyn_ref::<js_sys::Error>()
-                            .map(|err| String::from(err.message()))
-                    })
-                    .unwrap_or_else(|| format!("{e:?}"));
-                VmBamlError::Io {
-                    message: format!("Failed to read response body: {msg}"),
-                }
-            })?;
+        self.read_response_body(&response, |value| {
             if let Some(arr) = value.dyn_ref::<js_sys::Uint8Array>() {
                 Ok(arr.to_vec())
             } else if let Some(buf) = value.dyn_ref::<js_sys::ArrayBuffer>() {
@@ -319,8 +284,7 @@ impl IoClassHttpResponse for WasmHttp {
                     message: "Response body did not resolve to a Uint8Array or ArrayBuffer".into(),
                 })
             }
-            .map_err(VmRustFnError::from)
-        }))
+        })
     }
 
     fn new(
@@ -739,4 +703,179 @@ fn header_observations(headers: &indexmap::IndexMap<String, String>) -> Vec<Head
         .iter()
         .map(|(name, value)| HeaderObservation::observe(name, value))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use js_sys::{Promise, Uint8Array};
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::*;
+
+    use super::*;
+
+    wasm_bindgen_test_configure!(run_in_node_experimental);
+
+    type BodyHandle = Arc<dyn std::any::Any + Send + Sync>;
+
+    fn test_http() -> WasmHttp {
+        let noop = Function::new_no_args("");
+        WasmHttp::new(
+            noop.clone(),
+            Arc::new(InMemoryRunStore::default()),
+            crate::send_wrapper::SendWrapper::new(noop),
+        )
+    }
+
+    fn response_with_promise(
+        http: &WasmHttp,
+        promise: Promise,
+    ) -> (io::owned::http::Response, BodyHandle) {
+        let key = http.registry.store_body_promise(promise);
+        let body: BodyHandle = Arc::new(WasmResponseBody {
+            registry: Arc::clone(&http.registry),
+            key,
+        });
+        (
+            io::owned::http::Response {
+                status_code: 200,
+                headers: indexmap::IndexMap::new(),
+                url: "https://example.com".to_string(),
+                _body: Arc::clone(&body),
+            },
+            body,
+        )
+    }
+
+    fn clone_response(response: &io::owned::http::Response) -> io::owned::http::Response {
+        io::owned::http::Response {
+            status_code: response.status_code,
+            headers: response.headers.clone(),
+            url: response.url.clone(),
+            _body: Arc::clone(&response._body),
+        }
+    }
+
+    fn text(http: &WasmHttp, response: io::owned::http::Response) -> SysOpOutput<String> {
+        <WasmHttp as IoClassHttpResponse>::text(
+            http,
+            &BexHeap::new(Vec::new()),
+            CallId(1),
+            response,
+            &SysOpContext::empty(),
+        )
+    }
+
+    fn bytes(http: &WasmHttp, response: io::owned::http::Response) -> SysOpOutput<Vec<u8>> {
+        <WasmHttp as IoClassHttpResponse>::bytes(
+            http,
+            &BexHeap::new(Vec::new()),
+            CallId(1),
+            response,
+            &SysOpContext::empty(),
+        )
+    }
+
+    async fn resolve<T>(output: SysOpOutput<T>) -> Result<T, String> {
+        match output {
+            SysOpOutput::Ready(result) => result.map_err(|error| error.to_string()),
+            SysOpOutput::Async(future) => future.await.map_err(|error| error.to_string()),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn rejects_non_wasm_body_handles_synchronously() {
+        let http = test_http();
+        let output = text(
+            &http,
+            io::owned::http::Response {
+                status_code: 200,
+                headers: indexmap::IndexMap::new(),
+                url: "https://example.com".to_string(),
+                _body: Arc::new(()),
+            },
+        );
+        let SysOpOutput::Ready(result) = output else {
+            panic!("invalid handles must fail synchronously");
+        };
+
+        assert_eq!(
+            result.expect_err("expected invalid handle").to_string(),
+            "developer error: Response body handle is not a WasmResponseBody"
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn text_resolves_string_and_consumes_body_once() {
+        let http = test_http();
+        let (response, _body) =
+            response_with_promise(&http, Promise::resolve(&JsValue::from_str("hello")));
+        let duplicate = clone_response(&response);
+
+        assert_eq!(
+            resolve(text(&http, response))
+                .await
+                .expect("expected response text"),
+            "hello"
+        );
+        assert_eq!(
+            resolve(text(&http, duplicate))
+                .await
+                .expect_err("expected consumed body"),
+            "invalid argument: Response body has already been consumed or handle is invalid"
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn bytes_preserves_uint8_array_and_array_buffer_values() {
+        let http = test_http();
+        let value = JsValue::from(Uint8Array::from([0, 127, 255].as_slice()));
+        let (response, _body) = response_with_promise(&http, Promise::resolve(&value));
+        assert_eq!(
+            resolve(bytes(&http, response))
+                .await
+                .expect("expected Uint8Array body"),
+            vec![0, 127, 255]
+        );
+
+        let uint8 = Uint8Array::from([1, 2, 3].as_slice());
+        let value = JsValue::from(uint8.buffer());
+        let (response, _body) = response_with_promise(&http, Promise::resolve(&value));
+        assert_eq!(
+            resolve(bytes(&http, response))
+                .await
+                .expect("expected ArrayBuffer body"),
+            vec![1, 2, 3]
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn preserves_rejection_and_return_shape_errors() {
+        let http = test_http();
+        let error = JsValue::from(js_sys::Error::new("boom"));
+        let (response, _body) = response_with_promise(&http, Promise::reject(&error));
+        assert_eq!(
+            resolve(text(&http, response))
+                .await
+                .expect_err("expected rejected body promise"),
+            "I/O error: Failed to read response body: boom"
+        );
+
+        let value = JsValue::from(Uint8Array::new_with_length(0));
+        let (response, _body) = response_with_promise(&http, Promise::resolve(&value));
+        assert_eq!(
+            resolve(text(&http, response))
+                .await
+                .expect_err("expected non-string body"),
+            "I/O error: Response body did not resolve to a string"
+        );
+
+        let (response, _body) =
+            response_with_promise(&http, Promise::resolve(&JsValue::from_str("not bytes")));
+        assert_eq!(
+            resolve(bytes(&http, response))
+                .await
+                .expect_err("expected non-byte body"),
+            "I/O error: Response body did not resolve to a Uint8Array or ArrayBuffer"
+        );
+    }
 }
