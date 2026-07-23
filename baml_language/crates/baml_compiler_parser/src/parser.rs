@@ -2693,7 +2693,14 @@ impl<'a> Parser<'a> {
                 if self.looks_like_for_in_loop() {
                     self.parse_for_in_pattern();
                     self.expect(TokenKind::In);
+                    let suppress_object_literal = !self.has_for_header_closing_paren_ahead();
+                    if suppress_object_literal {
+                        self.suppress_object_literal_depth += 1;
+                    }
                     self.parse_expr();
+                    if suppress_object_literal {
+                        self.suppress_object_literal_depth -= 1;
+                    }
                 } else {
                     self.parse_let_stmt();
                     if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
@@ -5683,7 +5690,14 @@ impl<'a> Parser<'a> {
                         // Iterator-style: for (let var in expr) / for (const var in expr)
                         p.parse_for_in_pattern();
                         p.expect(TokenKind::In);
+                        let suppress_object_literal = !p.has_for_header_closing_paren_ahead();
+                        if suppress_object_literal {
+                            p.suppress_object_literal_depth += 1;
+                        }
                         p.parse_expr(); // iterator expression
+                        if suppress_object_literal {
+                            p.suppress_object_literal_depth -= 1;
+                        }
                     } else {
                         // C-style: for (let i = 0; cond; update)
                         p.parse_let_stmt();
@@ -5731,6 +5745,58 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("block after for expression".to_string());
             }
         });
+    }
+
+    /// Whether the current parenthesized for-in header has a closing `)` ahead.
+    ///
+    /// If it does not, a following `{ ... }` must remain available as the loop
+    /// body instead of being consumed as an object literal. Balanced nested
+    /// delimiters are skipped so valid iterables such as `Items { values }`,
+    /// arrays containing objects, and calls continue to work.
+    fn has_for_header_closing_paren_ahead(&self) -> bool {
+        let mut stack: Vec<TokenKind> = Vec::new();
+        let mut saw_top_level_brace = false;
+        let mut i = 0;
+
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => {
+                    if stack.is_empty() {
+                        saw_top_level_brace = true;
+                    }
+                    stack.push(TokenKind::RBrace);
+                }
+                TokenKind::RParen if stack.is_empty() => return true,
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                }
+                TokenKind::Semicolon if stack.is_empty() => return false,
+                TokenKind::For
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Let
+                | TokenKind::Return
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Match
+                    if stack.is_empty() && saw_top_level_brace =>
+                {
+                    return false;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
     }
 
     /// Check if this looks like a for-in loop. We're at a binding introducer.
@@ -12155,6 +12221,84 @@ function parenthesized_object(enabled: bool) -> bool {
                 .count(),
             1,
             "only the explicitly parenthesized constructor should parse as an object literal"
+        );
+    }
+
+    #[test]
+    fn parenthesized_for_iterable_does_not_consume_body_brace() {
+        let source = r#"
+function iterate(values: int[]) -> int {
+    for (let value in values { value }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::UnexpectedToken {
+                    expected,
+                    found,
+                    ..
+                } if expected == "')'" && found == "'{'"
+            )),
+            "expected the missing ')' diagnostic, got: {errors:#?}"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            0,
+            "the loop body must not be consumed as an object literal"
+        );
+        assert!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::FOR_EXPR)
+                .flat_map(|node| node.children())
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
+            "the brace after the iterable must remain the loop body"
+        );
+    }
+
+    #[test]
+    fn nested_parens_allow_object_literal_in_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for (let item in (Values { items }).items) { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "nested parentheses must opt back into an explicit object literal"
+        );
+    }
+
+    #[test]
+    fn object_literal_is_allowed_in_parenthesized_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for (let item in Values { items }.items) { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "a real header-closing ')' keeps direct object literals unambiguous"
         );
     }
 }

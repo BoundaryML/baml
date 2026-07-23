@@ -20,6 +20,12 @@ function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "shorthand works across multiple nested classes"
+    make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -57,5 +63,13 @@ function property_shorthand.property_shorthand_mixed(mode: string, retries: int,
     load_var label
     init_instance user.property_shorthand.PropertyShorthandRequest .options, .retries, .label
     init_instance user.property_shorthand.PropertyShorthandEnvelope .request
+    return
+}
+
+function property_shorthand.property_shorthand_multi_nested(value: string) -> property_shorthand.PropertyShorthandOuter {
+    load_var value
+    init_instance user.property_shorthand.PropertyShorthandLeaf .value
+    init_instance user.property_shorthand.PropertyShorthandMiddle .leaf
+    init_instance user.property_shorthand.PropertyShorthandOuter .middle
     return
 }

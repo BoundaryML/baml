@@ -13,6 +13,18 @@ class PropertyShorthandEnvelope {
     request PropertyShorthandRequest
 }
 
+class PropertyShorthandLeaf {
+    value string
+}
+
+class PropertyShorthandMiddle {
+    leaf PropertyShorthandLeaf
+}
+
+class PropertyShorthandOuter {
+    middle PropertyShorthandMiddle
+}
+
 function property_shorthand_class(
     mode: string,
     retries: int,
@@ -65,6 +77,25 @@ test "shorthand mixes with explicit properties and nests" {
                 options: { "mode": "fast" },
                 retries: 5,
                 label: "nested",
+            },
+        },
+    ))
+}
+
+function property_shorthand_multi_nested(value: string) -> PropertyShorthandOuter {
+    let leaf = PropertyShorthandLeaf { value };
+    let middle = PropertyShorthandMiddle { leaf };
+    PropertyShorthandOuter { middle }
+}
+
+test "shorthand works across multiple nested classes" {
+    assert.is_true(baml.deep_equals(
+        property_shorthand_multi_nested("deep"),
+        PropertyShorthandOuter {
+            middle: PropertyShorthandMiddle {
+                leaf: PropertyShorthandLeaf {
+                    value: "deep",
+                },
             },
         },
     ))
