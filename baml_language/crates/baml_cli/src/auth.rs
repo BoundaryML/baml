@@ -869,9 +869,18 @@ fn prompt(message: &str) -> Result<String> {
     print!("{message}");
     std::io::stdout().flush().ok();
     let mut line = String::new();
-    std::io::stdin()
+    let bytes_read = std::io::stdin()
         .read_line(&mut line)
         .context("Failed to read input")?;
+    // EOF (closed or exhausted stdin, e.g. a piped invocation) would
+    // otherwise return an empty line forever and spin the retry loops that
+    // call this; fail instead so non-interactive callers get a clean error.
+    if bytes_read == 0 {
+        anyhow::bail!(
+            "Standard input closed before a response was entered. \
+             This command needs an interactive terminal."
+        );
+    }
     Ok(line.trim().to_string())
 }
 
