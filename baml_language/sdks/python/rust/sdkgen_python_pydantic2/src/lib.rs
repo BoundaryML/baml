@@ -221,11 +221,7 @@ fn to_source_code_internal(
         // emit re-exports here instead of the runtime PEP 562
         // `__getattr__` hook. The root `.pyi` drops all the
         // `BamlRuntime`/`set_type_map` runtime wiring too.
-        let mut pyi_content = if dir.is_empty() {
-            render_root_init_pyi(&kids, &callable_child_names)
-        } else {
-            render_package_init_pyi(&kids, &callable_child_names)
-        };
+        let mut pyi_content = render_stub_init(&kids, &callable_child_names);
         let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
         pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
         out.insert(init_pyi_path(dir), pyi_content);
@@ -311,10 +307,9 @@ fn init_pyi_path(dir: &[String]) -> PathBuf {
 ///    annotations like `_sse: stream_types.baml.http.SseStream`
 ///    resolves without manual setattr boilerplate.
 ///
-/// The `.pyi` counterpart (`render_package_init_pyi`) emits the
-/// classical `from . import <child>` cascade — pyright doesn't execute
-/// `__getattr__`, and the explicit re-export is what lets it accept
-/// dotted submodule access.
+/// The stub renderer emits the classical `from . import <child>`
+/// cascade because pyright doesn't execute `__getattr__`, and the explicit
+/// re-export is what lets it accept dotted submodule access.
 fn render_package_init(children: &BTreeSet<String>) -> String {
     let mut out = String::from("from __future__ import annotations\n");
     if !children.is_empty() {
@@ -323,13 +318,9 @@ fn render_package_init(children: &BTreeSet<String>) -> String {
     out
 }
 
-/// `.pyi` counterpart of `render_package_init`. Stubs aren't executed,
-/// so the PEP 562 `__getattr__` hook serves no purpose; pyright wants
-/// the explicit `from . import <child>` cascade instead.
-fn render_package_init_pyi(
-    children: &BTreeSet<String>,
-    hidden_children: &BTreeSet<String>,
-) -> String {
+/// Render the root or package `.pyi` framing. Stubs aren't executed,
+/// so they need explicit child re-exports and no runtime initialization.
+fn render_stub_init(children: &BTreeSet<String>, hidden_children: &BTreeSet<String>) -> String {
     let mut out = String::from("from __future__ import annotations\n");
     if !children.is_empty() {
         out.push('\n');
@@ -387,27 +378,6 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("set_type_map(_TYPE_MAP)\n");
     if !top_children.is_empty() {
         append_lazy_children_block(&mut out, top_children);
-    }
-    out
-}
-
-/// `.pyi` counterpart of `render_root_init`. Stubs aren't executed —
-/// pyright needs `from . import <child>` re-exports for dotted access
-/// to type-check, and there's no runtime init machinery (no
-/// `BamlRuntime`, no `set_type_map`).
-fn render_root_init_pyi(
-    top_children: &BTreeSet<String>,
-    hidden_children: &BTreeSet<String>,
-) -> String {
-    let mut out = String::from("from __future__ import annotations\n");
-    if !top_children.is_empty() {
-        out.push('\n');
-        for child in top_children {
-            if hidden_children.contains(child) {
-                continue;
-            }
-            let _ = writeln!(out, "from . import {child}");
-        }
     }
     out
 }
@@ -702,6 +672,29 @@ mod tests {
             let comp_key = cg_name(pkg, ns, &comp_name);
             pool.insert(comp_key, Symbol::Function(companion));
         }
+    }
+
+    #[test]
+    fn stub_init_preserves_import_order_visibility_and_blank_lines() {
+        let children = ["vendor", "hidden", "baml"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let hidden = ["hidden"].into_iter().map(str::to_string).collect();
+        assert_eq!(
+            render_stub_init(&children, &hidden),
+            "from __future__ import annotations\n\nfrom . import baml\nfrom . import vendor\n"
+        );
+
+        let only_hidden = ["hidden"].into_iter().map(str::to_string).collect();
+        assert_eq!(
+            render_stub_init(&only_hidden, &only_hidden),
+            "from __future__ import annotations\n\n"
+        );
+        assert_eq!(
+            render_stub_init(&BTreeSet::new(), &BTreeSet::new()),
+            "from __future__ import annotations\n"
+        );
     }
 
     #[test]
