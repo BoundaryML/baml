@@ -157,7 +157,7 @@ fn expand_function(
         .map(|n| n.as_str().to_string())
         .collect();
     let func_docstring = f.docstring.clone();
-    let raises_names = collect_raises_names(f.throws.as_ref());
+    let raises_names = f.unqualified_throws_names();
     expand_callable(
         &bare,
         &fqn_root,
@@ -184,33 +184,6 @@ fn expand_function(
     );
 }
 
-/// Collect the unqualified leaf names of the thrown types in a `throws`
-/// `Ty`, in source order, de-duping exact-equal names. Class/Enum/
-/// `TypeAlias` contribute their unqualified leaf name; a union contributes
-/// each member's; an optional unwraps; anything else contributes nothing.
-fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
-    use baml_codegen_types::Ty;
-
-    fn walk(ty: &Ty, out: &mut Vec<String>) {
-        match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
-                let n = name.name().as_str().to_string();
-                if !out.contains(&n) {
-                    out.push(n);
-                }
-            }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
-            _ => {}
-        }
-    }
-
-    let mut out = Vec::new();
-    if let Some(ty) = throws {
-        walk(ty, &mut out);
-    }
-    out
-}
-
 /// Fan out source-declared methods (parents and companions) into one
 /// `TypeScriptMethodBinding` per emitted line. Methods are sorted by `(file,
 /// span, name)` so a parent and its companions cluster together.
@@ -233,7 +206,7 @@ fn expand_methods(
             .map(|n| n.as_str().to_string())
             .collect();
         let method_docstring = m.docstring.clone();
-        let raises_names = collect_raises_names(m.throws.as_ref());
+        let raises_names = m.unqualified_throws_names();
         let (required_args, optional_args) = split_arguments(&m.arguments);
         for (name, mode) in [
             (bare.clone(), SyncAsync::Sync),

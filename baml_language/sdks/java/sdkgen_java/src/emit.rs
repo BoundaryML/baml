@@ -285,33 +285,6 @@ fn starts_unicode_escape(chars: &[char], mut i: usize) -> bool {
     saw_u && i + 4 <= chars.len() && chars[i..i + 4].iter().all(char::is_ascii_hexdigit)
 }
 
-/// Collect the unqualified leaf names of the thrown types in a `throws`
-/// `Ty`, in source order, de-duping exact-equal names. `Class`/`Enum`/
-/// `TypeAlias` contribute their unqualified leaf name; a union contributes
-/// each member's; anything else (primitives) contributes nothing. Mirrors
-/// the Python generator's `collect_raises_names` so both SDKs surface the
-/// same names.
-pub(crate) fn collect_raises_names(throws: Option<&Ty>) -> Vec<String> {
-    fn walk(ty: &Ty, out: &mut Vec<String>) {
-        match ty {
-            Ty::Class(name, ..) | Ty::Enum(name, ..) | Ty::TypeAlias(name, ..) => {
-                let n = name.name().as_str().to_string();
-                if !out.contains(&n) {
-                    out.push(n);
-                }
-            }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
-            _ => {}
-        }
-    }
-
-    let mut out = Vec::new();
-    if let Some(ty) = throws {
-        walk(ty, &mut out);
-    }
-    out
-}
-
 /// How a field participates in `equals` / `hashCode`.
 enum FieldEq {
     /// `==` comparison, `Objects.hash` member.
@@ -853,7 +826,7 @@ fn render_callable_pair(
     // tags shared by the sync binding, its `_async` sibling, and any
     // optional-configurator overloads, so every entry point documents
     // the same contract.
-    let raises = collect_raises_names(function.throws.as_ref());
+    let raises = function.unqualified_throws_names();
     let doc = render_javadoc_with_throws(function.docstring.as_deref(), &raises, "    ");
     let static_kw = if is_static { "static " } else { "" };
 

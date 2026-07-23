@@ -264,7 +264,7 @@ fn emit_binding(
     }
     // The `# Errors` section goes LAST: rustdoc folds everything after a
     // heading into that section, so the prose notes must precede it.
-    append_errors_section(&mut doc_attrs, &raises_names(function.throws.as_ref()));
+    append_errors_section(&mut doc_attrs, &function.unqualified_throws_names());
 
     let self_param = match receiver {
         Receiver::None => TokenStream::new(),
@@ -522,35 +522,6 @@ fn append_by_value_note(attrs: &mut Vec<TokenStream>, subject: ByValueSubject) {
     for line in lines {
         attrs.push(quote! { #[doc = #line] });
     }
-}
-
-/// Collect the unqualified leaf names of the thrown types in a `throws`
-/// `Ty`, in source order, de-duping exact-equal names. Class/Enum/TypeAlias
-/// contribute their unqualified leaf name; a union contributes each
-/// member's; anything else (primitives) contributes nothing. Mirrors the
-/// python emitter's `collect_raises_names` so both SDKs document the same
-/// name set.
-fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
-    use baml_codegen_types::Ty;
-
-    fn walk(ty: &Ty, out: &mut Vec<String>) {
-        match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
-                let n = name.name().as_str().to_string();
-                if !out.contains(&n) {
-                    out.push(n);
-                }
-            }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
-            _ => {}
-        }
-    }
-
-    let mut out = Vec::new();
-    if let Some(ty) = throws {
-        walk(ty, &mut out);
-    }
-    out
 }
 
 /// Append the `# Errors` rustdoc section naming the BAML `throws`

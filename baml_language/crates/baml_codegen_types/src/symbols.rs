@@ -168,6 +168,35 @@ pub fn validate_symbol_pool_map_keys(pool: &SymbolPool) -> Result<(), CodegenTyp
 }
 
 impl Function {
+    /// Return the unqualified nominal names in this function's throws contract.
+    ///
+    /// Names retain their first-occurrence order and are deduplicated after
+    /// qualification is removed. Primitive and null members are omitted.
+    pub fn unqualified_throws_names(&self) -> Vec<String> {
+        fn collect(ty: &Ty, names: &mut Vec<String>) {
+            match ty {
+                Ty::Class(name, ..) | Ty::Enum(name, ..) | Ty::TypeAlias(name, ..) => {
+                    let name = name.name().as_str();
+                    if !names.iter().any(|existing| existing == name) {
+                        names.push(name.to_string());
+                    }
+                }
+                Ty::Union(members, _) => {
+                    for member in members {
+                        collect(member, names);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut names = Vec::new();
+        if let Some(throws) = &self.throws {
+            collect(throws, &mut names);
+        }
+        names
+    }
+
     fn validate(&self) -> Result<(), CodegenTypeError> {
         self.arguments
             .iter()
@@ -526,5 +555,59 @@ mod tests {
         let symbol = alias(name("Nested"), outer.clone());
 
         assert_eq!(symbol.walk_all_unions(), HashSet::from([outer, nested]));
+    }
+
+    #[test]
+    fn thrown_names_preserve_order_and_deduplicate_unqualified_names() {
+        let duplicate = crate::Name::new(
+            BaseName::new("dependency"),
+            vec![BaseName::new("errors")],
+            BaseName::new("ParseError"),
+        );
+        let throws = Ty::Union(
+            vec![
+                Ty::Class(name("ParseError"), Vec::new(), TyAttr::EMPTY),
+                Ty::Union(
+                    vec![
+                        Ty::Enum(name("TimeoutError"), TyAttr::EMPTY),
+                        Ty::Union(
+                            vec![
+                                Ty::TypeAlias(duplicate, TyAttr::EMPTY),
+                                Ty::Null {
+                                    attr: TyAttr::EMPTY,
+                                },
+                            ],
+                            TyAttr::EMPTY,
+                        ),
+                        Ty::Int {
+                            attr: TyAttr::EMPTY,
+                        },
+                    ],
+                    TyAttr::EMPTY,
+                ),
+                Ty::TypeAlias(name("AliasError"), TyAttr::EMPTY),
+                Ty::Null {
+                    attr: TyAttr::EMPTY,
+                },
+            ],
+            TyAttr::EMPTY,
+        );
+        let function = Function {
+            name: BaseName::new("run"),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: Ty::Null {
+                attr: TyAttr::EMPTY,
+            },
+            throws: Some(throws),
+            watchers: Vec::new(),
+            origin: origin(),
+        };
+
+        assert_eq!(
+            function.unqualified_throws_names(),
+            ["ParseError", "TimeoutError", "AliasError"]
+        );
     }
 }
