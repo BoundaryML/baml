@@ -1510,6 +1510,43 @@ jobs:
             --version "${{ needs.plan.outputs.version }}" \
             --work-dir "$RUNNER_TEMP/baml-go-release-smoke"
 
+  smoke-swift-release:
+    name: Smoke published Swift package
+    # Consume the ACTUAL published baml-swift package (release asset by
+    # URL + checksum, mirror sources at the v<version> tag) from a clean
+    # project — proves the whole publish chain, not just the built artifact.
+    needs: [plan, publish-swift-sdk]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: macos-15
+    steps:
+      - name: Resolve, link, and run the published package
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/baml-swift-release-smoke"
+          mkdir -p "$work/Sources/Smoke"
+          cat > "$work/Package.swift" <<EOF
+          // swift-tools-version: 6.1
+          import PackageDescription
+          let package = Package(
+              name: "Smoke",
+              platforms: [.macOS(.v13)],
+              dependencies: [.package(url: "https://github.com/BoundaryML/baml-swift", exact: "$VERSION")],
+              targets: [.executableTarget(name: "Smoke",
+                  dependencies: [.product(name: "BamlBridge", package: "baml-swift")])]
+          )
+          EOF
+          cat > "$work/Sources/Smoke/main.swift" <<'EOF'
+          import BamlBridge
+          print("resolved + linked published BamlBridge OK")
+          EOF
+          cd "$work"
+          swift build -c release
+          bin=.build/release/Smoke
+          codesign --force --sign - "$bin"
+          "$bin"
+
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
     needs: [plan, publish-pkg-boundaryml-com, smoke-go-release]
