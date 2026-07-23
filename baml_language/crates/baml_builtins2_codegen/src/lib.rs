@@ -3,6 +3,7 @@ mod codegen_errors;
 mod codegen_io;
 mod codegen_panics;
 mod extract;
+mod rust_ident;
 mod types;
 
 pub use codegen::{generate_native_trait, generate_native_trait_for};

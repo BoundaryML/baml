@@ -219,6 +219,9 @@ macro_rules! assert_compiler2_snapshot {
 pub mod compiler2_hir;
 
 #[cfg(test)]
+pub mod compiler2_ppir;
+
+#[cfg(test)]
 pub mod compiler2_tir;
 
 #[cfg(test)]

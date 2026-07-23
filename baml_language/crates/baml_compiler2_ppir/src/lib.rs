@@ -929,13 +929,17 @@ pub fn namespace_items<'db>(
 pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    // Consumers observe the insertion order of `namespaces`, so namespace
+    // discovery must not inherit `HashSet`'s per-process randomized order.
+    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
+            ns_paths.push(pkg_info.namespace_path.clone());
         }
     }
+    ns_paths.sort();
+    ns_paths.dedup();
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
