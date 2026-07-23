@@ -86,6 +86,7 @@ define_keyword_tokens! {
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
     "type" => SyntaxKind::KW_TYPE => TypeKw;
