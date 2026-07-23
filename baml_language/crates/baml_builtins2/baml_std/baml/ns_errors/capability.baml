@@ -52,18 +52,6 @@ implements CallError for Unsupported {
   function is_parse_error(self) -> bool { false }
 }
 
-implements StreamError for Unsupported {
-  function is_network_error(self) -> bool { false }
-}
-
-implements ToolError for Unsupported {
-  function is_network_error(self) -> bool { false }
-}
-
-implements RealtimeError for Unsupported {
-  function is_network_error(self) -> bool { false }
-}
-
 /// Raised when retrying would replay an effectful provider operation.
 class CannotRetry {
     message: string,
@@ -83,14 +71,6 @@ implements CallError for CannotRetry {
   function is_parse_error(self) -> bool { false }
 }
 
-implements StreamError for CannotRetry {
-  function is_network_error(self) -> bool { false }
-}
-
-implements ToolError for CannotRetry {
-  function is_network_error(self) -> bool { false }
-}
-
 /// Raised when a tool-loop stop policy is reached before a final value exists.
 class LoopBudgetExceeded {
     steps_taken: int,
@@ -102,12 +82,6 @@ implements Failure for LoopBudgetExceeded {
   function is_policy_refusal(self) -> bool { true }
   function is_resumable(self) -> bool { false }
   function is_unsupported(self) -> bool { false }
-}
-
-implements CallError for LoopBudgetExceeded {
-  function is_network_error(self) -> bool { false }
-  function is_rate_limit(self) -> bool { false }
-  function is_parse_error(self) -> bool { false }
 }
 
 implements ToolError for LoopBudgetExceeded {
@@ -126,12 +100,6 @@ implements Failure for HandoffUnresolved {
   function is_policy_refusal(self) -> bool { false }
   function is_resumable(self) -> bool { true }
   function is_unsupported(self) -> bool { false }
-}
-
-implements CallError for HandoffUnresolved {
-  function is_network_error(self) -> bool { false }
-  function is_rate_limit(self) -> bool { false }
-  function is_parse_error(self) -> bool { false }
 }
 
 implements ToolError for HandoffUnresolved {
