@@ -20,6 +20,8 @@ from zoneinfo import ZoneInfo
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError, SlackClientError
 
+GITHUB_API_TIMEOUT_SECONDS = 30
+
 
 @dataclass(frozen=True)
 class Failure:
@@ -56,7 +58,9 @@ def get_json(url: str, token: str) -> tuple[dict[str, Any], str | None]:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(
+            request, timeout=GITHUB_API_TIMEOUT_SECONDS
+        ) as response:
             return json.load(response), response.headers.get("Link")
     except urllib.error.HTTPError as error:
         body = error.read().decode(errors="replace")
