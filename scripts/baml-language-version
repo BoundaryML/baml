@@ -522,9 +522,11 @@ def stamp(plan: ReleasePlan) -> None:
                 "//! Stamped BAML language product version.",
                 "",
                 f'pub const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
-                f'pub const PYPI_VERSION: &str = "{plan.pypi_version}";',
+                "#[allow(dead_code)]",
+                f'const PYPI_VERSION: &str = "{plan.pypi_version}";',
                 f'pub const CHANNEL: &str = "{plan.channel}";',
-                f'pub const STABLE_VERSION: &str = "{plan.canary_version}";',
+                "#[allow(dead_code)]",
+                f'const STABLE_VERSION: &str = "{plan.canary_version}";',
                 "",
             ]
         ),
@@ -648,7 +650,7 @@ def check_release() -> None:
         ),
         "baml_version::PYPI_VERSION": exact_regex_field(
             BAML_VERSION_RS,
-            r'^pub const PYPI_VERSION: &str = "([^"]+)";$',
+            r'^const PYPI_VERSION: &str = "([^"]+)";$',
             expected.pypi_version,
         ),
         "baml_version::CHANNEL": exact_regex_field(
@@ -658,7 +660,7 @@ def check_release() -> None:
         ),
         "baml_version::STABLE_VERSION": exact_regex_field(
             BAML_VERSION_RS,
-            r'^pub const STABLE_VERSION: &str = "([^"]+)";$',
+            r'^const STABLE_VERSION: &str = "([^"]+)";$',
             expected.canary_version,
         ),
         "python pyproject version": exact_regex_field(

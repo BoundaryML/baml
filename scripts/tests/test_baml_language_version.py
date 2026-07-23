@@ -48,9 +48,11 @@ class VersionToolTests(unittest.TestCase):
             "\n".join(
                 [
                     f'pub const CANONICAL_VERSION: &str = "{version}";',
-                    f'pub const PYPI_VERSION: &str = "{version}";',
+                    "#[allow(dead_code)]",
+                    f'const PYPI_VERSION: &str = "{version}";',
                     'pub const CHANNEL: &str = "canary";',
-                    f'pub const STABLE_VERSION: &str = "{version}";',
+                    "#[allow(dead_code)]",
+                    f'const STABLE_VERSION: &str = "{version}";',
                     "",
                 ]
             ),
