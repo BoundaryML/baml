@@ -3,24 +3,62 @@ use super::{
     SyntaxNodeIter, TextRange, ThrowsClause, t,
 };
 
-/// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
-#[derive(Debug)]
-pub enum Type {
-    Paren(ParenType),
-    Path(PathType),
-    /// Generally only string literals are used in normal types,
-    /// but other literals are valid in some contexts like match bindings.
-    Literal(Literal),
-    Union(UnionType),
-    Optional(OptionalType),
-    Array(ArrayType),
-    Generic(GenericType),
-    AssociatedProjection(AssociatedProjectionType),
-    Function(FunctionType),
-    /// Types constrained by attributes.
-    Constrained(ConstrainedType<Type>),
-    Unknown(TextRange),
+validated_ast_node! {
+    custom Type, TYPE_EXPR, parse_type,
+    /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
+    pub enum Type {
+        Paren(ParenType),
+        Path(PathType),
+        /// Generally only string literals are used in normal types,
+        /// but other literals are valid in some contexts like match bindings.
+        Literal(Literal),
+        Union(UnionType),
+        Optional(OptionalType),
+        Array(ArrayType),
+        Generic(GenericType),
+        AssociatedProjection(AssociatedProjectionType),
+        Function(FunctionType),
+        /// Types constrained by attributes.
+        Constrained(ConstrainedType<Type>),
+        Unknown(TextRange),
+    }
 }
+
+fn parse_type(elem: SyntaxElement) -> Result<Type, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_EXPR)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let first = UnionTypeMember::take(&mut it)?;
+    let mut rest = Vec::new();
+    while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
+        let pipe = t::Pipe::from_cst(pipe)?;
+        let next = UnionTypeMember::take(&mut it)?;
+        rest.push((pipe, next));
+    }
+    it.expect_end()?;
+    match rest.pop() {
+        None => Ok(first.into()),
+        Some((pipe, UnionTypeMember::Constrained(constrained))) => {
+            let ConstrainedType { ty, attrs } = constrained;
+            rest.push((pipe, *ty));
+            Ok(Type::Constrained(ConstrainedType {
+                ty: Box::new(Type::Union(UnionType {
+                    first: Box::new(first),
+                    rest,
+                })),
+                attrs,
+            }))
+        }
+        Some(other) => {
+            rest.push(other);
+            Ok(Type::Union(UnionType {
+                first: Box::new(first),
+                rest,
+            }))
+        }
+    }
+}
+
 impl Type {
     #[must_use]
     pub const fn multi_line_is_indented(&self) -> bool {
@@ -39,80 +77,50 @@ impl Type {
         }
     }
 }
-impl FromCST for Type {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_EXPR)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let first = UnionTypeMember::take(&mut it)?;
-        let mut rest = Vec::new();
-        while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
-            let pipe = t::Pipe::from_cst(pipe)?;
-            let next = UnionTypeMember::take(&mut it)?;
-            rest.push((pipe, next));
-        }
-        it.expect_end()?;
-        match rest.pop() {
-            None => Ok(first.into()),
-            Some((pipe, UnionTypeMember::Constrained(constrained))) => {
-                let ConstrainedType { ty, attrs } = constrained;
-                rest.push((pipe, *ty));
-                Ok(Type::Constrained(ConstrainedType {
-                    ty: Box::new(Type::Union(UnionType {
-                        first: Box::new(first),
-                        rest,
-                    })),
-                    attrs,
-                }))
-            }
-            Some(other) => {
-                rest.push(other);
-                Ok(Type::Union(UnionType {
-                    first: Box::new(first),
-                    rest,
-                }))
-            }
-        }
+
+validated_ast_data! {
+    pub struct ParenType {
+        pub open_paren: t::LParen,
+        /// Will have a [`SyntaxKind::FUNCTION_TYPE_PARAM`] with a [`SyntaxKind::TYPE_EXPR`] inside for some reason
+        pub ty: Box<Type>,
+        pub close_paren: t::RParen,
     }
 }
-impl KnownKind for Type {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TYPE_EXPR
+
+validated_ast_data! {
+    pub struct PathType {
+        pub first: t::Word,
+        pub rest: Vec<(t::Dot, t::Word)>,
     }
 }
-#[derive(Debug)]
-pub struct ParenType {
-    pub open_paren: t::LParen,
-    /// Will have a [`SyntaxKind::FUNCTION_TYPE_PARAM`] with a [`SyntaxKind::TYPE_EXPR`] inside for some reason
-    pub ty: Box<Type>,
-    pub close_paren: t::RParen,
+
+validated_ast_data! {
+    pub struct StringType(pub t::QuotedString);
 }
-#[derive(Debug)]
-pub struct PathType {
-    pub first: t::Word,
-    pub rest: Vec<(t::Dot, t::Word)>,
+
+validated_ast_data! {
+    pub struct UnionType {
+        pub first: Box<UnionTypeMember>,
+        pub rest: Vec<(t::Pipe, UnionTypeMember)>,
+    }
 }
-#[derive(Debug)]
-pub struct StringType(pub t::QuotedString);
-#[derive(Debug)]
-pub struct UnionType {
-    pub first: Box<UnionTypeMember>,
-    pub rest: Vec<(t::Pipe, UnionTypeMember)>,
+
+validated_ast_data! {
+    pub enum UnionTypeMember {
+        Paren(ParenType),
+        Path(PathType),
+        Literal(Literal),
+        Optional(OptionalType),
+        Array(ArrayType),
+        Generic(GenericType),
+        AssociatedProjection(AssociatedProjectionType),
+        Function(FunctionType),
+        /// Types constrained by attributes.
+        Constrained(ConstrainedType<UnionTypeMember>),
+        Unknown(TextRange),
+    }
 }
-#[derive(Debug)]
-pub enum UnionTypeMember {
-    Paren(ParenType),
-    Path(PathType),
-    Literal(Literal),
-    Optional(OptionalType),
-    Array(ArrayType),
-    Generic(GenericType),
-    AssociatedProjection(AssociatedProjectionType),
-    Function(FunctionType),
-    /// Types constrained by attributes.
-    Constrained(ConstrainedType<UnionTypeMember>),
-    Unknown(TextRange),
-}
+
 impl UnionTypeMember {
     /// Take a base type (no postfix operators).
     /// If there are postix operators, they will remain in the iterator.
@@ -290,6 +298,7 @@ impl UnionTypeMember {
         Ok(ty)
     }
 }
+
 impl From<UnionTypeMember> for Type {
     fn from(member: UnionTypeMember) -> Self {
         match member {
@@ -308,36 +317,47 @@ impl From<UnionTypeMember> for Type {
         }
     }
 }
-#[derive(Debug)]
-pub struct OptionalType {
-    pub ty: Box<Type>,
-    pub question: t::Question,
+
+validated_ast_data! {
+    pub struct OptionalType {
+        pub ty: Box<Type>,
+        pub question: t::Question,
+    }
 }
-#[derive(Debug)]
-pub struct ArrayType {
-    pub ty: Box<Type>,
-    pub brackets: Vec<(t::LBracket, t::RBracket)>,
+
+validated_ast_data! {
+    pub struct ArrayType {
+        pub ty: Box<Type>,
+        pub brackets: Vec<(t::LBracket, t::RBracket)>,
+    }
 }
-#[derive(Debug)]
-pub struct GenericType {
-    pub base: Box<Type>,
-    pub args: TypeArgs,
+
+validated_ast_data! {
+    pub struct GenericType {
+        pub base: Box<Type>,
+        pub args: TypeArgs,
+    }
 }
-#[derive(Debug)]
-pub struct AssociatedProjectionType {
-    pub open_paren: t::LParen,
-    pub base: Box<Type>,
-    pub as_token: t::As,
-    pub interface: Box<Type>,
-    pub close_paren: t::RParen,
-    pub dot: t::Dot,
-    pub member: t::Word,
+
+validated_ast_data! {
+    pub struct AssociatedProjectionType {
+        pub open_paren: t::LParen,
+        pub base: Box<Type>,
+        pub as_token: t::As,
+        pub interface: Box<Type>,
+        pub close_paren: t::RParen,
+        pub dot: t::Dot,
+        pub member: t::Word,
+    }
 }
-#[derive(Debug)]
-pub enum TypeArg {
-    Type(Type),
-    Associated(AssociatedTypeArgBinding),
+
+validated_ast_data! {
+    pub enum TypeArg {
+        Type(Type),
+        Associated(AssociatedTypeArgBinding),
+    }
 }
+
 impl TypeArg {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
@@ -353,12 +373,15 @@ impl TypeArg {
         }
     }
 }
-#[derive(Debug)]
-pub struct AssociatedTypeArgBinding {
-    pub name: t::Word,
-    pub equals: t::Equals,
-    pub ty: Type,
+
+validated_ast_data! {
+    pub struct AssociatedTypeArgBinding {
+        pub name: t::Word,
+        pub equals: t::Equals,
+        pub ty: Type,
+    }
 }
+
 impl FromCST for AssociatedTypeArgBinding {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -371,81 +394,82 @@ impl FromCST for AssociatedTypeArgBinding {
         Ok(AssociatedTypeArgBinding { name, equals, ty })
     }
 }
-/// Corresponds to a [`SyntaxKind::TYPE_ARGS`] node.
-#[derive(Debug)]
-pub struct TypeArgs {
-    pub open_angle: t::Less,
-    pub first: Box<TypeArg>,
-    pub rest: Vec<(t::Comma, TypeArg)>,
-    pub close_angle: t::Greater,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TYPE_ARGS`] node.
+    custom TypeArgs, TYPE_ARGS, parse_type_args {
+        open_angle: t::Less,
+        first: Box<TypeArg>,
+        rest: Vec<(t::Comma, TypeArg)>,
+        close_angle: t::Greater,
+    }
 }
-impl FromCST for TypeArgs {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let open_angle: t::Less = it.expect_parse()?;
-        let first = TypeArg::from_cst(it.expect_next("type argument")?)?;
-        let mut rest = Vec::new();
-        let close_angle = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::COMMA => {
-                    let comma = t::Comma::from_cst(elem)?;
-                    let Some(next_elem) = it.peek() else {
-                        return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
-                    };
-                    if next_elem.kind() == SyntaxKind::GREATER {
-                        continue;
-                    }
-                    let next = TypeArg::from_cst(it.expect_next("type argument")?)?;
-                    rest.push((comma, next));
-                }
-                SyntaxKind::GREATER => {
-                    break t::Greater::from_cst(elem)?;
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "COMMA or GREATER".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
-            }
+
+fn parse_type_args(elem: SyntaxElement) -> Result<TypeArgs, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let open_angle: t::Less = it.expect_parse()?;
+    let first = TypeArg::from_cst(it.expect_next("type argument")?)?;
+    let mut rest = Vec::new();
+    let close_angle = loop {
+        let Some(elem) = it.next() else {
+            return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
         };
-        it.expect_end()?;
-        Ok(TypeArgs {
-            open_angle,
-            first: Box::new(first),
-            rest,
-            close_angle,
-        })
+        match elem.kind() {
+            SyntaxKind::COMMA => {
+                let comma = t::Comma::from_cst(elem)?;
+                let Some(next_elem) = it.peek() else {
+                    return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+                };
+                if next_elem.kind() == SyntaxKind::GREATER {
+                    continue;
+                }
+                let next = TypeArg::from_cst(it.expect_next("type argument")?)?;
+                rest.push((comma, next));
+            }
+            SyntaxKind::GREATER => {
+                break t::Greater::from_cst(elem)?;
+            }
+            _ => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "COMMA or GREATER".into(),
+                    found: elem.kind(),
+                    at: elem.text_range(),
+                });
+            }
+        }
+    };
+    it.expect_end()?;
+    Ok(TypeArgs {
+        open_angle,
+        first: Box::new(first),
+        rest,
+        close_angle,
+    })
+}
+
+validated_ast_data! {
+    pub struct FunctionType {
+        pub open_paren: t::LParen,
+        pub params: Vec<(FunctionTypeParam, Option<t::Comma>)>,
+        pub close_paren: t::RParen,
+        pub arrow: t::Arrow,
+        pub return_type: Box<Type>,
+        pub throws: Option<Box<ThrowsClause>>,
     }
 }
-impl KnownKind for TypeArgs {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TYPE_ARGS
+
+validated_ast_data! {
+    /// Corresponds to a [`SyntaxKind::FUNCTION_TYPE_PARAM`] node.
+    ///
+    /// Exists in [`FunctionType`] but also in [`ParenType`] for some reason.
+    pub struct FunctionTypeParam {
+        pub name: Option<(t::Word, Option<t::Question>, Option<t::Colon>)>,
+        pub ty: Type,
     }
 }
-#[derive(Debug)]
-pub struct FunctionType {
-    pub open_paren: t::LParen,
-    pub params: Vec<(FunctionTypeParam, Option<t::Comma>)>,
-    pub close_paren: t::RParen,
-    pub arrow: t::Arrow,
-    pub return_type: Box<Type>,
-    pub throws: Option<Box<ThrowsClause>>,
-}
-/// Corresponds to a [`SyntaxKind::FUNCTION_TYPE_PARAM`] node.
-///
-/// Exists in [`FunctionType`] but also in [`ParenType`] for some reason.
-#[derive(Debug)]
-pub struct FunctionTypeParam {
-    pub name: Option<(t::Word, Option<t::Question>, Option<t::Colon>)>,
-    pub ty: Type,
-}
+
 impl FromCST for FunctionTypeParam {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -469,14 +493,17 @@ impl FromCST for FunctionTypeParam {
         Ok(FunctionTypeParam { name, ty })
     }
 }
-/// The type argument is what type enumeration is being constrained.
-/// Generally either use [`Type`] or [`UnionTypeMember`].
-#[derive(Debug)]
-pub struct ConstrainedType<T> {
-    pub ty: Box<T>,
-    /// Should not be empty: if it is, just use the inner type
-    pub attrs: Vec<Attribute>,
+
+validated_ast_data! {
+    /// The type argument is what type enumeration is being constrained.
+    /// Generally either use [`Type`] or [`UnionTypeMember`].
+    pub struct ConstrainedType<T> {
+        pub ty: Box<T>,
+        /// Should not be empty: if it is, just use the inner type
+        pub attrs: Vec<Attribute>,
+    }
 }
+
 impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
     fn from(member: ConstrainedType<UnionTypeMember>) -> Self {
         ConstrainedType {

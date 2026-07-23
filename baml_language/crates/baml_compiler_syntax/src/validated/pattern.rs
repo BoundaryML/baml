@@ -3,28 +3,30 @@ use super::{
     SyntaxNodeIter, Type, TypeArgs, t,
 };
 
-/// Top-level pattern AST node - corresponds to a [`SyntaxKind::PATTERN`].
-#[derive(Debug)]
-pub enum MatchPattern {
-    Wildcard(WildcardPattern),
-    Binding(BindingPattern),
-    Destructure(DestructurePattern),
-    Array(ArrayPattern),
-    Type(TypePattern),
-    Paren(ParenPattern),
-    Union(UnionPattern),
-    Chain(ChainPattern),
-}
-impl FromCST for MatchPattern {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PATTERN)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let inner = it.expect_next("pattern body")?;
-        it.expect_end()?;
-        MatchPattern::from_inner(inner)
+validated_ast_node! {
+    custom MatchPattern, PATTERN, parse_match_pattern,
+    /// Top-level pattern AST node - corresponds to a [`SyntaxKind::PATTERN`].
+    pub enum MatchPattern {
+        Wildcard(WildcardPattern),
+        Binding(BindingPattern),
+        Destructure(DestructurePattern),
+        Array(ArrayPattern),
+        Type(TypePattern),
+        Paren(ParenPattern),
+        Union(UnionPattern),
+        Chain(ChainPattern),
     }
 }
+
+fn parse_match_pattern(elem: SyntaxElement) -> Result<MatchPattern, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::PATTERN)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let inner = it.expect_next("pattern body")?;
+    it.expect_end()?;
+    MatchPattern::from_inner(inner)
+}
+
 impl MatchPattern {
     /// Convert one of the inner pattern kinds (an atom, `UNION_PATTERN`, or
     /// `CHAIN_PATTERN`) into the rich enum.
@@ -53,17 +55,15 @@ impl MatchPattern {
         }
     }
 }
-impl KnownKind for MatchPattern {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PATTERN
+
+validated_ast_data! {
+    /// `_`, `let _`, or `const _`.
+    pub struct WildcardPattern {
+        pub let_keyword: Option<t::BindingKeyword>,
+        pub underscore: t::Word,
     }
 }
-/// `_`, `let _`, or `const _`.
-#[derive(Debug)]
-pub struct WildcardPattern {
-    pub let_keyword: Option<t::BindingKeyword>,
-    pub underscore: t::Word,
-}
+
 impl WildcardPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -80,18 +80,21 @@ impl WildcardPattern {
         })
     }
 }
-/// `let WORD`/`const WORD` or `let WORD : <pattern>`/`const WORD : <pattern>` - name binding with an optional
-/// sub-pattern. The sub-pattern can be a type ascription (`let x: int`),
-/// another binding (`let x: let y`), a structural destructure
-/// (`let x: [a, b]`, `let x: Class { f }`), etc. The parser folds the
-/// `: <pattern>` directly into the [`SyntaxKind::BINDING_PATTERN`] node
-/// (no `CHAIN_PATTERN` wrapper).
-#[derive(Debug)]
-pub struct BindingPattern {
-    pub let_keyword: t::BindingKeyword,
-    pub name: t::Word,
-    pub subpat: Option<(t::Colon, Box<MatchPattern>)>,
+
+validated_ast_data! {
+    /// `let WORD`/`const WORD` or `let WORD : <pattern>`/`const WORD : <pattern>` - name binding with an optional
+    /// sub-pattern. The sub-pattern can be a type ascription (`let x: int`),
+    /// another binding (`let x: let y`), a structural destructure
+    /// (`let x: [a, b]`, `let x: Class { f }`), etc. The parser folds the
+    /// `: <pattern>` directly into the [`SyntaxKind::BINDING_PATTERN`] node
+    /// (no `CHAIN_PATTERN` wrapper).
+    pub struct BindingPattern {
+        pub let_keyword: t::BindingKeyword,
+        pub name: t::Word,
+        pub subpat: Option<(t::Colon, Box<MatchPattern>)>,
+    }
 }
+
 impl BindingPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -112,22 +115,27 @@ impl BindingPattern {
         })
     }
 }
-/// `(let|const)? path.Class { field, renamed: <pattern>, ... }`.
-#[derive(Debug)]
-pub struct DestructurePattern {
-    pub let_keyword: Option<t::BindingKeyword>,
-    pub first: t::Word,
-    pub rest: Vec<(t::Dot, t::Word)>,
-    pub generic_args: Option<DestructureTypeArgs>,
-    pub open_brace: t::LBrace,
-    pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
-    pub close_brace: t::RBrace,
+
+validated_ast_data! {
+    /// `(let|const)? path.Class { field, renamed: <pattern>, ... }`.
+    pub struct DestructurePattern {
+        pub let_keyword: Option<t::BindingKeyword>,
+        pub first: t::Word,
+        pub rest: Vec<(t::Dot, t::Word)>,
+        pub generic_args: Option<DestructureTypeArgs>,
+        pub open_brace: t::LBrace,
+        pub fields: Vec<(FieldPattern, Option<t::Comma>)>,
+        pub close_brace: t::RBrace,
+    }
 }
-#[derive(Debug)]
-pub enum DestructureTypeArgs {
-    Generic(GenericArgs),
-    Type(TypeArgs),
+
+validated_ast_data! {
+    pub enum DestructureTypeArgs {
+        Generic(GenericArgs),
+        Type(TypeArgs),
+    }
 }
+
 impl FromCST for DestructureTypeArgs {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
@@ -141,6 +149,7 @@ impl FromCST for DestructureTypeArgs {
         }
     }
 }
+
 impl DestructurePattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -192,12 +201,15 @@ impl DestructurePattern {
         })
     }
 }
-/// A single field inside a destructure pattern.
-#[derive(Debug)]
-pub struct FieldPattern {
-    pub name: t::Word,
-    pub pattern: Option<(t::Colon, MatchPattern)>,
+
+validated_ast_data! {
+    /// A single field inside a destructure pattern.
+    pub struct FieldPattern {
+        pub name: t::Word,
+        pub pattern: Option<(t::Colon, MatchPattern)>,
+    }
 }
+
 impl FromCST for FieldPattern {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -215,15 +227,18 @@ impl FromCST for FieldPattern {
         Ok(Self { name, pattern })
     }
 }
-#[derive(Debug)]
-pub struct ArrayPattern {
-    pub open_bracket: t::LBracket,
-    pub elements: Vec<(ArrayPatternElement, Option<t::Comma>)>,
-    pub close_bracket: t::RBracket,
-    /// `[...]: T` - optional type ascription folded into the
-    /// [`SyntaxKind::ARRAY_PATTERN`] node by the parser.
-    pub ascription: Option<(t::Colon, Type)>,
+
+validated_ast_data! {
+    pub struct ArrayPattern {
+        pub open_bracket: t::LBracket,
+        pub elements: Vec<(ArrayPatternElement, Option<t::Comma>)>,
+        pub close_bracket: t::RBracket,
+        /// `[...]: T` - optional type ascription folded into the
+        /// [`SyntaxKind::ARRAY_PATTERN`] node by the parser.
+        pub ascription: Option<(t::Colon, Type)>,
+    }
 }
+
 impl ArrayPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -259,11 +274,14 @@ impl ArrayPattern {
         })
     }
 }
-#[derive(Debug)]
-pub struct ArrayPatternElement {
-    pub rest: Option<t::DotDot>,
-    pub pattern: Option<MatchPattern>,
+
+validated_ast_data! {
+    pub struct ArrayPatternElement {
+        pub rest: Option<t::DotDot>,
+        pub pattern: Option<MatchPattern>,
+    }
 }
+
 impl FromCST for ArrayPatternElement {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -278,12 +296,15 @@ impl FromCST for ArrayPatternElement {
         Ok(Self { rest, pattern })
     }
 }
-/// Bare type-expression pattern (literals, paths, generics, function types,
-/// arrays, etc).
-#[derive(Debug)]
-pub struct TypePattern {
-    pub ty: Type,
+
+validated_ast_data! {
+    /// Bare type-expression pattern (literals, paths, generics, function types,
+    /// arrays, etc).
+    pub struct TypePattern {
+        pub ty: Type,
+    }
 }
+
 impl TypePattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -292,13 +313,16 @@ impl TypePattern {
         Ok(Self { ty })
     }
 }
-/// `( PATTERN )` - explicit grouping.
-#[derive(Debug)]
-pub struct ParenPattern {
-    pub open_paren: t::LParen,
-    pub pattern: Box<MatchPattern>,
-    pub close_paren: t::RParen,
+
+validated_ast_data! {
+    /// `( PATTERN )` - explicit grouping.
+    pub struct ParenPattern {
+        pub open_paren: t::LParen,
+        pub pattern: Box<MatchPattern>,
+        pub close_paren: t::RParen,
+    }
 }
+
 impl ParenPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -313,13 +337,16 @@ impl ParenPattern {
         })
     }
 }
-/// Union alternation: `A | B | C`. Each member is a pattern (typically an atom,
-/// since `|` binds tighter than `:`).
-#[derive(Debug)]
-pub struct UnionPattern {
-    pub first: Box<MatchPattern>,
-    pub rest: Vec<(t::Pipe, MatchPattern)>,
+
+validated_ast_data! {
+    /// Union alternation: `A | B | C`. Each member is a pattern (typically an atom,
+    /// since `|` binds tighter than `:`).
+    pub struct UnionPattern {
+        pub first: Box<MatchPattern>,
+        pub rest: Vec<(t::Pipe, MatchPattern)>,
+    }
 }
+
 impl UnionPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
@@ -338,12 +365,15 @@ impl UnionPattern {
         })
     }
 }
-/// Type-narrowing chain: `A : B : C`. Each link is a pattern (atom or union).
-#[derive(Debug)]
-pub struct ChainPattern {
-    pub first: Box<MatchPattern>,
-    pub rest: Vec<(t::Colon, MatchPattern)>,
+
+validated_ast_data! {
+    /// Type-narrowing chain: `A : B : C`. Each link is a pattern (atom or union).
+    pub struct ChainPattern {
+        pub first: Box<MatchPattern>,
+        pub rest: Vec<(t::Colon, MatchPattern)>,
+    }
 }
+
 impl ChainPattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);

@@ -4,23 +4,25 @@ use super::{
     Type, t,
 };
 
-/// Any of the valid top-level declarations in a [`super::SourceFile`].
-#[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum TopLevelDeclaration {
-    Function(FunctionDecl),
-    Class(ClassDecl),
-    Enum(EnumDecl),
-    Client(ClientDecl),
-    Test(TestDecl),
-    TestExpr(TestExprDecl),
-    TestSet(TestSetDecl),
-    RetryPolicy(RetryPolicyDecl),
-    TemplateString(TemplateStringDecl),
-    TypeAlias(TypeAliasDecl),
-    Generator(GeneratorDecl),
-    Unknown(TextRange),
+validated_ast_data! {
+    /// Any of the valid top-level declarations in a [`super::SourceFile`].
+    #[allow(clippy::large_enum_variant)]
+    pub enum TopLevelDeclaration {
+        Function(FunctionDecl),
+        Class(ClassDecl),
+        Enum(EnumDecl),
+        Client(ClientDecl),
+        Test(TestDecl),
+        TestExpr(TestExprDecl),
+        TestSet(TestSetDecl),
+        RetryPolicy(RetryPolicyDecl),
+        TemplateString(TemplateStringDecl),
+        TypeAlias(TypeAliasDecl),
+        Generator(GeneratorDecl),
+        Unknown(TextRange),
+    }
 }
+
 impl FromCST for TopLevelDeclaration {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let decl = match elem.kind() {
@@ -52,164 +54,118 @@ impl FromCST for TopLevelDeclaration {
         Ok(decl)
     }
 }
-/// Corresponds to a [`SyntaxKind::FUNCTION_DEF`] node.
-#[derive(Debug)]
-pub struct FunctionDecl {
-    pub keyword: t::Function,
-    pub name: t::Word,
-    pub generic_params: Option<GenericParamList>,
-    pub params: FunctionParamList,
-    pub arrow: t::Arrow,
-    pub return_type: Type,
-    pub throws: Option<ThrowsClause>,
-    pub body: FunctionDeclBody,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::FUNCTION_DEF`] node.
+    FunctionDecl, FUNCTION_DEF {
+        keyword: required t::Function;
+        name: required t::Word;
+        generic_params: optional GenericParamList;
+        params: required FunctionParamList;
+        arrow: required t::Arrow;
+        return_type: required Type;
+        throws: optional ThrowsClause;
+        body: required FunctionDeclBody;
+    }
 }
-impl FromCST for FunctionDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let generic_params =
-            if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::GENERIC_PARAM_LIST) {
-                let elem = it.next().expect("peeked");
-                Some(GenericParamList::from_cst(elem)?)
-            } else {
-                None
-            };
-        let params: FunctionParamList = it.expect_parse()?;
-        let arrow = it.expect_parse()?;
-        let return_type: Type = it.expect_parse()?;
-        let throws = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
-            let elem = it.next().expect("peeked");
-            Some(ThrowsClause::from_cst(elem)?)
-        } else {
-            None
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::PARAMETER_LIST`] node.
+    custom FunctionParamList, PARAMETER_LIST, parse_function_param_list {
+        open_paren: t::LParen,
+        params: Vec<(FunctionParam, Option<t::Comma>)>,
+        close_paren: t::RParen,
+    }
+}
+
+fn parse_function_param_list(elem: SyntaxElement) -> Result<FunctionParamList, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER_LIST)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let open_paren = it.expect_parse()?;
+    let mut params = Vec::new();
+    let close_paren = loop {
+        let Some(elem) = it.next() else {
+            return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
         };
-        let body = it.expect_node("of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY")?;
-        let body = FunctionDeclBody::from_cst(SyntaxElement::Node(body))?;
-        it.expect_end()?;
-        Ok(FunctionDecl {
-            keyword,
-            name,
-            generic_params,
-            params,
-            arrow,
-            return_type,
-            throws,
-            body,
-        })
-    }
-}
-impl KnownKind for FunctionDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::FUNCTION_DEF
-    }
-}
-/// Corresponds to a [`SyntaxKind::PARAMETER_LIST`] node.
-#[derive(Debug)]
-pub struct FunctionParamList {
-    pub open_paren: t::LParen,
-    pub params: Vec<(FunctionParam, Option<t::Comma>)>,
-    pub close_paren: t::RParen,
-}
-impl FromCST for FunctionParamList {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER_LIST)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let open_paren = it.expect_parse()?;
-        let mut params = Vec::new();
-        let close_paren = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::PARAMETER => {
-                    let param = FunctionParam::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    params.push((param, comma));
-                }
-                SyntaxKind::R_PAREN => {
-                    break t::RParen::from_cst(elem)?;
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
+        match elem.kind() {
+            SyntaxKind::PARAMETER => {
+                let param = FunctionParam::from_cst(elem)?;
+                let comma = it
+                    .next_if_kind(SyntaxKind::COMMA)
+                    .map(t::Comma::from_cst)
+                    .transpose()?;
+                params.push((param, comma));
             }
-        };
-        it.expect_end()?;
-        Ok(FunctionParamList {
-            open_paren,
-            params,
-            close_paren,
-        })
+            SyntaxKind::R_PAREN => {
+                break t::RParen::from_cst(elem)?;
+            }
+            _ => {
+                return Err(StrongAstError::UnexpectedAdditionalElement {
+                    parent: it.parent,
+                    at: elem.text_range(),
+                });
+            }
+        }
+    };
+    it.expect_end()?;
+    Ok(FunctionParamList {
+        open_paren,
+        params,
+        close_paren,
+    })
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::PARAMETER`] node.
+    custom FunctionParam, PARAMETER, parse_function_param {
+        name: t::Word,
+        /// Type annotation with optional colon (colon is optional per BEP-019).
+        ty: Option<(Option<t::Colon>, Type)>,
+        default: Option<(t::Equals, Expression)>,
     }
 }
-impl KnownKind for FunctionParamList {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PARAMETER_LIST
+
+fn parse_function_param(elem: SyntaxElement) -> Result<FunctionParam, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let name = it.expect_parse()?;
+    let colon = it
+        .next_if_kind(SyntaxKind::COLON)
+        .map(t::Colon::from_cst)
+        .transpose()?;
+    let ty = if colon.is_some() {
+        let ty: Type = it.expect_parse()?;
+        Some((colon, ty))
+    } else if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
+        let elem = it.next().expect("peeked");
+        Some((None, Type::from_cst(elem)?))
+    } else {
+        None
+    };
+    let default = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
+        let equals = t::Equals::from_cst(equals)?;
+        let expr_elem = it
+            .next()
+            .ok_or_else(|| StrongAstError::missing_desc("default expression", it.parent))?;
+        let expr = Expression::from_cst(expr_elem)?;
+        Some((equals, expr))
+    } else {
+        None
+    };
+    it.expect_end()?;
+    Ok(FunctionParam { name, ty, default })
+}
+
+validated_ast_data! {
+    /// Any of the valid function bodies in a [`FunctionDecl`].
+    pub enum FunctionDeclBody {
+        Llm(LlmFunctionBody),
+        Block(BlockExpr),
     }
 }
-/// Corresponds to a [`SyntaxKind::PARAMETER`] node.
-#[derive(Debug)]
-pub struct FunctionParam {
-    pub name: t::Word,
-    /// Type annotation with optional colon (colon is optional per BEP-019).
-    pub ty: Option<(Option<t::Colon>, Type)>,
-    pub default: Option<(t::Equals, Expression)>,
-}
-impl FromCST for FunctionParam {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let name = it.expect_parse()?;
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-        let ty = if colon.is_some() {
-            let ty: Type = it.expect_parse()?;
-            Some((colon, ty))
-        } else if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
-            let elem = it.next().expect("peeked");
-            Some((None, Type::from_cst(elem)?))
-        } else {
-            None
-        };
-        let default = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
-            let equals = t::Equals::from_cst(equals)?;
-            let expr_elem = it
-                .next()
-                .ok_or_else(|| StrongAstError::missing_desc("default expression", it.parent))?;
-            let expr = Expression::from_cst(expr_elem)?;
-            Some((equals, expr))
-        } else {
-            None
-        };
-        it.expect_end()?;
-        Ok(FunctionParam { name, ty, default })
-    }
-}
-impl KnownKind for FunctionParam {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PARAMETER
-    }
-}
-/// Any of the valid function bodies in a [`FunctionDecl`].
-#[derive(Debug)]
-pub enum FunctionDeclBody {
-    Llm(LlmFunctionBody),
-    Block(BlockExpr),
-}
+
 impl FromCST for FunctionDeclBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -231,166 +187,141 @@ impl FromCST for FunctionDeclBody {
         }
     }
 }
-/// Corresponds to a [`SyntaxKind::LLM_FUNCTION_BODY`] node.
-#[derive(Debug)]
-pub struct LlmFunctionBody {
-    pub open_brace: t::LBrace,
-    /// Not guaranteed that client is before prompt in the input.
-    pub client: ClientField,
-    /// Not guaranteed that client is before prompt in the input.
-    pub prompt: PromptField,
-    /// Optional `type_builder { ... }` block for inline schema overrides.
-    pub type_builder: Option<TypeBuilderBlock>,
-    pub close_brace: t::RBrace,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::LLM_FUNCTION_BODY`] node.
+    custom LlmFunctionBody, LLM_FUNCTION_BODY, parse_llm_function_body {
+        open_brace: t::LBrace,
+        /// Not guaranteed that client is before prompt in the input.
+        client: ClientField,
+        /// Not guaranteed that client is before prompt in the input.
+        prompt: PromptField,
+        /// Optional `type_builder { ... }` block for inline schema overrides.
+        type_builder: Option<TypeBuilderBlock>,
+        close_brace: t::RBrace,
+    }
 }
-impl FromCST for LlmFunctionBody {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let open_brace = it.expect_parse()?;
-        let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
-        let (client, prompt) = match first.kind() {
-            SyntaxKind::CLIENT_FIELD => {
-                let client = ClientField::from_cst(SyntaxElement::Node(first))?;
-                let prompt: PromptField = it.expect_parse()?;
-                (client, prompt)
+
+fn parse_llm_function_body(elem: SyntaxElement) -> Result<LlmFunctionBody, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let open_brace = it.expect_parse()?;
+    let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
+    let (client, prompt) = match first.kind() {
+        SyntaxKind::CLIENT_FIELD => {
+            let client = ClientField::from_cst(SyntaxElement::Node(first))?;
+            let prompt: PromptField = it.expect_parse()?;
+            (client, prompt)
+        }
+        SyntaxKind::PROMPT_FIELD => {
+            let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
+            let client: ClientField = it.expect_parse()?;
+            (client, prompt)
+        }
+        found => {
+            return Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
+                found,
+                at: first.text_range(),
+            });
+        }
+    };
+    let type_builder = it
+        .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
+        .map(TypeBuilderBlock::from_cst)
+        .transpose()?;
+    let close_brace = it.expect_parse()?;
+    it.expect_end()?;
+    Ok(LlmFunctionBody {
+        open_brace,
+        client,
+        prompt,
+        type_builder,
+        close_brace,
+    })
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CLIENT_FIELD`] node.
+    custom ClientField, CLIENT_FIELD, parse_client_field {
+        keyword: t::Client,
+        colon: Option<t::Colon>,
+        name: ClientName,
+    }
+}
+
+fn parse_client_field(elem: SyntaxElement) -> Result<ClientField, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_FIELD)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let colon = it
+        .next_if_kind(SyntaxKind::COLON)
+        .map(t::Colon::from_cst)
+        .transpose()?;
+    let name = it.expect_next("STRING_LITERAL, WORD, or PATH_EXPR")?;
+    let name = match name.kind() {
+        SyntaxKind::STRING_LITERAL => ClientName::String(t::QuotedString::from_cst(name)?),
+        SyntaxKind::WORD => {
+            let first = t::Word::from_cst(name)?;
+            let mut rest = Vec::new();
+            while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+                let dot = t::Dot::from_cst(dot)?;
+                let word = it.expect_parse()?;
+                rest.push((dot, word));
             }
-            SyntaxKind::PROMPT_FIELD => {
-                let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
-                let client: ClientField = it.expect_parse()?;
-                (client, prompt)
-            }
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
-                    found,
-                    at: first.text_range(),
-                });
-            }
-        };
-        let type_builder = it
-            .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
-            .map(TypeBuilderBlock::from_cst)
-            .transpose()?;
-        let close_brace = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(LlmFunctionBody {
-            open_brace,
-            client,
-            prompt,
-            type_builder,
-            close_brace,
-        })
+            ClientName::Path(PathExpr {
+                first,
+                rest,
+                generic_args: None,
+            })
+        }
+        SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
+        found => {
+            return Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
+                found,
+                at: name.text_range(),
+            });
+        }
+    };
+    it.expect_end()?;
+    Ok(ClientField {
+        keyword,
+        colon,
+        name,
+    })
+}
+
+validated_ast_data! {
+    pub enum ClientName {
+        Path(PathExpr),
+        String(t::QuotedString),
     }
 }
-impl KnownKind for LlmFunctionBody {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::LLM_FUNCTION_BODY
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::PROMPT_FIELD`] node.
+    PromptField, PROMPT_FIELD {
+        prompt: required t::Word;
+        colon: optional_element t::Colon;
+        string: required StringLiteralValue;
     }
 }
-/// Corresponds to a [`SyntaxKind::CLIENT_FIELD`] node.
-#[derive(Debug)]
-pub struct ClientField {
-    pub keyword: t::Client,
-    pub colon: Option<t::Colon>,
-    pub name: ClientName,
-}
-impl FromCST for ClientField {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_FIELD)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-        let name = it.expect_next("STRING_LITERAL, WORD, or PATH_EXPR")?;
-        let name = match name.kind() {
-            SyntaxKind::STRING_LITERAL => ClientName::String(t::QuotedString::from_cst(name)?),
-            SyntaxKind::WORD => {
-                let first = t::Word::from_cst(name)?;
-                let mut rest = Vec::new();
-                while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
-                    let dot = t::Dot::from_cst(dot)?;
-                    let word = it.expect_parse()?;
-                    rest.push((dot, word));
-                }
-                ClientName::Path(PathExpr {
-                    first,
-                    rest,
-                    generic_args: None,
-                })
-            }
-            SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
-                    found,
-                    at: name.text_range(),
-                });
-            }
-        };
-        it.expect_end()?;
-        Ok(ClientField {
-            keyword,
-            colon,
-            name,
-        })
+
+validated_ast_data! {
+    /// A string-literal value as it appears in a declarative slot such as a
+    /// [`PromptField`] or a [`TemplateStringDecl`]: a raw `#"..."#`, a quoted
+    /// `"..."`, or a backtick `` `...` `` literal. All three parse equally in these
+    /// positions, so the formatter accepts and re-emits any of them.
+    pub enum StringLiteralValue {
+        RawString(t::RawString),
+        String(t::QuotedString),
+        Backtick(t::BacktickString),
     }
 }
-impl KnownKind for ClientField {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CLIENT_FIELD
-    }
-}
-#[derive(Debug)]
-pub enum ClientName {
-    Path(PathExpr),
-    String(t::QuotedString),
-}
-/// Corresponds to a [`SyntaxKind::PROMPT_FIELD`] node.
-#[derive(Debug)]
-pub struct PromptField {
-    pub prompt: t::Word,
-    pub colon: Option<t::Colon>,
-    pub string: StringLiteralValue,
-}
-impl FromCST for PromptField {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PROMPT_FIELD)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let prompt = it.expect_parse()?;
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-        let string = StringLiteralValue::from_cst(it.expect_next("a prompt string")?)?;
-        it.expect_end()?;
-        Ok(PromptField {
-            prompt,
-            colon,
-            string,
-        })
-    }
-}
-impl KnownKind for PromptField {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PROMPT_FIELD
-    }
-}
-/// A string-literal value as it appears in a declarative slot such as a
-/// [`PromptField`] or a [`TemplateStringDecl`]: a raw `#"..."#`, a quoted
-/// `"..."`, or a backtick `` `...` `` literal. All three parse equally in these
-/// positions, so the formatter accepts and re-emits any of them.
-#[derive(Debug)]
-pub enum StringLiteralValue {
-    RawString(t::RawString),
-    String(t::QuotedString),
-    Backtick(t::BacktickString),
-}
+
 impl FromCST for StringLiteralValue {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
@@ -412,157 +343,119 @@ impl FromCST for StringLiteralValue {
         }
     }
 }
-/// Corresponds to a [`SyntaxKind::CLASS_DEF`] node.
-#[derive(Debug)]
-pub struct ClassDecl {
-    pub keyword: t::Class,
-    pub name: t::Word,
-    pub generic_params: Option<GenericParamList>,
-    pub open_brace: t::LBrace,
-    pub items: Vec<ClassItem>,
-    pub close_brace: t::RBrace,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CLASS_DEF`] node.
+    custom ClassDecl, CLASS_DEF, parse_class_decl {
+        keyword: t::Class,
+        name: t::Word,
+        generic_params: Option<GenericParamList>,
+        open_brace: t::LBrace,
+        items: Vec<ClassItem>,
+        close_brace: t::RBrace,
+    }
 }
-impl FromCST for ClassDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CLASS_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let generic_params =
-            if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::GENERIC_PARAM_LIST) {
-                let elem = it.next().expect("peeked");
-                Some(GenericParamList::from_cst(elem)?)
-            } else {
-                None
-            };
-        let open_brace = it.expect_parse()?;
-        let mut items = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::FIELD => {
-                    let field = ClassField::from_cst(elem)?;
-                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
-                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
-                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
-                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
-                            semi_elem,
-                        )?))
-                    } else {
-                        None
-                    };
-                    items.push(ClassItem::Field(field, delimiter));
-                }
-                SyntaxKind::FUNCTION_DEF => {
-                    items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
-                }
-                SyntaxKind::IMPLEMENTS_BLOCK => {
-                    items.push(ClassItem::Implements(ImplementsBlock::from_cst(elem)?));
-                }
-                SyntaxKind::BLOCK_ATTRIBUTE => {
-                    items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
-                }
-                SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
-                SyntaxKind::R_BRACE => {
-                    break t::RBrace::from_cst(elem)?;
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
-            }
+
+fn parse_class_decl(elem: SyntaxElement) -> Result<ClassDecl, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::CLASS_DEF)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let name = it.expect_parse()?;
+    let generic_params =
+        if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::GENERIC_PARAM_LIST) {
+            let elem = it.next().expect("peeked");
+            Some(GenericParamList::from_cst(elem)?)
+        } else {
+            None
         };
-        it.expect_end()?;
-        Ok(ClassDecl {
-            keyword,
-            name,
-            generic_params,
-            open_brace,
-            items,
-            close_brace,
-        })
-    }
-}
-impl KnownKind for ClassDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CLASS_DEF
-    }
-}
-#[derive(Debug)]
-pub struct ClassField {
-    pub name: t::Word,
-    pub colon: Option<t::Colon>,
-    pub ty: Type,
-    pub attributes: Vec<Attribute>,
-}
-impl FromCST for ClassField {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FIELD)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let name = it.expect_parse()?;
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-        let ty: Type = it.expect_parse()?;
-        let mut attributes = Vec::new();
-        for attr in it {
-            attributes.push(Attribute::from_cst(attr)?);
+    let open_brace = it.expect_parse()?;
+    let mut items = Vec::new();
+    let close_brace = loop {
+        let Some(elem) = it.next() else {
+            return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
+        };
+        match elem.kind() {
+            SyntaxKind::FIELD => {
+                let field = ClassField::from_cst(elem)?;
+                let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
+                    Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
+                } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
+                    Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
+                        semi_elem,
+                    )?))
+                } else {
+                    None
+                };
+                items.push(ClassItem::Field(field, delimiter));
+            }
+            SyntaxKind::FUNCTION_DEF => {
+                items.push(ClassItem::Function(FunctionDecl::from_cst(elem)?));
+            }
+            SyntaxKind::IMPLEMENTS_BLOCK => {
+                items.push(ClassItem::Implements(ImplementsBlock::from_cst(elem)?));
+            }
+            SyntaxKind::BLOCK_ATTRIBUTE => {
+                items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
+            }
+            SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
+            SyntaxKind::R_BRACE => {
+                break t::RBrace::from_cst(elem)?;
+            }
+            _ => {
+                return Err(StrongAstError::UnexpectedAdditionalElement {
+                    parent: it.parent,
+                    at: elem.text_range(),
+                });
+            }
         }
-        Ok(ClassField {
-            name,
-            colon,
-            ty,
-            attributes,
-        })
+    };
+    it.expect_end()?;
+    Ok(ClassDecl {
+        keyword,
+        name,
+        generic_params,
+        open_brace,
+        items,
+        close_brace,
+    })
+}
+
+validated_ast_node! {
+    ClassField, FIELD {
+        name: required t::Word;
+        colon: optional_element t::Colon;
+        ty: required Type;
+        attributes: rest Attribute;
     }
 }
-impl KnownKind for ClassField {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::FIELD
+
+validated_ast_data! {
+    /// Delimiter after a class field (comma or semicolon).
+    /// The formatter normalizes to comma, but we preserve the original for trivia.
+    pub enum ClassFieldDelimiter {
+        Comma(t::Comma),
+        Semicolon(t::Semicolon),
     }
 }
-/// Delimiter after a class field (comma or semicolon).
-/// The formatter normalizes to comma, but we preserve the original for trivia.
-#[derive(Debug)]
-pub enum ClassFieldDelimiter {
-    Comma(t::Comma),
-    Semicolon(t::Semicolon),
-}
-/// Corresponds to a [`SyntaxKind::IMPLEMENTS_TARGET`] node.
-#[derive(Debug)]
-pub struct ImplementsTarget {
-    pub ty: Type,
-}
-impl FromCST for ImplementsTarget {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::IMPLEMENTS_TARGET)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let ty = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(ImplementsTarget { ty })
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::IMPLEMENTS_TARGET`] node.
+    ImplementsTarget, IMPLEMENTS_TARGET {
+        ty: required Type;
     }
 }
-impl KnownKind for ImplementsTarget {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::IMPLEMENTS_TARGET
+
+validated_ast_data! {
+    /// BEP-057 associated type declaration or implementation witness.
+    pub struct AssociatedTypeDecl {
+        pub keyword: t::TypeKw,
+        pub name: t::Word,
+        pub bound: Option<(t::Extends, Type)>,
+        pub default: Option<(t::Equals, Type)>,
     }
 }
-/// BEP-057 associated type declaration or implementation witness.
-#[derive(Debug)]
-pub struct AssociatedTypeDecl {
-    pub keyword: t::TypeKw,
-    pub name: t::Word,
-    pub bound: Option<(t::Extends, Type)>,
-    pub default: Option<(t::Equals, Type)>,
-}
+
 impl FromCST for AssociatedTypeDecl {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -600,13 +493,16 @@ impl FromCST for AssociatedTypeDecl {
         })
     }
 }
-/// Corresponds to a [`SyntaxKind::INTERFACE_FIELD_LINK`] node.
-#[derive(Debug)]
-pub struct InterfaceFieldLink {
-    pub interface_field: t::Word,
-    pub as_token: t::As,
-    pub class_field: t::Word,
+
+validated_ast_data! {
+    /// Corresponds to a [`SyntaxKind::INTERFACE_FIELD_LINK`] node.
+    pub struct InterfaceFieldLink {
+        pub interface_field: t::Word,
+        pub as_token: t::As,
+        pub class_field: t::Word,
+    }
 }
+
 impl FromCST for InterfaceFieldLink {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -623,15 +519,18 @@ impl FromCST for InterfaceFieldLink {
         })
     }
 }
-/// Any item accepted inside a class `implements` block.
-#[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum ImplementsItem {
-    AssociatedType(AssociatedTypeDecl, Option<ClassFieldDelimiter>),
-    FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
-    Field(ClassField, Option<ClassFieldDelimiter>),
-    Function(FunctionDecl),
+
+validated_ast_data! {
+    /// Any item accepted inside a class `implements` block.
+    #[allow(clippy::large_enum_variant)]
+    pub enum ImplementsItem {
+        AssociatedType(AssociatedTypeDecl, Option<ClassFieldDelimiter>),
+        FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
+        Field(ClassField, Option<ClassFieldDelimiter>),
+        Function(FunctionDecl),
+    }
 }
+
 impl ImplementsItem {
     pub fn delimiter_rightmost(
         delimiter: Option<&ClassFieldDelimiter>,
@@ -644,15 +543,18 @@ impl ImplementsItem {
         }
     }
 }
-/// Corresponds to a [`SyntaxKind::IMPLEMENTS_BLOCK`] node.
-#[derive(Debug)]
-pub struct ImplementsBlock {
-    pub keyword_span: TextRange,
-    pub target: ImplementsTarget,
-    pub open_brace: t::LBrace,
-    pub items: Vec<ImplementsItem>,
-    pub close_brace: t::RBrace,
+
+validated_ast_data! {
+    /// Corresponds to a [`SyntaxKind::IMPLEMENTS_BLOCK`] node.
+    pub struct ImplementsBlock {
+        pub keyword_span: TextRange,
+        pub target: ImplementsTarget,
+        pub open_brace: t::LBrace,
+        pub items: Vec<ImplementsItem>,
+        pub close_brace: t::RBrace,
+    }
 }
+
 impl FromCST for ImplementsBlock {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -741,16 +643,19 @@ impl FromCST for ImplementsBlock {
         })
     }
 }
-/// Any of the valid items in a [`ClassDecl`].
-#[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum ClassItem {
-    Field(ClassField, Option<ClassFieldDelimiter>),
-    Function(FunctionDecl),
-    Implements(ImplementsBlock),
-    BlockAttribute(BlockAttribute),
-    Unknown(TextRange),
+
+validated_ast_data! {
+    /// Any of the valid items in a [`ClassDecl`].
+    #[allow(clippy::large_enum_variant)]
+    pub enum ClassItem {
+        Field(ClassField, Option<ClassFieldDelimiter>),
+        Function(FunctionDecl),
+        Implements(ImplementsBlock),
+        BlockAttribute(BlockAttribute),
+        Unknown(TextRange),
+    }
 }
+
 impl FromCST for ClassItem {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let item = match elem.kind() {
@@ -772,262 +677,185 @@ impl FromCST for ClassItem {
         Ok(item)
     }
 }
-/// Corresponds to a [`SyntaxKind::ENUM_DEF`] node.
-#[derive(Debug)]
-pub struct EnumDecl {
-    pub keyword: t::Enum,
-    pub name: t::Word,
-    pub open_brace: t::LBrace,
-    pub items: Vec<EnumItem>,
-    pub close_brace: t::RBrace,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::ENUM_DEF`] node.
+    custom EnumDecl, ENUM_DEF, parse_enum_decl {
+        keyword: t::Enum,
+        name: t::Word,
+        open_brace: t::LBrace,
+        items: Vec<EnumItem>,
+        close_brace: t::RBrace,
+    }
 }
-impl FromCST for EnumDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ENUM_DEF)?;
-        let enum_range = node.text_range();
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let open_brace = it.expect_parse()?;
-        let mut items = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing_desc(
-                    "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE",
-                    enum_range,
-                ));
-            };
-            match elem.kind() {
-                SyntaxKind::ENUM_VARIANT => {
-                    let variant = StrongAstError::assert_is_node(elem)?;
-                    let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    items.push(EnumItem::Variant(variant, comma));
-                }
-                SyntaxKind::BLOCK_ATTRIBUTE => {
-                    let attr = BlockAttribute::from_cst(elem)?;
-                    items.push(EnumItem::BlockAttribute(attr));
-                }
-                SyntaxKind::R_BRACE => {
-                    break t::RBrace::from_cst(elem)?;
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
+
+fn parse_enum_decl(elem: SyntaxElement) -> Result<EnumDecl, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::ENUM_DEF)?;
+    let enum_range = node.text_range();
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let name = it.expect_parse()?;
+    let open_brace = it.expect_parse()?;
+    let mut items = Vec::new();
+    let close_brace = loop {
+        let Some(elem) = it.next() else {
+            return Err(StrongAstError::missing_desc(
+                "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE",
+                enum_range,
+            ));
+        };
+        match elem.kind() {
+            SyntaxKind::ENUM_VARIANT => {
+                let variant = StrongAstError::assert_is_node(elem)?;
+                let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
+                let comma = it
+                    .next_if_kind(SyntaxKind::COMMA)
+                    .map(t::Comma::from_cst)
+                    .transpose()?;
+                items.push(EnumItem::Variant(variant, comma));
+            }
+            SyntaxKind::BLOCK_ATTRIBUTE => {
+                let attr = BlockAttribute::from_cst(elem)?;
+                items.push(EnumItem::BlockAttribute(attr));
+            }
+            SyntaxKind::R_BRACE => {
+                break t::RBrace::from_cst(elem)?;
+            }
+            _ => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE".into(),
+                    found: elem.kind(),
+                    at: elem.text_range(),
+                });
+            }
+        }
+    };
+    it.expect_end()?;
+    Ok(EnumDecl {
+        keyword,
+        name,
+        open_brace,
+        items,
+        close_brace,
+    })
+}
+
+validated_ast_data! {
+    /// Any of the valid items in an [`EnumDecl`].
+    pub enum EnumItem {
+        Variant(EnumVariant, Option<t::Comma>),
+        BlockAttribute(BlockAttribute),
+    }
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::ENUM_VARIANT`] node.
+    EnumVariant, ENUM_VARIANT {
+        name: required t::Word;
+        attributes: rest Attribute;
+    }
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CLIENT_DEF`] node.
+    ClientDecl, CLIENT_DEF {
+        keyword: required t::Client;
+        client_type: optional ClientType;
+        name: required t::Word;
+        config_block: required ConfigBlock;
+    }
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CLIENT_TYPE`] node.
+    ClientType, CLIENT_TYPE {
+        langle: required t::Less;
+        generic: required t::Word;
+        rangle: required t::Greater;
+    }
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CONFIG_BLOCK`] node.
+    custom ConfigBlock, CONFIG_BLOCK, parse_config_block {
+        open_brace: t::LBrace,
+        items: Vec<(ConfigBlockMember, Option<t::Comma>)>,
+        close_brace: t::RBrace,
+    }
+}
+
+fn parse_config_block(elem: SyntaxElement) -> Result<ConfigBlock, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_BLOCK)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let open_brace = it.expect_parse()?;
+    let mut items = Vec::new();
+    let close_brace = loop {
+        let elem =
+            it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE")?;
+        let item = match elem.kind() {
+            SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
+            SyntaxKind::CONFIG_ITEM => ConfigBlockMember::Item(ConfigItem::from_cst(elem)?),
+            SyntaxKind::TYPE_BUILDER_BLOCK => {
+                ConfigBlockMember::TypeBuilder(TypeBuilderBlock::from_cst(elem)?)
+            }
+            SyntaxKind::BLOCK_ATTRIBUTE => {
+                ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
+            }
+            _ => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE"
+                        .into(),
+                    found: elem.kind(),
+                    at: elem.text_range(),
+                });
             }
         };
-        it.expect_end()?;
-        Ok(EnumDecl {
-            keyword,
-            name,
-            open_brace,
-            items,
-            close_brace,
-        })
-    }
-}
-impl KnownKind for EnumDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::ENUM_DEF
-    }
-}
-/// Any of the valid items in an [`EnumDecl`].
-#[derive(Debug)]
-pub enum EnumItem {
-    Variant(EnumVariant, Option<t::Comma>),
-    BlockAttribute(BlockAttribute),
-}
-/// Corresponds to a [`SyntaxKind::ENUM_VARIANT`] node.
-#[derive(Debug)]
-pub struct EnumVariant {
-    pub name: t::Word,
-    pub attributes: Vec<Attribute>,
-}
-impl FromCST for EnumVariant {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ENUM_VARIANT)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let name = it.expect_parse()?;
-        let attributes = it.map(Attribute::from_cst).collect::<Result<_, _>>()?;
-        Ok(EnumVariant { name, attributes })
-    }
-}
-impl KnownKind for EnumVariant {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::ENUM_VARIANT
-    }
-}
-/// Corresponds to a [`SyntaxKind::CLIENT_DEF`] node.
-#[derive(Debug)]
-pub struct ClientDecl {
-    pub keyword: t::Client,
-    pub client_type: Option<ClientType>,
-    pub name: t::Word,
-    pub config_block: ConfigBlock,
-}
-impl FromCST for ClientDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let client_type = it
-            .next_if_kind(SyntaxKind::CLIENT_TYPE)
-            .map(ClientType::from_cst)
+        let comma = it
+            .next_if_kind(SyntaxKind::COMMA)
+            .map(t::Comma::from_cst)
             .transpose()?;
-        let name = it.expect_parse()?;
-        let config_block: ConfigBlock = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(ClientDecl {
-            keyword,
-            client_type,
-            name,
-            config_block,
-        })
+        items.push((item, comma));
+    };
+    it.expect_end()?;
+    Ok(ConfigBlock {
+        open_brace,
+        items,
+        close_brace,
+    })
+}
+
+validated_ast_data! {
+    pub enum ConfigBlockMember {
+        Item(ConfigItem),
+        TypeBuilder(TypeBuilderBlock),
+        BlockAttribute(BlockAttribute),
     }
 }
-impl KnownKind for ClientDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CLIENT_DEF
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::CONFIG_ITEM`] node.
+    ConfigItem, CONFIG_ITEM {
+        key: required ConfigItemKey;
+        colon: optional_element t::Colon;
+        value: required ConfigItemValue;
     }
 }
-/// Corresponds to a [`SyntaxKind::CLIENT_TYPE`] node.
-#[derive(Debug)]
-pub struct ClientType {
-    pub langle: t::Less,
-    pub generic: t::Word,
-    pub rangle: t::Greater,
-}
-impl FromCST for ClientType {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_TYPE)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let langle = it.expect_parse()?;
-        let generic = it.expect_parse()?;
-        let rangle = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(ClientType {
-            langle,
-            generic,
-            rangle,
-        })
+
+validated_ast_data! {
+    /// Any of the valid keys in a [`ConfigItem`].
+    ///
+    /// See `Parser::parse_config_item` in [`baml_db::baml_compiler_parser`]
+    pub enum ConfigItemKey {
+        Word(t::Word),
+        String(t::QuotedString),
+        RetryPolicy(t::RetryPolicy),
+        Enum(t::Enum),
+        Class(t::Class),
     }
 }
-impl KnownKind for ClientType {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CLIENT_TYPE
-    }
-}
-/// Corresponds to a [`SyntaxKind::CONFIG_BLOCK`] node.
-#[derive(Debug)]
-pub struct ConfigBlock {
-    pub open_brace: t::LBrace,
-    pub items: Vec<(ConfigBlockMember, Option<t::Comma>)>,
-    pub close_brace: t::RBrace,
-}
-impl FromCST for ConfigBlock {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_BLOCK)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let open_brace = it.expect_parse()?;
-        let mut items = Vec::new();
-        let close_brace = loop {
-            let elem =
-                it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE")?;
-            let item = match elem.kind() {
-                SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
-                SyntaxKind::CONFIG_ITEM => ConfigBlockMember::Item(ConfigItem::from_cst(elem)?),
-                SyntaxKind::TYPE_BUILDER_BLOCK => {
-                    ConfigBlockMember::TypeBuilder(TypeBuilderBlock::from_cst(elem)?)
-                }
-                SyntaxKind::BLOCK_ATTRIBUTE => {
-                    ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc:
-                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
-            };
-            let comma = it
-                .next_if_kind(SyntaxKind::COMMA)
-                .map(t::Comma::from_cst)
-                .transpose()?;
-            items.push((item, comma));
-        };
-        it.expect_end()?;
-        Ok(ConfigBlock {
-            open_brace,
-            items,
-            close_brace,
-        })
-    }
-}
-impl KnownKind for ConfigBlock {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CONFIG_BLOCK
-    }
-}
-#[derive(Debug)]
-pub enum ConfigBlockMember {
-    Item(ConfigItem),
-    TypeBuilder(TypeBuilderBlock),
-    BlockAttribute(BlockAttribute),
-}
-/// Corresponds to a [`SyntaxKind::CONFIG_ITEM`] node.
-#[derive(Debug)]
-pub struct ConfigItem {
-    pub key: ConfigItemKey,
-    pub colon: Option<t::Colon>,
-    pub value: ConfigItemValue,
-}
-impl FromCST for ConfigItem {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_ITEM)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let key = it.expect_next("a CONFIG_ITEM key")?;
-        let key = ConfigItemKey::from_cst(key)?;
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-        let value = it.expect_next("a config value")?;
-        let value = ConfigItemValue::from_cst(value)?;
-        it.expect_end()?;
-        Ok(ConfigItem { key, colon, value })
-    }
-}
-impl KnownKind for ConfigItem {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CONFIG_ITEM
-    }
-}
-/// Any of the valid keys in a [`ConfigItem`].
-///
-/// See `Parser::parse_config_item` in [`baml_db::baml_compiler_parser`]
-#[derive(Debug)]
-pub enum ConfigItemKey {
-    Word(t::Word),
-    String(t::QuotedString),
-    RetryPolicy(t::RetryPolicy),
-    Enum(t::Enum),
-    Class(t::Class),
-}
+
 impl FromCST for ConfigItemKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
@@ -1048,13 +876,16 @@ impl FromCST for ConfigItemKey {
         }
     }
 }
-/// Any of the valid values in a [`ConfigItem`].
-#[derive(Debug)]
-pub enum ConfigItemValue {
-    Value(Expression),
-    ConfigArray(ConfigArray),
-    ConfigBlock(ConfigBlock),
+
+validated_ast_data! {
+    /// Any of the valid values in a [`ConfigItem`].
+    pub enum ConfigItemValue {
+        Value(Expression),
+        ConfigArray(ConfigArray),
+        ConfigBlock(ConfigBlock),
+    }
 }
+
 impl FromCST for ConfigItemValue {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -1084,14 +915,17 @@ impl FromCST for ConfigItemValue {
         }
     }
 }
-/// Corresponds to a [`SyntaxKind::ARRAY_LITERAL`] node, when inside a [`ConfigBlock`].
-/// This is a special case because all elements will be [`ConfigItemValue`]s.
-#[derive(Debug)]
-pub struct ConfigArray {
-    pub open_bracket: t::LBracket,
-    pub elements: Vec<(ConfigItemValue, Option<t::Comma>)>,
-    pub close_bracket: t::RBracket,
+
+validated_ast_data! {
+    /// Corresponds to a [`SyntaxKind::ARRAY_LITERAL`] node, when inside a [`ConfigBlock`].
+    /// This is a special case because all elements will be [`ConfigItemValue`]s.
+    pub struct ConfigArray {
+        pub open_bracket: t::LBracket,
+        pub elements: Vec<(ConfigItemValue, Option<t::Comma>)>,
+        pub close_bracket: t::RBracket,
+    }
 }
+
 impl FromCST for ConfigArray {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -1121,54 +955,53 @@ impl FromCST for ConfigArray {
         })
     }
 }
-/// Corresponds to a [`SyntaxKind::TYPE_BUILDER_BLOCK`] node.
-#[derive(Debug)]
-pub struct TypeBuilderBlock {
-    pub keyword: t::TypeBuilder,
-    pub open_brace: t::LBrace,
-    pub items: Vec<TypeBuilderItem>,
-    pub close_brace: t::RBrace,
-}
-impl FromCST for TypeBuilderBlock {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BUILDER_BLOCK)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let open_brace = it.expect_parse()?;
-        let mut items = Vec::new();
-        let close_brace = loop {
-            let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
-            if elem.kind() == SyntaxKind::R_BRACE {
-                break t::RBrace::from_cst(elem)?;
-            }
-            items.push(TypeBuilderItem::from_cst(elem)?);
-        };
-        it.expect_end()?;
-        Ok(TypeBuilderBlock {
-            keyword,
-            open_brace,
-            items,
-            close_brace,
-        })
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TYPE_BUILDER_BLOCK`] node.
+    custom TypeBuilderBlock, TYPE_BUILDER_BLOCK, parse_type_builder_block {
+        keyword: t::TypeBuilder,
+        open_brace: t::LBrace,
+        items: Vec<TypeBuilderItem>,
+        close_brace: t::RBrace,
     }
 }
-impl KnownKind for TypeBuilderBlock {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TYPE_BUILDER_BLOCK
+
+fn parse_type_builder_block(elem: SyntaxElement) -> Result<TypeBuilderBlock, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BUILDER_BLOCK)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let open_brace = it.expect_parse()?;
+    let mut items = Vec::new();
+    let close_brace = loop {
+        let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
+        if elem.kind() == SyntaxKind::R_BRACE {
+            break t::RBrace::from_cst(elem)?;
+        }
+        items.push(TypeBuilderItem::from_cst(elem)?);
+    };
+    it.expect_end()?;
+    Ok(TypeBuilderBlock {
+        keyword,
+        open_brace,
+        items,
+        close_brace,
+    })
+}
+
+validated_ast_data! {
+    /// Any of the valid items in a [`TypeBuilderBlock`].
+    pub enum TypeBuilderItem {
+        /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins a class definition.
+        DynamicClass(t::Dynamic, ClassDecl),
+        /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins an enum definition.
+        DynamicEnum(t::Dynamic, EnumDecl),
+        Class(ClassDecl),
+        Enum(EnumDecl),
+        TypeAlias(TypeAliasDecl),
     }
 }
-/// Any of the valid items in a [`TypeBuilderBlock`].
-#[derive(Debug)]
-pub enum TypeBuilderItem {
-    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins a class definition.
-    DynamicClass(t::Dynamic, ClassDecl),
-    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins an enum definition.
-    DynamicEnum(t::Dynamic, EnumDecl),
-    Class(ClassDecl),
-    Enum(EnumDecl),
-    TypeAlias(TypeAliasDecl),
-}
+
 impl FromCST for TypeBuilderItem {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
@@ -1215,247 +1048,140 @@ impl FromCST for TypeBuilderItem {
         }
     }
 }
-/// Corresponds to a [`SyntaxKind::TEST_DEF`] node.
-#[derive(Debug)]
-pub struct TestDecl {
-    pub keyword: t::Test,
-    pub name: t::Word,
-    pub config_block: ConfigBlock,
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TEST_DEF`] node.
+    TestDecl, TEST_DEF {
+        keyword: required t::Test;
+        name: required t::Word;
+        config_block: required ConfigBlock;
+    }
 }
-impl FromCST for TestDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let config_block: ConfigBlock = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(TestDecl {
-            keyword,
-            name,
-            config_block,
+
+validated_ast_data! {
+    /// The `with <expr>` clause on test/testset declarations.
+    pub struct WithClause {
+        pub keyword: t::With,
+        pub expr: Expression,
+    }
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TEST_EXPR_DEF`] node.
+    custom TestExprDecl, TEST_EXPR_DEF, parse_test_expr_decl {
+        keyword: t::Test,
+        /// Test name - any expression that evaluates to a string. The parser
+        /// accepts string literals, raw strings, identifiers, concatenations,
+        /// arithmetic, etc.; type-checking enforces the string requirement.
+        name: Expression,
+        with_clause: Option<WithClause>,
+        body: BlockExpr,
+    }
+}
+
+fn parse_test_expr_decl(elem: SyntaxElement) -> Result<TestExprDecl, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_EXPR_DEF)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let name_elem = it.expect_next("a test name expression")?;
+    let name = Expression::from_cst(name_elem)?;
+    let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
+        let with_kw = t::With::from_cst(with_kw_elem)?;
+        let expr_elem = it.expect_next("a runner expression")?;
+        let expr = Expression::from_cst(expr_elem)?;
+        Some(WithClause {
+            keyword: with_kw,
+            expr,
         })
+    } else {
+        None
+    };
+    let body: BlockExpr = it.expect_parse()?;
+    it.expect_end()?;
+    Ok(TestExprDecl {
+        keyword,
+        name,
+        with_clause,
+        body,
+    })
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TESTSET_DEF`] node.
+    custom TestSetDecl, TESTSET_DEF, parse_test_set_decl {
+        keyword: t::TestSet,
+        /// Testset name - any expression (string literal, raw string, identifier,
+        /// concatenation, etc.); type-checking enforces the string requirement.
+        name: Expression,
+        with_clause: Option<WithClause>,
+        body: BlockExpr,
     }
 }
-impl KnownKind for TestDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TEST_DEF
-    }
-}
-/// The `with <expr>` clause on test/testset declarations.
-#[derive(Debug)]
-pub struct WithClause {
-    pub keyword: t::With,
-    pub expr: Expression,
-}
-/// Corresponds to a [`SyntaxKind::TEST_EXPR_DEF`] node.
-#[derive(Debug)]
-pub struct TestExprDecl {
-    pub keyword: t::Test,
-    /// Test name - any expression that evaluates to a string. The parser
-    /// accepts string literals, raw strings, identifiers, concatenations,
-    /// arithmetic, etc.; type-checking enforces the string requirement.
-    pub name: Expression,
-    pub with_clause: Option<WithClause>,
-    pub body: BlockExpr,
-}
-impl FromCST for TestExprDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_EXPR_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name_elem = it.expect_next("a test name expression")?;
-        let name = Expression::from_cst(name_elem)?;
-        let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
-            let with_kw = t::With::from_cst(with_kw_elem)?;
-            let expr_elem = it.expect_next("a runner expression")?;
-            let expr = Expression::from_cst(expr_elem)?;
-            Some(WithClause {
-                keyword: with_kw,
-                expr,
-            })
-        } else {
-            None
-        };
-        let body: BlockExpr = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(TestExprDecl {
-            keyword,
-            name,
-            with_clause,
-            body,
+
+fn parse_test_set_decl(elem: SyntaxElement) -> Result<TestSetDecl, StrongAstError> {
+    let node = StrongAstError::assert_is_node(elem)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::TESTSET_DEF)?;
+    let mut it = SyntaxNodeIter::new(&node);
+    let keyword = it.expect_parse()?;
+    let name_elem = it.expect_next("a testset name expression")?;
+    let name = Expression::from_cst(name_elem)?;
+    let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
+        let with_kw = t::With::from_cst(with_kw_elem)?;
+        let expr_elem = it.expect_next("a runner expression")?;
+        let expr = Expression::from_cst(expr_elem)?;
+        Some(WithClause {
+            keyword: with_kw,
+            expr,
         })
+    } else {
+        None
+    };
+    let body: BlockExpr = it.expect_parse()?;
+    it.expect_end()?;
+    Ok(TestSetDecl {
+        keyword,
+        name,
+        with_clause,
+        body,
+    })
+}
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::RETRY_POLICY_DEF`] node.
+    RetryPolicyDecl, RETRY_POLICY_DEF {
+        keyword: required t::RetryPolicy;
+        name: required t::Word;
+        config_block: required ConfigBlock;
     }
 }
-impl KnownKind for TestExprDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TEST_EXPR_DEF
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TEMPLATE_STRING_DEF`] node.
+    TemplateStringDecl, TEMPLATE_STRING_DEF {
+        keyword: required t::TemplateString;
+        name: required t::Word;
+        args: required FunctionParamList;
+        body: required StringLiteralValue;
     }
 }
-/// Corresponds to a [`SyntaxKind::TESTSET_DEF`] node.
-#[derive(Debug)]
-pub struct TestSetDecl {
-    pub keyword: t::TestSet,
-    /// Testset name - any expression (string literal, raw string, identifier,
-    /// concatenation, etc.); type-checking enforces the string requirement.
-    pub name: Expression,
-    pub with_clause: Option<WithClause>,
-    pub body: BlockExpr,
-}
-impl FromCST for TestSetDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TESTSET_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name_elem = it.expect_next("a testset name expression")?;
-        let name = Expression::from_cst(name_elem)?;
-        let with_clause = if let Some(with_kw_elem) = it.next_if_kind(SyntaxKind::KW_WITH) {
-            let with_kw = t::With::from_cst(with_kw_elem)?;
-            let expr_elem = it.expect_next("a runner expression")?;
-            let expr = Expression::from_cst(expr_elem)?;
-            Some(WithClause {
-                keyword: with_kw,
-                expr,
-            })
-        } else {
-            None
-        };
-        let body: BlockExpr = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(TestSetDecl {
-            keyword,
-            name,
-            with_clause,
-            body,
-        })
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
+    TypeAliasDecl, TYPE_ALIAS_DEF {
+        keyword: required t::TypeKw;
+        name: required t::Word;
+        equals: required t::Equals;
+        type_expr: required Type;
+        semicolon: optional_element t::Semicolon;
     }
 }
-impl KnownKind for TestSetDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TESTSET_DEF
-    }
-}
-/// Corresponds to a [`SyntaxKind::RETRY_POLICY_DEF`] node.
-#[derive(Debug)]
-pub struct RetryPolicyDecl {
-    pub keyword: t::RetryPolicy,
-    pub name: t::Word,
-    pub config_block: ConfigBlock,
-}
-impl FromCST for RetryPolicyDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::RETRY_POLICY_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let config_block: ConfigBlock = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(RetryPolicyDecl {
-            keyword,
-            name,
-            config_block,
-        })
-    }
-}
-impl KnownKind for RetryPolicyDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::RETRY_POLICY_DEF
-    }
-}
-/// Corresponds to a [`SyntaxKind::TEMPLATE_STRING_DEF`] node.
-#[derive(Debug)]
-pub struct TemplateStringDecl {
-    pub keyword: t::TemplateString,
-    pub name: t::Word,
-    pub args: FunctionParamList,
-    pub body: StringLiteralValue,
-}
-impl FromCST for TemplateStringDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TEMPLATE_STRING_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let args: FunctionParamList = it.expect_parse()?;
-        let body = StringLiteralValue::from_cst(it.expect_next("a template_string body")?)?;
-        it.expect_end()?;
-        Ok(TemplateStringDecl {
-            keyword,
-            name,
-            args,
-            body,
-        })
-    }
-}
-impl KnownKind for TemplateStringDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TEMPLATE_STRING_DEF
-    }
-}
-/// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
-#[derive(Debug)]
-pub struct TypeAliasDecl {
-    pub keyword: t::TypeKw,
-    pub name: t::Word,
-    pub equals: t::Equals,
-    pub type_expr: Type,
-    pub semicolon: Option<t::Semicolon>,
-}
-impl FromCST for TypeAliasDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ALIAS_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let equals = it.expect_parse()?;
-        let type_expr: Type = it.expect_parse()?;
-        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
-        it.expect_end()?;
-        Ok(TypeAliasDecl {
-            keyword,
-            name,
-            equals,
-            type_expr,
-            semicolon,
-        })
-    }
-}
-impl KnownKind for TypeAliasDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TYPE_ALIAS_DEF
-    }
-}
-/// Corresponds to a [`SyntaxKind::GENERATOR_DEF`] node.
-#[derive(Debug)]
-pub struct GeneratorDecl {
-    pub keyword: t::Generator,
-    pub name: t::Word,
-    pub config: ConfigBlock,
-}
-impl FromCST for GeneratorDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERATOR_DEF)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let name = it.expect_parse()?;
-        let config = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(GeneratorDecl {
-            keyword,
-            name,
-            config,
-        })
-    }
-}
-impl KnownKind for GeneratorDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::GENERATOR_DEF
+
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::GENERATOR_DEF`] node.
+    GeneratorDecl, GENERATOR_DEF {
+        keyword: required t::Generator;
+        name: required t::Word;
+        config: required ConfigBlock;
     }
 }

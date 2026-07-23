@@ -14,6 +14,32 @@ macro_rules! parse_validated_field {
     ($iter:ident, $field:ident, boxed $ty:ty) => {
         Box::new(<$ty>::from_cst($iter.expect_next(stringify!($field))?)?)
     };
+    ($iter:ident, $field:ident, optional $ty:ty) => {
+        $iter
+            .next_if_kind(<$ty as KnownKind>::kind())
+            .map(<$ty>::from_cst)
+            .transpose()?
+    };
+    ($iter:ident, $field:ident, optional_element $ty:ty) => {
+        $iter
+            .next_if(|element| <$ty as $crate::AstElement>::can_cast_element(element.kind()))
+            .map(<$ty>::from_cst)
+            .transpose()?
+    };
+    ($iter:ident, $field:ident, optional_boxed $ty:ty) => {
+        $iter
+            .next_if_kind(<$ty as KnownKind>::kind())
+            .map(<$ty>::from_cst)
+            .transpose()?
+            .map(Box::new)
+    };
+    ($iter:ident, $field:ident, rest $ty:ty) => {{
+        let mut values = Vec::new();
+        for element in &mut $iter {
+            values.push(<$ty>::from_cst(element)?);
+        }
+        values
+    }};
 }
 
 macro_rules! validated_ast_node {
@@ -59,6 +85,74 @@ macro_rules! validated_ast_node {
     };
     (@field_type boxed $field_ty:ty) => {
         Box<$field_ty>
+    };
+    (@field_type optional $field_ty:ty) => {
+        Option<$field_ty>
+    };
+    (@field_type optional_element $field_ty:ty) => {
+        Option<$field_ty>
+    };
+    (@field_type optional_boxed $field_ty:ty) => {
+        Option<Box<$field_ty>>
+    };
+    (@field_type rest $field_ty:ty) => {
+        Vec<$field_ty>
+    };
+    (
+        $(#[$meta:meta])*
+        custom $name:ident, $kind:ident, $parser:ident {
+            $(
+                $(#[$field_meta:meta])*
+                $field:ident: $field_ty:ty,
+            )*
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug)]
+        pub struct $name {
+            $(
+                $(#[$field_meta])*
+                pub $field: $field_ty,
+            )*
+        }
+
+        impl FromCST for $name {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+                $parser(elem)
+            }
+        }
+
+        impl KnownKind for $name {
+            fn kind() -> SyntaxKind {
+                SyntaxKind::$kind
+            }
+        }
+    };
+    (
+        custom $name:ident, $kind:ident, $parser:ident,
+        $item:item
+    ) => {
+        #[derive(Debug)]
+        $item
+
+        impl FromCST for $name {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+                $parser(elem)
+            }
+        }
+
+        impl KnownKind for $name {
+            fn kind() -> SyntaxKind {
+                SyntaxKind::$kind
+            }
+        }
+    };
+}
+
+macro_rules! validated_ast_data {
+    ($item:item) => {
+        #[derive(Debug)]
+        $item
     };
 }
 
@@ -433,27 +527,11 @@ impl Iterator for SyntaxNodeIter {
         self.peeked.take().or_else(|| self.it.next())
     }
 }
-/// Corresponds to a [`SyntaxKind::SOURCE_FILE`] node.
-///
-/// This is the root node of the AST.
-#[derive(Debug)]
-pub struct SourceFile {
-    pub items: Vec<TopLevelDeclaration>,
-}
-impl FromCST for SourceFile {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::SOURCE_FILE)?;
-        let mut items = Vec::new();
-        for elem in SyntaxNodeIter::new(&node) {
-            let item = TopLevelDeclaration::from_cst(elem)?;
-            items.push(item);
-        }
-        Ok(SourceFile { items })
-    }
-}
-impl KnownKind for SourceFile {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::SOURCE_FILE
+validated_ast_node! {
+    /// Corresponds to a [`SyntaxKind::SOURCE_FILE`] node.
+    ///
+    /// This is the root node of the AST.
+    SourceFile, SOURCE_FILE {
+        items: rest TopLevelDeclaration;
     }
 }
