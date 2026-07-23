@@ -49,7 +49,6 @@ notify = { workspace = true }
 num-bigint = { workspace = true }
 parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
 prost = { workspace = true }
-regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true, optional = true }
 serde = { workspace = true }

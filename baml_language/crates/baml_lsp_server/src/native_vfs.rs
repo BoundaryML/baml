@@ -75,7 +75,7 @@ impl bex_project::BulkReadFileSystem for NativeVfs {
         // first `*` or `?` wildcard). This lets us walk only the relevant
         // subtree instead of the entire filesystem.
         let base_dir = glob_base_dir(glob);
-        let pattern = glob_to_regex(glob);
+        let pattern = bex_project::glob_to_regex(glob);
 
         let base = std::path::Path::new(&base_dir);
         if !base.is_dir() {
@@ -90,7 +90,7 @@ impl bex_project::BulkReadFileSystem for NativeVfs {
 
 fn walk_dir_native(
     dir: &std::path::Path,
-    pattern: &regex::Regex,
+    pattern: &bex_project::GlobPattern,
     results: &mut Vec<(String, Vec<u8>)>,
 ) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -127,34 +127,4 @@ fn glob_base_dir(glob: &str) -> String {
         Some(pos) => prefix[..=pos].to_string(),
         None => ".".to_string(),
     }
-}
-
-fn glob_to_regex(glob: &str) -> regex::Regex {
-    let mut re = String::from("^");
-    let bytes = glob.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-            re.push_str(".*");
-            i += 2;
-            if i < bytes.len() && bytes[i] == b'/' {
-                i += 1;
-            }
-        } else if bytes[i] == b'*' {
-            re.push_str("[^/]*");
-            i += 1;
-        } else if bytes[i] == b'?' {
-            re.push_str("[^/]");
-            i += 1;
-        } else {
-            let ch = bytes[i] as char;
-            if ".+^${}()|[]\\".contains(ch) {
-                re.push('\\');
-            }
-            re.push(ch);
-            i += 1;
-        }
-    }
-    re.push('$');
-    regex::Regex::new(&re).unwrap_or_else(|_| regex::Regex::new("$^").unwrap())
 }

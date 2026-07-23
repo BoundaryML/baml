@@ -114,4 +114,6 @@ pub use bex_lsp::{
     LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
     PreparedRun, ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
-pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};
+pub use fs::{
+    BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath, GlobPattern, glob_to_regex,
+};

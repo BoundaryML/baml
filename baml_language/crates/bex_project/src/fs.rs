@@ -59,17 +59,17 @@ impl<T: DefaultBulkReadFileSystem + vfs::FileSystem + Clone> BulkReadFileSystem 
 }
 
 /// Minimal glob-to-regex converter.
-struct GlobPattern {
+pub struct GlobPattern {
     re: regex::Regex,
 }
 
 impl GlobPattern {
-    fn is_match(&self, s: &str) -> bool {
+    pub fn is_match(&self, s: &str) -> bool {
         self.re.is_match(s)
     }
 }
 
-fn glob_to_regex(glob: &str) -> GlobPattern {
+pub fn glob_to_regex(glob: &str) -> GlobPattern {
     let mut re = String::from("^");
     let bytes = glob.as_bytes();
     let mut i = 0;
@@ -98,6 +98,34 @@ fn glob_to_regex(glob: &str) -> GlobPattern {
     re.push('$');
     GlobPattern {
         re: regex::Regex::new(&re).unwrap_or_else(|_| regex::Regex::new("$^").unwrap()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glob_to_regex;
+
+    #[test]
+    fn glob_patterns_preserve_segment_and_regex_escaping_semantics() {
+        let cases = [
+            ("/root/file.baml", "/root/file.baml", true),
+            ("/root/file.baml", "/root/filexbaml", false),
+            ("/root/*.baml", "/root/file.baml", true),
+            ("/root/*.baml", "/root/nested/file.baml", false),
+            ("/root/**/*.baml", "/root/file.baml", true),
+            ("/root/**/*.baml", "/root/a/b/file.baml", true),
+            ("/root/file?.baml", "/root/file1.baml", true),
+            ("/root/file?.baml", "/root/file12.baml", false),
+            ("/root/[file].baml", "/root/[file].baml", true),
+        ];
+
+        for (glob, path, expected) in cases {
+            assert_eq!(
+                glob_to_regex(glob).is_match(path),
+                expected,
+                "{glob:?} against {path:?}"
+            );
+        }
     }
 }
 

@@ -1069,7 +1069,6 @@ dependencies = [
  "num-bigint",
  "parking_lot",
  "prost",
- "regex",
  "reqwest",
  "rustls",
  "serde",
