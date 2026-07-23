@@ -98,52 +98,47 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-error: Expected config key, found '.'
-   ╭─[ test.baml:8:23 ]
-   │
- 8 │         model gemini-2.0-flash
-   │                       ┬  
-   │                       ╰── Expected config key, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: Expected config key, found integer
-   ╭─[ test.baml:8:24 ]
-   │
+  × Expected config key, found '.'
+   ╭─[test.baml:8:23]
  8 │         model gemini-2.0-flash
-   │                        ┬  
-   │                        ╰── Expected config key, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                       ┬
+   ·                       ╰── Expected config key, found '.'
+   ╰────
 
-error: Expected config key, found '-'
-   ╭─[ test.baml:8:25 ]
-   │
+E0010
+
+  × Expected config key, found integer
+   ╭─[test.baml:8:24]
  8 │         model gemini-2.0-flash
-   │                         ┬  
-   │                         ╰── Expected config key, found '-'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                        ┬
+   ·                        ╰── Expected config key, found integer
+   ╰────
 
-error: Expected identifier, found '}'
-   ╭─[ test.baml:9:5 ]
-   │
+E0010
+
+  × Expected config key, found '-'
+   ╭─[test.baml:8:25]
+ 8 │         model gemini-2.0-flash
+   ·                         ┬
+   ·                         ╰── Expected config key, found '-'
+   ╰────
+
+E0010
+
+  × Expected identifier, found '}'
+   ╭─[test.baml:9:5]
  9 │     }
-   │     ┬  
-   │     ╰── Expected identifier, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·     ┬
+   ·     ╰── Expected identifier, found '}'
+   ╰────
 
-error: Header comments (//#) are not allowed inside LLM functions
-    ╭─[ test.baml:13:5 ]
-    │
+E0010
+
+  × Header comments (//#) are not allowed inside LLM functions
+    ╭─[test.baml:13:5]
  13 │     //# collect source material
-    │     ─────────────┬─────────────  
-    │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ─────────────┬─────────────
+    ·                  ╰── Header comments (//#) are not allowed inside LLM functions
+    ╰────

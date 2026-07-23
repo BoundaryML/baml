@@ -14,7 +14,12 @@
 
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
-use baml_db::SourceFile;
+use baml_db::{
+    SourceFile,
+    baml_compiler_diagnostics::{
+        HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle,
+    },
+};
 use baml_lsp2_actions::{
     DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_tokens,
 };
@@ -34,43 +39,73 @@ use text_size::{TextRange, TextSize};
 /// Styling is **forced** so emission is decided by the caller from the resolved
 /// output policy for the destination stream, not by console's ambient stdout
 /// flag.
-fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
+fn highlight_style(token_type: SemanticTokenType, modifiers: ModifierSet) -> HighlightStyle {
     use SemanticTokenType as T;
     // (base color, dimmed) — dim is a *base* trait of quiet token types, kept
     // separate so a declaration can trade it for bold instead of stacking the
     // two contradictory weights.
-    let (style, base_dim) = match token_type {
-        T::Keyword | T::Modifier => (Style::new().magenta(), false),
+    let (foreground, base_dim) = match token_type {
+        T::Keyword | T::Modifier => (Some(HighlightColor::Magenta), false),
         T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
-            (Style::new().yellow(), false)
+            (Some(HighlightColor::Yellow), false)
         }
-        T::Function | T::Method | T::Macro => (Style::new().blue().bright(), false),
-        T::EnumMember | T::Property => (Style::new().cyan(), false),
-        T::Parameter => (Style::new().yellow(), true),
-        T::Namespace => (Style::new().cyan().bright(), false),
-        T::String | T::Regexp => (Style::new().green(), false),
-        T::EscapeSequence => (Style::new().magenta().bright(), false),
-        T::Number | T::Boolean => (Style::new().yellow().bright(), false),
-        T::Comment => (Style::new(), true),
-        T::Decorator => (Style::new().magenta(), true),
-        T::Operator => (Style::new(), true),
+        T::Function | T::Method | T::Macro => (Some(HighlightColor::BrightBlue), false),
+        T::EnumMember | T::Property => (Some(HighlightColor::Cyan), false),
+        T::Parameter => (Some(HighlightColor::Yellow), true),
+        T::Namespace => (Some(HighlightColor::BrightCyan), false),
+        T::String | T::Regexp => (Some(HighlightColor::Green), false),
+        T::EscapeSequence => (Some(HighlightColor::BrightMagenta), false),
+        T::Number | T::Boolean => (Some(HighlightColor::BrightYellow), false),
+        T::Comment => (None, true),
+        T::Decorator => (Some(HighlightColor::Magenta), true),
+        T::Operator => (None, true),
         // Ordinary names keep the terminal's default foreground: forcing any
         // concrete color here would assume a background.
-        T::Variable | T::Event => (Style::new(), false),
+        T::Variable | T::Event => (None, false),
     };
     let declaration = modifiers.contains(ModifierSet::DECLARATION);
-    let mut style = if base_dim && !declaration {
-        style.dim()
-    } else {
-        style
-    };
+    let mut attributes = HighlightAttributes::empty();
     if declaration {
-        style = style.bold();
+        attributes.insert(HighlightAttributes::BOLD);
+    }
+    if base_dim && !declaration {
+        attributes.insert(HighlightAttributes::DIM);
     }
     if modifiers.contains(ModifierSet::DEFAULT_LIBRARY) {
-        style = style.italic();
+        attributes.insert(HighlightAttributes::ITALIC);
     }
     if modifiers.contains(ModifierSet::DEPRECATED) {
+        attributes.insert(HighlightAttributes::STRIKETHROUGH);
+    }
+    HighlightStyle {
+        foreground,
+        attributes,
+    }
+}
+
+fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
+    let spec = highlight_style(token_type, modifiers);
+    let mut style = match spec.foreground {
+        Some(HighlightColor::Green) => Style::new().green(),
+        Some(HighlightColor::Yellow) => Style::new().yellow(),
+        Some(HighlightColor::Magenta) => Style::new().magenta(),
+        Some(HighlightColor::Cyan) => Style::new().cyan(),
+        Some(HighlightColor::BrightYellow) => Style::new().yellow().bright(),
+        Some(HighlightColor::BrightBlue) => Style::new().blue().bright(),
+        Some(HighlightColor::BrightMagenta) => Style::new().magenta().bright(),
+        Some(HighlightColor::BrightCyan) => Style::new().cyan().bright(),
+        None => Style::new(),
+    };
+    if spec.attributes.contains(HighlightAttributes::BOLD) {
+        style = style.bold();
+    }
+    if spec.attributes.contains(HighlightAttributes::DIM) {
+        style = style.dim();
+    }
+    if spec.attributes.contains(HighlightAttributes::ITALIC) {
+        style = style.italic();
+    }
+    if spec.attributes.contains(HighlightAttributes::STRIKETHROUGH) {
         style = style.strikethrough();
     }
     style.force_styling(true)
@@ -362,6 +397,16 @@ impl<'db> Highlighter<'db> {
         rc
     }
 
+    pub fn spans(&self, file: SourceFile) -> Vec<HighlightSpan> {
+        self.tokens(file)
+            .iter()
+            .map(|token| HighlightSpan {
+                range: token.range,
+                style: highlight_style(token.token_type, token.modifiers),
+            })
+            .collect()
+    }
+
     /// Highlight the verbatim source slice `file.text()[range]`.
     ///
     /// Styling is re-opened on every line so no SGR run crosses a `'\n'`, which
@@ -504,6 +549,28 @@ mod tests {
         assert!(
             effects_at(&lib, "string").contains(&ITALIC),
             "defaultLibrary not italic: {lib:?}"
+        );
+    }
+
+    #[test]
+    fn diagnostic_spans_use_describe_palette() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/test"));
+        let file = db.add_or_update_file(Path::new("/test/main.baml"), "class Foo {}\n");
+        let highlighter = Highlighter::new(&db);
+        let span = highlighter
+            .spans(file)
+            .into_iter()
+            .find(|span| span.range == text_size::TextRange::new(6.into(), 9.into()))
+            .expect("class name has a semantic token");
+        assert_eq!(
+            span.style.foreground,
+            Some(baml_db::baml_compiler_diagnostics::HighlightColor::Yellow)
+        );
+        assert!(
+            span.style
+                .attributes
+                .contains(baml_db::baml_compiler_diagnostics::HighlightAttributes::BOLD)
         );
     }
 

@@ -2,66 +2,68 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: blah
-   ╭─[ unknown_type_error.baml:3:19 ]
-   │
+  [type] E0002
+
+  × unresolved type: blah
+   ╭─[unknown_type_error.baml:3:19]
  3 │ function Foo() -> blah {
-   │                   ──┬─  
-   │                     ╰─── unresolved type: blah
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·                   ──┬─
+   ·                     ╰── unresolved type: blah
+   ╰────
 
-  [type] error: unresolved type: unknown_param_type
-   ╭─[ unknown_type_error.baml:8:17 ]
-   │
+  [type] E0002
+
+  × unresolved type: unknown_param_type
+   ╭─[unknown_type_error.baml:8:17]
  8 │ function Bar(x: unknown_param_type) -> int {
-   │                 ─────────┬────────  
-   │                          ╰────────── unresolved type: unknown_param_type
-   │ 
-   │ Note: Error code: E0002
-───╯
+   ·                 ─────────┬────────
+   ·                          ╰── unresolved type: unknown_param_type
+   ╰────
 
-  [type] error: unresolved type: unknown_optional
-    ╭─[ unknown_type_error.baml:13:19 ]
-    │
+  [type] E0002
+
+  × unresolved type: unknown_optional
+    ╭─[unknown_type_error.baml:13:19]
  13 │ function Baz() -> unknown_optional? {
-    │                   ────────┬────────  
-    │                           ╰────────── unresolved type: unknown_optional
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                   ────────┬────────
+    ·                           ╰── unresolved type: unknown_optional
+    ╰────
 
-  [type] error: unresolved type: Status.Typo
-    ╭─[ unknown_type_error.baml:26:38 ]
-    │
+  [type] E0002
+
+  × unresolved type: Status.Typo
+    ╭─[unknown_type_error.baml:26:38]
  26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {
-    │                                      ─────┬─────  
-    │                                           ╰─────── unresolved type: Status.Typo
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                                      ─────┬─────
+    ·                                           ╰── unresolved type: Status.Typo
+    ╰────
 
-  [type] error: cannot access field `email` on `unknown`
-    ╭─[ unknown_type_error.baml:31:7 ]
-    │
+  [type] E0007
+
+  × cannot access field `email` on `unknown`
+    ╭─[unknown_type_error.baml:31:7]
  31 │   raw.email.to_lower_case()
-    │   ─┬─ ──┬──  
-    │    ╰───────── this value has type `unknown`
-    │         │    
-    │         ╰──── use `match` to narrow this value before accessing `email`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·   ─┬─ ──┬──
+    ·    │    ╰── use `match` to narrow this value before accessing `email`
+    ·    ╰── this value has type `unknown`
+    ╰────
+  ╰─▶   ☞ this value has type `unknown`
+          ╭─[unknown_type_error.baml:31:3]
+       31 │   raw.email.to_lower_case()
+          ·   ───
+          ╰────
 
-  [type] error: cannot access field `email` on `unknown`
-    ╭─[ unknown_type_error.baml:39:20 ]
-    │
+  [type] E0007
+
+  × cannot access field `email` on `unknown`
+    ╭─[unknown_type_error.baml:39:20]
  39 │   envelope.payload.email
-    │            ───┬─── ──┬──  
-    │               ╰─────────── this value has type `unknown`
-    │                      │    
-    │                      ╰──── use `match` to narrow this value before accessing `email`
-    │ 
-    │ Note: Error code: E0007
-────╯
+    ·            ───┬─── ──┬──
+    ·               │      ╰── use `match` to narrow this value before accessing `email`
+    ·               ╰── this value has type `unknown`
+    ╰────
+  ╰─▶   ☞ this value has type `unknown`
+          ╭─[unknown_type_error.baml:39:12]
+       39 │   envelope.payload.email
+          ·            ───────
+          ╰────

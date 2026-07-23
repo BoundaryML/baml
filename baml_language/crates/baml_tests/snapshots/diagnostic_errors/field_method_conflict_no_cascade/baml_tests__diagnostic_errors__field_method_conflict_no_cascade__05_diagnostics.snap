@@ -2,16 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Name `Box.value` defined 2 times as: field, method
-   ╭─[ main.baml:4:14 ]
-   │
+  [hir] E0012
+
+  × Name `Box.value` defined 2 times as: field, method
+   ╭─[main.baml:2:5]
  2 │     value: int,
-   │     ──┬──  
-   │       ╰──── first defined as field here
-   │ 
+   ·     ──┬──
+   ·       ╰── first defined as field here
+   ╰────
+   ╭─[main.baml:4:14]
  4 │     function value(self) -> string {
-   │              ──┬──  
-   │                ╰──── duplicate method definition
-   │ 
-   │ Note: Error code: E0012
-───╯
+   ·              ──┬──
+   ·                ╰── duplicate method definition
+   ╰────

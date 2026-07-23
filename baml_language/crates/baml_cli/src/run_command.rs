@@ -211,7 +211,7 @@ impl RunArgs {
         self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
     }
 
-    /// Filter `diagnostics` to errors and, if any, render the full ariadne block
+    /// Filter `diagnostics` to errors and, if any, render the full diagnostic block
     /// (sources/paths for every user file plus builtins, since an error may carry
     /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
     /// not surfaced.
@@ -1454,7 +1454,7 @@ impl RunArgs {
         // subcommands at parse time, not when a subcommand reference is
         // grabbed directly via `find_subcommand`. Re-apply
         // `CLAP_STYLING` explicitly so `run --help` keeps the same
-        // green/cyan ariadne-adjacent palette as top-level help,
+        // green/cyan diagnostic palette as top-level help,
         // instead of falling back to clap's default
         // bold+underline-no-color treatment.
         sub.clone()

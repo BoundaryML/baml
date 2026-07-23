@@ -2,14 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)
-    ╭─[ client_option_types.baml:54:5 ]
-    │
+  [hir] E0101
+
+  × azure-openai requires either base_url or both resource_name and deployment_id (missing: resource_name and deployment_id)
+    ╭─[client_option_types.baml:54:5]
  54 │ ╭─▶     options {
-    ┆ ┆   
+ 55 │ │           api_version "2024-02-15-preview"
+ 56 │ │           model "gpt-4o"
  57 │ ├─▶     }
-    │ │           
-    │ ╰─────────── missing options
-    │     
-    │     Note: Error code: E0101
-────╯
+    · ╰──── missing options
+    ╰────

@@ -22,7 +22,7 @@ fn main() {
 
     let argv: Vec<String> = std::env::args().collect();
 
-    // Route every top-level error through the ariadne-style printer
+    // Route every top-level error through the graphical printer
     // (bold-red "Error:" header + cause chain) so plain bails look the
     // same as compiler diagnostics. Returning `Result<()>` from `main`
     // would defer to anyhow's Debug printer instead, which renders the

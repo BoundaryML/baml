@@ -2,14 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved name: GPT4
-   ╭─[ main.baml:1:45 ]
-   │
+  [type] E0003
+
+  × unresolved name: GPT4
+   ╭─[main.baml:1:45]
  1 │ ╭─▶ function HelloWorld(name: string) -> string {
-   ┆ ┆   
+ 2 │ │     client GPT4
+ 3 │ │     prompt #"
+ 4 │ │       Say hello to {{name}}
+ 5 │ │     "#
  6 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
+   · ╰──── unresolved name: GPT4
+   ╰────

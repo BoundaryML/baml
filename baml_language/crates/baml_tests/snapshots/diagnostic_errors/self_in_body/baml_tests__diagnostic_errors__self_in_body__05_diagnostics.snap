@@ -2,52 +2,47 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:20:20 ]
-    │
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:20:20]
  20 │             let s: Self => "self",
-    │                    ──┬─  
-    │                      ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                    ──┬─
+    ·                      ╰── unresolved type: Self
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:25:18 ]
-    │
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:25:18]
  25 │         other is Self
-    │                  ──┬─  
-    │                    ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                  ──┬─
+    ·                    ╰── unresolved type: Self
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:28:16 ]
-    │
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:28:16]
  28 │         let a: Self = other;
-    │                ──┬─  
-    │                  ╰─── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                ──┬─
+    ·                  ╰── unresolved type: Self
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:33:20 ]
-    │
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:33:20]
  33 │             let s: Box<Self> => 1,
-    │                    ────┬────  
-    │                        ╰────── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·                    ────┬────
+    ·                        ╰── unresolved type: Self
+    ╰────
 
-  [type] error: unresolved type: Self
-    ╭─[ main.baml:38:9 ]
-    │
+  [type] E0002
+
+  × unresolved type: Self
+    ╭─[main.baml:38:9]
  38 │         reflect.type_of<Self>().to_string()
-    │         ───────────┬───────────  
-    │                    ╰───────────── unresolved type: Self
-    │ 
-    │ Note: Error code: E0002
-────╯
+    ·         ───────────┬───────────
+    ·                    ╰── unresolved type: Self
+    ╰────

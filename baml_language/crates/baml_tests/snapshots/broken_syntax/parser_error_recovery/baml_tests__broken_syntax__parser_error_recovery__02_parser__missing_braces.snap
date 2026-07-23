@@ -22,12 +22,11 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-error: Expected '}', found class
-   ╭─[ missing_braces.baml:5:1 ]
-   │
+E0010
+
+  × Expected '}', found class
+   ╭─[missing_braces.baml:5:1]
  5 │ class Another {  // Should still parse this class
-   │ ──┬──  
-   │   ╰──── Expected '}', found class
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ──┬──
+   ·   ╰── Expected '}', found class
+   ╰────

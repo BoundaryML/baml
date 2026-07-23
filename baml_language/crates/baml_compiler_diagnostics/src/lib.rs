@@ -3,7 +3,7 @@
 //! This crate provides:
 //! - A unified `Diagnostic` type that can represent any compiler error
 //! - The `ToDiagnostic` trait for converting error types to `Diagnostic`
-//! - Multi-format rendering (Ariadne for CLI)
+//! - Multi-format rendering (Miette for CLI)
 //!
 //! ## Architecture
 //!
@@ -32,6 +32,7 @@
 
 pub mod diagnostic;
 pub mod errors;
+pub mod highlight;
 pub mod render;
 pub mod to_diagnostic;
 
@@ -39,5 +40,8 @@ pub mod to_diagnostic;
 // Re-export the unified diagnostic types
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
 pub use errors::{ErrorContext, NameError, ParseError, TypeError};
+pub use highlight::{
+    HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
+};
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};

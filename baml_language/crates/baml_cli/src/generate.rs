@@ -72,7 +72,7 @@ impl GenerateArgs {
         session.prime();
         let (db, from) = (session.db, session.resolved.root);
         // Compile-time diagnostics — same shape as run/pack: render the
-        // ariadne block after abandoning the spinner so the colored
+        // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
@@ -84,18 +84,9 @@ impl GenerateArgs {
             .filter(|d| d.severity == Severity::Error)
             .collect();
         if !errors.is_empty() {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(&db);
-                sources.insert(file_id, sf.text(&db).to_string());
-                file_paths.insert(file_id, sf.path(&db));
-            }
-            let rendered = render::render_diagnostics(
+            let rendered = crate::check_command::render_project_diagnostics(
+                &db,
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &crate::output::policy().diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");
@@ -112,7 +103,7 @@ impl GenerateArgs {
         if !gen_diags.is_empty() {
             // Manifest diagnostics carry spans into `baml.toml`, which isn't a
             // salsa source file — register it under a dedicated pseudo
-            // [`FileId`] so ariadne can render the offending snippet.
+            // [`FileId`] so the diagnostic renderer can show the offending snippet.
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {

@@ -1,7 +1,7 @@
 //! Multi-format rendering for diagnostics.
 //!
 //! This module provides rendering of unified `Diagnostic` types to various formats:
-//! - **Ariadne**: Beautiful CLI output with colors and source snippets
+//! - **Human**: Graphical CLI output with colors and source snippets
 //! - **Agent**: Compact exact locations without source diagrams
 //! - **Concise**: One-line format like `file:line:col: [E0001] message`
 //! - **LSP**: Converts to `lsp_types::Diagnostic` for editor integration
@@ -27,94 +27,28 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ariadne::{Fmt, Label, Report, ReportKind, Source};
 use baml_base::{FileId, Span};
+use miette::highlighters::{Highlighter, HighlighterState};
+use miette::{
+    Diagnostic as MietteDiagnosticTrait, GraphicalReportHandler, GraphicalTheme, LabeledSpan,
+    MietteError, MietteSpanContents, NamedSource, Severity as MietteSeverity, SourceCode,
+    SourceSpan, SpanContents,
+};
+use owo_colors::{Style as OwoStyle, Styled};
 
-use crate::diagnostic::{Diagnostic, Severity};
-
-// ============================================================================
-// SourceCache - Ariadne cache that displays filenames instead of file IDs
-// ============================================================================
-
-/// A cache for ariadne that displays filenames instead of file IDs.
-///
-/// This implements `ariadne::Cache<FileId>` with a `display()` method that
-/// returns the filename from `file_paths` instead of the raw `FileId` integer.
-///
-/// ## Example
-///
-/// ```ignore
-/// let cache = SourceCache::new(sources, file_paths);
-/// report.write(&mut cache, &mut output)?;
-/// // Output shows: syntax_errors.baml:18:19 (not 0:18:19)
-/// ```
-pub struct SourceCache {
-    sources: HashMap<FileId, Source<String>>,
-    file_paths: HashMap<FileId, PathBuf>,
-}
-
-impl SourceCache {
-    /// Create a new source cache from source text and file paths.
-    pub fn new(sources: HashMap<FileId, String>, file_paths: HashMap<FileId, PathBuf>) -> Self {
-        let mut ariadne_sources: HashMap<FileId, Source<String>> = sources
-            .into_iter()
-            .map(|(id, text)| (id, Source::from(text)))
-            .collect();
-
-        // Add a dummy source for the sentinel file ID to avoid errors when
-        // diagnostics have fake/default spans (e.g., for errors without location)
-        ariadne_sources.insert(FileId::sentinel(), Source::from(String::new()));
-
-        Self {
-            sources: ariadne_sources,
-            file_paths,
-        }
-    }
-}
-
-/// Helper struct for displaying file IDs as filenames.
-struct FilePathDisplay {
-    file_id: FileId,
-    path: Option<PathBuf>,
-}
-
-impl fmt::Display for FilePathDisplay {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(ref path) = self.path {
-            // Use just the filename for cleaner output
-            if let Some(name) = path.file_name() {
-                return write!(f, "{}", name.to_string_lossy());
-            }
-            // Fall back to full path if no filename
-            return write!(f, "{}", path.display());
-        }
-        // Fall back to file ID if no path available
-        write!(f, "{}", self.file_id)
-    }
-}
-
-#[allow(refining_impl_trait)]
-impl ariadne::Cache<FileId> for SourceCache {
-    type Storage = String;
-
-    fn fetch(&mut self, id: &FileId) -> Result<&Source<Self::Storage>, Box<dyn fmt::Debug + '_>> {
-        self.sources
-            .get(id)
-            .ok_or_else(|| Box::new(format!("Unknown file ID: {id}")) as Box<dyn fmt::Debug>)
-    }
-
-    fn display<'a>(&self, id: &'a FileId) -> Option<Box<dyn fmt::Display + 'a>> {
-        let path = self.file_paths.get(id).cloned();
-        Some(Box::new(FilePathDisplay { file_id: *id, path }))
-    }
-}
+use crate::{
+    diagnostic::{Annotation, Diagnostic, Severity},
+    highlight::{
+        HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
+    },
+};
 
 /// Output format for diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DiagnosticFormat {
-    /// Full Ariadne output with colors and source context.
+    /// Full human output with colors and source context.
     #[default]
-    Ariadne,
+    Human,
     /// Compact location-based output for coding agents.
     Agent,
     /// Concise one-line format: `file:line:col: [E0001] message`
@@ -135,7 +69,7 @@ pub struct RenderConfig {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self {
-            format: DiagnosticFormat::Ariadne,
+            format: DiagnosticFormat::Human,
             color: true,
             show_error_codes: true,
         }
@@ -143,6 +77,15 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
+    /// Configuration for human CLI output, always colored.
+    pub fn cli() -> Self {
+        Self {
+            format: DiagnosticFormat::Human,
+            color: true,
+            show_error_codes: true,
+        }
+    }
+
     /// Configuration for compact agent output.
     pub fn agent() -> Self {
         Self {
@@ -152,10 +95,10 @@ impl RenderConfig {
         }
     }
 
-    /// Configuration for test output (no color Ariadne).
+    /// Configuration for test output without color.
     pub fn test() -> Self {
         Self {
-            format: DiagnosticFormat::Ariadne,
+            format: DiagnosticFormat::Human,
             color: false,
             show_error_codes: true,
         }
@@ -182,14 +125,14 @@ pub fn render_diagnostic(
     config: &RenderConfig,
 ) -> String {
     match config.format {
-        DiagnosticFormat::Ariadne => {
-            // Single-diagnostic path builds its own one-shot cache. The batch
-            // path (`render_diagnostics`) shares one cache across diagnostics
-            // instead; this cache is exactly what that code used to build
-            // per-diagnostic, so the rendered bytes are unchanged.
-            let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
-            render_ariadne(diagnostic, sources, &mut cache, config.color)
-        }
+        DiagnosticFormat::Human => render_miette(
+            diagnostic,
+            sources,
+            file_paths,
+            &SourceHighlights::new(),
+            config.color,
+            config.show_error_codes,
+        ),
         DiagnosticFormat::Agent => {
             let mut path_cache = HashMap::new();
             render_agent(
@@ -215,192 +158,489 @@ pub fn render_diagnostics(
     file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
-    // Build the ariadne `SourceCache` ONCE for the whole batch. Previously
-    // each diagnostic reconstructed its own cache inside
-    // `render_report_to_string`, and every `SourceCache::new` eagerly clones
-    // `sources`/`file_paths` and ariadne then computes a line index over every
-    // touched file. On warning-heavy projects that per-diagnostic rebuild was a
-    // large fraction of `baml check` wall time. Hoisting it is a pure
-    // construction move: the cache handed to `render_ariadne` is byte-for-byte
-    // the same object it would have built itself, so rendered output is
-    // identical (safe under `BAML_CACHE_VERIFY`).
-    let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
-        .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
+    render_diagnostics_with_highlights(
+        diagnostics,
+        sources,
+        file_paths,
+        &SourceHighlights::new(),
+        config,
+    )
+}
+
+pub fn render_diagnostics_with_highlights(
+    diagnostics: &[Diagnostic],
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    highlights: &SourceHighlights,
+    config: &RenderConfig,
+) -> String {
     let mut path_cache = HashMap::new();
+    let handler = (config.format == DiagnosticFormat::Human)
+        .then(|| miette_handler(highlights, file_paths, config.color));
     diagnostics
         .iter()
-        .map(|d| match (&config.format, &mut ariadne_cache) {
-            (DiagnosticFormat::Ariadne, Some(cache)) => {
-                render_ariadne(d, sources, cache, config.color)
-            }
-            (DiagnosticFormat::Agent, _) => render_agent(
-                d,
+        .map(|diagnostic| match config.format {
+            DiagnosticFormat::Human => render_miette_with_handler(
+                diagnostic,
+                sources,
+                file_paths,
+                handler.as_ref().expect("human renderer has a handler"),
+                config.show_error_codes,
+            ),
+            DiagnosticFormat::Agent => render_agent(
+                diagnostic,
                 sources,
                 file_paths,
                 &mut path_cache,
                 config.color,
                 config.show_error_codes,
             ),
-            _ => render_concise(d, sources, file_paths),
+            DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
         })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-/// Translate a byte offset into a character offset within `text`.
-///
-/// Ariadne's `Source` indexes by characters (codepoints), but our `Span`
-/// values come from `text_size::TextRange` and use byte offsets. For ASCII
-/// the two coincide; for files with multi-byte UTF-8 (e.g. em-dashes) they
-/// don't, and ariadne would otherwise render at the wrong line/column or
-/// fail to render at all when a byte offset is past the char-count of the
-/// source.
-fn byte_to_char(text: &str, byte_offset: usize) -> usize {
-    let cap = byte_offset.min(text.len());
-    text[..cap].chars().count()
+#[derive(Debug)]
+struct RenderedDiagnostic {
+    message: String,
+    code: Option<&'static str>,
+    severity: MietteSeverity,
+    source: Option<NamedSource<FullLineSource>>,
+    labels: Vec<LabeledSpan>,
+    related: Vec<RenderedDiagnostic>,
 }
 
-fn translate_span(span: Span, sources: &HashMap<FileId, String>) -> Span {
-    let Some(source) = sources.get(&span.file_id) else {
-        return span;
-    };
-    let start = byte_to_char(source, span.range.start().into());
-    let end = byte_to_char(source, span.range.end().into()).max(start);
-    Span {
-        file_id: span.file_id,
-        range: text_size::TextRange::new(
-            text_size::TextSize::new(u32::try_from(start).unwrap_or(u32::MAX)),
-            text_size::TextSize::new(u32::try_from(end).unwrap_or(u32::MAX)),
-        ),
+impl fmt::Display for RenderedDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
     }
 }
 
-/// Render a diagnostic using Ariadne (pretty CLI output).
-///
-/// Takes a pre-built [`SourceCache`] by `&mut` so batch rendering can share a
-/// single line-index computation across all diagnostics instead of rebuilding
-/// it per diagnostic. The cache carries the same `sources`/`file_paths` used
-/// elsewhere here, so filename display and rendered bytes are unchanged.
-fn render_ariadne(
+impl std::error::Error for RenderedDiagnostic {}
+
+impl MietteDiagnosticTrait for RenderedDiagnostic {
+    fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        self.code
+            .map(|code| Box::new(code) as Box<dyn fmt::Display>)
+    }
+
+    fn severity(&self) -> Option<MietteSeverity> {
+        Some(self.severity)
+    }
+
+    fn source_code(&self) -> Option<&dyn SourceCode> {
+        self.source.as_ref().map(|source| source as &dyn SourceCode)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        (!self.labels.is_empty()).then(|| Box::new(self.labels.iter().cloned()) as Box<_>)
+    }
+
+    fn related<'a>(
+        &'a self,
+    ) -> Option<Box<dyn Iterator<Item = &'a dyn MietteDiagnosticTrait> + 'a>> {
+        (!self.related.is_empty()).then(|| {
+            Box::new(
+                self.related
+                    .iter()
+                    .map(|diagnostic| diagnostic as &dyn MietteDiagnosticTrait),
+            ) as Box<_>
+        })
+    }
+}
+
+fn render_miette(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
-    cache: &mut SourceCache,
+    file_paths: &HashMap<FileId, PathBuf>,
+    highlights: &SourceHighlights,
     color: bool,
+    show_error_codes: bool,
 ) -> String {
-    // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
-    // cargo, rustc, clap) — ariadne's built-in `ReportKind::Error` /
-    // `Warning` render capitalized, so swap to `Custom(name, color)`
-    // with the same red/yellow ariadne would have picked anyway.
-    //
-    // (and yes, ariadne not letting `Custom` participate in
-    // `with_color(false)` is genuinely dumb — `Custom(_, color)` is the
-    // one match arm that unconditionally returns `Some(color)` regardless
-    // of the config flag, so plain-text mode leaks ANSI escapes for the
-    // keyword. We work around it by stripping ANSI from the rendered
-    // string below when `color = false`. Real fix would be upstreaming a
-    // `Custom { name, color: Option<Color> }` shape; until then, strip.)
-    let report_kind = match diagnostic.severity {
-        Severity::Error => ReportKind::Custom("error", ariadne::Color::Red),
-        Severity::Warning => ReportKind::Custom("warning", ariadne::Color::Yellow),
-        // `Advice` (info) keeps ariadne's default 147 (a soft blue/purple).
-        Severity::Info => ReportKind::Custom("info", ariadne::Color::Fixed(147)),
+    let handler = miette_handler(highlights, file_paths, color);
+    render_miette_with_handler(diagnostic, sources, file_paths, &handler, show_error_codes)
+}
+
+fn miette_handler(
+    highlights: &SourceHighlights,
+    file_paths: &HashMap<FileId, PathBuf>,
+    color: bool,
+) -> GraphicalReportHandler {
+    let mut theme = if color {
+        GraphicalTheme::unicode()
+    } else {
+        GraphicalTheme::unicode_nocolor()
+    };
+    if color {
+        theme.styles.highlights[0] = OwoStyle::new().red().bold();
+    }
+    let mut handler = GraphicalReportHandler::new_themed(theme)
+        .with_links(false)
+        .with_urls(false)
+        .with_show_related_as_nested(true)
+        .with_context_lines(0);
+    if color {
+        handler =
+            handler.with_syntax_highlighting(DiagnosticHighlighter::new(highlights, file_paths));
+    } else {
+        handler = handler.without_syntax_highlighting();
+    }
+    handler
+}
+
+fn render_miette_with_handler(
+    diagnostic: &Diagnostic,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    handler: &GraphicalReportHandler,
+    show_error_codes: bool,
+) -> String {
+    let diagnostic = build_rendered_diagnostic(diagnostic, sources, file_paths, show_error_codes);
+    let mut output = String::new();
+    if handler.render_report(&mut output, &diagnostic).is_err() {
+        return "<error rendering diagnostic>".to_string();
+    }
+    output
+}
+
+fn build_rendered_diagnostic(
+    diagnostic: &Diagnostic,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    show_error_codes: bool,
+) -> RenderedDiagnostic {
+    let primary_file = diagnostic
+        .primary_span()
+        .or_else(|| {
+            diagnostic
+                .annotations
+                .first()
+                .map(|annotation| annotation.span)
+        })
+        .map(|span| span.file_id)
+        .filter(|file_id| sources.contains_key(file_id));
+    let mut primary_labels = diagnostic
+        .annotations
+        .iter()
+        .filter(|annotation| Some(annotation.span.file_id) == primary_file)
+        .collect::<Vec<_>>();
+    primary_labels.sort_by_key(|annotation| !annotation.is_primary);
+
+    let mut rendered = RenderedDiagnostic {
+        message: diagnostic.message.clone(),
+        code: show_error_codes.then(|| diagnostic.code()),
+        severity: miette_severity(diagnostic.severity),
+        source: primary_file.and_then(|file_id| named_source(file_id, sources, file_paths)),
+        labels: primary_labels
+            .into_iter()
+            .map(|annotation| {
+                labeled_span(
+                    annotation.span,
+                    annotation.message.clone(),
+                    annotation.is_primary,
+                )
+            })
+            .collect(),
+        related: Vec::new(),
     };
 
-    // Get the primary span for the report location
-    let primary_span = diagnostic.primary_span().unwrap_or_else(|| {
-        // Fallback: use first annotation if no primary
-        diagnostic
-            .annotations
-            .first()
-            .map(|a| a.span)
-            // Use sentinel for fake spans (matches Span::fake())
-            .unwrap_or(Span {
-                file_id: FileId::sentinel(),
-                range: text_size::TextRange::new(0.into(), 0.into()),
-            })
-    });
-    let primary_span = translate_span(primary_span, sources);
-
-    // Build the report
-    let mut builder = Report::build(report_kind, primary_span).with_message(&diagnostic.message);
-
-    // Add labels for each annotation
+    let mut related_files: Vec<(FileId, Vec<&Annotation>)> = Vec::new();
     for annotation in &diagnostic.annotations {
-        let span = translate_span(annotation.span, sources);
-        let label = if let Some(msg) = &annotation.message {
-            Label::new(span).with_message(msg)
+        let file_id = annotation.span.file_id;
+        if Some(file_id) == primary_file || !sources.contains_key(&file_id) {
+            continue;
+        }
+        if let Some((_, annotations)) = related_files
+            .iter_mut()
+            .find(|(related_file, _)| *related_file == file_id)
+        {
+            annotations.push(annotation);
         } else {
-            Label::new(span)
-        };
-        builder = builder.with_label(label);
+            related_files.push((file_id, vec![annotation]));
+        }
+    }
+    for (file_id, annotations) in related_files {
+        rendered.related.push(RenderedDiagnostic {
+            message: annotations
+                .iter()
+                .find_map(|annotation| annotation.message.clone())
+                .unwrap_or_else(|| "related location".to_string()),
+            code: None,
+            severity: MietteSeverity::Advice,
+            source: named_source(file_id, sources, file_paths),
+            labels: annotations
+                .into_iter()
+                .map(|annotation| labeled_span(annotation.span, None, false))
+                .collect(),
+            related: Vec::new(),
+        });
     }
 
-    // Add note with error code
-    builder = builder.with_note(format!("Error code: {}", diagnostic.code()));
+    for related in &diagnostic.related_info {
+        rendered.related.push(RenderedDiagnostic {
+            message: related.message.clone(),
+            code: None,
+            severity: MietteSeverity::Advice,
+            source: named_source(related.span.file_id, sources, file_paths),
+            labels: sources
+                .contains_key(&related.span.file_id)
+                .then(|| labeled_span(related.span, None, true))
+                .into_iter()
+                .collect(),
+            related: Vec::new(),
+        });
+    }
 
-    let report = builder
-        .with_config(ariadne::Config::default().with_color(color))
-        .finish();
+    rendered
+}
 
-    // Render to string using SourceCache for proper filename display.
-    let rendered = render_report_to_string(&report, cache);
+fn named_source(
+    file_id: FileId,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+) -> Option<NamedSource<FullLineSource>> {
+    sources.get(&file_id).map(|source| {
+        NamedSource::new(
+            shortest_unique_path(file_id, file_paths),
+            FullLineSource::new(source.clone()),
+        )
+        .with_language("baml")
+    })
+}
 
-    // See the rant above the `report_kind` match — ariadne paints the
-    // `Custom` keyword unconditionally, so `with_color(false)` doesn't
-    // reach it. Strip ANSI from the final string so snapshots / piped
-    // output / `NO_COLOR` users get plain text without losing the
-    // lowercase keyword we get from `Custom`.
-    if color {
-        rendered
-    } else {
-        strip_ansi(&rendered)
+#[derive(Debug)]
+struct FullLineSource {
+    source: String,
+    line_starts: Vec<usize>,
+}
+
+impl FullLineSource {
+    fn new(source: String) -> Self {
+        let mut line_starts = vec![0];
+        let bytes = source.as_bytes();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            match bytes[offset] {
+                b'\r' if bytes.get(offset + 1) == Some(&b'\n') => {
+                    offset += 2;
+                    line_starts.push(offset);
+                }
+                b'\n' => {
+                    offset += 1;
+                    line_starts.push(offset);
+                }
+                _ => offset += 1,
+            }
+        }
+        Self {
+            source,
+            line_starts,
+        }
+    }
+
+    fn line_index(&self, offset: usize) -> usize {
+        self.line_starts
+            .partition_point(|line_start| *line_start <= offset)
+            .saturating_sub(1)
     }
 }
 
-/// Strip ANSI SGR escape sequences (`\x1b[...m`) from `s`. Inlined to
-/// avoid a dep on `strip-ansi-escapes` for ~25 lines — only used in the
-/// no-color path of [`render_ariadne`].
-///
-/// Preserves malformed input:
-///   - `\x1b` not followed by `[` is kept verbatim (a stray ESC byte is
-///     unusual but shouldn't silently eat the next character).
-///   - `\x1b[…` with no terminating `m` (truncated stream) is written
-///     back verbatim instead of dropping every character to EOF.
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c != '\x1b' {
-            out.push(c);
-            continue;
+impl SourceCode for FullLineSource {
+    fn read_span<'a>(
+        &'a self,
+        span: &SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> Result<Box<dyn SpanContents<'a> + 'a>, MietteError> {
+        let span_start = span.offset();
+        let span_end = span_start
+            .checked_add(span.len())
+            .filter(|end| *end <= self.source.len())
+            .ok_or(MietteError::OutOfBounds)?;
+        if span_start > self.source.len() {
+            return Err(MietteError::OutOfBounds);
         }
-        // Peek — don't consume — so a non-`[` follow-up survives.
-        if chars.peek() != Some(&'[') {
-            out.push('\x1b');
-            continue;
-        }
-        chars.next(); // commit to consuming the `[`
-        // Buffer the body in case the sequence is unterminated; we
-        // need to write it back verbatim then. SGR bodies are short
-        // (a handful of digits + `;`s), so the allocation is trivial.
-        let mut buffered = String::new();
-        let mut terminated = false;
-        for inner in chars.by_ref() {
-            if inner == 'm' {
-                terminated = true;
+
+        let span_start_line = self.line_index(span_start);
+        let span_end_line = self.line_index(if span_end > span_start {
+            span_end - 1
+        } else {
+            span_start
+        });
+        let first_line = span_start_line.saturating_sub(context_lines_before);
+        let last_line = span_end_line
+            .saturating_add(context_lines_after)
+            .min(self.line_starts.len() - 1);
+        let data_start = self.line_starts[first_line];
+        let data_end = self
+            .line_starts
+            .get(last_line + 1)
+            .copied()
+            .unwrap_or(self.source.len());
+        let column = if context_lines_before == 0 {
+            self.source
+                .get(self.line_starts[span_start_line]..span_start)
+                .ok_or(MietteError::OutOfBounds)?
+                .chars()
+                .count()
+        } else {
+            0
+        };
+        let line_count =
+            last_line - first_line + usize::from(self.line_starts.get(last_line + 1).is_some());
+        let contents = MietteSpanContents::new(
+            &self.source.as_bytes()[data_start..data_end],
+            (data_start, data_end - data_start).into(),
+            first_line,
+            column,
+            line_count,
+        );
+        Ok(Box::new(contents))
+    }
+}
+
+fn labeled_span(span: Span, message: Option<String>, primary: bool) -> LabeledSpan {
+    let start: usize = span.range.start().into();
+    let end: usize = span.range.end().into();
+    let source_span = SourceSpan::from((start, end.saturating_sub(start)));
+    if primary {
+        LabeledSpan::new_primary_with_span(message, source_span)
+    } else {
+        LabeledSpan::new_with_span(message, source_span)
+    }
+}
+
+fn miette_severity(severity: Severity) -> MietteSeverity {
+    match severity {
+        Severity::Error => MietteSeverity::Error,
+        Severity::Warning => MietteSeverity::Warning,
+        Severity::Info => MietteSeverity::Advice,
+    }
+}
+
+#[derive(Debug)]
+struct DiagnosticHighlighter {
+    by_name: HashMap<String, Vec<HighlightSpan>>,
+}
+
+impl DiagnosticHighlighter {
+    fn new(highlights: &SourceHighlights, file_paths: &HashMap<FileId, PathBuf>) -> Self {
+        let by_name = highlights
+            .iter()
+            .map(|(file_id, spans)| {
+                let mut spans = spans.clone();
+                spans.sort_by_key(|span| span.range.start());
+                (shortest_unique_path(*file_id, file_paths), spans)
+            })
+            .collect();
+        Self { by_name }
+    }
+}
+
+impl Highlighter for DiagnosticHighlighter {
+    fn start_highlighter_state<'h>(
+        &'h self,
+        source: &dyn SpanContents<'_>,
+    ) -> Box<dyn HighlighterState + 'h> {
+        let spans = source
+            .name()
+            .and_then(|name| self.by_name.get(name))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let base = source.span().offset();
+        let mut line_starts = vec![base];
+        line_starts.extend(
+            source
+                .data()
+                .iter()
+                .enumerate()
+                .filter(|(_, byte)| **byte == b'\n')
+                .map(|(index, _)| base + index + 1),
+        );
+        Box::new(DiagnosticHighlighterState {
+            spans,
+            line_starts,
+            line_index: 0,
+        })
+    }
+}
+
+struct DiagnosticHighlighterState<'a> {
+    spans: &'a [HighlightSpan],
+    line_starts: Vec<usize>,
+    line_index: usize,
+}
+
+impl HighlighterState for DiagnosticHighlighterState<'_> {
+    fn highlight_line<'s>(&mut self, line: &'s str) -> Vec<Styled<&'s str>> {
+        let line_start = self
+            .line_starts
+            .get(self.line_index)
+            .copied()
+            .unwrap_or_default();
+        self.line_index += 1;
+        let line_end = line_start + line.len();
+        let mut output = Vec::new();
+        let mut cursor = 0;
+        for span in self.spans {
+            let start: usize = span.range.start().into();
+            let end: usize = span.range.end().into();
+            if end <= line_start {
+                continue;
+            }
+            if start >= line_end {
                 break;
             }
-            buffered.push(inner);
+            let start = start.max(line_start) - line_start;
+            let end = end.min(line_end) - line_start;
+            if start < cursor || start >= end {
+                continue;
+            }
+            if !line.is_char_boundary(start) || !line.is_char_boundary(end) {
+                continue;
+            }
+            if cursor < start {
+                output.push(OwoStyle::new().style(&line[cursor..start]));
+            }
+            output.push(owo_style(span.style).style(&line[start..end]));
+            cursor = end;
         }
-        if !terminated {
-            // Truncated escape — surface the bytes rather than swallow
-            // the rest of the line.
-            out.push('\x1b');
-            out.push('[');
-            out.push_str(&buffered);
+        if cursor < line.len() || output.is_empty() {
+            output.push(OwoStyle::new().style(&line[cursor..]));
         }
+        output
     }
-    out
+}
+
+fn owo_style(style: HighlightStyle) -> OwoStyle {
+    let mut output = match style.foreground {
+        Some(HighlightColor::Green) => OwoStyle::new().green(),
+        Some(HighlightColor::Yellow) => OwoStyle::new().yellow(),
+        Some(HighlightColor::Magenta) => OwoStyle::new().magenta(),
+        Some(HighlightColor::Cyan) => OwoStyle::new().cyan(),
+        Some(HighlightColor::BrightYellow) => OwoStyle::new().bright_yellow(),
+        Some(HighlightColor::BrightBlue) => OwoStyle::new().bright_blue(),
+        Some(HighlightColor::BrightMagenta) => OwoStyle::new().bright_magenta(),
+        Some(HighlightColor::BrightCyan) => OwoStyle::new().bright_cyan(),
+        None => OwoStyle::new(),
+    };
+    if style.attributes.contains(HighlightAttributes::BOLD) {
+        output = output.bold();
+    }
+    if style.attributes.contains(HighlightAttributes::DIM) {
+        output = output.dimmed();
+    }
+    if style.attributes.contains(HighlightAttributes::ITALIC) {
+        output = output.italic();
+    }
+    if style
+        .attributes
+        .contains(HighlightAttributes::STRIKETHROUGH)
+    {
+        output = output.strikethrough();
+    }
+    output
 }
 
 /// Render one diagnostic as compact, location-first text for coding agents.
@@ -425,7 +665,7 @@ fn render_agent(
         level.to_string()
     };
     let label = if color {
-        label.fg(severity_color(diagnostic.severity)).to_string()
+        severity_style(diagnostic.severity).style(label).to_string()
     } else {
         label
     };
@@ -493,11 +733,11 @@ fn severity_name(severity: Severity) -> &'static str {
     }
 }
 
-fn severity_color(severity: Severity) -> ariadne::Color {
+fn severity_style(severity: Severity) -> OwoStyle {
     match severity {
-        Severity::Error => ariadne::Color::Red,
-        Severity::Warning => ariadne::Color::Yellow,
-        Severity::Info => ariadne::Color::Fixed(147),
+        Severity::Error => OwoStyle::new().red(),
+        Severity::Warning => OwoStyle::new().yellow(),
+        Severity::Info => OwoStyle::new().cyan(),
     }
 }
 
@@ -620,23 +860,6 @@ fn render_concise(
     )
 }
 
-/// Render an ariadne Report to a String using `SourceCache` for proper filename display.
-///
-/// The `SourceCache` is now supplied by the caller (built once per batch)
-/// rather than reconstructed here per diagnostic. `report.write` only reads
-/// from the cache (populating ariadne's internal line index lazily), so
-/// reusing one cache across reports produces identical bytes.
-fn render_report_to_string(report: &Report<'_, Span>, cache: &mut SourceCache) -> String {
-    let mut output = Vec::new();
-
-    report.write(cache, &mut output).unwrap_or_else(|_| {
-        output.clear();
-        output.extend_from_slice(b"<error rendering diagnostic>");
-    });
-
-    String::from_utf8_lossy(&output).into_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use text_size::TextRange;
@@ -654,36 +877,6 @@ mod tests {
         let mut paths = HashMap::new();
         paths.insert(FileId::new(0), PathBuf::from("test.baml"));
         paths
-    }
-
-    // ── strip_ansi: malformed-input preservation ───────────────────────
-
-    /// Well-formed SGR sequence: stripped, surrounding text intact.
-    #[test]
-    fn strip_ansi_removes_well_formed_sgr() {
-        assert_eq!(
-            strip_ansi("hello \x1b[31mred\x1b[0m world"),
-            "hello red world"
-        );
-    }
-
-    /// Bare ESC (no `[` follow-up) is preserved together with the next
-    /// character — regression for the earlier bug where `chars.next()`
-    /// dropped the byte after ESC unconditionally.
-    #[test]
-    fn strip_ansi_preserves_bare_escape_and_next_char() {
-        assert_eq!(strip_ansi("a\x1bXb"), "a\x1bXb");
-        // Trailing bare ESC (no follow-up at all) survives too.
-        assert_eq!(strip_ansi("end\x1b"), "end\x1b");
-    }
-
-    /// Unterminated `ESC[…` (truncated stream — no `m`) is written back
-    /// verbatim instead of swallowing the rest of the input. Without
-    /// this the old loop would drop everything past the `[`.
-    #[test]
-    fn strip_ansi_preserves_unterminated_csi() {
-        assert_eq!(strip_ansi("ok \x1b[31;1"), "ok \x1b[31;1");
-        assert_eq!(strip_ansi("\x1b[31"), "\x1b[31");
     }
 
     fn test_span() -> Span {
@@ -708,7 +901,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_ariadne() {
+    fn test_render_human() {
         let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Expected int, found string")
             .with_primary_span(test_span());
 
@@ -717,12 +910,12 @@ mod tests {
         let output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::test());
 
         assert!(output.contains("Expected int, found string"));
-        assert!(output.contains("Error code: E0001"));
+        assert!(output.contains("E0001"));
         assert!(output.contains("test.baml")); // Should show filename
     }
 
     #[test]
-    fn test_render_ariadne_shows_filename() {
+    fn test_render_human_shows_filename() {
         let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Test error")
             .with_primary_span(test_span());
 
@@ -739,6 +932,111 @@ mod tests {
             !output.contains("─[ 0:"),
             "Should not show file ID, got: {output}"
         );
+    }
+
+    #[test]
+    fn human_renderer_preserves_source_before_the_span() {
+        let source = "function Foo() -> int {\n  1 + \"foo\"\n}\n".to_string();
+        let start = source.find("1 + \"foo\"").unwrap();
+        let end = start + "1 + \"foo\"".len();
+        let span = Span {
+            file_id: FileId::new(0),
+            range: TextRange::new(
+                u32::try_from(start).unwrap().into(),
+                u32::try_from(end).unwrap().into(),
+            ),
+        };
+        let diag =
+            Diagnostic::error(DiagnosticId::TypeMismatch, "Test error").with_primary_span(span);
+        let sources = HashMap::from([(FileId::new(0), source)]);
+
+        let output = render_diagnostic(&diag, &sources, &make_file_paths(), &RenderConfig::test());
+
+        assert!(output.contains("[test.baml:2:3]"), "{output}");
+        assert!(output.contains(" 2 │   1 + \"foo\""), "{output}");
+    }
+
+    #[test]
+    fn human_renderer_uses_red_for_the_primary_diagnostic_span() {
+        let marker = "PRIMARY_COLOR_MARKER";
+        let secondary_marker = "SECONDARY_COLOR_MARKER";
+        let secondary_span = Span {
+            file_id: FileId::new(0),
+            range: TextRange::new(14.into(), 18.into()),
+        };
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Test error")
+            .with_secondary(secondary_span, secondary_marker)
+            .with_primary(test_span(), marker);
+        let output = render_diagnostic(
+            &diag,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::cli(),
+        );
+        let styled_marker = OwoStyle::new().red().bold().style(marker).to_string();
+        let red_prefix = styled_marker.split_once(marker).unwrap().0;
+        let styled_marker = OwoStyle::new().magenta().bold().style(marker).to_string();
+        let magenta_prefix = styled_marker.split_once(marker).unwrap().0;
+        let label_line = output
+            .lines()
+            .find(|line| line.contains(marker) && line.contains(red_prefix))
+            .unwrap_or_else(|| panic!("missing red primary label in {output:?}"));
+        let styled_secondary = OwoStyle::new()
+            .yellow()
+            .bold()
+            .style(secondary_marker)
+            .to_string();
+        let secondary_prefix = styled_secondary.split_once(secondary_marker).unwrap().0;
+
+        assert!(!label_line.contains(magenta_prefix), "{output:?}");
+        assert!(
+            output
+                .lines()
+                .any(|line| { line.contains(secondary_marker) && line.contains(secondary_prefix) }),
+            "{output:?}"
+        );
+    }
+
+    #[test]
+    fn full_line_source_preserves_utf8_indentation_and_crlf() {
+        let source = FullLineSource::new("header\n  caf\u{e9} + 1\r\nfooter".to_string());
+        let span = SourceSpan::from((17, 1));
+
+        let contents = source.read_span(&span, 0, 0).unwrap();
+
+        assert_eq!(
+            std::str::from_utf8(contents.data()).unwrap(),
+            "  caf\u{e9} + 1\r\n"
+        );
+        assert_eq!(contents.span(), &SourceSpan::from((7, 13)));
+        assert_eq!(contents.line(), 1);
+        assert_eq!(contents.column(), 9);
+        assert_eq!(contents.line_count(), 1);
+    }
+
+    #[test]
+    fn human_renderer_applies_source_highlights() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Test error")
+            .with_primary_span(test_span());
+        let mut highlights = SourceHighlights::new();
+        highlights.insert(
+            FileId::new(0),
+            vec![HighlightSpan {
+                range: TextRange::new(6.into(), 9.into()),
+                style: HighlightStyle {
+                    foreground: Some(HighlightColor::Yellow),
+                    attributes: HighlightAttributes::empty(),
+                },
+            }],
+        );
+        let output = render_diagnostics_with_highlights(
+            &[diag],
+            &make_source(),
+            &make_file_paths(),
+            &highlights,
+            &RenderConfig::cli(),
+        );
+        assert!(output.contains("\x1b[33mFoo"), "{output:?}");
     }
 
     #[test]

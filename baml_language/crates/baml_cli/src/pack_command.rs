@@ -476,7 +476,7 @@ fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Re
 /// list and bail with `ctx`; no-op when the list is error-free.
 ///
 /// When `reporter` has an active spinner, abandon it before printing so
-/// the multi-line ariadne block lands cleanly instead of getting
+/// the multi-line diagnostic block lands cleanly instead of getting
 /// interleaved with the tick character.
 fn bail_on_error_diagnostics(
     db: &ProjectDatabase,
@@ -484,8 +484,6 @@ fn bail_on_error_diagnostics(
     ctx: &str,
     reporter: &Reporter,
 ) -> Result<()> {
-    use baml_db::baml_compiler_diagnostics::render;
-
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -493,19 +491,9 @@ fn bail_on_error_diagnostics(
     if errors.is_empty() {
         return Ok(());
     }
-    let source_files = db.get_source_files();
-    let mut sources = HashMap::new();
-    let mut file_paths = HashMap::new();
-    for sf in &source_files {
-        let file_id = sf.file_id(db);
-        sources.insert(file_id, sf.text(db).to_string());
-        file_paths.insert(file_id, sf.path(db));
-    }
-    let rendered = render::render_diagnostics(
+    let rendered = crate::check_command::render_project_diagnostics(
+        db,
         &errors.iter().copied().cloned().collect::<Vec<_>>(),
-        &sources,
-        &file_paths,
-        &crate::output::policy().diagnostic_render_config(),
     );
     reporter.abandon();
     eprintln!("{rendered}");

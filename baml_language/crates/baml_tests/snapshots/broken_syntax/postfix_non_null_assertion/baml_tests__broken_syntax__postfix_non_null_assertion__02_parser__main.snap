@@ -62,12 +62,11 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-error: unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
-   ╭─[ main.baml:7:17 ]
-   │
+E0010
+
+  × unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
+   ╭─[main.baml:7:17]
  7 │         xs.at(0)!
-   │                 ┬  
-   │                 ╰── unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                 ┬
+   ·                 ╰── unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
+   ╰────

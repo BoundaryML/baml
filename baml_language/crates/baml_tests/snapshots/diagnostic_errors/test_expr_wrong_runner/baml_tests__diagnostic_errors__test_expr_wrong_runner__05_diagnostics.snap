@@ -2,32 +2,29 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected testing.TestRunner | null, got 42
-   ╭─[ main.baml:4:31 ]
-   │
+  [type] E0001
+
+  × type mismatch: expected testing.TestRunner | null, got 42
+   ╭─[main.baml:4:31]
  4 │ test "wrong runner type" with 42 {
-   │                               ─┬  
-   │                                ╰── type mismatch: expected testing.TestRunner | null, got 42
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·                               ─┬
+   ·                                ╰── type mismatch: expected testing.TestRunner | null, got 42
+   ╰────
 
-  [type] error: type mismatch: expected testing.TestRunner | null, got "not a runner"
-   ╭─[ main.baml:8:30 ]
-   │
+  [type] E0001
+
+  × type mismatch: expected testing.TestRunner | null, got "not a runner"
+   ╭─[main.baml:8:30]
  8 │ test "string as runner" with "not a runner" {
-   │                              ───────┬──────  
-   │                                     ╰──────── type mismatch: expected testing.TestRunner | null, got "not a runner"
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·                              ───────┬──────
+   ·                                     ╰── type mismatch: expected testing.TestRunner | null, got "not a runner"
+   ╰────
 
-  [type] error: type mismatch: expected testing.TestSetRunner | null, got 42
-    ╭─[ main.baml:12:37 ]
-    │
+  [type] E0001
+
+  × type mismatch: expected testing.TestSetRunner | null, got 42
+    ╭─[main.baml:12:37]
  12 │ testset "wrong testset runner" with 42 {
-    │                                     ─┬  
-    │                                      ╰── type mismatch: expected testing.TestSetRunner | null, got 42
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                                     ─┬
+    ·                                      ╰── type mismatch: expected testing.TestSetRunner | null, got 42
+    ╰────

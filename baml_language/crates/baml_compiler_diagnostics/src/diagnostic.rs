@@ -642,7 +642,7 @@ impl RelatedInfo {
 ///
 /// This type is inspired by `ruff_db::Diagnostic` and enables:
 /// - Centralized diagnostic collection via `Project::check()`
-/// - Multi-format rendering (Ariadne for CLI, LSP types for editors)
+/// - Multi-format rendering (Miette for CLI, LSP types for editors)
 /// - Consistent error handling across all compiler phases
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {

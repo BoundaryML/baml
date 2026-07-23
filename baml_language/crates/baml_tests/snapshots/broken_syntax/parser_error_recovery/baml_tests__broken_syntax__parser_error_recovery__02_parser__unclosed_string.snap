@@ -62,32 +62,29 @@ SOURCE_FILE
           R_BRACE "}"
 
 === ERRORS ===
-error: Expected ')', found identifier
-   ╭─[ unclosed_string.baml:4:25 ]
-   │
+E0010
+
+  × Expected ')', found identifier
+   ╭─[unclosed_string.baml:4:25]
  4 │   field3 string @alias("another closed string")  // Should still parse this
-   │                         ───┬───  
-   │                            ╰───── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ───┬───
+   ·                            ╰── Expected ')', found identifier
+   ╰────
 
-error: Expected Unclosed string literal, found EOF
-   ╭─[ unclosed_string.baml:5:2 ]
-   │
- 5 │ }
-   │  │ 
-   │  ╰─ Expected Unclosed string literal, found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: Expected '}', found EOF
-   ╭─[ unclosed_string.baml:5:2 ]
-   │
+  × Expected Unclosed string literal, found EOF
+   ╭─[unclosed_string.baml:5:2]
  5 │ }
-   │  │ 
-   │  ╰─ Expected '}', found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·  ▲
+   ·  ╰── Expected Unclosed string literal, found EOF
+   ╰────
+
+E0010
+
+  × Expected '}', found EOF
+   ╭─[unclosed_string.baml:5:2]
+ 5 │ }
+   ·  ▲
+   ·  ╰── Expected '}', found EOF
+   ╰────

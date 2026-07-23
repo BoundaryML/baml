@@ -278,392 +278,353 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-error: Expected function name, found error
-    ╭─[ unicode_strings.baml:25:10 ]
-    │
- 25 │ function 处理文本(输入: string) -> string {
-    │          ┬─    
-    │          ╰───── Expected function name, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+E0010
 
-error: Expected parameter name, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+  × Expected function name, found error
+    ╭─[unicode_strings.baml:25:10]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected parameter name, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ─┬
+    ·           ╰── Expected function name, found error
+    ╰────
 
-error: Expected type annotation, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+E0010
+
+  × Expected parameter name, found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected type annotation, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected parameter name, found error
+    ╰────
 
-error: Expected ')', found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+E0010
+
+  × Expected type annotation, found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected ')', found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected type annotation, found error
+    ╰────
 
-error: Expected return type (->), found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+E0010
+
+  × Expected ')', found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected return type (->), found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected ')', found error
+    ╰────
 
-error: Expected function body, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+E0010
+
+  × Expected return type (->), found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected function body, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected return type (->), found error
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:25:15 ]
-    │
+E0010
+
+  × Expected function body, found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                   ┬─   
-    │                   ╰──── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected function body, found error
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:25:16 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
-    │                     ┬─  
-    │                     ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ─┬
+    ·                    ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:25:17 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:25:16]
  25 │ function 处理文本(输入: string) -> string {
-    │                       ┬  
-    │                       ╰── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                     ─┬
+    ·                      ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:25:19 ]
-    │
+E0010
+
+  × Expected top-level declaration, found ':'
+    ╭─[unicode_strings.baml:25:17]
  25 │ function 处理文本(输入: string) -> string {
-    │                         ───┬──  
-    │                            ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                       ┬
+    ·                       ╰── Expected top-level declaration, found ':'
+    ╰────
 
-error: Expected top-level declaration, found ')'
-    ╭─[ unicode_strings.baml:25:25 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:25:19]
  25 │ function 处理文本(输入: string) -> string {
-    │                               ┬  
-    │                               ╰── Expected top-level declaration, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                         ───┬──
+    ·                            ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found '->'
-    ╭─[ unicode_strings.baml:25:27 ]
-    │
+E0010
+
+  × Expected top-level declaration, found ')'
+    ╭─[unicode_strings.baml:25:25]
  25 │ function 处理文本(输入: string) -> string {
-    │                                 ─┬  
-    │                                  ╰── Expected top-level declaration, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                               ┬
+    ·                               ╰── Expected top-level declaration, found ')'
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:25:30 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '->'
+    ╭─[unicode_strings.baml:25:27]
  25 │ function 处理文本(输入: string) -> string {
-    │                                    ───┬──  
-    │                                       ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                 ─┬
+    ·                                  ╰── Expected top-level declaration, found '->'
+    ╰────
 
-error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:25:37 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:25:30]
  25 │ function 处理文本(输入: string) -> string {
-    │                                           ┬  
-    │                                           ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                    ───┬──
+    ·                                       ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected config block, found identifier
-    ╭─[ unicode_strings.baml:27:3 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '{'
+    ╭─[unicode_strings.baml:25:37]
+ 25 │ function 处理文本(输入: string) -> string {
+    ·                                           ┬
+    ·                                           ╰── Expected top-level declaration, found '{'
+    ╰────
+
+E0010
+
+  × Expected config block, found identifier
+    ╭─[unicode_strings.baml:27:3]
  27 │   prompt #"
-    │   ───┬──  
-    │      ╰──── Expected config block, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬──
+    ·      ╰── Expected config block, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:27:3 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:27:3]
  27 │   prompt #"
-    │   ───┬──  
-    │      ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬──
+    ·      ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found '#'
-    ╭─[ unicode_strings.baml:27:10 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '#'
+    ╭─[unicode_strings.baml:27:10]
  27 │   prompt #"
-    │          ┬  
-    │          ╰── Expected top-level declaration, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ┬
+    ·          ╰── Expected top-level declaration, found '#'
+    ╰────
 
-error: Expected top-level declaration, found '"'
-    ╭─[ unicode_strings.baml:27:11 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '"'
+    ╭─[unicode_strings.baml:27:11]
  27 │   prompt #"
-    │           ┬  
-    │           ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·           ┬
+    ·           ╰── Expected top-level declaration, found '"'
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:5 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:28:5]
  28 │     Process the text: {{ 输入 }}
-    │     ───┬───  
-    │        ╰───── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ───┬───
+    ·        ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:13 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:28:13]
  28 │     Process the text: {{ 输入 }}
-    │             ─┬─  
-    │              ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·             ─┬─
+    ·              ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:28:17 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:28:17]
  28 │     Process the text: {{ 输入 }}
-    │                 ──┬─  
-    │                   ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                 ──┬─
+    ·                   ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:28:21 ]
-    │
+E0010
+
+  × Expected top-level declaration, found ':'
+    ╭─[unicode_strings.baml:28:21]
  28 │     Process the text: {{ 输入 }}
-    │                     ┬  
-    │                     ╰── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                     ┬
+    ·                     ╰── Expected top-level declaration, found ':'
+    ╰────
 
-error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:28:23 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '{'
+    ╭─[unicode_strings.baml:28:23]
  28 │     Process the text: {{ 输入 }}
-    │                       ┬  
-    │                       ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                       ┬
+    ·                       ╰── Expected top-level declaration, found '{'
+    ╰────
 
-error: Expected top-level declaration, found '{'
-    ╭─[ unicode_strings.baml:28:24 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '{'
+    ╭─[unicode_strings.baml:28:24]
  28 │     Process the text: {{ 输入 }}
-    │                        ┬   
-    │                        ╰─── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                        ┬
+    ·                        ╰── Expected top-level declaration, found '{'
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:28:26 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:28:26]
  28 │     Process the text: {{ 输入 }}
-    │                          ┬─   
-    │                          ╰──── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                          ─┬
+    ·                           ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:28:27 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:28:27]
  28 │     Process the text: {{ 输入 }}
-    │                            ┬─  
-    │                            ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                            ─┬
+    ·                             ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:28:29 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '}'
+    ╭─[unicode_strings.baml:28:29]
  28 │     Process the text: {{ 输入 }}
-    │                               ┬  
-    │                               ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                               ┬
+    ·                               ╰── Expected top-level declaration, found '}'
+    ╰────
 
-error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:28:30 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '}'
+    ╭─[unicode_strings.baml:28:30]
  28 │     Process the text: {{ 输入 }}
-    │                                ┬  
-    │                                ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                ┬
+    ·                                ╰── Expected top-level declaration, found '}'
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:5 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:29:5]
  29 │     Return result with emojis: ✅ or ❌
-    │     ───┬──  
-    │        ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ───┬──
+    ·        ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:12 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:29:12]
  29 │     Return result with emojis: ✅ or ❌
-    │            ───┬──  
-    │               ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·            ───┬──
+    ·               ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:19 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:29:19]
  29 │     Return result with emojis: ✅ or ❌
-    │                   ──┬─  
-    │                     ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                   ──┬─
+    ·                     ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:24 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:29:24]
  29 │     Return result with emojis: ✅ or ❌
-    │                        ───┬──  
-    │                           ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                        ───┬──
+    ·                           ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found ':'
-    ╭─[ unicode_strings.baml:29:30 ]
-    │
+E0010
+
+  × Expected top-level declaration, found ':'
+    ╭─[unicode_strings.baml:29:30]
  29 │     Return result with emojis: ✅ or ❌
-    │                              ┬   
-    │                              ╰─── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                              ┬
+    ·                              ╰── Expected top-level declaration, found ':'
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:32 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:29:32]
  29 │     Return result with emojis: ✅ or ❌
-    │                                ┬─  
-    │                                ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                ─┬
+    ·                                 ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ unicode_strings.baml:29:34 ]
-    │
+E0010
+
+  × Expected top-level declaration, found identifier
+    ╭─[unicode_strings.baml:29:34]
  29 │     Return result with emojis: ✅ or ❌
-    │                                   ─┬   
-    │                                    ╰─── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                   ─┬
+    ·                                    ╰── Expected top-level declaration, found identifier
+    ╰────
 
-error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:37 ]
-    │
+E0010
+
+  × Expected top-level declaration, found error
+    ╭─[unicode_strings.baml:29:37]
  29 │     Return result with emojis: ✅ or ❌
-    │                                      ┬─  
-    │                                      ╰─── Expected top-level declaration, found error
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                      ─┬
+    ·                                       ╰── Expected top-level declaration, found error
+    ╰────
 
-error: Expected top-level declaration, found '"'
-    ╭─[ unicode_strings.baml:30:3 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '"'
+    ╭─[unicode_strings.baml:30:3]
  30 │   "#
-    │   ┬  
-    │   ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ┬
+    ·   ╰── Expected top-level declaration, found '"'
+    ╰────
 
-error: Expected top-level declaration, found '#'
-    ╭─[ unicode_strings.baml:30:4 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '#'
+    ╭─[unicode_strings.baml:30:4]
  30 │   "#
-    │    ┬  
-    │    ╰── Expected top-level declaration, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·    ┬
+    ·    ╰── Expected top-level declaration, found '#'
+    ╰────
 
-error: Expected top-level declaration, found '}'
-    ╭─[ unicode_strings.baml:31:1 ]
-    │
+E0010
+
+  × Expected top-level declaration, found '}'
+    ╭─[unicode_strings.baml:31:1]
  31 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── Expected top-level declaration, found '}'
+    ╰────

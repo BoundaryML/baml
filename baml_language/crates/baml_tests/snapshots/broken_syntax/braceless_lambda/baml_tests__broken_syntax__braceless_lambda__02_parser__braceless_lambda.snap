@@ -67,12 +67,11 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-error: Expected lambda body '{', found '+'
-   ╭─[ braceless_lambda.baml:8:28 ]
-   │
+E0010
+
+  × Expected lambda body '{', found '+'
+   ╭─[braceless_lambda.baml:8:28]
  8 │   let add1 = (x: int) => x + 1;
-   │                            ┬  
-   │                            ╰── Expected lambda body '{', found '+'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                            ┬
+   ·                            ╰── Expected lambda body '{', found '+'
+   ╰────

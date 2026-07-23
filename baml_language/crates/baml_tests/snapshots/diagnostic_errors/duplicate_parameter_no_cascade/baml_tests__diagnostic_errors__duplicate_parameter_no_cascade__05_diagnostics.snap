@@ -2,50 +2,42 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Duplicate parameter `value` in `named_first`
-   ╭─[ main.baml:1:34 ]
-   │
+  [hir] E0012
+
+  × Duplicate parameter `value` in `named_first`
+   ╭─[main.baml:1:34]
  1 │ function named_first(value: int, value: string) -> int {
-   │                      ──┬──       ──┬──  
-   │                        ╰──────────────── first defined as parameter here
-   │                                    │    
-   │                                    ╰──── duplicate parameter definition
-   │ 
-   │ Note: Error code: E0012
-───╯
+   ·                      ──┬──       ──┬──
+   ·                        │           ╰── duplicate parameter definition
+   ·                        ╰── first defined as parameter here
+   ╰────
 
-  [hir] error: Duplicate parameter `value` in `named_last`
-   ╭─[ main.baml:5:36 ]
-   │
+  [hir] E0012
+
+  × Duplicate parameter `value` in `named_last`
+   ╭─[main.baml:5:36]
  5 │ function named_last(value: string, value: int) -> string {
-   │                     ──┬──          ──┬──  
-   │                       ╰─────────────────── first defined as parameter here
-   │                                      │    
-   │                                      ╰──── duplicate parameter definition
-   │ 
-   │ Note: Error code: E0012
-───╯
+   ·                     ──┬──          ──┬──
+   ·                       │              ╰── duplicate parameter definition
+   ·                       ╰── first defined as parameter here
+   ╰────
 
-  [hir] error: Duplicate parameter `value` in `lambda_first`
-    ╭─[ main.baml:10:26 ]
-    │
+  [hir] E0012
+
+  × Duplicate parameter `value` in `lambda_first`
+    ╭─[main.baml:10:26]
  10 │     let f = (value: int, value: string) -> int {
-    │              ──┬──       ──┬──  
-    │                ╰──────────────── first defined as parameter here
-    │                            │    
-    │                            ╰──── duplicate parameter definition
-    │ 
-    │ Note: Error code: E0012
-────╯
+    ·              ──┬──       ──┬──
+    ·                │           ╰── duplicate parameter definition
+    ·                ╰── first defined as parameter here
+    ╰────
 
-  [hir] error: Duplicate parameter `value` in `lambda_last`
-    ╭─[ main.baml:18:29 ]
-    │
+  [hir] E0012
+
+  × Duplicate parameter `value` in `lambda_last`
+    ╭─[main.baml:18:29]
  18 │     let f = (value: string, value: int) -> string {
-    │              ──┬──          ──┬──  
-    │                ╰─────────────────── first defined as parameter here
-    │                               │    
-    │                               ╰──── duplicate parameter definition
-    │ 
-    │ Note: Error code: E0012
-────╯
+    ·              ──┬──          ──┬──
+    ·                │              ╰── duplicate parameter definition
+    ·                ╰── first defined as parameter here
+    ╰────

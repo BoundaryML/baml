@@ -271,7 +271,7 @@ impl TestArgs {
                 .cloned()
                 .collect();
             if !errors.is_empty() {
-                // Render the full ariadne block so test errors look like
+                // Render the full diagnostic block so test errors look like
                 // run/pack errors instead of a bullet list of messages. Sources
                 // and paths cover every user file plus builtins — an error in one
                 // file may carry related spans elsewhere.
