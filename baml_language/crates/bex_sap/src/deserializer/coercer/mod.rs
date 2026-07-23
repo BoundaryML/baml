@@ -154,13 +154,14 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         }
     }
 
-    pub(crate) fn error_unexpected_empty_array(
+    fn error_unexpected_value_description(
         &self,
         target: &impl TryTypeName<'t, N>,
+        description: &str,
     ) -> ParsingError {
         match target.error_type_resolution(self) {
             Ok(ty) => ParsingError {
-                reason: format!("Expected {ty}, got empty array"),
+                reason: format!("Expected {ty}, got {description}"),
                 scope: self.scope.clone(),
                 causes: Vec::new(),
             },
@@ -168,7 +169,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
-                    reason: "Expected <UNRESOLVED>, got empty array".to_string(),
+                    reason: format!("Expected <UNRESOLVED>, got {description}"),
                     scope: self.scope.clone(),
                     causes: Vec::new(),
                 }],
@@ -176,23 +177,15 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         }
     }
 
+    pub(crate) fn error_unexpected_empty_array(
+        &self,
+        target: &impl TryTypeName<'t, N>,
+    ) -> ParsingError {
+        self.error_unexpected_value_description(target, "empty array")
+    }
+
     pub(crate) fn error_unexpected_null(&self, target: &impl TryTypeName<'t, N>) -> ParsingError {
-        match target.error_type_resolution(self) {
-            Ok(ty) => ParsingError {
-                reason: format!("Expected {ty}, got null"),
-                scope: self.scope.clone(),
-                causes: Vec::new(),
-            },
-            Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {ident}"),
-                scope: self.scope.clone(),
-                causes: vec![ParsingError {
-                    reason: "Expected <UNRESOLVED>, got null".to_string(),
-                    scope: self.scope.clone(),
-                    causes: Vec::new(),
-                }],
-            },
-        }
+        self.error_unexpected_value_description(target, "null")
     }
 
     pub(crate) fn error_image_not_supported(&self) -> ParsingError {
