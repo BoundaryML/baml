@@ -998,28 +998,11 @@ fn open_boundary_from_segments_with_fallback(
     })
 }
 
-pub fn read_value_from_segments(
-    value_segments: &[HistoryValueSegment],
-    value_ref_id: &str,
-) -> io::Result<Option<HistoryValueBody>> {
-    read_value_from_segments_result(value_segments, value_ref_id)
-        .map(HistoryValueReadResult::into_body)
-}
-
 pub fn read_value_from_segments_result(
     value_segments: &[HistoryValueSegment],
     value_ref_id: &str,
 ) -> io::Result<HistoryValueReadResult> {
     read_value_from_segments_with_blobs_result(value_segments, value_ref_id, None)
-}
-
-pub fn read_value_from_segments_with_blobs(
-    value_segments: &[HistoryValueSegment],
-    value_ref_id: &str,
-    blob_store: Option<&BlobStore>,
-) -> io::Result<Option<HistoryValueBody>> {
-    read_value_from_segments_with_blobs_result(value_segments, value_ref_id, blob_store)
-        .map(HistoryValueReadResult::into_body)
 }
 
 pub fn read_value_from_segments_with_blobs_result(

@@ -14,13 +14,13 @@ use minijinja::machinery::{
 
 use super::TypeError;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumDefinition {
     pub name: String,
     pub values: Vec<EnumValueDefinition>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumValueDefinition {
     pub name: String,
     pub alias: Option<String>,
@@ -71,13 +71,13 @@ pub enum Type {
 impl Type {
     /// Subtyping for the Jinja template type lattice.
     ///
-    /// This is a **third** subtyping implementation alongside
-    /// `baml_compiler2_tir::normalize::is_subtype_of` (the TIR) and
-    /// `baml_type::Ty::is_subtype_of` (runtime / SAP). It is intentionally
-    /// isolated: Jinja templates have their own value semantics
-    /// (`Bigint` never widens to anything — see the `Bigint` arm below),
-    /// so this impl mirrors neither the TIR coercive scalar rules nor the
-    /// coercion-free container rules.
+    /// This is a subtyping implementation for a **separate dialect**, distinct
+    /// from BAML's single canonical relation `baml_type::normalize::is_subtype`
+    /// (behind the `TypeContext` trait, shared by the compiler and the runtime).
+    /// It is intentionally isolated: Jinja templates have their own value
+    /// semantics (`Bigint` never widens to anything — see the `Bigint` arm
+    /// below), so this impl mirrors neither the scalar nor the container rules of
+    /// the BAML algebra.
     ///
     /// Do **not** keep this in sync with the TIR rules by reflex — it is
     /// a separate dialect by design. Any change here should be motivated
@@ -300,7 +300,7 @@ impl BitOr for Type {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Scope {
     CodeBlock(IndexMap<String, Type>),
     Branch(IndexMap<String, Type>, IndexMap<String, Type>, bool),
@@ -311,7 +311,7 @@ enum Scope {
     Narrowing(IndexMap<String, Type>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PredefinedTypes {
     functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
     classes: HashMap<String, IndexMap<String, Type>>,
@@ -602,12 +602,6 @@ impl PredefinedTypes {
 
     pub fn as_enum(&self, name: &str) -> Option<&EnumDefinition> {
         self.enum_definitions.get(name)
-    }
-
-    pub fn as_enum_values(&self, name: &str) -> Option<Vec<String>> {
-        self.enum_definitions
-            .get(name)
-            .map(|def| def.values.iter().map(|v| v.name.clone()).collect())
     }
 
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {

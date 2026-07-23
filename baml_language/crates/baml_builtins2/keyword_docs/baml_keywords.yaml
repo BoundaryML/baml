@@ -197,31 +197,35 @@ generator:
     }
 
 test:
-  summary: "Defines a test case for a BAML function."
+  summary: "Defines a named executable test."
   syntax: |
-    test MyTest {
-      functions [ExtractResume]
-      args {
-        text "John Doe, Software Engineer"
-      }
+    test "extracts a resume" {
+      let resume = ExtractResume("John Doe, Software Engineer")
+      assert.equal(resume.name, "John Doe")
     }
+  details: |
+    A modern test is named with a string and contains ordinary BAML expressions. Top-level tests have canonical IDs such as `root::extracts a resume`; tests declared in a namespace start with that namespace, such as `root.payments::refunds`. Tests inside a testset add each enclosing quoted name with `::`.
+
+    Run `baml test --list` to discover canonical IDs. `baml test -i <selector>` and `-x <selector>` match them; plain selectors are substring matches, while selectors containing `*` are anchored globs. Run `baml test --help` for selector and profile configuration.
+
+    The legacy config-block form (`test Name { functions [...] args { ... } }`) remains supported.
 
 testset:
   summary: "Groups related tests, optionally sharing setup, under a quoted name."
   syntax: |
     testset "math suite" {
       let answer = 42
-
       test "adds" {
         assert.equal(answer, 42)
       }
-
       test "is positive" {
         assert.is_true(answer > 0)
       }
     }
   details: |
     A testset is named with a string (`testset "name" { ... }`), not a bare identifier. Its body holds `let` setup bindings plus nested `test` (and further `testset`) blocks; setup bindings are visible to the nested tests. Pick a runner with an optional `with` clause: `testset "name" with <runner> { ... }`. This is unrelated to the old config-block style — there are no `functions`/`cases` keys.
+
+    Every leaf gets a canonical ID beginning with `root` (or `root.<namespace>`) and using `::` for testset nesting. For example, the first test above is `root::math suite::adds`. Run `baml test --list` to discover IDs and `baml test --help` for selectors and profiles.
 
 template_string:
   summary: "Defines a reusable prompt template with Jinja2 syntax."

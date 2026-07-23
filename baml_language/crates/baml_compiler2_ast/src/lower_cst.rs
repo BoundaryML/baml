@@ -2553,10 +2553,15 @@ fn synthesize_retry_policy_let(
         type_annotations: la_arena::Arena::new(),
         root_expr: Some(root),
     };
-    let source_map = AstSourceMap {
+    let mut source_map = AstSourceMap {
         expr_spans,
         ..Default::default()
     };
+    // The object constructor is an implementation detail of `retry_policy`
+    // config lowering, not a user-written class literal. TIR uses this marker
+    // to avoid applying ordinary object-literal field diagnostics to config
+    // keys such as the legacy `strategy` block.
+    source_map.synthetic_exprs.insert(root);
 
     Some(Item::Let(LetDef {
         name: Name::new(name_token.text()),

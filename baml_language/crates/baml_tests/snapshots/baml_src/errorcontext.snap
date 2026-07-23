@@ -103,8 +103,9 @@ function errorcontext.ec_deferbody_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -113,7 +114,7 @@ function errorcontext.ec_deferbody_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -286,8 +287,9 @@ function errorcontext.ec_deferunwind_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -296,7 +298,7 @@ function errorcontext.ec_deferunwind_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -387,8 +389,9 @@ function errorcontext.ec_hazard_a_main() -> string {
 
   L0:
     load_field .error
-    store_var_load_var _7
-    is_type string
+    store_var _9
+    load_var _9
+    narrow_bind string, slot=7
     pop_jump_if_false L1
     jump L2
 
@@ -397,7 +400,7 @@ function errorcontext.ec_hazard_a_main() -> string {
     jump L3
 
   L2:
-    load_var _7
+    load_var _9
 
   L3:
     return
@@ -429,8 +432,9 @@ function errorcontext.ec_hazard_b_main() -> string {
     load_var _10
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _11
-    is_type string
+    store_var _13
+    load_var _13
+    narrow_bind string, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -439,7 +443,7 @@ function errorcontext.ec_hazard_b_main() -> string {
     jump L2
 
   L1:
-    load_var _11
+    load_var _13
 
   L2:
     return
@@ -467,8 +471,9 @@ function errorcontext.ec_nested_main() -> string {
     load_var _4
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _5
-    is_type string
+    store_var _7
+    load_var _7
+    narrow_bind string, slot=5
     pop_jump_if_false L0
     jump L1
 
@@ -477,7 +482,7 @@ function errorcontext.ec_nested_main() -> string {
     jump L2
 
   L1:
-    load_var _5
+    load_var _7
 
   L2:
     return
@@ -531,8 +536,9 @@ function errorcontext.ec_sibling_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -541,7 +547,7 @@ function errorcontext.ec_sibling_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -571,8 +577,9 @@ function errorcontext.ec_single_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -581,7 +588,7 @@ function errorcontext.ec_single_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return
@@ -600,8 +607,9 @@ function errorcontext.ec_stackdefers_main() -> string {
     load_var _2
     call baml.errors.ErrorContext.root_cause
     load_field .error
-    store_var_load_var _3
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -610,7 +618,7 @@ function errorcontext.ec_stackdefers_main() -> string {
     jump L2
 
   L1:
-    load_var _3
+    load_var _5
 
   L2:
     return

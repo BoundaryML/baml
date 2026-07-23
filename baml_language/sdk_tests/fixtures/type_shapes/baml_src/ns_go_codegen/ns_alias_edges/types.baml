@@ -1,5 +1,6 @@
-// Exhaustive Go type-alias fixture. Public Go APIs retain these names while
-// generated wire codecs recursively lower each alias to its terminal shape.
+// Exhaustive Go type-alias fixture. Alias declarations are emitted for users
+// who import them directly, while signatures and wire codecs transparently
+// lower aliases to the same canonical Go type as the underlying BAML shape.
 type Text = string
 type TextChain = Text
 type Count = int
@@ -59,8 +60,8 @@ function collision_item() -> string {
   "function"
 }
 
-// General unions and recursive aliases remain outside this milestone. Both
-// aliases and every declaration that depends on them must be omitted cleanly.
+// Non-recursive union aliases are transparent and supported. Recursive aliases
+// remain omitted until Go receives a dedicated recursive representation.
 type Unsupported = string | int
 
 function unsupported_alias(value: Unsupported) -> Unsupported {

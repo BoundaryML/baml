@@ -20,10 +20,10 @@ function isBamlSerializable(val: unknown): val is BamlSerializable {
 
 function serializeValue(val: unknown): InboundValue {
   if (val === null || val === undefined) {
-    return { value: undefined };
+    return { valueType: undefined, value: undefined };
   }
   if (typeof val === 'string') {
-    return { value: { $case: 'stringValue', stringValue: val } };
+    return { valueType: undefined, value: { $case: 'stringValue', stringValue: val } };
   }
   if (typeof val === 'number') {
     if (!Number.isFinite(val)) {
@@ -39,20 +39,21 @@ function serializeValue(val: unknown): InboundValue {
           val,
         );
       }
-      return { value: { $case: 'intValue', intValue: val } };
+      return { valueType: undefined, value: { $case: 'intValue', intValue: val } };
     }
-    return { value: { $case: 'floatValue', floatValue: val } };
+    return { valueType: undefined, value: { $case: 'floatValue', floatValue: val } };
   }
   if (typeof val === 'bigint') {
     // Base-sixteen hex on the wire (no `0x` prefix, leading `-` for
     // negatives) — matches Rust's `format!("{:x}")` / `parse_bytes(_, 16)`.
-    return { value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
+    return { valueType: undefined, value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
   }
   if (typeof val === 'boolean') {
-    return { value: { $case: 'boolValue', boolValue: val } };
+    return { valueType: undefined, value: { $case: 'boolValue', boolValue: val } };
   }
   if (Array.isArray(val)) {
     return {
+      valueType: undefined,
       value: {
         $case: 'listValue',
         listValue: { values: val.map(serializeValue) },
@@ -84,6 +85,7 @@ function serializeValue(val: unknown): InboundValue {
         );
       }
       return {
+        valueType: undefined,
         value: {
           $case: 'enumValue',
           enumValue: { name: marker.enum, value: marker.value },
@@ -111,13 +113,15 @@ function serializeValue(val: unknown): InboundValue {
           value: serializeValue(v),
         }));
       return {
+        valueType: {
+          ty: {
+            $case: 'classTy',
+            classTy: { name: className, typeArgs: [] },
+          },
+        },
         value: {
           $case: 'classValue',
-          // `classTy` binds the class: `classTy.name` is the FQN and
-          // `classTy.type_args` would carry a generic instance's concrete args.
-          // The webview encoder does not yet support generic class instances, so
-          // `type_args` is always empty here.
-          classValue: { fields, classTy: { name: className, typeArgs: [] } },
+          classValue: { fields },
         },
       };
     }
@@ -129,7 +133,11 @@ function serializeValue(val: unknown): InboundValue {
       }),
     );
     return {
-      value: { $case: 'mapValue', mapValue: { entries } },
+      valueType: undefined,
+      value: {
+        $case: 'mapValue',
+        mapValue: { entries },
+      },
     };
   }
   throw new Error(

@@ -14,7 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
+/// (e.g., in `baml_tests` snapshots).
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
@@ -30,18 +30,6 @@ pub enum DiagnosticPhase {
     Validation,
     /// Type inference phase (type mismatches, unknown variables)
     Type,
-}
-
-impl DiagnosticPhase {
-    /// Get a short display name for the phase.
-    pub fn name(&self) -> &'static str {
-        match self {
-            DiagnosticPhase::Parse => "parse",
-            DiagnosticPhase::Hir => "hir",
-            DiagnosticPhase::Validation => "validation",
-            DiagnosticPhase::Type => "type",
-        }
-    }
 }
 
 /// Unique identifier for a diagnostic category.
@@ -353,6 +341,16 @@ pub enum DiagnosticId {
     /// a digit invalid for the base (`0b12`), or an integer literal whose
     /// magnitude exceeds `i64::MAX`.
     InvalidNumericLiteral,
+
+    // Builtin interfaces (BEP-062, E0153/E0154)
+    /// An `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (every function type implements it) and cannot be written by hand.
+    BuiltinInterfaceNotImplementable,
+    /// A generic parameter's bound (`T extends X`) names a compiler-builtin
+    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// (an existential), never as a bound.
+    BuiltinInterfaceNotABound,
 }
 
 impl DiagnosticId {
@@ -566,6 +564,8 @@ impl DiagnosticId {
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",
+            DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
+            DiagnosticId::BuiltinInterfaceNotABound => "E0154",
         }
     }
 }
@@ -606,15 +606,6 @@ impl Annotation {
         }
     }
 
-    /// Create a primary annotation without a message.
-    pub fn primary_no_msg(span: Span) -> Self {
-        Self {
-            span,
-            message: None,
-            is_primary: true,
-        }
-    }
-
     /// Create a secondary annotation with a message.
     pub fn secondary(span: Span, message: impl Into<String>) -> Self {
         Self {
@@ -643,15 +634,6 @@ impl RelatedInfo {
             span,
             message: message.into(),
             file_path: None,
-        }
-    }
-
-    /// Create a new related info with file path for display.
-    pub fn with_path(span: Span, message: impl Into<String>, path: impl Into<String>) -> Self {
-        Self {
-            span,
-            message: message.into(),
-            file_path: Some(path.into()),
         }
     }
 }
@@ -734,19 +716,6 @@ impl Diagnostic {
     #[must_use]
     pub fn with_related(mut self, span: Span, message: impl Into<String>) -> Self {
         self.related_info.push(RelatedInfo::new(span, message));
-        self
-    }
-
-    /// Add related information with file path.
-    #[must_use]
-    pub fn with_related_path(
-        mut self,
-        span: Span,
-        message: impl Into<String>,
-        path: impl Into<String>,
-    ) -> Self {
-        self.related_info
-            .push(RelatedInfo::with_path(span, message, path));
         self
     }
 

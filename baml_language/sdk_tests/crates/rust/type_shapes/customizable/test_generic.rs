@@ -40,16 +40,16 @@
 /// the streaming smoke's error.
 #[test]
 fn test_generic() {
-    // PROVISIONAL(rust-codegen): anonymous unions in a method's return
-    // position have no final Rust naming; this port assumes a synthesized
-    // enum `<Class><MethodCamelCase>Return` with one variant per arm
-    // (`String` for the `T = string` substitution here).
-    use baml_sdk::generics::{WrapperMethodsGetValueOrMarkerReturn, make_wrapper_methods};
+    // ADAPTATION(rust): the anonymous `T | WrapperMarker` return union
+    // synthesizes the arm-named generic enum `TOrWrapperMarker<T>`; with
+    // `T = String` the returned string decodes into the `T` variant (decode
+    // trial order is declaration order).
+    use baml_sdk::generics::{TOrWrapperMarker, make_wrapper_methods};
 
     let w = make_wrapper_methods("hello".to_string()).unwrap();
     assert_eq!(
         w.get_value_or_marker().unwrap(),
-        WrapperMethodsGetValueOrMarkerReturn::String("hello".to_string())
+        TOrWrapperMarker::T("hello".to_string())
     );
 }
 

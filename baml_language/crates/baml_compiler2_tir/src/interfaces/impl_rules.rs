@@ -214,6 +214,16 @@ fn lower_generic_param_interface_bounds(
             diags,
         );
         match ty {
+            // BEP-062: `baml.AnyFunction` is legal only as a value type (an
+            // existential); as a bound it is rejected and contributes no
+            // constraint (recovery treats the param as unbounded).
+            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                diags.push(
+                    crate::infer_context::TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn,
+                    },
+                );
+            }
             Ty::Interface(qtn, generics, assoc, _) => {
                 // A generic interface used as a bare bound under-instantiates it —
                 // a bound cannot infer the missing argument (mirrors the decl-env
@@ -511,6 +521,18 @@ pub fn impl_data<'db>(
     let mut conformance_diags: Vec<(crate::infer_context::TirTypeError, ImplDiagnosticLocation)> =
         Vec::new();
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
+        // BEP-062 (E0153): `baml.AnyFunction`'s conformance is derived by the
+        // compiler (every function type implements it, in the subtype engine);
+        // a written impl is rejected outright. The block's other diagnostics
+        // still ride along so the user sees everything at once.
+        if iface_qtn.is_builtin_root_type("AnyFunction") {
+            conformance_diags.push((
+                crate::infer_context::TirTypeError::BuiltinInterfaceNotImplementable {
+                    interface: iface_qtn.clone(),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            ));
+        }
         if matches!(origin, InterfaceImplOrigin::OutOfBody) && !iface_data.fields.is_empty() {
             conformance_diags.push((
                 crate::infer_context::TirTypeError::OutOfBodyImplementsFieldInterface {

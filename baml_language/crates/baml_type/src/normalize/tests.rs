@@ -246,6 +246,53 @@ fn never_is_removed_unknown_absorbs() {
 }
 
 #[test]
+fn literal_types_are_subtypes_of_their_base_only() {
+    // A literal type is a member of its base primitive's value set — a free,
+    // representation-preserving widening (TYPE_SYSTEM.md §BAML Subtyping Cases) —
+    // and of any union/optional containing it. It does NOT cross representations:
+    // `42 <: float` would be an int→float coercion, which is not a subtype
+    // relation.
+    let ctx = Ctx::default();
+    assert!(is_subtype(&lit_int(42), &Ty::int(), &ctx));
+    assert!(is_subtype(&lit_float("3.14"), &Ty::float(), &ctx));
+    assert!(is_subtype(
+        &Ty::Literal(
+            Literal::String("hello".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        ),
+        &Ty::string(),
+        &ctx
+    ));
+    assert!(is_subtype(
+        &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
+        &Ty::bool(),
+        &ctx
+    ));
+    assert!(!is_subtype(&lit_int(42), &Ty::float(), &ctx));
+    // Union / optional membership.
+    assert!(is_subtype(
+        &lit_int(42),
+        &union(vec![Ty::string(), Ty::int()]),
+        &ctx
+    ));
+    assert!(is_subtype(&lit_int(42), &Ty::optional(Ty::int()), &ctx));
+    assert!(is_subtype(&Ty::null(), &Ty::optional(Ty::string()), &ctx));
+}
+
+#[test]
+fn numeric_types_do_not_widen_across_representations() {
+    // Concrete types are atomic: `int` (i64) is not a subtype of `float` (f64 —
+    // precision loss past 2^53) nor of `bigint` (heap representation); those
+    // conversions are explicit or FFI-boundary coercions, never subtyping. The
+    // same holds under an (invariant) container.
+    let ctx = Ctx::default();
+    assert!(!is_subtype(&Ty::int(), &Ty::float(), &ctx));
+    assert!(!is_subtype(&Ty::int(), &bigint(), &ctx));
+    assert!(!is_subtype(&Ty::list(Ty::int()), &Ty::list(bigint()), &ctx));
+}
+
+#[test]
 fn literal_into_base_absorption() {
     let ctx = Ctx::default();
     // `int | 99 == int`.
@@ -1061,4 +1108,136 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     ));
     // Class singletons (and distinct values generally) are not folded.
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
+}
+
+// ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
+
+/// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
+/// list models a pre-default-fill existential (lowering normally fills
+/// `Returns`/`Throws` with `unknown`).
+fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
+    Ty::Interface(
+        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyFunction")),
+        vec![],
+        pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
+        TyAttr::default(),
+    )
+}
+
+fn simple_fn(ret: Ty, throws: Ty) -> Ty {
+    Ty::Function {
+        params: vec![FunctionParamTy::required(None, Ty::int())],
+        ret: Box::new(ret),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    }
+}
+
+#[test]
+fn every_function_implements_bare_any_function() {
+    // BEP-062: conformance is compiler-derived with no impl in the context.
+    // Both the default-filled existential (`Returns`/`Throws` pinned to
+    // `unknown`) and a pin-free one accept any function shape.
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let filled = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
+    assert!(is_subtype(
+        &simple_fn(Ty::string(), never.clone()),
+        &filled,
+        &ctx
+    ));
+    assert!(is_subtype(
+        &simple_fn(class("Doc"), class("HttpError")),
+        &filled,
+        &ctx
+    ));
+    assert!(is_subtype(
+        &simple_fn(Ty::string(), never),
+        &any_function(vec![]),
+        &ctx
+    ));
+    // Non-function values do not conform through the derived rule; they fall
+    // to the ordinary nominal fact, which this context does not claim.
+    assert!(!is_subtype(&Ty::int(), &filled, &ctx));
+    assert!(!is_subtype(&class("Doc"), &filled, &ctx));
+}
+
+#[test]
+fn any_function_pins_check_the_functions_channels_covariantly() {
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let ret_pin = any_function(vec![
+        ("Returns", union(vec![Ty::int(), Ty::string()])),
+        ("Throws", Ty::unknown()),
+    ]);
+    // `int <: int | string` fits the `Returns` pin; `bool` does not.
+    assert!(is_subtype(
+        &simple_fn(Ty::int(), never.clone()),
+        &ret_pin,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &simple_fn(Ty::bool(), never.clone()),
+        &ret_pin,
+        &ctx
+    ));
+    // A non-throwing function (`throws never`) fits every `Throws` pin; a
+    // mismatched error class does not.
+    let throws_pin = any_function(vec![
+        ("Returns", Ty::unknown()),
+        ("Throws", class("ToolError")),
+    ]);
+    assert!(is_subtype(&simple_fn(Ty::int(), never), &throws_pin, &ctx));
+    assert!(is_subtype(
+        &simple_fn(Ty::int(), class("ToolError")),
+        &throws_pin,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &simple_fn(Ty::int(), class("IoError")),
+        &throws_pin,
+        &ctx
+    ));
+}
+
+#[test]
+fn any_function_existentials_are_covariant_in_their_pins() {
+    // Unlike every other interface binding (invariant), `AnyFunction`'s pins
+    // only describe outputs of the held function, so the existentials
+    // themselves relate covariantly: `AnyFunction<Returns = int>` fits where
+    // `AnyFunction<Returns = int | string>` is expected.
+    let ctx = Ctx::default();
+    let narrow = any_function(vec![
+        ("Returns", Ty::int()),
+        (
+            "Throws",
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+        ),
+    ]);
+    let wide = any_function(vec![
+        ("Returns", union(vec![Ty::int(), Ty::string()])),
+        ("Throws", class("ToolError")),
+    ]);
+    let bare = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
+    assert!(is_subtype(&narrow, &wide, &ctx));
+    assert!(is_subtype(&narrow, &bare, &ctx));
+    assert!(is_subtype(&wide, &bare, &ctx));
+    assert!(!is_subtype(&wide, &narrow, &ctx));
+    assert!(!is_subtype(&bare, &narrow, &ctx));
+    // The carve-out is AnyFunction-specific: an unrelated same-shape interface
+    // still goes through the invariant `interface_requires` fact, which this
+    // context does not claim.
+    let other = Ty::Interface(
+        qtn("Callable"),
+        vec![],
+        vec![(Name::new("Returns"), Ty::int())],
+        TyAttr::default(),
+    );
+    assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
 }

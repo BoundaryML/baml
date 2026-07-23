@@ -1,24 +1,20 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{path::PathBuf, sync::Arc};
+use std::{future::Future, io::Write as _, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
-    test_arg_to_external,
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, CaptureDefaults,
+    FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
+    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
-use clap::{Args, CommandFactory, FromArgMatches};
+use clap::{Args, CommandFactory, FromArgMatches, ValueEnum};
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    bytecode_cache::CacheContext,
-    project_load::{build_db_from_sources, resolve_project_sources},
-    reporter::Reporter,
-    test_filter::TestFilter,
-};
+use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
 
 #[derive(Args, Clone, Debug)]
 #[command(
@@ -66,10 +62,28 @@ pub struct TestArgs {
     /// Uses the same canonical-id selector syntax as --include.
     pub exclude: Vec<String>,
 
-    /// Explicit global CLI color, injected by the top-level parser so a direct
-    /// scalar value can override the selected profile's value.
+    /// Explicit global output options, injected by the top-level parser so
+    /// direct scalar values can override the selected profile's values.
     #[arg(skip)]
-    pub(crate) cli_color: Option<crate::paint::ColorChoice>,
+    pub(crate) cli_output: TestOutputOverrides,
+
+    /// Print BAML `log.*` events to stdout at or above this level.
+    ///
+    /// Logs are off by default. Because logs use stdout, callers can retain
+    /// the raw stream with `baml test --logs INFO > baml-test.log`.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = TestLogLevel::Off,
+        ignore_case = true,
+        value_name = "LEVEL"
+    )]
+    pub logs: TestLogLevel,
+
+    /// Explicit command-line log level, injected by the top-level parser so a
+    /// direct scalar value can override the selected profile's value.
+    #[arg(skip)]
+    pub(crate) cli_logs: Option<TestLogLevel>,
 }
 
 #[derive(Debug, Default)]
@@ -79,13 +93,76 @@ struct TestInvocation {
     profile_exclude: Vec<String>,
     cli_include: Vec<String>,
     cli_exclude: Vec<String>,
-    color: Option<crate::paint::ColorChoice>,
+    output: crate::output::OutputArgs,
+    logs: TestLogLevel,
 }
 
 #[derive(Debug)]
 struct ParsedProfileArgs {
     test: TestArgs,
-    color: Option<crate::paint::ColorChoice>,
+    output: TestOutputOverrides,
+    logs: Option<TestLogLevel>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct TestOutputOverrides {
+    pub(crate) preset: Option<crate::output::OutputPreset>,
+    pub(crate) color: Option<crate::output::ColorChoice>,
+    pub(crate) hyperlinks: Option<crate::output::HyperlinkChoice>,
+    pub(crate) diagnostic_format: Option<crate::output::DiagnosticFormatChoice>,
+}
+
+impl TestOutputOverrides {
+    pub(crate) fn from_cli_matches(
+        matches: &clap::ArgMatches,
+        output: crate::output::OutputArgs,
+    ) -> Self {
+        let explicitly_set = |id| {
+            matches
+                .value_source(id)
+                .is_some_and(|source| source != clap::parser::ValueSource::DefaultValue)
+        };
+        Self {
+            preset: explicitly_set("preset").then_some(output.preset),
+            color: explicitly_set("color").then_some(output.color).flatten(),
+            hyperlinks: explicitly_set("hyperlinks")
+                .then_some(output.hyperlinks)
+                .flatten(),
+            diagnostic_format: explicitly_set("diagnostic_format")
+                .then_some(output.diagnostic_format)
+                .flatten(),
+        }
+    }
+
+    fn from_profile_matches(matches: &clap::ArgMatches, output: crate::output::OutputArgs) -> Self {
+        let supplied =
+            |id| matches.value_source(id) == Some(clap::parser::ValueSource::CommandLine);
+        Self {
+            preset: supplied("preset").then_some(output.preset),
+            color: supplied("color").then_some(output.color).flatten(),
+            hyperlinks: supplied("hyperlinks")
+                .then_some(output.hyperlinks)
+                .flatten(),
+            diagnostic_format: supplied("diagnostic_format")
+                .then_some(output.diagnostic_format)
+                .flatten(),
+        }
+    }
+
+    fn apply_to(self, output: &mut crate::output::OutputArgs) {
+        if let Some(preset) = self.preset {
+            output.preset = preset;
+        }
+        if let Some(color) = self.color {
+            output.color = Some(color);
+        }
+        if let Some(hyperlinks) = self.hyperlinks {
+            output.hyperlinks = Some(hyperlinks);
+        }
+        if let Some(diagnostic_format) = self.diagnostic_format {
+            output.diagnostic_format = Some(diagnostic_format);
+        }
+    }
 }
 
 impl TestInvocation {
@@ -99,6 +176,36 @@ impl TestInvocation {
             || !self.profile_exclude.is_empty()
             || !self.cli_include.is_empty()
             || !self.cli_exclude.is_empty()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum TestLogLevel {
+    #[default]
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+}
+
+impl TestLogLevel {
+    fn allows(self, event_level: Option<&str>) -> bool {
+        let threshold = match self {
+            Self::Off => return false,
+            Self::Error => 1,
+            Self::Warn => 2,
+            Self::Info => 3,
+            Self::Debug => 4,
+        };
+        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
+            "error" => 1,
+            "warn" | "warning" => 2,
+            "info" => 3,
+            "debug" => 4,
+            _ => 3,
+        };
+        event <= threshold
     }
 }
 
@@ -172,27 +279,101 @@ struct RunCtx<'a> {
     engine: &'a Arc<BexEngine>,
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
+    logs: TestLogLevel,
+}
+
+impl RunCtx<'_> {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+        let builder =
+            FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
+        if self.logs == TestLogLevel::Off {
+            return (builder.build(), None);
+        }
+
+        // Only log bodies are needed here. Periodic draining keeps this queue
+        // bounded in practice while leaving enough headroom for bursty tests.
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
+        let context = builder
+            .with_capture_defaults(CaptureDefaults {
+                values_enabled: false,
+                logs_enabled: true,
+            })
+            .with_value_capture(producer.clone())
+            .build();
+        (context, Some(producer))
+    }
+
+    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
+        let Some(producer) = producer else {
+            return;
+        };
+        let report = producer.drain_rendered_logs();
+        for log in report.logs {
+            if self.logs.allows(log.metadata.level.as_deref()) {
+                let level = log
+                    .metadata
+                    .level
+                    .as_deref()
+                    .unwrap_or("info")
+                    .to_ascii_uppercase();
+                println!("[{level}] {}", log.body);
+            }
+        }
+        for failure in report.failures {
+            eprintln!("WARN test log capture failed: {}", failure.diagnostic);
+        }
+
+        // Redirected stdout is block-buffered. Flush every drained batch so
+        // consumers can observe test logs while the test is still running.
+        let _ = std::io::stdout().flush();
+    }
+
+    fn block_on_with_logs<T>(
+        &self,
+        future: impl Future<Output = T>,
+        producer: Option<&TraceCaptureProducer>,
+    ) -> T {
+        let Some(producer) = producer else {
+            return self.rt.block_on(future);
+        };
+        self.rt.block_on(async {
+            tokio::pin!(future);
+            let mut interval = tokio::time::interval(Duration::from_millis(50));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    result = &mut future => {
+                        // The future may complete between ticks. Drain once
+                        // more before its PASS/FAIL report is printed.
+                        self.print_logs(Some(producer));
+                        break result;
+                    }
+                    _ = interval.tick() => self.print_logs(Some(producer)),
+                }
+            }
+        })
+    }
 }
 
 impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let resolved = resolve_project_sources(self.from.as_deref())?;
-        let invocation = self.resolve_invocation(resolved.manifest.as_deref(), &resolved.root)?;
-        if let Some(color) = invocation.color {
-            crate::paint::init_color(color);
-        }
-        if resolved.files.is_empty() {
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWriteTests,
+        )?;
+        let invocation =
+            self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
+        crate::output::init(invocation.output);
+        if session.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                resolved.root.display()
+                session.root().display()
             ));
             return Ok(crate::ExitCode::NoTestsRun);
         }
-
-        let cache = CacheContext::open(&resolved, /* emit_test_cases */ true);
 
         // Warm `--list` fast path. The flattened test list (legacy tests +
         // fully-expanded testset leaf names) is a pure function of the compiled
@@ -203,16 +384,13 @@ impl TestArgs {
         // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
         // honest path below.
         if invocation.list {
-            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref(), &invocation) {
+            if let Some(exit) = self.try_cached_list(&reporter, session.cache.as_ref(), &invocation)
+            {
                 return Ok(exit);
             }
         }
 
-        let cached_program = if CacheContext::verify_enabled() {
-            None
-        } else {
-            cache.as_ref().and_then(CacheContext::load)
-        };
+        let cached_program = session.try_cached_program();
 
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries everything the test run
@@ -234,22 +412,14 @@ impl TestArgs {
         let (engine, legacy) = if let Some(hit) = cached_engine {
             hit
         } else {
-            let mut db = build_db_from_sources(&resolved, |_| {});
+            let warmth = session.warm_prep();
+            let (reuse_plan, stdlib_interface_hit) =
+                (warmth.reuse_plan, warmth.stdlib_interface_hit);
+            let db = &session.db;
+            let cache = &session.cache;
             let project = db
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
-
-            // Seed the stdlib typed interface before the first typecheck query
-            // (gated off under verify so the oracle exercises the honest path) and
-            // prepare the per-file reuse plan — the same warm-database setup `run`
-            // and `check` run.
-            let (reuse_plan, stdlib_interface_hit) = match &cache {
-                Some(ctx) => {
-                    let prep = ctx.prepare_warm_db(&mut db);
-                    (prep.reuse_plan, prep.stdlib_interface_hit)
-                }
-                None => (None, false),
-            };
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -258,11 +428,11 @@ impl TestArgs {
             // plan's dirty files, serve clean files from their cached blobs, and
             // carry the fresh per-file blobs into the manifest); without one,
             // run the honest full check. The merged set is byte-identical.
-            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = &cache {
-                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
+                let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
-                (baml_project::collect_diagnostics(&db), None)
+                (baml_project::collect_diagnostics(db), None)
             };
             let errors: Vec<_> = diagnostics
                 .iter()
@@ -274,37 +444,37 @@ impl TestArgs {
                 // run/pack errors instead of a bullet list of messages. Sources
                 // and paths cover every user file plus builtins — an error in one
                 // file may carry related spans elsewhere.
-                let rendered = crate::check_command::render_project_diagnostics(&db, &errors);
+                let rendered = crate::check_command::render_project_diagnostics(db, &errors);
                 reporter.abandon();
                 eprintln!("{rendered}");
                 return Ok(crate::ExitCode::Other);
             }
 
             // ── 3. Discover legacy tests from HIR ──────────────────────────
-            let legacy = discover_legacy_tests(&db, project);
+            let legacy = discover_legacy_tests(db, project);
 
             // ── 4. Compile + engine + runtime ──────────────────────────────
             let compile_options = baml_compiler2_emit::CompileOptions {
                 emit_test_cases: true,
             };
             let compiled = crate::bytecode_cache::compile_program_artifacts(
-                &db,
+                db,
                 &compile_options,
                 cache.as_ref(),
                 reuse_plan.as_ref(),
             )
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-            if let Some(ctx) = &cache {
+            if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
                 ctx.verify_and_store(
-                    &db,
+                    db,
                     &compiled,
                     fresh,
                     reuse_plan.as_ref(),
                     stdlib_interface_hit,
-                    || build_db_from_sources(&resolved, |_| {}),
+                    || session.honest_db(),
                 )?;
             }
             // Warm-run evidence: with the stdlib interface seeded this is 0 (the
@@ -367,6 +537,7 @@ impl TestArgs {
             engine: &engine,
             rt: &rt,
             cancel: &cancel,
+            logs: invocation.logs,
         };
 
         // ── 7. List mode ───────────────────────────────────────────────────
@@ -394,7 +565,7 @@ impl TestArgs {
             // excluded tree merely to populate an unfiltered cache entry. A
             // cache produced by an earlier unfiltered run can still serve this
             // invocation through the fast path above.
-            if let Some(ctx) = &cache
+            if let Some(ctx) = &session.cache
                 && !invocation.has_filters()
                 && !testset_names
                     .iter()
@@ -553,6 +724,12 @@ impl TestArgs {
             None
         };
 
+        let mut output = crate::output::OutputArgs::default();
+        if let Some(profile) = &profile_args {
+            profile.output.apply_to(&mut output);
+        }
+        self.cli_output.apply_to(&mut output);
+
         let invocation = TestInvocation {
             // Boolean flags compose naturally. Future value-taking scalar test
             // options should use clap value-source tracking so an explicit CLI
@@ -568,9 +745,11 @@ impl TestArgs {
                 .unwrap_or_default(),
             cli_include: self.include.clone(),
             cli_exclude: self.exclude.clone(),
-            color: self
-                .cli_color
-                .or_else(|| profile_args.as_ref().and_then(|p| p.color)),
+            output,
+            logs: self
+                .cli_logs
+                .or_else(|| profile_args.as_ref().and_then(|p| p.logs))
+                .unwrap_or(self.logs),
         };
         validate_selectors(
             invocation
@@ -609,16 +788,20 @@ impl TestArgs {
                     .chain(tokens.iter().map(String::as_str)),
             )
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
-        let color_is_explicit =
-            matches.value_source("color") == Some(clap::parser::ValueSource::CommandLine);
+        let logs_is_explicit = matches
+            .subcommand_matches("test")
+            .and_then(|matches| matches.value_source("logs"))
+            == Some(clap::parser::ValueSource::CommandLine);
         let parsed = crate::commands::RuntimeCli::from_arg_matches(&matches)
             .map_err(|e| anyhow!("invalid args in test profile `{name}`: {e}"))?;
+        let output = TestOutputOverrides::from_profile_matches(&matches, parsed.output);
         let crate::commands::Commands::Test(test) = parsed.command else {
             unreachable!("synthetic profile argv always selects the test command")
         };
         Ok(Some(ParsedProfileArgs {
+            logs: logs_is_explicit.then_some(test.logs),
             test,
-            color: color_is_explicit.then_some(parsed.color),
+            output,
         }))
     }
 
@@ -820,16 +1003,13 @@ fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mu
         }
     };
 
-    match ctx.rt.block_on(
-        ctx.engine.call_function_bound_args(
-            &t.function_name,
-            ordered_args,
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_cancel_token(ctx.cancel.clone())
-                .build(),
-            true,
-        ),
-    ) {
+    let (call_ctx, logs) = ctx.call_context(CallId::next());
+    let result = ctx.block_on_with_logs(
+        ctx.engine
+            .call_function_bound_args(&t.function_name, ordered_args, call_ctx, true),
+        logs.as_ref(),
+    );
+    match result {
         Ok(result) => {
             println!("PASS {}", t.canonical_id);
             println!("  => {result:?}");
@@ -885,11 +1065,9 @@ fn run_filtered_report(
     registry: &BexExternalValue,
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
-    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
-        .with_cancel_token(ctx.cancel.clone())
-        .build();
-    ctx.rt
-        .block_on(ctx.engine.call_function(
+    let (call_ctx, logs) = ctx.call_context(CallId::next());
+    let result = ctx.block_on_with_logs(
+        ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
             vec![
                 registry.clone(),
@@ -900,8 +1078,10 @@ fn run_filtered_report(
             ],
             call_ctx,
             true,
-        ))
-        .map_err(|e| anyhow!("run_filtered failed: {e}"))
+        ),
+        logs.as_ref(),
+    );
+    result.map_err(|e| anyhow!("run_filtered failed: {e}"))
 }
 
 fn list_selected_testset_names(
@@ -1292,6 +1472,19 @@ mod tests {
     }
 
     #[test]
+    fn test_log_level_filters_at_or_above_threshold() {
+        assert!(!TestLogLevel::Off.allows(Some("error")));
+        assert!(TestLogLevel::Error.allows(Some("error")));
+        assert!(!TestLogLevel::Error.allows(Some("warn")));
+        assert!(TestLogLevel::Info.allows(Some("error")));
+        assert!(TestLogLevel::Info.allows(Some("warning")));
+        assert!(TestLogLevel::Info.allows(Some("info")));
+        assert!(TestLogLevel::Info.allows(None));
+        assert!(!TestLogLevel::Info.allows(Some("debug")));
+        assert!(TestLogLevel::Debug.allows(Some("debug")));
+    }
+
+    #[test]
     fn consume_fail_with_zero_hard_failed_synthesizes_one() {
         // Runner fails the aggregate without marking any child failed.
         let parsed =
@@ -1306,12 +1499,15 @@ mod tests {
             "root::integration::*".to_string(),
             "-x".to_string(),
             "*::flaky::*".to_string(),
+            "--logs".to_string(),
+            "info".to_string(),
         ];
         let parsed = TestArgs::parse_profile_args("ci", &tokens)
             .unwrap()
             .unwrap();
         assert_eq!(parsed.test.include, vec!["root::integration::*"]);
         assert_eq!(parsed.test.exclude, vec!["*::flaky::*"]);
+        assert_eq!(parsed.logs, Some(TestLogLevel::Info));
 
         let globals = TestArgs::parse_profile_args(
             "globals",
@@ -1325,7 +1521,10 @@ mod tests {
         )
         .unwrap()
         .unwrap();
-        assert_eq!(globals.color, Some(crate::paint::ColorChoice::Never));
+        assert_eq!(
+            globals.output.color,
+            Some(crate::output::ColorChoice::Never)
+        );
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
             .unwrap_err()
@@ -1342,6 +1541,8 @@ mod tests {
             "ci".into(),
             "--color".into(),
             "always".into(),
+            "--logs".into(),
+            "debug".into(),
         ]);
         let crate::commands::Commands::Test(args) = cli.command else {
             panic!("expected test command")
@@ -1351,12 +1552,16 @@ mod tests {
                 Some(
                     r#"
 [test.profiles.ci]
-args = ["--color", "never"]
+args = ["--color", "never", "--logs", "warn"]
 "#,
                 ),
                 std::path::Path::new("/project"),
             )
             .unwrap();
-        assert_eq!(invocation.color, Some(crate::paint::ColorChoice::Always));
+        assert_eq!(
+            invocation.output.color,
+            Some(crate::output::ColorChoice::Always)
+        );
+        assert_eq!(invocation.logs, TestLogLevel::Debug);
     }
 }

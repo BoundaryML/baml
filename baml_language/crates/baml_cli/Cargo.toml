@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 baml_builtins2 = { workspace = true }
+baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
@@ -32,14 +33,17 @@ bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_cpp = { workspace = true }
+sdkgen_csharp = { workspace = true }
 sdkgen_go = { workspace = true }
+sdkgen_java = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_rust = { workspace = true }
+sdkgen_swift = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
-clap = { workspace = true, features = [ "color" ] }
+clap = { workspace = true, features = [ "color", "env" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
@@ -49,6 +53,7 @@ indicatif = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 object = { workspace = true }
+rayon = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }

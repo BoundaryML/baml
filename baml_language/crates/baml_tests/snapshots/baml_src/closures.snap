@@ -359,7 +359,7 @@ function closures.closures_unbound_in_map() -> string[] {
     init_instance user.closures.ClsEmployee .first, .last
     load_type closures.ClsEmployee
     alloc_array 2
-    load_global user.closures.ClsEmployee.full_name
+    load_const user.closures.ClsEmployee.full_name
     call baml.Array.map
     return
 }

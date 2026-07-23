@@ -426,7 +426,9 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     virtual_call nargs=1 ntypeargs=0
     store_var j
     load_var j
-    is_type int
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -436,7 +438,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _3
 
   L2:
     return
@@ -527,8 +529,9 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     load_var j
     call baml.json.to
     load_field .value
-    store_var_load_var _5
-    is_type int
+    store_var _6
+    load_var _6
+    narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -538,7 +541,7 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     jump L2
 
   L1:
-    load_var _5
+    load_var _6
 
   L2:
     return

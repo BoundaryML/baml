@@ -84,6 +84,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::Discriminant
             | I::TypeTag
             | I::IsType(..)
+            | I::NarrowBind { .. }
             | I::LoadType(..)
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
@@ -296,6 +297,8 @@ mod tests {
         Function {
             name: "test".to_string(),
             source_file: String::new(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,

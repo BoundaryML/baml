@@ -21,6 +21,7 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     contributions::Definition,
+    loc::{ClassLoc, FunctionLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId},
 };
@@ -74,6 +75,23 @@ struct MemberAccess<'a> {
     bound: bool,
 }
 
+enum ClassFieldLookup {
+    Found(Ty),
+    Duplicate,
+    NotFound,
+}
+
+enum ClassMethodLookup<'db> {
+    Found {
+        ty: Ty,
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    DuplicateInherent,
+    DeferToInterfaces,
+    NotFound,
+}
+
 /// Construct `Ty::Class` for `baml.spawn.SpawnParams<value, error>` (BEP-034
 /// middleware: the value a `spawn ... with` pipeline transforms).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
@@ -115,6 +133,19 @@ fn json_decode_error_ty() -> Ty {
             Name::new("baml"),
             vec![Name::new("json")],
             Name::new("JsonDecodeError"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
+/// The exact builtin type accepted by the call-site `$id` side channel.
+fn boundary_local_id_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new(baml_builtins2::PACKAGE_BOUNDARY),
+            vec![],
+            Name::new("LocalId"),
         ),
         vec![],
         TyAttr::default(),
@@ -1340,6 +1371,49 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn local_is_uncaptured(&self, subject: ExprId, name: &Name) -> bool {
+        if !self.locals.contains_key(name) {
+            return false;
+        }
+        let Some(source_map) = self.body_source_map.as_ref() else {
+            return false;
+        };
+        let db = self.context.db();
+        let file = self.context.scope().file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let offset = source_map.expr_span(subject).start();
+        let use_scope = index.scope_at_offset(offset, None);
+        let Some(binding_id) = index.visible_binding_at(use_scope, offset, name) else {
+            return false;
+        };
+        index
+            .scope_bindings
+            .get(binding_id.scope.index() as usize)
+            .is_some_and(|bindings| !bindings.captured_bindings.contains(&binding_id))
+    }
+
+    fn narrow_uncaptured_local(&mut self, subject: ExprId, name: &Name, ty: Ty) {
+        if self.local_is_uncaptured(subject, name) {
+            self.narrow_local(name.clone(), ty);
+        }
+    }
+
+    fn uncaptured_condition_narrowings(
+        &self,
+        condition: ExprId,
+        body: &ExprBody,
+    ) -> Vec<crate::narrowing::Narrowing> {
+        crate::narrowing::extract_narrowings(
+            condition,
+            body,
+            &self.expressions,
+            &self.pattern_types,
+        )
+        .into_iter()
+        .filter(|narrowing| self.local_is_uncaptured(narrowing.subject, &narrowing.name))
+        .collect()
+    }
+
     /// Seed a captured-name marker as `Ty::Unknown` to suppress false
     /// "unresolved name" diagnostics inside a lambda body. This is NOT a
     /// binding; the actual capture's type is resolved by the parent scope.
@@ -2369,27 +2443,65 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let mut next_positional = 0usize;
         let mut saw_named = false;
+        let mut runtime_id = None;
         let mut reported_overflow_arity = false;
-        let has_named_args =
-            call_args.is_some_and(|call_args| call_args.iter().any(|arg| arg.label.is_some()));
+        let ordinary_arg_count = call_args.map_or(args.len(), |call_args| {
+            call_args
+                .iter()
+                .filter(|arg| {
+                    arg.label
+                        .as_ref()
+                        .is_none_or(|label| label.as_str() != "$id")
+                })
+                .count()
+        });
+        let has_named_args = call_args.is_some_and(|call_args| {
+            call_args.iter().any(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|label| label.as_str() != "$id")
+            })
+        });
         for (arg_index, arg_expr) in args.iter().copied().enumerate() {
             let label = call_args
                 .and_then(|call_args| call_args.get(arg_index))
                 .and_then(|arg| arg.label.as_ref());
 
+            if label.is_some_and(|label| label.as_str() == "$id") {
+                if runtime_id.is_some() {
+                    self.context
+                        .report_simple(TirTypeError::DuplicateRuntimeIdArgument, arg_expr);
+                    self.infer_expr(arg_expr, body);
+                    provided_args.insert(arg_expr);
+                    continue;
+                }
+
+                let got = self.infer_expr(arg_expr, body);
+                if !self.is_subtype(&got, &boundary_local_id_ty()) {
+                    self.context.report_simple(
+                        TirTypeError::RuntimeIdArgumentTypeMismatch { got },
+                        arg_expr,
+                    );
+                }
+                runtime_id = Some(arg_expr);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
+            if runtime_id.is_some() {
+                self.context
+                    .report_simple(TirTypeError::RuntimeIdArgumentMustBeLast, arg_expr);
+                self.infer_expr(arg_expr, body);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
             if let Some(label) = label {
                 saw_named = true;
                 let Some(param_index) = name_to_index.get(label).copied() else {
-                    // `foo($id = x)` deserves a targeted message: overrides
-                    // are set inside the callee, not at the call site (the
-                    // call-site form is not part of the language surface).
                     self.context.report_simple(
-                        if label.as_str() == "$id" {
-                            TirTypeError::RuntimeIdCallSiteArgument
-                        } else {
-                            TirTypeError::UnknownNamedArgument {
-                                name: label.clone(),
-                            }
+                        TirTypeError::UnknownNamedArgument {
+                            name: label.clone(),
                         },
                         arg_expr,
                     );
@@ -2420,7 +2532,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: effective_params.len(),
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2450,12 +2562,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .filter(|param| param.is_required())
             .count();
-        let reported_positional_arity = !has_named_args && args.len() < required_count;
+        let reported_positional_arity = !has_named_args && ordinary_arg_count < required_count;
         if reported_positional_arity {
             self.context.report_simple(
                 TirTypeError::ArgumentCountMismatch {
                     expected: required_count,
-                    got: args.len(),
+                    got: ordinary_arg_count,
                 },
                 expr_id,
             );
@@ -2476,7 +2588,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: required_count,
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2519,6 +2631,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
+                side_channels: crate::inference::CallSideChannels { runtime_id },
             },
         );
 
@@ -2664,6 +2777,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .or_insert_with(|| crate::inference::CallPlan {
                 bindings: Vec::new(),
                 type_args,
+                side_channels: crate::inference::CallSideChannels::default(),
             });
     }
 
@@ -4487,12 +4601,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = crate::narrowing::extract_narrowings(
-                    *condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -4678,8 +4787,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args: obj_type_args,
                 fields,
+                spreads,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields),
+            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields, spreads),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -5699,6 +5809,53 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn report_unknown_class_property(
+        &mut self,
+        object_expr: ExprId,
+        class_name: &crate::ty::QualifiedTypeName,
+        field_name: &Name,
+        field_expr: ExprId,
+        declared_fields: &FxHashMap<Name, Ty>,
+    ) {
+        let (is_shorthand, is_synthetic_object) = self
+            .body_source_map
+            .as_ref()
+            .map(|source_map| {
+                (
+                    source_map.is_property_shorthand_expr(field_expr),
+                    source_map.is_synthetic_expr(object_expr),
+                )
+            })
+            .unwrap_or_default();
+        if !is_shorthand && is_synthetic_object {
+            return;
+        }
+
+        let suggestions = Self::similar_name_suggestions(field_name, declared_fields.keys());
+        let error = if is_shorthand {
+            TirTypeError::UnknownClassPropertyShorthand {
+                class_name: class_name.clone(),
+                name: field_name.clone(),
+                suggestions,
+            }
+        } else {
+            TirTypeError::UnknownClassField {
+                class_name: class_name.clone(),
+                field_name: field_name.clone(),
+                suggestions,
+            }
+        };
+
+        if let Some(source_map) = &self.body_source_map {
+            self.context.report_at_span(
+                error,
+                source_map.object_field_name_span(object_expr, field_expr),
+            );
+        } else {
+            self.context.report_simple(error, field_expr);
+        }
+    }
+
     #[inline(never)]
     fn infer_object_expr(
         &mut self,
@@ -5707,7 +5864,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
     ) -> Ty {
+        // Spread expressions are ordinary expressions: infer them even before
+        // resolving the destination class so calls nested inside a spread get
+        // their TIR call plans (including omitted-default bindings). Skipping
+        // these used to let MIR fall back to the source argument list, so a
+        // five-parameter factory called with two values emitted no OmittedArg
+        // sentinels and consumed three slots from its caller's VM frame.
+        let spread_types: Vec<(ExprId, Ty)> = spreads
+            .iter()
+            .map(|spread| (spread.expr, self.infer_expr(spread.expr, body)))
+            .collect();
+
         // Class-instance literals only: map literals (`map { .. }`) are routed
         // to `infer_map_object_expr` by the `is_map_object_literal` guard in the
         // `Expr::Object` arm before reaching here. The parser only emits an
@@ -5750,6 +5919,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &field_ty,
                                 &mut bindings,
                             );
+                        }
+                        // An exact-class spread can determine otherwise omitted
+                        // class arguments (`Box { ...box_int }` => `Box<int>`).
+                        for (_, spread_ty) in &spread_types {
+                            if let Ty::Class(spread_name, spread_args, _) = spread_ty
+                                && spread_name == &class_name
+                                && spread_args.len() == class_data.generic_params.len()
+                            {
+                                for (param, arg) in
+                                    class_data.generic_params.iter().zip(spread_args)
+                                {
+                                    bindings.entry(param.clone()).or_insert_with(|| arg.clone());
+                                }
+                            }
                         }
                         // Params that appear in some field's declared type are
                         // inferable in principle, so leaving one unbound (e.g. `T`
@@ -5806,6 +5989,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             ty => ty,
         };
         self.validate_type_generic_bounds(expr_id, &ty);
+        // Class spread is nominal and invariant: the source must be the same
+        // resolved class with compatible generic arguments. Besides preventing
+        // runtime field-layout violations, checking here ensures every nested
+        // expression is fully typed before MIR lowering.
+        for (spread_expr, spread_ty) in &spread_types {
+            if !matches!(spread_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.is_subtype(spread_ty, &ty)
+            {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: ty.clone(),
+                        got: spread_ty.clone(),
+                    },
+                    *spread_expr,
+                    Vec::new(),
+                );
+            }
+        }
         if let Ty::Class(class_name, type_args, _) = &ty {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
@@ -5847,6 +6048,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
+                    self.report_unknown_class_property(
+                        expr_id,
+                        class_name,
+                        field_name,
+                        *field_expr,
+                        &field_types,
+                    );
                     self.infer_expr(*field_expr, body);
                 }
             }
@@ -5877,9 +6085,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
-        if let Ty::Class(lit_qtn, _, _) = &lit_ty
-            && lit_qtn != expected_qtn
-        {
+        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
+            lit_qtn != expected_qtn
+                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+        } else {
+            false
+        };
+        if declared_mismatch {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
                 && !self.is_subtype(&inferred, expected)
@@ -5899,6 +6111,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     fn check_object_expr(
         &mut self,
@@ -5906,6 +6119,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Ty {
@@ -5924,6 +6138,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         self.validate_type_generic_bounds(expr_id, expected);
         if let Ty::Class(class_name, type_args, _) = expected {
+            for spread in spreads {
+                self.check_expr(spread.expr, body, expected);
+            }
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
                 .into_iter()
@@ -5964,6 +6181,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
+                    self.report_unknown_class_property(
+                        expr_id,
+                        class_name,
+                        field_name,
+                        *field_expr,
+                        &field_types,
+                    );
                     self.infer_expr(*field_expr, body);
                 }
             }
@@ -6635,12 +6859,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = crate::narrowing::extract_narrowings(
-                    *condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -6725,8 +6944,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 type_name,
                 type_args,
+                spreads,
                 ..
-            } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
+            } => self.check_object_expr(
+                expr_id, body, expected, fields, spreads, type_name, type_args,
+            ),
             Expr::Map { entries } => {
                 // Look through aliases, a nullable wrapper (`map<string, int>?`),
                 // and a union with a unique map member (`json` is
@@ -7178,7 +7400,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // register the pattern bindings for the body only, then restore.
                 let snapshot = self.snapshot_scoped_locals();
                 if let Some(name) = &scrutinee_name {
-                    self.narrow_local(name.clone(), result.matched_ty.clone());
+                    self.narrow_uncaptured_local(*scrutinee, name, result.matched_ty.clone());
                 }
                 self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
                 self.loop_depth += 1;
@@ -7553,7 +7775,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         if let Some(matched_ty) = self.pattern_types.get(&pattern).cloned() {
                             let complement =
                                 crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                            self.narrow_local(name, complement);
+                            self.narrow_uncaptured_local(scrutinee, &name, complement);
                         }
                     }
                 }
@@ -7589,12 +7811,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
                 self.infer_expr(condition, body);
-                let narrowings = crate::narrowing::extract_narrowings(
-                    condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(condition, body);
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).
@@ -7780,7 +7997,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Narrow the scrutinee local for the arm body.
             if let Some(name) = &scrutinee_name {
-                self.narrow_local(name.clone(), narrowed.clone());
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, narrowed.clone());
             }
 
             self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
@@ -7968,7 +8185,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pattern bindings, then infer/check the body.
         let snapshot = self.snapshot_scoped_locals();
         if let Some(name) = &scrutinee_name {
-            self.narrow_local(name.clone(), matched_ty.clone());
+            self.narrow_uncaptured_local(scrutinee_expr_id, name, matched_ty.clone());
         }
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         let then_ty = match expected {
@@ -7984,7 +8201,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(name) = &scrutinee_name {
                 let complement =
                     crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                self.narrow_local(name.clone(), complement);
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, complement);
             }
             let ty = match expected {
                 Some(exp) => self.check_expr(else_expr, body, exp),
@@ -9595,8 +9812,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .is_none()
                 && !is_dep_package
             {
-                self.context
-                    .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
+                let error = if self
+                    .body_source_map
+                    .as_ref()
+                    .is_some_and(|source_map| source_map.is_property_shorthand_expr(expr_id))
+                {
+                    TirTypeError::UnresolvedPropertyShorthand {
+                        name: name.clone(),
+                        suggestions: Self::similar_name_suggestions(name, self.locals.keys()),
+                    }
+                } else {
+                    TirTypeError::UnresolvedName { name: name.clone() }
+                };
+                self.context.report_simple(error, expr_id);
             }
             ty
         } else if segments.len() >= 2 {
@@ -10068,17 +10296,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     type_name,
                 );
                 // Look up method on this class (no type args for UFCS)
-                if let Some((method_ty, class_loc, func_loc)) =
-                    self.lookup_class_method(&class_qtn, &[], method_name)
-                {
-                    self.resolutions.insert(
-                        expr_id,
-                        crate::inference::MemberResolution::UnboundMethod {
-                            class_loc,
-                            func_loc,
-                        },
-                    );
-                    return Some(method_ty);
+                match self.lookup_class_method(&class_qtn, &[], method_name) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => {
+                        self.resolutions.insert(
+                            expr_id,
+                            crate::inference::MemberResolution::UnboundMethod {
+                                class_loc,
+                                func_loc,
+                            },
+                        );
+                        return Some(ty);
+                    }
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Some(Ty::Error {
+                            attr: TyAttr::default(),
+                        });
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => {}
                 }
             }
         }
@@ -10438,8 +10676,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         match base_ty {
             Ty::Class(class_name, type_args, _) => {
                 // Check class fields
-                let class_fields = self.lookup_class_fields(class_name, type_args);
-                if let Some(field_ty) = class_fields.get(member) {
+                let field_ty = match self.lookup_class_field(class_name, type_args, member) {
+                    ClassFieldLookup::Found(ty) => Some(ty),
+                    ClassFieldLookup::Duplicate => {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
+                    ClassFieldLookup::NotFound => None,
+                };
+                if let Some(field_ty) = field_ty {
+                    if self.class_has_inherent_method(class_name, member) {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
                     // Store field resolution for LSP navigation
                     if let Some(class_loc) = self.resolve_class_loc(class_name) {
                         self.resolutions.insert(
@@ -10450,14 +10701,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                             },
                         );
                     }
-                    return field_ty.clone();
+                    return field_ty;
                 }
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some((ty, class_loc, func_loc)) =
-                    self.lookup_class_method(class_name, type_args, member)
-                {
+                let class_method = match self.lookup_class_method(class_name, type_args, member) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => Some((ty, class_loc, func_loc)),
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => None,
+                };
+                if let Some((ty, class_loc, func_loc)) = class_method {
                     if bound {
                         // Record the receiver's class type args (owner class
                         // generics → concrete args) keyed by this callee, so the
@@ -11798,22 +12060,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Look up class fields from the package items (via item tree).
+    /// Look up a class field from the package items (via item tree).
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
     /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
     /// When non-empty, field types are resolved with the binding keys in scope and then substituted
     /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     ///
-    /// Returns a map of field name → resolved field type.
-    fn lookup_class_fields(
+    fn lookup_class_field(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
-    ) -> FxHashMap<Name, Ty> {
-        self.class_all_fields_ordered(class_name, class_type_args, true)
+        field_name: &Name,
+    ) -> ClassFieldLookup {
+        let mut matches = self
+            .class_all_fields_ordered(class_name, class_type_args, true)
             .into_iter()
-            .collect()
+            .filter(|(name, _)| name == field_name);
+        let Some((_, ty)) = matches.next() else {
+            return ClassFieldLookup::NotFound;
+        };
+        if matches.next().is_some() {
+            ClassFieldLookup::Duplicate
+        } else {
+            ClassFieldLookup::Found(ty)
+        }
     }
 
     fn class_actual_fields_ordered(
@@ -12067,6 +12338,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn class_has_inherent_method(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        method_name: &Name,
+    ) -> bool {
+        let Some(class_loc) = self.resolve_class_loc(class_name) else {
+            return false;
+        };
+        let db = self.context.db();
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+
+        class_data.methods.iter().copied().any(|method| {
+            baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
+                && baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+        })
+    }
+
     /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.
     fn resolve_enum_loc(
         &self,
@@ -12084,11 +12372,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// BEP-044 §"Method Disambiguation": when a class's flattened
-    /// method list contains two or more methods sharing `method_name`
-    /// (typically because the class declares them in different
-    /// `implements I {}` blocks), return the list of contributing
-    /// interface names. Returns `None` when the call is unambiguous.
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
@@ -12105,26 +12388,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
         method_name: &Name,
-    ) -> Option<(
-        Ty,
-        baml_compiler2_hir::loc::ClassLoc<'db>,
-        baml_compiler2_hir::loc::FunctionLoc<'db>,
-    )> {
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
+    ) -> ClassMethodLookup<'db> {
+        let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
+            return ClassMethodLookup::NotFound;
+        };
+        let Some(def) = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return ClassMethodLookup::NotFound;
+        };
         let Definition::Class(class_loc) = def else {
-            return None;
+            return ClassMethodLookup::NotFound;
         };
         let db = self.context.db();
         let file = class_loc.file(db);
         let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
-        // `class_data.methods` flattens every `implements I { … }` block's methods together
-        // with class-level ones. A name matching more than one can only come from two distinct
-        // interfaces declaring it (coherence forbids two impls of one interface), so resolving
-        // it here would silently pick the first. Defer to `resolve_member_from_impls`, which
-        // dedups by realized interface and reports the ambiguity (E0121).
+        // `class_data.methods` flattens inherent methods and interface implementations.
+        // Duplicate inherent methods were already diagnosed by HIR, while multiple interface
+        // methods must be resolved through their realized interfaces.
         let materialized: Vec<_> = class_data
             .methods
             .iter()
@@ -12133,8 +12415,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
             })
             .collect();
+        let inherent_count = materialized
+            .iter()
+            .filter(|&&method| {
+                baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+            })
+            .count();
+        if inherent_count > 1 {
+            return ClassMethodLookup::DuplicateInherent;
+        }
         if materialized.len() > 1 {
-            return None;
+            return ClassMethodLookup::DeferToInterfaces;
         }
         // Even a *single* materialized match can be ambiguous: an impl-block override of one
         // interface's method does not shadow a *different* interface's same-named method that
@@ -12164,7 +12455,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if !providers.contains(&realized) {
                         providers.push(realized);
                         if providers.len() > 1 {
-                            return None;
+                            return ClassMethodLookup::DeferToInterfaces;
                         }
                     }
                 }
@@ -12390,10 +12681,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // scope resolve the same names; a name resolvable there but not here
                 // lowers to `Ty::Error` whose diagnostic is silently dropped (`diags`
                 // above is never drained). Keep the two scopes in lockstep.
-                return Some((ty, class_loc, func_loc));
+                return ClassMethodLookup::Found {
+                    ty,
+                    class_loc,
+                    func_loc,
+                };
             }
         }
-        None
+        ClassMethodLookup::NotFound
     }
 
     /// Check if a `FieldAccess` base is a primitive type name used for static
@@ -16239,12 +16534,22 @@ impl TypeInferenceBuilder<'_> {
         unknown_field: &Name,
         declared_fields: &[Name],
     ) -> Vec<Name> {
-        let needle = unknown_field.as_str().to_ascii_lowercase();
+        Self::similar_name_suggestions(unknown_field, declared_fields.iter())
+    }
+
+    /// Rank close names for diagnostics. Prefix and substring relationships get
+    /// a small boost so singular/plural and missing-suffix mistakes remain
+    /// helpful without suggesting unrelated short identifiers.
+    fn similar_name_suggestions<'a>(
+        unknown_name: &Name,
+        candidates: impl IntoIterator<Item = &'a Name>,
+    ) -> Vec<Name> {
+        let needle = unknown_name.as_str().to_ascii_lowercase();
         if needle.is_empty() {
             return Vec::new();
         }
-        let mut scored: Vec<(f64, Name)> = declared_fields
-            .iter()
+        let mut scored: Vec<(f64, Name)> = candidates
+            .into_iter()
             .map(|candidate| {
                 let candidate_lower = candidate.as_str().to_ascii_lowercase();
                 let mut score = strsim::jaro_winkler(&needle, &candidate_lower);

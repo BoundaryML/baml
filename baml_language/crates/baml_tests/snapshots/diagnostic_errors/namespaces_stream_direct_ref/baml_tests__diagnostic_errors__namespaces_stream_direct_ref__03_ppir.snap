@@ -1,0 +1,57 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 51325
+---
+=== PPIR ===
+class user.Config {
+  key: string
+}
+class user.Config$stream {
+  key: string | null
+}
+class user.Response {
+  text: string
+}
+class user.Response$stream {
+  text: string | null
+}
+class user.RootWithStreamFields {
+  own_stream: user.Config$stream
+  llm_stream: root.llm.Config$stream
+}
+class user.RootWithStreamFields$stream {
+  own_stream: user.Config$stream | null
+  llm_stream: root.llm.Config$stream | null
+}
+function user.RootUsesLlmStream(r: root.llm.Response$stream) -> string  [expr] {
+  {  } r.text
+}
+function user.RootUsesOwnStream(c: user.Config$stream) -> string  [expr] {
+  {  } c.key
+}
+class user.llm.Config {
+  model: string
+}
+class user.llm.Config$stream {
+  model: string | null
+}
+class user.llm.LlmWithStreamFields {
+  own_stream: user.llm.Response$stream
+  root_stream: root.Config$stream
+}
+class user.llm.LlmWithStreamFields$stream {
+  own_stream: user.llm.Response$stream | null
+  root_stream: root.Config$stream | null
+}
+class user.llm.Response {
+  text: string
+}
+class user.llm.Response$stream {
+  text: string | null
+}
+function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string  [expr] {
+  {  } r.text
+}
+function user.llm.LlmUsesRootStream(c: root.Config$stream) -> string  [expr] {
+  {  } c.key
+}

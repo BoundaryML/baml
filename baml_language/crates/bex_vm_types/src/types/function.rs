@@ -192,6 +192,19 @@ pub struct Function {
     /// synthesized functions that have no source file.
     pub source_file: String,
 
+    /// The declaration's joined `///` doc-comment lines, if any. Surfaced by
+    /// runtime reflection (BEP-062 `reflect.signature`); `None` for lambdas
+    /// without docs and synthesized functions.
+    pub docstring: Option<String>,
+
+    /// The name the function was declared with (`greet`, `bump`), recorded
+    /// at lowering.
+    /// `None` for callables that have no source-level name: lambdas and
+    /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
+    /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection
+    /// (BEP-062 `reflect.signature`); never inferred from [`Self::name`].
+    pub declared_name: Option<String>,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 
@@ -279,29 +292,6 @@ pub struct Function {
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
-    }
-}
-
-impl Function {
-    /// Get the source span associated with a bytecode PC.
-    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
-        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
-    }
-
-    /// Get named locals whose lexical scope contains the source span at `pc`.
-    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
-        let Some(span) = self.source_span_for_pc(pc) else {
-            return Vec::new();
-        };
-
-        self.debug_locals
-            .iter()
-            .filter(|local| {
-                local.scope_span.file_id == span.file_id
-                    && local.scope_span.range.start() <= span.range.start()
-                    && local.scope_span.range.end() >= span.range.end()
-            })
-            .collect()
     }
 }
 

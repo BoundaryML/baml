@@ -792,6 +792,21 @@ fn collect_uses_in_terminator(
         Terminator::Branch { condition, .. } => {
             collect_uses_in_operand(condition, block, StatementRef::Terminator, def_use);
         }
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(source, block, StatementRef::Terminator, def_use);
+            if let Some(du) = def_use.get_mut(destination) {
+                du.def = Some(DefLocation {
+                    block,
+                    statement_ref: StatementRef::Terminator,
+                    rvalue: Rvalue::Use(source.clone()),
+                });
+                du.all_defs.push((block, StatementRef::Terminator));
+            }
+        }
         Terminator::Switch { discriminant, .. } => {
             collect_uses_in_operand(discriminant, block, StatementRef::Terminator, def_use);
         }
@@ -979,6 +994,14 @@ fn classify_locals(
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
     let mut stack_carry_candidates: HashMap<Local, stack_carry::StackCarryKind> = HashMap::new();
+    let narrow_bind_destinations: HashSet<Local> = body
+        .blocks
+        .iter()
+        .filter_map(|block| match block.terminator.as_ref() {
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            _ => None,
+        })
+        .collect();
 
     for (idx, _local_decl) in body.locals.iter().enumerate() {
         let local = Local(idx);
@@ -1004,6 +1027,8 @@ fn classify_locals(
             // Captured locals must always be Real - they need a stable stack slot
             // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
+            LocalClassification::Real
+        } else if narrow_bind_destinations.contains(&local) {
             LocalClassification::Real
         } else if idx != 0
             && du.uses.is_empty()
@@ -1651,6 +1676,31 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         return false;
     }
 
+    // A class spread is emitted incrementally as
+    // `AllocInstance; InitField/InitSpread`. Its explicit field operands must
+    // be pushed after the destination instance exists. Carrying a call result
+    // from the preceding block leaves it below that instance and reverses the
+    // `InitField` operands. Reject this structurally here, including when the
+    // aggregate destination is virtual and its use is forwarded elsewhere.
+    let use_loc = &du.uses[0];
+    if let StatementRef::Statement(stmt_idx) = use_loc.statement_ref
+        && let Some(StatementKind::Assign {
+            value:
+                Rvalue::Aggregate {
+                    kind: baml_compiler2_mir::AggregateKind::Class { .. },
+                    fields,
+                },
+            ..
+        }) = body
+            .block(use_loc.block)
+            .statements
+            .get(stmt_idx)
+            .map(|stmt| &stmt.kind)
+        && fields.iter().any(is_class_field_copy_operand)
+    {
+        return false;
+    }
+
     // Must have a definition from a terminator (Call/Await/SysOp)
     let Some(def) = &du.def else {
         return false;
@@ -1976,6 +2026,74 @@ mod tests {
         assert!(!is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
+    }
+
+    #[test]
+    fn call_result_immediate_rejects_incremental_class_spread_init() {
+        let result = Local(1);
+        let spread_base = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Null),
+                        args: vec![],
+                        ntypeargs: 0,
+                        runtime_id: None,
+                        destination: Place::Local(result),
+                        target: BlockId(1),
+                        unwind: None,
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Aggregate {
+                                kind: baml_compiler2_mir::AggregateKind::Class {
+                                    name: "GuideHooks".to_string(),
+                                    type_arg_templates: vec![],
+                                },
+                                fields: vec![
+                                    Operand::copy_local(result),
+                                    Operand::Copy(Place::Field {
+                                        base: Box::new(Place::Local(spread_base)),
+                                        field: 1,
+                                    }),
+                                ],
+                            },
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+        let du = LocalDefUse {
+            def: Some(DefLocation {
+                block: BlockId(0),
+                statement_ref: StatementRef::Terminator,
+                rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+            }),
+            uses: vec![UseLocation {
+                block: BlockId(1),
+                statement_ref: StatementRef::Statement(0),
+            }],
+            all_defs: vec![(BlockId(0), StatementRef::Terminator)],
+        };
+
+        assert!(!is_call_result_immediate(result, &du, &body));
     }
 
     /// Builds a minimal integer local declaration for MIR analysis tests.

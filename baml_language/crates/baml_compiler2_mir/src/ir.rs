@@ -85,11 +85,6 @@ impl MirFunctionBody {
         &self.blocks[id.0]
     }
 
-    /// Get a mutable reference to a basic block by ID.
-    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
-        &mut self.blocks[id.0]
-    }
-
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
@@ -114,6 +109,41 @@ pub enum MirFunctionKind {
     Builtin(BuiltinKind),
 }
 
+/// Runtime signature metadata stamped onto a compiled `Function` object — the
+/// ONE shape both producers fill: top-level declarations (emit derives it from
+/// the TIR/item-tree in `compute_function_metadata_from_item_tree`) and
+/// lambdas (`lower_lambda` records it here on the `MirFunction`). Consumed by
+/// runtime reflection (BEP-062 `reflect.signature` / `reflect.call_any`),
+/// function-value type reconstruction, and display surfaces
+/// (`baml run --list`, bytecode listings).
+#[derive(Debug, Clone)]
+pub struct RuntimeSignature {
+    /// Parameter names, in declaration order.
+    pub param_names: Vec<String>,
+    /// Parameter types, parallel to `param_names`.
+    pub param_types: Vec<baml_type::RuntimeTy>,
+    /// Whether each parameter has a default, parallel to `param_names`.
+    pub param_has_default: Vec<bool>,
+    /// The declared return type; `unknown` when unannotated.
+    pub return_type: baml_type::RuntimeTy,
+    /// The throws type. `None` == cannot throw. Top-level declarations carry
+    /// TIR's inferred transitive throw set; a lambda carries its declared
+    /// clause (`throws never` == `None`, unannotated == `Some(unknown)`, no
+    /// claim).
+    pub throws_type: Option<baml_type::RuntimeTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub docstring: Option<String>,
+    /// The name the declaration was written with; `None` for lambdas
+    /// (which have no source-level name).
+    pub name: Option<String>,
+    /// Display strings for the generic type parameters (`T extends Bound`).
+    pub display_type_params: Vec<String>,
+    /// Display strings for the parameter types, parallel to `param_names`.
+    pub display_param_types: Vec<String>,
+    /// Display string for the return type.
+    pub display_return_type: String,
+}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
@@ -130,6 +160,11 @@ pub struct MirFunction {
     /// Indexed by `lambda_idx` in `Rvalue::MakeClosure`.
     /// Empty until lambda lowering is implemented.
     pub lambdas: Vec<MirFunction>,
+    /// Runtime signature metadata, populated by `lower_lambda` for lambda
+    /// functions only. Top-level functions get theirs from TIR `func_data`
+    /// during emit; `None` there (and on synthetic adapters, which fall back
+    /// to no metadata).
+    pub signature: Option<RuntimeSignature>,
 }
 
 // ============================================================================
@@ -300,6 +335,15 @@ pub enum Terminator {
     /// Conditional branch based on a boolean.
     Branch {
         condition: Operand,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+
+    /// Test one value and bind that same value to `destination` on success.
+    NarrowBind {
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
         then_block: BlockId,
         else_block: BlockId,
     },
@@ -528,6 +572,11 @@ impl Terminator {
                 else_block,
                 ..
             } => vec![*then_block, *else_block],
+            Terminator::NarrowBind {
+                then_block,
+                else_block,
+                ..
+            } => vec![*then_block, *else_block],
             Terminator::Switch {
                 arms, otherwise, ..
             } => {
@@ -599,23 +648,6 @@ impl Place {
     /// Create a place for a local variable.
     pub fn local(local: Local) -> Self {
         Place::Local(local)
-    }
-
-    /// Create a field projection.
-    pub fn field(base: Place, field: usize) -> Self {
-        Place::Field {
-            base: Box::new(base),
-            field,
-        }
-    }
-
-    /// Create an index projection.
-    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
-        Place::Index {
-            base: Box::new(base),
-            index,
-            kind,
-        }
     }
 
     /// Get the base local of this place.
@@ -839,11 +871,6 @@ impl Operand {
         Operand::Copy(Place::Local(local))
     }
 
-    /// Create a move operand from a local.
-    pub fn move_local(local: Local) -> Self {
-        Operand::Move(Place::Local(local))
-    }
-
     /// Create a constant operand.
     pub fn constant(c: Constant) -> Self {
         Operand::Constant(c)
@@ -871,8 +898,17 @@ pub enum Constant {
     /// A function reference with structured item identification.
     ///
     /// Carried from TIR resolution through lowering. Converted to a
-    /// runtime string only in the emit phase.
+    /// runtime string only in the emit phase, where it becomes a pooled
+    /// function-value wrapper (see `emit_pooled_function_value`). Only for
+    /// items that ARE functions; a non-function global item read (a client,
+    /// a top-level `let`, ...) is [`Constant::GlobalItem`].
     Function(ItemRef),
+    /// A non-function global item read (a `client<llm>` declaration, a
+    /// top-level `let`, a template string, ...): the value the program's
+    /// `$init` stored in the item's global slot. Emitted as a plain
+    /// `LoadGlobal`, never wrapped — the slot holds an ordinary value
+    /// (an instance, a closure, ...), not a `Function` object.
+    GlobalItem(ItemRef),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object

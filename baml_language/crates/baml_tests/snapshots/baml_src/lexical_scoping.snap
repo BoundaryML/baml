@@ -153,13 +153,15 @@ function lexical_scoping.capture_before_after_shadow() -> int {
 }
 
 function lexical_scoping.capture_catch_arm_binding() -> string {
-    load_var ?2
+    load_var ?3
     make_cell
-    store_var ?2
+    store_var ?3
     call user.lexical_scoping.throw_string
     jump L2
     load_var e
-    is_type string
+    store_var _2
+    load_var _2
+    narrow_bind string, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -168,8 +170,8 @@ function lexical_scoping.capture_catch_arm_binding() -> string {
     rethrow
 
   L1:
-    load_var e
-    store_deref ?2
+    load_var _2
+    store_deref ?3
     load_var s
     make_closure .<lambda(capture_catch_arm_binding, 0)>, 1
     call_indirect

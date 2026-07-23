@@ -254,6 +254,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+            ':baml_language/crates/bridge_cffi/include/**' \
+            ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
+            ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -365,7 +368,9 @@ jobs:
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
-        run: rustup toolchain install
+        run: |
+          rustup toolchain install
+          rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -383,7 +388,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:prek python uv"
+          install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -751,6 +756,23 @@ jobs:
         run: pnpm build:debug
         working-directory: baml_language/sdks/typescript/bridge_typescript
 
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
+
       - name: "Check generated proto files are in sync"
         run: |
           # Check for both modified tracked files and untracked files across every
@@ -761,6 +783,8 @@ jobs:
             baml_language/sdks/go/bridge_go
             baml_language/sdks/python/src/baml_bridge/cffi
             baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
             typescript2/pkg-proto
           )
           README="baml_language/crates/bridge_ctypes/README.md"
@@ -1085,3 +1109,49 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1
+
+  # Entry point for the release: a green push to canary hands off to
+  # release-baml-language.yml. The release deliberately has no `workflow_run`
+  # trigger -- crates.io refuses to mint a Trusted Publishing token for
+  # `workflow_run` (and `pull_request_target`) runs, so a `workflow_run` release
+  # can never publish baml_bridge.
+  #
+  # Same required-gate set as ci-failure-alert above; keep the two lists in sync.
+  dispatch-release:
+    name: "Dispatch BAML Language Release"
+    runs-on: ubuntu-latest
+    needs:
+      - prek
+      - release-metadata
+      - cargo-tests
+      - wasm-pack-tests
+      - docs
+      - webview-tests
+      - grammar-tests
+      - linguist-compile-gate
+      # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
+      - prof-concurrency
+      - proto-sync
+    # `!failure() && !cancelled()` rather than `success()`, because that is what
+    # the old `workflow_run.conclusion == 'success'` gate meant: a skipped gate
+    # is not a failure. prof-concurrency and proto-sync are change-detected with
+    # no `|| ref == canary` escape hatch, so they are skipped on most canary
+    # pushes and `success()` would keep the release from ever firing.
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref_name == 'canary' }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch release for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # --ref canary selects the workflow *definition* from canary HEAD;
+          # source_sha pins the commit that actually gets built and released.
+          gh workflow run release-baml-language.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref canary \
+            -f channel=auto \
+            -f dry_run=false \
+            -f source_sha="$GITHUB_SHA"

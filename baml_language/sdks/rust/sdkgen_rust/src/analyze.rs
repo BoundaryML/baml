@@ -105,16 +105,17 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             });
             continue;
         }
-        if !class.generic_params.is_empty() {
-            warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "generic classes are not emitted yet".to_string(),
-            });
-            continue;
-        }
+        // A generic class emits as a `<T: BamlValue>` struct: its own type
+        // params come into scope, so a `Ty::TypeVar` naming one is a
+        // representable field (it resolves to that Rust generic parameter).
+        let class_params: Vec<&str> = class
+            .generic_params
+            .iter()
+            .map(baml_base::Name::as_str)
+            .collect();
         let mut class_deps = Vec::new();
         let unsupported = class.properties.iter().find_map(|prop| {
-            field_deps(&prop.ty, &mut class_deps)
+            field_deps(&prop.ty, &class_params, &mut class_deps)
                 .err()
                 .map(|reason| (prop.name.as_str(), reason))
         });
@@ -124,6 +125,28 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 reason: format!("field `{field}`: {reason}"),
             }),
             None => {
+                // Every type parameter must appear in some field in a
+                // *non-recursive* position. An entirely unused param is an
+                // `E0392`; a param used only inside the class's own recursive
+                // references (`GNode<T> { children: GNode<T>[] }`) is the
+                // "type parameter is only used recursively" error — Rust
+                // cannot determine its variance. Either way the struct would
+                // not compile, and PhantomData would leak into the public
+                // struct literal, so skip (fail closed).
+                let mut used = HashSet::new();
+                for prop in &class.properties {
+                    collect_non_recursive_type_vars(&prop.ty, name, &mut used);
+                }
+                if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
+                    warnings.push(SkipWarning {
+                        fqn: name.to_string(),
+                        reason: format!(
+                            "generic type parameter `{unused}` is not used in a non-recursive \
+                             field position (not representable as a Rust struct)"
+                        ),
+                    });
+                    continue;
+                }
                 deps.insert(name, class_deps);
                 alive.insert((*name).clone());
             }
@@ -152,7 +175,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             continue;
         }
         let mut alias_deps = Vec::new();
-        match field_deps(&alias.resolves_to, &mut alias_deps) {
+        // Aliases carry no type parameters of their own in the current
+        // scope, so no TypeVar is ever in scope for their right-hand side.
+        match field_deps(&alias.resolves_to, &[], &mut alias_deps) {
             Err(reason) => warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason,
@@ -244,11 +269,13 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
 }
 
 /// Collect the nominal types a field type references, or the reason the
-/// type cannot be represented. Mirrors the supported subset of
+/// type cannot be represented. `generic_params` are the enclosing generic
+/// class's own type parameters, in scope for its fields (a `Ty::TypeVar`
+/// naming one is representable). Mirrors the supported subset of
 /// `translate_ty` — the two must agree, and the emission path re-checks
 /// through `translate_ty` so a disagreement fails codegen loudly rather
 /// than emitting broken code.
-fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
+fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<(), String> {
     match ty {
         Ty::Int { .. }
         | Ty::Bigint { .. }
@@ -259,38 +286,40 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
         | Ty::Void { .. }
         | Ty::Literal(..)
         | Ty::Uint8Array { .. } => Ok(()),
-        Ty::List(inner, _) => field_deps(inner, deps),
+        Ty::List(inner, _) => field_deps(inner, generic_params, deps),
         Ty::Map { key, value, .. } => {
             match key.as_ref() {
                 Ty::String { .. } => {}
                 other => return Err(format!("unsupported map key type: {other}")),
             }
-            field_deps(value, deps)
+            field_deps(value, generic_params, deps)
         }
         Ty::Union(items, _) => {
             let (arms, _) = crate::unions::strip_null(items);
             match arms.as_slice() {
                 // Pure optionality (or the degenerate all-null union).
                 [] => Ok(()),
-                [only] => field_deps(only, deps),
+                [only] => field_deps(only, generic_params, deps),
                 arms => {
                     if let Some(reason) = crate::unions::shape_error(arms) {
                         return Err(reason);
                     }
                     for arm in arms {
-                        field_deps(arm, deps)?;
+                        field_deps(arm, generic_params, deps)?;
                     }
                     Ok(())
                 }
             }
         }
+        // A class reference depends on the class item; its concrete type
+        // arguments are themselves types that must be representable (a
+        // generic argument referencing a skipped type poisons this field).
         Ty::Class(name, args, _) => {
-            if args.is_empty() {
-                deps.push(name.clone());
-                Ok(())
-            } else {
-                Err("unsupported type: generic class".to_string())
+            deps.push(name.clone());
+            for arg in args {
+                field_deps(arg, generic_params, deps)?;
             }
+            Ok(())
         }
         // An enum-variant type (`Sentiment.Positive`) drops its tag to the
         // enum, so it depends on the same enum item.
@@ -305,7 +334,19 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
             deps.push(name.clone());
             Ok(())
         }
-        Ty::TypeVar(..) => Err("unsupported type: type variable (generics)".to_string()),
+        // A TypeVar naming one of the enclosing generic class's own params
+        // is representable (it becomes that Rust generic parameter); any
+        // other TypeVar is not.
+        Ty::TypeVar(var, _) => {
+            if generic_params.contains(&var.as_str()) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "unsupported type: type variable `{}` (not a class type parameter)",
+                    var.as_str()
+                ))
+            }
+        }
         Ty::Media(kind, _) => Err(format!("unsupported type: media ({kind})")),
         Ty::BuiltinUnknown { .. } => Err("unsupported type: unknown".to_string()),
         Ty::Function { .. } => Err("unsupported type: function".to_string()),
@@ -319,6 +360,35 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
     }
 }
 
+/// Collect every `TypeVar` name used in a *non-recursive* position — one
+/// not reached solely as a type argument of a `self_name` self-reference.
+/// Rust requires a struct type parameter to appear at least once outside
+/// the struct's own recursive occurrences to fix its variance; a param
+/// seen only inside `self_name<…>` fails that rule.
+fn collect_non_recursive_type_vars<'a>(ty: &'a Ty, self_name: &Name, used: &mut HashSet<&'a str>) {
+    match ty {
+        Ty::TypeVar(var, _) => {
+            used.insert(var.as_str());
+        }
+        Ty::List(inner, _) => collect_non_recursive_type_vars(inner, self_name, used),
+        Ty::Map { key, value, .. } => {
+            collect_non_recursive_type_vars(key, self_name, used);
+            collect_non_recursive_type_vars(value, self_name, used);
+        }
+        Ty::Union(items, _) => items
+            .iter()
+            .for_each(|item| collect_non_recursive_type_vars(item, self_name, used)),
+        // A recursive self-reference does not constrain its args' variance,
+        // so type vars appearing only there do not count as used. Arguments
+        // of a *different* generic class do count (that class's definition
+        // pins their variance).
+        Ty::Class(name, args, _) if name != self_name => args
+            .iter()
+            .for_each(|arg| collect_non_recursive_type_vars(arg, self_name, used)),
+        _ => {}
+    }
+}
+
 /// Collect emitted-class references reachable without crossing `Vec` /
 /// `Map` (heap indirection already breaks the containment cycle there).
 fn non_heap_class_refs<'a>(
@@ -328,9 +398,16 @@ fn non_heap_class_refs<'a>(
     out: &mut Vec<&'a Name>,
 ) {
     match ty {
-        Ty::Class(name, args, _) if args.is_empty() => {
+        // A class reference is a containment edge whether or not it is
+        // generic; a generic instance stores its arguments inline, so those
+        // arguments continue the walk (an inline same-SCC argument, e.g.
+        // `GenericBox<Self>`, is a cycle too).
+        Ty::Class(name, args, _) => {
             if emitted.contains(name) && !enums.contains(name) {
                 out.push(name);
+            }
+            for arg in args {
+                non_heap_class_refs(arg, emitted, enums, out);
             }
         }
         Ty::Union(items, _) => {

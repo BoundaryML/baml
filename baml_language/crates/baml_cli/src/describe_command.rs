@@ -8,10 +8,7 @@ use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{
-    project_load::load_project_or_default,
-    util::{line_number_at_offset, relative_path},
-};
+use crate::util::{line_number_at_offset, relative_path};
 
 /// Parsed documentation entry for a BAML keyword topic.
 #[derive(serde::Deserialize)]
@@ -289,7 +286,15 @@ impl DescribeArgs {
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
-        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
+        let mut session = crate::project_session::ProjectSession::open_lenient(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadOnly,
+        )?;
+        // Warm seeds (no-delta only) + parallel index prime: describe queries
+        // the whole-package aggregates, which otherwise derive serially.
+        let _ = session.warm_prep_seeds_only();
+        session.prime();
+        let (db, from) = (session.db, session.resolved.root);
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {

@@ -996,10 +996,13 @@ fn tir2_to_dispatch_guard_template(
             .iter()
             .position(|p| p == name)
             .map(|n| {
-                #[expect(deprecated)]
-                TyTemplate::TypeArgRefOrWildcard(
-                    u32::try_from(n).expect("generic param index fits in u32"),
-                )
+                // A frame type-parameter lowers to its `TypeArgRef` slot. It used
+                // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
+                // reified-and-widened `T` (`Shape | Sq`) would match a value's
+                // narrower `Shape`; that is unnecessary now the runtime relates
+                // type args through the canonical algebra, which absorbs
+                // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
             .unwrap_or(TyTemplate::Wildcard),
         Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::list(
@@ -1077,6 +1080,17 @@ pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
         RuntimeTy::Class(tn, args, _) if !args.is_empty() => TyTemplate::class(
             tn.clone(),
             args.iter().map(ty_to_template_from_resolved_ty).collect(),
+        ),
+        // Interfaces decompose so the membership test keeps its instantiation
+        // (args + associated bindings), with a nested residual type variable a
+        // hole at its own position rather than a panic in the realized-leaf path.
+        RuntimeTy::Interface(tn, args, assoc, _) => TyTemplate::interface(
+            tn.clone(),
+            args.iter().map(ty_to_template_from_resolved_ty).collect(),
+            assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty_to_template_from_resolved_ty(ty)))
+                .collect(),
         ),
         RuntimeTy::Function {
             params,
@@ -1932,6 +1946,12 @@ struct LoweringContext<'db> {
     /// guard keeps `is` / standalone tests element-precise even inside one.
     match_scrutinee: Option<(Local, RuntimeTy)>,
 
+    /// Stable values read while testing patterns, keyed by pattern identity.
+    /// Binding lowering reuses these exact values instead of rereading mutable
+    /// captured cells or object fields after a successful test.
+    tested_pattern_values: HashMap<PatMetadataKey, Local>,
+    atomic_pattern_test: bool,
+
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
     current_scope: FileScopeId,
@@ -2178,6 +2198,12 @@ impl<'db> LoweringContext<'db> {
             }
             Tir2Ty::Class(qtn, args, _) => self
                 .interface_view_for_class_tir_ty(qtn, args, target_tn)
+                .or_else(|| self.realized_interface_view_for(ty, target_tn)),
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.interface_view_for_tir_ty(target, target_tn))
                 .or_else(|| self.realized_interface_view_for(ty, target_tn)),
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
@@ -2823,6 +2849,8 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds,
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
+            tested_pattern_values: HashMap::new(),
+            atomic_pattern_test: false,
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -2914,6 +2942,8 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds: FxHashMap::default(),
             lambda_param_tir_types: FxHashMap::default(),
             match_scrutinee: None,
+            tested_pattern_values: HashMap::new(),
+            atomic_pattern_test: false,
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -4596,22 +4626,34 @@ impl<'db> LoweringContext<'db> {
             .into_iter()
             .chain(self.lambda_generic_params.iter().cloned())
             .collect();
+        // Lower a lambda-scope type annotation (a param, the return, the
+        // throws), with the enclosing and lambda generics in scope. Lowering
+        // diagnostics are dropped: TIR reports the lambda's own type errors.
+        let lower_sig_ty = |this: &mut Self, te: &baml_compiler2_ast::TypeExpr| {
+            let mut diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                te,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db: this.db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &lambda_param_generics,
+                    bounds: &this.enclosing_generic_param_bounds(),
+                    self_ty: None,
+                },
+                &mut diags,
+            )
+        };
+        // BEP-062: collect the runtime signature alongside, so emit can stamp
+        // it onto the compiled `Function` object. Top-level declarations get
+        // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
+        // and without this a closure value carries no signature at all (which
+        // `reflect.signature` / `reflect.call_any` consume).
+        let mut sig_param_types = Vec::with_capacity(func_def.params.len());
         for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
-                    let mut diags = Vec::new();
-                    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                        spanned_te,
-                        &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                            db: self.db,
-                            package_items: pkg_items,
-                            ns_context: &pkg_info.namespace_path,
-                            generic_params: &lambda_param_generics,
-                            bounds: &self.enclosing_generic_param_bounds(),
-                            self_ty: None,
-                        },
-                        &mut diags,
-                    );
+                    let tir_ty = lower_sig_ty(self, spanned_te);
                     self.lambda_param_tir_types
                         .insert(param.name.clone(), tir_ty.clone());
                     self.convert_tir_ty_for_runtime(&tir_ty)
@@ -4620,6 +4662,7 @@ impl<'db> LoweringContext<'db> {
                     attr: baml_type::TyAttr::default(),
                 },
             };
+            sig_param_types.push(param_ty.clone());
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -4627,6 +4670,27 @@ impl<'db> LoweringContext<'db> {
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
+        // The declared return/throws. Unannotated slots make no claim
+        // (`unknown`); an explicit `throws never` becomes `None` (the
+        // runtime's "cannot throw").
+        let sig_return_type = match &func_def.return_type {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                self.convert_tir_ty_for_runtime(&tir_ty)
+            }
+            None => baml_type::RuntimeTy::unknown(),
+        };
+        let sig_throws_type = match &func_def.throws {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                if matches!(tir_ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
+                    None
+                } else {
+                    Some(self.convert_tir_ty_for_runtime(&tir_ty))
+                }
+            }
+            None => Some(baml_type::RuntimeTy::unknown()),
+        };
 
         // Create entry and exit blocks.
         let entry = self.builder.create_block();
@@ -4674,6 +4738,31 @@ impl<'db> LoweringContext<'db> {
         };
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
+        lambda_mir.signature = Some(crate::ir::RuntimeSignature {
+            // A lambda has no source-level name; its `Function::name` is a
+            // synthetic debug identity.
+            name: None,
+            docstring: func_def.docstring.clone(),
+            display_type_params: func_def
+                .generic_params
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+            display_param_types: sig_param_types
+                .iter()
+                .map(|ty| ty.as_ty().render_user_facing())
+                .collect(),
+            display_return_type: sig_return_type.as_ty().render_user_facing(),
+            param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
+            param_has_default: func_def
+                .params
+                .iter()
+                .map(|p| p.default.is_some())
+                .collect(),
+            param_types: sig_param_types,
+            return_type: sig_return_type,
+            throws_type: sig_throws_type,
+        });
 
         // Collect transitive captures that inner lambda bodies discovered were
         // needed (names that weren't in hir_captures but that inner lambdas
@@ -5480,20 +5569,18 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn split_runtime_id_call_args(args: &[CallArg]) -> (Vec<AstExprId>, Option<AstExprId>) {
-        let mut ordinary_args = Vec::with_capacity(args.len());
-        let mut runtime_id = None;
-        for arg in args {
-            if arg
-                .label
-                .as_ref()
-                .is_some_and(|label| label.as_str() == "$id")
-            {
-                runtime_id.get_or_insert(arg.expr);
-            } else {
-                ordinary_args.push(arg.expr);
-            }
-        }
+    fn planned_call_args(
+        &self,
+        expr_id: AstExprId,
+        args: &[CallArg],
+    ) -> (Vec<AstExprId>, Option<AstExprId>) {
+        let runtime_id = self
+            .tir_call_plan(self.expr_metadata_key(expr_id))
+            .and_then(|plan| plan.side_channels.runtime_id);
+        let ordinary_args = args
+            .iter()
+            .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
+            .collect();
         (ordinary_args, runtime_id)
     }
 
@@ -5559,7 +5646,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
                 self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
@@ -5614,7 +5701,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
                 self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
@@ -6573,11 +6660,15 @@ impl<'db> LoweringContext<'db> {
             );
             return;
         }
-        // Otherwise treat as function/constructor reference
-        self.builder.assign(
-            dest,
-            Rvalue::Use(Operand::Constant(Constant::Function(item))),
-        );
+        // A function reference becomes a pooled function-value wrapper at
+        // emit; any other item (a client, a top-level `let`, a template
+        // string, ...) is a plain read of the global slot `$init` filled.
+        let constant = match def {
+            Definition::Function(_) => Constant::Function(item),
+            _ => Constant::GlobalItem(item),
+        };
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Constant(constant)));
     }
 }
 
@@ -11107,76 +11198,6 @@ impl<'db> LoweringContext<'db> {
             .any(|f| &f.name == field)
     }
 
-    /// Class-tag dispatch guards for every implementor that satisfies the
-    /// *specific instantiation* `iface_tn<iface_type_args>`. Implementors of a
-    /// different instantiation (e.g. `StrSlot: Slot<string>` when the request is
-    /// `Slot<int>`) are excluded, because `interface_class_guard_for_args`
-    /// returns `None` for a non-matching argument list. Used by the runtime
-    /// `is`-type test so a generic-interface pattern respects its type argument.
-    fn interface_implementor_class_guards(
-        &self,
-        iface_tn: &TypeName,
-        iface_type_args: &[Tir2Ty],
-        iface_assoc: &[(Name, Tir2Ty)],
-    ) -> Vec<(TypeName, InterfaceClassGuard)> {
-        let Some(impls) = self.interface_implementors.get(iface_tn).cloned() else {
-            return Vec::new();
-        };
-        let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
-        else {
-            return Vec::new();
-        };
-        let mut out: Vec<(TypeName, InterfaceClassGuard)> = Vec::new();
-        for impl_tn in &impls {
-            let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
-                continue;
-            };
-            let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
-            for impl_block in &class_data.implements {
-                let Some((target_tn, target_args, target_assoc)) = self
-                    .resolve_implements_target_view(
-                        impl_block.target,
-                        &impl_block.associated_type_bindings,
-                        class_loc,
-                    )
-                else {
-                    continue;
-                };
-                let Some(target_views) =
-                    self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
-                else {
-                    continue;
-                };
-                for (target_view_tn, target_view_args, target_view_assoc) in target_views {
-                    for (requested_tn, requested_args, requested_assoc) in &requested_views {
-                        if target_view_tn != *requested_tn {
-                            continue;
-                        }
-                        let Some(guard) = interface_class_guard_for_args(
-                            &target_view_args,
-                            &target_view_assoc,
-                            requested_args,
-                            requested_assoc,
-                            &class_data.generic_params,
-                            &self.resolved_aliases.aliases,
-                        ) else {
-                            continue;
-                        };
-                        // Push every matching guard — a generic class can satisfy
-                        // the requested instantiation through more than one
-                        // type-arg projection (`Pair<L, R>` implementing
-                        // `Slot<L>` and `Slot<R>`), and dropping all but the first
-                        // would make some runtime values fail the `is` test.
-                        // Redundant identical branches are harmless (both succeed).
-                        out.push((impl_tn.clone(), guard));
-                    }
-                }
-            }
-        }
-        out
-    }
-
     fn resolve_implementor_interface_field_candidates(
         &self,
         impl_tn: &TypeName,
@@ -12074,6 +12095,10 @@ impl LoweringContext<'_> {
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
+                // A projection assignment may use an arbitrary expression as
+                // its base (`store.require().info.title = ...`). Materialize
+                // that base exactly once before projecting through it.
+                self.lower_expr(expr_id, Place::Local(temp));
                 Place::Local(temp)
             }
         }
@@ -12092,8 +12117,6 @@ impl LoweringContext<'_> {
     ) {
         let is_exhaustive = self.tir_is_exhaustive_match(self.expr_metadata_key(expr_id));
 
-        // If scrutinee is a simple variable reference, reuse the local directly
-        // instead of copying into a temp (matches MIR1 behavior).
         let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
             let op = self.lower_to_operand(scrutinee);
             let ty = self.expr_ty(scrutinee);
@@ -12208,25 +12231,10 @@ impl LoweringContext<'_> {
             if guard.is_some() {
                 return false;
             }
-            // OLD `pat.narrow.is_some()` branch: Chain encodes the narrow
-            // as a `Type` link, so recover it and treat as a TypeTag arm.
+            // Narrowed bindings require NarrowBind's atomic test-and-bind
+            // semantics, which Switch cannot preserve.
             if self.pattern_narrow_type(pattern).is_some() {
-                match &switch_kind {
-                    None => switch_kind = Some(SwitchKind::TypeTag),
-                    Some(SwitchKind::TypeTag) => {}
-                    Some(_) => return false,
-                }
-                match self.classify_pattern_type_tag(pattern, scrutinee_static_ty.as_ref()) {
-                    Some(tags) => {
-                        for tag in tags {
-                            if seen_values.insert(tag) {
-                                int_arms.push((tag, i));
-                            }
-                        }
-                    }
-                    None => return false,
-                }
-                continue;
+                return false;
             }
 
             // Helpers that classify a pattern (the arm pattern itself, or a
@@ -12765,30 +12773,21 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        // BEP-044/BEP-057: testing a value against an *interface* type means
-        // "is its runtime class an implementor". Interface types used to lower
-        // to `RuntimeTy::Class`; they now lower to `RuntimeTy::Interface` so reflection can
-        // retain associated bindings. Accept both runtime shapes here.
-        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = &ty
-            && let Some(impls) = self.interface_implementors.get(tn).cloned()
-        {
-            if impls.is_empty() {
-                // No class implements the interface — the test can never hold.
-                self.builder.goto(failure);
-                return;
-            }
-            let members: Vec<RuntimeTy> = impls
-                .into_iter()
-                .map(|cn| RuntimeTy::Class(cn, Vec::new(), TyAttr::default()))
-                .collect();
-            self.emit_is_type_branch(
-                scrutinee,
-                RuntimeTy::Union(members, TyAttr::default()),
-                success,
-                failure,
-            );
-            return;
-        }
+        // BEP-044/BEP-057: testing a value against an *interface* type means "is
+        // its concrete runtime type an implementor" — emitted as a single `IsType` on the
+        // interface existential itself, which the VM resolves through the canonical
+        // membership check against the impl registry (`type_implements`, at the
+        // requested instantiation: type args and associated bindings validated
+        // exactly). The bytecode never enumerates implementors: a compile-time list
+        // is closed-world (an implementor loaded from a later package would silently
+        // fail the test).
+        //
+        // Interfaces reach here already tagged `RuntimeTy::Interface`: TIR resolves
+        // an interface reference to `Ty::Interface` (never `Ty::Class`), and
+        // `lower_to_runtime` preserves the tag and its instantiation. So no
+        // name-based re-tag is needed — matching a `RuntimeTy::Class` against
+        // `interface_implementors` would both miss declaration-only interfaces and
+        // drop the instantiation.
         if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
@@ -12847,16 +12846,26 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        let test = Rvalue::IsType {
-            operand: Operand::Copy(Place::Local(scrutinee)),
-            ty_template,
-        };
-        let test_local = self.builder.temp(RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        });
-        self.builder.assign(Place::local(test_local), test);
-        self.builder
-            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        if self.atomic_pattern_test {
+            self.builder.narrow_bind(
+                Operand::Copy(Place::Local(scrutinee)),
+                ty_template,
+                scrutinee,
+                success,
+                failure,
+            );
+        } else {
+            let test = Rvalue::IsType {
+                operand: Operand::Copy(Place::Local(scrutinee)),
+                ty_template,
+            };
+            let test_local = self.builder.temp(RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), test);
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
     }
 
     fn emit_is_tir_type_branch(
@@ -12982,36 +12991,21 @@ impl LoweringContext<'_> {
 
                 visited.remove(&key);
             }
-            // An associated or generic interface pattern (`Slot<int>`,
-            // `Source<Item=int>`) must respect its full interface view: test
-            // only the implementors of *that* view, not every implementor of
-            // the bare interface.
-            Tir2Ty::Interface(iface_qtn, type_args, associated_bindings, _)
-                if !type_args.is_empty() || !associated_bindings.is_empty() =>
-            {
-                let iface_tn = iface_qtn.clone();
-                let guards = self.interface_implementor_class_guards(
-                    &iface_tn,
-                    type_args,
-                    associated_bindings,
-                );
-                if guards.is_empty() {
-                    self.builder.goto(failure);
-                    return;
-                }
-                let mut next_check = self.builder.current_block();
-                for (idx, (impl_tn, guard)) in guards.iter().enumerate() {
-                    let bb_next = if idx + 1 == guards.len() {
-                        failure
-                    } else {
-                        self.builder.create_block()
-                    };
-                    self.builder.set_current_block(next_check);
-                    self.emit_interface_class_guard_branch(
-                        scrutinee, impl_tn, guard, success, bb_next,
-                    );
-                    next_check = bb_next;
-                }
+            // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
+            // `Named`) is a single membership test against the interface
+            // existential itself: the VM's canonical algebra resolves the value's
+            // concrete class against the impl registry at the requested
+            // instantiation (type args and associated bindings validated exactly;
+            // an omitted dimension matches any). The bytecode never enumerates
+            // implementors — a compile-time list is closed-world (an implementor
+            // in a later-loaded package would silently fail the test). The
+            // enclosing function's type variables in the instantiation lower to
+            // `TypeArgRef` frame slots, resolved at runtime.
+            Tir2Ty::Interface(..) => {
+                let generic_params = self.enclosing_generic_params();
+                let template =
+                    tir2_to_dispatch_guard_template(ty, self.resolved_aliases, &generic_params);
+                self.emit_is_type_template_branch(scrutinee, template, success, failure);
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
@@ -13427,6 +13421,18 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
+        let scrutinee = if self.atomic_pattern_test {
+            let snapshot = self.builder.temp(self.builder.local_ty(scrutinee));
+            self.builder.assign(
+                Place::local(snapshot),
+                Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+            );
+            self.tested_pattern_values
+                .insert(self.pat_metadata_key(pat_id), snapshot);
+            snapshot
+        } else {
+            scrutinee
+        };
         let pat = self.body.patterns[pat_id].clone();
 
         // Bind sub-pattern: `let x: <pattern>` defers to the sub-
@@ -13436,7 +13442,11 @@ impl LoweringContext<'_> {
             subpat: Some(sp), ..
         } = &pat
         {
-            return self.lower_pattern_test(scrutinee, *sp, success, failure);
+            let saved = self.atomic_pattern_test;
+            self.atomic_pattern_test = true;
+            self.lower_pattern_test(scrutinee, *sp, success, failure);
+            self.atomic_pattern_test = saved;
+            return;
         }
         // Array `: T` ascription emits an `is_type` test before the
         // structural shape test below.
@@ -13570,28 +13580,31 @@ impl LoweringContext<'_> {
                     // site a type variable corresponds to exactly one realized
                     // type).
                     //
-                    // Use the dispatch-guard template (frame TypeVar →
-                    // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
-                    // exact `TypeArgRef` one. A pattern type-test is covariant —
-                    // it asks "does this value belong to type `Opt<T>`" — so the
-                    // reified frame arg must be compared with `is_subtype_of`, not
-                    // `==`. Otherwise, when inference pins `T` to a supertype union
-                    // of the value's actual type arg (e.g. a `default: T` arg
+                    // Each frame `TypeVar` lowers to a `TypeArgRef` and is
+                    // compared *invariantly* against the value's realized arg by
+                    // the canonical algebra. When inference pins `T` to a supertype
+                    // union of the value's actual arg (e.g. a `default: T` arg
                     // subtypes, so `T` reifies to the un-subsumed join `Shape | Sq`
-                    // while the value is `Opt<Shape>`), the exact check
-                    // `Shape | Sq == Shape` fails and the arm silently misses. This
-                    // matches the interface class-dispatch guard path
-                    // (`emit_interface_class_guard_branch`), which already builds
-                    // its typevar args with `tir2_to_dispatch_guard_template`.
-                    // Directionality is preserved: a strictly wider runtime arg
-                    // still fails to match a narrower pinned `T`.
+                    // while the value is `Opt<Shape>`), the arm still matches: the
+                    // algebra knows `Sq <: Shape` and absorbs `Shape | Sq == Shape`,
+                    // so invariant equivalence holds. (The old context-free
+                    // comparison could not see that membership, which is why this
+                    // used to need a covariant `TypeArgRefOrWildcard` band-aid.)
+                    //
+                    // `tir2_to_dispatch_guard_template` (rather than
+                    // `tir2_to_template`) is still used because it also maps an
+                    // unresolved associated projection in the pattern to a match-any
+                    // `Wildcard` — a separate erasure concern.
                     //
                     // `Self`-carrying patterns are excluded: `Self` has no frame
                     // slot yet, so the guard builder would lower it to a
-                    // match-anything `Wildcard` — over-matching is strictly worse
-                    // than today's constant-false. The `Self` units replace this
-                    // (class bodies substitute the enclosing class; interface
-                    // default methods gain a frame slot).
+                    // match-anything `Wildcard`. Keeping them on the erased path
+                    // loses no precision — there a bare `Self` is constant-false
+                    // (`Wildcard` → `emit_false`), while a nested `Self` (e.g.
+                    // `Box<Self>`) already over-matches its container through the
+                    // same residual-typevar `Wildcard` bandaid. The `Self` units
+                    // replace this (class bodies substitute the enclosing class;
+                    // interface default methods gain a frame slot).
                     if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                         && !baml_compiler2_tir::generics::contains_typevar_where(
                             &pat_tir_ty,
@@ -13826,8 +13839,20 @@ impl LoweringContext<'_> {
         narrow_root: AstPatId,
         fresh_cell: bool,
     ) {
+        let scrutinee = self
+            .tested_pattern_values
+            .get(&self.pat_metadata_key(pat_id))
+            .copied()
+            .unwrap_or(scrutinee);
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, subpat } => {
+                let bound_scrutinee = subpat
+                    .and_then(|subpat| {
+                        self.tested_pattern_values
+                            .get(&self.pat_metadata_key(subpat))
+                            .copied()
+                    })
+                    .unwrap_or(scrutinee);
                 // For Or-patterns we look up `pat_types` against the inner
                 // bind's `pat_id`, not the outer `root`. That's safe because
                 // TIR rejects Or-branches whose shared bindings disagree on
@@ -13849,14 +13874,14 @@ impl LoweringContext<'_> {
                 }
                 self.builder.assign(
                     Place::local(local),
-                    Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
+                    Rvalue::Use(Operand::Copy(Place::Local(bound_scrutinee))),
                 );
                 self.record_pattern_binding_local(root, &name, local);
                 self.locals.insert(name, local);
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(scrutinee, sp, root, sp, fresh_cell);
+                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, fresh_cell);
                 }
             }
             AstPattern::Or(parts) => {
@@ -14617,6 +14642,7 @@ pub fn lower_function<'db>(
                 item_ref,
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
+                signature: None,
             }
         }
         FunctionBody::Missing => MirFunction {
@@ -14647,6 +14673,7 @@ pub fn lower_function<'db>(
                 viz_nodes: vec![],
             }),
             lambdas: vec![],
+            signature: None,
         },
     }
 }

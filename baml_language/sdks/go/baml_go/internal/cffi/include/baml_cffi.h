@@ -149,6 +149,8 @@ enum BamlBridgeLanguage
   BAML_BRIDGE_LANGUAGE_RUST = 4,
   BAML_BRIDGE_LANGUAGE_C_SHARP = 5,
   BAML_BRIDGE_LANGUAGE_CPP = 6,
+  BAML_BRIDGE_LANGUAGE_JAVA = 7,
+  BAML_BRIDGE_LANGUAGE_SWIFT = 8,
 };
 #ifndef __cplusplus
 typedef uint32_t BamlBridgeLanguage;

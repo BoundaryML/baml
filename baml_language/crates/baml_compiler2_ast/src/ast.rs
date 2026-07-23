@@ -608,6 +608,14 @@ pub struct AstSourceMap {
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// For object-constructor fields, the span of the field name keyed by
+    /// `(object_expr_id, value_expr_id)`.
+    pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// Value expressions synthesized from property shorthand. For example,
+    /// `{ options }` lowers to the same key/value shape as
+    /// `{ options: options }`, while this set preserves that the user wrote the
+    /// shorthand so diagnostics can explain its exact-name requirement.
+    pub property_shorthand_exprs: HashSet<ExprId>,
 
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
@@ -635,6 +643,8 @@ impl AstSourceMap {
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
+            object_field_name_spans: HashMap::new(),
+            property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -651,9 +661,10 @@ impl AstSourceMap {
         self.synthetic_stmts.contains(&id)
     }
 
-    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_patterns`).
-    pub fn is_synthetic_pattern(&self, id: PatId) -> bool {
-        self.synthetic_patterns.contains(&id)
+    /// Whether `id` is the value expression synthesized for a shorthand
+    /// property such as the `options` value in `{ options }`.
+    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
+        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up the source span of a statement by its `StmtId`.
@@ -698,12 +709,13 @@ impl AstSourceMap {
             .unwrap_or_else(|| self.expr_span(id))
     }
 
-    /// Look up a labeled call argument's label span.
-    pub fn call_arg_label_span(&self, call: ExprId, arg_expr: ExprId) -> TextRange {
-        self.call_arg_label_spans
-            .get(&(call, arg_expr))
+    /// Look up the field-name span for an object-constructor field.
+    /// Returns the value-expression span as fallback.
+    pub fn object_field_name_span(&self, object_id: ExprId, value_id: ExprId) -> TextRange {
+        self.object_field_name_spans
+            .get(&(object_id, value_id))
             .copied()
-            .unwrap_or_else(|| self.expr_span(call))
+            .unwrap_or_else(|| self.expr_span(value_id))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
@@ -1682,17 +1694,6 @@ pub struct ImplementsBlockDef {
     pub span: TextRange,
 }
 
-impl ImplementsBlockDef {
-    /// Convenience: the interface's simple name (last path segment), used for
-    /// diagnostics. Returns `None` if the target is not a simple path.
-    pub fn interface_name(&self) -> Option<&Name> {
-        match &self.target.kind {
-            TypeExprKind::Path { segments, .. } => segments.last(),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceFieldLinkDef {
     pub interface_field: Name,
@@ -1823,13 +1824,6 @@ pub enum TestArgValue {
 impl TestArgValue {
     pub fn float(value: f64) -> Self {
         Self::FloatBits(value.to_bits())
-    }
-
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
-            _ => None,
-        }
     }
 }
 

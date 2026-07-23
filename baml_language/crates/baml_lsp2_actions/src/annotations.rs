@@ -57,7 +57,7 @@ use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, ExprBody, FunctionBodyDef, FunctionOrigin},
 };
-use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::FileScopeId};
+use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
 use text_size::TextSize;
 
@@ -108,13 +108,12 @@ pub struct InlineAnnotation {
 /// with this module.
 #[salsa::tracked(returns(ref))]
 pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
-    for (func_local_id, func_data) in &item_tree.functions {
-        let func_loc = FunctionLoc::new(db, file, *func_local_id);
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
 
         // Process user-written functions and methods, plus the synthesized
         // `$init_test*` registration functions (so test/testset bodies — which

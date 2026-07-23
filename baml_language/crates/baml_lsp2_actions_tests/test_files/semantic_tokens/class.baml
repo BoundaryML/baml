@@ -53,6 +53,87 @@ function fo() -> int {
 
 //----
 //- diagnostics
+// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[ class.baml:39:13 ]
+//     │
+//  39 │     Color { re: 255, gree: 0, blu: 0 },
+//     │             ─┬
+//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[ class.baml:39:22 ]
+//     │
+//  39 │     Color { re: 255, gree: 0, blu: 0 },
+//     │                      ──┬─
+//     │                        ╰─── class `Color` has no field `gree`. Did you mean `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[ class.baml:39:31 ]
+//     │
+//  39 │     Color { re: 255, gree: 0, blu: 0 },
+//     │                               ─┬─
+//     │                                ╰─── class `Color` has no field `blu`. Did you mean `blue`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[ class.baml:40:13 ]
+//     │
+//  40 │     Color { re: 0, gree: 255, blu: 0 },
+//     │             ─┬
+//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[ class.baml:40:20 ]
+//     │
+//  40 │     Color { re: 0, gree: 255, blu: 0 },
+//     │                    ──┬─
+//     │                      ╰─── class `Color` has no field `gree`. Did you mean `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[ class.baml:40:31 ]
+//     │
+//  40 │     Color { re: 0, gree: 255, blu: 0 },
+//     │                               ─┬─
+//     │                                ╰─── class `Color` has no field `blu`. Did you mean `blue`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[ class.baml:41:13 ]
+//     │
+//  41 │     Color { re: 0, gree: 0, blu: 255 },
+//     │             ─┬
+//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[ class.baml:41:20 ]
+//     │
+//  41 │     Color { re: 0, gree: 0, blu: 255 },
+//     │                    ──┬─
+//     │                      ╰─── class `Color` has no field `gree`. Did you mean `green`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
+// error: class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[ class.baml:41:29 ]
+//     │
+//  41 │     Color { re: 0, gree: 0, blu: 255 },
+//     │                             ─┬─
+//     │                              ╰─── class `Color` has no field `blu`. Did you mean `blue`?
+//     │
+//     │ Note: Error code: E0007
+// ────╯
 // error: type `Color` has no member `get_re`
 //     ╭─[ class.baml:44:29 ]
 //     │

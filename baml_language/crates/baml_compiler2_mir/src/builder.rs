@@ -27,7 +27,7 @@
 //! ```
 
 use baml_base::{Name, Span};
-use baml_type::RuntimeTy;
+use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
@@ -249,6 +249,23 @@ impl MirBuilder {
     pub(crate) fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
         self.set_terminator(Terminator::Branch {
             condition,
+            then_block,
+            else_block,
+        });
+    }
+
+    pub(crate) fn narrow_bind(
+        &mut self,
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
+        then_block: BlockId,
+        else_block: BlockId,
+    ) {
+        self.set_terminator(Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
             then_block,
             else_block,
         });
@@ -614,6 +631,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 
@@ -656,6 +674,7 @@ impl MirBuilder {
                 viz_nodes: self.viz_nodes,
             }),
             lambdas: vec![],
+            signature: None,
         }
     }
 

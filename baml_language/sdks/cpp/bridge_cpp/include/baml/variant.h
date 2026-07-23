@@ -79,9 +79,11 @@ template <class... Ts>
 struct canon_sort {
   static constexpr canon_indices<sizeof...(Ts)> canon =
       sorted_unique_indices<Ts...>();
+  using source_types = std::tuple<Ts...>;
+  template <std::size_t I>
+  using canonical_type = std::tuple_element_t<canon.idx[I], source_types>;
   template <std::size_t... Is>
-  static std::variant<std::tuple_element_t<canon.idx[Is], std::tuple<Ts...>>...>
-      helper(std::index_sequence<Is...>);
+  static std::variant<canonical_type<Is>...> helper(std::index_sequence<Is...>);
   using type = decltype(helper(std::make_index_sequence<canon.count>{}));
 };
 

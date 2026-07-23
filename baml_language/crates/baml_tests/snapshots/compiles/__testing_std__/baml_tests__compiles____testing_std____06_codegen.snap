@@ -553,9 +553,9 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     load_var ts
     load_field .name
     call baml.Map.get
-    store_var _3
-    load_var _3
-    is_type testing.TestRegistry
+    store_var _8
+    load_var _8
+    narrow_bind testing.TestRegistry, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -597,7 +597,7 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     jump L2
 
   L1:
-    load_var _3
+    load_var _8
 
   L2:
     return
@@ -925,9 +925,9 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     load_var ts
     load_field .name
     call baml.Map.get
-    store_var expanded
-    load_var expanded
-    is_type testing.TestRegistry
+    store_var _24
+    load_var _24
+    narrow_bind testing.TestRegistry, slot=8
     pop_jump_if_false L5
     jump L6
 
@@ -942,7 +942,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     jump L3
 
   L6:
-    load_var expanded
+    load_var _24
     store_var sub
     load_var ts
     load_field .name
@@ -1091,7 +1091,9 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     call baml.Array.push
     pop 1
     load_var result
-    is_type testing.TestReport
+    store_var _19
+    load_var _19
+    narrow_bind testing.TestReport, slot=13
     pop_jump_if_false L2
     jump L3
 
@@ -1102,7 +1104,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     jump L4
 
   L3:
-    load_var result
+    load_var _19
     load_field .outcome
     store_var outcome
 
@@ -1119,7 +1121,9 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     add_int
     store_var failed
     load_var result
-    is_type testing.TestReport
+    store_var _25
+    load_var _25
+    narrow_bind testing.TestReport, slot=14
     pop_jump_if_false L6
     jump L9
 
@@ -1171,7 +1175,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     jump L13
 
   L12:
-    load_var2 5 16
+    load_var2 5 18
     call baml.Array.push
     pop 1
     jump L11
@@ -1224,8 +1228,8 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     load_var results
     container_len
     store_var _49
-    load_var2 17 18
     load_var2 19 20
+    load_var2 21 22
     load_var2 5 6
     load_var result_names
     init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results, .result_names
@@ -1462,8 +1466,11 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
     load_field .results
     load_var i
     load_array_element
-    store_var_load_var _22
-    is_type testing.TestReport
+    store_var _22
+    load_var _22
+    store_var _25
+    load_var _25
+    narrow_bind testing.TestReport, slot=13
     pop_jump_if_false L7
     jump L19
 
@@ -1563,14 +1570,14 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
     jump L24
 
   L18:
-    load_var2 13 14
+    load_var2 14 15
     load_var2 3 4
     call testing.collect_leaf_identities
     pop 1
     jump L24
 
   L19:
-    load_var _22
+    load_var _25
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
@@ -1642,8 +1649,11 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
 
   L1:
     load_var _4
-    store_var_load_var r
-    is_type testing.TestReport
+    store_var r
+    load_var r
+    store_var _8
+    load_var _8
+    narrow_bind testing.TestReport, slot=6
     pop_jump_if_false L2
     jump L3
 
@@ -1656,7 +1666,7 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
     jump L0
 
   L3:
-    load_var r
+    load_var _8
     load_field .runs
     load_type baml.iter.Iterable<Item = testing.RunReport, Error = never>
     load_const "iter"
@@ -1684,10 +1694,11 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
     pop_jump_if_false L4
     load_var run
     load_field .message
-    store_var_load_var _19
-    is_type string
+    store_var _20
+    load_var _20
+    narrow_bind string, slot=10
     pop_jump_if_false L4
-    load_var2 2 9
+    load_var2 2 10
     call baml.Array.push
     pop 1
     jump L4
@@ -1781,13 +1792,111 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     load_var2 1 2
     call testing.TestRegistry.expand_testset_registry
     call testing.collect_leaf_names
-    jump L3
+    jump L19
     load_var e
-    type_tag
-    dense_tag [InvalidTestName, DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
-    jump_table [L2, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
+    store_var _5
+    load_var _5
+    narrow_bind testing.InvalidTestName, slot=4
+    pop_jump_if_false L0
+    jump L18
 
   L0:
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L1
+    jump L17
+
+  L1:
+    load_var e
+    is_type baml.panics.IndexOutOfBounds
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var e
+    is_type baml.panics.InvalidFieldAccess
+    pop_jump_if_false L3
+    jump L17
+
+  L3:
+    load_var e
+    is_type baml.panics.MapKeyNotFound
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var e
+    is_type baml.panics.StackOverflow
+    pop_jump_if_false L5
+    jump L17
+
+  L5:
+    load_var e
+    is_type baml.panics.AssertionFailed
+    pop_jump_if_false L6
+    jump L17
+
+  L6:
+    load_var e
+    is_type baml.panics.Unreachable
+    pop_jump_if_false L7
+    jump L17
+
+  L7:
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L8
+    jump L17
+
+  L8:
+    load_var e
+    is_type baml.panics.UserPanic
+    pop_jump_if_false L9
+    jump L17
+
+  L9:
+    load_var e
+    is_type baml.panics.Exit
+    pop_jump_if_false L10
+    jump L17
+
+  L10:
+    load_var e
+    is_type baml.panics.AllocFailure
+    pop_jump_if_false L11
+    jump L17
+
+  L11:
+    load_var e
+    is_type baml.panics.HostUnavailable
+    pop_jump_if_false L12
+    jump L17
+
+  L12:
+    load_var e
+    is_type baml.panics.NegativeBitShift
+    pop_jump_if_false L13
+    jump L17
+
+  L13:
+    load_var e
+    is_type baml.panics.SdkPanic
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var e
+    is_type baml.panics.HostContractViolation
+    pop_jump_if_false L15
+    jump L17
+
+  L15:
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
     load_var e
     throw_if_panic
     load_var ts
@@ -1796,22 +1905,22 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     bin_op +
     load_type string
     alloc_array 1
-    jump L3
+    jump L19
 
-  L1: IntegerOverflow
+  L17:
     load_var ts
     load_field .name
     load_const "::(failed to expand)"
     bin_op +
     load_type string
     alloc_array 1
-    jump L3
+    jump L19
 
-  L2: InvalidTestName
-    load_var e
+  L18:
+    load_var _5
     throw
 
-  L3:
+  L19:
     return
 }
 
@@ -1821,13 +1930,111 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     load_var2 3 4
     load_var2 5 6
     call testing.select_names_layered
-    jump L7
+    jump L23
     load_var e
-    type_tag
-    dense_tag [InvalidTestName, DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
-    jump_table [L6, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3, L3], default L0
+    store_var _9
+    load_var _9
+    narrow_bind testing.InvalidTestName, slot=8
+    pop_jump_if_false L0
+    jump L22
 
   L0:
+    load_var e
+    is_type baml.panics.DivisionByZero
+    pop_jump_if_false L1
+    jump L19
+
+  L1:
+    load_var e
+    is_type baml.panics.IndexOutOfBounds
+    pop_jump_if_false L2
+    jump L19
+
+  L2:
+    load_var e
+    is_type baml.panics.InvalidFieldAccess
+    pop_jump_if_false L3
+    jump L19
+
+  L3:
+    load_var e
+    is_type baml.panics.MapKeyNotFound
+    pop_jump_if_false L4
+    jump L19
+
+  L4:
+    load_var e
+    is_type baml.panics.StackOverflow
+    pop_jump_if_false L5
+    jump L19
+
+  L5:
+    load_var e
+    is_type baml.panics.AssertionFailed
+    pop_jump_if_false L6
+    jump L19
+
+  L6:
+    load_var e
+    is_type baml.panics.Unreachable
+    pop_jump_if_false L7
+    jump L19
+
+  L7:
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L8
+    jump L19
+
+  L8:
+    load_var e
+    is_type baml.panics.UserPanic
+    pop_jump_if_false L9
+    jump L19
+
+  L9:
+    load_var e
+    is_type baml.panics.Exit
+    pop_jump_if_false L10
+    jump L19
+
+  L10:
+    load_var e
+    is_type baml.panics.AllocFailure
+    pop_jump_if_false L11
+    jump L19
+
+  L11:
+    load_var e
+    is_type baml.panics.HostUnavailable
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var e
+    is_type baml.panics.NegativeBitShift
+    pop_jump_if_false L13
+    jump L19
+
+  L13:
+    load_var e
+    is_type baml.panics.SdkPanic
+    pop_jump_if_false L14
+    jump L19
+
+  L14:
+    load_var e
+    is_type baml.panics.HostContractViolation
+    pop_jump_if_false L15
+    jump L19
+
+  L15:
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L16
+    jump L19
+
+  L16:
     load_var e
     throw_if_panic
     load_var ts
@@ -1838,21 +2045,21 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     load_var2 3 4
     load_var2 5 6
     call testing.leaf_selected_layered
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L17
+    jump L18
 
-  L1:
+  L17:
     load_type string
     alloc_array 0
-    jump L7
+    jump L23
 
-  L2:
+  L18:
     load_var sentinel
     load_type string
     alloc_array 1
-    jump L7
+    jump L23
 
-  L3: IntegerOverflow
+  L19:
     load_var ts
     load_field .name
     load_const "::(failed to expand)"
@@ -1861,25 +2068,25 @@ function testing.collect_subtree_names_layered(registry: testing.TestRegistry, t
     load_var2 3 4
     load_var2 5 6
     call testing.leaf_selected_layered
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L20
+    jump L21
 
-  L4:
+  L20:
     load_type string
     alloc_array 0
-    jump L7
+    jump L23
 
-  L5:
+  L21:
     load_var sentinel
     load_type string
     alloc_array 1
-    jump L7
+    jump L23
 
-  L6: InvalidTestName
-    load_var e
+  L22:
+    load_var _9
     throw
 
-  L7:
+  L23:
     return
 }
 
@@ -1911,8 +2118,11 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
 
   L1:
     load_var _8
-    store_var_load_var r
-    is_type testing.TestReport
+    store_var r
+    load_var r
+    store_var _13
+    load_var _13
+    narrow_bind testing.TestReport, slot=11
     pop_jump_if_false L2
     jump L9
 
@@ -1981,7 +2191,7 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     jump L14
 
   L9:
-    load_var r
+    load_var _13
     load_field .outcome
     load_const "pass"
     call baml.ops.equals_equals
@@ -2374,9 +2584,9 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     call baml.String.substring
     load_var part
     call baml.String.index_of
-    store_var _40
-    load_var _40
-    is_type int
+    store_var _45
+    load_var _45
+    narrow_bind int, slot=14
     pop_jump_if_false L7
     jump L8
 
@@ -2633,7 +2843,9 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     call baml.Array.push
     pop 1
     load_var report
-    is_type testing.TestReport
+    store_var _16
+    load_var _16
+    narrow_bind testing.TestReport, slot=9
     pop_jump_if_false L2
     jump L3
 
@@ -2644,7 +2856,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     jump L4
 
   L3:
-    load_var report
+    load_var _16
     load_field .outcome
     store_var outcome
 

@@ -59,6 +59,8 @@ pub struct InterfaceSourceMap {
     pub span: TextRange,
     /// Spans for every node in [`InterfaceData::type_refs`].
     pub type_refs: TypeRefSourceMap,
+    /// Name span per field, parallel to [`InterfaceData::fields`].
+    pub field_name_spans: Vec<TextRange>,
     /// Parallel to [`InterfaceData::associated_types`].
     pub associated_type_spans: Vec<AssociatedTypeSourceMap>,
     /// Parallel to [`InterfaceData::required_methods`].
@@ -74,6 +76,8 @@ pub struct AssociatedTypeSourceMap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceMethodSigSourceMap {
     pub span: TextRange,
+    /// Span of just the method's name.
+    pub name_span: TextRange,
     /// One span per parameter, parallel to `InterfaceMethodSigData::params`.
     pub param_spans: Vec<TextRange>,
 }
@@ -106,7 +110,18 @@ fn lower<'db>(
 ) -> (InterfaceData<'db>, InterfaceSourceMap) {
     let file = interface.file(db);
     let item_tree = crate::file_item_tree(db, file);
+    let item_source_map = crate::file_item_tree_source_map(db, file);
     let data = &item_tree[interface.id(db)];
+    // Name spans for fields / required methods live in the item-tree source map
+    // (parallel to `fields` / `required_methods`), like a class's field spans.
+    let field_name_spans = item_source_map
+        .interface_field_spans
+        .get(&interface.id(db))
+        .cloned()
+        .unwrap_or_default();
+    let method_name_spans = item_source_map
+        .interface_method_spans
+        .get(&interface.id(db));
 
     let mut type_refs = TypeRefBuilder::new();
 
@@ -193,6 +208,7 @@ fn lower<'db>(
         InterfaceSourceMap {
             span: data.span,
             type_refs: spans,
+            field_name_spans,
             associated_type_spans: data
                 .associated_types
                 .iter()
@@ -204,8 +220,13 @@ fn lower<'db>(
             required_method_spans: data
                 .required_methods
                 .iter()
-                .map(|method| InterfaceMethodSigSourceMap {
+                .enumerate()
+                .map(|(i, method)| InterfaceMethodSigSourceMap {
                     span: method.span,
+                    name_span: method_name_spans
+                        .and_then(|spans| spans.get(i))
+                        .copied()
+                        .unwrap_or_default(),
                     param_spans: method.params.iter().map(|param| param.span).collect(),
                 })
                 .collect(),

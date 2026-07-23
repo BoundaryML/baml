@@ -144,14 +144,6 @@ impl QualifiedTypeName {
         baml_base::is_panic_namespace(self.package().as_str(), &self.namespace)
     }
 
-    pub fn to_path_in_package(&self) -> Vec<Name> {
-        self.namespace
-            .iter()
-            .chain(std::iter::once(&self.name))
-            .cloned()
-            .collect::<Vec<_>>()
-    }
-
     /// The flat `[package, ...namespace]` path, matching the legacy
     /// `TypeName::module_path` representation that fused package and namespace
     /// into one `Vec`. Allocates — prefer [`package`](Self::package) /

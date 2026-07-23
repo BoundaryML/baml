@@ -511,7 +511,9 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     store_var ok
     jump L2
     load_var e
-    is_type baml.errors.Io
+    store_var _13
+    load_var _13
+    narrow_bind baml.errors.Io, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -520,7 +522,7 @@ function streaming_sse_primitives.sse_fetch_error_on_bad_status_fn() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _13
     load_field .message
     load_const "500"
     call assert.contains
@@ -568,7 +570,9 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     store_var ok
     jump L2
     load_var e
-    is_type baml.errors.Io
+    store_var _13
+    load_var _13
+    narrow_bind baml.errors.Io, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -577,7 +581,7 @@ function streaming_sse_primitives.sse_http_4xx_error_fn() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _13
     load_field .message
     load_const "403"
     call assert.contains

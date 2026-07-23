@@ -453,10 +453,34 @@ jobs:
                 "timeout": 30,
               },
               {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
+                // The Java sdk-test crate needs the mise-pinned JDK and
+                // Gradle (setup script builds the bridge_java cdylib and
+                // the baml_bridge jar; test time spawns `gradle` from
+                // PATH, so `java` + `gradle` must be in install-args).
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
@@ -513,9 +537,42 @@ jobs:
                 "timeout": 40,
               },
               {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
                 "sdk-label": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                // Swift is macOS-only: the fixtures need SwiftPM/XCTest,
+                // and the nextest-bound setup script assembles the
+                // BamlBridgeFFI xcframework (host slice) before the run.
+                "sdk-label": "swift",
+                "package-name": "sdk_test_swift",
+                "sdk-path": "swift",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
@@ -563,10 +620,30 @@ jobs:
                 "timeout": 60,
               },
               {
+                "sdk-label": "csharp",
+                "package-name": "sdk_test_csharp",
+                "sdk-path": "csharp",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
                 "sdk-label": "rust",
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
@@ -615,6 +692,12 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: ${{ matrix.install-args }}
+
+      - name: "Install .NET SDK"
+        if: matrix.sdk-label == 'csharp'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
 
       - name: "Verify sccache"
         run: sccache --version
@@ -669,11 +752,20 @@ jobs:
         run: sccache --show-stats
 
       - name: "Run sdk test setup"
+        # The C# crate uses nextest's setup-script hook directly and has no
+        # generated setup_guard test. Its setup still runs before the full suite.
+        if: matrix.sdk-label != 'csharp'
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }}) and test(setup_guard::ran)'
         working-directory: baml_language
 
       - name: "Run sdk tests"
+        if: matrix.sdk-label != 'csharp'
         run: cargo nextest run -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
+        working-directory: baml_language
+
+      - name: "Run C# sdk tests"
+        if: matrix.sdk-label == 'csharp'
+        run: cargo nextest run -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
       # The Rust bridge runtime crate (baml_bridge). Its tests load the engine

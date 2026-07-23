@@ -62,7 +62,9 @@ function catch_arm_return.catch_arm_return_mixed(x: int) -> int {
     call user.catch_arm_return.car_throws
     jump L2
     load_var e
-    is_type string
+    store_var _4
+    load_var _4
+    narrow_bind string, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -71,7 +73,7 @@ function catch_arm_return.catch_arm_return_mixed(x: int) -> int {
     rethrow
 
   L1:
-    load_var e
+    load_var _4
     call baml.String.length
     jump L3
 

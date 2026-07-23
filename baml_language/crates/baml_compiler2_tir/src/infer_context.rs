@@ -110,6 +110,23 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A shorthand property (`{ name }`) could not resolve its implicit value.
+    /// Suggestions are in-scope values with similar names; the diagnostic
+    /// renders them as explicit `name: suggestion` mappings.
+    UnresolvedPropertyShorthand { name: Name, suggestions: Vec<Name> },
+    /// A class constructor shorthand property resolves as a value but its name
+    /// is not an exact class-field match.
+    UnknownClassPropertyShorthand {
+        class_name: crate::ty::QualifiedTypeName,
+        name: Name,
+        suggestions: Vec<Name>,
+    },
+    /// A class constructor explicitly names a field the class does not declare.
+    UnknownClassField {
+        class_name: crate::ty::QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -496,9 +513,12 @@ pub enum TirTypeError {
     /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
     /// string value but is not a binding; bind it to a local first.
     RuntimeIdMemberAccess { member: Name },
-    /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
-    /// are set inside the callee body with `$id = ...`, not by the caller.
-    RuntimeIdCallSiteArgument,
+    /// A second `$id` side channel was supplied to one call.
+    DuplicateRuntimeIdArgument,
+    /// `$id` is trailing call metadata and an ordinary argument followed it.
+    RuntimeIdArgumentMustBeLast,
+    /// The `$id` side channel accepts only a `boundary.LocalId`.
+    RuntimeIdArgumentTypeMismatch { got: Ty },
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -506,6 +526,18 @@ pub enum TirTypeError {
     /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
+    /// BEP-062: an `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler and
+    /// cannot be written by hand.
+    BuiltinInterfaceNotImplementable {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// BEP-062: a generic parameter's bound names a compiler-builtin interface
+    /// (`baml.AnyFunction`) that is only legal as a value type (an
+    /// existential), never as a bound.
+    BuiltinInterfaceNotABound {
+        interface: crate::ty::QualifiedTypeName,
+    },
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
     /// an interface-bounded type parameter
     /// (`<T extends I>`) was given a non-concrete type argument (a union,
@@ -763,6 +795,66 @@ impl fmt::Display for TirTypeError {
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
             }
+            TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`"
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`. \
+                         Did you mean `{name}: {}`?",
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(|suggestion| format!("{name}: {suggestion}"))
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`. \
+                         Did you mean one of these: `{joined}`?"
+                    )
+                }
+            }
+            TirTypeError::UnknownClassPropertyShorthand {
+                class_name,
+                name,
+                suggestions,
+            } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires class `{}` to have a field named \
+                         `{name}`",
+                        class_name.render_user_facing()
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "class `{}` has no field `{name}` for property shorthand. Did you mean \
+                         `{}: {name}`?",
+                        class_name.render_user_facing(),
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(|field| format!("{field}: {name}"))
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "class `{}` has no field `{name}` for property shorthand. Did you mean \
+                         one of these: `{joined}`?",
+                        class_name.render_user_facing()
+                    )
+                }
+            }
             TirTypeError::DeadCode {
                 unreachable_count, ..
             } => {
@@ -804,7 +896,12 @@ impl fmt::Display for TirTypeError {
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
-            TirTypeError::UnknownClassPatternField {
+            TirTypeError::UnknownClassField {
+                class_name,
+                field_name,
+                suggestions,
+            }
+            | TirTypeError::UnknownClassPatternField {
                 class_name,
                 field_name,
                 suggestions,
@@ -1376,10 +1473,17 @@ impl fmt::Display for TirTypeError {
                 "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
                  (e.g. `let id = $id; id.{member}`)"
             ),
-            TirTypeError::RuntimeIdCallSiteArgument => write!(
+            TirTypeError::DuplicateRuntimeIdArgument => {
+                write!(f, "duplicate `$id` call argument")
+            }
+            TirTypeError::RuntimeIdArgumentMustBeLast => write!(
                 f,
-                "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
-                 body instead"
+                "`$id` must be the final call argument because it is trailing call metadata"
+            ),
+            TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
+                f,
+                "`$id` at a call site expects `boundary.LocalId`, got {}",
+                got.render_user_facing()
             ),
             TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                 f,
@@ -1391,6 +1495,19 @@ impl fmt::Display for TirTypeError {
                 f,
                 "generic bound `{}` is not an interface; bounds must be interfaces",
                 bound.render_user_facing()
+            ),
+            TirTypeError::BuiltinInterfaceNotImplementable { interface } => write!(
+                f,
+                "`{}` is a compiler builtin and cannot be implemented by hand; \
+                 every function type implements it automatically",
+                interface.render_user_facing()
+            ),
+            TirTypeError::BuiltinInterfaceNotABound { interface } => write!(
+                f,
+                "`{}` cannot be used as a generic bound; use it as a value type \
+                 instead (e.g. `f: {}`)",
+                interface.render_user_facing(),
+                interface.render_user_facing()
             ),
             TirTypeError::BoundedTypeArgNotConcrete { arg, bound } => {
                 let bound = bound
@@ -2105,22 +2222,6 @@ impl<'db> InferContext<'db> {
             });
     }
 
-    /// Report a type error at a type annotation location.
-    pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::TypeAnnot(at),
-                related: Vec::new(),
-            });
-    }
-
     /// Report a type error at a raw source span (for type annotations).
     pub fn report_at_span(&self, error: TirTypeError, span: TextRange) {
         self.report_at_span_with_related(error, span, Vec::new());
@@ -2144,19 +2245,6 @@ impl<'db> InferContext<'db> {
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::Span(span),
                 related,
-            });
-    }
-
-    /// Report a type error at a specific statement.
-    pub fn report_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Stmt(at),
-                related: Vec::new(),
             });
     }
 

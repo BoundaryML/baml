@@ -378,15 +378,6 @@ pub fn slugify(input: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-pub fn slug_or_default(label: &str, default: &str) -> String {
-    let candidate = slugify(label);
-    if candidate.is_empty() {
-        default.to_string()
-    } else {
-        candidate
-    }
-}
-
 pub fn describe_node_type(node_type: &NodeType) -> &'static str {
     match node_type {
         NodeType::FunctionRoot => "function",

@@ -1242,13 +1242,17 @@ function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> nul
 function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
     load_field .value
-    store_var_load_var _3
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
     pop_jump_if_false L0
+    load_var _4
+    store_var a
     load_var other
     load_field .0
-    store_var_load_var _6
-    is_type int
+    store_var _7
+    load_var _7
+    narrow_bind int, slot=6
     pop_jump_if_false L0
     jump L1
 
@@ -1258,7 +1262,7 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     throw
 
   L1:
-    load_var2 4 5
+    load_var2 5 6
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0

@@ -617,7 +617,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
         quote! {
             {
                 let pkg_filter = #pkg_lit;
-                writeln!(output, "\n=== HIR2 (package {}) ===", pkg_filter).unwrap();
+                writeln!(output, "\n=== PPIR (package {}) ===", pkg_filter).unwrap();
                 use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
                 let mut baml_files: Vec<_> = compiler2_all_files(&db)
                     .into_iter()
@@ -626,7 +626,7 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
                     writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
-                    output.push_str(&render_hir2(&db, sf));
+                    output.push_str(&render_ppir(&db, sf));
                 }
             }
         }
@@ -636,8 +636,8 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
 
     quote! {
         #[test]
-        fn test_03_hir() {
-            use crate::compiler2_tir::support::render_hir2;
+        fn test_03_ppir() {
+            use crate::compiler2_tir::support::render_ppir;
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -646,16 +646,16 @@ fn generate_hir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             #file_loaders
 
             let mut output = String::new();
-            writeln!(output, "=== HIR2 ===").unwrap();
+            writeln!(output, "=== PPIR ===").unwrap();
 
             for source_file in &source_files {
-                output.push_str(&render_hir2(&db, *source_file));
+                output.push_str(&render_ppir(&db, *source_file));
             }
 
             #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("03_hir", output);
+                assert_snapshot!("03_ppir", output);
             });
         }
     }
@@ -769,11 +769,9 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
                     .collect();
                 baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
                 for sf in baml_files {
-                    let item_tree = file_item_tree(&db, sf);
-                    let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                    functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                    for (local_id, _func_data) in functions {
-                        let func_loc = FunctionLoc::new(&db, sf, *local_id);
+                    let mut functions = file_functions(&db, sf).to_vec();
+                    functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                    for func_loc in functions {
                         let mir = lower_function(&db, func_loc, OptLevel::Two);
                         writeln!(output, "{}", display_function(&mir)).unwrap();
                     }
@@ -787,8 +785,8 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
     quote! {
         #[test]
         fn test_04_5_mir() {
-            use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
             use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
+            use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 
             let mut db = ProjectDatabase::new();
             let _root = db.set_project_root(std::path::Path::new("."));
@@ -800,11 +798,12 @@ fn generate_mir_test(project: &TestProject, stdlib_package_filter: Option<&str>)
             writeln!(output, "=== MIR2 ===").unwrap();
 
             for source_file in &source_files {
-                let item_tree = file_item_tree(&db, *source_file);
-                let mut functions: Vec<_> = item_tree.functions.iter().collect();
-                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
-                for (local_id, _func_data) in functions {
-                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                // Dump in source order (by declaration span) — an intrinsic,
+                // salsa-enumeration-independent key, so the snapshot never churns
+                // on a firewall/tie-break change the way a name sort would.
+                let mut functions = file_functions(&db, *source_file).to_vec();
+                functions.sort_by_key(|loc| function_source_map(&db, *loc).span.start());
+                for func_loc in functions {
                     let mir = lower_function(&db, func_loc, OptLevel::Two);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
                 }

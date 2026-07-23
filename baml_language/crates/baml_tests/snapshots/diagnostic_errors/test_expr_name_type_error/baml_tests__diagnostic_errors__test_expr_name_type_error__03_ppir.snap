@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 57021
+---
+=== PPIR ===
+function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root", "a" Add 1, () -> void { {  } null }, null); registry.register_test_at("root", 42, () -> void { {  } null }, null); registry.register_test_set_at("root", "int_name", (testset: testing.TestCollector) -> void { { for i in [1, 2, 3] { testset.register_test(5 Add i, () -> { {  } null }, null) } } null }, null) } null
+}

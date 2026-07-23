@@ -160,11 +160,18 @@ pub struct ProjectDatabase {
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
     /// Maps file paths to their `SourceFile` handles (user files only).
-    file_map: HashMap<std::path::PathBuf, SourceFile>,
+    ///
+    /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
+    /// database handle stays O(1): the parallel check and emit drivers mint a
+    /// shared-storage handle per work chunk, and a deep per-clone copy of an
+    /// N-entry `PathBuf` map made every clone O(files) — quadratic CPU and
+    /// peak RSS across a whole compile.
+    file_map: Arc<HashMap<std::path::PathBuf, SourceFile>>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
-    /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
-    file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// Maps `FileId` to file path for reverse lookup (all files including v2
+    /// stubs). `Arc`-wrapped for the same reason as `file_map`.
+    file_id_to_path: Arc<HashMap<FileId, std::path::PathBuf>>,
     /// `SourceFile` inputs of removed paths. Salsa never frees inputs, so a
     /// delete/recreate cycle (branch switch, codegen rewriting `.baml`
     /// files) would mint a new immortal input per cycle; instead the input
@@ -292,9 +299,9 @@ impl ProjectDatabase {
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
-            file_map: HashMap::new(),
+            file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
-            file_id_to_path: HashMap::new(),
+            file_id_to_path: Arc::new(HashMap::new()),
             removed_file_tombstones: HashMap::new(),
         };
         db.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(
@@ -315,30 +322,6 @@ impl ProjectDatabase {
     /// Get the project, if set.
     pub fn get_project(&self) -> Option<Project> {
         self.project
-    }
-
-    /// Get the project, if set.
-    ///
-    /// Alias for `get_project()` for API compatibility with old `LspDatabase`.
-    pub fn project(&self) -> Option<Project> {
-        self.project
-    }
-
-    /// Get a reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db()` to get the underlying `RootDatabase`.
-    /// Since `ProjectDatabase` IS the database now, this just returns `self`.
-    pub fn db(&self) -> &Self {
-        self
-    }
-
-    /// Get a mutable reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db_mut()` to get the underlying `RootDatabase`.
-    pub fn db_mut(&mut self) -> &mut Self {
-        self
     }
 
     /// Seed per-file throw facts from a previous compile of identical file
@@ -453,8 +436,8 @@ impl ProjectDatabase {
             };
             let file_id = file.file_id(self);
 
-            self.file_map.insert(canonical_path.clone(), file);
-            self.file_id_to_path.insert(file_id, canonical_path);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
 
             // Update project files list if project is set
             if let Some(project) = self.project {
@@ -467,6 +450,44 @@ impl ProjectDatabase {
         }
     }
 
+    /// Bulk [`Self::add_or_update_file`]: identical per-file semantics
+    /// (canonicalization, tombstone revival, map registration), but the
+    /// project file list is written once at the end instead of once per new
+    /// file. The per-file path clones and re-sets the whole `files` Vec and
+    /// bumps the salsa revision each time — O(files²) copies plus one
+    /// revision per file during initial project load.
+    pub fn add_or_update_files<'a, I>(&mut self, files: I)
+    where
+        I: IntoIterator<Item = (&'a std::path::Path, &'a str)>,
+    {
+        let mut new_files = Vec::new();
+        for (path, content) in files {
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+            if let Some(&existing_file) = self.file_map.get(&canonical_path) {
+                existing_file.set_text(self).to(content.to_string());
+                continue;
+            }
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
+            let file_id = file.file_id(self);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
+            new_files.push(file);
+        }
+        if !new_files.is_empty()
+            && let Some(project) = self.project
+        {
+            let mut project_files: Vec<SourceFile> = project.files(self).clone();
+            project_files.extend(new_files);
+            project.set_files(self).to(project_files);
+        }
+    }
+
     /// Remove a file from the database.
     ///
     /// Note: Salsa doesn't support true removal. The input is emptied (so its
@@ -476,9 +497,9 @@ impl ProjectDatabase {
     pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        if let Some(file) = self.file_map.remove(&canonical_path) {
+        if let Some(file) = Arc::make_mut(&mut self.file_map).remove(&canonical_path) {
             let file_id = file.file_id(self);
-            self.file_id_to_path.remove(&file_id);
+            Arc::make_mut(&mut self.file_id_to_path).remove(&file_id);
 
             // Remove from project files list
             if let Some(project) = self.project {
@@ -544,7 +565,7 @@ impl ProjectDatabase {
             let file = self.add_file_internal(&path, builtin.contents);
             let file_id = file.file_id(self);
 
-            self.file_id_to_path.insert(file_id, path.clone());
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
             self.compiler2_file_map.insert(path, file);
 
             v2_builtin_files.push(file);
@@ -558,11 +579,6 @@ impl ProjectDatabase {
     /// This is an alias for `add_or_update_file` for API compatibility.
     pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
-    }
-
-    /// Get all files currently in the database.
-    pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
-        self.file_map.values().copied()
     }
 
     /// Get all file paths currently tracked by the database.
@@ -582,23 +598,6 @@ impl ProjectDatabase {
     /// Get a `FileId` by its path.
     pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
-    }
-
-    /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
-        self.file_id_to_path
-            .get(&file_id)
-            .map(std::path::PathBuf::as_path)
-    }
-
-    /// Get a `SourceFile` by its `FileId`.
-    pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path.get(&file_id).and_then(|path| {
-            self.file_map
-                .get(path)
-                .or_else(|| self.compiler2_file_map.get(path))
-                .copied()
-        })
     }
 
     /// Get the compiled bytecode for the project using the compiler2 pipeline.
@@ -632,6 +631,20 @@ impl ProjectDatabase {
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
+        self.get_bytecode_unchecked()
+    }
+
+    /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
+    ///
+    /// Only for callers that have already run a full-project check (per-file
+    /// `check_file` sweep **plus** package-level diagnostics) at the current
+    /// revision and found no user-file errors — the gate in `get_bytecode`
+    /// would re-derive exactly that result. Calling this on an error-bearing
+    /// project can panic in the runtime-conversion boundary (see the gate
+    /// comment above).
+    pub fn get_bytecode_unchecked(
+        &self,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
@@ -670,8 +683,8 @@ impl ProjectDatabase {
 
         let mut result = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -680,8 +693,6 @@ impl ProjectDatabase {
                     continue;
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
@@ -844,8 +855,8 @@ impl ProjectDatabase {
     fn function_header_title(&self, function_name: &str) -> Option<String> {
         let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -853,8 +864,6 @@ impl ProjectDatabase {
                 ) {
                     continue;
                 }
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let text = source_file.text(self);
@@ -1265,7 +1274,7 @@ impl ProjectDatabase {
             return Some(sf);
         }
         // Fallback: match by file name suffix (handles Monaco's relative paths)
-        for (stored_path, sf) in &self.file_map {
+        for (stored_path, sf) in self.file_map.iter() {
             if stored_path.ends_with(file_path)
                 || file_path.ends_with(stored_path.to_string_lossy().as_ref())
             {
@@ -1298,17 +1307,16 @@ impl ProjectDatabase {
         // A declarative LLM function and its `$stream`/`$parse_stream` companions
         // share one declaration span, hence one scope range — so multiple
         // functions match here. Prefer the user-authored one (origin order).
-        let (local_id, _) = index
-            .item_tree
-            .functions
+        let func_loc = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))?;
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+            })?;
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
         let is_workflow = matches!(
@@ -1326,8 +1334,8 @@ impl ProjectDatabase {
         let mut memberships = Vec::new();
 
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 let func_name =
                     self.playground_function_name_for_source_file(source_file, &func_data.name);
                 if func_data.name.as_str() == target_function_name
@@ -1336,8 +1344,6 @@ impl ProjectDatabase {
                     continue; // Skip self
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Only workflow (Expr) functions can call other functions
@@ -1417,18 +1423,17 @@ impl ProjectDatabase {
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-        if let Some((local_id, _)) = index
-            .item_tree
-            .functions
+        if let Some(func_loc) = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+            })
         {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);

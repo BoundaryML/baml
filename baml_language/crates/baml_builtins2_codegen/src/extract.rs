@@ -61,15 +61,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+}
+
+/// [`extract_native_builtins`] scoped to one stdlib package, so each package
+/// with Rust-implemented builtins gets its own generated dispatch surface.
+#[allow(clippy::type_complexity)]
+pub fn extract_native_builtins_for(
+    package: &str,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
-    {
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(

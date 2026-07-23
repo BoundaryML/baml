@@ -224,7 +224,9 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
     store_var u
     jump L2
     load_var e
-    is_type baml.json.JsonDecodeError
+    store_var _4
+    load_var _4
+    narrow_bind baml.json.JsonDecodeError, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -233,7 +235,7 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
     rethrow
 
   L1:
-    load_var e
+    load_var _4
     load_field .path
     load_const ".inner.value"
     call assert.contains
@@ -331,7 +333,9 @@ function json_to_from_string.from_string_json_passthrough_int_match() -> bool {
     load_type baml.json.json
     load_const "42"
     call baml.json.from_string
-    is_type int
+    store_var _3
+    load_var _3
+    narrow_bind int, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -350,9 +354,9 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     load_type baml.json.json
     load_const "{\"x\":7}"
     call baml.json.from_string
-    store_var j
-    load_var j
-    is_type map<string, baml.json.json>
+    store_var _3
+    load_var _3
+    narrow_bind map<string, baml.json.json>, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -362,7 +366,7 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     jump L2
 
   L1:
-    load_var j
+    load_var _3
     container_len
 
   L2:

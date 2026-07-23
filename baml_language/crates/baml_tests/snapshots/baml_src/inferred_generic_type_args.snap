@@ -464,13 +464,17 @@ function inferred_generic_type_args.inferred_ctor_instance_is_typed() -> int {
     call user.inferred_generic_type_args.ArrBag.make
     store_var s
     load_var s
-    is_type inferred_generic_type_args.ArrBag<...>
+    store_var _4
+    load_var _4
+    narrow_bind inferred_generic_type_args.ArrBag<...>, slot=2
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    is_type inferred_generic_type_args.OneBag<...>
+    store_var _5
+    load_var _5
+    narrow_bind inferred_generic_type_args.OneBag<...>, slot=3
     pop_jump_if_false L1
     jump L2
 
