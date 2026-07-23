@@ -2,7 +2,7 @@
 
 use rowan::ast::AstNode;
 
-use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken, TextRange};
 
 /// Extract a dotted name from a token sequence (e.g., `baml.http.Request` → `"baml.http.Request"`).
 ///
@@ -89,8 +89,29 @@ pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     }
 }
 
-/// Macro to define AST node types.
-macro_rules! ast_node {
+/// A parsed syntax node did not match the structural shape declared for its AST node.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum AstShapeError {
+    #[error("expected {expected}, but the element was missing from {parent:?}")]
+    Missing {
+        expected: &'static str,
+        parent: TextRange,
+    },
+    #[error("expected {expected}, but found {found:?} at {at:?}")]
+    Unexpected {
+        expected: &'static str,
+        found: SyntaxKind,
+        at: TextRange,
+    },
+    #[error("unexpected extra {found:?} at {at:?} in {parent:?}")]
+    Extra {
+        found: SyntaxKind,
+        at: TextRange,
+        parent: TextRange,
+    },
+}
+
+macro_rules! define_ast_node {
     ($name:ident, $kind:ident) => {
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         pub struct $name {
@@ -116,6 +137,175 @@ macro_rules! ast_node {
 
             fn syntax(&self) -> &SyntaxNode {
                 &self.syntax
+            }
+        }
+    };
+}
+
+macro_rules! validated_field_type {
+    (required token $expected:tt) => {
+        SyntaxToken
+    };
+    (optional token $expected:tt) => {
+        Option<SyntaxToken>
+    };
+    (required node $expected:ty) => {
+        $expected
+    };
+    (optional node $expected:ty) => {
+        Option<$expected>
+    };
+}
+
+macro_rules! parse_validated_field {
+    ($elements:ident, $parent:ident, required token $expected:ident) => {{
+        let element = $elements.next().ok_or(AstShapeError::Missing {
+            expected: stringify!($expected),
+            parent: $parent,
+        })?;
+        match element {
+            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::$expected => token,
+            other => {
+                return Err(AstShapeError::Unexpected {
+                    expected: stringify!($expected),
+                    found: other.kind(),
+                    at: other.text_range(),
+                });
+            }
+        }
+    }};
+    ($elements:ident, $parent:ident, optional token $expected:ident) => {{
+        let present = $elements
+            .peek()
+            .is_some_and(|element| element.kind() == SyntaxKind::$expected);
+        if present {
+            match $elements.next().expect("peeked element must exist") {
+                rowan::NodeOrToken::Token(token) => Some(token),
+                rowan::NodeOrToken::Node(_) => unreachable!("token kind cannot belong to a node"),
+            }
+        } else {
+            None
+        }
+    }};
+    ($elements:ident, $parent:ident, required node $expected:ty) => {{
+        let element = $elements.next().ok_or(AstShapeError::Missing {
+            expected: stringify!($expected),
+            parent: $parent,
+        })?;
+        match element {
+            rowan::NodeOrToken::Node(node) => {
+                let found = node.kind();
+                let at = node.text_range();
+                <$expected as AstNode>::cast(node).ok_or(AstShapeError::Unexpected {
+                    expected: stringify!($expected),
+                    found,
+                    at,
+                })?
+            }
+            rowan::NodeOrToken::Token(token) => {
+                return Err(AstShapeError::Unexpected {
+                    expected: stringify!($expected),
+                    found: token.kind(),
+                    at: token.text_range(),
+                });
+            }
+        }
+    }};
+    ($elements:ident, $parent:ident, optional node $expected:ty) => {{
+        let present = $elements.peek().is_some_and(|element| {
+            element
+                .as_node()
+                .is_some_and(|node| <$expected as AstNode>::can_cast(node.kind()))
+        });
+        if present {
+            match $elements.next().expect("peeked element must exist") {
+                rowan::NodeOrToken::Node(node) => {
+                    Some(<$expected as AstNode>::cast(node).expect("node kind was checked"))
+                }
+                rowan::NodeOrToken::Token(_) => unreachable!("node kind cannot belong to a token"),
+            }
+        } else {
+            None
+        }
+    }};
+}
+
+/// Macro to define AST node types.
+macro_rules! ast_node {
+    ($name:ident, $kind:ident) => {
+        define_ast_node!($name, $kind);
+    };
+    (
+        $name:ident, $kind:ident,
+        validated $validated:ident {
+            $(
+                $cardinality:ident $element_kind:ident $field:ident: $expected:tt;
+            )*
+        }
+    ) => {
+        define_ast_node!($name, $kind);
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $validated {
+            syntax: $name,
+            $(
+                pub $field: validated_field_type!($cardinality $element_kind $expected),
+            )*
+        }
+
+        impl $name {
+            pub fn validate(self) -> Result<$validated, AstShapeError> {
+                let parent = self.syntax.text_range();
+                let mut elements = self
+                    .syntax
+                    .children_with_tokens()
+                    .filter(|element| !element.kind().is_trivia())
+                    .peekable();
+                $(
+                    let $field = parse_validated_field!(
+                        elements,
+                        parent,
+                        $cardinality $element_kind $expected
+                    );
+                )*
+                if let Some(extra) = elements.next() {
+                    return Err(AstShapeError::Extra {
+                        found: extra.kind(),
+                        at: extra.text_range(),
+                        parent,
+                    });
+                }
+                Ok($validated {
+                    syntax: self,
+                    $($field,)*
+                })
+            }
+        }
+
+        impl $validated {
+            #[must_use]
+            pub fn syntax(&self) -> &SyntaxNode {
+                self.syntax.syntax()
+            }
+        }
+
+        impl TryFrom<SyntaxElement> for $validated {
+            type Error = AstShapeError;
+
+            fn try_from(element: SyntaxElement) -> Result<Self, Self::Error> {
+                let found = element.kind();
+                let at = element.text_range();
+                let node = element.into_node().ok_or(AstShapeError::Unexpected {
+                    expected: stringify!($kind),
+                    found,
+                    at,
+                })?;
+                let syntax = <$name as AstNode>::cast(node).ok_or(AstShapeError::Unexpected {
+                    expected: stringify!($kind),
+                    found,
+                    at,
+                })?;
+                syntax.validate()
             }
         }
     };
@@ -876,8 +1066,22 @@ ast_node!(WhileLetStmt, WHILE_LET_STMT);
 ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
 ast_node!(ThrowStmt, THROW_STMT);
-ast_node!(BreakStmt, BREAK_STMT);
-ast_node!(ContinueStmt, CONTINUE_STMT);
+ast_node!(
+    BreakStmt,
+    BREAK_STMT,
+    validated ValidatedBreakStmt {
+        required token keyword: KW_BREAK;
+        optional token semicolon: SEMICOLON;
+    }
+);
+ast_node!(
+    ContinueStmt,
+    CONTINUE_STMT,
+    validated ValidatedContinueStmt {
+        required token keyword: KW_CONTINUE;
+        optional token semicolon: SEMICOLON;
+    }
+);
 ast_node!(DeferStmt, DEFER_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
@@ -893,7 +1097,14 @@ ast_node!(CatchArm, CATCH_ARM);
 ast_node!(CatchPattern, CATCH_PATTERN);
 ast_node!(ThrowExpr, THROW_EXPR);
 ast_node!(ReturnExpr, RETURN_EXPR);
-ast_node!(ThrowsClause, THROWS_CLAUSE);
+ast_node!(
+    ThrowsClause,
+    THROWS_CLAUSE,
+    validated ValidatedThrowsClause {
+        required token keyword: KW_THROWS;
+        required node ty: TypeExpr;
+    }
+);
 
 // Implement accessor methods
 impl SourceFile {

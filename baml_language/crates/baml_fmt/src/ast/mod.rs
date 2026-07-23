@@ -9,7 +9,9 @@ mod types;
 use std::{borrow::Cow, path::Path};
 
 pub use attributes::*;
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+use baml_db::baml_compiler_syntax::{
+    AstShapeError, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken,
+};
 pub use declarations::*;
 pub use expressions::*;
 pub use pattern::*;
@@ -38,6 +40,8 @@ pub trait KnownKind {
 /// Errors that can occur when parsing from a [`SyntaxNode`] with [`FromCST`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StrongAstError {
+    #[error("{0}")]
+    AstShape(#[from] AstShapeError),
     /// When an element is expected (of a specific [`SyntaxKind`]) but was found to be of a different kind.
     #[error("Expected token/node of kind {expected:?}, but found {found:?} at {at:?}")]
     UnexpectedKind {
@@ -151,6 +155,7 @@ impl StrongAstError {
             Some((line, column))
         }
         match self {
+            StrongAstError::AstShape(error) => error.to_string(),
             StrongAstError::UnexpectedKind {
                 expected,
                 found,

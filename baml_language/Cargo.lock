@@ -964,6 +964,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "rowan 0.16.1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

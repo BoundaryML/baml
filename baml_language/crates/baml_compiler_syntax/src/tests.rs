@@ -2,7 +2,7 @@
 mod builder_tests {
     use rowan::ast::AstNode;
 
-    use crate::{SyntaxKind, SyntaxNode, ast, builder::SyntaxTreeBuilder};
+    use crate::{AstShapeError, SyntaxKind, SyntaxNode, ast, builder::SyntaxTreeBuilder};
 
     #[test]
     fn test_build_function() {
@@ -115,5 +115,80 @@ mod builder_tests {
         let root = SyntaxNode::new_root(green);
 
         assert_eq!(root.text(), "function test()");
+    }
+
+    #[test]
+    fn validated_node_extracts_required_and_optional_tokens() {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(SyntaxKind::BREAK_STMT);
+        builder.token(SyntaxKind::KW_BREAK, "break");
+        builder.token(SyntaxKind::WHITESPACE, " ");
+        builder.token(SyntaxKind::SEMICOLON, ";");
+        builder.finish_node();
+
+        let syntax = ast::BreakStmt::cast(SyntaxNode::new_root(builder.finish())).unwrap();
+        let validated = syntax.validate().unwrap();
+
+        assert_eq!(validated.keyword.text(), "break");
+        assert_eq!(validated.semicolon.unwrap().text(), ";");
+    }
+
+    #[test]
+    fn validated_node_rejects_wrong_required_token() {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(SyntaxKind::BREAK_STMT);
+        builder.token(SyntaxKind::SEMICOLON, ";");
+        builder.finish_node();
+
+        let syntax = ast::BreakStmt::cast(SyntaxNode::new_root(builder.finish())).unwrap();
+        let error = syntax.validate().unwrap_err();
+
+        assert!(matches!(
+            error,
+            AstShapeError::Unexpected {
+                expected: "KW_BREAK",
+                found: SyntaxKind::SEMICOLON,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn validated_node_rejects_extra_elements() {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(SyntaxKind::CONTINUE_STMT);
+        builder.token(SyntaxKind::KW_CONTINUE, "continue");
+        builder.token(SyntaxKind::SEMICOLON, ";");
+        builder.token(SyntaxKind::WORD, "extra");
+        builder.finish_node();
+
+        let syntax = ast::ContinueStmt::cast(SyntaxNode::new_root(builder.finish())).unwrap();
+        let error = syntax.validate().unwrap_err();
+
+        assert!(matches!(
+            error,
+            AstShapeError::Extra {
+                found: SyntaxKind::WORD,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn validated_node_extracts_required_child_node() {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(SyntaxKind::THROWS_CLAUSE);
+        builder.token(SyntaxKind::KW_THROWS, "throws");
+        builder.token(SyntaxKind::WHITESPACE, " ");
+        builder.start_node(SyntaxKind::TYPE_EXPR);
+        builder.token(SyntaxKind::WORD, "Error");
+        builder.finish_node();
+        builder.finish_node();
+
+        let syntax = ast::ThrowsClause::cast(SyntaxNode::new_root(builder.finish())).unwrap();
+        let validated = syntax.validate().unwrap();
+
+        assert_eq!(validated.keyword.text(), "throws");
+        assert_eq!(validated.ty.syntax().text(), "Error");
     }
 }

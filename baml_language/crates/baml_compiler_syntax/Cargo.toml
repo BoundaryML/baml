@@ -19,4 +19,4 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 rowan = { workspace = true }
-
+thiserror = { workspace = true }

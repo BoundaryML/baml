@@ -1,4 +1,7 @@
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{
+    SyntaxElement, SyntaxKind, ValidatedBreakStmt as BreakStmt,
+    ValidatedContinueStmt as ContinueStmt,
+};
 use rowan::TextRange;
 
 use super::tokens as t;
@@ -50,8 +53,12 @@ impl FromCST for Statement {
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
             SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
-            SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
-            SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
+            SyntaxKind::BREAK_STMT => BreakStmt::try_from(elem)
+                .map(Statement::Break)
+                .map_err(StrongAstError::from),
+            SyntaxKind::CONTINUE_STMT => ContinueStmt::try_from(elem)
+                .map(Statement::Continue)
+                .map_err(StrongAstError::from),
             SyntaxKind::SEMICOLON => t::Semicolon::from_cst(elem).map(Statement::EmptySemicolon),
             SyntaxKind::HEADER_COMMENT => {
                 t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
@@ -1060,30 +1067,6 @@ impl Printable for ReturnStmt {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::BREAK_STMT`] node.
-#[derive(Debug)]
-pub struct BreakStmt {
-    pub keyword: t::Break,
-    pub semicolon: Option<t::Semicolon>,
-}
-
-impl FromCST for BreakStmt {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::BREAK_STMT)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let keyword = it.expect_parse()?;
-
-        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
-
-        it.expect_end()?;
-
-        Ok(BreakStmt { keyword, semicolon })
-    }
-}
-
 impl KnownKind for BreakStmt {
     fn kind() -> SyntaxKind {
         SyntaxKind::BREAK_STMT
@@ -1109,30 +1092,6 @@ impl Printable for BreakStmt {
         self.semicolon
             .as_ref()
             .map_or(self.keyword.span(), Token::span)
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::CONTINUE_STMT`] node.
-#[derive(Debug)]
-pub struct ContinueStmt {
-    pub keyword: t::Continue,
-    pub semicolon: Option<t::Semicolon>,
-}
-
-impl FromCST for ContinueStmt {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CONTINUE_STMT)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let keyword = it.expect_parse()?;
-
-        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
-
-        it.expect_end()?;
-
-        Ok(ContinueStmt { keyword, semicolon })
     }
 }
 
