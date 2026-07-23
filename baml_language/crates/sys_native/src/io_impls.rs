@@ -21,6 +21,37 @@ fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io:
         .get_or_init(|| tokio::sync::Mutex::new(tokio::io::BufReader::new(tokio::io::stdin())))
 }
 
+fn write_output<W, F>(
+    make_writer: F,
+    s: String,
+    newline: bool,
+    stream: &'static str,
+) -> SysOpOutput<()>
+where
+    W: tokio::io::AsyncWrite + Unpin + Send + 'static,
+    F: FnOnce() -> W + Send + 'static,
+{
+    SysOpOutput::async_op(async move {
+        use tokio::io::AsyncWriteExt;
+
+        let mut writer = make_writer();
+        let mut bytes = s.into_bytes();
+        if newline {
+            bytes.push(b'\n');
+        }
+        writer
+            .write_all(&bytes)
+            .await
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write {stream}: {e}"),
+            })?;
+        writer.flush().await.map_err(|e| VmBamlError::Io {
+            message: format!("Failed to flush {stream}: {e}"),
+        })?;
+        Ok(())
+    })
+}
+
 use crate::NativeSysOps;
 
 // ============================================================================
@@ -272,20 +303,7 @@ impl io::IoNamespaceIo for NativeSysOps {
         s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt;
-            let mut stdout = tokio::io::stdout();
-            stdout
-                .write_all(s.as_bytes())
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stdout: {e}"),
-                })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
-            Ok(())
-        })
+        write_output(tokio::io::stdout, s, false, "stdout")
     }
 
     fn println(
@@ -295,21 +313,7 @@ impl io::IoNamespaceIo for NativeSysOps {
         s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt;
-            let mut stdout = tokio::io::stdout();
-            // Single write_all so concurrent calls from spawned threads don't
-            // interleave on a line boundary.
-            let mut buf = s.into_bytes();
-            buf.push(b'\n');
-            stdout.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stdout: {e}"),
-            })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
-            Ok(())
-        })
+        write_output(tokio::io::stdout, s, true, "stdout")
     }
 
     fn eprint(
@@ -319,20 +323,7 @@ impl io::IoNamespaceIo for NativeSysOps {
         s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt;
-            let mut stderr = tokio::io::stderr();
-            stderr
-                .write_all(s.as_bytes())
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stderr: {e}"),
-                })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
-            Ok(())
-        })
+        write_output(tokio::io::stderr, s, false, "stderr")
     }
 
     fn eprintln(
@@ -342,19 +333,7 @@ impl io::IoNamespaceIo for NativeSysOps {
         s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt;
-            let mut stderr = tokio::io::stderr();
-            let mut buf = s.into_bytes();
-            buf.push(b'\n');
-            stderr.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stderr: {e}"),
-            })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
-            Ok(())
-        })
+        write_output(tokio::io::stderr, s, true, "stderr")
     }
 }
 
