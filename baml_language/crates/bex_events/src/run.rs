@@ -1286,14 +1286,6 @@ impl InMemoryRunStore {
         Some(patch)
     }
 
-    pub fn complete_run_now(
-        &self,
-        boundary_id: BoundaryId,
-        outcome: RunOutcome,
-    ) -> Option<RunPatch> {
-        self.complete_run(boundary_id, outcome, epoch_ms())
-    }
-
     pub fn add_diagnostic(
         &self,
         boundary_id: BoundaryId,
@@ -1312,32 +1304,6 @@ impl InMemoryRunStore {
             &retention,
             vec![RunPatchChange::UpsertDiagnostic(diagnostic)],
         ))
-    }
-
-    pub fn ingest_payload(
-        &self,
-        boundary_id: BoundaryId,
-        kind: PayloadKind,
-        call_node_id: Option<CallNodeId>,
-        body: Option<PayloadBody>,
-        redaction: RedactionMetadata,
-    ) -> Option<RunPatch> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let payload_id = inner.allocate_payload_id();
-        let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&boundary_id)?;
-        let payload = PayloadEvent {
-            id: payload_id,
-            call_node_id,
-            timestamp_ms: epoch_ms(),
-            kind,
-            redaction,
-            body,
-        };
-        Some(push_payload_patch(record, &retention, payload, None))
     }
 
     pub fn ingest_root_input_value_ref(

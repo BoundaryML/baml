@@ -21,8 +21,7 @@ use baml_compiler2_hir::{
     item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
     package::{PackageId, PackageItems, PackageItemsExtra},
-    scope::ScopeId,
-    semantic_index::{FileSemanticIndex, ScopeBindings},
+    semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -814,27 +813,6 @@ pub fn elaborated_function_signature_source_map<'db>(
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> baml_compiler2_hir::signature::SignatureSourceMap {
     function_signature_source_map(db, function)
-}
-
-/// Returns the `ScopeBindings` for a given scope (canonical index).
-pub fn scope_bindings_query<'db>(db: &'db dyn Db, scope_id: ScopeId<'db>) -> ScopeBindings {
-    let file = scope_id.file(db);
-    let index = file_semantic_index(db, file);
-    let local_id = scope_id.file_scope_id(db);
-    index.scope_bindings[local_id.index() as usize].clone()
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Uses the canonical (PPIR) semantic index, which includes *$stream synthetic items.
-/// Returns `None` if `expr_id` was not recorded as a multi-segment path.
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<baml_compiler2_hir::PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }
 
 /// Canonical namespace items (original + *$stream types).

@@ -289,13 +289,6 @@ impl ProjectDatabase {
         }
     }
 
-    /// Legacy check method for backwards compatibility.
-    /// Returns (diagnostics, sources) tuple.
-    pub fn check_legacy(&self) -> (Vec<Diagnostic>, HashMap<FileId, String>) {
-        let result = self.check();
-        (result.diagnostics, result.sources)
-    }
-
     /// Check a single file and return diagnostics for that file only.
     ///
     /// Note: This still requires the full project context for type checking.

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+workspace_root="$(dirname "$script_dir")"
+
+# Hawk performs closed-world analysis. These crates expose supported APIs at
+# bridge, WebAssembly, cloud-fork, or signing boundaries outside the native
+# production binaries configured in hawk.toml.
+external_crates=(
+  aws_sigv4
+  baml_bridge
+  bridge_cffi
+  bridge_ctypes
+  forked_google_cloud_auth
+  sys_wasm
+)
+
+exclude_args=()
+for crate in "${external_crates[@]}"; do
+  exclude_args+=(--exclude-crate "$crate")
+done
+
+exec cargo +1.97.1 hawk check \
+  --manifest-path "$workspace_root/Cargo.toml" \
+  --config "$workspace_root/hawk.toml" \
+  --only dead-public \
+  -D warnings \
+  "${exclude_args[@]}" \
+  "$@"

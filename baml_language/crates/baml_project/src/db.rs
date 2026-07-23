@@ -317,30 +317,6 @@ impl ProjectDatabase {
         self.project
     }
 
-    /// Get the project, if set.
-    ///
-    /// Alias for `get_project()` for API compatibility with old `LspDatabase`.
-    pub fn project(&self) -> Option<Project> {
-        self.project
-    }
-
-    /// Get a reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db()` to get the underlying `RootDatabase`.
-    /// Since `ProjectDatabase` IS the database now, this just returns `self`.
-    pub fn db(&self) -> &Self {
-        self
-    }
-
-    /// Get a mutable reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db_mut()` to get the underlying `RootDatabase`.
-    pub fn db_mut(&mut self) -> &mut Self {
-        self
-    }
-
     /// Seed per-file throw facts from a previous compile of identical file
     /// content (bytecode-cache per-file reuse); keys are full source-file path
     /// strings.
@@ -560,11 +536,6 @@ impl ProjectDatabase {
         self.add_or_update_file(path.as_ref(), content)
     }
 
-    /// Get all files currently in the database.
-    pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
-        self.file_map.values().copied()
-    }
-
     /// Get all file paths currently tracked by the database.
     pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
         self.file_map
@@ -582,23 +553,6 @@ impl ProjectDatabase {
     /// Get a `FileId` by its path.
     pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
-    }
-
-    /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
-        self.file_id_to_path
-            .get(&file_id)
-            .map(std::path::PathBuf::as_path)
-    }
-
-    /// Get a `SourceFile` by its `FileId`.
-    pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path.get(&file_id).and_then(|path| {
-            self.file_map
-                .get(path)
-                .or_else(|| self.compiler2_file_map.get(path))
-                .copied()
-        })
     }
 
     /// Get the compiled bytecode for the project using the compiler2 pipeline.

@@ -9,7 +9,7 @@ use baml_compiler_syntax::SyntaxNode;
 use rowan::GreenNode;
 
 mod parser;
-pub use parser::{parse_file, parse_file_with_cache};
+pub use parser::parse_file;
 
 /// Tracked struct that holds both parse outputs together
 #[salsa::tracked]

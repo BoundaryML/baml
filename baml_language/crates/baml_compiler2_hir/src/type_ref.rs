@@ -142,12 +142,9 @@ impl TypeRefStore {
         self.types.iter()
     }
 
-    pub fn len(&self) -> usize {
+    #[cfg(test)]
+    fn len(&self) -> usize {
         self.types.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.types.is_empty()
     }
 
     /// A [`Display`](std::fmt::Display) view of `id`, rendering BAML source-like text.

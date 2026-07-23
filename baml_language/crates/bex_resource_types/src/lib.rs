@@ -67,18 +67,6 @@ impl ResourceHandle {
         }
     }
 
-    /// Create a handle without cleanup (for testing or when cleanup is external).
-    pub fn new_without_cleanup(key: usize, kind: ResourceType, display_name: String) -> Self {
-        Self {
-            inner: Arc::new(ResourceHandleInner {
-                key,
-                kind,
-                display_name,
-                registry: None,
-            }),
-        }
-    }
-
     /// Get the registry key for this handle.
     pub fn key(&self) -> usize {
         self.inner.key

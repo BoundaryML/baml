@@ -118,11 +118,6 @@ impl TraceSnapshot {
         self.values.get(value_ref.0)
     }
 
-    #[must_use]
-    pub fn values(&self) -> &[TraceValue] {
-        &self.values
-    }
-
     #[cfg(test)]
     pub(crate) fn for_test(root: TraceValueRef, values: Vec<TraceValue>) -> Self {
         Self { root, values }

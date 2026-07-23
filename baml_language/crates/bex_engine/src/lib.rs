@@ -2118,20 +2118,6 @@ impl BexEngine {
         .await
     }
 
-    /// Run-vocabulary alias for the traced function entry path. The
-    /// `FunctionCallContext` still carries host-call plumbing; `RunStore` owns
-    /// the public `BoundaryId` outside the engine.
-    pub async fn start_run(
-        self: &Arc<Self>,
-        function_name: &str,
-        args: Vec<BexExternalValue>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        self.call_function_with_trace(function_name, args, call_ctx, copy_objects)
-            .await
-    }
-
     pub async fn call_function_bound_args(
         self: &Arc<Self>,
         function_name: &str,
@@ -2969,12 +2955,6 @@ impl BexEngine {
         Ok(())
     }
 
-    /// Run-vocabulary alias for host-call cancellation. The parameter is the
-    /// adapter-owned host call id backing value, not a `BoundaryId`.
-    pub fn cancel_run(&self, host_call_id: CallId) -> Result<(), EngineError> {
-        self.cancel_function_call(host_call_id)
-    }
-
     fn validate_bound_args(
         &self,
         function_name: &str,
@@ -3056,20 +3036,6 @@ impl BexEngine {
             Object::Function(func) => func.throws_type.clone(),
             _ => None,
         }
-    }
-
-    /// All class field schemas known to the engine, keyed by `TypeName`.
-    ///
-    /// Used by callers that walk a `RuntimeTy` tree and need to resolve nested
-    /// class field types — e.g. the CLI parsing `--json-args` for a function
-    /// whose parameter is a class with `map<…>` or class-typed fields.
-    pub fn class_definitions(&self) -> &indexmap::IndexMap<TypeName, ClassDefinition> {
-        &self.sys_op_ctx.class_definitions
-    }
-
-    /// Look up the field schema for a class by its `TypeName`.
-    pub fn class_definition(&self, name: &TypeName) -> Option<&ClassDefinition> {
-        self.sys_op_ctx.class_definitions.get(name)
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
@@ -3278,11 +3244,6 @@ impl BexEngine {
                 }
             })
             .collect()
-    }
-
-    /// Get all compiled test cases.
-    pub fn test_cases(&self) -> &[bex_vm_types::TestCase] {
-        &self.test_cases
     }
 
     /// Find a test case by name.

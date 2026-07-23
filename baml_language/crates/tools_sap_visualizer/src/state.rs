@@ -85,15 +85,6 @@ impl SapVisualizerState {
         })
     }
 
-    /// More efficient if only the json changes.
-    ///
-    /// Since most of the time the json change is at the end (add or remove suffix),
-    /// we check to see if we can keep some of the existing output.
-    pub fn with_json(mut self, json: String) -> Self {
-        self.update_with_json(json);
-        self
-    }
-
     pub fn json(&self) -> &str {
         &self.json
     }

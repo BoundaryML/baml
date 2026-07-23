@@ -591,16 +591,6 @@ fn raise_serialize(
     }
 }
 
-/// Public helper for native methods outside `json.rs` that need to throw a
-/// `JsonSerializationError` without a path context (e.g. `Uint8Array.to_json`).
-pub fn raise_serialize_no_path(
-    vm: &mut BexVm,
-    message: impl Into<String>,
-    reason: &str,
-) -> VmRustFnError {
-    raise_serialize(vm, message, "", reason)
-}
-
 // ─── serde_json ↔ VM Value conversion (untyped) ──────────────────────────────
 
 /// Convert a `serde_json::Value` into a VM `Value`.

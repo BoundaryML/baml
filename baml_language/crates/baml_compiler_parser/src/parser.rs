@@ -10,15 +10,6 @@ use text_size::TextRange;
 
 use crate::ParseError;
 
-/// Parse tokens using a caller-provided [`NodeCache`] so that identical
-/// subtrees from previous parses can be reused.
-pub fn parse_file_with_cache(
-    tokens: &[Token],
-    cache: &mut NodeCache,
-) -> (GreenNode, Vec<ParseError>) {
-    parse_impl(tokens, Some(cache))
-}
-
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
     parse_impl(tokens, None)
 }

@@ -51,10 +51,6 @@ impl BuiltinFile {
 pub const PACKAGE_BAML: &str = "baml";
 /// Package name for boundary identity and capture helpers.
 pub const PACKAGE_BOUNDARY: &str = "boundary";
-/// Package name for the testing package.
-pub const PACKAGE_TESTING: &str = "testing";
-/// Package name for the assert package.
-pub const PACKAGE_ASSERT: &str = "assert";
 
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
