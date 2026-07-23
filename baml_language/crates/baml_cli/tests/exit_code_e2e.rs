@@ -44,6 +44,10 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     cmd.output().expect("spawn baml-cli")
 }
 
+fn gofmt_is_available() -> bool {
+    Command::new("gofmt").arg("-h").output().is_ok()
+}
+
 /// Create a minimal project structure with the given source code.
 fn create_project(dir: &Path, source: &str) {
     std::fs::write(
@@ -276,6 +280,9 @@ fn generate_valid_project_returns_zero_exit_code() {
 
 #[test]
 fn generate_go_writes_sdk_through_cli() {
+    if !gofmt_is_available() {
+        return;
+    }
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project_with_go_generator(
@@ -310,6 +317,9 @@ fn generate_go_writes_sdk_through_cli() {
 
 #[test]
 fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
+    if !gofmt_is_available() {
+        return;
+    }
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project_with_go_generator(

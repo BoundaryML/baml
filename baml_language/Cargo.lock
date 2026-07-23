@@ -798,6 +798,7 @@ dependencies = [
  "fs2",
  "serde",
  "serde_json",
+ "sha2",
  "strum",
  "tempfile",
 ]
@@ -6718,7 +6719,6 @@ dependencies = [
  "baml_codegen_types",
  "bex_vm_types",
  "borsh",
- "fs2",
  "serde",
  "serde_json",
  "sha2",

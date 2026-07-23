@@ -260,8 +260,6 @@ fn codegen_fixture(
             }
         }
     }
-    fs::create_dir_all(generated.join("tests")).unwrap();
-
     let options = RustGenOptions {
         naming_convention: NamingConvention::PreserveCase,
         package_name: format!("sdk-tests-rust-{}", fixture.replace('_', "-")),
@@ -334,10 +332,10 @@ fn codegen_fixture(
         }
     }
 
-    if let Err(e) = fs::write(
-        generated.join("tests").join("main.rs"),
-        render_tests_main(fixture),
-    ) {
+    let tests = generated.join("tests");
+    if let Err(e) = fs::create_dir_all(&tests)
+        .and_then(|()| fs::write(tests.join("main.rs"), render_tests_main(fixture)))
+    {
         diagnostics.record("tests_main_write", fixture, format!("write main.rs: {e}"));
     }
 }

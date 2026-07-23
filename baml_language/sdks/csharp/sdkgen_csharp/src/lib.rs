@@ -1,8 +1,7 @@
 //! C# SDK generation infrastructure.
 //!
-//! Identifier allocation, file routing, and output replacement are completed
-//! before rendering so generated source cannot depend on discovery order or a
-//! partially written output tree.
+//! Identifier allocation, file routing, and C# validation are completed before
+//! the shared SDK output writer installs the generated tree.
 
 pub mod names;
 pub mod pipeline;
@@ -10,14 +9,14 @@ pub mod routing;
 
 mod model;
 mod normalize;
+mod output;
 mod semantic;
-mod transaction;
 
-use std::{fmt, fs, io, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
-use baml_codegen_types::SymbolPool;
+use baml_codegen_types::{OutputWriterError, SymbolPool, write_generated_output};
+pub use output::{GenerationManifest, OutputValidationError};
 pub use semantic::CSharpGenerationError;
-pub use transaction::{GenerationManifest, TransactionError};
 
 /// Complete input for one C# generation transaction.
 pub struct CSharpGenerateRequest<'a> {
@@ -40,30 +39,22 @@ pub struct GenerationReport {
 #[derive(Debug)]
 pub enum GenerateIntoError {
     Generation(CSharpGenerationError),
-    Transaction(TransactionError),
+    Validation(OutputValidationError),
+    OutputWriter(OutputWriterError),
     InvalidOutputDirectory(PathBuf),
-    Io {
-        operation: &'static str,
-        path: PathBuf,
-        source: io::Error,
-    },
 }
 
 impl fmt::Display for GenerateIntoError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Generation(error) => error.fmt(formatter),
-            Self::Transaction(error) => error.fmt(formatter),
+            Self::Validation(error) => error.fmt(formatter),
+            Self::OutputWriter(error) => error.fmt(formatter),
             Self::InvalidOutputDirectory(path) => write!(
                 formatter,
                 "C# generated output must be an absolute directory path: `{}`",
                 path.display()
             ),
-            Self::Io {
-                operation,
-                path,
-                source,
-            } => write!(formatter, "{operation} `{}`: {source}", path.display()),
         }
     }
 }
@@ -72,8 +63,8 @@ impl std::error::Error for GenerateIntoError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Generation(error) => Some(error),
-            Self::Transaction(error) => Some(error),
-            Self::Io { source, .. } => Some(source),
+            Self::Validation(error) => Some(error),
+            Self::OutputWriter(error) => Some(error),
             Self::InvalidOutputDirectory(_) => None,
         }
     }
@@ -85,13 +76,19 @@ impl From<CSharpGenerationError> for GenerateIntoError {
     }
 }
 
-impl From<TransactionError> for GenerateIntoError {
-    fn from(error: TransactionError) -> Self {
-        Self::Transaction(error)
+impl From<OutputValidationError> for GenerateIntoError {
+    fn from(error: OutputValidationError) -> Self {
+        Self::Validation(error)
     }
 }
 
-/// Generate, validate, stage, and atomically install a complete C# source tree.
+impl From<OutputWriterError> for GenerateIntoError {
+    fn from(error: OutputWriterError) -> Self {
+        Self::OutputWriter(error)
+    }
+}
+
+/// Generate and validate C# source, then install it through the shared writer.
 pub fn generate_into(
     request: CSharpGenerateRequest<'_>,
 ) -> Result<GenerationReport, GenerateIntoError> {
@@ -100,22 +97,6 @@ pub fn generate_into(
             request.output_directory,
         ));
     }
-    let parent = request.output_directory.parent().ok_or_else(|| {
-        GenerateIntoError::InvalidOutputDirectory(request.output_directory.clone())
-    })?;
-    let directory = request
-        .output_directory
-        .file_name()
-        .map(PathBuf::from)
-        .ok_or_else(|| {
-            GenerateIntoError::InvalidOutputDirectory(request.output_directory.clone())
-        })?;
-    fs::create_dir_all(parent).map_err(|source| GenerateIntoError::Io {
-        operation: "create C# generated output parent",
-        path: parent.to_path_buf(),
-        source,
-    })?;
-
     let model = model::CodegenModel::from_symbol_pool(request.symbols);
     let runtime_identities =
         model::RuntimeCallableIdentities::from_program_bytes(request.program_bytes)
@@ -128,7 +109,8 @@ pub fn generate_into(
         request.required_bridge_version,
         request.program_identity,
     )?;
-    let manifest = transaction::commit_generated_tree(parent, &directory, &tree)?;
+    let (manifest, files) = output::validate_and_collect(&tree)?;
+    write_generated_output(&request.output_directory, files)?;
     let written_files = manifest
         .files
         .iter()
