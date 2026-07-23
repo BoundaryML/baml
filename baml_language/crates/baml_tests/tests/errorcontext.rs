@@ -573,4 +573,14 @@ function main() -> string {
         wide.contains('…'),
         "wide array error exceeded its budget without truncation:\n{wide}"
     );
+    assert_eq!(
+        wide.matches('…').count(),
+        1,
+        "wide array should use one truncation marker:\n{wide}"
+    );
+    assert!(
+        wide.len() < 2_000,
+        "wide array diagnostic should remain bounded, got {} bytes",
+        wide.len()
+    );
 }

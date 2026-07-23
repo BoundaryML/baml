@@ -430,13 +430,14 @@ enum DisplaySnap {
     Leaf(String),
     /// A string's contents — quoted when nested, bare at top level.
     Str(String),
-    /// An array (or `uint8array`) — elements rendered as `[a, b, c]`.
-    Seq(Vec<Value>),
+    /// An array — elements rendered as `[a, b, c]`, with at most one trailing
+    /// ellipsis when diagnostic limits omit further siblings.
+    Seq(Vec<Value>, bool),
     /// A map — entries rendered as `{"k": v, ...}` (keys are always strings, and
     /// are quoted so keys containing `:`/`,` stay unambiguous).
-    Entries(Vec<(String, Value)>),
+    Entries(Vec<(String, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
-    Instance(String, Vec<(String, Value)>),
+    Instance(String, Vec<(String, Value)>, bool),
 }
 
 const DIAGNOSTIC_RENDER_MAX_DEPTH: usize = 32;
@@ -486,16 +487,30 @@ impl<'a> StringRenderState<'a> {
     }
 
     fn consume_node(&mut self, depth: usize) -> bool {
-        if self.max_depth.is_some_and(|max_depth| depth > max_depth) {
-            return false;
-        }
-        match &mut self.remaining_nodes {
+        let has_budget = match &mut self.remaining_nodes {
             Some(remaining) if *remaining == 0 => false,
             Some(remaining) => {
                 *remaining -= 1;
                 true
             }
             None => true,
+        };
+        has_budget && self.max_depth.is_none_or(|max_depth| depth <= max_depth)
+    }
+
+    fn can_render_node(&self, depth: usize) -> bool {
+        self.remaining_nodes.is_none_or(|remaining| remaining != 0)
+            && self.max_depth.is_none_or(|max_depth| depth <= max_depth)
+    }
+
+    fn snapshot_child_limit(&self, child_count: usize) -> usize {
+        self.remaining_nodes
+            .map_or(child_count, |remaining| remaining.min(child_count))
+    }
+
+    fn consume_leaf_children(&mut self, count: usize) {
+        if let Some(remaining) = &mut self.remaining_nodes {
+            *remaining = remaining.saturating_sub(count);
         }
     }
 }
@@ -553,48 +568,73 @@ fn render_to_string(
         Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
         Object::Float(f) => DisplaySnap::Leaf(bex_vm_types::format_float(*f)),
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
-        Object::Array(values) => DisplaySnap::Seq(values.to_vec()),
+        Object::Array(values) => {
+            let values = values.lock();
+            let limit = state.snapshot_child_limit(values.len());
+            DisplaySnap::Seq(
+                values.iter().take(limit).copied().collect(),
+                values.len() > limit,
+            )
+        }
         Object::Uint8Array(bytes) => {
-            let rendered = bytes
-                .to_vec()
+            let bytes = bytes.lock();
+            let limit = state.snapshot_child_limit(bytes.len());
+            let truncated = bytes.len() > limit;
+            let mut rendered = bytes
                 .iter()
+                .take(limit)
                 .map(u8::to_string)
                 .collect::<Vec<_>>()
                 .join(", ");
+            state.consume_leaf_children(limit);
+            if truncated {
+                if !rendered.is_empty() {
+                    rendered.push_str(", ");
+                }
+                rendered.push_str(TRUNCATED_RENDER);
+            }
             DisplaySnap::Leaf(format!("[{rendered}]"))
         }
-        Object::Map(map) => DisplaySnap::Entries(
-            map.to_index_map()
-                .into_iter()
-                .map(|(k, v)| (k.as_str().to_string(), v))
-                .collect(),
-        ),
+        Object::Map(map) => {
+            let map = map.lock();
+            let limit = state.snapshot_child_limit(map.len());
+            DisplaySnap::Entries(
+                map.iter()
+                    .take(limit)
+                    .map(|(k, v)| (k.as_str().to_string(), *v))
+                    .collect(),
+                map.len() > limit,
+            )
+        }
         Object::Instance(inst) => {
-            let field_values: Vec<Value> = inst.fields.iter().map(AtomicValueSlot::load).collect();
-            let (class_name, field_names) = match vm.get_object(inst.class) {
-                Object::Class(class) => (
-                    if state.qualified_class_names {
+            let limit = state.snapshot_child_limit(inst.fields.len());
+            let (class_name, paired) = match vm.get_object(inst.class) {
+                Object::Class(class) => {
+                    let name = if state.qualified_class_names {
                         class.name.to_string()
                     } else {
                         class.name.name().to_string()
-                    },
-                    class
+                    };
+                    let fields = inst
                         .fields
                         .iter()
-                        .map(|f| f.name.clone())
-                        .collect::<Vec<_>>(),
-                ),
+                        .take(limit)
+                        .map(AtomicValueSlot::load)
+                        .enumerate()
+                        .map(|(i, v)| {
+                            let field_name = class
+                                .fields
+                                .get(i)
+                                .map(|field| field.name.clone())
+                                .unwrap_or_else(|| i.to_string());
+                            (field_name, v)
+                        })
+                        .collect();
+                    (name, fields)
+                }
                 _ => (String::new(), Vec::new()),
             };
-            let paired = field_values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let name = field_names.get(i).cloned().unwrap_or_else(|| i.to_string());
-                    (name, v)
-                })
-                .collect();
-            DisplaySnap::Instance(class_name, paired)
+            DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -619,33 +659,58 @@ fn render_to_string(
                 s
             }
         }
-        DisplaySnap::Seq(values) => {
+        DisplaySnap::Seq(values, mut truncated) => {
             let mut parts: Vec<String> = Vec::with_capacity(values.len());
             for v in &values {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
                 parts.push(render_to_string(vm, *v, true, depth + 1, state));
+            }
+            if truncated {
+                parts.push(TRUNCATED_RENDER.to_string());
             }
             format!("[{}]", parts.join(", "))
         }
-        DisplaySnap::Entries(entries) => {
+        DisplaySnap::Entries(entries, mut truncated) => {
             let mut parts: Vec<String> = Vec::with_capacity(entries.len());
             for (k, v) in &entries {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
                 parts.push(format!(
                     "{k:?}: {}",
                     render_to_string(vm, *v, true, depth + 1, state)
                 ));
             }
+            if truncated {
+                parts.push(TRUNCATED_RENDER.to_string());
+            }
             format!("{{{}}}", parts.join(", "))
         }
-        DisplaySnap::Instance(class_name, paired) => {
+        DisplaySnap::Instance(class_name, paired, mut truncated) => {
             if paired.is_empty() {
-                class_name
+                if truncated {
+                    format!("{class_name} {{ {TRUNCATED_RENDER} }}")
+                } else {
+                    class_name
+                }
             } else {
                 let mut parts: Vec<String> = Vec::with_capacity(paired.len());
                 for (name, v) in &paired {
+                    if !state.can_render_node(depth + 1) {
+                        truncated = true;
+                        break;
+                    }
                     parts.push(format!(
                         "{name}: {}",
                         render_to_string(vm, *v, true, depth + 1, state)
                     ));
+                }
+                if truncated {
+                    parts.push(TRUNCATED_RENDER.to_string());
                 }
                 format!("{class_name} {{ {} }}", parts.join(", "))
             }
