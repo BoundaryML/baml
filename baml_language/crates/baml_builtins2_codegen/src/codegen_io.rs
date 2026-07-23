@@ -431,6 +431,21 @@ fn external_to_typed_expr(
     }
 }
 
+/// Turn a BAML field name into a Rust identifier for generated structs and accessors.
+///
+/// Rust keywords such as `type`, `match`, and `move` are valid BAML field names, so
+/// emit them as raw identifiers. Rust does not permit raw forms of `self`, `Self`,
+/// `super`, `crate`, or `_`; those names use a trailing underscore instead. This
+/// only changes the generated Rust spelling: VM and external-value lookups continue
+/// to use the original BAML field name.
+fn field_ident(name: &str) -> proc_macro2::Ident {
+    match name {
+        "self" | "Self" | "super" | "crate" | "_" => format_ident!("{}_", name),
+        _ if syn::parse_str::<syn::Ident>(name).is_err() => format_ident!("r#{}", name),
+        _ => format_ident!("{}", name),
+    }
+}
+
 /// Generate the `into_owned` conversion expression for a view field.
 fn into_owned_expr(
     field_name: &str,
@@ -438,7 +453,7 @@ fn into_owned_expr(
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let field_ident = format_ident!("{}", field_name);
+    let field_ident = field_ident(field_name);
     match ty {
         BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
@@ -991,7 +1006,7 @@ fn emit_view_struct(
             let mut needs_heap = false;
             let ret_type = view_return_type(&field.field_type, &mut needs_heap);
             let body = view_accessor_body(&field.name, &field.field_type);
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
 
             if needs_heap {
                 quote! {
@@ -1022,7 +1037,7 @@ fn emit_view_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map, paths);
             quote! { #field_ident: #expr }
         })
@@ -1198,7 +1213,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
             quote! { pub #field_ident: #rust_ty }
         })
@@ -1210,7 +1225,7 @@ fn emit_owned_struct(
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let conv = owned_to_external_expr(
                 &quote! { self.#field_ident },
                 &field.field_type,
@@ -1225,7 +1240,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let field_name_str = &field.name;
             let field_val = quote! {
                 fields.swap_remove(#field_name_str).unwrap_or(BexExternalValue::Null)
@@ -2199,7 +2214,7 @@ fn emit_runtime_io_handles(
                     if field.field_type == BamlType::RustType {
                         continue;
                     }
-                    let field_ident = format_ident!("{}", field.name);
+                    let field_ident = field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });
 
@@ -2696,6 +2711,97 @@ fn emit_build_runtime_io(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 ctx: ctx.clone(),
                 #(#field_inits,)*
             })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, HashSet};
+
+    use super::{CodegenPaths, emit_owned_struct, emit_view_struct, field_ident};
+    use crate::types::{BamlType, NativeClassDef, NativeClassField};
+
+    #[test]
+    fn field_ident_escapes_keywords_and_uses_legal_fallbacks() {
+        for keyword in ["type", "match", "move"] {
+            assert_eq!(field_ident(keyword).to_string(), format!("r#{keyword}"));
+        }
+
+        for (name, expected) in [
+            ("self", "self_"),
+            ("Self", "Self_"),
+            ("super", "super_"),
+            ("crate", "crate_"),
+            ("_", "__"),
+        ] {
+            assert_eq!(field_ident(name).to_string(), expected);
+        }
+
+        assert_eq!(field_ident("ordinary").to_string(), "ordinary");
+    }
+
+    #[test]
+    fn generated_keyword_fields_keep_original_vm_keys() {
+        let class = NativeClassDef {
+            name: "KeywordFields".to_string(),
+            namespace_prefix: "baml.test".to_string(),
+            generic_params: Vec::new(),
+            fields: [
+                "type", "match", "move", "self", "Self", "super", "crate", "_",
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(index, name)| NativeClassField {
+                name: name.to_string(),
+                field_type: BamlType::Bool,
+                index,
+            })
+            .collect(),
+            source_file: "<test>/keywords.baml".to_string(),
+        };
+        let class_ns_map = BTreeMap::new();
+        let paths = CodegenPaths::inline();
+
+        let owned = crate::format_tokens(&emit_owned_struct(
+            &class,
+            &class_ns_map,
+            "test",
+            &paths,
+            &HashSet::new(),
+        ));
+        let view = crate::format_tokens(&emit_view_struct(&class, &class_ns_map, "test", &paths));
+        let compact_owned: String = owned.chars().filter(|c| !c.is_whitespace()).collect();
+        let compact_view: String = view.chars().filter(|c| !c.is_whitespace()).collect();
+
+        for rust_name in [
+            "r#type", "r#match", "r#move", "self_", "Self_", "super_", "crate_", "__",
+        ] {
+            assert!(
+                compact_owned.contains(&format!("pub{rust_name}:bool")),
+                "missing escaped owned field `{rust_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("pubfn{rust_name}(&self)")),
+                "missing escaped view accessor `{rust_name}`:\n{view}"
+            );
+        }
+
+        for baml_name in [
+            "type", "match", "move", "self", "Self", "super", "crate", "_",
+        ] {
+            assert!(
+                compact_owned.contains(&format!("\"{baml_name}\".to_string()")),
+                "external conversion changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_owned.contains(&format!("fields.swap_remove(\"{baml_name}\")")),
+                "external lookup changed the BAML key `{baml_name}`:\n{owned}"
+            );
+            assert!(
+                compact_view.contains(&format!("self.cls.field(\"{baml_name}\")")),
+                "VM lookup changed the BAML key `{baml_name}`:\n{view}"
+            );
         }
     }
 }
