@@ -3535,6 +3535,128 @@ function baml.iter.flatten(src: baml.iter.Iterator<Item = I, Error = E>) -> baml
     return
 }
 
+function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json {
+    load_var current
+    store_var _4
+    load_var _4
+    narrow_bind map<string, baml.json.json>, slot=4
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "field access '."
+    load_var key
+    bin_op +
+    load_const "' on a non-object"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L1:
+    load_var _4
+    store_var m
+    load_type string
+    load_type baml.json.json
+    load_var2 5 2
+    call baml.Map.has
+    unary_op !
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_type string
+    load_type baml.json.json
+    load_var2 5 2
+    call baml.Map.get
+    return
+
+  L3:
+    load_const "missing field '"
+    load_var key
+    bin_op +
+    load_const "'"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+}
+
+function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json {
+    load_var current
+    store_var _4
+    load_var _4
+    narrow_bind baml.json.json[], slot=4
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type int
+    load_var idx
+    call baml.String.from
+    store_var _23
+    load_const "index ["
+    load_var _23
+    bin_op +
+    load_const "] on a non-array"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L1:
+    load_var _4
+    store_var arr
+    load_var idx
+    load_const 0
+    cmp_int_op <
+    jump_if_false L2
+    jump L3
+
+  L2:
+    pop 1
+    load_var arr
+    container_len
+    store_var _8
+    load_var2 2 6
+    cmp_int_op >=
+
+  L3:
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_type baml.json.json
+    load_var2 5 2
+    call baml.Array.at
+    return
+
+  L5:
+    load_type int
+    load_var idx
+    call baml.String.from
+    store_var _14
+    load_var arr
+    container_len
+    store_var _17
+    load_type int
+    load_var _17
+    call baml.String.from
+    store_var _16
+    load_const "index ["
+    load_var _14
+    bin_op +
+    load_const "] out of bounds (length "
+    bin_op +
+    load_var _16
+    bin_op +
+    load_const ")"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+}
+
 function baml.json.deserialize(s: string) -> T {
     load_var s
     call baml.json.parse
@@ -3562,6 +3684,470 @@ function baml.json.from_string(s: string) -> T {
 }
 
 function baml.json.parse(s: string) -> baml.json.json {
+}
+
+function baml.json.path(j: baml.json.json, selector: string) -> T {
+    load_var selector
+    load_const "."
+    call baml.String.starts_with
+    jump_if_false L0
+    jump L1
+
+  L0:
+    pop 1
+    load_var selector
+    load_const "["
+    call baml.String.starts_with
+
+  L1:
+    unary_op !
+    pop_jump_if_false L2
+    jump L47
+
+  L2:
+    load_var j
+    store_var current
+    load_const 0
+    store_var i
+
+  L3:
+    load_var i
+    store_var _12
+    load_var selector
+    call baml.String.length
+    store_var _13
+    load_var2 5 6
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L8
+
+  L4:
+    load_type #0
+    load_var current
+    call baml.json.to
+    jump L7
+    load_var _
+    is_type baml.json.JsonDecodeError
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _
+    rethrow
+
+  L6:
+    load_const "leaf does not coerce to the requested type"
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L7:
+    return
+
+  L8:
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    store_var marker
+    load_var marker
+    load_const "."
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L41
+
+  L9:
+    load_var marker
+    load_const "["
+    cmp_op !=
+    pop_jump_if_false L10
+    jump L40
+
+  L10:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    store_var _48
+    load_var selector
+    call baml.String.length
+    store_var _49
+    load_var2 14 15
+    cmp_int_op >=
+    pop_jump_if_false L11
+    jump L39
+
+  L11:
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    store_var first
+    load_var first
+    load_const "\""
+    cmp_op ==
+    jump_if_false L12
+    jump L13
+
+  L12:
+    pop 1
+    load_var first
+    load_const "'"
+    cmp_op ==
+
+  L13:
+    pop_jump_if_false L14
+    jump L24
+
+  L14:
+    load_var i
+    store_var start
+
+  L15:
+    load_var i
+    store_var _103
+    load_var selector
+    call baml.String.length
+    store_var _104
+    load_var2 29 30
+    cmp_int_op <
+    jump_if_false L16
+    pop 1
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    load_const "]"
+    cmp_op !=
+
+  L16:
+    pop_jump_if_false L17
+    jump L23
+
+  L17:
+    load_var i
+    store_var _110
+    load_var selector
+    call baml.String.length
+    store_var _111
+    load_var2 31 32
+    cmp_int_op >=
+    pop_jump_if_false L18
+    jump L22
+
+  L18:
+    load_var2 2 28
+    load_var i
+    call baml.String.substring
+    store_var token
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var token
+    call baml.Int.parse
+    store_var idx
+    jump L21
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L19
+    jump L20
+
+  L19:
+    load_var _
+    rethrow
+
+  L20:
+    load_const "bad bracket token '["
+    load_var token
+    bin_op +
+    load_const "]'"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L21:
+    load_var2 3 34
+    load_var selector
+    call baml.json._path_index
+    store_var current
+    jump L3
+
+  L22:
+    load_const "unterminated '[' segment"
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L23:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L15
+
+  L24:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_const ""
+    store_var key
+    load_const false
+    store_var closed
+
+  L25:
+    load_var i
+    store_var _63
+    load_var selector
+    call baml.String.length
+    store_var _64
+    load_var2 19 20
+    cmp_int_op <
+    pop_jump_if_false L29
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    store_var ch
+    load_var ch
+    load_const "\\"
+    cmp_op ==
+    pop_jump_if_false L26
+    jump L36
+
+  L26:
+    load_var2 21 16
+    cmp_op ==
+    pop_jump_if_false L27
+    jump L28
+
+  L27:
+    load_var2 17 21
+    bin_op +
+    store_var key
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L25
+
+  L28:
+    load_const true
+    store_var closed
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+
+  L29:
+    load_var closed
+    unary_op !
+    jump_if_false L30
+    jump L31
+
+  L30:
+    pop 1
+    load_var i
+    store_var _91
+    load_var selector
+    call baml.String.length
+    store_var _92
+    load_var2 26 27
+    cmp_int_op >=
+
+  L31:
+    jump_if_false L32
+    jump L33
+
+  L32:
+    pop 1
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    load_const "]"
+    cmp_op !=
+
+  L33:
+    pop_jump_if_false L34
+    jump L35
+
+  L34:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var2 3 17
+    load_var selector
+    call baml.json._path_field
+    store_var current
+    jump L3
+
+  L35:
+    load_const "unterminated quoted bracket key"
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L36:
+    load_var i
+    load_const 1
+    add_int
+    store_var _72
+    load_var selector
+    call baml.String.length
+    store_var _74
+    load_var2 22 23
+    cmp_int_op >=
+    pop_jump_if_false L37
+    jump L38
+
+  L37:
+    load_var key
+    store_var _76
+    load_var2 2 4
+    load_const 1
+    add_int
+    load_var i
+    load_const 2
+    add_int
+    call baml.String.substring
+    store_var _77
+    load_var2 24 25
+    bin_op +
+    store_var key
+    load_var i
+    load_const 2
+    add_int
+    store_var i
+    jump L25
+
+  L38:
+    load_const "unterminated escape in quoted bracket key"
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L39:
+    load_const "unterminated '[' segment"
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L40:
+    load_type int
+    load_var i
+    call baml.String.from
+    store_var _45
+    load_const "expected '.' or '[' at offset "
+    load_var _45
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+
+  L41:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    load_var i
+    store_var start
+
+  L42:
+    load_var i
+    store_var _24
+    load_var selector
+    call baml.String.length
+    store_var _25
+    load_var2 9 10
+    cmp_int_op <
+    jump_if_false L43
+    pop 1
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    load_const "."
+    cmp_op !=
+
+  L43:
+    jump_if_false L44
+    pop 1
+    load_var2 2 4
+    load_var i
+    load_const 1
+    add_int
+    call baml.String.substring
+    load_const "["
+    cmp_op !=
+
+  L44:
+    pop_jump_if_false L45
+    jump L46
+
+  L45:
+    load_var2 4 8
+    cmp_int_op >
+    pop_jump_if_false L3
+    load_var current
+    store_var _37
+    load_var2 2 8
+    load_var i
+    call baml.String.substring
+    store_var _38
+    load_var2 11 12
+    load_var selector
+    call baml.json._path_field
+    store_var current
+    jump L3
+
+  L46:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L42
+
+  L47:
+    load_const "selector must start with '.' or '[' (jq style), got '"
+    load_var selector
+    bin_op +
+    load_const "'"
+    bin_op +
+    load_var selector
+    init_instance baml.json.JsonPathError .message, .selector
+    throw
+}
+
+function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T {
+    load_type #0
+    load_var2 1 2
+    call baml.json.path
+    jump L2
+    load_var _
+    is_type baml.json.JsonPathError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    rethrow
+
+  L1:
+    load_var default
+
+  L2:
+    return
 }
 
 function baml.json.serialize(v: T) -> string {
@@ -4734,6 +5320,13 @@ function baml.llm.StreamAccumulator.output_tokens(self: baml.llm.StreamAccumulat
 function baml.llm.StreamCache.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal> {
 }
 
+function baml.llm.__new_stream_cache() -> baml.llm.StreamCache<TStream, TFinal> {
+    load_type #0
+    load_type #1
+    sys_op baml.llm.StreamCache.new
+    return
+}
+
 function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TFinal {
 }
 
@@ -4970,6 +5563,9 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
 
   L2:
     return
+}
+
+function baml.llm.prompt_to_text(prompt: baml.llm.PromptAst) -> string {
 }
 
 function baml.llm.render_output_format(return_type: type) -> string {
@@ -5734,6 +6330,32 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     load_var seed
     call baml.random.Xoshiro256PlusPlus._new
     return
+}
+
+function baml.sap.parse(text: string) -> T {
+    load_type #0
+    load_type #0
+    call baml.llm.__new_stream_cache
+    store_var cache
+    load_var2 1 2
+    load_type #0
+    load_type #0
+    sys_op baml.llm.__sap_parse_final
+    return
+}
+
+function baml.sap.parse_type(t: type, text: string) -> unknown {
+    load_var2 1 1
+    sys_op baml.llm.StreamCache.new
+    store_var cache
+    load_var2 2 3
+    load_type unknown
+    load_type unknown
+    sys_op baml.llm.__sap_parse_final
+    return
+}
+
+function baml.schema.json_schema(t: type) -> baml.json.json {
 }
 
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
@@ -7737,6 +8359,37 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
   L5:
     load_var items
     init_instance baml.toml.Table .items
+    return
+}
+
+function baml.ws.WsStream.close(self: baml.ws.WsStream) -> null {
+}
+
+function baml.ws.WsStream.next(self: baml.ws.WsStream) -> string | null {
+}
+
+function baml.ws.WsStream.send(self: baml.ws.WsStream, text: string) -> null {
+}
+
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream {
+}
+
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WsStream {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 30
+    call baml.time.Duration.from_seconds
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    store_var _5
+    load_var2 1 2
+    load_var _5
+    sys_op baml.ws._connect
     return
 }
 

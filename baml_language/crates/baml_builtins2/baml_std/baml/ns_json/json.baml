@@ -209,37 +209,84 @@ function path<T>(j: json, selector: string) -> T throws JsonPathError {
     };
   }
   let current: json = j;
-  let pieces = selector.split("[");
   let i = 0;
-  for (let piece in pieces) {
-    let rest = piece;
-    if (i > 0) {
-      let closing = rest.split("]");
-      if (closing.length() < 2) {
-        throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+  while (i < selector.length()) {
+    let marker = selector.substring(i, i + 1);
+    if (marker == ".") {
+      i += 1;
+      let start = i;
+      while (
+        i < selector.length()
+        && selector.substring(i, i + 1) != "."
+        && selector.substring(i, i + 1) != "["
+      ) {
+        i += 1;
       }
-      let token = closing.at(0) ?? "";
-      rest = closing.at(1) ?? "";
-      let quoted = (token.starts_with("\"") && token.ends_with("\"") && token.length() >= 2)
-        || (token.starts_with("'") && token.ends_with("'") && token.length() >= 2);
-      if (quoted) {
-        current = _path_field(current, token.substring(1, token.length() - 1), selector);
-      } else {
-        let idx = int.parse(token) catch (_) {
-          root.errors.ParseError => {
-            throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector };
-          },
-        };
-        current = _path_index(current, idx, selector);
+      if (i > start) {
+        current = _path_field(current, selector.substring(start, i), selector);
       }
+      continue;
     }
-    for (let name in rest.split(".")) {
-      if (name == "") {
-        continue;
-      }
-      current = _path_field(current, name, selector);
+
+    if (marker != "[") {
+      throw JsonPathError {
+        message: "expected '.' or '[' at offset " + i.to_string(),
+        selector: selector,
+      };
     }
+
     i += 1;
+    if (i >= selector.length()) {
+      throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+    }
+
+    let first = selector.substring(i, i + 1);
+    if (first == "\"" || first == "'") {
+      let quote = first;
+      i += 1;
+      let key = "";
+      let closed = false;
+      while (i < selector.length()) {
+        let ch = selector.substring(i, i + 1);
+        if (ch == "\\") {
+          if (i + 1 >= selector.length()) {
+            throw JsonPathError { message: "unterminated escape in quoted bracket key", selector: selector };
+          }
+          key = key + selector.substring(i + 1, i + 2);
+          i += 2;
+          continue;
+        }
+        if (ch == quote) {
+          closed = true;
+          i += 1;
+          break;
+        }
+        key = key + ch;
+        i += 1;
+      }
+      if (!closed || i >= selector.length() || selector.substring(i, i + 1) != "]") {
+        throw JsonPathError { message: "unterminated quoted bracket key", selector: selector };
+      }
+      i += 1;
+      current = _path_field(current, key, selector);
+      continue;
+    }
+
+    let start = i;
+    while (i < selector.length() && selector.substring(i, i + 1) != "]") {
+      i += 1;
+    }
+    if (i >= selector.length()) {
+      throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+    }
+    let token = selector.substring(start, i);
+    i += 1;
+    let idx = int.parse(token) catch (_) {
+      root.errors.ParseError => {
+        throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector };
+      },
+    };
+    current = _path_index(current, idx, selector);
   }
   to<T>(current) catch (_) {
     JsonDecodeError => throw JsonPathError {

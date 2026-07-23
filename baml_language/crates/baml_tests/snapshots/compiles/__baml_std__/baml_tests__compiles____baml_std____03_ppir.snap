@@ -662,6 +662,16 @@ function baml.errors.to_string(self: ?) -> string  [expr] {
   {  } self._to_string_impl()
 }
 
+--- <builtin>/baml/ns_errors/unknown_error.baml ---
+class baml.errors.UnknownError {
+  data: unknown
+  message: string[]
+}
+class baml.errors.UnknownError$stream {
+  data: unknown
+  message: string[]
+}
+
 --- <builtin>/baml/ns_events/events.baml ---
 
 --- <builtin>/baml/ns_fs/fs.baml ---
@@ -1130,6 +1140,14 @@ class baml.json.JsonParseError {
 class baml.json.JsonParseError$stream {
   message: string | null
 }
+class baml.json.JsonPathError {
+  message: string
+  selector: string
+}
+class baml.json.JsonPathError$stream {
+  message: string | null
+  selector: string | null
+}
 class baml.json.JsonSerializationError {
   message: string
   path: string
@@ -1142,6 +1160,12 @@ class baml.json.JsonSerializationError$stream {
 }
 type baml.json.json = null | bool | int | float | string | baml.json.json[] | map<string, baml.json.json>
 type baml.json.json$stream = null | bool | int | float | string | baml.json.json$stream[] | map<string, baml.json.json$stream>
+function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json  [expr] {
+  {  } match (current) { m: map<string, baml.json.json> => { if (Not m.has(key)) { throw baml.json.JsonPathError { message: "missing field '" Add key Add "'", selector: selector } } } m.get(key), _ => throw baml.json.JsonPathError { message: "field access '." Add key Add "' on a non-object", selector: selector } }
+}
+function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json  [expr] {
+  {  } match (current) { arr: baml.json.json[] => { if (idx Lt 0 Or idx Ge arr.length()) { throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] out of bounds (..." Add arr.length().to_string() Add ")", selector: selector } } } arr.at(idx), _ => throw baml.json.JsonPathError { message: "index [" Add idx.to_string() Add "] on a non-array", selector: selector } }
+}
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
 }
@@ -1152,6 +1176,12 @@ function baml.json.from(value: T) -> baml.json.json  [expr] {
 function baml.json.from_json(j: baml.json.json) -> T  [builtin]
 function baml.json.from_string(s: string) -> T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
+function baml.json.path(j: baml.json.json, selector: string) -> T  [expr] {
+  { if (Not selector.starts_with(".") Or selector.starts_with("[")) { throw baml.json.JsonPathError { message: "selector must sta..." Add selector Add "'", selector: selector } }; let current: baml.json.json = j; let i = 0; while i Lt selector.length() { let marker = selector.substring(i, i Add 1); if (marker Eq ".") { i Add= 1; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "." And selector.substring(i, i Add 1) Ne "[" { i Add= 1 }; if (i Gt start) { current = _path_field(current, selector.substring(start, i), selector) }; continue }; if (marker Ne "[") { throw baml.json.JsonPathError { message: "expected '.' or '..." Add i.to_string(), selector: selector } }; i Add= 1; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let first = selector.substring(i, i Add 1); if (first Eq "\"" Or first Eq "'") { let quote = first; i Add= 1; let key = ""; let closed = false; while i Lt selector.length() { let ch = selector.substring(i, i Add 1); if (ch Eq "\\") { if (i Add 1 Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated esca...", selector: selector } }; key = key Add selector.substring(i Add 1, i Add 2); i Add= 2; continue }; if (ch Eq quote) { closed = true; i Add= 1; break }; key = key Add ch; i Add= 1 }; if (Not closed Or i Ge selector.length() Or selector.substring(i, i Add 1) Ne "]") { throw baml.json.JsonPathError { message: "unterminated quot...", selector: selector } }; i Add= 1; current = _path_field(current, key, selector); continue }; let start = i; while i Lt selector.length() And selector.substring(i, i Add 1) Ne "]" { i Add= 1 }; if (i Ge selector.length()) { throw baml.json.JsonPathError { message: "unterminated '[' ...", selector: selector } }; let token = selector.substring(start, i); i Add= 1; let idx = int.parse(token) catch (_) { root.errors.ParseError => { throw baml.json.JsonPathError { message: "bad bracket token '[" Add token Add "]'", selector: selector } } }; current = _path_index(current, idx, selector) } } to(current) catch (_) { baml.json.JsonDecodeError => throw baml.json.JsonPathError { message: "leaf does not coe...", selector: selector } }
+}
+function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T  [expr] {
+  {  } path(j, selector) catch (_) { baml.json.JsonPathError => default }
+}
 function baml.json.serialize(v: T) -> string  [expr] {
   {  } stringify(to_json(v))
 }
@@ -1189,6 +1219,9 @@ class baml.llm.PlannerState {
 }
 class baml.llm.PlannerState$stream {
   rr_client_names: string[]
+}
+function baml.llm.__new_stream_cache() -> StreamCache<TStream, TFinal>  [expr] {
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } cache
 }
 function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst throws never? = null) -> root.http.Request  [expr] {
   { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
@@ -1519,6 +1552,7 @@ function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
   { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, render_prompt_values(t.values)) } } render
 }
+function baml.llm.prompt_to_text(prompt: baml.llm.PromptAst) -> string  [builtin]
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.render_prompt_values(values: unknown[]) -> unknown[]  [expr] {
@@ -1893,6 +1927,17 @@ function baml.random.random_int(self: ?) -> int  [expr] {
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
 function baml.random.random_int(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_sap/sap.baml ---
+function baml.sap.parse(text: string) -> T  [expr] {
+  { let cache = root.llm.__new_stream_cache() } root.llm.__sap_parse_final(text, cache)
+}
+function baml.sap.parse_type(t: type, text: string) -> unknown  [expr] {
+  { let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) } root.llm.__sap_parse_final(text, cache)
+}
+
+--- <builtin>/baml/ns_schema/schema.baml ---
+function baml.schema.json_schema(t: type) -> root.json.json  [builtin]
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.CancelToken {
@@ -2354,6 +2399,21 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table  [expr]
 function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
+
+--- <builtin>/baml/ns_ws/ws.baml ---
+class baml.ws.WsStream {
+  _handle: $rust_type
+}
+class baml.ws.WsStream$stream {
+  _handle: $rust_type
+}
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream  [builtin]
+function baml.ws.close(self: ?) -> null  [builtin]
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: root.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WsStream  [expr] {
+  {  } _connect(url, headers, timeout.to_nanoseconds())
+}
+function baml.ws.next(self: ?) -> string?  [builtin]
+function baml.ws.send(self: ?, text: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {

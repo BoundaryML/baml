@@ -783,14 +783,7 @@ mod schema {
                 RuntimeTy::Union(members, _) => self.union_schema(members),
                 RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
                 RuntimeTy::Class(name, _, _) => self.class_ref(name),
-                RuntimeTy::TypeAlias(name, _) => {
-                    let target = find_type_alias_definition(self.ctx, name)
-                        .cloned()
-                        .ok_or_else(|| {
-                            format!("json_schema: unknown type alias `{}`", name.display_name())
-                        })?;
-                    self.ty_schema(&target)
-                }
+                RuntimeTy::TypeAlias(name, _) => self.type_alias_ref(name),
                 RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
                 other => Err(format!(
                     "json_schema: no JSON Schema representation for `{other}`"
@@ -879,6 +872,25 @@ mod schema {
             Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
         }
 
+        fn type_alias_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let key = definition_key(name);
+            self.referenced.insert(key.clone());
+
+            if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
+                let target = find_type_alias_definition(self.ctx, name)
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("json_schema: unknown type alias `{}`", name.display_name())
+                    })?;
+                self.building.insert(key.clone());
+                let definition = self.ty_schema(&target)?;
+                self.building.remove(&key);
+                self.definitions.insert(key.clone(), definition);
+            }
+
+            Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
+        }
+
         fn class_object(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
             let class_def = find_class_definition(self.ctx, name)
                 .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?
@@ -956,6 +968,196 @@ mod schema {
             let first = matches.next()?;
             matches.next().is_none().then_some(first)
         })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::sync::Arc;
+
+        use baml_type::{RuntimeTy, TyAttr, TypeName};
+        use serde_json::json;
+        use sys_types::{
+            ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition,
+            SysOpContext,
+        };
+
+        use super::json_schema;
+
+        fn type_name(name: &str) -> TypeName {
+            TypeName::from_dotted_path(name)
+        }
+
+        fn class_ty(name: &TypeName) -> RuntimeTy {
+            RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default())
+        }
+
+        fn alias_ty(name: &TypeName) -> RuntimeTy {
+            RuntimeTy::TypeAlias(name.clone(), TyAttr::default())
+        }
+
+        fn field(name: &str, field_type: RuntimeTy) -> ClassFieldDefinition {
+            ClassFieldDefinition {
+                name: name.to_string(),
+                field_type,
+                description: None,
+                alias: None,
+                skip: false,
+            }
+        }
+
+        fn class_definition(name: &TypeName, fields: Vec<ClassFieldDefinition>) -> ClassDefinition {
+            ClassDefinition {
+                name: name.display_name().to_string(),
+                description: None,
+                alias: None,
+                fields,
+            }
+        }
+
+        #[test]
+        fn self_referential_class_uses_defs_ref() {
+            let node = type_name("pkg.Node");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                node.clone(),
+                class_definition(
+                    &node,
+                    vec![field("next", RuntimeTy::optional(class_ty(&node)))],
+                ),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&node), &ctx).expect("schema should lower");
+            assert_eq!(schema["type"], "object");
+            assert_eq!(
+                schema["properties"]["next"]["anyOf"][0]["$ref"],
+                "#/$defs/pkg.Node"
+            );
+            assert_eq!(schema["$defs"]["pkg.Node"]["type"], "object");
+        }
+
+        #[test]
+        fn mutually_recursive_classes_share_defs() {
+            let a = type_name("pkg.A");
+            let b = type_name("pkg.B");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                a.clone(),
+                class_definition(&a, vec![field("b", class_ty(&b))]),
+            );
+            classes.insert(
+                b.clone(),
+                class_definition(&b, vec![field("a", RuntimeTy::optional(class_ty(&a)))]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&a), &ctx).expect("schema should lower");
+            assert_eq!(schema["properties"]["b"]["$ref"], "#/$defs/pkg.B");
+            assert_eq!(
+                schema["$defs"]["pkg.B"]["properties"]["a"]["anyOf"][0]["$ref"],
+                "#/$defs/pkg.A"
+            );
+            assert_eq!(schema["$defs"]["pkg.A"]["type"], "object");
+        }
+
+        #[test]
+        fn nullable_union_widens_primitive_type() {
+            let schema = json_schema(
+                &RuntimeTy::optional(RuntimeTy::string()),
+                &SysOpContext::empty(),
+            )
+            .expect("schema should lower");
+            assert_eq!(schema, json!({ "type": ["string", "null"] }));
+        }
+
+        #[test]
+        fn class_refs_escape_json_pointer_tokens() {
+            let holder = type_name("pkg.Holder");
+            let escaped = type_name("pkg.A/B~C");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                holder.clone(),
+                class_definition(&holder, vec![field("value", class_ty(&escaped))]),
+            );
+            classes.insert(
+                escaped.clone(),
+                class_definition(&escaped, vec![field("value", RuntimeTy::int())]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&holder), &ctx).expect("schema should lower");
+            assert_eq!(schema["properties"]["value"]["$ref"], "#/$defs/pkg.A~1B~0C");
+            assert_eq!(schema["$defs"]["pkg.A/B~C"]["type"], "object");
+        }
+
+        #[test]
+        fn enum_variant_aliases_become_schema_values() {
+            let status = type_name("pkg.Status");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(
+                status.clone(),
+                EnumDefinition {
+                    name: "Status".to_string(),
+                    description: None,
+                    alias: None,
+                    variants: vec![
+                        EnumVariantDefinition {
+                            name: "Ready".to_string(),
+                            description: None,
+                            alias: Some("ready-now".to_string()),
+                        },
+                        EnumVariantDefinition {
+                            name: "Done".to_string(),
+                            description: None,
+                            alias: None,
+                        },
+                    ],
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema = json_schema(&RuntimeTy::Enum(status, TyAttr::default()), &ctx)
+                .expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({ "type": "string", "enum": ["ready-now", "Done"] })
+            );
+        }
+
+        #[test]
+        fn recursive_json_alias_uses_a_self_ref() {
+            let json_name = type_name(baml_base::qualified_name::BAML_JSON_JSON);
+            let json_alias = alias_ty(&json_name);
+            let target = RuntimeTy::union([
+                RuntimeTy::null(),
+                RuntimeTy::bool(),
+                RuntimeTy::int(),
+                RuntimeTy::float(),
+                RuntimeTy::string(),
+                RuntimeTy::list(json_alias.clone()),
+                RuntimeTy::map(RuntimeTy::string(), json_alias.clone()),
+            ]);
+            let mut aliases = indexmap::IndexMap::new();
+            aliases.insert(json_name, target);
+            let mut ctx = SysOpContext::empty();
+            ctx.type_alias_definitions = Arc::new(aliases);
+
+            let schema = json_schema(&json_alias, &ctx).expect("schema should lower");
+            assert_eq!(schema["$ref"], "#/$defs/baml.json.json");
+            let definition = &schema["$defs"]["baml.json.json"];
+            assert_eq!(
+                definition["anyOf"][4]["items"]["$ref"],
+                "#/$defs/baml.json.json"
+            );
+            assert_eq!(
+                definition["anyOf"][5]["additionalProperties"]["$ref"],
+                "#/$defs/baml.json.json"
+            );
+        }
     }
 }
 
@@ -1764,12 +1966,13 @@ impl io::IoClassWsWsStream for DefaultIoOps {
 }
 
 impl io::IoNamespaceWs for DefaultIoOps {
-    fn connect(
+    fn _connect(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _url: String,
         _headers: indexmap::IndexMap<String, String>,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::ws::WsStream> {
         SysOpOutput::err(VmBamlError::Unsupported {

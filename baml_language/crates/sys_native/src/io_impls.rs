@@ -2484,7 +2484,13 @@ impl io::IoClassWsWsStream for NativeSysOps {
                         return Ok(Some(text.as_str().to_string()));
                     }
                     Some(Ok(Message::Binary(bytes))) => {
-                        return Ok(Some(String::from_utf8_lossy(&bytes).into_owned()));
+                        return Err(VmBamlError::Io {
+                            message: format!(
+                                "received unexpected binary WebSocket frame ({} bytes) on a text-oriented stream",
+                                bytes.len()
+                            ),
+                        }
+                        .into());
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(None),
                     Some(Ok(Message::Ping(payload))) => {
@@ -2522,6 +2528,33 @@ impl io::IoClassWsWsStream for NativeSysOps {
         })
     }
 
+    #[cfg(feature = "bundle-http")]
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        stream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_resource_types::ResourceRegistryRef;
+        use futures::SinkExt;
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            if let Ok(handle) = stream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+            {
+                if let Some((sink, _)) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
+                    let _ = sink.lock().await.send(Message::Close(None)).await;
+                }
+                crate::registry::REGISTRY.remove(handle.key());
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
     fn close(
         &self,
         _heap: &Arc<BexHeap>,
@@ -2543,12 +2576,13 @@ impl io::IoClassWsWsStream for NativeSysOps {
 
 impl io::IoNamespaceWs for NativeSysOps {
     #[cfg(feature = "bundle-http")]
-    fn connect(
+    fn _connect(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         url: String,
         headers: indexmap::IndexMap<String, String>,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::ws::WsStream> {
         use futures::StreamExt;
@@ -2558,6 +2592,7 @@ impl io::IoNamespaceWs for NativeSysOps {
             http::{HeaderName, HeaderValue},
         };
 
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
 
@@ -2578,12 +2613,23 @@ impl io::IoNamespaceWs for NativeSysOps {
                 request.headers_mut().insert(name, value);
             }
 
-            let (transport, _) =
-                tokio_tungstenite::connect_async(request)
-                    .await
-                    .map_err(|error| VmBamlError::Io {
-                        message: format!("WebSocket connect failed: {error}"),
-                    })?;
+            let connect = tokio_tungstenite::connect_async(request);
+            let connected = match timeout {
+                Some(duration) => match tokio::time::timeout(duration, connect).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        return Err(VmBamlError::Timeout {
+                            message: format!("Connecting WebSocket to '{url}' timed out"),
+                            duration_ms: i64::try_from(duration.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => connect.await,
+            };
+            let (transport, _) = connected.map_err(|error| VmBamlError::Io {
+                message: format!("WebSocket connect failed: {error}"),
+            })?;
             let (sink, source) = transport.split();
             let handle = crate::registry::REGISTRY.register_ws_stream(
                 Arc::new(Mutex::new(sink)),
@@ -2597,12 +2643,13 @@ impl io::IoNamespaceWs for NativeSysOps {
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn connect(
+    fn _connect(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _url: String,
         _headers: indexmap::IndexMap<String, String>,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::ws::WsStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {

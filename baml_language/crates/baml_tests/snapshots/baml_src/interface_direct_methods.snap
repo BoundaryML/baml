@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function interface_direct_methods.$init_test_ns_interface_direct_methods_interface_direct_methods(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interface_direct_methods"
+    load_const "direct class method satisfies interface method"
+    make_closure .<lambda($init_test_ns_interface_direct_methods_interface_direct_methods, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interface_direct_methods.ManagedResourceImpl.cleanup(self: interface_direct_methods.ManagedResourceImpl) -> void {
+    load_type interface_direct_methods.ManagedResourceImpl
+    load_var self
+    call baml._cleanup_begin
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_var self
+    copy 0
+    load_field .cleanup_count
+    load_const 1
+    bin_op +
+    store_field .cleanup_count
+    load_const null
+
+  L2:
+    return
+}
+
+function interface_direct_methods.cleanup_through_interface() -> int {
+    load_const 0
+    init_instance user.interface_direct_methods.ManagedResourceImpl .cleanup_count
+    store_var_load_var resource
+    load_type interface_direct_methods.ManagedResource
+    load_const "cleanup"
+    virtual_call nargs=1 ntypeargs=0
+    pop 1
+    load_var resource
+    load_field .cleanup_count
+    return
+}

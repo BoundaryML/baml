@@ -83,15 +83,6 @@ function         baml.csv._error                  <builtin>/baml/ns_csv/csv.baml
 function         baml.env.get                     <builtin>/baml/ns_env/env.baml:6
 function         baml.env.get_or_panic            <builtin>/baml/ns_env/env.baml:11
 function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:23
-class            baml.errors.UnknownError         <builtin>/baml/ns_errors/capability.baml:5
-interface        baml.errors.Failure              <builtin>/baml/ns_errors/capability.baml:11
-interface        baml.errors.CallError            <builtin>/baml/ns_errors/capability.baml:20
-interface        baml.errors.StreamError          <builtin>/baml/ns_errors/capability.baml:27
-interface        baml.errors.ToolError            <builtin>/baml/ns_errors/capability.baml:32
-interface        baml.errors.RealtimeError        <builtin>/baml/ns_errors/capability.baml:37
-class            baml.errors.CannotRetry          <builtin>/baml/ns_errors/capability.baml:56
-class            baml.errors.LoopBudgetExceeded   <builtin>/baml/ns_errors/capability.baml:75
-class            baml.errors.HandoffUnresolved    <builtin>/baml/ns_errors/capability.baml:92
 class            baml.errors.ErrorContext         <builtin>/baml/ns_errors/error_context.baml:9
 class            baml.errors.InvalidArgument      <builtin>/baml/ns_errors/errors.baml:2
 class            baml.errors.ParseError           <builtin>/baml/ns_errors/errors.baml:8
@@ -109,6 +100,7 @@ class            baml.errors.CompilationError     <builtin>/baml/ns_errors/error
 class            baml.errors.TypeMismatch         <builtin>/baml/ns_errors/errors.baml:90
 class            baml.errors.StackFrame           <builtin>/baml/ns_errors/stack_trace.baml:2
 class            baml.errors.StackTrace           <builtin>/baml/ns_errors/stack_trace.baml:9
+class            baml.errors.UnknownError         <builtin>/baml/ns_errors/unknown_error.baml:2
 class            baml.fs.File                     <builtin>/baml/ns_fs/fs.baml:6
 function         baml.fs.open                     <builtin>/baml/ns_fs/fs.baml:57
 function         baml.fs.exists                   <builtin>/baml/ns_fs/fs.baml:62
@@ -188,9 +180,9 @@ class            baml.json.JsonPathError          <builtin>/baml/ns_json/json.ba
 function         baml.json._path_field            <builtin>/baml/ns_json/json.baml:168
 function         baml.json._path_index            <builtin>/baml/ns_json/json.baml:183
 function         baml.json.path                   <builtin>/baml/ns_json/json.baml:204
-function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:253
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:275
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:294
+function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:300
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:322
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:341
 class            baml.llm.OrchestrationStep       <builtin>/baml/ns_llm/llm.baml:1
 class            baml.llm.ExecutionContext        <builtin>/baml/ns_llm/llm.baml:6
 class            baml.llm.PlannerState            <builtin>/baml/ns_llm/llm.baml:16
@@ -321,6 +313,7 @@ function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.ba
 class            baml.toml.TomlParseError         <builtin>/baml/ns_toml/toml.baml:83
 class            baml.ws.WsStream                 <builtin>/baml/ns_ws/ws.baml:4
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:24
+function         baml.ws._connect                 <builtin>/baml/ns_ws/ws.baml:32
 class            baml.yaml.YamlParseError         <builtin>/baml/ns_yaml/yaml.baml:3
 function         baml.yaml.parse                  <builtin>/baml/ns_yaml/yaml.baml:15
 function         baml.yaml.deserialize            <builtin>/baml/ns_yaml/yaml.baml:24

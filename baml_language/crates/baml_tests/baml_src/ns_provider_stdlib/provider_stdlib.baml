@@ -30,6 +30,18 @@ test "provider stdlib exposes typed JSON paths and schemas" {
   )
 }
 
+test "provider stdlib JSON paths preserve brackets in quoted keys" {
+  let value: json = {
+    "key[part]": {
+      "tail]": 7,
+    },
+  }
+  assert.equal(
+    baml.json.path<int>(value, ".[\"key[part]\"][\"tail]\"]"),
+    7,
+  )
+}
+
 test "provider stdlib exposes schema aligned parsing" {
   assert.equal(baml.sap.parse<int>("42"), 42)
 }

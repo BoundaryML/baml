@@ -21,6 +21,18 @@ class WsStream {
 }
 
 /// Open a WebSocket connection with additional request headers.
-function connect(url: string, headers: map<string, string>) -> WsStream throws root.errors.Io {
+function connect(
+    url: string,
+    headers: map<string, string>,
+    timeout: root.time.Duration = root.time.Duration.from_seconds(30),
+) -> WsStream throws root.errors.Io | root.errors.Timeout {
+    _connect(url, headers, timeout.to_nanoseconds())
+}
+
+function _connect(
+    url: string,
+    headers: map<string, string>,
+    timeout_nanos: bigint,
+) -> WsStream throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
 }
