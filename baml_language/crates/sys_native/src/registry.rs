@@ -36,10 +36,30 @@ pub struct SseStreamResource {
 #[cfg(feature = "bundle-http")]
 type SseStreamParts = (Arc<TokioMutex<SseBuffer>>, Arc<Notify>, Arc<AtomicBool>);
 
+#[cfg(feature = "bundle-http")]
+type WsTransport =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+#[cfg(feature = "bundle-http")]
+type WsSink = futures::stream::SplitSink<WsTransport, tokio_tungstenite::tungstenite::Message>;
+#[cfg(feature = "bundle-http")]
+type WsSource = futures::stream::SplitStream<WsTransport>;
+
+#[cfg(feature = "bundle-http")]
+pub struct WsStreamResource {
+    pub sink: Arc<TokioMutex<WsSink>>,
+    pub source: Arc<TokioMutex<WsSource>>,
+    pub url: String,
+}
+
+#[cfg(feature = "bundle-http")]
+type WsStreamParts = (Arc<TokioMutex<WsSink>>, Arc<TokioMutex<WsSource>>);
+
 /// Registry entry for a resource.
 pub enum RegistryEntry {
     #[cfg(feature = "bundle-http")]
     SseStream(SseStreamResource),
+    #[cfg(feature = "bundle-http")]
+    WsStream(WsStreamResource),
 }
 
 /// Global resource registry.
@@ -90,6 +110,48 @@ impl ResourceRegistry {
             url,
             Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
         )
+    }
+
+    #[cfg(feature = "bundle-http")]
+    pub fn register_ws_stream(
+        self: &Arc<Self>,
+        sink: Arc<TokioMutex<WsSink>>,
+        source: Arc<TokioMutex<WsSource>>,
+        url: String,
+    ) -> ResourceHandle {
+        let key = self.next_key.fetch_add(1, Ordering::SeqCst);
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                key,
+                RegistryEntry::WsStream(WsStreamResource {
+                    sink,
+                    source,
+                    url: url.clone(),
+                }),
+            );
+
+        ResourceHandle::new(
+            key,
+            ResourceType::WsStream,
+            url,
+            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
+        )
+    }
+
+    #[cfg(feature = "bundle-http")]
+    pub fn get_ws_stream(&self, key: usize) -> Option<WsStreamParts> {
+        let entries = self
+            .entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match entries.get(&key) {
+            Some(RegistryEntry::WsStream(stream)) => {
+                Some((stream.sink.clone(), stream.source.clone()))
+            }
+            _ => None,
+        }
     }
 
     #[cfg(feature = "bundle-http")]

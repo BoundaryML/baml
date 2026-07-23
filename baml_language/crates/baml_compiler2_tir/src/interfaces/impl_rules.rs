@@ -493,6 +493,49 @@ pub fn impl_data<'db>(
     };
     let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
 
+    // The magic direct `cleanup` method may satisfy a same-named method in an
+    // in-body `implements` block. The VM only registers a direct class method
+    // as a finalizer, while interface dispatch still needs that same body in
+    // the impl method table.
+    //
+    // Explicit methods in the implements block win. Free/out-of-body impls
+    // must continue to provide their own methods.
+    let direct_class_methods: Vec<_> = match &block.subject {
+        ImplSubjectData::InClass {
+            class,
+            out_of_body: false,
+        } => {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+            let explicit_names: Vec<&Name> = block
+                .methods
+                .iter()
+                .map(|method| &function_data(db, *method).name)
+                .collect();
+            class_data
+                .methods
+                .iter()
+                .filter(|method| {
+                    baml_compiler2_ppir::item_data::method_interface_target(db, **method).is_none()
+                })
+                .filter(|method| {
+                    let name = &function_data(db, **method).name;
+                    name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                        && !explicit_names.contains(&name)
+                        && (iface_data
+                            .required_methods
+                            .iter()
+                            .any(|required| required.name == *name)
+                            || iface_data
+                                .default_methods
+                                .iter()
+                                .any(|default| function_data(db, *default).name == *name))
+                })
+                .copied()
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
     let mut assoc_diags = Vec::new();
     // The impl's own generic bounds, so a `T.member` projection in a binding value
     // (`type Item = T.Elem`) resolves through the impl generic's declared bound.
@@ -541,11 +584,16 @@ pub fn impl_data<'db>(
                 ImplDiagnosticLocation::InterfaceTarget,
             ));
         }
-        let override_names: Vec<&Name> = block
+        let mut override_names: Vec<&Name> = block
             .methods
             .iter()
             .map(|loc| &function_data(db, *loc).name)
             .collect();
+        override_names.extend(
+            direct_class_methods
+                .iter()
+                .map(|loc| &function_data(db, *loc).name),
+        );
         let default_names: Vec<&Name> = iface_data
             .default_methods
             .iter()
@@ -771,7 +819,8 @@ pub fn impl_data<'db>(
             )
             .collect();
 
-    let methods = block.methods.clone();
+    let mut methods = block.methods.clone();
+    methods.extend(direct_class_methods);
     let field_links = block
         .field_links
         .iter()
