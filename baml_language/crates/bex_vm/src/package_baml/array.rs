@@ -528,12 +528,27 @@ impl Continuation for EveryContinuation {
 
 // ── find / find_index ─────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy)]
+enum FindResult {
+    Value,
+    Index,
+}
+
+impl FindResult {
+    #[allow(clippy::cast_possible_wrap)]
+    fn resolve(self, array: &[Value], idx: usize) -> Value {
+        match self {
+            Self::Value => array[idx],
+            Self::Index => Value::int(idx as i64),
+        }
+    }
+}
+
 struct FindContinuation {
     f_ptr: HeapPtr,
     array: Vec<Value>,
     idx: usize,
-    /// `true` to return the matching element, `false` to return its index.
-    return_value: bool,
+    result: FindResult,
 }
 
 impl Continuation for FindContinuation {
@@ -543,13 +558,7 @@ impl Continuation for FindContinuation {
             Err(e) => return e,
         };
         if b {
-            let result = if self.return_value {
-                self.array[self.idx]
-            } else {
-                #[allow(clippy::cast_possible_wrap)]
-                Value::int(self.idx as i64)
-            };
-            return NativeCallResult::Done(result);
+            return NativeCallResult::Done(self.result.resolve(&self.array, self.idx));
         }
         self.idx += 1;
         if self.idx >= self.array.len() {
@@ -574,8 +583,7 @@ struct FindLastContinuation {
     /// Index of the element whose predicate result we await. We descend from
     /// `len - 1` toward 0; on reaching 0 with a `false` result, return null.
     idx: usize,
-    /// `true` to return the matching element, `false` to return its index.
-    return_value: bool,
+    result: FindResult,
 }
 
 impl Continuation for FindLastContinuation {
@@ -585,13 +593,7 @@ impl Continuation for FindLastContinuation {
             Err(e) => return e,
         };
         if b {
-            let result = if self.return_value {
-                self.array[self.idx]
-            } else {
-                #[allow(clippy::cast_possible_wrap)]
-                Value::int(self.idx as i64)
-            };
-            return NativeCallResult::Done(result);
+            return NativeCallResult::Done(self.result.resolve(&self.array, self.idx));
         }
         if self.idx == 0 {
             return NativeCallResult::Done(Value::NULL);
@@ -606,6 +608,63 @@ impl Continuation for FindLastContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+}
+
+fn start_find(
+    vm: &BexVm,
+    array: &ArrayView<'_>,
+    predicate: Value,
+    result: FindResult,
+) -> NativeCallResult {
+    let f_ptr = match extract_callable(vm, predicate) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    let array = array.to_vec();
+    if array.is_empty() {
+        return NativeCallResult::Done(Value::NULL);
+    }
+    let first_arg = array[0];
+    NativeCallResult::YieldToCall {
+        callee: f_ptr,
+        args: vec![first_arg],
+        type_args: vec![],
+        continuation: Box::new(FindContinuation {
+            f_ptr,
+            array,
+            idx: 0,
+            result,
+        }),
+    }
+}
+
+fn start_find_last(
+    vm: &BexVm,
+    array: &ArrayView<'_>,
+    predicate: Value,
+    result: FindResult,
+) -> NativeCallResult {
+    let f_ptr = match extract_callable(vm, predicate) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    let array = array.to_vec();
+    if array.is_empty() {
+        return NativeCallResult::Done(Value::NULL);
+    }
+    let last_idx = array.len() - 1;
+    let first_arg = array[last_idx];
+    NativeCallResult::YieldToCall {
+        callee: f_ptr,
+        args: vec![first_arg],
+        type_args: vec![],
+        continuation: Box::new(FindLastContinuation {
+            f_ptr,
+            array,
+            idx: last_idx,
+            result,
+        }),
+    }
 }
 
 // ── reduce ────────────────────────────────────────────────────────────────────
@@ -1017,73 +1076,15 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn find(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *predicate) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let array = array.to_vec();
-        if array.is_empty() {
-            return NativeCallResult::Done(Value::NULL);
-        }
-        let first_arg = array[0];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_arg],
-            type_args: vec![],
-            continuation: Box::new(FindContinuation {
-                f_ptr,
-                array,
-                idx: 0,
-                return_value: true,
-            }),
-        }
+        start_find(vm, &array, *predicate, FindResult::Value)
     }
 
     fn find_index(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *predicate) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let array = array.to_vec();
-        if array.is_empty() {
-            return NativeCallResult::Done(Value::NULL);
-        }
-        let first_arg = array[0];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_arg],
-            type_args: vec![],
-            continuation: Box::new(FindContinuation {
-                f_ptr,
-                array,
-                idx: 0,
-                return_value: false,
-            }),
-        }
+        start_find(vm, &array, *predicate, FindResult::Index)
     }
 
     fn find_last(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *predicate) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let array = array.to_vec();
-        if array.is_empty() {
-            return NativeCallResult::Done(Value::NULL);
-        }
-        let last_idx = array.len() - 1;
-        let first_arg = array[last_idx];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_arg],
-            type_args: vec![],
-            continuation: Box::new(FindLastContinuation {
-                f_ptr,
-                array,
-                idx: last_idx,
-                return_value: true,
-            }),
-        }
+        start_find_last(vm, &array, *predicate, FindResult::Value)
     }
 
     fn find_last_index(
@@ -1091,27 +1092,7 @@ impl BamlClassArray for PackageBamlImpl {
         array: ArrayView<'_>,
         predicate: &Value,
     ) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *predicate) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let array = array.to_vec();
-        if array.is_empty() {
-            return NativeCallResult::Done(Value::NULL);
-        }
-        let last_idx = array.len() - 1;
-        let first_arg = array[last_idx];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_arg],
-            type_args: vec![],
-            continuation: Box::new(FindLastContinuation {
-                f_ptr,
-                array,
-                idx: last_idx,
-                return_value: false,
-            }),
-        }
+        start_find_last(vm, &array, *predicate, FindResult::Index)
     }
 
     fn includes(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> bool {
