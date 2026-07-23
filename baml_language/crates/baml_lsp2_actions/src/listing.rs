@@ -3,6 +3,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
+    namespace::NamespaceItems,
     package::{PackageId, PackageItems, package_items},
 };
 use baml_compiler2_tir::ty::Package;
@@ -195,6 +196,30 @@ pub fn list_package_items(db: &dyn Db, package_id: PackageId<'_>) -> Vec<Listing
     collect_entries_from_package(db, pkg, &package_name)
 }
 
+fn extend_namespace_entries(
+    db: &dyn Db,
+    entries: &mut Vec<ListingEntry>,
+    package_name: &Name,
+    ns_path: &[Name],
+    ns_items: &NamespaceItems<'_>,
+) {
+    entries.extend(
+        ns_items
+            .types
+            .iter()
+            .chain(&ns_items.values)
+            .filter_map(|(name, def)| {
+                make_entry(
+                    db,
+                    package_name.clone(),
+                    ns_path.to_vec(),
+                    name.clone(),
+                    *def,
+                )
+            }),
+    );
+}
+
 /// Collect listing entries from a `PackageItems`, including all namespaces.
 fn collect_entries_from_package(
     db: &dyn Db,
@@ -204,31 +229,7 @@ fn collect_entries_from_package(
     let mut entries = Vec::new();
 
     for (ns_path, ns_items) in &pkg.namespaces {
-        // Collect from types (classes, enums, type aliases).
-        for (name, def) in &ns_items.types {
-            if let Some(entry) = make_entry(
-                db,
-                package_name.clone(),
-                ns_path.clone(),
-                name.clone(),
-                *def,
-            ) {
-                entries.push(entry);
-            }
-        }
-
-        // Collect from values (functions, clients, generators, etc.).
-        for (name, def) in &ns_items.values {
-            if let Some(entry) = make_entry(
-                db,
-                package_name.clone(),
-                ns_path.clone(),
-                name.clone(),
-                *def,
-            ) {
-                entries.push(entry);
-            }
-        }
+        extend_namespace_entries(db, &mut entries, package_name, ns_path, ns_items);
     }
 
     // Sort by (ns_path, file_path, line): root namespace first, then
@@ -280,28 +281,7 @@ pub fn list_namespace_items(
             continue;
         }
 
-        for (name, def) in &ns_items.types {
-            if let Some(entry) = make_entry(
-                db,
-                package_name.clone(),
-                ns_path.clone(),
-                name.clone(),
-                *def,
-            ) {
-                entries.push(entry);
-            }
-        }
-        for (name, def) in &ns_items.values {
-            if let Some(entry) = make_entry(
-                db,
-                package_name.clone(),
-                ns_path.clone(),
-                name.clone(),
-                *def,
-            ) {
-                entries.push(entry);
-            }
-        }
+        extend_namespace_entries(db, &mut entries, &package_name, ns_path, ns_items);
     }
 
     entries.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.line.cmp(&b.line)));

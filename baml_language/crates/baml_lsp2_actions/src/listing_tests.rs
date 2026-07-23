@@ -147,6 +147,30 @@ fn list_namespace_items_lorem() {
     assert!(entries.iter().any(|e| e.fqn() == "lorem.Resume"));
 }
 
+#[test]
+fn listings_preserve_same_name_in_type_and_value_namespaces() {
+    let mut builder = ProjectTest::builder();
+    builder.source("ns_api/type.baml", "class Shared { value int }");
+    builder.source(
+        "ns_api/value.baml",
+        "function Shared() -> int { return 1; }",
+    );
+    let project = builder.build();
+
+    let package_entries = project.list_package_items_user();
+    let namespace_entries = project.list_namespace_items_user(&["api"]).unwrap();
+
+    for entries in [&package_entries, &namespace_entries] {
+        let mut kinds: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.fqn() == "api.Shared")
+            .map(|entry| entry.kind.as_str())
+            .collect();
+        kinds.sort_unstable();
+        assert_eq!(kinds, ["class", "function"]);
+    }
+}
+
 // ── Deep namespace fixture ───────────────────────────────────────────────────
 
 fn make_deep_ns_project() -> ProjectTest {
