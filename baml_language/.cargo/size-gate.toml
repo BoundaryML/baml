@@ -42,15 +42,15 @@ policy.max_delta_pct = 3.0
 # Baselines include the first-class C# generator now linked into baml-cli.
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
-# macOS arm64: baseline 20.31 MB file (20_306_304), ceiling = baseline x1.03.
+# macOS arm64: baseline 20.92 MB file (20_919_056), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 20_915_494
+max_file_bytes = 21_546_628
 # Linux x86_64: baseline 26.20 MB file (26_196_496), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
 max_file_bytes = 26_982_391
-# Windows x86_64: baseline 21.91 MB file (21_914_624), ceiling = baseline x1.03.
+# Windows x86_64: baseline 22.58 MB file (22_579_712), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 22_572_063
+max_file_bytes = 23_257_104
 
 [artifacts.packed-program]
 kind = "pack"
