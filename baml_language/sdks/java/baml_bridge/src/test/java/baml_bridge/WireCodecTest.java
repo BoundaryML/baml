@@ -490,8 +490,8 @@ class WireCodecTest {
     void inbound_class_value_layout() {
         byte[] got = ProtoWriter.encodeInboundValue(new Resume("Alice", 30L));
 
-        // Hand-build the expected InboundClassValue: fields (=2) in declaration
-        // order, then class_ty (=3) carrying the FQN on name (=1).
+        // Hand-build the expected node-local value_type (=1), followed by the
+        // structural InboundClassValue fields (=2) in declaration order.
         WireWriter nameVal = new WireWriter();
         nameVal.writeString(2, "Alice"); // InboundValue.string_value = 2
         WireWriter nameEntry = new WireWriter();
@@ -507,12 +507,15 @@ class WireCodecTest {
         WireWriter classTy = new WireWriter();
         classTy.writeString(1, RESUME_FQN); // BamlTyClass.name = 1
 
+        WireWriter classType = new WireWriter();
+        classType.writeMessage(2, classTy.toByteArray()); // BamlTy.class_ty = 2
+
         WireWriter classMsg = new WireWriter();
         classMsg.writeMessage(2, nameEntry.toByteArray()); // InboundClassValue.fields = 2
         classMsg.writeMessage(2, ageEntry.toByteArray());
-        classMsg.writeMessage(3, classTy.toByteArray()); // InboundClassValue.class_ty = 3
 
         WireWriter expected = new WireWriter();
+        expected.writeMessage(1, classType.toByteArray()); // InboundValue.value_type = 1
         expected.writeMessage(8, classMsg.toByteArray()); // InboundValue.class_value = 8
 
         assertArrayEquals(expected.toByteArray(), got);
@@ -521,7 +524,7 @@ class WireCodecTest {
     /**
      * A reified generic instance (its concrete type args bound in the side-table
      * via the generated {@code of(...)} factory or wire decode) encodes its
-     * {@code class_ty.type_args} — the value-level type channel the engine reads
+     * {@code value_type.class_ty.type_args} — the value-level type channel the engine reads
      * to type-check a generic argument. An unbound instance stays byte-identical
      * to the pre-generics encoding (see {@code inbound_class_value_layout}).
      */
@@ -547,12 +550,15 @@ class WireCodecTest {
         classTy.writeString(1, RESUME_FQN); // BamlTyClass.name = 1
         classTy.writeMessage(2, BamlType.INT.toWireTy()); // BamlTyClass.type_args = 2
 
+        WireWriter classType = new WireWriter();
+        classType.writeMessage(2, classTy.toByteArray());
+
         WireWriter classMsg = new WireWriter();
         classMsg.writeMessage(2, nameEntry.toByteArray());
         classMsg.writeMessage(2, ageEntry.toByteArray());
-        classMsg.writeMessage(3, classTy.toByteArray());
 
         WireWriter expected = new WireWriter();
+        expected.writeMessage(1, classType.toByteArray());
         expected.writeMessage(8, classMsg.toByteArray());
 
         assertArrayEquals(expected.toByteArray(), got);
@@ -708,6 +714,16 @@ class WireCodecTest {
         return ov.toByteArray();
     }
 
+    private static byte[] ovUnionSelected(byte[] selfType, int selectedIndex, byte[] innerValue) {
+        WireWriter uv = new WireWriter();
+        uv.writeMessage(4, selfType);
+        uv.writeMessage(6, innerValue);
+        uv.writeInt64(8, selectedIndex);
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_UNION, uv.toByteArray());
+        return ov.toByteArray();
+    }
+
     private static byte[] ovString(String s) {
         WireWriter w = new WireWriter();
         w.writeString(OV_STRING, s);
@@ -770,6 +786,20 @@ class WireCodecTest {
         byte[] wrapped = ProtoWriter.encodeInboundValue(new IntOrString.IntValue(5L));
         byte[] bare = ProtoWriter.encodeInboundValue(5L);
         assertArrayEquals(bare, wrapped);
+    }
+
+    /** A generated typed carrier projects a union wrapper to its exact arm type. */
+    @Test
+    void encode_generic_union_second_empty_list_arm_has_exact_node_type() {
+        BamlType unionType = BamlType.union(
+                BamlType.list(BamlType.STRING), BamlType.list(BamlType.INT));
+        byte[] got = ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                new Union2.Arm1<List<String>, List<Long>>(List.of()), unionType));
+
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(1, BamlType.list(BamlType.INT).toWireTy());
+        expected.writeMessage(6, new byte[0]);
+        assertArrayEquals(expected.toByteArray(), got);
     }
 
     /** (e) A null inner value decodes to null (no wrapper record). */
@@ -1135,6 +1165,18 @@ class WireCodecTest {
         // Bare "list" → first list arm (int[]), even though the element is a
         // string — the untyped-wire back-compat lane, unchanged by the fix.
         assertInstanceOf(ListUnion.IntListValue.class, decoded);
+    }
+
+    /** The canonical selected index beats ambiguous empty-container shape. */
+    @Test
+    void decode_union_selected_index_preserves_second_empty_list_arm() {
+        byte[] selfType =
+                tyUnion(tyList(tyPrimitive(PRIM_INT)), tyList(tyPrimitive(PRIM_STRING)));
+        Object decoded = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovUnionSelected(selfType, 1, ovListUntyped())));
+        ListUnion.StrListValue value =
+                assertInstanceOf(ListUnion.StrListValue.class, decoded);
+        assertEquals(List.of(), value.value());
     }
 
     // -- media handle decode (baml.media.*) ----------------------------------

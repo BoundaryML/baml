@@ -141,10 +141,11 @@ internal static class HostCallableProtocol
 
         var value = new InboundValue
         {
-            ClassValue = new InboundClassValue
+            ValueType = new BamlTy
             {
                 ClassTy = new BamlTyClass { Name = HostCallableIdentity },
             },
+            ClassValue = new InboundClassValue(),
         };
         value.ClassValue.Fields.Add(Field("message", String(exception.Message)));
         value.ClassValue.Fields.Add(Field(

@@ -153,6 +153,15 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
             let class_generic_params: Vec<Name> = class.generic_params.clone();
+            let class_self_ty = TirTy::Class(
+                QualifiedTypeName::new(pkg.clone(), ns_path.clone(), class.name.clone()),
+                class_generic_params
+                    .iter()
+                    .cloned()
+                    .map(|name| TirTy::TypeVar(name, TyAttr::default()))
+                    .collect(),
+                TyAttr::default(),
+            );
             let properties = class
                 .fields
                 .iter()
@@ -232,7 +241,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     ns_context: &pkg_info.namespace_path,
                     generic_params: &method_scope_generics,
                     bounds: &method_bounds,
-                    self_ty: None,
+                    self_ty: Some(class_self_ty.clone()),
                 };
                 let type_refs = &sig.type_refs;
                 let lower = |id| {
@@ -1171,6 +1180,136 @@ function Extract(client: string, text: string) -> string {
         let bump = &class.instance_methods[0];
         let bump_args: Vec<&str> = bump.arguments.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(bump_args, vec!["by"], "self should not be in arguments");
+    }
+
+    /// `Self` must be resolved by the compiler-owned type lowering before any
+    /// host generator sees the signature. This pins bare and nested positions
+    /// for both instance and static class methods.
+    #[test]
+    fn test_class_method_self_lowers_to_owning_codegen_class() {
+        let root = Path::new("/tmp/12c_method_self");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+class Mirror {
+  value string
+  function clone(self, other: Self?) -> map<string, Self> { {"value": self} }
+  function pick(self, value: Self | int) -> Self | string { self }
+  function wrap(value: Self[]) -> Self { value[0] }
+}
+
+class GenericMirror<T> {
+  value T
+  function nested(self, other: Self?) -> map<string, Self[]> { {"value": [self]} }
+  function identity(value: Self) -> Self { value }
+}
+"#,
+        );
+
+        let pool = build_symbol_pool(&db);
+        let (owner, class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "Mirror" => Some((name, class)),
+                _ => None,
+            })
+            .expect("Mirror class missing from pool");
+
+        let clone = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "clone")
+            .expect("clone instance method missing");
+        assert!(matches!(
+            &clone.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &clone.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+
+        let pick = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "pick")
+            .expect("pick instance method missing");
+        assert!(matches!(
+            &pick.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Int { .. }))
+        ));
+        assert!(matches!(
+            &pick.return_type,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::String { .. }))
+        ));
+
+        let wrap = class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "wrap")
+            .expect("wrap static method missing");
+        assert!(matches!(
+            &wrap.arguments[0].ty,
+            cg::Ty::List(inner, _)
+                if matches!(inner.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+        assert!(matches!(
+            &wrap.return_type,
+            cg::Ty::Class(name, args, _) if name == owner && args.is_empty()
+        ));
+
+        let (generic_owner, generic_class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "GenericMirror" => {
+                    Some((name, class))
+                }
+                _ => None,
+            })
+            .expect("GenericMirror class missing from pool");
+        let nested = generic_class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "nested")
+            .expect("nested generic instance method missing");
+        let is_instantiated_self = |ty: &cg::Ty| {
+            matches!(
+                ty,
+                cg::Ty::Class(name, args, _)
+                    if name == generic_owner
+                        && matches!(args.as_slice(), [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
+            )
+        };
+        assert!(matches!(
+            &nested.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(&is_instantiated_self)
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &nested.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::List(inner, _) if is_instantiated_self(inner))
+        ));
+
+        let identity = generic_class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "identity")
+            .expect("identity generic static method missing");
+        assert!(is_instantiated_self(&identity.arguments[0].ty));
+        assert!(is_instantiated_self(&identity.return_type));
     }
 
     /// Verifies that a class in a namespaced folder gets `namespace_path` populated.

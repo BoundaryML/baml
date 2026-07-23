@@ -1116,6 +1116,7 @@ public sealed class BamlGeneratedValue
 
     internal static BamlGeneratedValue CreateUnion(
         ReadOnlySpan<byte> selfTypeMetadata,
+        byte[]? selectedTypeMetadata,
         string optionName,
         BamlGeneratedValue payload,
         string sourcePath = "generated result") =>
@@ -1123,6 +1124,7 @@ public sealed class BamlGeneratedValue
             PrimitiveCarrierKind.Union,
             stringValue: optionName,
             unionSelfTypeMetadata: selfTypeMetadata.ToArray(),
+            unionSelectedTypeMetadata: selectedTypeMetadata?.ToArray(),
             unionPayload: payload,
             sourcePath: sourcePath);
 

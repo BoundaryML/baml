@@ -160,9 +160,23 @@ class BamlFfiSmokeTest {
         byte[] classBytes = subMessage(new WireReader(encoded), 8);
         assertNotNull(classBytes, "expected InboundValue.class_value (field 8)");
 
-        // InboundClassValue: fields = 2 (repeated InboundMapEntry), class_ty = 3.
+        byte[] valueType = subMessage(new WireReader(encoded), 1);
+        assertNotNull(valueType, "expected InboundValue.value_type (field 1)");
+        byte[] mediaType = subMessage(new WireReader(valueType), 11);
+        assertNotNull(mediaType, "expected BamlTy.media (field 11)");
+        int mediaKind = 0;
+        WireReader ty = new WireReader(mediaType);
+        while (ty.hasRemaining()) {
+            int tag = ty.readTag();
+            if (WireReader.fieldOf(tag) == 1) {
+                mediaKind = (int) ty.readVarint();
+            } else {
+                ty.skipField(WireReader.wireOf(tag));
+            }
+        }
+
+        // InboundClassValue: fields = 2 (repeated InboundMapEntry).
         WireReader cv = new WireReader(classBytes);
-        String fqn = null;
         String dataKey = null;
         byte[] dataValueBytes = null;
         while (cv.hasRemaining()) {
@@ -182,21 +196,11 @@ class BamlFfiSmokeTest {
                         entry.skipField(WireReader.wireOf(et));
                     }
                 }
-            } else if (f == 3) {
-                WireReader ty = cv.readMessage();
-                while (ty.hasRemaining()) {
-                    int tt = ty.readTag();
-                    if (WireReader.fieldOf(tt) == 1) {
-                        fqn = ty.readString(); // BamlTyClass.name
-                    } else {
-                        ty.skipField(WireReader.wireOf(tt));
-                    }
-                }
             } else {
                 cv.skipField(wt);
             }
         }
-        assertEquals("baml.media.Image", fqn);
+        assertEquals(1, mediaKind); // BAML_TY_MEDIA_KIND_IMAGE
         assertEquals("_data", dataKey);
         assertNotNull(dataValueBytes, "expected a _data field value");
 

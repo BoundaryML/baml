@@ -49,7 +49,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut from_impls = Vec::new();
     let mut encode_arms = Vec::new();
     let mut trial_decodes = Vec::new();
+    let mut indexed_decodes = Vec::new();
     let mut baml_ty_options = Vec::new();
+    let name_str = union_enum.rust_name.as_str();
     for arm in &union_enum.arms {
         let variant = idents::ident(&arm.variant);
         match &arm.kind {
@@ -80,7 +82,19 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 }
                 encode_arms.push(quote! {
                     Self::#variant(value) => {
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(value)
+                        ::baml_bridge::baml_value::internal::annotate_selected_type(
+                            ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(value),
+                            <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                        )
+                    }
+                });
+                indexed_decodes.push(quote! {
+                    if ::baml_bridge::decode::selected_type_matches(
+                        &<#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                        &selected_type,
+                    ) {
+                        return <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(v)
+                            .map(Self::#variant);
                     }
                 });
                 trial_decodes.push(quote! {
@@ -101,9 +115,30 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 variant_defs.push(quote! { #variant });
                 encode_arms.push(quote! {
                     Self::#variant => {
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(
-                            &<::std::string::String as ::std::convert::From<&str>>::from(#value),
+                        ::baml_bridge::baml_value::internal::annotate_selected_type(
+                            ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(
+                                &<::std::string::String as ::std::convert::From<&str>>::from(#value),
+                            ),
+                            ::baml_bridge::baml_value::internal::literal_string_ty(#value),
                         )
+                    }
+                });
+                indexed_decodes.push(quote! {
+                    if ::baml_bridge::decode::selected_type_matches(
+                        &::baml_bridge::baml_value::internal::literal_string_ty(#value),
+                        &selected_type,
+                    ) {
+                        let value = <::std::string::String as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(v)?;
+                        if value == #value {
+                            return ::std::result::Result::Ok(Self::#variant);
+                        }
+                        return ::std::result::Result::Err(
+                            ::baml_bridge::decode::no_union_arm(#name_str, &::baml_bridge::wire::BamlOutboundValue {
+                                value: ::std::option::Option::Some(
+                                    ::baml_bridge::wire::baml_outbound_value::Value::StringValue(value),
+                                ),
+                            }),
+                        );
                     }
                 });
                 trial_decodes.push(quote! {
@@ -120,7 +155,6 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         }
     }
 
-    let name_str = union_enum.rust_name.as_str();
     Ok(quote! {
         #[derive(Debug, Clone, PartialEq)]
         pub enum #ident #bounded_generics {
@@ -141,6 +175,13 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
             fn from_baml(
                 v: ::baml_bridge::wire::BamlOutboundValue,
             ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
+                let (selected_type, v) = ::baml_bridge::decode::union_selected(v)?;
+                if let ::std::option::Option::Some(selected_type) = selected_type {
+                    #(#indexed_decodes)*
+                    return ::std::result::Result::Err(
+                        ::baml_bridge::decode::no_union_arm(#name_str, &v),
+                    );
+                }
                 let v = ::baml_bridge::decode::unwrap(v);
                 #(#trial_decodes)*
                 ::std::result::Result::Err(::baml_bridge::decode::no_union_arm(#name_str, &v))

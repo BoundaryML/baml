@@ -129,10 +129,7 @@ internal static class MediaProtocol
         using BamlSafeHandle original = api.CreateMediaOwner(contract.MediaType, payload);
         BamlSafeHandle transferred = original.CloneOwned();
         ownership.AddTransfer(transferred);
-        var @class = new InboundClassValue
-        {
-            ClassTy = new BamlTyClass { Name = contract.ClassIdentity },
-        };
+        var @class = new InboundClassValue();
         @class.Fields.Add(new InboundMapEntry
         {
             StringKey = "_data",
@@ -145,8 +142,26 @@ internal static class MediaProtocol
                 },
             },
         });
-        return new InboundValue { ClassValue = @class };
+        return new InboundValue
+        {
+            ValueType = new BamlTy
+            {
+                Media = new BamlTyMedia { Kind = MediaKind(contract.MediaType) },
+            },
+            ClassValue = @class,
+        };
     }
+
+    private static BamlTyMediaKind MediaKind(MediaTypeEnum mediaType) => mediaType switch
+    {
+        MediaTypeEnum.Image => BamlTyMediaKind.Image,
+        MediaTypeEnum.Audio => BamlTyMediaKind.Audio,
+        MediaTypeEnum.Video => BamlTyMediaKind.Video,
+        MediaTypeEnum.Pdf => BamlTyMediaKind.Pdf,
+        _ => throw new BamlProtocolException(
+            "A generated media codec produced an unsupported media type.",
+            $"Managed media type {mediaType} has no exact BAML media kind."),
+    };
 
     private static MediaContract Contract(MediaTypeEnum mediaType) => mediaType switch
     {

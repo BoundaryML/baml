@@ -852,6 +852,13 @@ internal static unsafe class Program
             encodedList.ListValue.Values.Count == 1
             && encodedList.ListValue.Values[0].StringValue == "owned",
             "list encode did not take an owned snapshot");
+        InboundValue encodedTypedList = PrimitiveProtocol.Encode(
+            context.List(Array.Empty<BamlGeneratedValue>(), stringType.ToByteArray()));
+        Require(
+            encodedTypedList.ValueType?.TyCase == BamlTy.TyOneofCase.List
+            && encodedTypedList.ValueType.List.Item.Equals(stringType)
+            && encodedTypedList.ListValue.Values.Count == 0,
+            "typed list encode did not carry its exact node-local value_type");
 
         var outboundMap = new BamlValueMap
         {
@@ -873,6 +880,17 @@ internal static unsafe class Program
         Require(
             map.Count == 1 && context.ReadInt(map["answer"]) == 42,
             "map decode did not take an owned snapshot");
+        InboundValue encodedTypedMap = PrimitiveProtocol.Encode(
+            context.Map(
+                Array.Empty<KeyValuePair<string, BamlGeneratedValue>>(),
+                stringType.ToByteArray(),
+                intType.ToByteArray()));
+        Require(
+            encodedTypedMap.ValueType?.TyCase == BamlTy.TyOneofCase.Map
+            && encodedTypedMap.ValueType.Map.Key.Equals(stringType)
+            && encodedTypedMap.ValueType.Map.Value.Equals(intType)
+            && encodedTypedMap.MapValue.Entries.Count == 0,
+            "typed map encode did not carry its exact node-local value_type");
         Expect<BamlProtocolException>(() =>
             _ = context.ReadMap(
                 decodedMap,
@@ -947,7 +965,8 @@ internal static unsafe class Program
                 classIdentity,
                 [new("name", context.String("Grace"))]));
         Require(
-            encodedClass.ClassValue.ClassTy.Name == classIdentity
+            encodedClass.ValueType?.TyCase == BamlTy.TyOneofCase.ClassTy
+            && encodedClass.ValueType.ClassTy.Name == classIdentity
             && encodedClass.ClassValue.Fields.Count == 1
             && encodedClass.ClassValue.Fields[0].StringKey == "name",
             "class encode changed");
@@ -1028,8 +1047,80 @@ internal static unsafe class Program
                 context.Int(7)));
         Require(
             encodedUnion.ValueCase == InboundValue.ValueOneofCase.IntValue
-            && encodedUnion.IntValue == 7,
-            "inbound union did not use Canary's payload encoding");
+            && encodedUnion.IntValue == 7
+            && encodedUnion.ValueType?.Equals(intType) == true,
+            "inbound union did not project its payload with the selected exact type");
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.Encode(
+                context.Union(
+                    unionType.ToByteArray(),
+                    unionType.ToByteArray(),
+                    "invalid",
+                    context.Int(7))));
+        BamlTy optionalIntType = new()
+        {
+            Optional = new BamlTyOptional { Inner = intType.Clone() },
+        };
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.Encode(
+                context.Union(
+                    unionType.ToByteArray(),
+                    optionalIntType.ToByteArray(),
+                    "invalid optional",
+                    context.Int(7))));
+
+        BamlOutboundValue indexedUnion = outboundUnion.Clone();
+        indexedUnion.UnionVariantValue.SelectedOptionIndex = 1;
+        indexedUnion.UnionVariantValue.ValueOptionName = "misleading display name";
+        BamlGeneratedUnionValue indexedSelected = context.ReadUnion(
+            PrimitiveProtocol.Decode(indexedUnion),
+            unionType.ToByteArray(),
+            options,
+            [stringType.ToByteArray(), intType.ToByteArray()]);
+        Require(
+            indexedSelected.CaseIndex == 1
+            && context.ReadInt(indexedSelected.Value) == 7,
+            "outbound selected_option_index did not override the display-only option name");
+
+        BamlTy stringListType = new()
+        {
+            List = new BamlTyList { Item = stringType.Clone() },
+        };
+        BamlTy intListType = new()
+        {
+            List = new BamlTyList { Item = intType.Clone() },
+        };
+        BamlTy nullableListUnion = new() { Union = new BamlTyUnion() };
+        nullableListUnion.Union.Options.Add(
+            PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveNull));
+        nullableListUnion.Union.Options.Add(stringListType.Clone());
+        nullableListUnion.Union.Options.Add(intListType.Clone());
+        var indexedEmptyList = new BamlOutboundValue
+        {
+            UnionVariantValue = new BamlValueUnionVariant
+            {
+                SelfType = nullableListUnion,
+                ValueOptionName = "string[]",
+                SelectedOptionIndex = 2,
+                Value = new BamlOutboundValue
+                {
+                    ListValue = new BamlValueList { ItemType = intType.Clone() },
+                },
+            },
+        };
+        BamlGeneratedUnionValue compactSelected = context.ReadUnion(
+            PrimitiveProtocol.Decode(indexedEmptyList),
+            indexedEmptyList.UnionVariantValue.SelfType.ToByteArray(),
+            ["string[]", "int[]"],
+            [stringListType.ToByteArray(), intListType.ToByteArray()]);
+        Require(
+            compactSelected.CaseIndex == 1
+            && context.ReadList(compactSelected.Value, intType.ToByteArray()).Count == 0,
+            "raw union option index was applied directly instead of resolving through self_type");
+
+        BamlOutboundValue outOfRangeUnion = indexedUnion.Clone();
+        outOfRangeUnion.UnionVariantValue.SelectedOptionIndex = 2;
+        Expect<BamlProtocolException>(() => _ = PrimitiveProtocol.Decode(outOfRangeUnion));
 
         BamlTy reorderedUnionType = new() { Union = new BamlTyUnion() };
         reorderedUnionType.Union.Options.Add(intType.Clone());
@@ -2225,7 +2316,8 @@ internal static unsafe class Program
             InboundValue encoded = MediaProtocol.Encode(api, ownership, input);
             rolledBackKey = encoded.ClassValue.Fields[0].Value.Handle.Key;
             Require(
-                encoded.ClassValue.ClassTy.Name == "baml.media.Image"
+                encoded.ValueType?.TyCase == BamlTy.TyOneofCase.Media
+                    && encoded.ValueType.Media.Kind == BamlTyMediaKind.Image
                     && encoded.ClassValue.Fields.Count == 1
                     && encoded.ClassValue.Fields[0].StringKey == "_data"
                     && encoded.ClassValue.Fields[0].Value.Handle.HandleType

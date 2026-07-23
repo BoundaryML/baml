@@ -578,7 +578,7 @@ internal static class Program
 
     private static BamlOutboundResult ToOutboundError(InboundValue inbound)
     {
-        var value = new BamlValueClass { Name = inbound.ClassValue.ClassTy.Name };
+        var value = new BamlValueClass { Name = inbound.ValueType.ClassTy.Name };
         foreach (InboundMapEntry field in inbound.ClassValue.Fields)
         {
             BamlOutboundValue outbound = field.Value.ValueCase switch

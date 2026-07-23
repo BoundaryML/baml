@@ -28,13 +28,24 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-/// Core value type. No type metadata because not every language has union/class
-/// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
-/// signatures.
+/// Core value type. `value_type` is a sparse exact-type annotation for this
+/// node, never a copy of the enclosing union. Most values omit it and are
+/// decoded from the declared contextual type plus payload shape. Hosts set it
+/// only when shape/context cannot preserve their choice (for example an empty
+/// container, an overlapping union arm, or a literal-vs-primitive selection).
 nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  var valueType: BamlBridge_Cffi_V1_BamlTy {
+    get {_valueType ?? BamlBridge_Cffi_V1_BamlTy()}
+    set {_valueType = newValue}
+  }
+  /// Returns true if `valueType` has been explicitly set.
+  var hasValueType: Bool {self._valueType != nil}
+  /// Clears the value of `valueType`. Subsequent reads from it will return its default value.
+  mutating func clearValueType() {self._valueType = nil}
 
   var value: BamlBridge_Cffi_V1_InboundValue.OneOf_Value? = nil
 
@@ -159,6 +170,8 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
   }
 
   init() {}
+
+  fileprivate var _valueType: BamlBridge_Cffi_V1_BamlTy? = nil
 }
 
 nonisolated struct BamlBridge_Cffi_V1_InboundListValue: Sendable {
@@ -255,23 +268,9 @@ nonisolated struct BamlBridge_Cffi_V1_InboundClassValue: Sendable {
 
   var fields: [BamlBridge_Cffi_V1_InboundMapEntry] = []
 
-  /// The instance's class as a nominal type: `class_ty.name` is the FQN used to
-  /// bind the class, and `class_ty.type_args` carries a generic instance's
-  /// concrete args. Always set for a well-formed class value.
-  var classTy: BamlBridge_Cffi_V1_BamlTyClass {
-    get {_classTy ?? BamlBridge_Cffi_V1_BamlTyClass()}
-    set {_classTy = newValue}
-  }
-  /// Returns true if `classTy` has been explicitly set.
-  var hasClassTy: Bool {self._classTy != nil}
-  /// Clears the value of `classTy`. Subsequent reads from it will return its default value.
-  mutating func clearClassTy() {self._classTy = nil}
-
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
-
-  fileprivate var _classTy: BamlBridge_Cffi_V1_BamlTyClass? = nil
 }
 
 nonisolated struct BamlBridge_Cffi_V1_InboundEnumValue: Sendable {
@@ -373,7 +372,7 @@ fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{c}\u{1}\u{1}")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -381,6 +380,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._valueType) }()
       case 2: try {
         var v: String?
         try decoder.decodeSingularStringField(value: &v)
@@ -517,6 +517,9 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._valueType {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     switch self.value {
     case .stringValue?: try {
       guard case .stringValue(let v)? = self.value else { preconditionFailure() }
@@ -572,6 +575,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_InboundValue, rhs: BamlBridge_Cffi_V1_InboundValue) -> Bool {
+    if lhs._valueType != rhs._valueType {return false}
     if lhs.value != rhs.value {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -731,7 +735,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundMapEntry: SwiftProtobuf.Message,
 
 nonisolated extension BamlBridge_Cffi_V1_InboundClassValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundClassValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}fields\0\u{3}class_ty\0\u{c}\u{1}\u{1}")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}fields\0\u{c}\u{1}\u{1}")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -740,29 +744,20 @@ nonisolated extension BamlBridge_Cffi_V1_InboundClassValue: SwiftProtobuf.Messag
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.fields) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._classTy) }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.fields.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.fields, fieldNumber: 2)
     }
-    try { if let v = self._classTy {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_InboundClassValue, rhs: BamlBridge_Cffi_V1_InboundClassValue) -> Bool {
     if lhs.fields != rhs.fields {return false}
-    if lhs._classTy != rhs._classTy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

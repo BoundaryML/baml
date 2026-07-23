@@ -643,7 +643,19 @@ internal static class PrimitiveProtocol
             list.Values.Add(Encode(item, api, ownership, functionCallId));
         }
 
-        return new InboundValue { ListValue = list };
+        var inbound = new InboundValue { ListValue = list };
+        if (value.ItemTypeMetadata is { Length: > 0 } itemTypeMetadata)
+        {
+            inbound.ValueType = new BamlTy
+            {
+                List = new BamlTyList
+                {
+                    Item = ParseTypeMetadata(itemTypeMetadata, "list item"),
+                },
+            };
+        }
+
+        return inbound;
     }
 
     private static InboundValue EncodeMap(
@@ -662,7 +674,21 @@ internal static class PrimitiveProtocol
             });
         }
 
-        return new InboundValue { MapValue = map };
+        var inbound = new InboundValue { MapValue = map };
+        if (value.KeyTypeMetadata is { Length: > 0 } keyTypeMetadata
+            && value.ValueTypeMetadata is { Length: > 0 } valueTypeMetadata)
+        {
+            inbound.ValueType = new BamlTy
+            {
+                Map = new BamlTyMap
+                {
+                    Key = ParseTypeMetadata(keyTypeMetadata, "map key"),
+                    Value = ParseTypeMetadata(valueTypeMetadata, "map value"),
+                },
+            };
+        }
+
+        return inbound;
     }
 
     private static InboundValue EncodeClass(
@@ -671,14 +697,12 @@ internal static class PrimitiveProtocol
         EncodedCallArguments? ownership,
         ulong functionCallId)
     {
-        var @class = new InboundClassValue
-        {
-            ClassTy = new BamlTyClass { Name = value.ReadClassIdentityForEncode() },
-        };
+        var classType = new BamlTyClass { Name = value.ReadClassIdentityForEncode() };
         foreach (byte[] metadata in value.ReadClassTypeArgumentsForEncode())
         {
-            @class.ClassTy.TypeArgs.Add(ParseTypeMetadata(metadata, "class type argument"));
+            classType.TypeArgs.Add(ParseTypeMetadata(metadata, "class type argument"));
         }
+        var @class = new InboundClassValue();
         foreach ((string name, BamlGeneratedValue field) in value.ReadClassFields())
         {
             @class.Fields.Add(new InboundMapEntry
@@ -688,7 +712,11 @@ internal static class PrimitiveProtocol
             });
         }
 
-        return new InboundValue { ClassValue = @class };
+        return new InboundValue
+        {
+            ValueType = new BamlTy { ClassTy = classType },
+            ClassValue = @class,
+        };
     }
 
     private static InboundValue EncodeEnum(BamlGeneratedValue value) =>
@@ -705,8 +733,28 @@ internal static class PrimitiveProtocol
         BamlGeneratedValue value,
         NativeApi? api,
         EncodedCallArguments? ownership,
-        ulong functionCallId) =>
-        Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
+        ulong functionCallId)
+    {
+        InboundValue encoded =
+            Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
+        if (encoded.ValueType is null
+            && value.UnionSelectedTypeMetadata is { Length: > 0 } selectedTypeMetadata)
+        {
+            BamlTy selectedType =
+                ParseTypeMetadata(selectedTypeMetadata, "selected union option");
+            if (selectedType.TyCase is BamlTy.TyOneofCase.Union
+                or BamlTy.TyOneofCase.Optional)
+            {
+                throw new BamlProtocolException(
+                    "A generated union codec selected a non-concrete inbound type.",
+                    "InboundValue.value_type must identify the selected value node, not a union or optional shell.");
+            }
+
+            encoded.ValueType = selectedType;
+        }
+
+        return encoded;
+    }
 
     private static InboundValue EncodeHandle(
         global::Baml.BamlHandle value,
@@ -1016,13 +1064,6 @@ internal static class PrimitiveProtocol
         int depth)
     {
         ArgumentNullException.ThrowIfNull(union);
-        if (string.IsNullOrEmpty(union.ValueOptionName))
-        {
-            throw new BamlProtocolException(
-                "The native bridge returned a union without an active option identity.",
-                $"Union value_option_name was empty at {path}.");
-        }
-
         if (union.Value is null)
         {
             throw new BamlProtocolException(
@@ -1031,18 +1072,64 @@ internal static class PrimitiveProtocol
         }
 
         byte[] selfType = Metadata(union.SelfType, path, "union self");
+        byte[]? selectedType = SelectedUnionType(union, path);
+        if (selectedType is null && string.IsNullOrEmpty(union.ValueOptionName))
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a union without an active option identity.",
+                $"Union value_option_name and selected_option_index were both absent at {path}.");
+        }
+
+        string selectedDisplayName = string.IsNullOrEmpty(union.ValueOptionName)
+            ? union.HasSelectedOptionIndex
+                ? $"option {union.SelectedOptionIndex}"
+                : "selected option"
+            : union.ValueOptionName;
         BamlGeneratedValue payload = Decode(
             union.Value,
-            $"{path}<{union.ValueOptionName}>",
+            $"{path}<{selectedDisplayName}>",
             ownership,
             api,
             budget,
             depth + 1);
         return BamlGeneratedValue.CreateUnion(
             selfType,
+            selectedType,
             union.ValueOptionName,
             payload,
             path);
+    }
+
+    private static byte[]? SelectedUnionType(BamlValueUnionVariant union, string path)
+    {
+        if (!union.HasSelectedOptionIndex)
+        {
+            return null;
+        }
+
+        if (union.SelfType?.TyCase != BamlTy.TyOneofCase.Union)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned an indexed union without a union self type.",
+                $"Union self_type at {path} was {union.SelfType?.TyCase.ToString() ?? "absent"}.");
+        }
+
+        uint selectedIndex = union.SelectedOptionIndex;
+        if (selectedIndex >= union.SelfType.Union.Options.Count)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned an out-of-range union option index.",
+                $"Union selected_option_index {selectedIndex} at {path} is outside self_type's {union.SelfType.Union.Options.Count} option(s).");
+        }
+
+        BamlTy selectedType = union.SelfType.Union.Options[(int)selectedIndex].Clone();
+        while (selectedType.TyCase == BamlTy.TyOneofCase.Optional
+            && selectedType.Optional?.Inner is not null)
+        {
+            selectedType = selectedType.Optional.Inner.Clone();
+        }
+
+        return selectedType.ToByteArray();
     }
 
     private static BamlGeneratedValue DecodeLiteral(BamlLiteralValue literal, string path)

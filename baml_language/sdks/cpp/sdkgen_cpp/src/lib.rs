@@ -1785,6 +1785,10 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "\ntemplate <>\nstruct codec<{q}> {{\n  \
+             static detail::pb::BamlTy baml_ty() {{\n    \
+             detail::pb::BamlTy ty;\n    \
+             ty.mutable_enum_()->set_name(\"{fqn}\");\n    \
+             return ty;\n  }}\n  \
              static void encode(detail::pb::InboundValue& value_msg, {q} v) {{\n    \
              auto* e = value_msg.mutable_enum_value();\n    \
              e->set_name(\"{fqn}\");\n    \
@@ -1832,10 +1836,15 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             // not a nominal type the engine can bind a TypeVar to).
             let inner = &c.fields[0].ty;
             let field = c.fields[0].name.identifier();
+            let fqn = c.name.wire();
             buf.push_str("\ntemplate <>\n");
             let _ = writeln!(
                 buf,
                 "struct codec<{q}> {{\n  \
+                 static detail::pb::BamlTy baml_ty() {{\n    \
+                   detail::pb::BamlTy ty;\n    \
+                   ty.mutable_type_alias()->set_name(\"{fqn}\");\n    \
+                   return ty;\n  }}\n  \
                  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
                  codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
                  static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
@@ -1848,6 +1857,13 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
 
         buf.push_str("\ntemplate <>\n");
         let _ = writeln!(buf, "struct codec<{q}> {{");
+        let _ = writeln!(
+            buf,
+            "  static detail::pb::BamlTy baml_ty() {{\n    \
+             detail::pb::BamlTy ty;\n    \
+             ty.mutable_class_ty()->set_name(\"{fqn}\");\n    \
+             return ty;\n  }};"
+        );
         let _ = writeln!(
             buf,
             "  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
@@ -1866,7 +1882,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         let _ = writeln!(
             buf,
-            "    cls->mutable_class_ty()->set_name(\"{fqn}\");\n  }}",
+            "    value_msg.mutable_value_type()->mutable_class_ty()->set_name(\"{fqn}\");\n  }}",
         );
         // Decode: strict field mapping (extra field or missing field = error,
         // pydantic extra="forbid" parity), FQN-checked for precise

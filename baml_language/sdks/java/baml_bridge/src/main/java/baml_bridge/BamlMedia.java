@@ -7,12 +7,10 @@ package baml_bridge;
  * class composes a single {@link BamlHandle} (the engine-side {@code Adt(Media)}
  * row) and knows its BAML stdlib FQN.
  *
- * <p>Inbound encode wraps a media value as
- * {@code class_value(fqn, { _data: handle })} with a freshly cloned wire key
+ * <p>Inbound encode uses an exact media {@code value_type} plus a class-shaped
+ * payload containing {@code { _data: handle }} with a freshly cloned wire key
  * (see {@code ProtoWriter}); outbound decode reconstructs the wrapper from the
- * decoded handle (see {@code ProtoReader}). This mirrors {@code bridge_python}'s
- * media PyO3 types, which compose a {@code BamlPyHandle} and encode the same
- * {@code _data} wrapper.
+ * decoded handle (see {@code ProtoReader}).
  */
 public interface BamlMedia {
     /** The engine handle backing this media value. */

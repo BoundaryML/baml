@@ -49,6 +49,14 @@ final class TestUnions: XCTestCase {
         XCTAssertEqual(try Baml.unions.round_trip_union_container(c: c), c)
     }
 
+    func test_round_trip_empty_list_preserves_selected_arm() throws {
+        let strings: BamlUnion2<[String], [Int]> = .t0([])
+        let ints: BamlUnion2<[String], [Int]> = .t1([])
+
+        XCTAssertEqual(try Baml.unions.round_trip_str_or_int_list(x: strings), strings)
+        XCTAssertEqual(try Baml.unions.round_trip_str_or_int_list(x: ints), ints)
+    }
+
     // Swift-specific: the three consumption tiers over one result.
     func test_consumption_surfaces() throws {
         let result = try Baml.unions.round_trip_dedup(u: .init("hi"))  // type-directed init

@@ -55,6 +55,13 @@ function ReturnNull() -> null {
 function ReturnFloat(f: float) -> float {
     f
 }
+
+function ClassifyAmbiguousEmptyList(value: int[] | string[]) -> string {
+    match (value) {
+        let ints: int[] => "ints",
+        let strings: string[] => "strings",
+    }
+}
 """
 
 
@@ -169,6 +176,12 @@ class TestCallFunctionSync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
+
+    def test_raw_empty_list_uses_dynamic_union_default(self):
+        """A raw Python [] selects the first matching list arm."""
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": []})
+        assert result.result() == "ints"
 
     def test_missing_argument_raises(self):
         """Missing required argument raises an error.

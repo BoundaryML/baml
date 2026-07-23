@@ -822,7 +822,23 @@ fn render_callable_pair(
         arg_exprs.push("this".to_string());
     }
     param_names_java.extend(required.iter().map(|a| format!("{:?}", a.name.as_str())));
-    arg_exprs.extend(required.iter().map(|a| java_identifier(a.name.as_str())));
+    for a in &required {
+        let value = java_identifier(a.name.as_str());
+        let mut type_vars = Vec::new();
+        crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
+        let encoded = if type_vars.is_empty() && needs_inbound_descriptor(&a.ty, ctx) {
+            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
+                Some(expr) => format!(
+                    "new baml_bridge.BamlTypedValue({value}, {})",
+                    pool.intern(expr)
+                ),
+                None => value,
+            }
+        } else {
+            value
+        };
+        arg_exprs.push(encoded);
+    }
 
     let mut ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
     let mut ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
@@ -940,6 +956,7 @@ fn render_callable_pair(
             receiver_guard.as_deref(),
             ctx,
             sink,
+            pool,
         ));
     }
 
@@ -1190,6 +1207,7 @@ fn render_optional_configurator(
     receiver_guard: Option<&str>,
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
+    pool: &mut DescriptorPool,
 ) -> String {
     // A generic callable's optional arg may reference class/method type
     // vars; the (static) opts class must then re-declare exactly those, so
@@ -1261,8 +1279,18 @@ fn render_optional_configurator(
         }
         let wire = a.name.as_str();
         let setter = java_identifier(wire);
+        let mut type_vars = Vec::new();
+        crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
+        let stored = if type_vars.is_empty() && needs_inbound_descriptor(&a.ty, ctx) {
+            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
+                Some(expr) => format!("new baml_bridge.BamlTypedValue(v, {})", pool.intern(expr)),
+                None => "v".to_string(),
+            }
+        } else {
+            "v".to_string()
+        };
         setters.push_str(&format!(
-            "\n        public {opts_ty} {setter}({boxed} v) {{\n            this.$values.put({wire:?}, v);\n            this.$touched.add({wire:?});\n            return this;\n        }}\n"
+            "\n        public {opts_ty} {setter}({boxed} v) {{\n            this.$values.put({wire:?}, {stored});\n            this.$touched.add({wire:?});\n            return this;\n        }}\n"
         ));
     }
 
@@ -1270,6 +1298,17 @@ fn render_optional_configurator(
         "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
     ));
     out
+}
+
+fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
+    match ty {
+        Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) => true,
+        Ty::Class(_, args, _) => !args.is_empty(),
+        Ty::TypeAlias(name, _) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
+            *recursive || needs_inbound_descriptor(resolved, ctx)
+        }),
+        _ => false,
+    }
 }
 
 /// Render a generated host-callable `@FunctionalInterface` (design point E):
