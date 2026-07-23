@@ -2708,8 +2708,10 @@ mod tests {
     use std::collections::{BTreeMap, HashSet};
 
     use super::{CodegenPaths, emit_owned_struct, emit_view_struct};
-    use crate::rust_ident::rust_field_ident;
-    use crate::types::{BamlType, NativeClassDef, NativeClassField};
+    use crate::{
+        rust_ident::rust_field_ident,
+        types::{BamlType, NativeClassDef, NativeClassField},
+    };
 
     #[test]
     fn generated_keyword_fields_keep_original_vm_keys() {
