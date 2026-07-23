@@ -1517,7 +1517,7 @@ impl LoweringContext {
         //   4. else-branch (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR), optional
         //
         // The scrutinee can appear as either a wrapper node (PATH_EXPR,
-        // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
+        // BINARY_EXPR, etc.) or as a bare token (single identifier / literal), so
         // we mirror `lower_if_expr` and walk children-with-tokens.
         self.warn_direct_const_introducers(node);
 

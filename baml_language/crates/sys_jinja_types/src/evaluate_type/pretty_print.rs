@@ -17,9 +17,11 @@ fn pretty_print_call_args(args: &[CallArg]) -> String {
 }
 
 fn pretty_print_optional_call_args(args: &[CallArg]) -> String {
-    (!args.is_empty())
-        .then(|| format!("({})", pretty_print_call_args(args)))
-        .unwrap_or_default()
+    if args.is_empty() {
+        String::new()
+    } else {
+        format!("({})", pretty_print_call_args(args))
+    }
 }
 
 pub(super) fn pretty_print(expr: &Expr) -> String {
