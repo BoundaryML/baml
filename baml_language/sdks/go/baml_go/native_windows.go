@@ -12,10 +12,16 @@ package baml_go
 
 extern void bamlGoResultCallback(uint32_t call_id, int8_t *content, size_t length);
 extern void bamlGoUnhandledSpawnErrorCallback(int8_t *content, size_t length, int32_t cancelled);
+extern void bamlGoHostDispatch(uint64_t host_value_key, uint32_t call_id, uint8_t *args, size_t length);
+extern void bamlGoHostRelease(uint64_t host_value_key);
 
 static void baml_go_result_callback(uint32_t call_id, const int8_t *content, size_t length) {
 	bamlGoResultCallback(call_id, (int8_t *)content, length);
 }
+static void baml_go_host_dispatch(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length) {
+	bamlGoHostDispatch(host_value_key, call_id, (uint8_t *)args, length);
+}
+static void baml_go_host_release(uint64_t host_value_key) { bamlGoHostRelease(host_value_key); }
 
 static void baml_go_unhandled_spawn_error_callback(const int8_t *content, size_t length, int32_t cancelled) {
 	bamlGoUnhandledSpawnErrorCallback((int8_t *)content, length, cancelled);
@@ -100,12 +106,26 @@ static BamlBuffer baml_register_go_bridge(const uint8_t *sdk_version, size_t len
 }
 static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) { return baml_api->initialize_runtime_from_bytecode(bytecode, length); }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
-static void baml_register_go_callback(void) { baml_api->register_callback(baml_go_result_callback); }
+static void baml_register_go_callback(void) {
+	baml_api->register_callback(baml_go_result_callback);
+	baml_api->register_host_dispatch_callback(baml_go_host_dispatch);
+	baml_api->register_host_release_callback(baml_go_host_release);
+}
 static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->register_unhandled_spawn_error_callback(baml_go_unhandled_spawn_error_callback); }
 static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static void baml_call_function(const char *name, const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(name, args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
+static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) { baml_api->complete_host_call(call_id, is_error, (const int8_t *)content, length); }
+static uint32_t baml_handle_clone_go(uint64_t key, uint64_t *out_key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_clone(key, out_key); }
+static uint32_t baml_handle_release_go(uint64_t key) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->handle_release(key); }
+static uint32_t baml_media_from_url_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_url(kind, value, mime_type, out_key, out_handle_type); }
+static uint32_t baml_media_from_file_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_file(kind, value, mime_type, out_key, out_handle_type); }
+static uint32_t baml_media_from_base64_go(int32_t kind, const char *value, const char *mime_type, uint64_t *out_key, int32_t *out_handle_type) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_from_base64(kind, value, mime_type, out_key, out_handle_type); }
+static uint32_t baml_media_url_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_url(key, handle_type, out); }
+static uint32_t baml_media_file_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_file(key, handle_type, out); }
+static uint32_t baml_media_base64_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_base64(key, handle_type, out); }
+static uint32_t baml_media_mime_type_go(uint64_t key, int32_t handle_type, BamlBuffer *out) { return baml_api == NULL ? BAML_CFFI_STATUS_INTERNAL_ERROR : baml_api->media_mime_type(key, handle_type, out); }
 */
 import "C"
 
@@ -114,6 +134,8 @@ import (
 	"runtime"
 	"syscall"
 	"unsafe"
+
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 func nativeOpen(path string) (string, error) {
@@ -198,6 +220,90 @@ func nativeCancel(callID uint64) int32 {
 	return int32(C.baml_cancel_function_call(C.uint64_t(callID)))
 }
 
+func nativeCompleteHostCall(callID uint32, isError bool, content []byte) {
+	var pointer *C.uint8_t
+	if len(content) != 0 {
+		pointer = (*C.uint8_t)(unsafe.Pointer(&content[0]))
+	}
+	flag := C.int32_t(0)
+	if isError {
+		flag = 1
+	}
+	C.baml_complete_host_call_go(C.uint32_t(callID), flag, pointer, C.size_t(len(content)))
+}
+
+func nativeHandleClone(key uint64) (uint64, error) {
+	var cloned C.uint64_t
+	status := uint32(C.baml_handle_clone_go(C.uint64_t(key), &cloned))
+	if err := nativeHandleStatus("clone BAML handle", status); err != nil {
+		return 0, err
+	}
+	if cloned == 0 {
+		return 0, fmt.Errorf("clone BAML handle: runtime returned a zero handle")
+	}
+	return uint64(cloned), nil
+}
+
+func nativeHandleRelease(key uint64) { _ = C.baml_handle_release_go(C.uint64_t(key)) }
+
+func nativeMediaConstruct(operation mediaConstructor, kind cffi.MediaTypeEnum, value string, mimeType *string) (uint64, cffi.BamlHandleType, error) {
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cValue))
+	var cMimeType *C.char
+	if mimeType != nil {
+		cMimeType = C.CString(*mimeType)
+		defer C.free(unsafe.Pointer(cMimeType))
+	}
+	var key C.uint64_t
+	var handleType C.int32_t
+	var status C.uint32_t
+	switch operation {
+	case mediaFromURL:
+		status = C.baml_media_from_url_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
+	case mediaFromFile:
+		status = C.baml_media_from_file_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
+	case mediaFromBase64:
+		status = C.baml_media_from_base64_go(C.int32_t(kind), cValue, cMimeType, &key, &handleType)
+	default:
+		return 0, cffi.BamlHandleType_HANDLE_UNSPECIFIED, fmt.Errorf("unknown BAML media constructor %d", operation)
+	}
+	if err := nativeHandleStatus(operation.String(), uint32(status)); err != nil {
+		return 0, cffi.BamlHandleType_HANDLE_UNSPECIFIED, err
+	}
+	return uint64(key), cffi.BamlHandleType(handleType), nil
+}
+
+func nativeMediaAccess(operation mediaAccessor, key uint64, handleType cffi.BamlHandleType) (*string, error) {
+	var buffer C.BamlBuffer
+	var status C.uint32_t
+	switch operation {
+	case mediaURL:
+		status = C.baml_media_url_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
+	case mediaFile:
+		status = C.baml_media_file_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
+	case mediaBase64:
+		status = C.baml_media_base64_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
+	case mediaMIMEType:
+		status = C.baml_media_mime_type_go(C.uint64_t(key), C.int32_t(handleType), &buffer)
+	default:
+		return nil, fmt.Errorf("unknown BAML media accessor %d", operation)
+	}
+	if err := nativeHandleStatus(operation.String(), uint32(status)); err != nil {
+		return nil, err
+	}
+	defer C.baml_free_buffer(buffer)
+	hasPointer := buffer.ptr != nil
+	if err := validateNativeMediaBuffer(hasPointer, uint64(buffer.len)); err != nil {
+		return nil, fmt.Errorf("%s: %w", operation, err)
+	}
+	if !hasPointer {
+		return nil, nil
+	}
+	bytes := C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len))
+	value := string(bytes)
+	return &value, nil
+}
+
 func nativeRuntimeTarget() (string, error) {
 	switch runtime.GOARCH {
 	case "amd64":
@@ -224,4 +330,19 @@ func bamlGoResultCallback(callID C.uint32_t, content *C.int8_t, length C.size_t)
 func bamlGoUnhandledSpawnErrorCallback(content *C.int8_t, length C.size_t, cancelled C.int32_t) {
 	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
 	go reportUnhandledSpawnError(payload, cancelled != 0)
+}
+
+//export bamlGoHostDispatch
+func bamlGoHostDispatch(hostValueKey C.uint64_t, callID C.uint32_t, content *C.uint8_t, length C.size_t) {
+	if uint64(length) > uint64(^uint32(0)>>1) {
+		go completeHostCallFailure(uint32(callID), fmt.Errorf("BAML host-call payload is too large: %d bytes", uint64(length)), "")
+		return
+	}
+	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
+	dispatchHostCall(uint64(hostValueKey), uint32(callID), payload)
+}
+
+//export bamlGoHostRelease
+func bamlGoHostRelease(hostValueKey C.uint64_t) {
+	unregisterHostValue(uint64(hostValueKey))
 }

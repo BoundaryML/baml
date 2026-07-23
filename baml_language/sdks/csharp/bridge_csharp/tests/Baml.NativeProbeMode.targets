@@ -1,0 +1,59 @@
+<Project>
+  <PropertyGroup>
+    <BamlNativeProbePackageId
+      Condition="'$(BamlNativeProbePackageId)' == ''">Baml.Bridge.MultiRidPackageProbe</BamlNativeProbePackageId>
+    <BamlNativeProbePackageVersion
+      Condition="'$(BamlNativeProbePackageVersion)' == ''">0.0.0-b4</BamlNativeProbePackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(BamlNativeProbeMode)' == 'Package'">
+    <PackageReference
+      Include="$(BamlNativeProbePackageId)"
+      Version="[$(BamlNativeProbePackageVersion)]"
+      GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <Target
+    Name="ValidateBamlNativeProbeMode"
+    BeforeTargets="CollectPackageReferences;PrepareForBuild">
+    <Error
+      Condition="'$(BamlNativeProbeMode)' != 'Direct' and '$(BamlNativeProbeMode)' != 'Package'"
+      Text="BamlNativeProbeMode must be set explicitly to Direct or Package." />
+    <Error
+      Condition="'$(BamlNativeProbePackageId)' != 'Baml.Bridge.MultiRidPackageProbe'"
+      Text="BamlNativeProbePackageId is frozen to Baml.Bridge.MultiRidPackageProbe for this evidence gate." />
+    <Error
+      Condition="'$(BamlNativeProbePackageVersion)' != '0.0.0-b4'"
+      Text="BamlNativeProbePackageVersion is frozen to 0.0.0-b4 for this evidence gate." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Direct' and ('$(BamlNativeProbeFeed)' != '' or '$(BAML_NATIVE_PROBE_FEED)' != '')"
+      Text="BamlNativeProbeFeed and BAML_NATIVE_PROBE_FEED must both be empty when BamlNativeProbeMode is Direct." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Package' and ('$(BamlNativeProbeFeed)' == '' or '$(BAML_NATIVE_PROBE_FEED)' == '')"
+      Text="BamlNativeProbeFeed and BAML_NATIVE_PROBE_FEED must both name the exact isolated feed when BamlNativeProbeMode is Package." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Package' and '$(BamlNativeProbeFeed)' != '$(BAML_NATIVE_PROBE_FEED)'"
+      Text="BamlNativeProbeFeed and BAML_NATIVE_PROBE_FEED must identify the same isolated feed." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Package' and '$(BamlNativeProbeFeed)' != '' and !Exists('$(BamlNativeProbeFeed)')"
+      Text="The isolated BamlNativeProbeFeed does not exist: $(BamlNativeProbeFeed)." />
+  </Target>
+
+  <Target
+    Name="ValidateBamlNativeProbeAssets"
+    BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_BamlNativeProbeRestoredVersion
+        Condition="'$(PkgBaml_Bridge_MultiRidPackageProbe)' != ''">$([System.IO.Path]::GetFileName('$(PkgBaml_Bridge_MultiRidPackageProbe)'))</_BamlNativeProbeRestoredVersion>
+    </PropertyGroup>
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Direct' and '$(PkgBaml_Bridge_MultiRidPackageProbe)' != ''"
+      Text="BamlNativeProbeMode is Direct but the restored assets contain $(BamlNativeProbePackageId). Restore again in Direct mode before building." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Package' and '$(PkgBaml_Bridge_MultiRidPackageProbe)' == ''"
+      Text="BamlNativeProbeMode is Package but the restored assets do not contain $(BamlNativeProbePackageId). Restore again in Package mode before building." />
+    <Error
+      Condition="'$(BamlNativeProbeMode)' == 'Package' and '$(PkgBaml_Bridge_MultiRidPackageProbe)' != '' and '$(_BamlNativeProbeRestoredVersion)' != '$(BamlNativeProbePackageVersion)'"
+      Text="BamlNativeProbeMode is Package but the restored $(BamlNativeProbePackageId) version is $(_BamlNativeProbeRestoredVersion), not $(BamlNativeProbePackageVersion). Restore the exact evidence version before building." />
+  </Target>
+</Project>

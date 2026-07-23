@@ -310,13 +310,27 @@ pub fn simplify(
     aliases: &HashMap<TypeName, RuntimeTy>,
     recursive_aliases: &HashSet<TypeName>,
 ) -> RuntimeTy {
-    simplify_impl(ty, aliases, recursive_aliases)
+    simplify_impl(ty, aliases, recursive_aliases, false)
+}
+
+/// Simplify a runtime-materialized SAP parse target.
+///
+/// In addition to [`simplify`], this expands a recursive union alias when it
+/// appears directly as another union's member. This turns `json | null` into a
+/// flat union while retaining recursive `json` references below lists/maps.
+pub fn simplify_parse_target(
+    ty: RuntimeTy,
+    aliases: &HashMap<TypeName, RuntimeTy>,
+    recursive_aliases: &HashSet<TypeName>,
+) -> RuntimeTy {
+    simplify_impl(ty, aliases, recursive_aliases, true)
 }
 
 fn simplify_impl(
     ty: RuntimeTy,
     aliases: &HashMap<TypeName, RuntimeTy>,
     recursive: &HashSet<TypeName>,
+    expand_recursive_alias_unions: bool,
 ) -> RuntimeTy {
     match ty {
         RuntimeTy::TypeAlias(ref name, ref outer_attr) => {
@@ -327,22 +341,44 @@ fn simplify_impl(
                 // Non-recursive: expand, merge attrs (nesting), simplify result.
                 let merged = merge_attr_nested(target.attr(), outer_attr);
                 let expanded = target.clone().with_attr(merged);
-                simplify_impl(expanded, aliases, recursive)
+                simplify_impl(expanded, aliases, recursive, expand_recursive_alias_unions)
             } else {
                 // Unknown alias — leave as-is.
                 ty
             }
         }
 
-        RuntimeTy::Union(variants, attr) => simplify_union(variants, attr, aliases, recursive),
+        RuntimeTy::Union(variants, attr) => simplify_union(
+            variants,
+            attr,
+            aliases,
+            recursive,
+            expand_recursive_alias_unions,
+        ),
 
         // Recurse into compound types.
-        RuntimeTy::List(inner, attr) => {
-            RuntimeTy::List(Box::new(simplify_impl(*inner, aliases, recursive)), attr)
-        }
+        RuntimeTy::List(inner, attr) => RuntimeTy::List(
+            Box::new(simplify_impl(
+                *inner,
+                aliases,
+                recursive,
+                expand_recursive_alias_unions,
+            )),
+            attr,
+        ),
         RuntimeTy::Map { key, value, attr } => RuntimeTy::Map {
-            key: Box::new(simplify_impl(*key, aliases, recursive)),
-            value: Box::new(simplify_impl(*value, aliases, recursive)),
+            key: Box::new(simplify_impl(
+                *key,
+                aliases,
+                recursive,
+                expand_recursive_alias_unions,
+            )),
+            value: Box::new(simplify_impl(
+                *value,
+                aliases,
+                recursive,
+                expand_recursive_alias_unions,
+            )),
             attr,
         },
 
@@ -360,27 +396,38 @@ fn simplify_union(
     attr: TyAttr,
     aliases: &HashMap<TypeName, RuntimeTy>,
     recursive: &HashSet<TypeName>,
+    expand_recursive_alias_unions: bool,
 ) -> RuntimeTy {
     // 1. Simplify each variant recursively.
     let variants: Vec<RuntimeTy> = variants
         .into_iter()
-        .map(|v| simplify_impl(v, aliases, recursive))
+        .map(|v| simplify_impl(v, aliases, recursive, expand_recursive_alias_unions))
         .collect();
 
-    // 2. Distribute outer attrs into variants.
+    // 2. A recursive alias may itself be a union. It must stay named under an
+    // indirection such as `json[]`, but when used directly as another union's
+    // member (`json | null`) its immediate variants must be spliced into this
+    // union so SAP never receives an alias-hidden nested union.
+    let variants = if expand_recursive_alias_unions {
+        expand_recursive_union_aliases(variants, aliases, recursive)
+    } else {
+        variants
+    };
+
+    // 3. Distribute outer attrs into variants.
     //    SAP flags: or'd in, kept at union level.
     let (variants, attr) = distribute_attrs(variants, attr);
 
-    // 3. Flatten nested unions.
+    // 4. Flatten nested unions.
     let variants = flatten_union(variants);
 
-    // 4. Deduplicate (attr-aware subtyping).
+    // 5. Deduplicate (attr-aware subtyping).
     let variants = dedup_variants(variants);
 
-    // 5. Push null to end.
+    // 6. Push null to end.
     let variants = null_to_end(variants);
 
-    // 6. Unwrap singleton.
+    // 7. Unwrap singleton.
     if variants.len() == 1 {
         let v = variants.into_iter().next().unwrap();
         // Merge remaining union-level SAP flags onto the single variant.
@@ -389,6 +436,54 @@ fn simplify_union(
     } else {
         RuntimeTy::Union(variants, attr)
     }
+}
+
+fn expand_recursive_union_aliases(
+    variants: Vec<RuntimeTy>,
+    aliases: &HashMap<TypeName, RuntimeTy>,
+    recursive: &HashSet<TypeName>,
+) -> Vec<RuntimeTy> {
+    let mut out = Vec::new();
+    let mut expanding = HashSet::new();
+    for variant in variants {
+        expand_recursive_union_alias_variant(variant, aliases, recursive, &mut expanding, &mut out);
+    }
+    out
+}
+
+fn expand_recursive_union_alias_variant(
+    variant: RuntimeTy,
+    aliases: &HashMap<TypeName, RuntimeTy>,
+    recursive: &HashSet<TypeName>,
+    expanding: &mut HashSet<TypeName>,
+    out: &mut Vec<RuntimeTy>,
+) {
+    let RuntimeTy::TypeAlias(name, reference_attr) = variant else {
+        out.push(variant);
+        return;
+    };
+
+    let Some(RuntimeTy::Union(alias_variants, alias_attr)) = aliases.get(&name) else {
+        out.push(RuntimeTy::TypeAlias(name, reference_attr));
+        return;
+    };
+    if !recursive.contains(&name) || !expanding.insert(name.clone()) {
+        out.push(RuntimeTy::TypeAlias(name, reference_attr));
+        return;
+    }
+
+    let inherited_attr = merge_attr_nested(alias_attr, &reference_attr);
+    for member in alias_variants {
+        let member_attr = merge_attr_nested(member.attr(), &inherited_attr);
+        let member = simplify_impl(
+            member.clone().with_attr(member_attr),
+            aliases,
+            recursive,
+            true,
+        );
+        expand_recursive_union_alias_variant(member, aliases, recursive, expanding, out);
+    }
+    expanding.remove(&name);
 }
 
 // ---------------------------------------------------------------------------

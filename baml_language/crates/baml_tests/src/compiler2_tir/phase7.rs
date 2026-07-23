@@ -494,3 +494,155 @@ fn early_return_string_null_check() {
     }
     "#);
 }
+
+#[test]
+fn captured_local_is_not_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+
+function f(x: Foo | int) -> int {
+  let task = spawn { x = 0; };
+  match (x) {
+    Foo => x.field,
+    int => x,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("x.field : unknown") && output.contains("expected int, got Foo | int"),
+        "captured local must retain its declared union type:\n{output}"
+    );
+}
+
+#[test]
+fn captured_local_is_not_narrowed_by_condition() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f(x: int?) -> int {
+  let task = spawn { x = null; };
+  if (x != null) {
+    return x;
+  }
+  0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("return x : int | null") && output.contains("expected int, got int | null"),
+        "captured local must not narrow across a condition:\n{output}"
+    );
+}
+
+#[test]
+fn uncaptured_local_is_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+
+function f(x: Foo | int) -> int {
+  match (x) {
+    Foo => x.field,
+    int => x,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("x.field : int") && output.contains("x : int"),
+        "uncaptured local should narrow in each match arm:\n{output}"
+    );
+    assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
+}
+
+#[test]
+fn field_is_not_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+class Box { value: Foo | int }
+
+function f(box: Box) -> int {
+  match (box.value) {
+    Foo => box.value.field,
+    int => box.value,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("box.value.field : unknown")
+            && output.contains("expected int, got Foo | int"),
+        "field access must retain its declared union type:\n{output}"
+    );
+}
+
+#[test]
+fn uncaptured_snapshot_of_captured_local_is_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+
+function f(x: Foo | int) -> int {
+  let task = spawn { x = 0; };
+  let snapshot = x;
+  match (snapshot) {
+    Foo => snapshot.field,
+    int => snapshot,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("snapshot.field : int") && output.contains("snapshot : int"),
+        "uncaptured snapshot should narrow even when its source is captured:\n{output}"
+    );
+    assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
+}
+
+#[test]
+fn destructured_field_local_is_narrowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Bar { value: int }
+class Foo { field: Bar | int }
+
+function f(x: Foo | int) -> int {
+  match (x) {
+    Foo => {
+      let Foo { field } = x;
+      match (field) {
+        Bar => field.value,
+        int => field,
+      }
+    },
+    int => x,
+  }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("field.value : int") && output.contains("field : int"),
+        "destructured field local should narrow in each match arm:\n{output}"
+    );
+    assert!(!output.contains("!!"), "unexpected diagnostics:\n{output}");
+}

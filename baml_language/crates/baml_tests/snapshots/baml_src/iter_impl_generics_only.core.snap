@@ -207,8 +207,11 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
   L2:
     load_var self
     load_field .inner
-    store_var_load_var _2
-    is_type iter_impl_generics_only.core.Iterator<#1, #4>
+    store_var _2
+    load_var _2
+    store_var _3
+    load_var _3
+    narrow_bind iter_impl_generics_only.core.Iterator<#1, #4>, slot=3
     pop_jump_if_false L3
     jump L6
 
@@ -228,14 +231,14 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L5
 
   L4:
-    load_var2 4 1
+    load_var2 5 1
     load_field .func
     call_indirect
     load_type iter_impl_generics_only.core.Iterable<#1, #4>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
-    load_var2 1 5
+    load_var2 1 6
     store_field .inner
     jump L0
 
@@ -244,7 +247,7 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L8
 
   L6:
-    load_var _2
+    load_var _3
     load_type iter_impl_generics_only.core.Iterator<#1, #4>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
@@ -288,8 +291,11 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
   L2:
     load_var self
     load_field .inner
-    store_var_load_var _2
-    is_type iter_impl_generics_only.core.Iterator<#0, #2>
+    store_var _2
+    load_var _2
+    store_var _3
+    load_var _3
+    narrow_bind iter_impl_generics_only.core.Iterator<#0, #2>, slot=3
     pop_jump_if_false L3
     jump L6
 
@@ -314,7 +320,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
-    load_var2 1 5
+    load_var2 1 6
     store_field .inner
     jump L0
 
@@ -323,7 +329,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     jump L8
 
   L6:
-    load_var _2
+    load_var _3
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0

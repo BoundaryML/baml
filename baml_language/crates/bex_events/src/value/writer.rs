@@ -213,10 +213,6 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         &self.sink
     }
 
-    pub fn into_sink(self) -> S {
-        self.sink
-    }
-
     fn store_body(&self, body: Vec<u8>) -> io::Result<(Vec<u8>, Option<BlobRef>)> {
         let Some(blob_store) = &self.blob_store else {
             return Ok((body, None));

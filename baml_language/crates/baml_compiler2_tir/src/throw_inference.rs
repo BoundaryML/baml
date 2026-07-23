@@ -50,10 +50,6 @@ unsafe impl salsa::Update for FunctionThrowSets {
 }
 
 impl FunctionThrowSets {
-    pub fn direct_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
-        self.direct.get(name)
-    }
-
     pub fn transitive_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
         self.transitive.get(name)
     }

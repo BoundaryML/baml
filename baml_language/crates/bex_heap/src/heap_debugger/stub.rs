@@ -1,4 +1,4 @@
-use bex_vm_types::{HeapPtr, Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object};
 
 use crate::BexHeap;
 
@@ -61,9 +61,6 @@ impl BexHeap {
     #[inline]
     pub fn verify_quick(&self) {}
 
-    #[inline]
-    pub fn debug_assert_valid_index(&self, _idx: HeapPtr) {}
-
     /// Create a HeapPtr from a raw pointer.
     /// In non-debug mode, just wraps the pointer.
     #[inline]
@@ -88,10 +85,6 @@ impl BexHeap {
     #[allow(dead_code)]
     pub(crate) fn heap_epoch(&self) -> u32 {
         self.debug_state().epoch()
-    }
-
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw(raw)
     }
 
     pub(crate) fn placeholder_object(&self) -> Object {

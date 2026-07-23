@@ -75,6 +75,7 @@ pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
     let _ = write!(
         out,
         "\n\tpublic static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
+         \tpublic static var _bamlType: BamlTypeDescriptor? {{ .enumType(\"{fqn}\") }}\n\n\
          \tpublic func _bamlEncode() -> BamlInboundValue {{\n\
          \t\t.baml_enum(\"{fqn}\", rawValue)\n\
          \t}}\n\n\
@@ -171,11 +172,27 @@ pub(crate) fn render_class(
         .map(|f| format!("(\"{}\", {})", f.name.trim_matches('`'), f.name))
         .collect::<Vec<_>>()
         .join(", ");
+    let type_arguments = if class.generic_params.is_empty() {
+        "[]".to_string()
+    } else {
+        format!(
+            "[{}]",
+            class
+                .generic_params
+                .iter()
+                .map(|p| format!("{}._bamlType", escape_ident(p.as_str())))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     let _ = write!(
         out,
         "\n\tpublic static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
+         \tpublic static var _bamlType: BamlTypeDescriptor? {{\n\
+         \t\t.classType(\"{fqn}\", typeArguments: {type_arguments})\n\
+         \t}}\n\n\
          \tpublic func _bamlEncode() -> BamlInboundValue {{\n\
-         \t\t.baml_class(\"{fqn}\", [{field_pairs}])\n\
+         \t\t.baml_class(\"{fqn}\", typeArguments: {type_arguments}, [{field_pairs}])\n\
          \t}}\n"
     );
 
@@ -565,8 +582,11 @@ pub(crate) fn render_recursive_union_alias(
     out.push_str("\t\t}\n\t}\n\n");
 
     out.push_str("\tpublic func _bamlEncode() -> BamlInboundValue {\n\t\tswitch self {\n");
-    for i in 0..n {
-        let _ = writeln!(out, "\t\tcase .t{i}(let v): return v._bamlEncode()");
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "\t\tcase .t{i}(let v): return v._bamlEncode()._bamlAnnotatingSelectedType({ty}._bamlType)"
+        );
     }
     out.push_str("\t\t}\n\t}\n\n");
 
@@ -574,6 +594,18 @@ pub(crate) fn render_recursive_union_alias(
         out,
         "\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{"
     );
+    out.push_str("\t\tif let selected = try v.unionSelectedType() {\n");
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "\t\t\tif {ty}._bamlDecodeType == selected {{ return .t{i}(try {ty}._bamlDecode(v)) }}"
+        );
+    }
+    let _ = writeln!(
+        out,
+        "\t\t\tthrow BamlDecodeError.typeMismatch(expected: \"{name}\", got: \"selected type not present in host union\")"
+    );
+    out.push_str("\t\t}\n");
     out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
     for (i, arm) in arms.iter().enumerate() {
         if let Ty::Class(class_name, _, _) = arm {

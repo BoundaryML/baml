@@ -76,13 +76,9 @@ class TestUnions {
 
     @Test
     void test_round_trip_str_or_int_list() {
-        // Differently-typed list arms: `string[] | int[]` -> Union2<List<String>,
-        // List<Long>> (string[] = Arm0, int[] = Arm1). A non-empty list PROVES
-        // its element type on the wire (BamlValueList.item_type), so it lands on
-        // the type-faithful arm — NOT merely the first-declared list arm. This is
-        // the union-arm-selection fix: pre-fix the decoder discarded item_type, so
-        // every list matched the FIRST list arm (an int[] wrongly decoded as
-        // string[]/Arm0).
+        // Differently-typed list arms: the generated arm wrapper selects the
+        // contextual list type. The encoder places that exact type on the list
+        // node, so neither non-empty nor empty values depend on element inference.
         assertEquals(
                 new Union2.Arm1<List<String>, List<Long>>(List.of(1L, 2L, 3L)),
                 Fns.round_trip_str_or_int_list(
@@ -91,19 +87,14 @@ class TestUnions {
                 new Union2.Arm0<List<String>, List<Long>>(List.of("a", "b")),
                 Fns.round_trip_str_or_int_list(
                         new Union2.Arm0<List<String>, List<Long>>(List.of("a", "b"))));
-        // An EMPTY list is assignable to both arms. A generic union arm unwraps
-        // to a bare value inbound (no element type), so the input arm is
-        // irrelevant; the engine resolves the bare `[]` against the union and
-        // canonicalizes it to the FIRST declared arm — string[] — emitting
-        // item_type=string on the wire (observed empirically). So it round-trips
-        // as Arm0(string[]) whichever arm wrapped it. This is the truthful engine
-        // contract, provable from the wire's item_type (not a Java-side guess).
+        // Empty containers are the regression case: payload shape alone cannot
+        // distinguish these arms, so each must retain its host-selected identity.
         assertEquals(
                 new Union2.Arm0<List<String>, List<Long>>(List.of()),
                 Fns.round_trip_str_or_int_list(
                         new Union2.Arm0<List<String>, List<Long>>(List.of())));
         assertEquals(
-                new Union2.Arm0<List<String>, List<Long>>(List.of()),
+                new Union2.Arm1<List<String>, List<Long>>(List.of()),
                 Fns.round_trip_str_or_int_list(
                         new Union2.Arm1<List<String>, List<Long>>(List.of())));
     }

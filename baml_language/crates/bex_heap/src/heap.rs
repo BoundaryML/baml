@@ -23,7 +23,7 @@ use std::{
 
 use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, ObjectIndex, WriteBarrier};
+use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -449,12 +449,6 @@ impl BexHeap {
         self.compile_time.len()
     }
 
-    /// Check if an index refers to a compile-time object.
-    #[inline]
-    pub fn is_compile_time(&self, idx: ObjectIndex) -> bool {
-        idx.into_raw() < self.compile_time.len()
-    }
-
     /// Check if a pointer refers to a compile-time object.
     ///
     /// Returns true if the pointer falls within the compile_time Vec's memory range.
@@ -750,25 +744,6 @@ impl BexHeap {
         None
     }
 
-    /// Convert a runtime space index to a global ObjectIndex.
-    #[inline]
-    pub fn runtime_to_global(&self, runtime_idx: usize) -> ObjectIndex {
-        self.make_object_index(self.compile_time.len() + runtime_idx)
-    }
-
-    /// Convert a global ObjectIndex to a runtime space index.
-    /// Returns None if this is a compile-time object.
-    #[inline]
-    pub fn global_to_runtime(&self, idx: ObjectIndex) -> Option<usize> {
-        let raw = idx.into_raw();
-        let ct_len = self.compile_time.len();
-        if raw >= ct_len {
-            Some(raw - ct_len)
-        } else {
-            None
-        }
-    }
-
     /// Get the TLAB chunk size.
     pub fn tlab_size(&self) -> usize {
         self.tlab_size
@@ -807,31 +782,15 @@ impl BexHeap {
         }
     }
 
-    /// Get a mutable reference to a runtime object in Gen0.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access to this object.
-    #[inline]
-    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
-    pub unsafe fn get_runtime_object_mut(&self, runtime_idx: usize) -> &mut Object {
-        // SAFETY: Caller ensures exclusive access; Gen0 holds all runtime allocations
-        unsafe { &mut *(*self.gen0.get()).get_ptr(runtime_idx) }
-    }
-
     /// Get the current number of objects in the heap (compile-time + all
     /// runtime generations).
-    pub fn len(&self) -> usize {
+    #[cfg(any(test, feature = "heap_debug"))]
+    pub(crate) fn len(&self) -> usize {
         // SAFETY: Reading len is safe on each space (AtomicUsize loads).
         let runtime_len = unsafe {
             (*self.gen0.get()).len() + (*self.gen1.get()).len() + (*self.gen2.get()).len()
         };
         self.compile_time.len() + runtime_len
-    }
-
-    /// Check if the heap is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// Allocate a new TLAB chunk from Gen0 (the nursery).
@@ -916,6 +875,7 @@ impl BexHeap {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure no concurrent writes to this object
     pub unsafe fn get_object(&self, idx: HeapPtr) -> &Object {
+        #[cfg(feature = "heap_debug")]
         self.debug_assert_valid_index(idx);
 
         // SAFETY: HeapPtr points directly to the object

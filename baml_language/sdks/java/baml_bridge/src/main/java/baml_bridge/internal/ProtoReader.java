@@ -103,6 +103,7 @@ public final class ProtoReader {
     // BamlValueUnionVariant
     private static final int UNION_SELF_TYPE = 4;
     private static final int UNION_VALUE = 6;
+    private static final int UNION_SELECTED_OPTION_INDEX = 8;
 
     // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3).
     private static final int HANDLE_KEY = 1;
@@ -604,6 +605,7 @@ public final class ProtoReader {
     private static Object decodeUnionVariant(WireReader r, boolean lenient) {
         byte[] selfTypeBytes = null;
         byte[] innerValueBytes = null;
+        Integer selectedOptionIndex = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -611,6 +613,7 @@ public final class ProtoReader {
             switch (field) {
                 case UNION_SELF_TYPE -> selfTypeBytes = r.readBytes();
                 case UNION_VALUE -> innerValueBytes = r.readBytes();
+                case UNION_SELECTED_OPTION_INDEX -> selectedOptionIndex = (int) r.readVarint();
                 default -> r.skipField(wire);
             }
         }
@@ -626,12 +629,28 @@ public final class ProtoReader {
             List<BamlType> arms = selfTypeArms(new WireReader(selfTypeBytes));
             Object record;
             if (arms != null) {
-                record = TypeRegistry.constructUnionForArms(arms, innerValueBytes, inner);
+                if (selectedOptionIndex != null) {
+                    BamlType rawSelected = selfTypeOptionAt(selfTypeBytes, selectedOptionIndex);
+                    if (rawSelected == null) {
+                        throw new BamlError(
+                                "union selected option index " + selectedOptionIndex
+                                        + " does not name a representable non-null arm",
+                                List.of(), null);
+                    }
+                    BamlType selectedType = hostSelectedType(rawSelected);
+                    inner = decodeWithDesc(innerValueBytes, selectedType, lenient);
+                    record = TypeRegistry.constructUnionForArmsSelected(arms, selectedType, inner);
+                } else {
+                    record = TypeRegistry.constructUnionForArms(arms, innerValueBytes, inner);
+                }
             } else {
                 String fqn = selfTypeFqn(new WireReader(selfTypeBytes));
                 record = fqn == null
                         ? null
-                        : TypeRegistry.constructUnionForFqn(fqn, innerValueBytes, inner);
+                        : selectedOptionIndex == null
+                                ? TypeRegistry.constructUnionForFqn(fqn, innerValueBytes, inner)
+                                : TypeRegistry.constructUnionForFqnAtIndex(
+                                        fqn, selectedOptionIndex, inner);
             }
             if (record != null) {
                 return record;
@@ -1181,7 +1200,9 @@ public final class ProtoReader {
      */
     private static Object decodeUnionWithDesc(byte[] valueBytes, BamlType unionDesc, boolean lenient) {
         byte[] effective = valueBytes;
+        BamlType selectedType = null;
         if (outboundArm(valueBytes) == OV_UNION) {
+            selectedType = extractUnionSelectedType(valueBytes);
             byte[] inner = extractUnionInner(valueBytes);
             if (inner == null) {
                 return null; // null inner ≡ null
@@ -1194,6 +1215,18 @@ public final class ProtoReader {
         }
         List<BamlType> arms = unionDesc.unionOptions();
         int k = arms.size();
+        if (selectedType != null) {
+            int selectedArm = arms.indexOf(selectedType);
+            if (selectedArm < 0) {
+                throw new BamlError(
+                        "wire selected union type " + selectedType
+                                + " is not one of the " + k + " declared arms",
+                        List.of(),
+                        null);
+            }
+            Object inner = decodeWithDesc(effective, selectedType, lenient);
+            return wrapArm(k, selectedArm, inner);
+        }
         for (int i = 0; i < k; i++) {
             if (armMatchesValue(arms.get(i), effective)) {
                 Object inner = decodeWithDesc(effective, arms.get(i), lenient);
@@ -1427,6 +1460,77 @@ public final class ProtoReader {
     private static byte[] extractUnionInner(byte[] valueBytes) {
         byte[] uvBytes = outboundSub(valueBytes, OV_UNION);
         return uvBytes == null ? null : unionInnerValue(new WireReader(uvBytes));
+    }
+
+    private static BamlType extractUnionSelectedType(byte[] valueBytes) {
+        byte[] uvBytes = outboundSub(valueBytes, OV_UNION);
+        if (uvBytes == null) {
+            return null;
+        }
+        WireReader r = new WireReader(uvBytes);
+        Integer selected = null;
+        byte[] selfType = null;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == UNION_SELECTED_OPTION_INDEX) {
+                selected = (int) r.readVarint();
+            } else if (field == UNION_SELF_TYPE) {
+                selfType = r.readBytes();
+            } else {
+                r.skipField(wire);
+            }
+        }
+        if (selected == null || selfType == null) {
+            return null;
+        }
+        BamlType selectedType = selfTypeOptionAt(selfType, selected);
+        if (selectedType == null) {
+            throw new BamlError(
+                    "union selected option index " + selected + " is invalid for self_type",
+                    List.of(), null);
+        }
+        return hostSelectedType(selectedType);
+    }
+
+    /** Resolve an index against the raw union options without dropping null holes. */
+    private static BamlType selfTypeOptionAt(byte[] selfTypeBytes, int selectedIndex) {
+        WireReader ty = new WireReader(selfTypeBytes);
+        while (ty.hasRemaining()) {
+            int tag = ty.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field != TY_UNION) {
+                ty.skipField(wire);
+                continue;
+            }
+            WireReader union = ty.readMessage();
+            int index = 0;
+            while (union.hasRemaining()) {
+                int optionTag = union.readTag();
+                int optionField = WireReader.fieldOf(optionTag);
+                int optionWire = WireReader.wireOf(optionTag);
+                if (optionField == TY_UNION_OPTIONS) {
+                    byte[] option = union.readBytes();
+                    if (index == selectedIndex) {
+                        return BamlType.fromWireTy(option);
+                    }
+                    index++;
+                } else {
+                    union.skipField(optionWire);
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    private static BamlType hostSelectedType(BamlType selected) {
+        while (selected.kind() == BamlType.Kind.OPTIONAL) {
+            selected = selected.optionalInner();
+        }
+        return selected;
     }
 
     private static int indexOf(String[] arr, String want) {

@@ -110,6 +110,23 @@ pub enum TirTypeError {
     UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
+    /// A shorthand property (`{ name }`) could not resolve its implicit value.
+    /// Suggestions are in-scope values with similar names; the diagnostic
+    /// renders them as explicit `name: suggestion` mappings.
+    UnresolvedPropertyShorthand { name: Name, suggestions: Vec<Name> },
+    /// A class constructor shorthand property resolves as a value but its name
+    /// is not an exact class-field match.
+    UnknownClassPropertyShorthand {
+        class_name: crate::ty::QualifiedTypeName,
+        name: Name,
+        suggestions: Vec<Name>,
+    },
+    /// A class constructor explicitly names a field the class does not declare.
+    UnknownClassField {
+        class_name: crate::ty::QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -778,6 +795,66 @@ impl fmt::Display for TirTypeError {
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
             }
+            TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`"
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`. \
+                         Did you mean `{name}: {}`?",
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(|suggestion| format!("{name}: {suggestion}"))
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires an in-scope value named `{name}`. \
+                         Did you mean one of these: `{joined}`?"
+                    )
+                }
+            }
+            TirTypeError::UnknownClassPropertyShorthand {
+                class_name,
+                name,
+                suggestions,
+            } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "property shorthand `{name}` requires class `{}` to have a field named \
+                         `{name}`",
+                        class_name.render_user_facing()
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "class `{}` has no field `{name}` for property shorthand. Did you mean \
+                         `{}: {name}`?",
+                        class_name.render_user_facing(),
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(|field| format!("{field}: {name}"))
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "class `{}` has no field `{name}` for property shorthand. Did you mean \
+                         one of these: `{joined}`?",
+                        class_name.render_user_facing()
+                    )
+                }
+            }
             TirTypeError::DeadCode {
                 unreachable_count, ..
             } => {
@@ -819,7 +896,12 @@ impl fmt::Display for TirTypeError {
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
-            TirTypeError::UnknownClassPatternField {
+            TirTypeError::UnknownClassField {
+                class_name,
+                field_name,
+                suggestions,
+            }
+            | TirTypeError::UnknownClassPatternField {
                 class_name,
                 field_name,
                 suggestions,
@@ -2140,22 +2222,6 @@ impl<'db> InferContext<'db> {
             });
     }
 
-    /// Report a type error at a type annotation location.
-    pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::TypeAnnot(at),
-                related: Vec::new(),
-            });
-    }
-
     /// Report a type error at a raw source span (for type annotations).
     pub fn report_at_span(&self, error: TirTypeError, span: TextRange) {
         self.report_at_span_with_related(error, span, Vec::new());
@@ -2179,19 +2245,6 @@ impl<'db> InferContext<'db> {
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::Span(span),
                 related,
-            });
-    }
-
-    /// Report a type error at a specific statement.
-    pub fn report_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Stmt(at),
-                related: Vec::new(),
             });
     }
 

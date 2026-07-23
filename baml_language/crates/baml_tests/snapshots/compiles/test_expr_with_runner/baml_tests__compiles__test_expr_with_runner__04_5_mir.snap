@@ -16,7 +16,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
     }
 
     bb1: {
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "with quorum", copy _3, copy _4) -> [bb2];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "with quorum", copy _3, copy _4) -> [bb2];
     }
 
     bb2: {

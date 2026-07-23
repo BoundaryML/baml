@@ -368,7 +368,9 @@ jobs:
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
-        run: rustup toolchain install
+        run: |
+          rustup toolchain install
+          rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
         working-directory: baml_language
 
       - uses: Swatinem/rust-cache@v2
@@ -386,7 +388,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:prek python uv"
+          install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
 
       - name: "Cache prek"
         uses: actions/cache@v5

@@ -3,10 +3,11 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function wildcard_type_inference.$init_test_ns_wildcard_type_inference_wildcard_type_inference(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.wildcard_type_inference"
     load_const "json_to_json_is_serialize_only"
     make_closure .<lambda($init_test_ns_wildcard_type_inference_wildcard_type_inference, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

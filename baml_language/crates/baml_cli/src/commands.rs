@@ -30,17 +30,8 @@ pub(crate) struct RuntimeCli {
     #[arg(long = "features", value_name = "FEATURE", global = true)]
     pub features: Vec<String>,
 
-    /// When to use colored / hyperlinked output: auto (default), always, or never.
-    ///
-    /// `auto` enables color on an interactive terminal and disables it when the
-    /// output is piped or captured by a known AI coding agent.
-    #[arg(
-        long,
-        value_enum,
-        default_value_t = crate::paint::ColorChoice::Auto,
-        global = true
-    )]
-    pub color: crate::paint::ColorChoice,
+    #[command(flatten)]
+    pub output: crate::output::OutputArgs,
 
     /// Specifies a subcommand to run.
     #[command(subcommand)]
@@ -73,12 +64,12 @@ pub(crate) enum Commands {
 
     // #[command(about = "Starts a development server")]
     // Dev(baml_runtime::cli::dev::DevArgs),
+    #[command(subcommand, about = "Manage authentication and claim your project")]
+    Auth(crate::auth::AuthCommands),
 
-    // #[command(subcommand, about = "Authenticate with Boundary Cloud", hide = true)]
-    // Auth(crate::auth::AuthCommands),
+    #[command(about = "Start an anonymous project (claim it later with `baml auth login`)")]
+    Login(crate::auth::LoginArgs),
 
-    // #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
-    // Login(crate::auth::LoginArgs),
     #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
 
@@ -210,6 +201,20 @@ impl RuntimeCli {
         // from the parsed matches so it always matches what clap registered.
         cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
 
+        // Preserve whether global test-compatible options were supplied on the
+        // real command line. Test profiles are parsed later, after locating the
+        // project manifest, and direct scalar values must take precedence.
+        if let Commands::Test(test) = &mut cli.command {
+            test.cli_output =
+                crate::test_command::TestOutputOverrides::from_cli_matches(&matches, cli.output);
+            test.cli_logs = matches
+                .subcommand_matches("test")
+                .filter(|matches| {
+                    matches.value_source("logs") == Some(clap::parser::ValueSource::CommandLine)
+                })
+                .map(|_| test.logs);
+        }
+
         cli
     }
 
@@ -230,8 +235,8 @@ impl RuntimeCli {
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
 
-        // Resolve color/hyperlink output once, before any subcommand writes.
-        crate::paint::init_color(self.color);
+        // Resolve every output dial once, before any subcommand writes.
+        crate::output::init(self.output);
 
         // Passive skill warning + background freshness refresh, only on the
         // core authoring commands (init, run, generate, pack) so the nag
@@ -265,6 +270,8 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Auth(args) => args.run(),
+            Commands::Login(args) => args.run(),
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
@@ -297,6 +304,23 @@ mod tests {
 
         let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "lsp".into()]);
         assert_eq!(cli.invoked_subcommand.as_deref(), Some("lsp"));
+    }
+
+    #[test]
+    fn test_command_records_explicit_global_color_override() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "test".into(),
+            "--color".into(),
+            "always".into(),
+        ]);
+        let Commands::Test(args) = cli.command else {
+            panic!("expected test command")
+        };
+        assert_eq!(
+            args.cli_output.color,
+            Some(crate::output::ColorChoice::Always)
+        );
     }
 
     fn help_for(args: &[&str]) -> String {
@@ -362,6 +386,52 @@ mod tests {
     }
 
     #[test]
+    fn output_dials_are_global_and_independent() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "check".into(),
+            "--output-preset".into(),
+            "human".into(),
+            "--color".into(),
+            "never".into(),
+            "--hyperlinks".into(),
+            "always".into(),
+            "--diagnostic-format".into(),
+            "agent".into(),
+        ]);
+
+        assert_eq!(cli.output.preset, crate::output::OutputPreset::Human);
+        assert_eq!(cli.output.color, Some(crate::output::ColorChoice::Never));
+        assert_eq!(
+            cli.output.hyperlinks,
+            Some(crate::output::HyperlinkChoice::Always)
+        );
+        assert_eq!(
+            cli.output.diagnostic_format,
+            Some(crate::output::DiagnosticFormatChoice::Agent)
+        );
+    }
+
+    #[test]
+    fn output_dials_expose_documented_environment_variables() {
+        let command = RuntimeCli::command();
+        let expected = [
+            ("preset", "BAML_OUTPUT_PRESET"),
+            ("color", "BAML_COLOR"),
+            ("hyperlinks", "BAML_HYPERLINKS"),
+            ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
+        ];
+
+        for (id, env) in expected {
+            let arg = command
+                .get_arguments()
+                .find(|arg| arg.get_id() == id)
+                .unwrap_or_else(|| panic!("missing argument {id}"));
+            assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new(env)));
+        }
+    }
+
+    #[test]
     fn playground_help_presents_public_baml_command() {
         let help = help_for(&["baml-cli", "playground", "--help"]);
         assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
@@ -369,6 +439,25 @@ mod tests {
         assert!(help.contains("--from <PATH>"), "{help}");
         assert!(help.contains("--port <PORT>"), "{help}");
         assert!(help.contains("--no-open"), "{help}");
+    }
+
+    #[test]
+    fn test_help_is_a_complete_selector_and_profile_reference() {
+        let help = help_for(&["baml-cli", "test", "--help"]);
+        for required in [
+            "matches anywhere in the full ID",
+            "Repeated includes are OR",
+            "always win",
+            "case-sensitive",
+            "without shell expansion",
+            "Profile names are case-sensitive",
+            "direct CLI includes narrow",
+            "scalar options override",
+            "With no default profile",
+            "Bootstrap options",
+        ] {
+            assert!(help.contains(required), "missing `{required}` in:\n{help}");
+        }
     }
 
     /// `run -e` accepts hyphen-prefixed values without consuming run flags.

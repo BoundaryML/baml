@@ -235,7 +235,7 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
+    use baml_type::{Freshness, Literal, Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
 
     use super::runtime_ty_to_proto_ty;
     use crate::{
@@ -263,6 +263,23 @@ mod tests {
             RuntimeTy::string(),
             RuntimeTy::list(RuntimeTy::int()),
         ));
+    }
+
+    #[test]
+    fn roundtrip_preserves_every_literal_identity() {
+        for literal in [
+            Literal::String("draft".into()),
+            Literal::Int(42),
+            Literal::Bigint(42.into()),
+            Literal::Float("1.25".into()),
+            Literal::Bool(true),
+        ] {
+            assert_roundtrip(&RuntimeTy::Literal(
+                literal,
+                Freshness::Regular,
+                TyAttr::default(),
+            ));
+        }
     }
 
     #[test]

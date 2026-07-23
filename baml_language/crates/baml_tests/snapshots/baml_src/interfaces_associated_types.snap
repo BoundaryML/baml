@@ -3,118 +3,137 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function interfaces_associated_types.$init_test_ns_interfaces_associated_types_interfaces_associated_types(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "associated_type_projection_in_throws_position_runs"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "default_method_self_call_yielding_associated_type_runs"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "blanket_impl_self_associated_projection_uses_bounded_typevar"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "blanket_impl_concrete_projection_return_resolves_at_callsite"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "upcast_of_bounded_typevar_preserves_associated_bindings"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "associated_type_default_typevar_satisfies_declared_bound"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "abstract_associated_projection_bound_method_dispatch_runs"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "inferred_native_generic_type_arg_from_interface_associated_return_runs"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "runtime_dispatch_substitutes_class_typevar_in_associated_type_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "runtime_dispatch_substitutes_class_typevar_inside_nested_associated_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "runtime_match_filters_by_associated_type_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "runtime_destructure_filters_by_associated_type_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_implements_respects_associated_type_bindings"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_implementors_respects_associated_type_bindings"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_resolves_generic_class_associated_type_binding"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_respects_generic_interface_impl_bound"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_respects_generic_interface_impl_bound_plain_args"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_literal_type_uses_concrete_base_impls"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_associated_types"
     load_const "reflection_enum_variant_type_uses_concrete_base_impls"
     make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -921,7 +940,9 @@ function interfaces_associated_types.rmf_main() -> int {
 
 function interfaces_associated_types.rmf_score(source: interfaces_associated_types.RmfSource<Item = int> | interfaces_associated_types.RmfSource<Item = string>) -> int {
     load_var source
-    is_type interfaces_associated_types.RmfSource<Item = int>
+    store_var _2
+    load_var _2
+    narrow_bind interfaces_associated_types.RmfSource<Item = int>, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -931,7 +952,7 @@ function interfaces_associated_types.rmf_score(source: interfaces_associated_typ
     jump L2
 
   L1:
-    load_var source
+    load_var _2
     load_type interfaces_associated_types.RmfSource<Item = int>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0

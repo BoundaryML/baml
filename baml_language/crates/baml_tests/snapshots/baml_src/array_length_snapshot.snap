@@ -3,10 +3,11 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function array_length_snapshot.$init_test_ns_array_length_snapshot_array_length_snapshot(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.array_length_snapshot"
     load_const "length_binding_snapshots_before_mutation"
     make_closure .<lambda($init_test_ns_array_length_snapshot_array_length_snapshot, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

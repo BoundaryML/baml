@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class Box {
+    value: int,
+
+    function value(self) -> string {
+        "hello"
+    }
+}
+
+function repro(box: Box) -> string {
+    box.value()
+}

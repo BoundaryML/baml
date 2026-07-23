@@ -1026,8 +1026,9 @@ func (*BamlTyUnknown) Descriptor() ([]byte, []int) {
 
 // Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 // strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-// its source string to preserve formatting). Literal types widen to their base
-// primitive at decode time.
+// its source string to preserve formatting). Decoders preserve literal
+// identity so `InboundValue.value_type` remains exact rather than being
+// widened to the corresponding primitive payload shape.
 type BamlTyLiteral struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

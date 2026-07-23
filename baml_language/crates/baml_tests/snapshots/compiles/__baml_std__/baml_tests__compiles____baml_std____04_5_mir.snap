@@ -1135,17 +1135,19 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     let _0: baml.csv.CsvRecord | baml.iter.Done // _0 // return
     let _1: baml.csv.CsvReader // self // param
     let _2: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
-    let _3: int
+    let _3: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
     let _4: baml.csv.CsvRecord // rec
-    let _5: baml.iter.Done // d
-    let _6: baml.csv.CsvSkip // s
-    let _7: null
-    let _8: null | ((baml.csv.CsvError) -> null throws never)
-    let _9: bool
-    let _10: (baml.csv.CsvError) -> null throws never // cb
-    let _11: (baml.csv.CsvError) -> null throws never
-    let _12: baml.csv.CsvError
-    let _13: null
+    let _5: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
+    let _6: baml.iter.Done // d
+    let _7: baml.csv.CsvNeedData | baml.csv.CsvRecord | baml.csv.CsvSkip | baml.iter.Done
+    let _8: baml.csv.CsvSkip // s
+    let _9: null
+    let _10: null | ((baml.csv.CsvError) -> null throws never)
+    let _11: bool
+    let _12: (baml.csv.CsvError) -> null throws never // cb
+    let _13: (baml.csv.CsvError) -> null throws never
+    let _14: baml.csv.CsvError
+    let _15: null
 
     bb0: {
         goto -> bb1;
@@ -1156,7 +1158,7 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable: CsvReader.next loop ended") -> [bb12];
+        _0 = call const fn baml.sys.panic(const "unreachable: CsvReader.next loop ended") -> [bb13];
     }
 
     bb3: {
@@ -1164,50 +1166,56 @@ fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.
     }
 
     bb4: {
-        _3 = type_tag(_2);
-        switch copy _3 [CsvRecord: bb11, Done: bb10, CsvSkip: bb7, CsvNeedData: bb6, otherwise: bb5] (exhaustive);
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvRecord" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb5];
     }
 
     bb5: {
-        unreachable;
+        _5 = copy _2;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Done" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb6];
     }
 
     bb6: {
-        _13 = call const fn baml.csv.CsvReader._read_chunk(copy _1) -> [bb1];
+        _7 = copy _2;
+        _7 = narrow_bind copy _7 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvSkip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
     }
 
     bb7: {
-        _6 = copy _2;
-        _8 = copy _1.2;
-        _9 = copy _8 == const null;
-        branch copy _9 -> [bb9, bb8];
+        _15 = call const fn baml.csv.CsvReader._read_chunk(copy _1) -> [bb1];
     }
 
     bb8: {
-        _10 = copy _8;
-        _11 = copy _10;
-        _12 = copy _6.0;
-        _7 = call copy _11(copy _12) -> [bb1];
+        _8 = copy _7;
+        _10 = copy _1.2;
+        _11 = copy _10 == const null;
+        branch copy _11 -> [bb10, bb9];
     }
 
     bb9: {
-        _7 = const null;
-        goto -> bb1;
+        _12 = copy _10;
+        _13 = copy _12;
+        _14 = copy _8.0;
+        _9 = call copy _13(copy _14) -> [bb1];
     }
 
     bb10: {
-        _5 = copy _2;
-        _0 = copy _5;
-        goto -> bb12;
+        _9 = const null;
+        goto -> bb1;
     }
 
     bb11: {
-        _4 = copy _2;
-        _0 = copy _4;
-        goto -> bb12;
+        _6 = copy _5;
+        _0 = copy _6;
+        goto -> bb13;
     }
 
     bb12: {
+        _4 = copy _3;
+        _0 = copy _4;
+        goto -> bb13;
+    }
+
+    bb13: {
         return;
     }
 }
@@ -1217,7 +1225,7 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     let _0: null | string[] // _0 // return
     let _1: baml.csv.CsvReader // self // param
     let _2: baml.csv.CsvHeaders | baml.csv.CsvNeedData
-    let _3: bool
+    let _3: baml.csv.CsvHeaders | baml.csv.CsvNeedData
     let _4: baml.csv.CsvHeaders // h
     let _5: null
 
@@ -1238,8 +1246,8 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     }
 
     bb4: {
-        _3 = is_type(copy _2, baml.csv.CsvHeaders);
-        branch copy _3 -> [bb6, bb5];
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvHeaders" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb6, bb5];
     }
 
     bb5: {
@@ -1247,7 +1255,7 @@ fn baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> null | string[] {
     }
 
     bb6: {
-        _4 = copy _2;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb7;
     }
@@ -1492,14 +1500,14 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     let _1: baml.csv.CsvRows // self // param
     let _2: baml.csv.CsvRecord | baml.iter.Done
     let _3: baml.csv.CsvReader
-    let _4: bool
+    let _4: baml.csv.CsvRecord | baml.iter.Done
     let _5: baml.iter.Done // d
     let _6: baml.csv.CsvRecord // rec
     let _7: baml.csv.CsvSkip | T
     let _8: baml.csv.CsvRecord
     let _9: baml.csv.CsvReader
     let _10: type
-    let _11: bool
+    let _11: baml.csv.CsvSkip | T
     let _12: baml.csv.CsvSkip // s
     let _13: null
     let _14: null | ((baml.csv.CsvError) -> null throws never)
@@ -1527,8 +1535,8 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 
     bb4: {
-        _4 = is_type(copy _2, baml.iter.Done);
-        branch copy _4 -> [bb11, bb5];
+        _4 = copy _2;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Done" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb5];
     }
 
     bb5: {
@@ -1540,8 +1548,8 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 
     bb6: {
-        _11 = is_type(copy _7, baml.csv.CsvSkip);
-        branch copy _11 -> [bb8, bb7];
+        _11 = copy _7;
+        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["csv"], name: "CsvSkip" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb8, bb7];
     }
 
     bb7: {
@@ -1551,7 +1559,7 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 
     bb8: {
-        _12 = copy _7;
+        _12 = copy _11;
         _14 = copy _1.0.2;
         _15 = copy _14 == const null;
         branch copy _15 -> [bb10, bb9];
@@ -1570,7 +1578,7 @@ fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter
     }
 
     bb11: {
-        _5 = copy _2;
+        _5 = copy _4;
         _0 = copy _5;
         goto -> bb12;
     }
@@ -4689,7 +4697,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.FlatMap // self // param
     let _2: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
-    let _3: bool
+    let _3: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
     let _4: baml.iter.Iterator<Item = R, Error = E3> // cur
     let _5: baml.iter.Done | R
     let _6: bool
@@ -4719,8 +4727,8 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
 
     bb3: {
         _2 = copy _1.2;
-        _3 = is_type(copy _2, baml.iter.Iterator<Item = #1, Error = #4>);
-        branch copy _3 -> [bb12, bb4];
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(4))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
     }
 
     bb4: {
@@ -4764,7 +4772,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     }
 
     bb12: {
-        _4 = copy _2;
+        _4 = copy _3;
         _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #4>(copy _4) -> [bb13];
     }
 
@@ -4809,7 +4817,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.Flatten // self // param
     let _2: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
-    let _3: bool
+    let _3: baml.iter.Done | baml.iter.Iterator<Error = E3, Item = R>
     let _4: baml.iter.Iterator<Item = R, Error = E3> // cur
     let _5: baml.iter.Done | R
     let _6: bool
@@ -4836,8 +4844,8 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
 
     bb3: {
         _2 = copy _1.1;
-        _3 = is_type(copy _2, baml.iter.Iterator<Item = #1, Error = #3>);
-        branch copy _3 -> [bb11, bb4];
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(3))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb4];
     }
 
     bb4: {
@@ -4875,7 +4883,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
     }
 
     bb11: {
-        _4 = copy _2;
+        _4 = copy _3;
         _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #3>(copy _4) -> [bb12];
     }
 
@@ -6054,7 +6062,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     let _1: baml.llm.Client // self // param
     let _2: baml.llm.PlannerState // planner_state // param
     let _3: null | baml.llm.RetryPolicy
-    let _4: bool
+    let _4: null | baml.llm.RetryPolicy
     let _5: baml.llm.RetryPolicy // r
     let _6: baml.llm.OrchestrationStep[] // result
     let _7: float // current_delay
@@ -6086,8 +6094,8 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
 
     bb0: {
         _3 = copy _1.3;
-        _4 = is_type(copy _3, baml.llm.RetryPolicy);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _3;
+        _4 = narrow_bind copy _4 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb2, bb1];
     }
 
     bb1: {
@@ -6095,7 +6103,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     }
 
     bb2: {
-        _5 = copy _3;
+        _5 = copy _4;
         _6 = []: baml.llm.OrchestrationStep[];
         _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _5) -> [bb3];
     }
@@ -6199,7 +6207,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
     let _4: null | baml.llm.RetryPolicy
-    let _5: bool
+    let _5: null | baml.llm.RetryPolicy
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
     let _8: int // attempt
@@ -6231,8 +6239,8 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, baml.llm.RetryPolicy);
-        branch copy _5 -> [bb3, bb1];
+        _5 = copy _4;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb1];
     }
 
     bb1: {
@@ -6247,7 +6255,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
     }
 
     bb3: {
-        _6 = copy _4;
+        _6 = copy _5;
         _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _6) -> [bb4];
     }
 
@@ -6581,7 +6589,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
     let _4: null | baml.llm.RetryPolicy
-    let _5: bool
+    let _5: null | baml.llm.RetryPolicy
     let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
     let _8: int // attempt
@@ -6611,8 +6619,8 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, baml.llm.RetryPolicy);
-        branch copy _5 -> [bb3, bb1];
+        _5 = copy _4;
+        _5 = narrow_bind copy _5 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["llm"], name: "RetryPolicy" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb3, bb1];
     }
 
     bb1: {
@@ -6626,7 +6634,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
     }
 
     bb3: {
-        _6 = copy _4;
+        _6 = copy _5;
         _7 = call const fn baml.llm.RetryPolicy.initial_delay_or_default(copy _6) -> [bb4];
     }
 
@@ -8452,6 +8460,8 @@ fn baml.sys.shell = builtin(io)
 
 fn baml.sys.sleep = builtin(io)
 
+fn baml.sys.collect_garbage = builtin(io)
+
 fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.exit = builtin(vm)
@@ -8487,14 +8497,14 @@ fn baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
     let _0: baml.time.Duration // _0 // return
     let _1: int | bigint // ns // param
     let _2: bigint
-    let _3: bool
+    let _3: int | bigint
     let _4: bigint // value
     let _5: int // value
     let _6: int
 
     bb0: {
-        _3 = is_type(copy _1, bigint);
-        branch copy _3 -> [bb2, bb1];
+        _3 = copy _1;
+        _3 = narrow_bind copy _3 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8505,7 +8515,7 @@ fn baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
     }
 
     bb2: {
-        _4 = copy _1;
+        _4 = copy _3;
         _2 = copy _4;
         goto -> bb3;
     }
@@ -8526,14 +8536,14 @@ fn baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration 
     let _1: int | bigint // us // param
     let _2: bigint
     let _3: bigint
-    let _4: bool
+    let _4: int | bigint
     let _5: bigint // value
     let _6: int // value
     let _7: int
 
     bb0: {
-        _4 = is_type(copy _1, bigint);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8544,7 +8554,7 @@ fn baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration 
     }
 
     bb2: {
-        _5 = copy _1;
+        _5 = copy _4;
         _3 = copy _5;
         goto -> bb3;
     }
@@ -8566,14 +8576,14 @@ fn baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration 
     let _1: int | bigint // ms // param
     let _2: bigint
     let _3: bigint
-    let _4: bool
+    let _4: int | bigint
     let _5: bigint // value
     let _6: int // value
     let _7: int
 
     bb0: {
-        _4 = is_type(copy _1, bigint);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8584,7 +8594,7 @@ fn baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration 
     }
 
     bb2: {
-        _5 = copy _1;
+        _5 = copy _4;
         _3 = copy _5;
         goto -> bb3;
     }
@@ -8606,14 +8616,14 @@ fn baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // s // param
     let _2: bigint
     let _3: bigint
-    let _4: bool
+    let _4: int | bigint
     let _5: bigint // value
     let _6: int // value
     let _7: int
 
     bb0: {
-        _4 = is_type(copy _1, bigint);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8624,7 +8634,7 @@ fn baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
     }
 
     bb2: {
-        _5 = copy _1;
+        _5 = copy _4;
         _3 = copy _5;
         goto -> bb3;
     }
@@ -8646,14 +8656,14 @@ fn baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // m // param
     let _2: bigint
     let _3: bigint
-    let _4: bool
+    let _4: int | bigint
     let _5: bigint // value
     let _6: int // value
     let _7: int
 
     bb0: {
-        _4 = is_type(copy _1, bigint);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8664,7 +8674,7 @@ fn baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
     }
 
     bb2: {
-        _5 = copy _1;
+        _5 = copy _4;
         _3 = copy _5;
         goto -> bb3;
     }
@@ -8686,14 +8696,14 @@ fn baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // h // param
     let _2: bigint
     let _3: bigint
-    let _4: bool
+    let _4: int | bigint
     let _5: bigint // value
     let _6: int // value
     let _7: int
 
     bb0: {
-        _4 = is_type(copy _1, bigint);
-        branch copy _4 -> [bb2, bb1];
+        _4 = copy _1;
+        _4 = narrow_bind copy _4 as Bigint { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
     }
 
     bb1: {
@@ -8704,7 +8714,7 @@ fn baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     }
 
     bb2: {
-        _5 = copy _1;
+        _5 = copy _4;
         _3 = copy _5;
         goto -> bb3;
     }

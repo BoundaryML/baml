@@ -71,6 +71,7 @@
 mod conversion;
 mod function_call_context;
 mod future;
+mod inbound_config;
 mod thread;
 pub mod trace_heap;
 mod trace_value_encode;
@@ -114,10 +115,36 @@ pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, CaptureDefaults, FunctionCallContext,
     FunctionCallContextBuilder,
 };
+pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_ambiguity_policy};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
+
+/// Sets the VM park request flag for the lifetime of a pending GC park request.
+///
+/// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
+/// while it is waiting for active heap permits must not leave every VM believing
+/// that a park is still requested.
+#[cfg(not(target_arch = "wasm32"))]
+struct ParkRequestGuard {
+    park_requested: Arc<AtomicBool>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ParkRequestGuard {
+    fn new(park_requested: Arc<AtomicBool>) -> Self {
+        park_requested.store(true, Ordering::Relaxed);
+        Self { park_requested }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for ParkRequestGuard {
+    fn drop(&mut self) {
+        self.park_requested.store(false, Ordering::Relaxed);
+    }
+}
 
 use crate::value_capture::{CaptureKind, TraceCaptureProducer, TraceLogMetadata};
 pub use crate::{
@@ -979,6 +1006,29 @@ fn host_call_type_arg(
         // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
         Object::Type(ty) => Ok((**ty).clone().into()),
         _ => Err(bad_slot()),
+    }
+}
+
+/// Clone the realized parameter contract captured by a host closure while the
+/// VM heap permit is held. These types drive the operation-specific outbound
+/// conversion for callback arguments; in particular, a union-typed parameter
+/// must become `BexExternalValue::Union` before the shared wire encoder runs.
+fn host_call_params(
+    handle: Option<Value>,
+) -> Result<Vec<baml_type::RealizedFunctionParamTy>, bex_vm::errors::VmInternalError> {
+    let malformed = || bex_vm::errors::VmInternalError::BridgeFailure {
+        message: "call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
+            .to_string(),
+    };
+    let ptr = handle
+        .as_ref()
+        .and_then(Value::as_object_ptr)
+        .ok_or_else(malformed)?;
+    // SAFETY: the caller invokes this while holding the active VM heap permit,
+    // before the sys-op await can allow a moving collection.
+    match unsafe { ptr.get() } {
+        Object::HostClosure(closure) => Ok(closure.params.as_ref().clone()),
+        _ => Err(malformed()),
     }
 }
 
@@ -2273,10 +2323,10 @@ impl BexEngine {
         level: bex_heap::CollectionLevel,
     ) -> bex_heap::GcStats {
         #[cfg(not(target_arch = "wasm32"))]
-        self.park_requested.store(true, Ordering::Relaxed);
+        let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
         let mut heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
-        self.park_requested.store(false, Ordering::Relaxed);
+        drop(park_request_guard);
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -2456,20 +2506,6 @@ impl BexEngine {
             copy_objects,
         )
         .await
-    }
-
-    /// Run-vocabulary alias for the traced function entry path. The
-    /// `FunctionCallContext` still carries host-call plumbing; `RunStore` owns
-    /// the public `BoundaryId` outside the engine.
-    pub async fn start_run(
-        self: &Arc<Self>,
-        function_name: &str,
-        args: Vec<BexExternalValue>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        self.call_function_with_trace(function_name, args, call_ctx, copy_objects)
-            .await
     }
 
     pub async fn call_function_bound_args(
@@ -2768,8 +2804,7 @@ impl BexEngine {
             .enumerate()
             .map(|(idx, arg)| match arg {
                 BexCallArg::Provided(value) => {
-                    let coerced =
-                        crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
+                    let coerced = self.coerce_inbound_arg(*value, &param_types[idx])?;
                     if callee_is_generic {
                         crate::conversion::check_generic_arg(
                             &coerced,
@@ -3047,8 +3082,9 @@ impl BexEngine {
         }
     }
 
-    /// Invoke a callable BAML value — a raw function, a closure (with captures),
-    /// or a bound method — referenced by a host [`Handle`](bex_external_types::Handle), as a fresh root call,
+    /// Invoke a callable value — a raw function, a BAML closure (with captures),
+    /// a bound method, or a host closure — referenced by a host
+    /// [`Handle`](bex_external_types::Handle), as a fresh root call,
     /// returning its result. This is the by-value counterpart of
     /// [`Self::call_function`], used to call a BAML callback passed to a sys-op
     /// (e.g. an HTTP server `handler`). The callee's `return`/`throws` types and
@@ -3101,82 +3137,122 @@ impl BexEngine {
         // `Function` pointer to read metadata from. `entry` is the closure value
         // itself (so its captures/upvalues resolve) or, for a bound method, the
         // inner function (its `self` is supplied positionally).
-        let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
-            Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
-            // A plain (or `foo<int>`-instantiated) function reference: the
-            // pooled wrapper over the function's global slot (see emit's
-            // `emit_pooled_function_value`). Resolve to the underlying
-            // `Function` object; its `type_args` seed the frame.
-            Object::GenericFunction(gf) => {
-                let type_args = gf.type_args.to_vec();
-                let inner = thread.vm.globals.get(thread.proof(), gf.function);
-                let func_ptr = inner.as_object_ptr().ok_or_else(|| {
-                    EngineError::Other(
-                        "call_callable: function wrapper resolves to no object".to_string(),
+        let (entry, receiver, seed_type_args, func_ptr, host_signature) =
+            match thread.vm.get_object(entry_ptr) {
+                Object::Function(_) => (entry_ptr, None, Vec::new(), Some(entry_ptr), None),
+                // A plain (or `foo<int>`-instantiated) function reference: the
+                // pooled wrapper over the function's global slot (see emit's
+                // `emit_pooled_function_value`). Resolve to the underlying
+                // `Function` object; its `type_args` seed the frame.
+                Object::GenericFunction(gf) => {
+                    let type_args = gf.type_args.to_vec();
+                    let inner = thread.vm.globals.get(thread.proof(), gf.function);
+                    let func_ptr = inner.as_object_ptr().ok_or_else(|| {
+                        EngineError::Other(
+                            "call_callable: function wrapper resolves to no object".to_string(),
+                        )
+                    })?;
+                    (func_ptr, None, type_args, Some(func_ptr), None)
+                }
+                Object::Closure(closure) => (
+                    entry_ptr,
+                    None,
+                    closure.captured_type_args.to_vec(),
+                    Some(closure.function),
+                    None,
+                ),
+                Object::BoundMethod(bm) => {
+                    let receiver = bm.receiver;
+                    let class_type_args = receiver
+                        .as_object_ptr()
+                        .and_then(|ptr| match thread.vm.get_object(ptr) {
+                            Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    (
+                        bm.function,
+                        Some(receiver),
+                        class_type_args,
+                        Some(bm.function),
+                        None,
                     )
-                })?;
-                (func_ptr, None, type_args, func_ptr)
-            }
-            Object::Closure(closure) => (
-                entry_ptr,
-                None,
-                closure.captured_type_args.to_vec(),
-                closure.function,
-            ),
-            Object::BoundMethod(bm) => {
-                let receiver = bm.receiver;
-                let class_type_args = receiver
-                    .as_object_ptr()
-                    .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                (bm.function, Some(receiver), class_type_args, bm.function)
-            }
-            other => {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("call_callable: handle is not callable ({other:?})"),
-                });
-            }
-        };
+                }
+                Object::HostClosure(host) => {
+                    let throws_type = match &*host.throws_ty {
+                        baml_type::RealizedTy::Never { .. }
+                        | baml_type::RealizedTy::Void { .. } => None,
+                        ty => Some(RuntimeTy::from(ty.clone())),
+                    };
+                    let param_types = host
+                        .params
+                        .iter()
+                        .map(|param| RuntimeTy::from(param.ty.clone()))
+                        .collect();
+                    (
+                        entry_ptr,
+                        None,
+                        Vec::new(),
+                        None,
+                        Some((
+                            RuntimeTy::from((*host.ret_ty).clone()),
+                            throws_type,
+                            host.arity,
+                            param_types,
+                            Vec::new(),
+                        )),
+                    )
+                }
+                other => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("call_callable: handle is not callable ({other:?})"),
+                    });
+                }
+            };
 
         // Read the inner function's metadata. `param_types` carries declared
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
         let (mut return_type, throws_type, arity, param_types, generic_param_names) =
-            match thread.vm.get_object(func_ptr) {
-                Object::Function(func) => {
-                    // A value referencing an unresolved native builtin can't be an
-                    // entry point (parity with `call_function_bound_args`).
-                    if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
-                        return Err(EngineError::NotInvokableAsEntry {
-                            name: func.name.clone(),
-                            kind: format!("{:?}", func.kind),
+            if let Some(signature) = host_signature {
+                signature
+            } else {
+                match thread
+                    .vm
+                    .get_object(func_ptr.expect("non-host callable must resolve to a function"))
+                {
+                    Object::Function(func) => {
+                        // A value referencing an unresolved native builtin can't be an
+                        // entry point (parity with `call_function_bound_args`).
+                        if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                            return Err(EngineError::NotInvokableAsEntry {
+                                name: func.name.clone(),
+                                kind: format!("{:?}", func.kind),
+                            });
+                        }
+                        // De Bruijn-ordered generic-param names (enclosing class
+                        // params first, then the function's own), bounds stripped to
+                        // the bare TypeVar — used to lower the positional `seed_type_args`
+                        // onto the named `type_args` channel below.
+                        let generic_param_names: Vec<String> = func
+                            .display_type_params
+                            .iter()
+                            .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                            .collect();
+                        (
+                            func.return_type.clone(),
+                            func.throws_type.clone(),
+                            func.arity,
+                            func.param_types.clone(),
+                            generic_param_names,
+                        )
+                    }
+                    _ => {
+                        return Err(EngineError::TypeMismatch {
+                            message: "call_callable: value does not wrap a function".to_string(),
                         });
                     }
-                    // De Bruijn-ordered generic-param names (enclosing class
-                    // params first, then the function's own), bounds stripped to
-                    // the bare TypeVar — used to lower the positional `seed_type_args`
-                    // onto the named `type_args` channel below.
-                    let generic_param_names: Vec<String> = func
-                        .display_type_params
-                        .iter()
-                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
-                        .collect();
-                    (
-                        func.return_type.clone(),
-                        func.throws_type.clone(),
-                        func.arity,
-                        func.param_types.clone(),
-                        generic_param_names,
-                    )
-                }
-                _ => {
-                    return Err(EngineError::TypeMismatch {
-                        message: "call_callable: value does not wrap a function".to_string(),
-                    });
                 }
             };
 
@@ -3219,7 +3295,7 @@ impl BexEngine {
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
-                Some(ty) => crate::conversion::coerce_arg_to_declared_type(arg, ty),
+                Some(ty) => self.coerce_inbound_arg(arg, ty),
                 None => Ok(arg),
             })
             .collect::<Result<_, _>>()?;
@@ -3291,12 +3367,6 @@ impl BexEngine {
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
         ActiveCallGuard::reserve_cancelled(self, call_id);
         Ok(())
-    }
-
-    /// Run-vocabulary alias for host-call cancellation. The parameter is the
-    /// adapter-owned host call id backing value, not a `BoundaryId`.
-    pub fn cancel_run(&self, host_call_id: CallId) -> Result<(), EngineError> {
-        self.cancel_function_call(host_call_id)
     }
 
     fn validate_bound_args(
@@ -3380,20 +3450,6 @@ impl BexEngine {
             Object::Function(func) => func.throws_type.clone(),
             _ => None,
         }
-    }
-
-    /// All class field schemas known to the engine, keyed by `TypeName`.
-    ///
-    /// Used by callers that walk a `RuntimeTy` tree and need to resolve nested
-    /// class field types — e.g. the CLI parsing `--json-args` for a function
-    /// whose parameter is a class with `map<…>` or class-typed fields.
-    pub fn class_definitions(&self) -> &indexmap::IndexMap<TypeName, ClassDefinition> {
-        &self.sys_op_ctx.class_definitions
-    }
-
-    /// Look up the field schema for a class by its `TypeName`.
-    pub fn class_definition(&self, name: &TypeName) -> Option<&ClassDefinition> {
-        self.sys_op_ctx.class_definitions.get(name)
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
@@ -3602,11 +3658,6 @@ impl BexEngine {
                 }
             })
             .collect()
-    }
-
-    /// Get all compiled test cases.
-    pub fn test_cases(&self) -> &[bex_vm_types::TestCase] {
-        &self.test_cases
     }
 
     /// Find a test case by name.
@@ -4740,8 +4791,56 @@ impl BexEngine {
                         Result(Result<BexExternalValue, OpError>),
                     }
 
+                    // Honor an already-cancelled call before traversing and
+                    // externalizing sys-op arguments. Host-call argument packs
+                    // can contain arbitrarily large value trees; cancellation
+                    // must remain an O(1) pre-check rather than paying that
+                    // conversion cost for an operation that will never run.
+                    if cancel.is_cancelled() {
+                        // Cancel-at-yield: spawned children settle as
+                        // Cancelled so the heap Future no longer hangs
+                        // at Pending; root threads surface the cancel
+                        // to the host.
+                        self.prof_end_sysop(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
+                        if let Some(future_id) = thread.vm_thread_settles_future() {
+                            self.settle_child_cancelled(&mut thread, future_id).await?;
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
+                        }
+                        return Err(cancelled_unhandled_throw());
+                    }
+
                     let bex_args: Vec<BexExternalValue> =
-                        args.iter().map(|v| self.vm_arg_to_bex_value(*v)).collect();
+                        if operation == SysOp::BamlHostCallHostValue {
+                            let params = host_call_params(args.first().copied())
+                                .map_err(EngineError::VmInternalError)?;
+                            if args.len() != 4 {
+                                return Err(EngineError::VmInternalError(
+                                    bex_vm::errors::VmInternalError::BridgeFailure {
+                                        message: format!(
+                                            "call_host_value: got {} sysop arguments, expected 4",
+                                            args.len()
+                                        ),
+                                    },
+                                ));
+                            }
+                            vec![
+                                self.vm_arg_to_bex_value(args[0]),
+                                self.convert_host_call_args_pack(args[1], &params, thread.proof())?,
+                                self.vm_arg_to_bex_value(args[2]),
+                                self.vm_arg_to_bex_value(args[3]),
+                            ]
+                        } else {
+                            args.iter()
+                                .map(|value| self.vm_arg_to_bex_value(*value))
+                                .collect()
+                        };
 
                     // Capture the host-call type args (`type_arg_0`/`args[2]`
                     // = return type `T`; `type_arg_1`/`args[3]` = throws
@@ -4777,26 +4876,6 @@ impl BexEngine {
                         } else {
                             None
                         };
-
-                    if cancel.is_cancelled() {
-                        // Cancel-at-yield: spawned children settle as
-                        // Cancelled so the heap Future no longer hangs
-                        // at Pending; root threads surface the cancel
-                        // to the host.
-                        self.prof_end_sysop(
-                            &mut thread.vm,
-                            bex_events::prof::record::FunctionEndStatus::Cancelled,
-                        );
-                        self.prof_drain_open_calls(
-                            &mut thread.vm,
-                            bex_events::prof::record::FunctionEndStatus::Cancelled,
-                        );
-                        if let Some(future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_cancelled(&mut thread, future_id).await?;
-                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
-                        }
-                        return Err(cancelled_unhandled_throw());
-                    }
 
                     let sys_op_result =
                         self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
@@ -5292,6 +5371,21 @@ impl BexEngine {
                 }
             }
         }
+
+        if op == SysOp::BamlSysCollectGarbage {
+            // A collection cannot run while this VM holds its active heap
+            // permit. Returning an async operation makes the event loop release
+            // that permit before polling us; the engine can then park every VM,
+            // collect, drain `cleanup()` finalizers, and only afterward resume
+            // the caller.
+            let engine = self.clone();
+            return SysOpResult::Async(Box::pin(async move {
+                engine
+                    .collect_garbage(bex_heap::CollectionLevel::Major)
+                    .await;
+                Ok(BexExternalValue::Null)
+            }));
+        }
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
@@ -5380,6 +5474,59 @@ impl sys_types::VmSpawner for BexEngine {
 
 #[cfg(test)]
 mod concurrent_tests {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn cancelling_pending_gc_park_request_clears_vm_flag() {
+        use std::{
+            sync::{
+                Arc,
+                atomic::{AtomicBool, Ordering},
+            },
+            time::Duration,
+        };
+
+        use super::ParkRequestGuard;
+        use crate::HeapPermitManager;
+
+        let permit_manager = Arc::new(HeapPermitManager::new());
+        let active_permit = permit_manager.new_permit(()).await.acquire().await;
+        let park_requested = Arc::new(AtomicBool::new(false));
+
+        let request = {
+            let permit_manager = Arc::clone(&permit_manager);
+            let park_requested = Arc::clone(&park_requested);
+            tokio::spawn(async move {
+                let park_request_guard = ParkRequestGuard::new(park_requested);
+                let _heap_guard = permit_manager.request_park().await;
+                drop(park_request_guard);
+            })
+        };
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !park_requested.load(Ordering::Relaxed) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("GC request should set the VM park flag");
+        assert!(
+            !request.is_finished(),
+            "the active heap permit should keep the GC request pending"
+        );
+
+        request.abort();
+        let join_error = request
+            .await
+            .expect_err("aborted GC request should not complete normally");
+        assert!(join_error.is_cancelled());
+        assert!(
+            !park_requested.load(Ordering::Relaxed),
+            "cancelling the GC request must clear the VM park flag"
+        );
+
+        drop(active_permit);
+    }
+
     /// Test that demonstrates concurrent `call_function` is safe.
     /// This test verifies that:
     /// 1. Multiple concurrent calls complete successfully

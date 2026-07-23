@@ -40,7 +40,7 @@ use sdkgen_rust::{NamingConvention, RustGenOptions};
 
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, symlink_customizable, watch_dir,
+    load_fixture, symlink_customizable, watch_dir, write_codegen_output,
 };
 
 /// Shared cargo build dir for ALL fixture crates, as a subdir of
@@ -247,25 +247,19 @@ fn codegen_fixture(
     let fixture_root = manifest_dir.join(fixture);
     let generated = fixture_root.join("generated");
 
-    // Wipe generated/ EXCEPT Cargo.lock so third-party dependency
-    // resolution stays stable across rebuilds (the analogue of node
-    // preserving node_modules/).
+    // The shared writer owns generated SDK files and removes stale ones.
+    // Clear only harness overlays; preserve Cargo.lock and the writer's
+    // ownership manifest across rebuilds.
     if generated.exists() {
-        for entry in fs::read_dir(&generated).unwrap() {
-            let entry = entry.unwrap();
-            if entry.file_name() == "Cargo.lock" {
-                continue;
-            }
-            let path = entry.path();
+        for overlay in ["customizable", "tests"] {
+            let path = generated.join(overlay);
             if path.is_dir() {
-                fs::remove_dir_all(&path).unwrap();
-            } else {
-                fs::remove_file(&path).unwrap();
+                fs::remove_dir_all(path).unwrap();
+            } else if path.exists() {
+                fs::remove_file(path).unwrap();
             }
         }
     }
-    fs::create_dir_all(generated.join("tests")).unwrap();
-
     let options = RustGenOptions {
         naming_convention: NamingConvention::PreserveCase,
         package_name: format!("sdk-tests-rust-{}", fixture.replace('_', "-")),
@@ -289,26 +283,15 @@ fn codegen_fixture(
                     output.warnings.len()
                 ));
             }
-            for (rel, content) in output.files {
-                let path = generated.join(&rel);
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = fs::create_dir_all(parent) {
-                        diagnostics.record(
-                            "codegen_write",
-                            fixture,
-                            format!("create_dir_all {}: {e}", parent.display()),
-                        );
-                        continue;
-                    }
-                }
-                if let Err(e) = fs::write(&path, content.as_bytes()) {
-                    diagnostics.record(
-                        "codegen_write",
-                        fixture,
-                        format!("write {}: {e}", path.display()),
-                    );
-                }
-            }
+            write_codegen_output(
+                &generated,
+                output
+                    .files
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes())),
+                fixture,
+                diagnostics,
+            );
         }
         Err(payload) => {
             // Surface the panic message: a codegen panic with an opaque
@@ -349,10 +332,10 @@ fn codegen_fixture(
         }
     }
 
-    if let Err(e) = fs::write(
-        generated.join("tests").join("main.rs"),
-        render_tests_main(fixture),
-    ) {
+    let tests = generated.join("tests");
+    if let Err(e) = fs::create_dir_all(&tests)
+        .and_then(|()| fs::write(tests.join("main.rs"), render_tests_main(fixture)))
+    {
         diagnostics.record("tests_main_write", fixture, format!("write main.rs: {e}"));
     }
 }

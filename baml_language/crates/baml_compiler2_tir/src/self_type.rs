@@ -27,27 +27,7 @@ pub fn self_type_for_interface_default() -> Ty {
     Ty::TypeVar(Name::new("Self"), TyAttr::default())
 }
 
-/// A class's full `Self` receiver type: `Foo<T>` with its declared generics as `TypeVar`
-/// args (an unspecialized generic class), or the builtin container sugar (`baml.Array<T>` →
-/// `T[]`, `baml.Map<K,V>` → `map<K,V>`) whose methods type `self` structurally.
-///
-/// The sugar is gated on the builtin root *identity* (`baml.Array` / `baml.Map`), not the bare
-/// name — a user class named `Array` or `Map` is an ordinary nominal `Ty::Class`.
-pub fn self_type_for_class(
-    class_data: &baml_compiler2_hir::item_tree::Class,
-    ns_path: &[Name],
-    package: Name,
-) -> Ty {
-    let qtn = QualifiedTypeName::new(package, ns_path.to_vec(), class_data.name.clone());
-    let args: Vec<Ty> = class_data
-        .generic_params
-        .iter()
-        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-        .collect();
-    receiver_type_for_class_at(qtn, args)
-}
-
-/// [`self_type_for_class`] at explicit generic `args` (`TypeVar`s or concrete): the builtin
+/// Build a class receiver type at explicit generic `args` (`TypeVar`s or concrete): the builtin
 /// container roots are their structural sugar (`baml.Array<int>` → `int[]`), everything else
 /// a nominal `Ty::Class`. This is the receiver shape a value actually has — an array value is
 /// a `Ty::List`, never a `Ty::Class(baml.Array, …)` — so a static-form call

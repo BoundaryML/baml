@@ -3,82 +3,95 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function to_string_interface.$init_test_ns_to_string_interface_to_string_interface(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.to_string_interface"
     load_const "default_renders_primitives"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "default_top_level_string_is_bare"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "default_renders_array_with_quoted_nested_strings"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "default_renders_class_instance_structurally"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "implementor_override_is_used"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "implementor_with_default_body_matches_nonimplementor"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "builtin_instant_dispatches_through_interface"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "nested_override_in_array_is_honored"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "nested_override_in_class_field_is_honored"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "override_and_structural_siblings_stay_aligned"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "nested_override_in_map_is_honored"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "nested_override_inside_array_inside_class"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.to_string_interface"
     load_const "direct_method_call_on_implementor"
     make_closure .<lambda($init_test_ns_to_string_interface_to_string_interface, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

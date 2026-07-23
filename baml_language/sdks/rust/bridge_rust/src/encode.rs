@@ -48,6 +48,12 @@ pub fn class(
     fields: Vec<(&str, wire::InboundValue)>,
 ) -> wire::InboundValue {
     wire::InboundValue {
+        value_type: Some(wire::BamlTy {
+            ty: Some(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
+                name: fqn.to_string(),
+                type_args,
+            })),
+        }),
         value: Some(In::ClassValue(wire::InboundClassValue {
             fields: fields
                 .into_iter()
@@ -56,10 +62,6 @@ pub fn class(
                     value: Some(value),
                 })
                 .collect(),
-            class_ty: Some(wire::BamlTyClass {
-                name: fqn.to_string(),
-                type_args,
-            }),
         })),
     }
 }
@@ -68,6 +70,7 @@ pub fn class(
 /// necessarily its Rust variant name).
 pub fn enum_value(fqn: &str, variant_value: &str) -> wire::InboundValue {
     wire::InboundValue {
+        value_type: None,
         value: Some(In::EnumValue(wire::InboundEnumValue {
             name: fqn.to_string(),
             value: variant_value.to_string(),

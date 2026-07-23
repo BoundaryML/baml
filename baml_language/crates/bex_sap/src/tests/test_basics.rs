@@ -184,11 +184,11 @@ test_deserializer!(
 // --- String tests ---
 
 test_deserializer!(
-    test_string,
+    test_complete_json_string,
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
 );
 
 // --- Bool tests ---

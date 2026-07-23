@@ -464,7 +464,7 @@ mod tests {
             sources.insert(sf.file_id(&db), sf.text(&db).to_string());
             paths.insert(sf.file_id(&db), p.clone());
         }
-        let cfg = render::RenderConfig::cli_auto();
+        let cfg = render::RenderConfig::test();
         assert_eq!(
             render::render_diagnostics(&[diag], &sources, &paths, &cfg),
             render::render_diagnostics(&restored, &sources, &paths, &cfg),

@@ -10,6 +10,7 @@
 )]
 
 pub(crate) mod agent_command;
+pub(crate) mod auth;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
@@ -29,11 +30,13 @@ pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
 pub(crate) mod manifest;
+pub(crate) mod output;
 pub(crate) mod pack_command;
 pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
+pub(crate) mod project_session;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod skill_check;

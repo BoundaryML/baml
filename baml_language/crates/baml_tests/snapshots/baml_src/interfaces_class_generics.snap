@@ -3,16 +3,18 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function interfaces_class_generics.$init_test_ns_interfaces_class_generics_interfaces_class_generics(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.interfaces_class_generics"
     load_const "class_generic_bound_member_access_runs_in_class_method"
     make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces_class_generics"
     load_const "function_class_generic_bound_member_access_runs"
     make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

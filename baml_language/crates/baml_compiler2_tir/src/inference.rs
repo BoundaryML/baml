@@ -31,7 +31,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
-    builder::TypeInferenceBuilder,
+    builder::{TypeInferenceBuilder, duplicate_parameter_names, parameter_binding_ty},
     infer_context::{InferContext, TypeCheckDiagnostics},
     lower_type_expr::TypeVarBoundsMap,
     ty::{FunctionParamTy, Ty, TyAttr},
@@ -1027,6 +1027,8 @@ fn add_lambda_params_to_builder(
     // The lambda's own generic bounds (its env extends the enclosing scope's) let a
     // `T.member` projection in a parameter type resolve `T`'s declaring interface.
     let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
+    let duplicate_names =
+        duplicate_parameter_names(func_def.params.iter().map(|param| &param.name));
     for (i, param) in func_def.params.iter().enumerate() {
         let param_ty = param
             .type_expr
@@ -1058,7 +1060,8 @@ fn add_lambda_params_to_builder(
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
             });
-        builder.add_local(param.name.clone(), param_ty.clone());
+        let local_ty = parameter_binding_ty(&param.name, &param_ty, &duplicate_names);
+        builder.add_local(param.name.clone(), local_ty);
         builder.param_types.push((param.name.clone(), param_ty));
     }
 }
@@ -1444,78 +1447,9 @@ impl<'db> ScopeInference<'db> {
         self.call_plans.iter()
     }
 
-    /// Iterate over the generic instantiations recorded for checked calls
-    /// (callee's declared type params, in De Bruijn order).
-    pub fn iter_call_type_instantiations(&self) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
-        self.call_type_instantiations.iter()
-    }
-
-    /// Iterate over all function adapters required by checked coercions.
-    pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.function_coercions.iter()
-    }
-
     /// Look up the function adapter required for a coerced expression in this scope.
     pub fn function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
         self.function_coercions.get(&expr_id)
-    }
-
-    /// Iterate over all default-parameter expression types for this scope.
-    pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.parameter_defaults.expressions.iter()
-    }
-
-    /// Iterate over all default-parameter pattern types for this scope.
-    pub fn iter_default_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.parameter_defaults.pattern_types.iter()
-    }
-
-    /// Iterate over all default-parameter member resolutions for this scope.
-    pub fn iter_default_resolutions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
-        self.parameter_defaults.resolutions.iter()
-    }
-
-    /// Iterate over all exhaustive default-parameter match expressions.
-    pub fn iter_default_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.parameter_defaults.exhaustive_matches.iter()
-    }
-
-    /// Iterate over all default-parameter path root types.
-    pub fn iter_default_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.parameter_defaults.path_root_types.iter()
-    }
-
-    /// Iterate over all default-parameter path prefix types.
-    pub fn iter_default_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.parameter_defaults.path_segment_types.iter()
-    }
-
-    /// Iterate over all default-parameter per-segment path member resolutions.
-    pub fn iter_default_path_member_resolutions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &Vec<MemberResolution<'db>>)> {
-        self.parameter_defaults.path_member_resolutions.iter()
-    }
-
-    /// Iterate over all default-parameter call binding plans.
-    pub fn iter_default_call_plans(&self) -> impl Iterator<Item = (&ExprId, &CallPlan)> {
-        self.parameter_defaults.call_plans.iter()
-    }
-
-    /// Iterate over all default-parameter call generic instantiations.
-    pub fn iter_default_call_type_instantiations(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &Vec<Ty>)> {
-        self.parameter_defaults.call_type_instantiations.iter()
-    }
-
-    /// Iterate over all default-parameter function adapters.
-    pub fn iter_default_function_coercions(
-        &self,
-    ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
-        self.parameter_defaults.function_coercions.iter()
     }
 
     // ── Parameter-default point lookups ────────────────────────────────────────
@@ -1584,11 +1518,6 @@ impl<'db> ScopeInference<'db> {
         self.expressions.iter()
     }
 
-    /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
-    pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
-        self.pattern_types.iter()
-    }
-
     /// Look up the member resolution for an expression in this scope.
     pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
         self.resolutions.get(&expr_id)
@@ -1610,31 +1539,15 @@ impl<'db> ScopeInference<'db> {
         self.exhaustive_matches.contains(&expr_id)
     }
 
-    /// Iterate over all exhaustive match `ExprIds` in this scope.
-    pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
-        self.exhaustive_matches.iter()
-    }
-
     /// Look up the TIR-inferred root segment type for a multi-segment Path expression.
     pub fn path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
         self.path_root_types.get(&expr_id)
-    }
-
-    /// Iterate over all (`ExprId`, root `Ty`) pairs for multi-segment paths in this scope.
-    pub fn iter_path_root_types(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
-        self.path_root_types.iter()
     }
 
     /// Look up the type of `segments[..=seg_idx]` for a multi-segment
     /// local-rooted `Path` expression. Index `0` mirrors `path_root_type`.
     pub fn path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
         self.path_segment_types.get(&(expr_id, seg_idx))
-    }
-
-    /// Iterate over all `((ExprId, seg_idx), Ty)` entries for multi-segment
-    /// local-rooted paths in this scope.
-    pub fn iter_path_segment_types(&self) -> impl Iterator<Item = (&(ExprId, usize), &Ty)> {
-        self.path_segment_types.iter()
     }
 
     /// Look up per-segment member resolutions for a multi-segment local-rooted
@@ -2211,6 +2124,8 @@ pub fn infer_scope_types<'db>(
                     builder.set_return_type(return_ty.clone());
 
                     // Add parameter bindings as locals
+                    let duplicate_names =
+                        duplicate_parameter_names(sig.params.iter().map(|param| &param.name));
                     for (i, param) in sig.params.iter().enumerate() {
                         let param_type_span = sig_sm
                             .param_type_spans
@@ -2245,7 +2160,9 @@ pub fn infer_scope_types<'db>(
                             builder
                                 .validate_type_generic_bounds_at_span(param_type_span, &param_ty);
                         }
-                        builder.add_local(param.name.clone(), param_ty.clone());
+                        let local_ty =
+                            parameter_binding_ty(&param.name, &param_ty, &duplicate_names);
+                        builder.add_local(param.name.clone(), local_ty);
                         builder.param_types.push((param.name.clone(), param_ty));
                     }
 
@@ -3003,6 +2920,11 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_hir::body::let_body(db, let_loc);
 
                     if let LetBody::Expr(expr_body) = body.as_ref() {
+                        if let Some(source_map) =
+                            baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                        {
+                            builder.set_body_source_map(source_map);
+                        }
                         // Infer the root expression type bottom-up.
                         if let Some(root_expr) = expr_body.root_expr {
                             builder.infer_expr(root_expr, expr_body);

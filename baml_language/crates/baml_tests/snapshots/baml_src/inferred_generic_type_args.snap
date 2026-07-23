@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inferred_generic_type_args(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "showcase_lazy_cursor_pipeline"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "inferred_static_ctor_dispatches_to_correct_implementor"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "inferred_static_ctor_dispatches_through_generic_interface"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "interface_default_method_sees_interface_type_var"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "class_method_builds_generic_via_class_type_var"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "default_method_forward_reads_interface_type_var"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "generic_class_behind_nongeneric_interface_reads_type_var"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "free_function_sees_inferred_type_arg"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "inferred_static_ctor_instance_carries_class_type_args"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "inferred_ctor_default_method_collects_all"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "nested_self_inferred_binding_not_voided"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.inferred_generic_type_args"
     load_const "interface_dispatch_sees_inferred_method_type_arg"
     make_closure .<lambda($init_test_ns_inferred_generic_type_args_inferred_generic_type_args, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -452,13 +464,17 @@ function inferred_generic_type_args.inferred_ctor_instance_is_typed() -> int {
     call user.inferred_generic_type_args.ArrBag.make
     store_var s
     load_var s
-    is_type inferred_generic_type_args.ArrBag<...>
+    store_var _4
+    load_var _4
+    narrow_bind inferred_generic_type_args.ArrBag<...>, slot=2
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    is_type inferred_generic_type_args.OneBag<...>
+    store_var _5
+    load_var _5
+    narrow_bind inferred_generic_type_args.OneBag<...>, slot=3
     pop_jump_if_false L1
     jump L2
 

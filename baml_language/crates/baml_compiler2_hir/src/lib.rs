@@ -144,8 +144,26 @@ unsafe impl salsa::Update for FileAst {
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let path = file.path(db);
+    let package = file_package::file_package(db, file);
+    let test_owner = if package.namespace_path.is_empty() {
+        "root".to_string()
+    } else {
+        format!(
+            "root.{}",
+            package
+                .namespace_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".")
+        )
+    };
     let (items, diagnostics, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+        baml_compiler2_ast::lower_file_with_path_and_test_owner(
+            &tree,
+            Some(path.as_path()),
+            Some(&test_owner),
+        );
     FileAst {
         items,
         diagnostics,
@@ -220,18 +238,4 @@ pub fn scope_bindings_query<'db>(
 /// Returns the env var references found in a file's expression bodies.
 pub fn file_env_var_refs(db: &dyn Db, file: SourceFile) -> &[baml_compiler2_ast::EnvVarRef] {
     &file_semantic_index(db, file).env_var_refs
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Not tracked — callers should use the cached `file_semantic_index` result.
-/// Returns `None` if `expr_id` was not recorded (i.e., single-segment paths
-/// or non-path expressions).
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }

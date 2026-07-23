@@ -205,6 +205,17 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, condition)?;
             write!(f, " -> [{then_block}, {else_block}];")
         }
+        Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        } => {
+            write!(f, "{destination} = narrow_bind ")?;
+            write_operand(f, source)?;
+            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
+        }
         Terminator::Switch {
             discriminant,
             arms,

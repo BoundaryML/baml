@@ -171,28 +171,6 @@ pub enum VmBamlError {
 }
 
 impl VmBamlError {
-    /// Fully-qualified BAML class name this error surfaces as (e.g.
-    /// `"baml.errors.Io"`). Mirrors the codegen-generated `ErrorClass`
-    /// enum in `bex_vm`; kept here so crates that only depend on
-    /// `bex_vm_types` (notably `sys_native`'s `host_impls`) can check a
-    /// thrown `VmBamlError` against a declared `Ty` without round-tripping
-    /// through a heap-allocated `Instance`.
-    pub fn class_name(&self) -> &'static str {
-        match self {
-            Self::InvalidArgument { .. } => "baml.errors.InvalidArgument",
-            Self::ParseError { .. } => "baml.errors.ParseError",
-            Self::Io { .. } => "baml.errors.Io",
-            Self::Timeout { .. } => "baml.errors.Timeout",
-            Self::Unsupported { .. } => "baml.errors.Unsupported",
-            Self::AccessError { .. } => "baml.errors.AccessError",
-            Self::RenderPrompt { .. } => "baml.errors.RenderPrompt",
-            Self::NotImplemented { .. } => "baml.errors.NotImplemented",
-            Self::LlmClient { .. } => "baml.errors.LlmClient",
-            Self::DevOther { .. } => "baml.errors.DevOther",
-            Self::HostCallable { .. } => "baml.errors.HostCallable",
-        }
-    }
-
     /// Map this `baml.errors.*` value to its contract-level
     /// [`SysOpErrorCategory`] — the finite set of categories that sysop
     /// `#[throws(...)]` annotations reference.

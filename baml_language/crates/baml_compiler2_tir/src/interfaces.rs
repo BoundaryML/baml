@@ -830,19 +830,7 @@ fn resolved_interface_from_ty(db: &dyn crate::Db, ty: Ty) -> Option<ResolvedInte
     Some(ResolvedInterface { loc, qtn })
 }
 
-/// Resolve a `TypeExprKind::Path` to an interface declaration. Returns `None`
-/// when the path doesn't resolve to an interface.
-pub fn resolve_path_to_interface<'db>(
-    db: &'db dyn crate::Db,
-    target: &baml_compiler2_ast::TypeExpr,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    current_ns: &[Name],
-) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-    resolve_path_to_interface_identity(db, target, pkg_items, current_ns)
-        .map(|resolved| resolved.loc)
-}
-
-/// The `TypeRef`-arena twin of [`resolve_path_to_interface`].
+/// Resolve a `TypeRef`-arena entry to an interface declaration.
 pub fn resolve_ref_to_interface<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,

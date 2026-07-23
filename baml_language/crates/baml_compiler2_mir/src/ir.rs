@@ -85,11 +85,6 @@ impl MirFunctionBody {
         &self.blocks[id.0]
     }
 
-    /// Get a mutable reference to a basic block by ID.
-    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
-        &mut self.blocks[id.0]
-    }
-
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
@@ -344,6 +339,15 @@ pub enum Terminator {
         else_block: BlockId,
     },
 
+    /// Test one value and bind that same value to `destination` on success.
+    NarrowBind {
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+
     /// Multi-way branch based on integer discriminant.
     Switch {
         discriminant: Operand,
@@ -568,6 +572,11 @@ impl Terminator {
                 else_block,
                 ..
             } => vec![*then_block, *else_block],
+            Terminator::NarrowBind {
+                then_block,
+                else_block,
+                ..
+            } => vec![*then_block, *else_block],
             Terminator::Switch {
                 arms, otherwise, ..
             } => {
@@ -641,31 +650,12 @@ impl Place {
         Place::Local(local)
     }
 
-    /// Create a field projection.
-    pub fn field(base: Place, field: usize) -> Self {
-        Place::Field {
-            base: Box::new(base),
-            field,
-        }
-    }
-
-    /// Create an index projection.
-    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
-        Place::Index {
-            base: Box::new(base),
-            index,
-            kind,
-        }
-    }
-
-    /// Get the base local of this place.
-    ///
-    /// Panics for `Place::Capture` — captures have no local base.
-    pub fn base_local(&self) -> Local {
+    /// Get the base local of this place, if it is rooted in a local.
+    pub fn base_local(&self) -> Option<Local> {
         match self {
-            Place::Local(l) => *l,
+            Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
-            Place::Capture(_) => panic!("Place::Capture has no base local"),
+            Place::Capture(_) => None,
         }
     }
 }
@@ -877,11 +867,6 @@ impl Operand {
     /// Create a copy operand from a local.
     pub fn copy_local(local: Local) -> Self {
         Operand::Copy(Place::Local(local))
-    }
-
-    /// Create a move operand from a local.
-    pub fn move_local(local: Local) -> Self {
-        Operand::Move(Place::Local(local))
     }
 
     /// Create a constant operand.

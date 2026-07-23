@@ -11,7 +11,7 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_set(copy _1, const "basic group", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "basic group", copy _3, const null) -> [bb1];
     }
 
     bb1: {

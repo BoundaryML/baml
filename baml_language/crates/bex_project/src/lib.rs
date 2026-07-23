@@ -13,8 +13,8 @@ pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, UnhandledSpawnError, UnhandledSpawnErrorHandler,
-    is_cancelled_engine_error,
+    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
     value_capture::{
         CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
         TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
@@ -22,8 +22,8 @@ pub use bex_engine::{
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch, try_convert_rust_data,
-    validate_host_return,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};

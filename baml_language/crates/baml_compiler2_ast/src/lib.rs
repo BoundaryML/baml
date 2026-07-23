@@ -28,7 +28,8 @@ pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
-    lower_file, lower_file_with_path, synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
+    lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
+    synthesize_llm_builtin_call, synthesize_llm_make_stream_call,
 };
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
@@ -1958,9 +1959,13 @@ retry_policy MyRetry {
         assert_eq!(let_def.name.as_str(), "MyRetry");
         assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
 
-        let (body, _source_map) = let_def.initializer.as_ref().expect("expected initializer");
+        let (body, source_map) = let_def.initializer.as_ref().expect("expected initializer");
 
         let root_id = body.root_expr.expect("expected root expr");
+        assert!(
+            source_map.is_synthetic_expr(root_id),
+            "retry_policy's class-shaped initializer is compiler-synthesized"
+        );
         let root_expr = &body.exprs[root_id];
 
         let (type_name, fields, _) = match root_expr {

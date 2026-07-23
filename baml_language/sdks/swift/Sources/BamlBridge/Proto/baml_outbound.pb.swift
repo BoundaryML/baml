@@ -541,8 +541,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueEnum: Sendable {
 }
 
 /// A union value: the selected variant's value plus its `self_type` (the full
-/// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
-/// `self_type` metadata is written for completeness but read by no host.
+/// union type as a `BamlTy`) and the selected arm's canonical index.
 nonisolated struct BamlBridge_Cffi_V1_BamlValueUnionVariant: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -573,6 +572,8 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueUnionVariant: @unchecked Sendable
   /// Clears the value of `selfType`. Subsequent reads from it will return its default value.
   mutating func clearSelfType() {_uniqueStorage()._selfType = nil}
 
+  /// Display-only arm name. Consumers must use `selected_option_index` for
+  /// canonical selected-arm identity.
   var valueOptionName: String {
     get {_storage._valueOptionName}
     set {_uniqueStorage()._valueOptionName = newValue}
@@ -586,6 +587,18 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueUnionVariant: @unchecked Sendable
   var hasValue: Bool {_storage._value != nil}
   /// Clears the value of `value`. Subsequent reads from it will return its default value.
   mutating func clearValue() {_uniqueStorage()._value = nil}
+
+  /// Zero-based position of the selected arm in `self_type`'s canonical union
+  /// member order. Presence distinguishes the first arm from an absent
+  /// discriminator. The selected type is derived from this index.
+  var selectedOptionIndex: UInt32 {
+    get {_storage._selectedOptionIndex ?? 0}
+    set {_uniqueStorage()._selectedOptionIndex = newValue}
+  }
+  /// Returns true if `selectedOptionIndex` has been explicitly set.
+  var hasSelectedOptionIndex: Bool {_storage._selectedOptionIndex != nil}
+  /// Clears the value of `selectedOptionIndex`. Subsequent reads from it will return its default value.
+  mutating func clearSelectedOptionIndex() {_uniqueStorage()._selectedOptionIndex = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1678,7 +1691,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueEnum: SwiftProtobuf.Message, S
 
 nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlValueUnionVariant"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}is_optional\0\u{3}is_single_pattern\0\u{3}self_type\0\u{3}value_option_name\0\u{1}value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}is_optional\0\u{3}is_single_pattern\0\u{3}self_type\0\u{3}value_option_name\0\u{1}value\0\u{4}\u{2}selected_option_index\0\u{c}\u{7}\u{1}")
 
   fileprivate class _StorageClass {
     var _name: String = String()
@@ -1687,6 +1700,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
     var _selfType: BamlBridge_Cffi_V1_BamlTy? = nil
     var _valueOptionName: String = String()
     var _value: BamlBridge_Cffi_V1_BamlOutboundValue? = nil
+    var _selectedOptionIndex: UInt32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1703,6 +1717,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
       _selfType = source._selfType
       _valueOptionName = source._valueOptionName
       _value = source._value
+      _selectedOptionIndex = source._selectedOptionIndex
     }
   }
 
@@ -1727,6 +1742,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._selfType) }()
         case 5: try { try decoder.decodeSingularStringField(value: &_storage._valueOptionName) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._value) }()
+        case 8: try { try decoder.decodeSingularUInt32Field(value: &_storage._selectedOptionIndex) }()
         default: break
         }
       }
@@ -1757,6 +1773,9 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
       try { if let v = _storage._value {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
+      try { if let v = _storage._selectedOptionIndex {
+        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 8)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1772,6 +1791,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
         if _storage._selfType != rhs_storage._selfType {return false}
         if _storage._valueOptionName != rhs_storage._valueOptionName {return false}
         if _storage._value != rhs_storage._value {return false}
+        if _storage._selectedOptionIndex != rhs_storage._selectedOptionIndex {return false}
         return true
       }
       if !storagesAreEqual {return false}

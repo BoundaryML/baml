@@ -298,7 +298,11 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return DynamicUnion{Variant: v.UnionVariantValue.ValueOptionName, Value: inner}, nil
+		return DynamicUnion{
+			Variant:             v.UnionVariantValue.ValueOptionName,
+			SelectedOptionIndex: v.UnionVariantValue.SelectedOptionIndex,
+			Value:               inner,
+		}, nil
 	case *pb.BamlOutboundValue_HandleValue:
 		return BamlHandle{
 			Key:        v.HandleValue.Key,

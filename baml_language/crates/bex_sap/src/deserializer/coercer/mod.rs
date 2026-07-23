@@ -12,7 +12,6 @@ mod match_string;
 
 use std::{borrow::Cow, collections::HashSet, marker::PhantomData};
 
-use super::types::BamlValueWithFlags;
 use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
@@ -40,13 +39,6 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
 }
 
 impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
-    pub fn display_scope(&self) -> String {
-        if self.scope.is_empty() {
-            return "<root>".to_string();
-        }
-        self.scope.join(".")
-    }
-
     pub fn new(db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
@@ -407,13 +399,6 @@ where
     ) -> Option<
         ValueWithMeta<<Self as TypeValue<'s, 'v, 't>>::Value, DeserializerMeta<'s, 'v, 't, N>>,
     >;
-}
-
-pub trait DefaultValue<'s, 'v, 't, N: TypeIdent> {
-    fn default_value(
-        &self,
-        error: Option<&ParsingError>,
-    ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>>;
 }
 
 /// A trait that gets the type name (permitting resolution errors) from a type.

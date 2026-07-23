@@ -296,6 +296,7 @@ namespace baml.sys:
   class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
+  function collect_garbage
   function exec
   function exit
   function now_ms

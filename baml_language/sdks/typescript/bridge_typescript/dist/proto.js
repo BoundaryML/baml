@@ -154,13 +154,12 @@ function setInboundValue(iv, value, ctx) {
         iv.listValue = { values: listVal };
     }
     else if (value !== null && typeof value === 'object') {
-        // Any remaining object — a plain object OR a codegen-emitted class
-        // instance (e.g. `new Resume({...})`) — encodes as `map_value` with
-        // no FQN tag. The Rust side's `coerce_arg_to_declared_type` reshapes
-        // it against the function's declared parameter type (the 10a
-        // typemap-free encode simplification). `Object.entries` yields the
-        // class's own enumerable fields, set by the constructor's
-        // `Object.assign(this, init)`. The specific built-in wrappers
+        // Any remaining object is either a plain object or a codegen-emitted
+        // class instance. Plain objects encode as `map_value` and are reshaped
+        // against contextual types; generated instances carry a sparse nominal
+        // annotation when the typemap identifies their constructor.
+        // `Object.entries` yields the class's own enumerable fields, set by the
+        // constructor's `Object.assign(this, init)`. The specific built-in wrappers
         // (BamlHandle/BamlStream/media) are handled by the instanceof
         // branches above, so they never reach here.
         //
@@ -191,30 +190,27 @@ function setInboundValue(iv, value, ctx) {
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { classTy: { name: fqn }, fields: classFields };
+                iv.valueType = { classTy: { name: fqn } };
+                iv.classValue = { fields: classFields };
                 return;
             }
         }
-        // Generic class instance → a FQN-tagged `class_value` carrying the
-        // value-level class type-args channel (`class_ty`). Unlike a non-generic
-        // class instance (which encodes as a bare `map_value` for the engine to
-        // reshape against the declared param type), a generic instance MUST send
-        // its concrete type args: the engine strictly rejects coercing a bare map
-        // into a generic class slot ("a bare map carries no class type
-        // arguments"). The args come from the optional `$types` instance field;
-        // an absent binding lowers to the unknown/top type. Mirrors
-        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
-        // `class_value.class_ty` for a generic instance.
+        // A codegen class instance has nominal identity even though its payload
+        // is structurally object-shaped. Preserve that identity with a sparse
+        // node annotation. For a generic class, include exact args when every
+        // `$types` entry is present; otherwise send only the class name. The
+        // engine may refine that nominal hint from one contextual class but
+        // will not use it to choose between two concrete instantiations of the
+        // same generic class in a union.
         if (isClassInstance) {
+            const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
             const params = genericParamNames(value);
-            if (params) {
-                const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
+            if (fqn) {
                 const userTypes = value.$types;
-                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
                 const classFields = [];
                 for (const [k, v] of Object.entries(value)) {
                     // Skip method bindings (behavior, not state) and the synthetic
-                    // `$types` carrier (it rides `class_ty`, not the field list).
+                    // `$types` carrier (it rides `value_type`, not the field list).
                     if (typeof v === 'function')
                         continue;
                     if (k === '$types')
@@ -223,7 +219,14 @@ function setInboundValue(iv, value, ctx) {
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { classTy: { name: fqn, typeArgs }, fields: classFields };
+                if (params && userTypes !== undefined && params.every((p) => userTypes[p] !== undefined)) {
+                    const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes[p]));
+                    iv.valueType = { classTy: { name: fqn, typeArgs } };
+                }
+                else {
+                    iv.valueType = { classTy: { name: fqn, typeArgs: [] } };
+                }
+                iv.classValue = { fields: classFields };
                 return;
             }
         }
@@ -459,7 +462,7 @@ function decodeClass(classValue, typeMap) {
             // Repopulate a generic instance's `$types` from the wire's positional
             // `type_args` (the value-level type channel), keyed by the class's
             // static `$generic` param names — the decode-side mirror of the
-            // encoder's `class_ty`. Defined non-enumerable so it neither perturbs
+            // encoder's sparse `value_type`. Defined non-enumerable so it neither perturbs
             // structural equality (`toEqual`) nor re-encodes as a data field,
             // while still being readable by a later generic instance-method call.
             const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
@@ -805,8 +808,8 @@ function buildHostCallableInbound(className, message, traceback, handleKey) {
     ];
     fields.push(handleField);
     return InboundValue.create({
+        valueType: { classTy: { name: 'baml.errors.HostCallable' } },
         classValue: InboundClassValue.create({
-            classTy: { name: 'baml.errors.HostCallable' },
             fields,
         }),
     });
@@ -848,7 +851,8 @@ function setInboundTypedThrowValue(iv, value, ctx) {
                     setInboundValue(child, fieldValue, ctx);
                     fields.push({ stringKey: key, value: child });
                 }
-                iv.classValue = { classTy: { name: fqn, typeArgs }, fields };
+                iv.valueType = { classTy: { name: fqn, typeArgs } };
+                iv.classValue = { fields };
                 return;
             }
         }
@@ -896,7 +900,7 @@ function sendHostCallableError(callId, err) {
                 // registrations its nested fields triggered and fall through
                 // to the opaque-handle path below. The fall-through is
                 // intentional: the throw must still reach the engine even if
-                // the typed-value encode broke, so we never leave the call
+                // the sparse typed-node encode broke, so we never leave the call
                 // hanging. Each release is wrapped in its own try/catch so
                 // a single bad entry doesn't abort the rest of the rollback
                 // and leak the remaining registrations (mirrors the other

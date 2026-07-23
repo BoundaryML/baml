@@ -179,7 +179,8 @@ inline std::string build_host_callable_inbound(const std::string& class_name,
     handle->set_key(handle_key);
     handle->set_handle_type(pb::HOST_VALUE_OPAQUE);
   }
-  cls->mutable_class_ty()->set_name("baml.errors.HostCallable");
+  value_msg.mutable_value_type()->mutable_class_ty()->set_name(
+      "baml.errors.HostCallable");
   return value_msg.SerializeAsString();
 }
 
@@ -247,7 +248,11 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
         field->set_string_key(e.key());
         transcode_outbound_to_inbound(*field->mutable_value(), e.value());
       }
-      cls->mutable_class_ty()->set_name(v.class_value().name());
+      pb::BamlTyClass* class_ty = out.mutable_value_type()->mutable_class_ty();
+      class_ty->set_name(v.class_value().name());
+      for (const pb::BamlTy& type_arg : v.class_value().type_args()) {
+        class_ty->add_type_args()->CopyFrom(type_arg);
+      }
       return;
     }
     case pb::BamlOutboundValue::kEnumValue: {

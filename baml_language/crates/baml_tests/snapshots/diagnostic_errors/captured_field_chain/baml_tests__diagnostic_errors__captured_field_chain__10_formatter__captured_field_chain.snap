@@ -17,24 +17,18 @@ class Outer {
 // `outer.inner.value` inside the lambda should resolve via Place::Capture,
 // not fall back to Null because `outer` isn't in self.locals.
 function test_captured_chain(outer: Outer) -> int {
-    let result = [1]
-        .map(
-            (x) -> {
-                outer.inner.value
-            },
-        );
+    let result = [1].map((x) -> {
+        outer.inner.value
+    });
     result[0]
 }
 
 // Issue #1 variant: captured root used as method receiver inside lambda.
 // `outer.inner` should resolve through capture, not produce a dummy temp.
 function test_captured_method(outer: Outer) -> string {
-    let result = [1]
-        .map(
-            (x) -> {
-                outer.name
-            },
-        );
+    let result = [1].map((x) -> {
+        outer.name
+    });
     result[0]
 }
 

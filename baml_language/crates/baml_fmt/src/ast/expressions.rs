@@ -46,6 +46,8 @@ pub enum Expression {
     BacktickString(t::BacktickString),
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
+    /// A `spawn name? (with opts)? { … }` task-spawn expression (BEP-034).
+    Spawn(Box<SpawnExpr>),
     /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
     /// `catch`/`match` arm value like `_ => return 0`). Printed verbatim, like
     /// [`Expression::Unknown`] and backed by the same [`VerbatimSpan`], but kept
@@ -67,7 +69,7 @@ pub enum Expression {
 }
 
 /// A node the strong AST does not model and prints verbatim: an unmodeled
-/// expression (e.g. `defer { … }`, `throw e`, `await f`, `spawn { … }`,
+/// expression (e.g. `defer { … }`, `throw e`, `await f`,
 /// `x.as<T>`) held as [`Expression::Unknown`], or a braceless jump held as
 /// [`Expression::Return`], [`Expression::Break`], or [`Expression::Continue`].
 ///
@@ -134,6 +136,7 @@ impl Expression {
                 | Expression::IfLet(_)
                 | Expression::Match(_)
                 | Expression::Lambda(_)
+                | Expression::Spawn(_)
                 | Expression::Unknown(_)
         )
     }
@@ -215,6 +218,7 @@ impl FromCST for Expression {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
+            SyntaxKind::SPAWN_EXPR => Expression::Spawn(Box::new(SpawnExpr::from_cst(elem)?)),
             SyntaxKind::RETURN_EXPR => Expression::Return(VerbatimSpan::from_element(&elem)),
             SyntaxKind::BREAK_EXPR => Expression::Break(VerbatimSpan::from_element(&elem)),
             SyntaxKind::CONTINUE_EXPR => Expression::Continue(VerbatimSpan::from_element(&elem)),
@@ -267,9 +271,10 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
+            Expression::Spawn(spawn) => spawn.single_line_width(input),
             Expression::Return(_) | Expression::Break(_) | Expression::Continue(_) => None,
             Expression::Unknown(unknown) => {
-                // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
+                // Unmodeled nodes (e.g. `await f`, `x.as<T>`,
                 // `throw e`) print their source verbatim (see `print`). When that
                 // text is a single line it occupies a known width and can sit
                 // inline like any other fitting expression. Reporting `None` here
@@ -319,6 +324,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
+            Expression::Spawn(spawn) => spawn.print(shape, printer),
             // Print the raw `return …` / `break` / `continue` text. The arm
             // printers add the `;` when they wrap this into a block (see
             // `CatchArm`/`MatchArm`). A braceless jump only appears as a whole
@@ -370,6 +376,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
+            Expression::Spawn(spawn) => spawn.leftmost_token(),
             Expression::Return(span)
             | Expression::Break(span)
             | Expression::Continue(span)
@@ -404,6 +411,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
+            Expression::Spawn(spawn) => spawn.rightmost_token(),
             Expression::Return(span)
             | Expression::Break(span)
             | Expression::Continue(span)
@@ -2422,8 +2430,16 @@ impl Printable for CallExpr {
     /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
+        let line_len_before = printer.current_line_len();
         multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
-        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        // Account for the callee on the call line so the args' hug layout
+        // (see `CallArgs::try_print_hug`) budgets its first line correctly.
+        let args_shape = Shape {
+            first_line_offset: shape.first_line_offset
+                + printer.current_line_len().saturating_sub(line_len_before),
+            ..shape
+        };
+        multi_lined |= printer.print(&self.args, args_shape).multi_lined;
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2526,6 +2542,14 @@ impl FromCST for CallArg {
 }
 
 impl CallArg {
+    /// A block-terminal argument (a lambda or a `spawn { … }`) that may hug
+    /// the call parens instead of forcing the whole call to break: the
+    /// argument's block opens on the call line and its `}` is immediately
+    /// followed by `)`.
+    const fn is_huggable(&self) -> bool {
+        matches!(self.expr, Expression::Lambda(_) | Expression::Spawn(_))
+    }
+
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         let mut len = 0;
         if let Some((name, equals)) = &self.label {
@@ -2720,12 +2744,96 @@ impl CallArgs {
             Some(PrintInfo::default_single_line())
         }
     }
+
+    /// Whether the hug layout (see [`Self::try_print_hug`]) applies: the last
+    /// argument is block-terminal (a lambda or `spawn { … }`).
+    fn can_hug(&self) -> bool {
+        self.args
+            .split_last()
+            .is_some_and(|((arg, _), _)| arg.is_huggable())
+    }
+
+    /// Hug layout for a trailing block-terminal argument: everything up to
+    /// the last argument prints on one line, the last argument's block opens
+    /// on that same line and closes at the outer indent, immediately followed
+    /// by the closing paren (no trailing comma).
+    ///
+    /// ```baml
+    /// futures.push(spawn {
+    ///     work(c)
+    /// })
+    /// ```
+    ///
+    /// Should be passed a sub-printer to avoid printing trivia in the outer
+    /// printer in the event that the hug layout does not apply.
+    fn try_print_hug(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let ((last_arg, last_comma), init) = self.args.split_last()?;
+        if !last_arg.is_huggable() {
+            return None;
+        }
+
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        for (arg, comma) in init {
+            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
+            printer.try_print_trivia_single_line_squished(arg_leading)?;
+            if printer
+                .print(arg, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(arg_trailing)?;
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.print_raw_token(comma);
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_str(" ");
+        }
+
+        let (last_leading, last_trailing) = printer.trivia.get_for_element(last_arg);
+        printer.try_print_trivia_single_line_squished(last_leading)?;
+        // The hugged argument's first line continues the call line, so its
+        // single-line budget is what remains after the indent, the call's own
+        // offset, and everything printed since the open paren.
+        let first_line_offset = shape.first_line_offset + printer.current_line_len();
+        let arg_shape = Shape {
+            width: printer
+                .config
+                .line_width
+                .saturating_sub(shape.indent + first_line_offset),
+            indent: shape.indent,
+            first_line_offset,
+        };
+        printer.print(last_arg, arg_shape);
+        // The trailing comma is dropped in the hug layout, but keep any
+        // comments attached around it.
+        printer.try_print_trivia_single_line_squished(last_trailing)?;
+        if let Some(comma) = last_comma {
+            let (comma_leading, comma_trailing) = printer.trivia.get_for_range_split(comma.span());
+            printer.try_print_trivia_single_line_squished(comma_leading)?;
+            printer.try_print_trivia_single_line_squished(comma_trailing)?;
+        }
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        Some(PrintInfo::default_multi_lined())
+    }
 }
 
 impl Printable for CallArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3312,6 +3420,20 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // An empty block with no comment trapped inside collapses to `{}`
+        // (e.g. an empty match arm `null => {},` or an empty `if` body).
+        if self.stmts.is_empty() && self.expr.is_none() {
+            let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
+            let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+            if !open_trailing.iter().any(EmittableTrivia::is_comment)
+                && !close_leading.iter().any(EmittableTrivia::is_comment)
+            {
+                printer.print_raw_token(&self.open_brace);
+                printer.print_raw_token(&self.close_brace);
+                return PrintInfo::default_single_line();
+            }
+        }
+
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
@@ -4047,8 +4169,10 @@ impl Printable for MapLiteral {
 #[derive(Debug)]
 pub struct ObjectField {
     pub name: ObjectFieldKey,
-    pub colon: t::Colon,
-    pub value: Expression,
+    /// Absent for property shorthand (`{ options }`). The parser only permits
+    /// shorthand for a bare identifier, never for a quoted or qualified key.
+    pub colon: Option<t::Colon>,
+    pub value: Option<Expression>,
 }
 
 impl FromCST for ObjectField {
@@ -4061,10 +4185,17 @@ impl FromCST for ObjectField {
         let name = it.expect_next("WORD or STRING_LITERAL")?;
         let name = ObjectFieldKey::from_cst(name)?;
 
-        let colon = it.expect_parse()?;
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
 
-        let value = it.expect_next("value")?;
-        let value = Expression::from_cst(value)?;
+        let value = if colon.is_some() {
+            let value = it.expect_next("value")?;
+            Some(Expression::from_cst(value)?)
+        } else {
+            None
+        };
 
         it.expect_end()?;
 
@@ -4083,18 +4214,21 @@ impl ObjectField {
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         let name = self.name.single_line_width(input)?;
-        let value = self.value.single_line_width(input)?;
+        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
+            return Some(name);
+        };
+        let value_width = value.single_line_width(input)?;
         // Must match trivia handled by print: colon_trailing + value_leading
         let mut trivia_len = 0usize;
-        let (_, colon_trailing) = input.trivia.get_for_range_split(self.colon.span());
+        let (_, colon_trailing) = input.trivia.get_for_range_split(colon.span());
         for t in colon_trailing {
             trivia_len += t.single_line_len(input.input)?;
         }
-        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        let value_leading = input.trivia.get_leading_for_element(value);
         for t in value_leading {
             trivia_len += t.single_line_len(input.input)?;
         }
-        Some(name + const { ": ".len() } + value + trivia_len)
+        Some(name + const { ": ".len() } + value_width + trivia_len)
     }
 }
 
@@ -4102,20 +4236,26 @@ impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
-        printer.print_raw_token(&self.colon);
-        let (_, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
+            return PrintInfo { multi_lined };
+        };
+        printer.print_raw_token(colon);
+        let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
         printer.print_str(" ");
         printer.print_trivia_squished(colon_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        let value_leading = printer.trivia.get_leading_for_element(value);
         printer.print_trivia_squished(value_leading);
-        multi_lined |= printer.print(&self.value, shape).multi_lined;
+        multi_lined |= printer.print(value, shape).multi_lined;
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.value.rightmost_token()
+        self.value
+            .as_ref()
+            .map(Printable::rightmost_token)
+            .unwrap_or_else(|| self.name.rightmost_token())
     }
 }
 
@@ -4505,22 +4645,6 @@ pub enum LambdaArrow {
     FatArrow(t::FatArrow),
 }
 
-impl LambdaArrow {
-    #[must_use]
-    pub fn span(&self) -> TextRange {
-        match self {
-            LambdaArrow::Arrow(t) => t.span(),
-            LambdaArrow::FatArrow(t) => t.span(),
-        }
-    }
-
-    /// Returns true if the source used `=>` instead of the canonical `->`.
-    #[must_use]
-    pub fn is_fat_arrow(&self) -> bool {
-        matches!(self, LambdaArrow::FatArrow(_))
-    }
-}
-
 impl FromCST for LambdaArrow {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
@@ -4658,6 +4782,279 @@ impl Printable for LambdaExpr {
         } else {
             self.param_list.leftmost_token()
         }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.block.rightmost_token()
+    }
+}
+
+/// The `with` options clause of a [`SpawnExpr`]: the keyword and its
+/// comma-separated expressions (in v1 a single `baml.spawn.options(...)`
+/// call).
+pub type SpawnWithClause = (t::With, Vec<(Expression, Option<t::Comma>)>);
+
+/// Corresponds to a [`SyntaxKind::SPAWN_EXPR`] node.
+///
+/// `spawn name_expr? (with expr (, expr)*)? { body }` (BEP-034). The name
+/// expression and the `with` options clause are both optional; the body is
+/// always a brace-delimited block.
+#[derive(Debug)]
+pub struct SpawnExpr {
+    pub keyword: t::Spawn,
+    /// Optional task-name expression between `spawn` and `with`/the body.
+    pub name: Option<Expression>,
+    pub with_clause: Option<SpawnWithClause>,
+    pub block: BlockExpr,
+}
+
+impl FromCST for SpawnExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::SPAWN_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword: t::Spawn = it.expect_parse()?;
+
+        let mut name = None;
+        let mut with_clause = None;
+        let block = loop {
+            let elem = it.expect_next("spawn body block")?;
+            match elem.kind() {
+                SyntaxKind::BLOCK_EXPR => break BlockExpr::from_cst(elem)?,
+                SyntaxKind::KW_WITH => {
+                    let with_kw = t::With::from_cst(elem)?;
+                    let mut options = Vec::new();
+                    while let Some(next) = it.peek() {
+                        if next.kind() == SyntaxKind::BLOCK_EXPR {
+                            break;
+                        }
+                        let expr = Expression::from_cst(it.next().expect("peeked"))?;
+                        let comma = it
+                            .next_if_kind(SyntaxKind::COMMA)
+                            .map(t::Comma::from_cst)
+                            .transpose()?;
+                        options.push((expr, comma));
+                    }
+                    with_clause = Some((with_kw, options));
+                }
+                _ if name.is_none() && with_clause.is_none() => {
+                    name = Some(Expression::from_cst(elem)?);
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedAdditionalElement {
+                        parent: it.parent,
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+        it.expect_end()?;
+
+        Ok(SpawnExpr {
+            keyword,
+            name,
+            with_clause,
+            block,
+        })
+    }
+}
+
+impl KnownKind for SpawnExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SPAWN_EXPR
+    }
+}
+
+impl SpawnExpr {
+    /// Source range for the spawn header, excluding the body block's opening
+    /// brace. Keeping a commented header verbatim avoids dropping trivia that
+    /// sits between the keyword, optional name, `with` options, and commas.
+    fn header_range(&self) -> TextRange {
+        TextRange::new(
+            self.keyword.span().start(),
+            self.block.open_brace.span().start(),
+        )
+    }
+
+    /// Header comments are deliberately kept verbatim. The structured header
+    /// layout canonicalizes whitespace and commas, but does not otherwise have
+    /// enough information to place a line comment without changing its line.
+    /// The trivia classifier catches both line and block comments here.
+    fn header_requires_verbatim(&self, input: &Printer<'_>) -> bool {
+        let header_start = self.keyword.span().start();
+        let block_start = self.block.open_brace.span().start();
+        input.trivia.all_trivia().iter().any(|trivia| {
+            let attached_at = trivia.attached_to().start();
+            trivia.is_comment() && attached_at >= header_start && attached_at <= block_start
+        })
+    }
+
+    /// Width of the header (`spawn`, optional name, optional `with` clause)
+    /// without the body block. `None` if any part can never be single-lined.
+    fn header_single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        if self.header_requires_verbatim(input) {
+            return None;
+        }
+        let mut len = usize::from(self.keyword.span().len());
+        if let Some(name) = &self.name {
+            len += const { " ".len() } + name.single_line_width(input)?;
+        }
+        if let Some((with_kw, options)) = &self.with_clause {
+            len += const { " ".len() } + usize::from(with_kw.span().len());
+            for (i, (expr, _)) in options.iter().enumerate() {
+                len += if i == 0 {
+                    const { " ".len() }
+                } else {
+                    const { ", ".len() }
+                };
+                len += expr.single_line_width(input)?;
+            }
+        }
+        Some(len)
+    }
+
+    /// Returns the width of the expression if it fits on a single line —
+    /// a simple body (`{}` or `{ tail }`) and a single-lineable header.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        if !self.block.stmts.is_empty() {
+            return None;
+        }
+        let header = self.header_single_line_width(input)?;
+        let (_, open_trailing) = input
+            .trivia
+            .get_for_range_split(self.block.open_brace.span());
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(self.block.close_brace.span());
+        let body = match self.block.expr.as_deref() {
+            Some(tail) => {
+                let (tail_leading, tail_trailing) = input.trivia.get_for_element(tail);
+                (const { " {  }".len() })
+                    + open_trailing.try_squished_len(input.input)?
+                    + tail_leading.try_squished_len(input.input)?
+                    + tail.single_line_width(input)?
+                    + tail_trailing.try_squished_len(input.input)?
+                    + close_leading.try_squished_len(input.input)?
+            }
+            None => {
+                if open_trailing.iter().any(EmittableTrivia::is_comment)
+                    || close_leading.iter().any(EmittableTrivia::is_comment)
+                {
+                    return None;
+                }
+                const { " {}".len() }
+            }
+        };
+        Some(header + body)
+    }
+
+    /// Prints the header: `spawn`, then the optional name and `with` clause.
+    /// Returns whether any part spilled onto multiple lines.
+    fn print_header(&self, shape: &Shape, printer: &mut Printer) -> bool {
+        let mut multi_lined = false;
+        printer.print_raw_token(&self.keyword);
+        if let Some(name) = &self.name {
+            printer.print_str(" ");
+            multi_lined |= printer.print(name, shape.clone()).multi_lined;
+        }
+        if let Some((with_kw, options)) = &self.with_clause {
+            printer.print_str(" ");
+            printer.print_raw_token(with_kw);
+            for (i, (expr, _)) in options.iter().enumerate() {
+                printer.print_str(if i == 0 { " " } else { ", " });
+                multi_lined |= printer.print(expr, shape.clone()).multi_lined;
+            }
+        }
+        multi_lined
+    }
+
+    /// Single-line layout: `spawn name? (with opts)? {}` or `… { tail }`.
+    /// Only possible when the body has no statements.
+    ///
+    /// Should be passed a sub-printer to avoid printing trivia in the outer
+    /// printer in the event that the expression cannot fit on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        if !self.block.stmts.is_empty() || self.header_requires_verbatim(printer) {
+            return None;
+        }
+        if self.print_header(&Shape::unlimited_single_line(), printer) {
+            return None;
+        }
+        printer.print_str(" ");
+
+        let (_, open_trailing) = printer
+            .trivia
+            .get_for_range_split(self.block.open_brace.span());
+        let (close_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.block.close_brace.span());
+        match self.block.expr.as_deref() {
+            Some(tail) => {
+                printer.print_raw_token(&self.block.open_brace);
+                printer.print_str(" ");
+                printer.try_print_trivia_single_line_squished(open_trailing)?;
+                let (tail_leading, tail_trailing) = printer.trivia.get_for_element(tail);
+                printer.try_print_trivia_single_line_squished(tail_leading)?;
+                if printer
+                    .print(tail, Shape::unlimited_single_line())
+                    .multi_lined
+                {
+                    return None;
+                }
+                printer.try_print_trivia_single_line_squished(tail_trailing)?;
+                printer.try_print_trivia_single_line_squished(close_leading)?;
+                printer.print_str(" ");
+                printer.print_raw_token(&self.block.close_brace);
+            }
+            None => {
+                if open_trailing.iter().any(EmittableTrivia::is_comment)
+                    || close_leading.iter().any(EmittableTrivia::is_comment)
+                {
+                    return None;
+                }
+                printer.print_raw_token(&self.block.open_brace);
+                printer.print_raw_token(&self.block.close_brace);
+            }
+        }
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl PrintMultiLine for SpawnExpr {
+    /// Multi-line layout: the header stays on the current line and the block
+    /// opens right after it, closing at the outer indent.
+    ///
+    /// ```baml
+    /// spawn with baml.spawn.options(group = g) {
+    ///     compute()
+    /// }
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if self.header_requires_verbatim(printer) {
+            printer.print_input_range(self.header_range());
+        } else {
+            self.print_header(&shape, printer);
+            printer.print_str(" ");
+        }
+        printer.print(&self.block, shape);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for SpawnExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
         self.block.rightmost_token()
@@ -4951,7 +5348,15 @@ impl PrintChain<'_> {
         }
     }
 
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    /// Prints `first` followed by `members` in single-line form. Returns
+    /// `None` if any element refuses to single-line. The final total-width
+    /// check is left to the caller.
+    fn try_print_members_single_line(
+        &self,
+        members: &[PrintChainItem<'_>],
+        shape: &Shape,
+        printer: &mut Printer,
+    ) -> Option<()> {
         match self.first {
             Expression::Path(path_expr) => {
                 printer.print_raw_token(&path_expr.first);
@@ -4990,7 +5395,7 @@ impl PrintChain<'_> {
                 }
             }
         }
-        for item in &self.chain_members {
+        for item in members {
             if printer.output.len() > shape.width {
                 return None;
             }
@@ -5022,11 +5427,56 @@ impl PrintChain<'_> {
                 }
             }
         }
+        Some(())
+    }
+
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        self.try_print_members_single_line(&self.chain_members, shape, printer)?;
         if printer.output.len() > shape.width {
             None
         } else {
             Some(PrintInfo::default_single_line())
         }
+    }
+
+    /// Hug layout: the whole chain prints on one line except the final call,
+    /// whose trailing block-terminal argument hugs the parens (see
+    /// [`CallArgs::try_print_hug`]).
+    ///
+    /// ```baml
+    /// futures.push(spawn {
+    ///     work(c)
+    /// });
+    /// ```
+    ///
+    /// Should be passed a sub-printer to avoid printing partial output in the
+    /// event that the hug layout does not apply.
+    fn try_print_hug(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let (last, prefix) = self.chain_members.split_last()?;
+        let (question_dot, call_args) = match last {
+            PrintChainItem::Call(args) => (None, *args),
+            PrintChainItem::OptionalCall(qd, args) => (Some(*qd), *args),
+            _ => return None,
+        };
+        if !call_args.can_hug() {
+            return None;
+        }
+        self.try_print_members_single_line(prefix, shape, printer)?;
+        if printer.output.len() > shape.width {
+            return None;
+        }
+        if let Some(qd) = question_dot {
+            printer.print_raw_token(qd);
+        }
+        let hug_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            // `try_print_hug` runs in this same sub-printer, so its
+            // `current_line_len()` already includes the printed chain prefix.
+            // Keep only the offset that existed before this chain began.
+            first_line_offset: shape.first_line_offset,
+        };
+        call_args.try_print_hug(&hug_shape, printer)
     }
 }
 
@@ -5034,6 +5484,7 @@ impl Printable for PrintChain<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {

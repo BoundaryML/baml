@@ -12,10 +12,10 @@ use std::{collections::HashSet, fmt::Debug, ops::Index};
 use indexmap::{IndexMap, IndexSet};
 use minijinja::machinery::{Span, ast::Expr};
 
+pub(crate) use self::stmt::get_variable_types;
 pub use self::types::{EnumDefinition, EnumValueDefinition, JinjaContext, PredefinedTypes, Type};
-pub(crate) use self::{expr::evaluate_type, stmt::get_variable_types};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeError {
     message: String,
     span: Span,
