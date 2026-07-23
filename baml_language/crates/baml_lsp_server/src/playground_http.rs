@@ -45,6 +45,50 @@ impl PlaygroundHttpState {
 
 pub struct PlaygroundHttp(pub Arc<PlaygroundHttpState>);
 
+impl PlaygroundHttp {
+    fn read_response_body<T: Send + 'static>(
+        &self,
+        response: owned::http::Response,
+        read: impl FnOnce(owned::http::Response) -> SysOpOutput<T>,
+        describe: impl FnOnce(&T) -> (usize, String) + Send + 'static,
+    ) -> SysOpOutput<T> {
+        let state = self.0.clone();
+        let key = response_body_key(&response);
+        let fetch_info = state.response_to_fetch.lock().remove(&key);
+
+        match (fetch_info, read(response)) {
+            (Some((host_call_id, fetch_id)), SysOpOutput::Async(fut)) => {
+                SysOpOutput::async_op_with_throw(async move {
+                    let body = fut.await?;
+                    let (body_size, response_body) = describe(&body);
+                    if let Some(patch) = state.run_store.ingest_fetch_updated(
+                        &HostCallId::Native(host_call_id),
+                        fetch_id,
+                        None,
+                        None,
+                        Vec::new(),
+                        Some(body_size),
+                        None,
+                    ) {
+                        broadcast_run_patch(&state.broadcast_tx, &patch);
+                    }
+                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
+                        call_id: host_call_id.0,
+                        log_id: fetch_id,
+                        status: None,
+                        duration_ms: None,
+                        response_headers: None,
+                        response_body: Some(response_body),
+                        error: None,
+                    });
+                    Ok(body)
+                })
+            }
+            (_, native_result) => native_result,
+        }
+    }
+}
+
 fn response_body_key(resp: &owned::http::Response) -> usize {
     Arc::as_ptr(&resp._body) as *const () as usize
 }
@@ -75,48 +119,11 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         response: owned::http::Response,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let state = self.0.clone();
-        let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().remove(&key);
-
-        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
-            &sys_native::NativeSysOps,
-            heap,
-            call_id,
+        self.read_response_body(
             response,
-            ctx,
-        );
-
-        match fetch_info {
-            Some((host_call_id, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
-                    let text = fut.await?;
-                    if let Some(patch) = state.run_store.ingest_fetch_updated(
-                        &HostCallId::Native(host_call_id),
-                        fetch_id,
-                        None,
-                        None,
-                        Vec::new(),
-                        Some(text.len()),
-                        None,
-                    ) {
-                        broadcast_run_patch(&state.broadcast_tx, &patch);
-                    }
-                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: host_call_id.0,
-                        log_id: fetch_id,
-                        status: None,
-                        duration_ms: None,
-                        response_headers: None,
-                        response_body: Some(text.clone()),
-                        error: None,
-                    });
-                    Ok(text)
-                }),
-                other => other,
-            },
-            None => native_result,
-        }
+            |response| sys_native::NativeSysOps.text(heap, call_id, response, ctx),
+            |text| (text.len(), text.clone()),
+        )
     }
 
     fn bytes(
@@ -126,48 +133,11 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         response: owned::http::Response,
         ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        let state = self.0.clone();
-        let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().remove(&key);
-
-        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
-            &sys_native::NativeSysOps,
-            heap,
-            call_id,
+        self.read_response_body(
             response,
-            ctx,
-        );
-
-        match fetch_info {
-            Some((host_call_id, fetch_id)) => match native_result {
-                SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
-                    let bytes = fut.await?;
-                    if let Some(patch) = state.run_store.ingest_fetch_updated(
-                        &HostCallId::Native(host_call_id),
-                        fetch_id,
-                        None,
-                        None,
-                        Vec::new(),
-                        Some(bytes.len()),
-                        None,
-                    ) {
-                        broadcast_run_patch(&state.broadcast_tx, &patch);
-                    }
-                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: host_call_id.0,
-                        log_id: fetch_id,
-                        status: None,
-                        duration_ms: None,
-                        response_headers: None,
-                        response_body: Some(format!("<binary data: {} bytes>", bytes.len())),
-                        error: None,
-                    });
-                    Ok(bytes)
-                }),
-                other => other,
-            },
-            None => native_result,
-        }
+            |response| sys_native::NativeSysOps.bytes(heap, call_id, response, ctx),
+            |bytes| (bytes.len(), format!("<binary data: {} bytes>", bytes.len())),
+        )
     }
 
     fn new(
@@ -513,5 +483,114 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             request,
             ctx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sys_types::{VmBamlError, VmRustFnError};
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    use super::*;
+
+    fn test_http() -> (PlaygroundHttp, broadcast::Receiver<WsOutMessage>) {
+        let (broadcast_tx, broadcast_rx) = broadcast::channel(8);
+        let state = PlaygroundHttpState::new(broadcast_tx, Arc::new(InMemoryRunStore::default()));
+        (PlaygroundHttp(Arc::new(state)), broadcast_rx)
+    }
+
+    fn test_response() -> owned::http::Response {
+        owned::http::Response {
+            status_code: 200,
+            headers: indexmap::IndexMap::new(),
+            url: "https://example.com".to_string(),
+            _body: Arc::new(()),
+        }
+    }
+
+    #[test]
+    fn untracked_response_preserves_ready_output() {
+        let (http, mut broadcast_rx) = test_http();
+        let output = http.read_response_body(
+            test_response(),
+            |_| SysOpOutput::ok("body".to_string()),
+            |_| panic!("ready output must not be described"),
+        );
+
+        let SysOpOutput::Ready(result) = output else {
+            panic!("expected ready output");
+        };
+        assert_eq!(result.expect("expected response body"), "body");
+        assert!(matches!(broadcast_rx.try_recv(), Err(TryRecvError::Empty)));
+    }
+
+    #[tokio::test]
+    async fn tracked_response_logs_async_body_after_removing_tracking() {
+        let (http, mut broadcast_rx) = test_http();
+        let response = test_response();
+        let key = response_body_key(&response);
+        http.0
+            .response_to_fetch
+            .lock()
+            .insert(key, (CallId(17), 23));
+        let state = Arc::clone(&http.0);
+
+        let output = http.read_response_body(
+            response,
+            move |_| {
+                assert!(!state.response_to_fetch.lock().contains_key(&key));
+                SysOpOutput::async_op(async { Ok("hello".to_string()) })
+            },
+            |text| (text.len(), text.clone()),
+        );
+        let SysOpOutput::Async(future) = output else {
+            panic!("expected async output");
+        };
+        assert_eq!(future.await.expect("expected response body"), "hello");
+
+        let message = broadcast_rx.recv().await.expect("expected fetch update");
+        assert!(matches!(
+            message,
+            WsOutMessage::FetchLogUpdate {
+                call_id: 17,
+                log_id: 23,
+                response_body: Some(body),
+                ..
+            } if body == "hello"
+        ));
+    }
+
+    #[tokio::test]
+    async fn tracked_response_preserves_async_body_errors() {
+        let (http, mut broadcast_rx) = test_http();
+        let response = test_response();
+        http.0
+            .response_to_fetch
+            .lock()
+            .insert(response_body_key(&response), (CallId(17), 23));
+
+        let output = http.read_response_body(
+            response,
+            |_| {
+                SysOpOutput::async_op(async {
+                    Err::<String, VmRustFnError>(
+                        VmBamlError::Io {
+                            message: "Response body has already been consumed".to_string(),
+                        }
+                        .into(),
+                    )
+                })
+            },
+            |_| panic!("failed output must not be described"),
+        );
+        let SysOpOutput::Async(future) = output else {
+            panic!("expected async output");
+        };
+        let error = future.await.expect_err("expected body error");
+        assert_eq!(
+            error.to_string(),
+            "I/O error: Response body has already been consumed"
+        );
+        assert!(matches!(broadcast_rx.try_recv(), Err(TryRecvError::Empty)));
     }
 }
