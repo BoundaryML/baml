@@ -1480,22 +1480,9 @@ impl LoweringContext {
         )
     }
 
-    fn lower_if_let_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // CST shape: `if let PATTERN = SCRUTINEE THEN_BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
-        //
-        // Children we care about, in source order:
-        //   1. PATTERN
-        //   2. scrutinee expression (may be a bare WORD/literal token, not a node)
-        //   3. then-branch (BLOCK_EXPR)
-        //   4. else-branch (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR), optional
-        //
-        // The scrutinee can appear as either a wrapper node (PATH_EXPR,
-        // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
-        // we mirror `lower_if_expr` and walk children-with-tokens.
-        self.warn_direct_const_introducers(node);
-
+    fn lower_let_condition_parts(&mut self, node: &SyntaxNode) -> (PatId, Vec<ExprId>) {
         let mut pattern = None;
-        let mut exprs: Vec<ExprId> = Vec::new();
+        let mut exprs = Vec::new();
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Node(child) => {
@@ -1517,6 +1504,24 @@ impl LoweringContext {
 
         let pattern =
             pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
+        (pattern, exprs)
+    }
+
+    fn lower_if_let_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        // CST shape: `if let PATTERN = SCRUTINEE THEN_BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
+        //
+        // Children we care about, in source order:
+        //   1. PATTERN
+        //   2. scrutinee expression (may be a bare WORD/literal token, not a node)
+        //   3. then-branch (BLOCK_EXPR)
+        //   4. else-branch (BLOCK_EXPR | IF_EXPR | IF_LET_EXPR), optional
+        //
+        // The scrutinee can appear as either a wrapper node (PATH_EXPR,
+        // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
+        // we mirror `lower_if_expr` and walk children-with-tokens.
+        self.warn_direct_const_introducers(node);
+
+        let (pattern, exprs) = self.lower_let_condition_parts(node);
         let scrutinee = exprs
             .first()
             .copied()
@@ -1544,29 +1549,7 @@ impl LoweringContext {
         // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
         self.warn_direct_const_introducers(node);
 
-        let mut pattern = None;
-        let mut exprs: Vec<ExprId> = Vec::new();
-        for elem in node.children_with_tokens() {
-            match elem {
-                rowan::NodeOrToken::Node(child) => {
-                    if child.kind() == SyntaxKind::PATTERN {
-                        if pattern.is_none() {
-                            pattern = Some(self.lower_pattern(&child));
-                        }
-                    } else {
-                        exprs.push(self.lower_expr(&child));
-                    }
-                }
-                rowan::NodeOrToken::Token(token) => {
-                    if let Some(expr_id) = self.try_lower_bare_token(&token) {
-                        exprs.push(expr_id);
-                    }
-                }
-            }
-        }
-
-        let pattern =
-            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
+        let (pattern, exprs) = self.lower_let_condition_parts(node);
         let scrutinee = exprs
             .first()
             .copied()
