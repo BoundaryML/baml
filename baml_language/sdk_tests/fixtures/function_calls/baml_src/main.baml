@@ -13,6 +13,15 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+function unhandled_spawn_error() -> int throws string {
+  throw "boom"
+}
+
+function spawn_unhandled_error() -> int {
+  spawn { unhandled_spawn_error() }
+  1
+}
+
 // First nominal-value bridge proof: the generated Go struct crosses the FFI
 // boundary in both directions with exact class and field wire names.
 class Person {
