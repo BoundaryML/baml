@@ -442,6 +442,64 @@ jobs:
           path: ${{ runner.temp }}/go-sdk-mirror
           if-no-files-found: error
 
+  build-swift-sdk:
+    name: Build Swift SDK (XCFramework + mirror)
+    needs: [plan]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - name: Stamp version
+        run: scripts/baml-language-version stamp --plan release-plan.json
+      - name: Install Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+        working-directory: baml_language
+      - name: Build XCFramework (all 5 Apple slices, bitcode-stripped)
+        # build-xcframework.sh --all self-provisions the pinned toolchain's
+        # Apple targets + deployment-target pins. No `swift` invocation on
+        # this path, so the runner's Swift version is irrelevant here.
+        run: baml_language/sdks/swift/scripts/build-xcframework.sh --all
+      - name: Zip + checksum (SwiftPM checksum == sha256 of the zip)
+        id: pack
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.plan.outputs.version }}"
+          ZIP="BamlBridgeFFI-${VERSION}.xcframework.zip"
+          (cd baml_language/sdks/swift/Binaries \
+            && ditto -c -k --keepParent BamlBridgeFFI.xcframework "$RUNNER_TEMP/$ZIP")
+          CHECKSUM="$(shasum -a 256 "$RUNNER_TEMP/$ZIP" | awk '{print $1}')"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+      - name: Assemble baml-swift mirror
+        env:
+          TAG: ${{ needs.plan.outputs.git_tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          CHECKSUM: ${{ steps.pack.outputs.checksum }}
+          ZIP: ${{ steps.pack.outputs.zip }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
+          scripts/assemble-swift-sdk-mirror \
+            --out "$RUNNER_TEMP/swift-sdk-mirror" \
+            --version "$VERSION" --source-sha "$SOURCE_SHA" \
+            --zip-url "$url" --checksum "$CHECKSUM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-xcframework
+          path: ${{ runner.temp }}/BamlBridgeFFI-*.xcframework.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: swift-sdk-mirror
+          path: ${{ runner.temp }}/swift-sdk-mirror
+          if-no-files-found: error
+
   # Verify-only: the C++ SDK ships no artifact (headers are vendored at
   # generate time); it consumes the shared bridge_cffi artifacts.
   verify-cpp-sdk:
@@ -500,6 +558,7 @@ jobs:
       # dylib-loader SDK depends on.
       - build-bridge-cffi
       - build-go-sdk
+      - build-swift-sdk
       - verify-cpp-sdk
       - verify-csharp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
@@ -1062,6 +1121,91 @@ jobs:
             exit 1
           fi
 
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for v$VERSION"
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "$tag" -m "$tag"
+          git push --atomic origin main "$tag"
+
+  publish-swift-sdk:
+    name: Publish Swift SDK (release asset + mirror)
+    # After the toolchain publisher so the shared baml-language-<version>
+    # release exists (we add the XCFramework asset to that tag), then push
+    # the passive baml-swift mirror pinned at that asset.
+    needs: [plan, build-swift-sdk, all-builds, publish-toolchain-release]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-xcframework
+          path: /tmp/swift-xcframework
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-sdk-mirror
+          path: /tmp/swift-sdk-mirror
+      - name: Upload XCFramework asset to the release (immutable)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.git_tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(/tmp/swift-xcframework/*.zip)
+          [[ ${#assets[@]} -eq 1 ]] || { echo "::error::expected one xcframework zip"; exit 1; }
+          f="${assets[0]}"; name="$(basename "$f")"
+          existing="$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+          if grep -qxF "$name" <<<"$existing"; then
+            tmp="$(mktemp)"
+            gh release download "$TAG" --pattern "$name" --output "$tmp" --clobber
+            cmp -s "$f" "$tmp" || { echo "::error::asset $name exists with different content"; exit 1; }
+            echo "asset already present and identical: $name"
+          else
+            gh release upload "$TAG" "$f"
+            echo "uploaded: $name"
+          fi
+      - name: Clone BoundaryML/baml-swift
+        env:
+          DEPLOY_KEY: ${{ secrets.BAML_SWIFT_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/baml_swift_mirror_key
+          chmod 600 ~/.ssh/baml_swift_mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
+          git clone git@github.com:BoundaryML/baml-swift.git /tmp/baml-swift
+          if ! git -C /tmp/baml-swift rev-parse --verify HEAD >/dev/null 2>&1; then
+            git -C /tmp/baml-swift switch --orphan main
+          fi
+      - name: Publish immutable package tag
+        env:
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
+          tag="v$VERSION"
+          rsync -a --delete --exclude .git /tmp/swift-sdk-mirror/ /tmp/baml-swift/
+          cd /tmp/baml-swift
+          git add -A
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            if git diff --cached --quiet "$tag" --; then
+              echo "$tag already exists with identical content"
+              exit 0
+            fi
+            echo "::error::$tag already exists with different content"
+            exit 1
+          fi
           if ! git diff --cached --quiet; then
             git -c user.name="github-actions[bot]" \
                 -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
