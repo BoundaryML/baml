@@ -6,6 +6,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -22,6 +23,9 @@ CSHARP_VERIFIER = (
     / "verify-csharp-product-slice.reusable.yaml"
 )
 CARGO_TESTS = ROOT / ".github" / "workflows" / "cargo-tests.reusable.yaml"
+CFFI_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
+)
 PACK_PRODUCT = (
     ROOT
     / "baml_language"
@@ -30,6 +34,16 @@ PACK_PRODUCT = (
     / "bridge_csharp"
     / "tools"
     / "pack-product.sh"
+)
+NUGET_NORMALIZER = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "csharp"
+    / "bridge_csharp"
+    / "tools"
+    / "Baml.NuGetNormalizer"
+    / "Program.cs"
 )
 
 
@@ -131,7 +145,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         )
 
     def test_invalid_or_missing_csharp_metadata_fails_early(self) -> None:
-        cases: list[tuple[str, callable]] = [
+        cases: list[tuple[str, Callable[[dict], object]]] = [
             (
                 "empty",
                 lambda contract: [
@@ -408,6 +422,22 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("--nuget-package-sha256", dry_run)
         self.assertIn("name: swift-xcframework", dry_run)
         self.assertIn("--swift-package-sha256", dry_run)
+        for block in (manifest, dry_run):
+            for output, variable in (
+                ("wrapper_changed", "WRAPPER_CHANGED"),
+                ("crates_io_version", "CRATES_IO_VERSION"),
+                ("nuget_version", "NUGET_VERSION"),
+                ("swiftpm_version", "SWIFTPM_VERSION"),
+                ("channel", "CHANNEL"),
+                ("version", "VERSION"),
+                ("released_at", "RELEASED_AT"),
+                ("pypi_version", "PYPI_VERSION"),
+                ("wrapper_version", "WRAPPER_VERSION"),
+            ):
+                self.assertIn(
+                    f"{variable}: ${{{{ needs.plan.outputs.{output} }}}}",
+                    block,
+                )
 
         swift_verify = job_block(workflow, "verify-swift-sdk")
         swift_smoke = job_block(workflow, "smoke-swift-release")
@@ -415,12 +445,17 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("BamlRuntime.nativeVersion()", swift_verify)
         self.assertIn("BamlRuntime.nativeVersion()", swift_smoke)
         self.assertIn("publish-pkg-channel", dispatch)
+        self.assertIn(
+            '--cfg=getrandom_backend=\\"wasm_js\\"',
+            CFFI_BUILDER.read_text(encoding="utf-8"),
+        )
 
     def test_nuget_repair_and_nightly_pack_contracts_are_fail_closed(self) -> None:
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
         verifier = CSHARP_VERIFIER.read_text(encoding="utf-8")
         cargo_tests = CARGO_TESTS.read_text(encoding="utf-8")
         pack = PACK_PRODUCT.read_text(encoding="utf-8")
+        normalizer = NUGET_NORMALIZER.read_text(encoding="utf-8")
         self.assertIn('404)', publisher)
         self.assertIn('echo "publish=true"', publisher)
         self.assertIn('200)', publisher)
@@ -444,6 +479,9 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn('name: "Test nightly C# package version"', cargo_tests)
         self.assertIn('-p:PackageVersion="$nuget"', cargo_tests)
         self.assertIn("baml-bridge.$nuget.nupkg", cargo_tests)
+        self.assertIn("left.ReadExactly(leftChunk)", normalizer)
+        self.assertIn("right.ReadExactly(rightChunk)", normalizer)
+        self.assertNotIn("left.Read(leftBuffer)", normalizer)
 
 
 if __name__ == "__main__":

@@ -1608,10 +1608,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: baml-language-release-${{ github.run_id }}
       - name: Generate release manifests
+        env:
+          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
+          CRATES_IO_VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          NUGET_VERSION: ${{ needs.plan.outputs.nuget_version }}
+          SWIFTPM_VERSION: ${{ needs.plan.outputs.swiftpm_version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           args=()
-          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
           (
@@ -1630,10 +1640,10 @@ jobs:
           fi
           swift_digest="$(sha256sum "${swift_packages[0]}" | cut -d ' ' -f 1)"
           args+=(
-            --crates-io-version "${{ needs.plan.outputs.crates_io_version }}"
-            --nuget-version "${{ needs.plan.outputs.nuget_version }}"
+            --crates-io-version "$CRATES_IO_VERSION"
+            --nuget-version "$NUGET_VERSION"
             --nuget-package-sha256 "$csharp_digest"
-            --swiftpm-version "${{ needs.plan.outputs.swiftpm_version }}"
+            --swiftpm-version "$SWIFTPM_VERSION"
             --swift-package-sha256 "$swift_digest"
           )
           scripts/baml-release-manifests \
@@ -1642,11 +1652,11 @@ jobs:
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out manifests \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --released-at "${{ needs.plan.outputs.released_at }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
-            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            --channel "$CHANNEL" \
+            --version "$VERSION" \
+            --released-at "$RELEASED_AT" \
+            --pypi-version "$PYPI_VERSION" \
+            --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
@@ -1974,10 +1984,20 @@ jobs:
           name: swift-xcframework
           path: dist/swift
       - name: Generate dry-run files
+        env:
+          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
+          CRATES_IO_VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          NUGET_VERSION: ${{ needs.plan.outputs.nuget_version }}
+          SWIFTPM_VERSION: ${{ needs.plan.outputs.swiftpm_version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           args=()
-          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
           # Dry-run rehearses the real manifest shape and binds it to the exact
@@ -1998,10 +2018,10 @@ jobs:
           fi
           swift_digest="$(sha256sum "${swift_packages[0]}" | cut -d ' ' -f 1)"
           args+=(
-            --crates-io-version "${{ needs.plan.outputs.crates_io_version }}"
-            --nuget-version "${{ needs.plan.outputs.nuget_version }}"
+            --crates-io-version "$CRATES_IO_VERSION"
+            --nuget-version "$NUGET_VERSION"
             --nuget-package-sha256 "$csharp_digest"
-            --swiftpm-version "${{ needs.plan.outputs.swiftpm_version }}"
+            --swiftpm-version "$SWIFTPM_VERSION"
             --swift-package-sha256 "$swift_digest"
           )
           scripts/baml-release-manifests \
@@ -2010,15 +2030,15 @@ jobs:
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out dry-run/manifest/v1 \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --released-at "${{ needs.plan.outputs.released_at }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
-            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            --channel "$CHANNEL" \
+            --version "$VERSION" \
+            --released-at "$RELEASED_AT" \
+            --pypi-version "$PYPI_VERSION" \
+            --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --version "$WRAPPER_VERSION" \
             --out dry-run/package-manager
       - uses: actions/upload-artifact@v4
         with:

@@ -612,24 +612,21 @@ internal static class Program
         using FileStream right = File.OpenRead(rightPath);
         byte[] leftBuffer = new byte[1 << 20];
         byte[] rightBuffer = new byte[leftBuffer.Length];
-        while (true)
+        long remaining = leftInfo.Length;
+        while (remaining > 0)
         {
-            int leftRead = left.Read(leftBuffer);
-            int rightRead = right.Read(rightBuffer);
-            if (leftRead != rightRead)
+            int chunkLength = (int)Math.Min(leftBuffer.Length, remaining);
+            Span<byte> leftChunk = leftBuffer.AsSpan(0, chunkLength);
+            Span<byte> rightChunk = rightBuffer.AsSpan(0, chunkLength);
+            left.ReadExactly(leftChunk);
+            right.ReadExactly(rightChunk);
+            if (!leftChunk.SequenceEqual(rightChunk))
             {
                 return false;
             }
-            if (leftRead == 0)
-            {
-                return true;
-            }
-            if (!leftBuffer.AsSpan(0, leftRead).SequenceEqual(
-                    rightBuffer.AsSpan(0, rightRead)))
-            {
-                return false;
-            }
+            remaining -= chunkLength;
         }
+        return true;
     }
 
     private static void RunSelfTests()

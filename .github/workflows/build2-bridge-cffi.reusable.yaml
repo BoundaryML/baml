@@ -194,6 +194,9 @@ jobs:
           if [[ "$TARGET" == "x86_64-pc-windows-msvc" ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=/STACK:67108864"
           fi
+          if [[ "$TARGET" == "wasm32-unknown-unknown" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg=getrandom_backend=\"wasm_js\""
+          fi
           # musl targets default to `+crt-static`, and rustc cannot emit a
           # cdylib under a static CRT — it silently drops the crate type and
           # produces only the `.rlib`. Disable `crt-static` so the build yields
