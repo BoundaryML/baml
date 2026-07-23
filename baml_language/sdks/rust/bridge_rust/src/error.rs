@@ -165,6 +165,15 @@ pub enum DecodeError {
         /// Length of the offending wire string.
         len: usize,
     },
+    /// A union envelope selected an arm outside the generated union's range.
+    InvalidUnionOptionIndex {
+        /// Generated union type being decoded.
+        union: &'static str,
+        /// Index carried by the wire envelope.
+        index: u32,
+        /// Number of representable generated arms.
+        arm_count: usize,
+    },
 }
 
 impl fmt::Display for DecodeError {
@@ -185,6 +194,14 @@ impl fmt::Display for DecodeError {
             DecodeError::InvalidBigint { len } => {
                 write!(f, "invalid bigint wire string ({len} bytes)")
             }
+            DecodeError::InvalidUnionOptionIndex {
+                union,
+                index,
+                arm_count,
+            } => write!(
+                f,
+                "union {union} selected option index {index}, but it has {arm_count} arms"
+            ),
             DecodeError::DeadHostHandle { key } => {
                 write!(
                     f,

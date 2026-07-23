@@ -32,14 +32,14 @@ func Class(name string, fields map[string]Input) Input {
 		})
 	}
 
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_ClassValue{
-		ClassValue: &cffi.InboundClassValue{
-			Fields: entries,
-			ClassTy: &cffi.BamlTyClass{
-				Name: name,
-			},
+	return Input{value: &cffi.InboundValue{
+		ValueType: &cffi.BamlTy{Ty: &cffi.BamlTy_ClassTy{
+			ClassTy: &cffi.BamlTyClass{Name: name},
+		}},
+		Value: &cffi.InboundValue_ClassValue{
+			ClassValue: &cffi.InboundClassValue{Fields: entries},
 		},
-	}}}
+	}}
 }
 
 // ClassValue is a validated non-generic class returned by BAML.

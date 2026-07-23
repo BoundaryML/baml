@@ -91,6 +91,29 @@ pub mod internal {
             )),
         }))
     }
+
+    /// Attach an exact type annotation to an inbound node when the type is a
+    /// concrete selected value type. Union and optional descriptors describe
+    /// context rather than an inhabitant, so they are deliberately omitted.
+    /// An annotation already supplied by the value itself wins: this matters
+    /// for a nested union whose encoder has already projected to its own
+    /// selected arm.
+    pub fn annotate_selected_type(
+        mut value: wire::InboundValue,
+        selected_type: wire::BamlTy,
+    ) -> wire::InboundValue {
+        use wire::baml_ty::Ty;
+
+        if value.value_type.is_none()
+            && !matches!(
+                selected_type.ty.as_ref(),
+                Some(Ty::Union(_) | Ty::Optional(_))
+            )
+        {
+            value.value_type = Some(selected_type);
+        }
+        value
+    }
 }
 
 use internal::__BamlValuePrivate;
@@ -298,8 +321,8 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Option<T> {
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        let v = unwrap(v);
-        match v.value {
+        let unwrapped = unwrap(v.clone());
+        match unwrapped.value {
             None | Some(Out::NullValue(_)) => Ok(None),
             _ => T::from_baml(v).map(Some),
         }
@@ -317,9 +340,12 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Option<T> {
 /// BAML `T[]`.
 impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::ListValue(wire::InboundListValue {
-            values: self.iter().map(__BamlValuePrivate::to_baml).collect(),
-        }))
+        internal::annotate_selected_type(
+            inbound(In::ListValue(wire::InboundListValue {
+                values: self.iter().map(__BamlValuePrivate::to_baml).collect(),
+            })),
+            Self::baml_ty(),
+        )
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -370,15 +396,18 @@ impl BamlMapKey for String {
 /// generated signatures — it preserves the engine's entry order.
 impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::IndexMap<K, V> {
     fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::MapValue(wire::InboundMapValue {
-            entries: self
-                .iter()
-                .map(|(k, v)| wire::InboundMapEntry {
-                    key: Some(k.to_baml_key()),
-                    value: Some(v.to_baml()),
-                })
-                .collect(),
-        }))
+        internal::annotate_selected_type(
+            inbound(In::MapValue(wire::InboundMapValue {
+                entries: self
+                    .iter()
+                    .map(|(k, v)| wire::InboundMapEntry {
+                        key: Some(k.to_baml_key()),
+                        value: Some(v.to_baml()),
+                    })
+                    .collect(),
+            })),
+            Self::baml_ty(),
+        )
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
@@ -411,15 +440,18 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
 /// generated code are always [`crate::Map`].
 impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collections::HashMap<K, V> {
     fn to_baml(&self) -> wire::InboundValue {
-        inbound(In::MapValue(wire::InboundMapValue {
-            entries: self
-                .iter()
-                .map(|(k, v)| wire::InboundMapEntry {
-                    key: Some(k.to_baml_key()),
-                    value: Some(v.to_baml()),
-                })
-                .collect(),
-        }))
+        internal::annotate_selected_type(
+            inbound(In::MapValue(wire::InboundMapValue {
+                entries: self
+                    .iter()
+                    .map(|(k, v)| wire::InboundMapEntry {
+                        key: Some(k.to_baml_key()),
+                        value: Some(v.to_baml()),
+                    })
+                    .collect(),
+            })),
+            Self::baml_ty(),
+        )
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {

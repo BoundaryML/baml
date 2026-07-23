@@ -123,7 +123,8 @@ func TestEncodeCallUsesExactClassAndFieldWireNames(t *testing.T) {
 		t.Fatalf("unexpected kwargs: %#v", call.Kwargs)
 	}
 	class := call.Kwargs[0].Value.GetClassValue()
-	if class == nil || class.ClassTy.GetName() != "user.people.Person" {
+	if class == nil ||
+		call.Kwargs[0].Value.GetValueType().GetClassTy().GetName() != "user.people.Person" {
 		t.Fatalf("unexpected class: %#v", class)
 	}
 	if len(class.Fields) != 2 {
