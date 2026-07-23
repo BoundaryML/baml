@@ -7,7 +7,6 @@
 //! - `TypeInferenceBuilder` — walks `ExprBody` within a scope, infers types
 //! - `resolve_name_at(db, file, offset, name)` — on-demand name resolution
 //! - `resolve_class_fields`, `resolve_type_alias` — per-item structural queries
-//! - `CycleDetector` — runtime cycle guard for recursive type handling
 //!
 //! ## Architecture
 //!
@@ -27,7 +26,6 @@ pub(crate) const INT_MAX: i64 = i64::MAX >> 1;
 pub mod analysis;
 pub mod builder;
 pub mod callable;
-pub mod cycle_detector;
 pub mod exhaustiveness;
 pub mod generics;
 pub mod infer_context;

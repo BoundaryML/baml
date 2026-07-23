@@ -221,17 +221,3 @@ pub fn scope_bindings_query<'db>(
 pub fn file_env_var_refs(db: &dyn Db, file: SourceFile) -> &[baml_compiler2_ast::EnvVarRef] {
     &file_semantic_index(db, file).env_var_refs
 }
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Not tracked — callers should use the cached `file_semantic_index` result.
-/// Returns `None` if `expr_id` was not recorded (i.e., single-segment paths
-/// or non-path expressions).
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
-}

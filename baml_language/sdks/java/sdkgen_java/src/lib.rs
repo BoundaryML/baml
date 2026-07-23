@@ -41,10 +41,6 @@ use crate::{
     translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
 };
 
-/// A user BAML source file as it should appear in the emitter's
-/// inlined-baml output. `rel_path` is relative to the `baml_src/` root.
-pub type UserBamlFile = (PathBuf, String);
-
 /// Banner prepended to every generated `.java` file. Mirrors the TS
 /// emitter's `NODE_BANNER`.
 const JAVA_BANNER: &str = "\

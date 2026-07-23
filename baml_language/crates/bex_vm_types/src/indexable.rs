@@ -369,13 +369,6 @@ impl SharedGlobals {
         }
     }
 
-    /// Whether the pool is empty.
-    ///
-    /// See [`Self::len`] for the permit-proof requirement.
-    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
-        self.len(proof) == 0
-    }
-
     /// Read a global by index.
     ///
     /// Requires a [`PermitProof`]; see [`Self::len`].
@@ -469,27 +462,6 @@ pub enum VmGlobals {
 }
 
 impl VmGlobals {
-    /// Number of globals in the view.
-    ///
-    /// `proof` is consumed for the `Shared` variant (where it gates a
-    /// safe read against the `UnsafeCell`-backed `SharedGlobals`); the
-    /// `Owned` variant ignores it. Taking the proof unconditionally
-    /// keeps the API symmetric across variants and matches how
-    /// post-`$init` VM operations always have access to one.
-    pub fn len(&self, proof: PermitProof<'_>) -> usize {
-        match self {
-            Self::Owned(pool) => pool.len(),
-            Self::Shared(globals) => globals.len(proof),
-        }
-    }
-
-    /// Whether the view is empty.
-    ///
-    /// See [`Self::len`] for the `proof` parameter.
-    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
-        self.len(proof) == 0
-    }
-
     /// Read a global by index. `Value` is `Copy` so this returns by value.
     ///
     /// # Panics
@@ -567,20 +539,12 @@ impl ObjectIndex {
         Self { raw, epoch: 0 }
     }
 
-    pub fn from_raw_epoch(raw: usize, epoch: u32) -> Self {
-        Self { raw, epoch }
-    }
-
     pub fn into_raw(self) -> usize {
         self.raw
     }
 
     pub fn raw(self) -> usize {
         self.raw
-    }
-
-    pub fn epoch(self) -> u32 {
-        self.epoch
     }
 }
 
@@ -629,16 +593,6 @@ impl<T> std::ops::IndexMut<ObjectIndex> for Pool<T, ObjectKind> {
 pub type ObjectIndex = Index<ObjectKind>;
 
 #[cfg(not(feature = "heap_debug"))]
-impl Index<ObjectKind> {
-    pub fn from_raw_epoch(raw: usize, _epoch: u32) -> Self {
-        Self::from_raw(raw)
-    }
-
-    pub fn epoch(self) -> u32 {
-        0
-    }
-}
-
 #[cfg(test)]
 mod shared_globals_tests {
     use super::*;

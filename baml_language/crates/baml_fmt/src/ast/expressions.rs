@@ -4505,22 +4505,6 @@ pub enum LambdaArrow {
     FatArrow(t::FatArrow),
 }
 
-impl LambdaArrow {
-    #[must_use]
-    pub fn span(&self) -> TextRange {
-        match self {
-            LambdaArrow::Arrow(t) => t.span(),
-            LambdaArrow::FatArrow(t) => t.span(),
-        }
-    }
-
-    /// Returns true if the source used `=>` instead of the canonical `->`.
-    #[must_use]
-    pub fn is_fat_arrow(&self) -> bool {
-        matches!(self, LambdaArrow::FatArrow(_))
-    }
-}
-
 impl FromCST for LambdaArrow {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;

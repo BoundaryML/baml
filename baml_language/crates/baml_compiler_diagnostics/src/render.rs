@@ -15,10 +15,10 @@
 //!     .with_primary_span(span);
 //!
 //! // Render for CLI
-//! let cli_output = render_diagnostic(&diag, &sources, RenderConfig::cli());
+//! let cli_output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::default());
 //!
 //! // Render concise (for tests)
-//! let concise = render_diagnostic(&diag, &sources, RenderConfig::concise());
+//! let concise = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::concise());
 //! ```
 
 use std::{
@@ -143,15 +143,6 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
-    /// Configuration for human CLI output, always colored (Ariadne).
-    pub fn cli() -> Self {
-        Self {
-            format: DiagnosticFormat::Ariadne,
-            color: true,
-            show_error_codes: true,
-        }
-    }
-
     /// Configuration for compact agent output.
     pub fn agent() -> Self {
         Self {

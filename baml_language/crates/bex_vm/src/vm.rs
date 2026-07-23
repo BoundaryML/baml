@@ -1684,27 +1684,6 @@ impl BexVm {
         roots
     }
 
-    /// Update heap pointers held by frames according to a GC forwarding map.
-    ///
-    /// Must be called after a GC cycle to keep frame pointers valid.
-    pub fn apply_frame_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for frame in &mut self.frames {
-            match frame {
-                Frame::Bytecode(bf) => {
-                    if let Some(&new_ptr) = forwarding.get(&bf.function) {
-                        bf.function = new_ptr;
-                    }
-                }
-                Frame::Native(nf) => {
-                    if let Some(&new_ptr) = forwarding.get(&nf.function) {
-                        nf.function = new_ptr;
-                    }
-                    nf.continuation.apply_forwarding(forwarding);
-                }
-            }
-        }
-    }
-
     /// Convert an `ObjectIndex` to `HeapPtr` (for compile-time objects).
     ///
     /// Used during the transition from index-based to pointer-based access.
@@ -2062,19 +2041,6 @@ impl BexVm {
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => return None,
         })
-    }
-
-    /// Get mutable string from a Value.
-    ///
-    /// Strings are immutable at the current BAML language surface. Do not use
-    /// this for spawned user-code mutation unless strings gain the same
-    /// object-level synchronization as containers.
-    pub fn as_string_mut(
-        &mut self,
-        value: &Value,
-    ) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::String)?;
-        self.get_object_mut(ptr).as_string_mut()
     }
 
     /// Get array from a Value. Acquires the container's mutex; the
@@ -2503,21 +2469,6 @@ impl BexVm {
         }));
     }
 
-    /// Restores the VM state and prepares it for the next execution.
-    ///
-    /// This is used to clear the stack and frames after execution.
-    pub fn finalize(&mut self) {
-        // If the VM returns correctly with VmExecState::Complete, the eval
-        // stack and call stack should be empty.
-        self.stack.clear();
-        self.frames.clear();
-        self.pending_call_captures.clear();
-        self.seen_throw_values.clear();
-        self.thrown_value_causes.clear();
-        self.pending_sysop_call_id = None;
-        self.pending_sysop_capture_mask = VmCaptureMask::disabled();
-    }
-
     /// Returns a reference to the unscheduled future at `future_ptr`.
     ///
     /// Returns [`VmInternalError::TypeError`] if the heap object is not an
@@ -2858,22 +2809,6 @@ impl BexVm {
             });
         }
         Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
-    }
-
-    /// Get collector ref from a Value.
-    pub fn as_collector(
-        &self,
-        value: &Value,
-    ) -> Result<&bex_vm_types::CollectorRef, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Collector)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::Collector(c) => Ok(c),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Collector.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
     }
 
     /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
@@ -5045,12 +4980,6 @@ impl BexVm {
         // Function` while we hold `&mut self`.
         let mut function = unsafe { self.load_function(seed_idx)? };
         self.try_unwind_exception(&mut frame_idx, &mut function, exception_value, false)
-    }
-
-    /// Number of live frames on the VM call stack.
-    #[must_use]
-    pub fn frame_count(&self) -> usize {
-        self.frames.len()
     }
 
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop

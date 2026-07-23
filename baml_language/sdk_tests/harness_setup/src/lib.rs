@@ -136,17 +136,6 @@ pub fn fixtures_root_from_manifest(manifest_dir: &Path) -> PathBuf {
         .join("fixtures")
 }
 
-/// Workspace root (`baml_language/`) from a generator crate's
-/// `CARGO_MANIFEST_DIR`. 3 ancestors up: `crates/<G>` → `crates` →
-/// `sdk_tests` → workspace.
-pub fn workspace_root_from_manifest(manifest_dir: &Path) -> PathBuf {
-    manifest_dir
-        .ancestors()
-        .nth(3)
-        .expect("crate not at <workspace>/sdk_tests/crates/<generator>/")
-        .to_path_buf()
-}
-
 /// Enumerate every `<fixtures_root>/<name>/` that contains a
 /// `baml_src/` subdirectory. Sorted so codegen output ordering is
 /// stable across builds.

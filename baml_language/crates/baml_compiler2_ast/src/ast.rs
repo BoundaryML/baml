@@ -651,11 +651,6 @@ impl AstSourceMap {
         self.synthetic_stmts.contains(&id)
     }
 
-    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_patterns`).
-    pub fn is_synthetic_pattern(&self, id: PatId) -> bool {
-        self.synthetic_patterns.contains(&id)
-    }
-
     /// Look up the source span of a statement by its `StmtId`.
     ///
     /// The `stmt_spans` arena is parallel to `ExprBody::stmts` — same indices,
@@ -696,14 +691,6 @@ impl AstSourceMap {
             .get(&id)
             .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
-    }
-
-    /// Look up a labeled call argument's label span.
-    pub fn call_arg_label_span(&self, call: ExprId, arg_expr: ExprId) -> TextRange {
-        self.call_arg_label_spans
-            .get(&(call, arg_expr))
-            .copied()
-            .unwrap_or_else(|| self.expr_span(call))
     }
 
     /// Look up the source span of a pattern by its `PatId`.
@@ -1682,17 +1669,6 @@ pub struct ImplementsBlockDef {
     pub span: TextRange,
 }
 
-impl ImplementsBlockDef {
-    /// Convenience: the interface's simple name (last path segment), used for
-    /// diagnostics. Returns `None` if the target is not a simple path.
-    pub fn interface_name(&self) -> Option<&Name> {
-        match &self.target.kind {
-            TypeExprKind::Path { segments, .. } => segments.last(),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceFieldLinkDef {
     pub interface_field: Name,
@@ -1823,13 +1799,6 @@ pub enum TestArgValue {
 impl TestArgValue {
     pub fn float(value: f64) -> Self {
         Self::FloatBits(value.to_bits())
-    }
-
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
-            _ => None,
-        }
     }
 }
 

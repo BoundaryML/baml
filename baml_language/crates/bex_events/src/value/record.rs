@@ -57,18 +57,6 @@ pub struct ValueRef {
 
 impl ValueRef {
     #[must_use]
-    pub fn pending(id: impl Into<String>, codec: ValueCodec) -> Self {
-        Self {
-            id: id.into(),
-            codec,
-            availability: ValueAvailability::Pending,
-            original_size_bytes: None,
-            retained_size_bytes: None,
-            diagnostic: None,
-        }
-    }
-
-    #[must_use]
     pub fn available(
         id: impl Into<String>,
         codec: ValueCodec,
@@ -82,18 +70,6 @@ impl ValueRef {
             original_size_bytes: Some(original_size_bytes),
             retained_size_bytes: Some(retained_size_bytes),
             diagnostic: None,
-        }
-    }
-
-    #[must_use]
-    pub fn lost(id: impl Into<String>, codec: ValueCodec, diagnostic: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            codec,
-            availability: ValueAvailability::Lost,
-            original_size_bytes: None,
-            retained_size_bytes: Some(0),
-            diagnostic: Some(diagnostic.into()),
         }
     }
 }
@@ -191,15 +167,6 @@ impl CaptureLossKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureLossReason {
     QueueFull,
-}
-
-impl CaptureLossReason {
-    #[must_use]
-    pub fn as_wire_str(self) -> &'static str {
-        match self {
-            Self::QueueFull => "queueFull",
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

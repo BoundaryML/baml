@@ -20,32 +20,9 @@ thread_local! {
     static DEBUG_LOG: RefCell<Vec<DebugMessage>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Push a debug message to the thread-local log.
-/// This is typically called via the `baml_debug!` macro.
-#[cfg(debug_assertions)]
-pub fn push_debug(module: &'static str, msg: String) {
-    DEBUG_LOG.with(|log| {
-        log.borrow_mut().push(DebugMessage {
-            module,
-            message: msg,
-        });
-    });
-}
-
 /// Stub for release builds - does nothing.
 #[cfg(not(debug_assertions))]
 pub fn push_debug(_module: &'static str, _msg: String) {}
-
-/// Drain all debug messages from the thread-local log.
-/// Returns the messages and clears the log.
-pub fn drain_debug_log() -> Vec<DebugMessage> {
-    DEBUG_LOG.with(|log| log.borrow_mut().drain(..).collect())
-}
-
-/// Check if there are any debug messages pending.
-pub fn has_debug_messages() -> bool {
-    DEBUG_LOG.with(|log| !log.borrow().is_empty())
-}
 
 /// Debug logging macro that automatically captures the crate/module path.
 ///

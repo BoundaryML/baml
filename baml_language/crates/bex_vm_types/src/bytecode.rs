@@ -62,18 +62,6 @@ impl JumpTableData {
             self.names[index] = Some(name);
         }
     }
-
-    /// Lookup the offset for a value.
-    /// Returns None if value is out of range or is a hole.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn lookup(&self, value: i64) -> Option<isize> {
-        if value < self.min {
-            return None;
-        }
-        // Safety: value >= min, so index is non-negative.
-        let index = (value - self.min) as usize;
-        self.offsets.get(index).copied().flatten()
-    }
 }
 
 // ============================================================================
@@ -2010,28 +1998,6 @@ impl Bytecode {
             .iter()
             .filter(|e| pc >= e.start_pc && pc < e.end_pc)
             .max_by_key(|e| e.handler_pc)
-    }
-
-    /// Resolve constants from `ConstValue` to Value using a resolver function.
-    /// Called at load time to convert `ObjectIndex` to `HeapPtr`.
-    pub fn resolve_constants<F>(&mut self, resolve: F)
-    where
-        F: Fn(crate::ObjectIndex) -> crate::HeapPtr,
-    {
-        self.resolved_constants = self
-            .constants
-            .iter()
-            .map(|cv| match cv {
-                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
-                // them directly from `constants` at execution time.
-                ConstValue::Type(_) => crate::Value::NULL,
-                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
-                // reads them directly from `constants` at execution time and
-                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
-                ConstValue::ClassWithTypeArgs { .. } => crate::Value::NULL,
-                other => other.to_value(&resolve),
-            })
-            .collect();
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.

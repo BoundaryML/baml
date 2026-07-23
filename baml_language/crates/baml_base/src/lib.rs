@@ -16,7 +16,7 @@ pub mod qualified_name;
 pub use attr::*;
 pub use client_options::*;
 pub use core_types::*;
-pub use debug_log::{DebugMessage, drain_debug_log, has_debug_messages};
+pub use debug_log::DebugMessage;
 pub use files::*;
 pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
 

@@ -109,35 +109,6 @@ impl Value {
     // doesn't affect the comparison). Bits interpreted as i64 yield the
     // signed ordering of the underlying i63 values.
 
-    /// Sum of two `Int`-tagged Values, computed without untagging.
-    ///
-    /// # Safety contract
-    ///
-    /// Caller must guarantee both inputs are `Int`-tagged (caller has
-    /// already type-checked, e.g. via the `OpCode::AddInt` specialization).
-    /// Mis-tagged inputs produce nonsense results; the type system does
-    /// not enforce this — it's a perf shortcut for the hot path.
-    #[inline(always)]
-    pub const fn tagged_int_add(a: Value, b: Value) -> Value {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_add: both inputs must be Int"
-        );
-        Value(a.0.wrapping_add(b.0).wrapping_sub(1))
-    }
-
-    /// Difference of two `Int`-tagged Values, computed without untagging.
-    ///
-    /// See [`Value::tagged_int_add`] for the safety contract.
-    #[inline(always)]
-    pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_sub: both inputs must be Int"
-        );
-        Value(a.0.wrapping_sub(b.0).wrapping_add(1))
-    }
-
     /// Sum of two `Int`-tagged Values, or `None` on i63 overflow — computed
     /// without untagging.
     ///
@@ -262,11 +233,6 @@ impl Value {
     #[inline(always)]
     pub const fn is_int(self) -> bool {
         self.0 & 1 != 0
-    }
-
-    #[inline(always)]
-    pub const fn is_bool(self) -> bool {
-        self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
     }
 
     /// True iff `self` is a non-null heap object pointer.
