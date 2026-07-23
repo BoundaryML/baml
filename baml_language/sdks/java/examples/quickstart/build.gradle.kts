@@ -13,10 +13,10 @@ plugins {
     java
     application
     // The plugin/runtime/CLI publish together at one family version — the
-    // version here must match the installed `baml` CLI. Until the first
-    // fully-matched family nightly ships, treat this example as the shape
-    // of the setup rather than a copy-paste-runnable snapshot.
-    id("com.boundaryml.baml") version "0.15.0-nightly.1"
+    // version here must match the installed `baml` CLI (download the
+    // matching release archive, or install a newer matched pair and bump
+    // this line to it).
+    id("com.boundaryml.baml") version "0.15.1-nightly.20260723.g"
 }
 
 repositories {
