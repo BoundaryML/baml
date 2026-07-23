@@ -138,7 +138,7 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => Diagnostic::error(
                 DiagnosticId::ArgumentCountMismatch,
-                format!("Expected {expected} arguments, found {found}"),
+                format!("expected {expected} arguments, found {found}"),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -183,7 +183,7 @@ impl<C: ErrorContext> TypeError<C> {
                 Diagnostic::error(
                     DiagnosticId::NonExhaustiveMatch,
                     format!(
-                        "Non-exhaustive match on `{}`: missing cases {missing}",
+                        "non-exhaustive match on `{}`: missing cases {missing}",
                         ty_fn(scrutinee_type)
                     ),
                 )
@@ -191,12 +191,12 @@ impl<C: ErrorContext> TypeError<C> {
             }
 
             TypeError::UnreachableArm { location } => {
-                Diagnostic::error(DiagnosticId::UnreachableArm, "Unreachable match arm")
+                Diagnostic::error(DiagnosticId::UnreachableArm, "unreachable match arm")
                     .with_primary_span(loc_fn(location))
             }
 
             TypeError::UnreachableCatchArm { location } => {
-                Diagnostic::warning(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
+                Diagnostic::warning(DiagnosticId::UnreachableCatchArm, "unreachable catch arm")
                     .with_primary_span(loc_fn(location))
             }
 
@@ -232,7 +232,7 @@ impl<C: ErrorContext> TypeError<C> {
                 let unhandled = unhandled_types.join(", ");
                 Diagnostic::error(
                     DiagnosticId::NonExhaustiveCatch,
-                    format!("Non-exhaustive catch chain: unhandled throw types {unhandled}"),
+                    format!("non-exhaustive catch chain: unhandled throw types {unhandled}"),
                 )
                 .with_primary_span(loc_fn(location))
             }
@@ -244,7 +244,7 @@ impl<C: ErrorContext> TypeError<C> {
                 let extras = extra_types.join(", ");
                 Diagnostic::error(
                     DiagnosticId::ThrowsContractViolation,
-                    format!("Function throws types not covered by `throws` declaration: {extras}"),
+                    format!("function throws types not covered by `throws` declaration: {extras}"),
                 )
                 .with_primary_span(loc_fn(location))
             }
@@ -264,20 +264,20 @@ impl<C: ErrorContext> TypeError<C> {
             TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
                 DiagnosticId::InvalidMapKeyType,
                 format!(
-                    "Invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
+                    "invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
                     ty_fn(ty)
                 )
             ).with_primary_span(loc_fn(location)),
 
             TypeError::AliasCycle { cycle_path, location } => Diagnostic::error(
                 DiagnosticId::AliasCycle,
-                format!("These aliases form a dependency cycle: {cycle_path}"),
+                format!("these aliases form a dependency cycle: {cycle_path}"),
             )
             .with_primary_span(loc_fn(location)),
 
             TypeError::ClassCycle { cycle_path, location } => Diagnostic::error(
                 DiagnosticId::ClassCycle,
-                format!("These classes form a dependency cycle: {cycle_path}"),
+                format!("these classes form a dependency cycle: {cycle_path}"),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -287,15 +287,15 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => {
                 let message = if suggestions.is_empty() {
-                    format!("Variable `{name}` does not exist.")
+                    format!("variable `{name}` does not exist.")
                 } else if suggestions.len() == 1 {
                     format!(
-                        "Variable `{name}` does not exist. Did you mean `{}`?",
+                        "variable `{name}` does not exist. Did you mean `{}`?",
                         suggestions[0]
                     )
                 } else {
                     format!(
-                        "Variable `{name}` does not exist. Did you mean one of these: `{}`?",
+                        "variable `{name}` does not exist. Did you mean one of these: `{}`?",
                         suggestions.join("`, `")
                     )
                 };
@@ -309,7 +309,7 @@ impl<C: ErrorContext> TypeError<C> {
             } => Diagnostic::warning(
                 DiagnosticId::JinjaFunctionReferenceWithoutCall,
                 format!(
-                    "Function '{function_name}' referenced without parentheses. Did you mean '{function_name}()'?"
+                    "function '{function_name}' referenced without parentheses. Did you mean '{function_name}()'?"
                 ),
             )
             .with_primary_span(loc_fn(location)),
@@ -320,15 +320,15 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => {
                 let message = if suggestions.is_empty() {
-                    format!("Filter '{filter_name}' does not exist")
+                    format!("filter '{filter_name}' does not exist")
                 } else if suggestions.len() == 1 {
                     format!(
-                        "Filter '{filter_name}' does not exist. Did you mean '{}'?",
+                        "filter '{filter_name}' does not exist. Did you mean '{}'?",
                         suggestions[0]
                     )
                 } else {
                     format!(
-                        "Filter '{filter_name}' does not exist. Did you mean one of these: '{}'?",
+                        "filter '{filter_name}' does not exist. Did you mean one of these: '{}'?",
                         suggestions.join("', '")
                     )
                 };
@@ -386,7 +386,7 @@ impl<C: ErrorContext> TypeError<C> {
             TypeError::JinjaEnumStringComparison { enum_name, location } => Diagnostic::warning(
                 DiagnosticId::JinjaEnumStringComparison,
                 format!(
-                    "Comparing enum {enum_name} to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
+                    "comparing enum {enum_name} to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
                 ),
             )
             .with_primary_span(loc_fn(location)),
@@ -435,7 +435,7 @@ impl<C: ErrorContext> TypeError<C> {
             } => Diagnostic::warning(
                 DiagnosticId::JinjaWrongArgCount,
                 format!(
-                    "Function '{function_name}' expects {expected} arguments, but got {found}"
+                    "function '{function_name}' expects {expected} arguments, but got {found}"
                 ),
             )
             .with_primary_span(loc_fn(location)),
@@ -446,7 +446,7 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => Diagnostic::warning(
                 DiagnosticId::JinjaMissingArg,
-                format!("Function '{function_name}' expects argument '{arg_name}'"),
+                format!("function '{function_name}' expects argument '{arg_name}'"),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -458,16 +458,16 @@ impl<C: ErrorContext> TypeError<C> {
             } => {
                 let message = if suggestions.is_empty() {
                     format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'"
+                        "function '{function_name}' does not have an argument '{arg_name}'"
                     )
                 } else if suggestions.len() == 1 {
                     format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean '{}'?",
+                        "function '{function_name}' does not have an argument '{arg_name}'. Did you mean '{}'?",
                         suggestions[0]
                     )
                 } else {
                     format!(
-                        "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean one of these: '{}'?",
+                        "function '{function_name}' does not have an argument '{arg_name}'. Did you mean one of these: '{}'?",
                         suggestions.join("', '")
                     )
                 };
@@ -484,7 +484,7 @@ impl<C: ErrorContext> TypeError<C> {
             } => Diagnostic::warning(
                 DiagnosticId::JinjaWrongArgType,
                 format!(
-                    "Function '{function_name}' expects argument '{arg_name}' to be of type {expected}, but got {found}"
+                    "function '{function_name}' expects argument '{arg_name}' to be of type {expected}, but got {found}"
                 ),
             )
             .with_primary_span(loc_fn(location)),
@@ -492,7 +492,7 @@ impl<C: ErrorContext> TypeError<C> {
             TypeError::JinjaParseError { message, location } => {
                 Diagnostic::warning(
                     DiagnosticId::JinjaParseError,
-                    format!("Failed to parse Jinja template: {message}"),
+                    format!("failed to parse Jinja template: {message}"),
                 )
                 .with_primary_span(loc_fn(location))
             }
@@ -530,7 +530,7 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
             } => Diagnostic::error(
                 DiagnosticId::InvalidCatchBindingType,
-                format!("Type `{type_name}` is not allowed in catch bindings"),
+                format!("type `{type_name}` is not allowed in catch bindings"),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -560,7 +560,7 @@ impl ToDiagnostic for NameError {
                 second_path: _,
             } => Diagnostic::error(
                 DiagnosticId::DuplicateName,
-                format!("Duplicate {kind} `{name}`"),
+                format!("duplicate {kind} `{name}`"),
             )
             .with_primary(*second, format!("{kind} `{name}` redefined here"))
             .with_secondary(*first, format!("`{name}` first defined in {first_path}")),
@@ -574,7 +574,7 @@ impl ToDiagnostic for NameError {
                 second_path: _,
             } => Diagnostic::error(
                 DiagnosticId::DuplicateName,
-                format!("Duplicate test `{test_name}` for function `{function_name}`"),
+                format!("duplicate test `{test_name}` for function `{function_name}`"),
             )
             .with_primary(
                 *second,
@@ -590,7 +590,7 @@ impl ToDiagnostic for NameError {
                 span,
             } => Diagnostic::error(
                 DiagnosticId::UnknownFunctionInTest,
-                format!("Unknown function `{function_name}` in test block"),
+                format!("unknown function `{function_name}` in test block"),
             )
             .with_primary(*span, format!("no function named `{function_name}` exists")),
         };
@@ -689,7 +689,7 @@ mod tests {
 
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0011");
-        assert!(diag.message.contains("Duplicate"));
+        assert!(diag.message.contains("duplicate"));
         assert_eq!(diag.annotations.len(), 2); // primary + secondary
         assert_eq!(diag.phase, DiagnosticPhase::Validation);
     }

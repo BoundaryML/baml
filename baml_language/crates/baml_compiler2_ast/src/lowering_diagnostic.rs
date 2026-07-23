@@ -268,7 +268,7 @@ impl LoweringDiagnostic {
                     Severity::Warning,
                     format!(
                         "{what} is ignored: code generators are configured in `baml.toml` now. \
-                         Move it to a `[generator.<name>]` section in baml.toml."
+                         Move it to a `[generator.<name>]` section in `baml.toml`."
                     ),
                 )
                 .with_primary(

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [validation] E0011
 
-  × Duplicate class `Point`
+  × duplicate class `Point`
    ╭─[class_constructor.baml:1:7]
  1 │ class Point {
    ·       ──┬──

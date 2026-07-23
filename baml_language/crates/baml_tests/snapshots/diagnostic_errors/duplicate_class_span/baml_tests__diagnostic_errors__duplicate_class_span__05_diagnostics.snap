@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [validation] E0011
 
-  × Name `A` defined 3 times as: class, class, type
+  × name `A` defined 3 times as: class, class, type
    ╭─[repro.baml:1:7]
  1 │ class A {
    ·       ┬

@@ -140,5 +140,5 @@ E0010
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────
-    ·                  ╰── Header comments (//#) are not allowed inside LLM functions
+    ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
     ╰────

@@ -1354,7 +1354,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{invalid_keyword}'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'."
+                "unknown keyword `{invalid_keyword}`; expected `class`, `enum`, `function`, `client`, `generator`, `test`, or `type`"
             ),
             span,
         );
@@ -1415,7 +1415,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{invalid_keyword}'. Did you mean 'type'? Usage: type Name = expression"
+                "unknown keyword `{invalid_keyword}`; did you mean `type`? usage: `type Name = expression`"
             ),
             span,
         );
@@ -2749,7 +2749,7 @@ impl<'a> Parser<'a> {
             if p.has_newline_ahead() {
                 // if the attribute name is not on the same line as the @, that's an error
                 if let Some(at_span) = at_span {
-                    p.error("Attribute is missing a name".to_string(), at_span);
+                    p.error("attribute is missing a name".to_string(), at_span);
                 }
                 return;
             }
@@ -2969,7 +2969,7 @@ impl<'a> Parser<'a> {
                 let span = token.span;
                 let text = token.text.clone();
                 self.error(
-                    format!("Float literal values are not supported: -{text}"),
+                    format!("float literal values are not supported: -{text}"),
                     span,
                 );
             }
@@ -2995,7 +2995,7 @@ impl<'a> Parser<'a> {
         if self.at(TokenKind::FloatLiteral) {
             if let Some(token) = self.current() {
                 self.error(
-                    format!("Float literal values are not supported: {}", token.text),
+                    format!("float literal values are not supported: {}", token.text),
                     token.span,
                 );
             }
@@ -3323,7 +3323,7 @@ impl<'a> Parser<'a> {
 
                     // Emit a helpful error message
                     p.error(
-                        "Enum variants cannot have type annotations".to_string(),
+                        "enum variants cannot have type annotations".to_string(),
                         type_span,
                     );
                 }
@@ -3935,7 +3935,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in type expression (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -4026,7 +4026,8 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LBrace) {
                 let span = p.current().map(|t| t.span).unwrap_or_default();
                 p.error(
-                    "Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }".to_string(),
+                    "old-style function syntax; use `function Name(params...) -> ReturnType { ... }`"
+                        .to_string(),
                     span,
                 );
                 // Create empty parameter list node for AST consistency
@@ -4249,7 +4250,7 @@ impl<'a> Parser<'a> {
                 if p.at_header_comment_start() {
                     let span = p.header_comment_span();
                     p.error(
-                        "Header comments (//#) are not allowed inside LLM functions".to_string(),
+                        "header comments (`//#`) are not allowed inside LLM functions".to_string(),
                         span,
                     );
                     p.consume_header_comment();
@@ -6047,7 +6048,7 @@ impl<'a> Parser<'a> {
                         self.bump();
                     } else {
                         self.error_unexpected_token(
-                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                            "field name, `[`, or `(` after `?.`".to_string(),
                         );
                     }
                     self.finish_node();
@@ -6083,7 +6084,7 @@ impl<'a> Parser<'a> {
                     } else {
                         "'.'"
                     };
-                    self.error_unexpected_token(format!("Expected field name after {punct}"));
+                    self.error_unexpected_token(format!("field name after `{punct}`"));
                 }
                 self.finish_node();
             } else if op == TokenKind::LBrace {
@@ -6878,7 +6879,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in type expression (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -6923,7 +6924,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in type expression (found {} extra)",
                         self.pending_greaters
                     ),
                     span,

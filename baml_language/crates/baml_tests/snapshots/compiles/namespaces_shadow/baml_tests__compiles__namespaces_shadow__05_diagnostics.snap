@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [validation] E0099
 
-  ⚠ Namespace `foo` (from `ns_foo/`) shadows root-level class `foo`
+  ⚠ namespace `foo` (from `ns_foo/`) shadows root-level class `foo`
    ╭─[main.baml:3:7]
  3 │ class foo {
    ·       ─┬─

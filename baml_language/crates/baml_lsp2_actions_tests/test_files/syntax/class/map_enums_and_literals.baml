@@ -37,104 +37,86 @@ function InOutLiteralStringUnionMapKey(
 
 //----
 //- diagnostics
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:76 ]
-//     │
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:76]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                                                            ─────────┬─────────
-//     │                                                                                     ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:27 ]
-//     │
+//     ·                                                                            ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:27]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                           ─────────┬─────────
-//     │                                    ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:52 ]
-//     │
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:52]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                                    ─────────┬─────────
-//     │                                                             ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:96 ]
-//     │
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:96]
 //  13 │ ╭─▶ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     ┆ ┆
-//  20 │ ├─▶ }
-//     │ │
-//     │ ╰─────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │     Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:27 ]
-//     │
+//  14 │ │     client "openai/gpt-4o"
+//  15 │ │     prompt #"
+//  16 │ │       Merge these: {{i1}} {{i2}}
+//  17 │ │
+//  18 │ │       {{ ctx.output_format }}
+//  19 │ │     "#
+//  20 │ ╰─▶ }
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:27]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                           ─────────┬─────────
-//     │                                    ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:52 ]
-//     │
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:52]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                                    ─────────┬─────────
-//     │                                                             ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:27 ]
-//     │
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:27]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                           ─────────┬─────────
-//     │                                    ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:52 ]
-//     │
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:52]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                                    ─────────┬─────────
-//     │                                                             ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:27 ]
-//     │
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:27]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                           ─────────┬─────────
-//     │                                    ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     ╭─[ class_map_enums_and_literals.baml:13:52 ]
-//     │
+//     ·                           ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[class_map_enums_and_literals.baml:13:52]
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                                    ─────────┬─────────
-//     │                                                             ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//     │
-//     │ Note: Error code: E0067
-// ────╯
-// error: map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//    ╭─[ class_map_enums_and_literals.baml:8:5 ]
-//    │
+//     ·                                                    ───────────────────
+//     ╰────
+// E0067
+//
+//   × map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    ╭─[class_map_enums_and_literals.baml:8:5]
 //  8 │   e map<MapKey, string>
-//    │     ─────────┬─────────
-//    │              ╰─────────── map keys must be `string`; got `MapKey`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
-//    │
-//    │ Note: Error code: E0067
-// ───╯
+//    ·     ───────────────────
+//    ╰────

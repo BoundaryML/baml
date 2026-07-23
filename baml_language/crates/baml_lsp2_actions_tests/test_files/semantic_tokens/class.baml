@@ -53,159 +53,165 @@ function fo() -> int {
 
 //----
 //- diagnostics
-// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     ╭─[ class.baml:39:13 ]
-//     │
+// E0007
+//
+//   × class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[class.baml:39:13]
 //  39 │     Color { re: 255, gree: 0, blu: 0 },
-//     │             ─┬
-//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `gree`. Did you mean `green`?
-//     ╭─[ class.baml:39:22 ]
-//     │
+//     ·             ──
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[class.baml:39:22]
 //  39 │     Color { re: 255, gree: 0, blu: 0 },
-//     │                      ──┬─
-//     │                        ╰─── class `Color` has no field `gree`. Did you mean `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `blu`. Did you mean `blue`?
-//     ╭─[ class.baml:39:31 ]
-//     │
+//     ·                      ────
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[class.baml:39:31]
 //  39 │     Color { re: 255, gree: 0, blu: 0 },
-//     │                               ─┬─
-//     │                                ╰─── class `Color` has no field `blu`. Did you mean `blue`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     ╭─[ class.baml:40:13 ]
-//     │
+//     ·                               ───
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[class.baml:40:13]
 //  40 │     Color { re: 0, gree: 255, blu: 0 },
-//     │             ─┬
-//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `gree`. Did you mean `green`?
-//     ╭─[ class.baml:40:20 ]
-//     │
+//     ·             ──
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[class.baml:40:20]
 //  40 │     Color { re: 0, gree: 255, blu: 0 },
-//     │                    ──┬─
-//     │                      ╰─── class `Color` has no field `gree`. Did you mean `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `blu`. Did you mean `blue`?
-//     ╭─[ class.baml:40:31 ]
-//     │
+//     ·                    ────
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[class.baml:40:31]
 //  40 │     Color { re: 0, gree: 255, blu: 0 },
-//     │                               ─┬─
-//     │                                ╰─── class `Color` has no field `blu`. Did you mean `blue`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     ╭─[ class.baml:41:13 ]
-//     │
+//     ·                               ───
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
+//     ╭─[class.baml:41:13]
 //  41 │     Color { re: 0, gree: 0, blu: 255 },
-//     │             ─┬
-//     │              ╰── class `Color` has no field `re`. Did you mean one of these: `red`, `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `gree`. Did you mean `green`?
-//     ╭─[ class.baml:41:20 ]
-//     │
+//     ·             ──
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `gree`. Did you mean `green`?
+//     ╭─[class.baml:41:20]
 //  41 │     Color { re: 0, gree: 0, blu: 255 },
-//     │                    ──┬─
-//     │                      ╰─── class `Color` has no field `gree`. Did you mean `green`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: class `Color` has no field `blu`. Did you mean `blue`?
-//     ╭─[ class.baml:41:29 ]
-//     │
+//     ·                    ────
+//     ╰────
+// E0007
+//
+//   × class `Color` has no field `blu`. Did you mean `blue`?
+//     ╭─[class.baml:41:29]
 //  41 │     Color { re: 0, gree: 0, blu: 255 },
-//     │                             ─┬─
-//     │                              ╰─── class `Color` has no field `blu`. Did you mean `blue`?
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `get_re`
-//     ╭─[ class.baml:44:29 ]
-//     │
+//     ·                             ───
+//     ╰────
+// E0007
+//
+//   × type `Color` has no member `get_re`
+//     ╭─[class.baml:44:29]
 //  44 │   let first_red = colors[0].get_re();
-//     │                             ───┬──
-//     │                                ╰──── type `Color` has no member `get_re`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `gree`
-//     ╭─[ class.baml:45:32 ]
-//     │
+//     ·                             ──────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `gree`
+//     ╭─[class.baml:45:32]
 //  45 │   let second_green = colors[1].gree;
-//     │                                ──┬─
-//     │                                  ╰─── type `Color` has no member `gree`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `re`
-//     ╭─[ class.baml:47:23 ]
-//     │
+//     ·                                ────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `re`
+//     ╭─[class.baml:47:23]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │                       ─┬
-//     │                        ╰── type `Color` has no member `re`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `gree`
-//     ╭─[ class.baml:47:38 ]
-//     │
+//     ·                       ──
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `gree`
+//     ╭─[class.baml:47:38]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │                                      ──┬─
-//     │                                        ╰─── type `Color` has no member `gree`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `blu`
-//     ╭─[ class.baml:47:55 ]
-//     │
+//     ·                                      ────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `blu`
+//     ╭─[class.baml:47:55]
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │                                                       ─┬─
-//     │                                                        ╰─── type `Color` has no member `blu`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `get_re`
-//     ╭─[ class.baml:49:27 ]
-//     │
+//     ·                                                       ───
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `get_re`
+//     ╭─[class.baml:49:27]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                           ───┬──
-//     │                              ╰──── type `Color` has no member `get_re`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `get_gree`
-//     ╭─[ class.baml:49:47 ]
-//     │
+//     ·                           ──────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `get_gree`
+//     ╭─[class.baml:49:47]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                                               ────┬───
-//     │                                                   ╰───── type `Color` has no member `get_gree`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
-// error: type `Color` has no member `get_blu`
-//     ╭─[ class.baml:49:69 ]
-//     │
+//     ·                                               ────────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
+// E0007
+//
+//   × type `Color` has no member `get_blu`
+//     ╭─[class.baml:49:69]
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                                                                     ───┬───
-//     │                                                                        ╰───── type `Color` has no member `get_blu`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
+//     ·                                                                     ───────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[class.baml:1:7]
+//        1 │ class Color {
+//          ·       ─────
+//          ╰────
 //
 //- semantic_tokens
 // class.baml:1:1 (keyword) len=5 "class"

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0012
 
-  × Duplicate parameter `value` in `named_first`
+  × duplicate parameter `value` in `named_first`
    ╭─[main.baml:1:34]
  1 │ function named_first(value: int, value: string) -> int {
    ·                      ──┬──       ──┬──
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate parameter `value` in `named_last`
+  × duplicate parameter `value` in `named_last`
    ╭─[main.baml:5:36]
  5 │ function named_last(value: string, value: int) -> string {
    ·                     ──┬──          ──┬──
@@ -24,7 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate parameter `value` in `lambda_first`
+  × duplicate parameter `value` in `lambda_first`
     ╭─[main.baml:10:26]
  10 │     let f = (value: int, value: string) -> int {
     ·              ──┬──       ──┬──
@@ -34,7 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate parameter `value` in `lambda_last`
+  × duplicate parameter `value` in `lambda_last`
     ╭─[main.baml:18:29]
  18 │     let f = (value: string, value: int) -> string {
     ·              ──┬──          ──┬──

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0012
 
-  × Name `Box.value` defined 2 times as: field, method
+  × name `Box.value` defined 2 times as: field, method
    ╭─[main.baml:2:5]
  2 │     value: int,
    ·     ──┬──

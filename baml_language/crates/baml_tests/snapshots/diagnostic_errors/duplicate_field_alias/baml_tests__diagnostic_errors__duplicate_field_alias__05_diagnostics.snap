@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0149
 
-  × Duplicate serialized key `x` in class
+  × duplicate serialized key `x` in class
    ╭─[duplicate_field_alias.baml:9:3]
  8 │   a string @alias("x")
    ·   ┬
@@ -16,7 +16,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0149
 
-  × Duplicate serialized key `x` in class
+  × duplicate serialized key `x` in class
     ╭─[duplicate_field_alias.baml:15:3]
  14 │   x string
     ·   ┬
@@ -28,7 +28,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0149
 
-  × Duplicate serialized key `shared` in class
+  × duplicate serialized key `shared` in class
     ╭─[duplicate_field_alias.baml:21:3]
  20 │   first string @alias("shared")
     ·   ──┬──
@@ -43,7 +43,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0149
 
-  × Duplicate serialized key `q` in class
+  × duplicate serialized key `q` in class
     ╭─[duplicate_field_alias.baml:29:3]
  28 │   a string @alias("q")
     ·   ┬

@@ -13,12 +13,11 @@ function FooBar(arg: int) {
 
 //----
 //- diagnostics
-// error: Expected return type (->), found '{'
-//    ╭─[ functions_v2_invalid_no_return.baml:1:27 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid_no_return.baml:1:27]
 //  1 │ function FooBar(arg: int) {
-//    │                           ┬
-//    │                           ╰── Expected return type (->), found '{'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
+//    ·                           ┬
+//    ·                           ╰── expected `return type (->)`, found `'{'`
+//    ╰────

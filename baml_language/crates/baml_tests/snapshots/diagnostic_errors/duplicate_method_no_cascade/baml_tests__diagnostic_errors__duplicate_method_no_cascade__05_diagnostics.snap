@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0012
 
-  × Duplicate method `Box.value`
+  × duplicate method `Box.value`
    ╭─[main.baml:2:14]
  2 │     function value(self) -> int {
    ·              ──┬──

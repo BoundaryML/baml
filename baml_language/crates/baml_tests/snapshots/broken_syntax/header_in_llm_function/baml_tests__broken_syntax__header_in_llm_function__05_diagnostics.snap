@@ -44,5 +44,5 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────
-    ·                  ╰── Header comments (//#) are not allowed inside LLM functions
+    ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
     ╰────

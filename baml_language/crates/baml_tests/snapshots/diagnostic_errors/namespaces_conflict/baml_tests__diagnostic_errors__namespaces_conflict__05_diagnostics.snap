@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [validation] E0011
 
-  × Duplicate class `Response`
+  × duplicate class `Response`
    ╭─[b.baml:2:7]
  2 │ class Response {
    ·       ────┬───

@@ -115,7 +115,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[partial_input.baml:5:17]
  5 │   field3 string @  // Incomplete attribute
    ·                 ┬
-   ·                 ╰── Attribute is missing a name
+   ·                 ╰── attribute is missing a name
    ╰────
 
   [hir] E0037

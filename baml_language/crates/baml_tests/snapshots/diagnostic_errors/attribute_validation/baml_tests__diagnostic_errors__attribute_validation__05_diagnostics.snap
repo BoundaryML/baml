@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0014
 
-  × Duplicate attribute `@description`
+  × duplicate attribute `@description`
    ╭─[test.baml:5:3]
  5 │   @@description("First description")
    ·   ─────────────────┬────────────────
@@ -18,7 +18,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate field `HasDuplicateField.name`
+  × duplicate field `HasDuplicateField.name`
     ╭─[test.baml:11:3]
  11 │   name string
     ·   ──┬─
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0014
 
-  × Duplicate attribute `@alias`
+  × duplicate attribute `@alias`
     ╭─[test.baml:17:48]
  17 │   name string @alias("n") @description("Name") @alias("nm")
     ·               ─────┬─────                      ──────┬─────
@@ -42,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate variant `HasDuplicateVariant.RED`
+  × duplicate variant `HasDuplicateVariant.RED`
     ╭─[test.baml:21:3]
  21 │   RED
     ·   ─┬─
@@ -56,7 +56,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0014
 
-  × Duplicate attribute `@description`
+  × duplicate attribute `@description`
     ╭─[test.baml:30:3]
  29 │   @@description("First")
     ·   ───────────┬──────────
@@ -68,7 +68,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0014
 
-  × Duplicate attribute `@alias`
+  × duplicate attribute `@alias`
     ╭─[test.baml:34:22]
  34 │   ACTIVE @alias("a") @alias("active")
     ·          ─────┬───── ────────┬───────

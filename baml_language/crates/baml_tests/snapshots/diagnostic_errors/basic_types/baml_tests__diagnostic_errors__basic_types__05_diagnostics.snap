@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0015
 
-  × Unknown attribute `@stream.not_null`
+  × unknown attribute `@stream.not_null`
     ╭─[classes.baml:11:21]
  11 │     details string? @stream.not_null
     ·                     ────────┬───────
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × Unknown attribute `@stream.not_null`
+  × unknown attribute `@stream.not_null`
     ╭─[classes.baml:16:96]
  16 │     multiple string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
     ·                                                                                                ────────┬───────

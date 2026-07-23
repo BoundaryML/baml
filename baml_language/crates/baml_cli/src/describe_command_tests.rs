@@ -993,7 +993,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let tight = capture_description(&db, &descs[0], 5);
     let full = capture_description(&db, &descs[0], 1000);
     assert!(
-        !tight.contains("[INFO] Showing"),
+        !tight.contains("[INFO] showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
     // The header + body block is identical at both budgets; only the trailing

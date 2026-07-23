@@ -44,78 +44,70 @@ function BindingAndDeferForms(user: User, value: int | string, items: int[]) -> 
 
 //----
 //- diagnostics
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ const_let_else_defer.baml:6:3 ]
-//    │
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[const_let_else_defer.baml:6:3]
 //  6 │   const x = 1;
-//    │   ──┬──
-//    │     ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ const_let_else_defer.baml:7:3 ]
-//    │
+//    ·   ──┬──
+//    ·     ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[const_let_else_defer.baml:7:3]
 //  7 │   const y: int = x;
-//    │   ──┬──
-//    │     ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//    ╭─[ const_let_else_defer.baml:8:3 ]
-//    │
+//    ·   ──┬──
+//    ·     ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//    ╭─[const_let_else_defer.baml:8:3]
 //  8 │   const _ = y;
-//    │   ──┬──
-//    │     ╰──── `const` behaves like `let` for now
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ const_let_else_defer.baml:19:6 ]
-//     │
+//    ·   ──┬──
+//    ·     ╰── `const` behaves like `let` for now
+//    ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[const_let_else_defer.baml:19:6]
 //  19 │   if const narrowed: int = value {
-//     │      ──┬──
-//     │        ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ const_let_else_defer.baml:25:9 ]
-//     │
+//     ·      ──┬──
+//     ·        ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[const_let_else_defer.baml:25:9]
 //  25 │   while const loop_value: int = value {
-//     │         ──┬──
-//     │           ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ const_let_else_defer.baml:30:8 ]
-//     │
+//     ·         ──┬──
+//     ·           ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[const_let_else_defer.baml:30:8]
 //  30 │   for (const i = 0; i < 3; i += 1) {
-//     │        ──┬──
-//     │          ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ const_let_else_defer.baml:34:8 ]
-//     │
+//     ·        ──┬──
+//     ·          ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[const_let_else_defer.baml:34:8]
 //  34 │   for (const item in items) {
-//     │        ──┬──
-//     │          ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// warning: `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
-//     ╭─[ const_let_else_defer.baml:38:7 ]
-//     │
+//     ·        ──┬──
+//     ·          ╰── `const` behaves like `let` for now
+//     ╰────
+// E0010
+//
+//   ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+//     ╭─[const_let_else_defer.baml:38:7]
 //  38 │   for const item in items {
-//     │       ──┬──
-//     │         ╰──── `const` behaves like `let` for now
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//     ·       ──┬──
+//     ·         ╰── `const` behaves like `let` for now
+//     ╰────
 //
 //- semantic_tokens
 // const_let_else_defer.baml:1:1 (keyword) len=5 "class"

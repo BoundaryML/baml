@@ -560,13 +560,13 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
     let rest = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
-        .ok_or_else(|| anyhow!("SKILL.md is missing opening frontmatter marker"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` is missing opening frontmatter marker"))?;
     let Some((closing_start, closing_marker)) = ["\n---\n", "\r\n---\r\n"]
         .into_iter()
         .filter_map(|marker| rest.find(marker).map(|index| (index, marker)))
         .min_by_key(|(index, _)| *index)
     else {
-        anyhow::bail!("SKILL.md is missing closing frontmatter marker");
+        anyhow::bail!("`SKILL.md` is missing closing frontmatter marker");
     };
     Ok((
         &rest[..closing_start],
@@ -577,9 +577,9 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
 fn validate_skill_name(content: &str, expected_name: &str) -> Result<()> {
     let (frontmatter, _) = split_frontmatter(content)?;
     let got = frontmatter_name(frontmatter)
-        .ok_or_else(|| anyhow!("SKILL.md frontmatter is missing `name`"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` frontmatter is missing `name`"))?;
     if got != expected_name {
-        anyhow::bail!("SKILL.md frontmatter name must be `{expected_name}`, got `{got}`");
+        anyhow::bail!("`SKILL.md` frontmatter name must be `{expected_name}`, got `{got}`");
     }
     Ok(())
 }
@@ -606,7 +606,7 @@ fn replace_frontmatter_name(frontmatter: &str, name: &str) -> Result<String> {
         }
     }
     if !replaced {
-        anyhow::bail!("SKILL.md frontmatter is missing `name`");
+        anyhow::bail!("`SKILL.md` frontmatter is missing `name`");
     }
     Ok(out)
 }

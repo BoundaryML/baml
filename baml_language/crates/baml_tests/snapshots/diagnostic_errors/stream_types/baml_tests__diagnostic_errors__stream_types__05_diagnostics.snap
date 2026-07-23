@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [validation] E0011
 
-  × Duplicate class `Inner`
+  × duplicate class `Inner`
     ╭─[main.baml:31:7]
  31 │ class Inner {
     ·       ──┬──
@@ -18,7 +18,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [validation] E0011
 
-  × Name `Foo` defined 2 times as: class, type
+  × name `Foo` defined 2 times as: class, type
      ╭─[main.baml:145:6]
  145 │ type Foo = int | string
      ·      ─┬─
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [validation] E0011
 
-  × Name `Bar` defined 2 times as: class, type
+  × name `Bar` defined 2 times as: class, type
      ╭─[main.baml:146:6]
  146 │ type Bar = Foo | bool
      ·      ─┬─

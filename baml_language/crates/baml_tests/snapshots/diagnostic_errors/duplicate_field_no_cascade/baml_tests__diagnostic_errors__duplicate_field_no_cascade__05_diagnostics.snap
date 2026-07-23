@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0012
 
-  × Duplicate field `Box.value`
+  × duplicate field `Box.value`
    ╭─[main.baml:3:5]
  2 │     value: int,
    ·     ──┬──

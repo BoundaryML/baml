@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate field `age` in class destructure pattern
+  × duplicate field `age` in class destructure pattern
     ╭─[patterns_class_destructure.baml:42:9]
  41 │         age: let first,
     ·         ─┬─
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0012
 
-  × Duplicate field `age` in class destructure pattern
+  × duplicate field `age` in class destructure pattern
     ╭─[patterns_class_destructure.baml:53:26]
  53 │         Person { age: _, age: _ } => 1
     ·                  ─┬─     ─┬─
@@ -42,7 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Duplicate binding `age` in pattern
+  × duplicate binding `age` in pattern
     ╭─[patterns_class_destructure.baml:60:23]
  59 │         age,
     ·         ─┬─
@@ -54,7 +54,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Duplicate binding `field` in pattern
+  × duplicate binding `field` in pattern
     ╭─[patterns_class_destructure.baml:71:43]
  71 │         field: let field: SameNameInner { field }
     ·                ─────────────────┬────────────────┬
@@ -64,7 +64,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Duplicate binding `field` in pattern
+  × duplicate binding `field` in pattern
     ╭─[patterns_class_destructure.baml:82:32]
  81 │         field: SameNameInner { field },
     ·                                ──┬──
@@ -210,7 +210,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Or-pattern alternatives must bind the same names. Inconsistent across branches: age
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: age
      ╭─[patterns_class_destructure.baml:237:9]
  237 │         Person { age } | int => age
      ·         ──────────┬─────────
@@ -235,7 +235,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Duplicate binding `value` in pattern
+  × duplicate binding `value` in pattern
      ╭─[patterns_class_destructure.baml:258:50]
  258 │         value: let value: SameNameInner { field: let value }
      ·                ──────────────────────┬──────────────────────┬

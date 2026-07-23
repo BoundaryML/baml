@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0094
 
-  × Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
     ╭─[patterns_new.baml:10:10]
  10 │         (let x) | (let y) => 1
     ·          ───────┬───────
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y, z
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y, z
     ╭─[patterns_new.baml:17:9]
  17 │         let x | let y | let z => 1
     ·         ──────────┬──────────
@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Or-pattern alternatives must bind the same names. Inconsistent across branches: x
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x
     ╭─[patterns_new.baml:24:10]
  24 │         (let x) | _ => 1
     ·          ─────┬────
@@ -31,7 +31,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0094
 
-  × Or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
+  × or-pattern alternatives must bind the same names. Inconsistent across branches: x, y
     ╭─[patterns_new.baml:31:10]
  31 │         (let x: int) | (let y: string) => 1
     ·          ──────────────┬─────────────

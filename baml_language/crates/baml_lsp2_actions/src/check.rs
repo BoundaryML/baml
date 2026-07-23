@@ -1663,7 +1663,7 @@ fn render_jinja_validation_result(
         return vec![
             Diagnostic::error(
                 DiagnosticId::JinjaParseError,
-                format!("Error parsing jinja template: {parse_error}"),
+                format!("error parsing jinja template: {parse_error}"),
             )
             .with_primary_span(Span { file_id, range })
             .with_phase(DiagnosticPhase::Type),

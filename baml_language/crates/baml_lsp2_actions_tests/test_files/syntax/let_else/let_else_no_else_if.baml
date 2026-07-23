@@ -10,12 +10,11 @@ function NoElseIfChain(r: Ok | Err) -> string {
 
 //----
 //- diagnostics
-// error: Expected block after 'else' (`else if` is not valid in let-else), found if
-//    ╭─[ let_else_let_else_no_else_if.baml:7:22 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[let_else_let_else_no_else_if.baml:7:22]
 //  7 │   let o: Ok = r else if true { return "x"; };
-//    │                      ─┬
-//    │                       ╰── Expected block after 'else' (`else if` is not valid in let-else), found if
-//    │
-//    │ Note: Error code: E0010
-// ───╯
+//    ·                      ─┬
+//    ·                       ╰── expected `block after 'else' (`else if` is not valid in let-else)`, found `if`
+//    ╰────

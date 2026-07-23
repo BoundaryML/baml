@@ -132,7 +132,7 @@ impl PackArgs {
             Arc::new(sys_native::SysOps::native()),
             vec![],
         )
-        .map_err(|e| anyhow!("Failed to initialize engine for resolution: {e:?}"))?;
+        .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 
         let (mode, targets) = self.resolve_targets(&engine)?;
         for t in &targets {
@@ -155,7 +155,7 @@ impl PackArgs {
             output_format: self.output_format,
         };
         let serialized = borsh::to_vec(&envelope)
-            .map_err(|e| anyhow!("Failed to serialize pack envelope: {e}"))?;
+            .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
@@ -166,7 +166,7 @@ impl PackArgs {
             .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
         let mut output_file = std::fs::File::create(&output_path)
-            .with_context(|| format!("Failed to create {}", output_path.display()))?;
+            .with_context(|| format!("failed to create {}", output_path.display()))?;
         write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
 
         #[cfg(unix)]
@@ -174,7 +174,7 @@ impl PackArgs {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&output_path, std::fs::Permissions::from_mode(0o755))
                 .with_context(|| {
-                    format!("Failed to set permissions on {}", output_path.display())
+                    format!("failed to set permissions on {}", output_path.display())
                 })?;
         }
 
@@ -208,7 +208,7 @@ impl PackArgs {
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\
-                     \n    baml pack --file {target} -f <NAME>\n",
+                     \n    `baml pack --file {target} -f <NAME>`\n",
                 );
             }
             if !self.functions.is_empty() {
@@ -241,14 +241,14 @@ impl PackArgs {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, needs_format_hint) = self.load_standalone(file)?;
-            check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
+            check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
             let program = baml_compiler2_emit::generate_project_bytecode(
                 &db,
                 &baml_compiler2_emit::CompileOptions {
                     emit_test_cases: false,
                 },
             )
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
@@ -272,7 +272,7 @@ impl PackArgs {
             crate::project_session::CacheUse::ReadWrite,
         )?;
         if session.is_empty() {
-            anyhow::bail!("No .baml files found in {}", session.root().display());
+            anyhow::bail!("no `.baml` files found in {}", session.root().display());
         }
         // Mirror `baml run`'s per-file format check: probe each source through
         // the formatter and emit a single advisory if any file would change.
@@ -305,12 +305,12 @@ impl PackArgs {
             bail_on_error_diagnostics(
                 db,
                 &incremental.merged,
-                "Cannot pack: compilation errors found",
+                "cannot pack: compilation errors found",
                 reporter,
             )?;
             Some(incremental.fresh_by_file)
         } else {
-            check_diagnostics(db, "Cannot pack: compilation errors found", reporter)?;
+            check_diagnostics(db, "cannot pack: compilation errors found", reporter)?;
             None
         };
 
@@ -322,7 +322,7 @@ impl PackArgs {
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
-        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
@@ -342,7 +342,7 @@ impl PackArgs {
     fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
         let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("Failed to read {}", canonical.display()))?;
+            .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
         let mut db = ProjectDatabase::new();
@@ -423,12 +423,12 @@ fn resolve_one(engine: &BexEngine, func: &str) -> Result<ResolvedPackTarget> {
         let suggestions = function_suggestions(engine, func);
         if suggestions.is_empty() {
             anyhow::bail!(
-                "Function `{func}` not found. Use `baml run --list` to see \
+                "function `{func}` not found. Use `baml run --list` to see \
                  available targets."
             );
         }
         anyhow::bail!(
-            "Function `{func}` not found. Did you mean one of:\n{}",
+            "function `{func}` not found. Did you mean one of:\n{}",
             suggestions
                 .iter()
                 .map(|s| format!("  - {s}"))
@@ -530,16 +530,16 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
 }
 
 fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
-    let exe = std::env::current_exe().context("Failed to locate current executable")?;
+    let exe = std::env::current_exe().context("failed to locate current executable")?;
     let dir = exe
         .parent()
-        .ok_or_else(|| anyhow!("Cannot determine directory of current executable"))?;
+        .ok_or_else(|| anyhow!("cannot determine directory of current executable"))?;
     let host_name = host_binary_name(target_triple);
     let host_path = dir.join(&host_name);
     let is_native = target_triple == release_host_target_triple()?;
     if is_native && host_path.exists() {
         return std::fs::read(&host_path)
-            .with_context(|| format!("Failed to read {}", host_path.display()));
+            .with_context(|| format!("failed to read {}", host_path.display()));
     }
 
     // A workspace-built host sits next to the CLI but we're skipping it
@@ -600,7 +600,7 @@ fn release_host_target_triple() -> Result<&'static str> {
 
 fn validate_release_target_triple(target: &str) -> Result<&str> {
     baml_release::validate_release_target_triple(target)
-        .map_err(|err| anyhow!("Unsupported pack target `{target}`. {err}"))
+        .map_err(|err| anyhow!("unsupported pack target `{target}`. {err}"))
 }
 
 /// Heuristic: does this positional `<TARGET>` look like a filesystem
@@ -634,23 +634,23 @@ fn write_executable(
         // address that can overlap the host's `.bss`, corrupting the envelope
         // (and the host's BSS globals) at startup. See `pack_elf`.
         crate::pack_elf::append_note(host_bytes, PACK_SECTION_NAME, data, writer)
-            .context("Failed to write ELF binary")?;
+            .context("failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
-            .context("Failed to parse PE binary")?
+            .context("failed to parse PE binary")?
             .write_resource(PACK_SECTION_NAME, data.to_vec())
-            .context("Failed to write PE resource")?
+            .context("failed to write PE resource")?
             .build(writer)
-            .context("Failed to build PE binary")?;
+            .context("failed to build PE binary")?;
     } else if target_triple.contains("apple-darwin") {
         libsui::Macho::from(host_bytes.to_vec())
-            .context("Failed to parse Mach-O binary")?
+            .context("failed to parse Mach-O binary")?
             .write_section(PACK_SECTION_NAME, data.to_vec())
-            .context("Failed to write Mach-O section")?
+            .context("failed to write Mach-O section")?
             .build_and_sign(writer)
-            .context("Failed to build Mach-O binary")?;
+            .context("failed to build Mach-O binary")?;
     } else {
-        anyhow::bail!("Unsupported pack target `{target_triple}`");
+        anyhow::bail!("unsupported pack target `{target_triple}`");
     }
     Ok(())
 }
@@ -1123,7 +1123,7 @@ mod tests {
     fn test_validate_release_target_triple_rejects_unknown_target() {
         let err = validate_release_target_triple("wasm32-unknown-unknown").unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("Unsupported pack target"), "got: {msg}");
+        assert!(msg.contains("unsupported pack target"), "got: {msg}");
         assert!(msg.contains("x86_64-unknown-linux-gnu"), "got: {msg}");
     }
 
@@ -1228,7 +1228,7 @@ mod tests {
         let reporter = Reporter::new();
         let err = args.load_and_compile_project(&reporter).unwrap_err();
         assert!(
-            format!("{err}").contains("No .baml files"),
+            format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",
         );
     }
@@ -1243,7 +1243,7 @@ mod tests {
             .unwrap_err();
         let msg = format!("{err:?}"); // use debug to capture the full context chain
         assert!(
-            msg.contains("File not found") || msg.contains("nonexistent"),
+            msg.contains("file not found") || msg.contains("nonexistent"),
             "expected file-not-found error; got: {msg}",
         );
     }

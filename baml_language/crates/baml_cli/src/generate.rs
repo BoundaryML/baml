@@ -133,7 +133,7 @@ impl GenerateArgs {
             #[allow(clippy::print_stderr)]
             {
                 eprintln!();
-                eprintln!("Add a generator section to your baml.toml, e.g.:");
+                eprintln!("add a generator section to `baml.toml`, for example:");
                 eprintln!();
                 eprintln!("  [generator.my_client]");
                 eprintln!("  output_type = \"python/pydantic\"");
@@ -149,9 +149,9 @@ impl GenerateArgs {
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
             .get_bytecode()
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = borsh::to_vec(&program)
-            .map_err(|e| anyhow!("Failed to serialize BAML bytecode: {e}"))?;
+            .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
 
         let mut total_files = 0;
 
@@ -165,7 +165,7 @@ impl GenerateArgs {
                 requested_output
             } else {
                 std::env::current_dir()
-                    .context("Failed to resolve the current directory for generated output")?
+                    .context("failed to resolve the current directory for generated output")?
                     .join(requested_output)
             };
 
@@ -260,7 +260,7 @@ impl GenerateArgs {
                         max_typed_union_arity: generator.max_typed_union_arity,
                     },
                 )
-                .map_err(|error| anyhow!("Go SDK generation failed: {error}"))?
+                .map_err(|error| anyhow!("failed to generate Go SDK: {error}"))?
                 .into_iter()
                 .map(|(path, content)| (path, content.into_bytes()))
                 .collect(),
@@ -304,7 +304,7 @@ impl GenerateArgs {
                 .collect();
             let report = write_generated_output(&output_dir, output).with_context(|| {
                 format!(
-                    "Failed to install generated output in {}",
+                    "failed to install generated output in {}",
                     output_dir.display()
                 )
             })?;
