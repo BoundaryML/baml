@@ -5,7 +5,9 @@
 use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::{TextRange, TextSize};
 
-use super::{FromCST, KnownKind, StrongAstError, tokens as t};
+use super::{
+    FromCST, KnownKind, StrongAstError, tokens as t, try_print_single_line_comma_separated,
+};
 use crate::{
     ast::{Attribute, Literal, SyntaxNodeIter, Token},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
@@ -1144,38 +1146,7 @@ impl FunctionType {
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        for (i, (param, comma)) in self.params.iter().enumerate() {
-            if printer.output.len() > shape.width {
-                return None;
-            }
-            let (p_leading, p_trailing) = printer.trivia.get_for_element(param);
-            printer.try_print_trivia_single_line_squished(p_leading)?;
-            if printer
-                .print(param, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-            printer.try_print_trivia_single_line_squished(p_trailing)?;
-            if i + 1 < self.params.len() {
-                if let Some(comma) = comma {
-                    let (comma_leading, comma_trailing) =
-                        printer.trivia.get_for_range_split(comma.span());
-                    printer.try_print_trivia_single_line_squished(comma_leading)?;
-                    printer.print_raw_token(comma);
-                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
-                } else {
-                    printer.print_str(",");
-                }
-                printer.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
-                let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
-                printer.try_print_trivia_single_line_squished(comma_leading)?;
-                printer.try_print_trivia_single_line_squished(comma_trailing)?;
-            }
-        }
+        try_print_single_line_comma_separated(&self.params, shape, printer)?;
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;

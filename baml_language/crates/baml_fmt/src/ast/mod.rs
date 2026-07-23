@@ -23,6 +23,44 @@ use crate::{
     trivia_classifier::TriviaSliceExt as _,
 };
 
+fn try_print_single_line_comma_separated<T: Printable>(
+    items: &[(T, Option<Comma>)],
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<()> {
+    for (i, (item, comma)) in items.iter().enumerate() {
+        if printer.output.len() > shape.width {
+            return None;
+        }
+        let (item_leading, item_trailing) = printer.trivia.get_for_element(item);
+        printer.try_print_trivia_single_line_squished(item_leading)?;
+        if printer
+            .print(item, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(item_trailing)?;
+        if i + 1 < items.len() {
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.print_raw_token(comma);
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_str(" ");
+        } else if let Some(comma) = comma {
+            let (comma_leading, comma_trailing) = printer.trivia.get_for_range_split(comma.span());
+            printer.try_print_trivia_single_line_squished(comma_leading)?;
+            printer.try_print_trivia_single_line_squished(comma_trailing)?;
+        }
+    }
+    Some(())
+}
+
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
 }
