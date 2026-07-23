@@ -27,11 +27,9 @@ function lambda_explicit_callback() -> int {
 }
 
 function explicit_nested(cb: ((value: int) -> int throws never) -> int) -> int {
-    cb(
-        (value: int) -> int {
-            value
-        },
-    )
+    cb((value: int) -> int {
+        value
+    })
 }
 
 function explicit_let() -> int {
