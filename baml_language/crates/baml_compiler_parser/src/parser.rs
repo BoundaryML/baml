@@ -5000,42 +5000,27 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Called when at `(`. Returns `true` if the matching `)` is followed by
-    /// `->`, indicating this opens a function-type pattern atom rather than a
-    /// parenthesized pattern.
+    /// Returns the non-trivia token after the `)` matching the current `(`.
     ///
     /// Walks forward via `peek()` with a stack of expected closers, so
     /// `(MyScores { f: int }) -> Result` and `(int[]) -> int` are recognised
-    /// correctly. On any mismatch (unbalanced or out-of-order closers) we
-    /// bail out and let the caller treat it as a paren pattern; the real
-    /// error will surface during the actual parse.
-    /// True if `(...)` is followed by a type-expression suffix (`[` or `?`),
-    /// indicating a parenthesized type like `(int | string)[]` rather than a
-    /// parenthesized pattern.
-    fn looks_like_paren_type_suffix(&self) -> bool {
+    /// correctly. Returns `None` for mismatched delimiters or EOF.
+    fn token_after_matching_paren(&self) -> Option<&Token> {
         debug_assert!(self.at(TokenKind::LParen));
         let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];
         let mut i: usize = 1;
         loop {
-            let Some(tok) = self.peek(i) else {
-                return false;
-            };
+            let tok = self.peek(i)?;
             match tok.kind {
                 TokenKind::LParen => stack.push(TokenKind::RParen),
                 TokenKind::LBracket => stack.push(TokenKind::RBracket),
                 TokenKind::LBrace => stack.push(TokenKind::RBrace),
                 close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
-                    let Some(expected) = stack.pop() else {
-                        return false;
-                    };
-                    if expected != close {
-                        return false;
+                    if stack.pop()? != close {
+                        return None;
                     }
                     if stack.is_empty() {
-                        return matches!(
-                            self.peek(i + 1).map(|t| t.kind),
-                            Some(TokenKind::LBracket | TokenKind::Question)
-                        );
+                        return self.peek(i + 1);
                     }
                 }
                 _ => {}
@@ -5044,35 +5029,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// True if `(...)` is followed by a type-expression suffix (`[` or `?`),
+    /// indicating a parenthesized type like `(int | string)[]` rather than a
+    /// parenthesized pattern.
+    fn looks_like_paren_type_suffix(&self) -> bool {
+        matches!(
+            self.token_after_matching_paren().map(|t| t.kind),
+            Some(TokenKind::LBracket | TokenKind::Question)
+        )
+    }
+
+    /// True if `(...)` is followed by `->`, indicating a function-type pattern.
     fn looks_like_function_type_paren(&self) -> bool {
-        debug_assert!(self.at(TokenKind::LParen));
-        let mut stack: Vec<TokenKind> = vec![TokenKind::RParen];
-        let mut i: usize = 1;
-        loop {
-            let Some(tok) = self.peek(i) else {
-                return false;
-            };
-            match tok.kind {
-                TokenKind::LParen => stack.push(TokenKind::RParen),
-                TokenKind::LBracket => stack.push(TokenKind::RBracket),
-                TokenKind::LBrace => stack.push(TokenKind::RBrace),
-                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
-                    let Some(expected) = stack.pop() else {
-                        return false;
-                    };
-                    if expected != close {
-                        return false;
-                    }
-                    if stack.is_empty() {
-                        // We just closed the outermost `(`. Function type iff
-                        // the next non-trivia token is `->`.
-                        return self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Arrow);
-                    }
-                }
-                _ => {}
-            }
-            i += 1;
-        }
+        self.token_after_matching_paren().map(|t| t.kind) == Some(TokenKind::Arrow)
     }
 
     /// True if the current token can start a pattern atom (used for
@@ -7942,11 +7911,11 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
-    use baml_compiler_lexer::lex_lossless;
+    use baml_compiler_lexer::{TokenKind, lex_lossless};
     use baml_compiler_syntax::{Item, SourceFile, SyntaxKind, SyntaxNode};
     use rowan::ast::AstNode;
 
-    use super::{ParseError, parse_file};
+    use super::{ParseError, Parser, parse_file};
 
     fn parse_source(source: &str) -> (SyntaxNode, Vec<ParseError>) {
         let tokens = lex_lossless(source, FileId::new(0));
@@ -7959,6 +7928,43 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    #[test]
+    fn matching_paren_lookahead_handles_delimiters_trivia_and_eof() {
+        let cases = [
+            (
+                "( { f: [ (int) ] } ) /* ) ] } */ -> Result",
+                (Some(TokenKind::Arrow), false, true),
+            ),
+            (
+                "((int | string)) /* suffix */ []",
+                (Some(TokenKind::LBracket), true, false),
+            ),
+            (
+                "(int) // suffix\n ?",
+                (Some(TokenKind::Question), true, false),
+            ),
+            ("(int) + value", (Some(TokenKind::Plus), false, false)),
+            ("(int)", (None, false, false)),
+            ("(int", (None, false, false)),
+            ("([int}) -> Result", (None, false, false)),
+            ("(int])[]", (None, false, false)),
+        ];
+
+        for (source, expected) in cases {
+            let tokens = lex_lossless(source, FileId::new(0));
+            let parser = Parser::new(&tokens);
+            assert_eq!(
+                (
+                    parser.token_after_matching_paren().map(|t| t.kind),
+                    parser.looks_like_paren_type_suffix(),
+                    parser.looks_like_function_type_paren(),
+                ),
+                expected,
+                "{source:?}"
+            );
+        }
     }
 
     /// A run of hashes at EOF (an incomplete raw string like `##`) must
