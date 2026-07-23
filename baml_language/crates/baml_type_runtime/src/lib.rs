@@ -337,6 +337,7 @@ fn collect(
     vars: &mut FxHashMap<Name, Vec<(Variance, Ty)>>,
     opts: InferOpts<'_>,
 ) {
+    let formal_non_null = formal.nullable_non_null_part();
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
             if opts.rigid == Some(name) {
@@ -378,9 +379,11 @@ fn collect(
             collect(fk, ak, inv, vars, opts);
             collect(fv, av, inv, vars, opts);
         }
-        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
-            let formal_inner = nullable_non_null_part(formal).expect("checked above");
-            let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+        (Ty::Union(_, _), _) if formal_non_null.is_some() => {
+            let formal_inner = formal_non_null.expect("checked above");
+            let actual_inner = actual
+                .nullable_non_null_part()
+                .unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts);
         }
         // Equal-length union ↔ union positional zip. This is only sound when the
@@ -506,25 +509,6 @@ fn collect(
             }
         }
         _ => {} // Concrete types: nothing to infer
-    }
-}
-
-fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
-    let Ty::Union(members, attr) = ty else {
-        return None;
-    };
-    if !members.iter().any(Ty::is_null) {
-        return None;
-    }
-    let non_null: Vec<Ty> = members
-        .iter()
-        .filter(|member| !member.is_null())
-        .cloned()
-        .collect();
-    match non_null.as_slice() {
-        [] => None,
-        [single] => Some(single.clone()),
-        _ => Some(Ty::Union(non_null, attr.clone())),
     }
 }
 

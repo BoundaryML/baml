@@ -357,21 +357,37 @@ impl Ty {
         matches!(self, Ty::Union(members, _) if members.iter().any(Ty::is_null))
     }
 
+    /// Returns the non-null payload of a nullable union.
+    ///
+    /// `Union([Null])` and unions without a direct `Null` member return `None`.
+    /// Member order and rebuilt-union attributes are preserved without flattening nested unions.
+    pub fn nullable_non_null_part(&self) -> Option<Ty> {
+        let Ty::Union(members, attr) = self else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+        match non_null.len() {
+            0 => None,
+            1 => non_null.into_iter().next(),
+            _ => Some(Ty::Union(non_null, attr.clone())),
+        }
+    }
+
     /// Remove `null` from a nullable union, collapsing the result: `T | null`
     /// → `T`, `A | B | null` → `A | B`, a non-nullable type → unchanged. The
     /// inverse direction of [`Ty::optional`]; used where the non-null payload
     /// of an optional is needed (e.g. union-member metadata).
     pub fn strip_null(&self) -> Ty {
         match self {
-            Ty::Union(members, attr) => {
-                let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
-                match non_null.len() {
-                    0 => self.clone(),
-                    1 => non_null.into_iter().next().expect("len checked"),
-                    _ => Ty::Union(non_null, attr.clone()),
-                }
+            Ty::Union(members, _) if members.len() == 1 && !members[0].is_null() => {
+                members[0].clone()
             }
-            _ => self.clone(),
+            _ => self
+                .nullable_non_null_part()
+                .unwrap_or_else(|| self.clone()),
         }
     }
 
@@ -1302,6 +1318,74 @@ mod tests {
         // `?` does not survive lowering; a nullable type displays as a union.
         let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
         assert_eq!(ty.to_string(), "int | string | null");
+    }
+
+    #[test]
+    fn nullable_non_null_part_preserves_union_structure() {
+        let union_attr = TyAttr {
+            sap_pending_never: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let member_attr = TyAttr {
+            sap_in_progress_never: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let attributed_int = Ty::Int {
+            attr: member_attr.clone(),
+        };
+        let nested = Ty::Union(
+            vec![attributed_int.clone(), Ty::null()],
+            member_attr.clone(),
+        );
+        let cases = [
+            ("non-union", ty_int(), None),
+            (
+                "union without null",
+                Ty::Union(vec![ty_int(), ty_string()], union_attr.clone()),
+                None,
+            ),
+            (
+                "single-member union without null",
+                Ty::Union(vec![ty_int()], union_attr.clone()),
+                None,
+            ),
+            (
+                "one non-null member",
+                Ty::Union(vec![Ty::null(), attributed_int.clone()], union_attr.clone()),
+                Some(attributed_int),
+            ),
+            (
+                "multiple non-null members",
+                Ty::Union(vec![ty_string(), Ty::null(), ty_bool()], union_attr.clone()),
+                Some(Ty::Union(vec![ty_string(), ty_bool()], union_attr.clone())),
+            ),
+            (
+                "null-only union",
+                Ty::Union(vec![Ty::null()], union_attr.clone()),
+                None,
+            ),
+            (
+                "nested null is not direct",
+                Ty::Union(vec![nested.clone()], union_attr.clone()),
+                None,
+            ),
+            (
+                "nested union is not flattened",
+                Ty::Union(vec![nested.clone(), Ty::null()], union_attr),
+                Some(nested),
+            ),
+        ];
+
+        for (name, ty, expected) in cases {
+            assert_eq!(ty.nullable_non_null_part(), expected, "{name}");
+            let expected_stripped = match &ty {
+                Ty::Union(members, _) if members.len() == 1 && !members[0].is_null() => {
+                    members[0].clone()
+                }
+                _ => expected.clone().unwrap_or_else(|| ty.clone()),
+            };
+            assert_eq!(ty.strip_null(), expected_stripped, "{name}");
+        }
     }
 
     #[test]

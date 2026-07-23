@@ -11228,25 +11228,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         adopted
     }
 
-    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
-        let Ty::Union(members, attr) = ty else {
-            return None;
-        };
-        if !members.iter().any(Ty::is_null) {
-            return None;
-        }
-        let non_null: Vec<Ty> = members
-            .iter()
-            .filter(|member| !member.is_null())
-            .cloned()
-            .collect();
-        match non_null.as_slice() {
-            [] => None,
-            [single] => Some(single.clone()),
-            _ => Some(Ty::Union(non_null, attr.clone())),
-        }
-    }
-
     fn infer_call_bindings_via_matching_shape(
         &self,
         formal: &Ty,
@@ -11255,6 +11236,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         rigid: Option<&Name>,
         allow_typevar_actuals: bool,
     ) {
+        let formal_non_null = formal.nullable_non_null_part();
         match (formal, actual) {
             (Ty::List(f, _), Ty::List(a, _)) | (Ty::EvolvingList(f, _), Ty::EvolvingList(a, _)) => {
                 if allow_typevar_actuals {
@@ -11322,10 +11304,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.infer_call_bindings_via_interface_views_rigid(fth, ath, bindings, rigid);
                 }
             }
-            (Ty::Union(_, _), _) if Self::nullable_non_null_part(formal).is_some() => {
-                let formal_inner = Self::nullable_non_null_part(formal).expect("checked above");
-                let actual_inner =
-                    Self::nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+            (Ty::Union(_, _), _) if formal_non_null.is_some() => {
+                let formal_inner = formal_non_null.expect("checked above");
+                let actual_inner = actual
+                    .nullable_non_null_part()
+                    .unwrap_or_else(|| actual.clone());
                 if allow_typevar_actuals {
                     self.infer_call_bindings_via_interface_views_allow_typevars(
                         &formal_inner,
