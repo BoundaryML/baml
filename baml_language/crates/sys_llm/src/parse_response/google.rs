@@ -67,19 +67,40 @@ fn text_content_part(parts: &[Part]) -> Option<String> {
     }
 }
 
-// == Google AI parser =============================================
+fn google_content(candidate: &Candidate) -> Result<String, &'static str> {
+    let content = candidate
+        .content
+        .as_ref()
+        .ok_or("candidate has no content")?;
+    Ok(text_content_part(&content.parts).unwrap_or_default())
+}
 
-pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
+fn vertex_content(candidate: &Candidate) -> Result<String, &'static str> {
+    // Vertex takes first part only, without filtering thought parts.
+    // Matches engine/baml-runtime vertex/response_handler.rs behavior.
+    candidate
+        .content
+        .as_ref()
+        .and_then(|content| content.parts.first())
+        .and_then(|part| part.text.clone())
+        .ok_or("candidate has no content parts")
+}
+
+fn parse_google_family_response(
+    body: &str,
+    provider: &'static str,
+    extract_content: fn(&Candidate) -> Result<String, &'static str>,
+) -> Result<LlmProviderResponse, ParseResponseError> {
     let response: GoogleResponse =
         serde_json::from_str(body).map_err(|e| ParseResponseError::Deserialize {
-            provider: "google-ai",
+            provider,
             source: e,
             content: body.to_string(),
         })?;
 
     if response.candidates.len() != 1 {
         return Err(ParseResponseError::NoContent {
-            provider: "google-ai",
+            provider,
             detail: format!(
                 "expected exactly 1 candidate, got {}",
                 response.candidates.len()
@@ -89,14 +110,10 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
 
     let candidate = &response.candidates[0];
 
-    let Some(content_obj) = candidate.content.as_ref() else {
-        return Err(ParseResponseError::NoContent {
-            provider: "google-ai",
-            detail: "candidate has no content".into(),
-        });
-    };
-
-    let content = text_content_part(&content_obj.parts).unwrap_or_default();
+    let content = extract_content(candidate).map_err(|detail| ParseResponseError::NoContent {
+        provider,
+        detail: detail.into(),
+    })?;
 
     let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
 
@@ -121,67 +138,121 @@ pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, P
     })
 }
 
+// == Google AI parser =============================================
+
+pub(super) fn parse_google_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
+    parse_google_family_response(body, "google-ai", google_content)
+}
+
 // == Vertex AI parser =============================================
 
 pub(super) fn parse_vertex_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
-    let response: GoogleResponse =
-        serde_json::from_str(body).map_err(|e| ParseResponseError::Deserialize {
-            provider: "vertex-ai",
-            source: e,
-            content: body.to_string(),
-        })?;
-
-    if response.candidates.len() != 1 {
-        return Err(ParseResponseError::NoContent {
-            provider: "vertex-ai",
-            detail: format!(
-                "expected exactly 1 candidate, got {}",
-                response.candidates.len()
-            ),
-        });
-    }
-
-    let candidate = &response.candidates[0];
-
-    // Vertex takes first part only, no thought filtering.
-    // Matches engine/baml-runtime vertex/response_handler.rs behavior.
-    let content = candidate
-        .content
-        .as_ref()
-        .and_then(|c| c.parts.first())
-        .and_then(|p| p.text.clone())
-        .ok_or_else(|| ParseResponseError::NoContent {
-            provider: "vertex-ai",
-            detail: "candidate has no content parts".into(),
-        })?;
-
-    let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
-
-    let usage = response
-        .usage_metadata
-        .as_ref()
-        .map(|u| TokenUsage {
-            input_tokens: u.prompt_token_count,
-            output_tokens: u.candidates_token_count,
-            total_tokens: u.total_token_count,
-            cached_input_tokens: u.cached_content_token_count,
-        })
-        .unwrap_or_default();
-
-    Ok(LlmProviderResponse {
-        output: crate::parse_response::LlmOutput::from_text(content.clone()),
-        content,
-        model: None,
-        finish_reason,
-        finish_reason_raw: candidate.finish_reason.clone(),
-        usage,
-    })
+    parse_google_family_response(body, "vertex-ai", vertex_content)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{LlmProvider, parse_response::parse_response};
+
+    type ResponseParser = fn(&str) -> Result<LlmProviderResponse, ParseResponseError>;
+
+    #[test]
+    fn test_google_family_shared_fields_and_content_policies() {
+        let body = r#"{
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {"text": "thinking", "thought": true},
+                        {"text": "answer"}
+                    ]
+                },
+                "finishReason": "SAFETY"
+            }],
+            "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 20,
+                "totalTokenCount": 120,
+                "cachedContentTokenCount": 80
+            }
+        }"#;
+
+        for (parse, expected_content) in [
+            (parse_google_response as ResponseParser, "answer"),
+            (parse_vertex_response as ResponseParser, "thinking"),
+        ] {
+            let response = parse(body).unwrap();
+            assert_eq!(response.content, expected_content);
+            assert_eq!(response.output.text_content(), expected_content);
+            assert_eq!(response.finish_reason, FinishReason::Other("SAFETY".into()));
+            assert_eq!(response.finish_reason_raw.as_deref(), Some("SAFETY"));
+            assert_eq!(response.model, None);
+            assert_eq!(response.usage.input_tokens, Some(100));
+            assert_eq!(response.usage.output_tokens, Some(20));
+            assert_eq!(response.usage.total_tokens, Some(120));
+            assert_eq!(response.usage.cached_input_tokens, Some(80));
+        }
+    }
+
+    #[test]
+    fn test_google_family_errors_keep_provider_details() {
+        let parsers = [
+            (parse_google_response as ResponseParser, "google-ai"),
+            (parse_vertex_response as ResponseParser, "vertex-ai"),
+        ];
+
+        for (parse, expected_provider) in parsers {
+            match parse("{").unwrap_err() {
+                ParseResponseError::Deserialize {
+                    provider, content, ..
+                } => {
+                    assert_eq!(provider, expected_provider);
+                    assert_eq!(content, "{");
+                }
+                error => panic!("unexpected error: {error}"),
+            }
+
+            for (body, expected_detail) in [
+                (
+                    r#"{"candidates":[]}"#,
+                    "expected exactly 1 candidate, got 0",
+                ),
+                (
+                    r#"{"candidates":[{},{}]}"#,
+                    "expected exactly 1 candidate, got 2",
+                ),
+            ] {
+                match parse(body).unwrap_err() {
+                    ParseResponseError::NoContent { provider, detail } => {
+                        assert_eq!(provider, expected_provider);
+                        assert_eq!(detail, expected_detail);
+                    }
+                    error => panic!("unexpected error: {error}"),
+                }
+            }
+        }
+
+        for (parse, expected_provider, expected_detail) in [
+            (
+                parse_google_response as ResponseParser,
+                "google-ai",
+                "candidate has no content",
+            ),
+            (
+                parse_vertex_response as ResponseParser,
+                "vertex-ai",
+                "candidate has no content parts",
+            ),
+        ] {
+            match parse(r#"{"candidates":[{}]}"#).unwrap_err() {
+                ParseResponseError::NoContent { provider, detail } => {
+                    assert_eq!(provider, expected_provider);
+                    assert_eq!(detail, expected_detail);
+                }
+                error => panic!("unexpected error: {error}"),
+            }
+        }
+    }
 
     // == Google AI tests ==========================================
 
