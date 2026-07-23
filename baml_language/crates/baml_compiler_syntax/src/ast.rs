@@ -1557,16 +1557,11 @@ pub enum AttributeNamePart {
 
 impl AttributeNamePart {
     #[must_use]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         match self {
             Self::Word(word) => word.span().len().into(),
             Self::Keyword(range) => range.len().into(),
         }
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     fn parse(element: SyntaxElement) -> Result<Self, AstShapeError> {

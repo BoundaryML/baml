@@ -510,22 +510,6 @@ impl ValidatedAstError {
             })
         }
     }
-    /// Checks that the given token is of the specified [`SyntaxKind`].
-    ///
-    /// # Errors
-    /// Returns [`ValidatedAstError::UnexpectedKind`] if the element not the expected kind.
-    #[allow(unused_must_use)]
-    pub fn assert_kind_token(token: &SyntaxToken, expected: SyntaxKind) -> Result<(), Self> {
-        if token.kind() == expected {
-            Ok(())
-        } else {
-            Err(Self::UnexpectedKind {
-                expected,
-                found: token.kind(),
-                at: token.text_range(),
-            })
-        }
-    }
     /// Easy way to create a [`ValidatedAstError::MissingExpectedElementDesc`] error.
     #[must_use]
     pub fn missing_desc(desc: impl Into<Cow<'static, str>>, parent: TextRange) -> Self {
@@ -708,25 +692,6 @@ impl SyntaxNodeIter {
             });
         };
         Ok(node)
-    }
-    /// Consumes the next element, returning [`ValidatedAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
-    /// Returns [`ValidatedAstError::ShouldBeToken`] if the element is not a token.
-    /// Otherwise, returns the token.
-    ///
-    /// Consumes an element even if it returns an error.
-    pub fn expect_token(
-        &mut self,
-        desc: impl Into<Cow<'static, str>>,
-    ) -> Result<SyntaxToken, ValidatedAstError> {
-        let Some(elem) = self.next() else {
-            return Err(ValidatedAstError::missing_desc(desc.into(), self.parent));
-        };
-        let SyntaxElement::Token(token) = elem else {
-            return Err(ValidatedAstError::ShouldBeToken {
-                at: elem.text_range(),
-            });
-        };
-        Ok(token)
     }
     /// Consumes the next element and checks it:
     /// - If there are no more elements, returns [`ValidatedAstError::MissingExpectedElement`].
