@@ -2,7 +2,7 @@ name: BAML Release - Build bridge_cffi
 
 # Builds the standalone `bridge_cffi` engine cdylib, one per target. This is a
 # LANGUAGE-NEUTRAL artifact: every dylib-loader SDK dlopens the same library at
-# runtime (the Rust `baml_bridge` crate today; the Go bridge when it migrates),
+# runtime (including the Rust `baml_bridge` crate and public `baml-go` module),
 # so it is built once here rather than inside any one language's SDK workflow.
 #
 # Adapts the legacy `libbaml-cffi` job shape (build -> rename to the loader's

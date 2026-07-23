@@ -69,10 +69,11 @@ def collect_artifacts(
 
 def collect_cffi_artifacts(root: Path, version: str) -> dict[str, dict[str, str]]:
     """The engine cdylibs (`libbaml_cffi-<triple>.{so,dylib}` /
-    `baml_cffi-<triple>.dll`), recorded as bookkeeping — the dylib-loader SDKs
-    construct these GitHub-release URLs directly, so the manifest does not need
-    to be consulted at load time. Only the targets actually built are recorded
-    (experimental targets may be absent), so no required/extra check applies.
+    `baml_cffi-<triple>.dll`). The public Go module resolves these exact URLs
+    and checksums from the immutable version manifest; other loaders may
+    construct the same URLs directly. Only the targets actually built are
+    recorded (experimental targets may be absent), so no required/extra check
+    applies.
     """
     tag = f"baml-language-{version}"
     artifacts: dict[str, dict[str, str]] = {}
