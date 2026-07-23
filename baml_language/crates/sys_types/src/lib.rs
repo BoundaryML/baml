@@ -279,14 +279,6 @@ pub struct OpErrorBody {
 }
 
 impl OpErrorBody {
-    /// Construct an `OpErrorBody` carrying a host-thrown value. The engine
-    /// reads the value through `materialize_host_throw`.
-    pub fn host_thrown_value(value: BexExternalValue) -> Self {
-        Self {
-            payload: OpErrorPayload::HostThrown(Box::new(value)),
-        }
-    }
-
     /// Attach the originating [`SysOp`], yielding a full [`OpError`] ready
     /// for [`SysOpResult`].
     pub fn into_op_error(self, fn_name: SysOp) -> OpError {
@@ -416,21 +408,6 @@ pub enum SysOpResult {
 /// into a full [`SysOpResult`] via [`into_result`](SysOpOutput::into_result),
 /// which converts `T` into [`BexExternalValue`] using [`AsBexExternalValue`]
 /// and attaches the `SysOp`.
-///
-/// # Example
-///
-/// ```ignore
-/// impl SysOpFs for MyProvider {
-///     fn baml_fs_open(path: String) -> SysOpOutput<FsFile> {
-///         SysOpOutput::async_op(async move {
-///             let file = File::open(&path).await
-///                 .map_err(|e| VmBamlError::Io { message: format!("open failed: {e}") })?;
-///             let handle = REGISTRY.register_file(file, path);
-///             Ok(FsFile { _handle: handle })
-///         })
-///     }
-/// }
-/// ```
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpOutput<T = BexExternalValue> {
     /// Operation completed synchronously.

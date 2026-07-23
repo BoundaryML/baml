@@ -21,6 +21,7 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     contributions::Definition,
+    loc::{ClassLoc, FunctionLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId},
 };
@@ -72,6 +73,17 @@ struct MemberAccess<'a> {
     member: &'a Name,
     at: ExprId,
     bound: bool,
+}
+
+enum ClassMethodLookup<'db> {
+    Found {
+        ty: Ty,
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+    DuplicateInherent,
+    DeferToInterfaces,
+    NotFound,
 }
 
 /// Construct `Ty::Class` for `baml.spawn.SpawnParams<value, error>` (BEP-034
@@ -4769,8 +4781,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args: obj_type_args,
                 fields,
+                spreads,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields),
+            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields, spreads),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -5798,7 +5811,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
     ) -> Ty {
+        // Spread expressions are ordinary expressions: infer them even before
+        // resolving the destination class so calls nested inside a spread get
+        // their TIR call plans (including omitted-default bindings). Skipping
+        // these used to let MIR fall back to the source argument list, so a
+        // five-parameter factory called with two values emitted no OmittedArg
+        // sentinels and consumed three slots from its caller's VM frame.
+        let spread_types: Vec<(ExprId, Ty)> = spreads
+            .iter()
+            .map(|spread| (spread.expr, self.infer_expr(spread.expr, body)))
+            .collect();
+
         // Class-instance literals only: map literals (`map { .. }`) are routed
         // to `infer_map_object_expr` by the `is_map_object_literal` guard in the
         // `Expr::Object` arm before reaching here. The parser only emits an
@@ -5841,6 +5866,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &field_ty,
                                 &mut bindings,
                             );
+                        }
+                        // An exact-class spread can determine otherwise omitted
+                        // class arguments (`Box { ...box_int }` => `Box<int>`).
+                        for (_, spread_ty) in &spread_types {
+                            if let Ty::Class(spread_name, spread_args, _) = spread_ty
+                                && spread_name == &class_name
+                                && spread_args.len() == class_data.generic_params.len()
+                            {
+                                for (param, arg) in
+                                    class_data.generic_params.iter().zip(spread_args)
+                                {
+                                    bindings.entry(param.clone()).or_insert_with(|| arg.clone());
+                                }
+                            }
                         }
                         // Params that appear in some field's declared type are
                         // inferable in principle, so leaving one unbound (e.g. `T`
@@ -5897,6 +5936,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             ty => ty,
         };
         self.validate_type_generic_bounds(expr_id, &ty);
+        // Class spread is nominal and invariant: the source must be the same
+        // resolved class with compatible generic arguments. Besides preventing
+        // runtime field-layout violations, checking here ensures every nested
+        // expression is fully typed before MIR lowering.
+        for (spread_expr, spread_ty) in &spread_types {
+            if !matches!(spread_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.is_subtype(spread_ty, &ty)
+            {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: ty.clone(),
+                        got: spread_ty.clone(),
+                    },
+                    *spread_expr,
+                    Vec::new(),
+                );
+            }
+        }
         if let Ty::Class(class_name, type_args, _) = &ty {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
@@ -5968,9 +6025,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
-        if let Ty::Class(lit_qtn, _, _) = &lit_ty
-            && lit_qtn != expected_qtn
-        {
+        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
+            lit_qtn != expected_qtn
+                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+        } else {
+            false
+        };
+        if declared_mismatch {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
                 && !self.is_subtype(&inferred, expected)
@@ -5990,6 +6051,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     fn check_object_expr(
         &mut self,
@@ -5997,6 +6059,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Ty {
@@ -6015,6 +6078,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         self.validate_type_generic_bounds(expr_id, expected);
         if let Ty::Class(class_name, type_args, _) = expected {
+            for spread in spreads {
+                self.check_expr(spread.expr, body, expected);
+            }
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
                 .into_iter()
@@ -6811,8 +6877,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 type_name,
                 type_args,
+                spreads,
                 ..
-            } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
+            } => self.check_object_expr(
+                expr_id, body, expected, fields, spreads, type_name, type_args,
+            ),
             Expr::Map { entries } => {
                 // Look through aliases, a nullable wrapper (`map<string, int>?`),
                 // and a union with a unique map member (`json` is
@@ -10149,17 +10218,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                     type_name,
                 );
                 // Look up method on this class (no type args for UFCS)
-                if let Some((method_ty, class_loc, func_loc)) =
-                    self.lookup_class_method(&class_qtn, &[], method_name)
-                {
-                    self.resolutions.insert(
-                        expr_id,
-                        crate::inference::MemberResolution::UnboundMethod {
-                            class_loc,
-                            func_loc,
-                        },
-                    );
-                    return Some(method_ty);
+                match self.lookup_class_method(&class_qtn, &[], method_name) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => {
+                        self.resolutions.insert(
+                            expr_id,
+                            crate::inference::MemberResolution::UnboundMethod {
+                                class_loc,
+                                func_loc,
+                            },
+                        );
+                        return Some(ty);
+                    }
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Some(Ty::Error {
+                            attr: TyAttr::default(),
+                        });
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => {}
                 }
             }
         }
@@ -10541,9 +10620,20 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some((ty, class_loc, func_loc)) =
-                    self.lookup_class_method(class_name, type_args, member)
-                {
+                let class_method = match self.lookup_class_method(class_name, type_args, member) {
+                    ClassMethodLookup::Found {
+                        ty,
+                        class_loc,
+                        func_loc,
+                    } => Some((ty, class_loc, func_loc)),
+                    ClassMethodLookup::DuplicateInherent => {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
+                    ClassMethodLookup::DeferToInterfaces | ClassMethodLookup::NotFound => None,
+                };
+                if let Some((ty, class_loc, func_loc)) = class_method {
                     if bound {
                         // Record the receiver's class type args (owner class
                         // generics → concrete args) keyed by this callee, so the
@@ -12187,11 +12277,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// BEP-044 §"Method Disambiguation": when a class's flattened
-    /// method list contains two or more methods sharing `method_name`
-    /// (typically because the class declares them in different
-    /// `implements I {}` blocks), return the list of contributing
-    /// interface names. Returns `None` when the call is unambiguous.
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
@@ -12208,26 +12293,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
         method_name: &Name,
-    ) -> Option<(
-        Ty,
-        baml_compiler2_hir::loc::ClassLoc<'db>,
-        baml_compiler2_hir::loc::FunctionLoc<'db>,
-    )> {
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
+    ) -> ClassMethodLookup<'db> {
+        let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
+            return ClassMethodLookup::NotFound;
+        };
+        let Some(def) = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        else {
+            return ClassMethodLookup::NotFound;
+        };
         let Definition::Class(class_loc) = def else {
-            return None;
+            return ClassMethodLookup::NotFound;
         };
         let db = self.context.db();
         let file = class_loc.file(db);
         let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
-        // `class_data.methods` flattens every `implements I { … }` block's methods together
-        // with class-level ones. A name matching more than one can only come from two distinct
-        // interfaces declaring it (coherence forbids two impls of one interface), so resolving
-        // it here would silently pick the first. Defer to `resolve_member_from_impls`, which
-        // dedups by realized interface and reports the ambiguity (E0121).
+        // `class_data.methods` flattens inherent methods and interface implementations.
+        // Duplicate inherent methods were already diagnosed by HIR, while multiple interface
+        // methods must be resolved through their realized interfaces.
         let materialized: Vec<_> = class_data
             .methods
             .iter()
@@ -12236,8 +12320,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
             })
             .collect();
+        let inherent_count = materialized
+            .iter()
+            .filter(|&&method| {
+                baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+            })
+            .count();
+        if inherent_count > 1 {
+            return ClassMethodLookup::DuplicateInherent;
+        }
         if materialized.len() > 1 {
-            return None;
+            return ClassMethodLookup::DeferToInterfaces;
         }
         // Even a *single* materialized match can be ambiguous: an impl-block override of one
         // interface's method does not shadow a *different* interface's same-named method that
@@ -12267,7 +12360,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if !providers.contains(&realized) {
                         providers.push(realized);
                         if providers.len() > 1 {
-                            return None;
+                            return ClassMethodLookup::DeferToInterfaces;
                         }
                     }
                 }
@@ -12493,10 +12586,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // scope resolve the same names; a name resolvable there but not here
                 // lowers to `Ty::Error` whose diagnostic is silently dropped (`diags`
                 // above is never drained). Keep the two scopes in lockstep.
-                return Some((ty, class_loc, func_loc));
+                return ClassMethodLookup::Found {
+                    ty,
+                    class_loc,
+                    func_loc,
+                };
             }
         }
-        None
+        ClassMethodLookup::NotFound
     }
 
     /// Check if a `FieldAccess` base is a primitive type name used for static

@@ -604,12 +604,6 @@ impl PredefinedTypes {
         self.enum_definitions.get(name)
     }
 
-    pub fn as_enum_values(&self, name: &str) -> Option<Vec<String>> {
-        self.enum_definitions
-            .get(name)
-            .map(|def| def.values.iter().map(|v| v.name.clone()).collect())
-    }
-
     pub fn as_function(&self, name: &str) -> Option<&(Type, Vec<(String, Type)>)> {
         self.functions.get(name)
     }

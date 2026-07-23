@@ -40,5 +40,5 @@ pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use symbols::{
     FunctionListing, FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol,
-    list_functions, list_functions_with_metadata, list_tests_with_metadata,
+    list_functions_with_metadata, list_tests_with_metadata,
 };

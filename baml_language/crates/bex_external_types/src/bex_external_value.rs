@@ -80,12 +80,6 @@ impl UnionMetadata {
             selected_option,
         }
     }
-
-    /// Set the name for this union (for named type aliases).
-    pub fn with_name(mut self, name: impl Into<String>) -> Self {
-        self.name = Some(name.into());
-        self
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -416,22 +410,6 @@ impl BexExternalValue {
         }
     }
 
-    /// Construct an optional value (`T?`) with metadata.
-    ///
-    /// Selected type is auto-detected: `inner` when non-null, `RuntimeTy::null()` when null.
-    pub fn optional(value: BexExternalValue, inner: RuntimeTy) -> Self {
-        let selected = if matches!(value, BexExternalValue::Null) {
-            RuntimeTy::null()
-        } else {
-            inner.clone()
-        };
-        let optional_type = RuntimeTy::optional(inner);
-        BexExternalValue::Union {
-            value: Box::new(value),
-            metadata: UnionMetadata::new(optional_type, selected),
-        }
-    }
-
     /// Construct an enum variant value.
     pub fn variant(enum_name: impl Into<String>, variant_name: impl Into<String>) -> Self {
         BexExternalValue::Variant {
@@ -513,10 +491,6 @@ impl BexExternalValue {
             BexExternalValue::Union { value, .. } => value.as_bool(),
             _ => None,
         }
-    }
-
-    pub fn is_host_value(&self) -> bool {
-        matches!(self, Self::HostValue(_))
     }
 
     /// Human-readable, structural rendering of this value — the form `baml run`

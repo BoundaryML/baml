@@ -13,7 +13,10 @@
 
 use std::{collections::BTreeMap, fmt::Write};
 
-use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
+use crate::{
+    rust_ident::{rust_field_ident, rust_field_value_ident},
+    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
+};
 
 // ============================================================================
 // Fallibility
@@ -235,7 +238,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     for field in &def.fields {
         let raw_name = &field.name;
-        let field_name = escape_rust_ident(raw_name);
+        let field_name = rust_field_ident(raw_name);
         match &field.field_type {
             BamlType::RustType => {
                 // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
@@ -533,7 +536,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         writeln!(
             out,
             "{inner}pub {}: {rust_type},",
-            escape_rust_ident(&field.name)
+            rust_field_ident(&field.name)
         )
         .unwrap();
     }
@@ -551,8 +554,12 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     // Convert each field to a Value
     for field in &def.fields {
-        let conversion = copy_field_to_value(&escape_rust_ident(&field.name), &field.field_type);
-        writeln!(out, "{inner2}let f_{} = {conversion};", field.name).unwrap();
+        let value_ident = rust_field_value_ident(&field.name);
+        let conversion = copy_field_to_value(
+            &rust_field_ident(&field.name).to_string(),
+            &field.field_type,
+        );
+        writeln!(out, "{inner2}let {value_ident} = {conversion};").unwrap();
     }
 
     // Build the fields vec
@@ -565,7 +572,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         if i > 0 {
             out.push_str(", ");
         }
-        write!(out, "f_{}", field.name).unwrap();
+        write!(out, "{}", rust_field_value_ident(&field.name)).unwrap();
     }
     out.push_str("]))\n");
     writeln!(out, "{inner}}}").unwrap();
@@ -674,25 +681,6 @@ fn class_dispatch_name(namespace_prefix: &str, class_name: &str) -> String {
         format!("__dispatch_{class_lower}")
     } else {
         format!("__dispatch_{namespace_prefix}_{class_lower}")
-    }
-}
-
-/// A BAML field name as a Rust identifier: `type` is a Rust keyword, so it is
-/// emitted as the raw identifier `r#type`. Field names come from `.baml`
-/// source, where BAML's keywords and Rust's do not coincide, so any of them
-/// can collide with Rust's.
-fn escape_rust_ident(name: &str) -> String {
-    const RUST_KEYWORDS: &[&str] = &[
-        "as", "async", "await", "become", "box", "break", "const", "continue", "crate", "do",
-        "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl", "in", "let",
-        "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref", "return",
-        "static", "struct", "super", "trait", "true", "try", "type", "typeof", "unsafe", "unsized",
-        "use", "virtual", "where", "while", "yield",
-    ];
-    if RUST_KEYWORDS.contains(&name) {
-        format!("r#{name}")
-    } else {
-        name.to_string()
     }
 }
 

@@ -85,11 +85,6 @@ impl MirFunctionBody {
         &self.blocks[id.0]
     }
 
-    /// Get a mutable reference to a basic block by ID.
-    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
-        &mut self.blocks[id.0]
-    }
-
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
@@ -655,23 +650,6 @@ impl Place {
         Place::Local(local)
     }
 
-    /// Create a field projection.
-    pub fn field(base: Place, field: usize) -> Self {
-        Place::Field {
-            base: Box::new(base),
-            field,
-        }
-    }
-
-    /// Create an index projection.
-    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
-        Place::Index {
-            base: Box::new(base),
-            index,
-            kind,
-        }
-    }
-
     /// Get the base local of this place.
     ///
     /// Panics for `Place::Capture` — captures have no local base.
@@ -891,11 +869,6 @@ impl Operand {
     /// Create a copy operand from a local.
     pub fn copy_local(local: Local) -> Self {
         Operand::Copy(Place::Local(local))
-    }
-
-    /// Create a move operand from a local.
-    pub fn move_local(local: Local) -> Self {
-        Operand::Move(Place::Local(local))
     }
 
     /// Create a constant operand.

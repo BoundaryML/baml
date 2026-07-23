@@ -84,6 +84,12 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
+    /// Resolve a named SAP type without first constructing a borrowed
+    /// [`Ty::Unresolved`] wrapper.
+    pub fn resolve_name(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
+        self.types.get(ident).map(TyResolved::as_ref)
+    }
+
     /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
     #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_with_meta(
@@ -248,48 +254,6 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
             _ => false,
         }
     }
-    /// Returns true if the two types are equivalent.
-    /// More comprehensive than `==` because it can look up unresolved named types
-    /// to compared with resolved types
-    pub fn ty_equiv(self, other: Self, db: &TypeRefDb<'t, N>) -> bool {
-        match (self, other) {
-            (TyResolvedRef::Null(..), TyResolvedRef::Null(..)) => true,
-            (TyResolvedRef::Int(..), TyResolvedRef::Int(..)) => true,
-            (TyResolvedRef::Bigint(..), TyResolvedRef::Bigint(..)) => true,
-            (TyResolvedRef::Float(..), TyResolvedRef::Float(..)) => true,
-            (TyResolvedRef::String(..), TyResolvedRef::String(..)) => true,
-            (TyResolvedRef::Bool(..), TyResolvedRef::Bool(..)) => true,
-            (TyResolvedRef::Media(a), TyResolvedRef::Media(b)) => a == b,
-            (TyResolvedRef::LiteralInt(a), TyResolvedRef::LiteralInt(b)) => a.0 == b.0,
-            (TyResolvedRef::LiteralBigint(a), TyResolvedRef::LiteralBigint(b)) => a.0 == b.0,
-            (TyResolvedRef::LiteralBool(a), TyResolvedRef::LiteralBool(b)) => a.0 == b.0,
-            (TyResolvedRef::LiteralString(a), TyResolvedRef::LiteralString(b)) => a.0 == b.0,
-            (TyResolvedRef::Array(a), TyResolvedRef::Array(b)) => {
-                a.ty.ty.ty_equiv(&b.ty.ty, db) && a.ty.meta == b.ty.meta
-            }
-            (TyResolvedRef::Map(a), TyResolvedRef::Map(b)) => {
-                a.key.ty.ty_equiv(&b.key.ty, db)
-                    && a.key.meta == b.key.meta
-                    && a.value.ty.ty_equiv(&b.value.ty, db)
-                    && a.value.meta == b.value.meta
-            }
-
-            (TyResolvedRef::Union(a), TyResolvedRef::Union(b)) => {
-                a.variants.len() == b.variants.len()
-                    && a.variants
-                        .iter()
-                        .zip(b.variants.iter())
-                        .all(|(a, b)| a.ty.ty_equiv(&b.ty, db) && a.meta == b.meta)
-            }
-            (TyResolvedRef::StreamState(a), TyResolvedRef::StreamState(b)) => {
-                a.value.ty.ty_equiv(&b.value.ty, db) && a.value.meta == b.value.meta
-            }
-            (TyResolvedRef::Class(a), TyResolvedRef::Class(b)) => a.name == b.name,
-            (TyResolvedRef::Enum(a), TyResolvedRef::Enum(b)) => a.name == b.name,
-            (TyResolvedRef::EnumVariant(a), TyResolvedRef::EnumVariant(b)) => a == b,
-            _ => false,
-        }
-    }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TyResolvedRef<'t, N>
 where
@@ -319,30 +283,6 @@ impl<'t, N: TypeIdent> Ty<'t, N> {
     /// Requires `db` in case we need to look up type aliases that may contain optional unions.
     pub fn is_optional(&self, db: &'t TypeRefDb<'t, N>) -> bool {
         db.resolve(self).is_ok_and(|ty| ty.is_optional(db))
-    }
-    /// Similar to [`PartialEq::eq`] except that it is better able to check equivalence
-    /// by looking up unknown types by name.
-    pub fn ty_equiv(&self, other: &Self, db: &'t TypeRefDb<'t, N>) -> bool {
-        match (self, other) {
-            (Ty::Unresolved(a), Ty::Unresolved(b)) => a == b,
-            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Class(b))) => *a == b.name,
-            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Enum(b))) => *a == b.name,
-            (Ty::Resolved(TyResolved::Class(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::Resolved(TyResolved::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Class(b))) => *a == b.name,
-            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Enum(b))) => *a == b.name,
-            (Ty::ResolvedRef(TyResolvedRef::Class(a)), Ty::Unresolved(b)) => a.name == *b,
-            (Ty::ResolvedRef(TyResolvedRef::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
-            (a, b) => {
-                let Ok(a) = db.resolve(a) else {
-                    return false;
-                };
-                let Ok(b) = db.resolve(b) else {
-                    return false;
-                };
-                a.ty_equiv(b, db)
-            }
-        }
     }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for Ty<'t, N>
@@ -393,12 +333,6 @@ impl<T, M> TyWithMeta<T, M> {
             meta: self.meta,
         }
     }
-    pub fn map_meta<U, F: FnOnce(M) -> U>(self, f: F) -> TyWithMeta<T, U> {
-        TyWithMeta {
-            ty: self.ty,
-            meta: f(self.meta),
-        }
-    }
 }
 impl<T: Clone, M: Clone> Clone for TyWithMeta<T, M> {
     fn clone(&self) -> Self {
@@ -415,7 +349,6 @@ impl<T: PartialEq, M: PartialEq> PartialEq for TyWithMeta<T, M> {
 }
 
 pub type AnnotatedTy<'t, N> = TyWithMeta<Ty<'t, N>, TypeAnnotations<'t, N>>;
-pub type AnnotatedTyRef<'t, N> = TyWithMeta<&'t Ty<'t, N>, &'t TypeAnnotations<'t, N>>;
 
 #[derive(Clone, Copy, PartialEq, Eq, From)]
 pub enum PrimitiveTy {

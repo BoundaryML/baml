@@ -485,12 +485,6 @@ pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
     ctx.definitely_equal(a, b)
 }
 
-/// Free-function form of [`TypeContext::constant_equality`], for a context held by
-/// value. Pending removal once every caller uses the method form.
-pub fn constant_equality<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> Option<bool> {
-    ctx.constant_equality(a, b)
-}
-
 impl NormalTy {
     /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
     fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {

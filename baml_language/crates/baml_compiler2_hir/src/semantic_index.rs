@@ -408,13 +408,6 @@ impl FileSemanticIndex<'_> {
             .get(idx)
     }
 
-    pub fn binding_site(&self, binding_id: BindingId) -> Option<DefinitionSite> {
-        match binding_id.kind {
-            BindingKind::Local(_) => self.local_binding(binding_id).map(|binding| binding.site),
-            BindingKind::Parameter(param_idx) => Some(DefinitionSite::Parameter(param_idx)),
-        }
-    }
-
     /// The scope opened for `owner`, if it opened one.
     pub fn item_scope(&self, owner: ItemScopeOwner) -> Option<FileScopeId> {
         self.item_scopes.get(&owner).copied()
@@ -430,16 +423,5 @@ impl FileSemanticIndex<'_> {
             .as_ref()
             .map(|e| e.diagnostics.as_slice())
             .unwrap_or(&[])
-    }
-
-    /// Look up the path resolution for a multi-segment `Path` expression.
-    ///
-    /// Returns `None` if `expr_id` was not a multi-segment path (i.e., single-
-    /// segment paths and non-path expressions are not recorded here).
-    pub fn path_resolution(&self, expr_id: ExprId) -> Option<&PathResolution> {
-        self.path_resolutions
-            .binary_search_by_key(&expr_id, |(id, _)| *id)
-            .ok()
-            .map(|idx| &self.path_resolutions[idx].1)
     }
 }

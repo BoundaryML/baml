@@ -2140,22 +2140,6 @@ impl<'db> InferContext<'db> {
             });
     }
 
-    /// Report a type error at a type annotation location.
-    pub fn report_at_type_annot(&self, error: TirTypeError, at: TypeAnnotId) {
-        if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
-            return;
-        }
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::TypeAnnot(at),
-                related: Vec::new(),
-            });
-    }
-
     /// Report a type error at a raw source span (for type annotations).
     pub fn report_at_span(&self, error: TirTypeError, span: TextRange) {
         self.report_at_span_with_related(error, span, Vec::new());
@@ -2179,19 +2163,6 @@ impl<'db> InferContext<'db> {
                 severity: DiagnosticSeverity::Error,
                 primary: DiagnosticLocation::Span(span),
                 related,
-            });
-    }
-
-    /// Report a type error at a specific statement.
-    pub fn report_at_stmt(&self, error: TirTypeError, at: StmtId) {
-        self.diagnostics
-            .borrow_mut()
-            .diagnostics
-            .push(TirDiagnostic {
-                error,
-                severity: DiagnosticSeverity::Error,
-                primary: DiagnosticLocation::Stmt(at),
-                related: Vec::new(),
             });
     }
 

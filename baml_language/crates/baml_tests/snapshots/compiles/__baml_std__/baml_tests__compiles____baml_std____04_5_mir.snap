@@ -8460,6 +8460,8 @@ fn baml.sys.shell = builtin(io)
 
 fn baml.sys.sleep = builtin(io)
 
+fn baml.sys.collect_garbage = builtin(io)
+
 fn baml.sys.panic = builtin(vm)
 
 fn baml.sys.exit = builtin(vm)

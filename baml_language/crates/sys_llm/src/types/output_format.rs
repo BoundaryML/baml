@@ -88,20 +88,6 @@ impl OutputFormatContent {
         self
     }
 
-    /// Mark a class as recursive (will be hoisted during rendering).
-    #[must_use]
-    pub fn with_recursive_class(mut self, name: String) -> Self {
-        self.recursive_classes.insert(name);
-        self
-    }
-
-    /// Add a recursive type alias (alias name → target type).
-    #[must_use]
-    pub fn with_recursive_type_alias(mut self, name: String, target: RuntimeTy) -> Self {
-        self.recursive_type_aliases.insert(name, target);
-        self
-    }
-
     /// Find an enum by name.
     pub fn find_enum(&self, name: &str) -> Option<&Enum> {
         self.enums.get(name)
