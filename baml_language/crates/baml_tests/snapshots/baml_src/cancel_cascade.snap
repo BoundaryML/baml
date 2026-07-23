@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function cancel_cascade.$init_test_ns_cancel_cascade_cancel_cascade(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.cancel_cascade"
     load_const "cancel_unblocks_await_on_non_descendant"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_cascade"
     load_const "cancel_from_handle_then_await_catches_cancelled"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_cascade"
     load_const "cancel_after_gc_relocation_still_settles"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_cascade"
     load_const "cancelled_child_future_state_is_cancelled"
     make_closure .<lambda($init_test_ns_cancel_cascade_cancel_cascade, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

@@ -3,94 +3,109 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_container_types.$init_test_ns_match_container_types_match_container_types(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_string_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_int_list_is_int_array"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_string_list_is_not_int_array"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_int_map"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_string_map"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_string_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_prims_still_dispatch"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_invariance_int_list_not_member_of_union_element_arm"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_invariance_union_element_constructed_list_matches"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_int_list_is_not_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_unknown_constructed_list_is_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_unknown_list_arm_rejects_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_unknown_list_arm_captures_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

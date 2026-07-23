@@ -39,8 +39,38 @@ pub(crate) struct BamlToml {
     #[serde(default)]
     pub generator: IndexMap<String, Spanned<GeneratorManifest>>,
 
+    /// `[test]` — saved `baml test` invocations.
+    #[serde(default)]
+    pub test: TestManifest,
+
     /// Stray top-level keys. Captured (not denied) so typos surface as
     /// warnings and forward-compatible manifests still load.
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// Test profiles deliberately store argv rather than duplicating the test
+/// command's option schema. They are parsed by clap at invocation time.
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct TestManifest {
+    /// Profile used by bare `baml test`. No profile is applied when absent.
+    pub default: Option<String>,
+
+    /// `[test.profiles.<name>]` tables.
+    #[serde(default)]
+    pub profiles: IndexMap<String, TestProfileManifest>,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TestProfileManifest {
+    /// Argument vector passed through the ordinary `baml test` parser. This is
+    /// intentionally an array, never a shell command string.
+    #[serde(default)]
+    pub args: Vec<String>,
+
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -175,6 +205,16 @@ pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
             ));
         }
     }
+    for key in manifest.test.unknown.keys() {
+        warnings.push(format!("ignoring unrecognized key `{key}` in [test]"));
+    }
+    for (name, profile) in &manifest.test.profiles {
+        for key in profile.unknown.keys() {
+            warnings.push(format!(
+                "ignoring unrecognized key `{key}` in [test.profiles.{name}]"
+            ));
+        }
+    }
     warnings
 }
 
@@ -193,6 +233,25 @@ mod tests {
     fn script_array_form_preserves_spaces() {
         let m = parse("[scripts]\ng = [\"--name\", \"Ada Lovelace\"]\n").unwrap();
         assert_eq!(m.scripts["g"].tokens(), vec!["--name", "Ada Lovelace"]);
+    }
+
+    #[test]
+    fn parses_test_profiles_as_argv_arrays() {
+        let m = parse(
+            "[test]\ndefault = \"regular\"\n\
+             [test.profiles.regular]\nargs = [\"-x\", \"*::integration::*\"]\n",
+        )
+        .unwrap();
+        assert_eq!(m.test.default.as_deref(), Some("regular"));
+        assert_eq!(
+            m.test.profiles["regular"].args,
+            vec!["-x", "*::integration::*"]
+        );
+    }
+
+    #[test]
+    fn rejects_profile_args_as_a_shell_string() {
+        assert!(parse("[test.profiles.regular]\nargs = \"-x '*::integration::*'\"\n").is_err());
     }
 
     #[test]

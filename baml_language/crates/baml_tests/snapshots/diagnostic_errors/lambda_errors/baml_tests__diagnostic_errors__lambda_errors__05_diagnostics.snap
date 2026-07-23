@@ -33,16 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[lambda_errors.baml:22:15]
  22 │     items.map((x: string) -> { x })
     ·               ──────────┬─────────
-    ·                         ╰── expected `int`, found `string`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[lambda_errors.baml:22:32]
- 22 │     items.map((x: string) -> { x })
-    ·                                ┬
-    ·                                ╰── expected `int`, found `string`
+    ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> string throws never`
     ╰────
 
   [type] E0002

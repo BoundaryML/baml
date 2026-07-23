@@ -64,12 +64,12 @@ pub(crate) enum Commands {
 
     // #[command(about = "Starts a development server")]
     // Dev(baml_runtime::cli::dev::DevArgs),
+    #[command(subcommand, about = "Manage authentication and claim your project")]
+    Auth(crate::auth::AuthCommands),
 
-    // #[command(subcommand, about = "Authenticate with Boundary Cloud", hide = true)]
-    // Auth(crate::auth::AuthCommands),
+    #[command(about = "Start an anonymous project (claim it later with `baml auth login`)")]
+    Login(crate::auth::LoginArgs),
 
-    // #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
-    // Login(crate::auth::LoginArgs),
     #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
 
@@ -201,6 +201,20 @@ impl RuntimeCli {
         // from the parsed matches so it always matches what clap registered.
         cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
 
+        // Preserve whether global test-compatible options were supplied on the
+        // real command line. Test profiles are parsed later, after locating the
+        // project manifest, and direct scalar values must take precedence.
+        if let Commands::Test(test) = &mut cli.command {
+            test.cli_output =
+                crate::test_command::TestOutputOverrides::from_cli_matches(&matches, cli.output);
+            test.cli_logs = matches
+                .subcommand_matches("test")
+                .filter(|matches| {
+                    matches.value_source("logs") == Some(clap::parser::ValueSource::CommandLine)
+                })
+                .map(|_| test.logs);
+        }
+
         cli
     }
 
@@ -256,6 +270,8 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Auth(args) => args.run(),
+            Commands::Login(args) => args.run(),
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
@@ -288,6 +304,23 @@ mod tests {
 
         let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "lsp".into()]);
         assert_eq!(cli.invoked_subcommand.as_deref(), Some("lsp"));
+    }
+
+    #[test]
+    fn test_command_records_explicit_global_color_override() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "test".into(),
+            "--color".into(),
+            "always".into(),
+        ]);
+        let Commands::Test(args) = cli.command else {
+            panic!("expected test command")
+        };
+        assert_eq!(
+            args.cli_output.color,
+            Some(crate::output::ColorChoice::Always)
+        );
     }
 
     fn help_for(args: &[&str]) -> String {
@@ -406,6 +439,25 @@ mod tests {
         assert!(help.contains("--from <PATH>"), "{help}");
         assert!(help.contains("--port <PORT>"), "{help}");
         assert!(help.contains("--no-open"), "{help}");
+    }
+
+    #[test]
+    fn test_help_is_a_complete_selector_and_profile_reference() {
+        let help = help_for(&["baml-cli", "test", "--help"]);
+        for required in [
+            "matches anywhere in the full ID",
+            "Repeated includes are OR",
+            "always win",
+            "case-sensitive",
+            "without shell expansion",
+            "Profile names are case-sensitive",
+            "direct CLI includes narrow",
+            "scalar options override",
+            "With no default profile",
+            "Bootstrap options",
+        ] {
+            assert!(help.contains(required), "missing `{required}` in:\n{help}");
+        }
     }
 
     /// `run -e` accepts hyphen-prefixed values without consuming run flags.

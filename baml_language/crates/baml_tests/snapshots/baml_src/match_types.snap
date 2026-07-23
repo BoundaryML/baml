@@ -3,190 +3,221 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_types.$init_test_ns_match_types_match_types(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_types"
     load_const "match_typed_pattern_second_arm"
     make_closure .<lambda($init_test_ns_match_types_match_types, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_typed_pattern_with_field_access"
     make_closure .<lambda($init_test_ns_match_types_match_types, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_typed_discard_patterns_typetag_switch_path"
     make_closure .<lambda($init_test_ns_match_types_match_types, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guard_true"
     make_closure .<lambda($init_test_ns_match_types_match_types, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guard_fallthrough"
     make_closure .<lambda($init_test_ns_match_types_match_types, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guard_all_fail"
     make_closure .<lambda($init_test_ns_match_types_match_types, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guarded_int_literal_guard_true"
     make_closure .<lambda($init_test_ns_match_types_match_types, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guarded_int_literal_guard_false"
     make_closure .<lambda($init_test_ns_match_types_match_types, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_all_arms_guarded_all_fail"
     make_closure .<lambda($init_test_ns_match_types_match_types, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_mixed_literal_typed_guard"
     make_closure .<lambda($init_test_ns_match_types_match_types, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_mixed_literal_typed_guard_fallthrough"
     make_closure .<lambda($init_test_ns_match_types_match_types, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guard_on_typed_pattern_field_access"
     make_closure .<lambda($init_test_ns_match_types_match_types, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_guard_on_typed_pattern_field_access_fails"
     make_closure .<lambda($init_test_ns_match_types_match_types, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_enum_variant_first"
     make_closure .<lambda($init_test_ns_match_types_match_types, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_enum_variant_last"
     make_closure .<lambda($init_test_ns_match_types_match_types, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_enum_variant_with_wildcard"
     make_closure .<lambda($init_test_ns_match_types_match_types, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_enum_variant_with_wildcard_matched"
     make_closure .<lambda($init_test_ns_match_types_match_types, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_enum_four_variants_jump_table"
     make_closure .<lambda($init_test_ns_match_types_match_types, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_types_exhaustive_first"
     make_closure .<lambda($init_test_ns_match_types_match_types, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_types_exhaustive_last"
     make_closure .<lambda($init_test_ns_match_types_match_types, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_types_non_exhaustive_wildcard"
     make_closure .<lambda($init_test_ns_match_types_match_types, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_types_non_exhaustive_matched"
     make_closure .<lambda($init_test_ns_match_types_match_types, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_union_type_four_patterns_type_tag"
     make_closure .<lambda($init_test_ns_match_types_match_types, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_multiple_typed_patterns_with_guards"
     make_closure .<lambda($init_test_ns_match_types_match_types, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_type_tag_jump_table"
     make_closure .<lambda($init_test_ns_match_types_match_types, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_class_type_is_type_chain"
     make_closure .<lambda($init_test_ns_match_types_match_types, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_mixed_class_primitive_type_tag_switch"
     make_closure .<lambda($init_test_ns_match_types_match_types, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_sparse_class_type_tag_perfect_hash"
     make_closure .<lambda($init_test_ns_match_types_match_types, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_null_in_type_tag_jump_table"
     make_closure .<lambda($init_test_ns_match_types_match_types, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_null_with_class_types_type_tag"
     make_closure .<lambda($init_test_ns_match_types_match_types, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_types"
     load_const "match_dense_class_still_uses_direct_jump_table"
     make_closure .<lambda($init_test_ns_match_types_match_types, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

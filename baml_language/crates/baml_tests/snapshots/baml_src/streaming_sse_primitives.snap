@@ -3,76 +3,88 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function streaming_sse_primitives.$init_test_ns_streaming_sse_primitives_streaming_sse_primitives(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_fetch_and_next_returns_events"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_next_returns_null_when_done"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_close_does_not_hang"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_fetch_error_on_bad_status"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_post_with_body"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_custom_headers"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_empty_stream_returns_null"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_next_after_close_returns_null"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_event_fields_in_json"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_event_id_null_when_not_set"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_http_4xx_error"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_sse_primitives"
     load_const "sse_large_event_payload"
     make_closure .<lambda($init_test_ns_streaming_sse_primitives_streaming_sse_primitives, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

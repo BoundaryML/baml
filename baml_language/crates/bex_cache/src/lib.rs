@@ -1276,13 +1276,15 @@ mod remote_tests {
                         if reader.read_exact(&mut body).is_ok() {
                             server_store.lock().expect("lock").insert(path, body);
                         }
-                        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
+                        let _ = stream.write_all(
+                            b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                        );
                     }
                     "GET" => match server_store.lock().expect("lock").get(&path) {
                         Some(body) => {
                             let _ = stream.write_all(
                                 format!(
-                                    "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n",
+                                    "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
                                     body.len()
                                 )
                                 .as_bytes(),
@@ -1291,12 +1293,12 @@ mod remote_tests {
                         }
                         None => {
                             let _ = stream
-                                .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n");
+                                .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
                         }
                     },
                     _ => {
                         let _ = stream.write_all(
-                            b"HTTP/1.1 405 Method Not Allowed\r\ncontent-length: 0\r\n\r\n",
+                            b"HTTP/1.1 405 Method Not Allowed\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
                         );
                     }
                 }

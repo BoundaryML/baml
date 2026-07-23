@@ -84,8 +84,11 @@
       Condition="'$(BamlNativeAssetRoot)' == ''"
       Text="BamlNativeAssetRoot must identify the staged eight-RID runtime tree." />
     <Error
-      Condition="'@(_BamlNativePackageAsset->Count())' != '8'"
-      Text="The staged runtime tree must contain exactly eight native assets; found @(_BamlNativePackageAsset->Count())." />
+      Condition="'$(BamlExpectedNativeAssetCount)' == ''"
+      Text="BamlExpectedNativeAssetCount must come from the validated platform contract." />
+    <Error
+      Condition="'$(BamlExpectedNativeAssetCount)' != '' and '@(_BamlNativePackageAsset->Count())' != '$(BamlExpectedNativeAssetCount)'"
+      Text="The staged runtime tree must match the validated platform contract: expected $(BamlExpectedNativeAssetCount) native assets; found @(_BamlNativePackageAsset->Count())." />
     <Error
       Condition="'$(BamlGeneratedTargetsPath)' == ''"
       Text="BamlGeneratedTargetsPath must identify the platform-contract-derived buildTransitive target." />

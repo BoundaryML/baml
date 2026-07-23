@@ -4,5 +4,5 @@ assertion_line: 31475
 ---
 === PPIR ===
 function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("with quorum", () -> void { { let result = "hello" } assert.not_null(result) }, testing.Quorum(5, 3)) } null
+  { registry.register_test_at("root", "with quorum", () -> void { { let result = "hello" } assert.not_null(result) }, testing.Quorum(5, 3)) } null
 }

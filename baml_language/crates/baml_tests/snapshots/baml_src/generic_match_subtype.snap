@@ -3,52 +3,60 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_subtype_narrow_default"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_widened_default"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_falls_through_on_non"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_concrete_discriminates_int"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_concrete_discriminates_string"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_discriminates_int"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_discriminates_string"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.generic_match_subtype"
     load_const "generic_match_switch_prims_still_dispatch"
     make_closure .<lambda($init_test_ns_generic_match_subtype_generic_match_subtype, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

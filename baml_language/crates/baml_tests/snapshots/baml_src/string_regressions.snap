@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function string_regressions.$init_test_ns_string_regressions_string_regressions(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.string_regressions"
     load_const "split_empty_delimiter_has_no_padding"
     make_closure .<lambda($init_test_ns_string_regressions_string_regressions, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.string_regressions"
     load_const "split_empty_string_returns_empty_array"
     make_closure .<lambda($init_test_ns_string_regressions_string_regressions, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.string_regressions"
     load_const "string_is_iterable_by_character"
     make_closure .<lambda($init_test_ns_string_regressions_string_regressions, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.string_regressions"
     load_const "chars_returns_character_array"
     make_closure .<lambda($init_test_ns_string_regressions_string_regressions, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.property_shorthand"
     load_const "class properties use shorthand"
     make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.property_shorthand"
     load_const "map entries use shorthand"
     make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.property_shorthand"
     load_const "shorthand mixes with explicit properties and nests"
     make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.property_shorthand"
     load_const "shorthand works across multiple nested classes"
     make_closure .<lambda($init_test_ns_property_shorthand_property_shorthand, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

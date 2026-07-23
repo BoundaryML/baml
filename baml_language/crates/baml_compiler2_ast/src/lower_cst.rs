@@ -73,6 +73,18 @@ pub fn lower_file_with_path(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner(root, file_path, None)
+}
+
+/// Variant used by project-aware lowering, where the HIR layer already knows
+/// the exact BAML namespace derived from the project root. Keeping the owner an
+/// input avoids accidentally treating an absolute ancestor named `ns_*` as a
+/// user namespace.
+pub fn lower_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
     let mut items = Vec::new();
@@ -215,6 +227,7 @@ pub fn lower_file_with_path(
         let init_fn = synthesize_init_test_function(
             &test_registrations,
             file_path,
+            test_owner,
             &mut diags,
             &mut env_var_refs,
         );
@@ -2098,6 +2111,44 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
         .collect()
 }
 
+/// Public owner of tests declared in `path`. User package names are deliberately
+/// not embedded in test ids: `root` is stable across package renames, while
+/// `ns_<name>` directories retain BAML's dotted namespace qualification.
+fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
+    let mut namespaces = Vec::new();
+    if let Some(path) = path {
+        for component in path
+            .parent()
+            .into_iter()
+            .flat_map(std::path::Path::components)
+        {
+            let std::path::Component::Normal(component) = component else {
+                continue;
+            };
+            let Some(component) = component.to_str() else {
+                continue;
+            };
+            let Some(name) = component.strip_prefix("ns_") else {
+                continue;
+            };
+            let mut chars = name.chars();
+            let valid = chars
+                .next()
+                .map(|c| c.is_ascii_alphabetic() || c == '_')
+                .unwrap_or(false)
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if valid {
+                namespaces.push(name.to_string());
+            }
+        }
+    }
+    if namespaces.is_empty() {
+        "root".to_string()
+    } else {
+        format!("root.{}", namespaces.join("."))
+    }
+}
+
 /// The function is named `"$init_test_<sanitized_path>"` to avoid collisions
 /// when multiple files contain tests. The suffix is derived from the file path
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
@@ -2108,6 +2159,7 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_path: Option<&std::path::Path>,
+    explicit_test_owner: Option<&str>,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
@@ -2118,11 +2170,14 @@ fn synthesize_init_test_function(
     let span = text_size::TextRange::default();
 
     let mut ctx = lower_expr_body::InitTestContext::new();
+    let test_owner = explicit_test_owner
+        .map(str::to_owned)
+        .unwrap_or_else(|| test_owner_from_path(file_path));
 
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags, env_var_refs);
+        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx, diags, env_var_refs);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -2180,6 +2235,7 @@ fn synthesize_init_test_function(
 /// `registry.register_test_set(name, collector_lambda, runner)` call expression.
 fn synthesize_register_call(
     reg: &TestRegistrationItem,
+    test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
@@ -2215,14 +2271,18 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            // registry.register_test
+            // registry.register_test_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test")]),
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test_at")]),
                 span,
             );
 
             // Args: (name_expr, lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the test body's real CST range as the lambda's span so HIR
             // scope lookup resolves names inside the body correctly. The body's
             // statements carry real source offsets, so a synthetic span (disjoint
@@ -2240,6 +2300,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(lambda_arg),
                         CallArg::positional(runner_arg),
@@ -2298,14 +2359,21 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            // registry.register_test_set
+            // registry.register_test_set_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test_set")]),
+                Expr::Path(vec![
+                    Name::new("registry"),
+                    Name::new("register_test_set_at"),
+                ]),
                 span,
             );
 
             // Args: (name_expr, collector_lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the testset body's real CST range so HIR scope lookup works
             // correctly for name resolution inside the collector lambda body.
             let collector_lambda_span = body_node.span_range();
@@ -2318,6 +2386,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(collector_arg),
                         CallArg::positional(runner_arg),
@@ -3151,4 +3220,23 @@ fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test_owner_tests {
+    use std::path::Path;
+
+    use super::test_owner_from_path;
+
+    #[test]
+    fn path_owner_uses_the_same_namespace_identifier_rules_as_hir() {
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_orders/ns_v2/tests.baml"))),
+            "root.orders.v2"
+        );
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_123/tests.baml"))),
+            "root"
+        );
+    }
 }

@@ -3,178 +3,207 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function byte_strings.$init_test_ns_byte_strings_byte_strings(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_basic"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_empty"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_hex_escapes"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_standard_escapes"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_mixed_ascii_and_hex"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "length_basic"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "length_empty"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "at_valid_index"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "at_out_of_bounds"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "at_negative_index"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "at_negative_out_of_bounds"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "zeroes_basic"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_read"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_write"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_write_out_of_range"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_out_of_bounds"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_negative_in_bounds"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_before_start"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "return_uint8array"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "equality_same_content"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "equality_different_content"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "equality_empty"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "equality_different_lengths"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "equality_different_lengths_reversed"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "inequality_same"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "inequality_different"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "b_as_identifier"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "literal_as_call_argument"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.byte_strings"
     load_const "index_read_direct"
     make_closure .<lambda($init_test_ns_byte_strings_byte_strings, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

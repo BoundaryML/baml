@@ -3,148 +3,172 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function control_flow.$init_test_ns_control_flow_control_flow(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_break_exits_infinite_while_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_continue_continues_loop_without_falling_through"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_return_returns_without_falling_through"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_takes_then_branch_when_pattern_matches"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_takes_else_branch_when_pattern_does_not_match"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_destructure_binds_fields_at_runtime"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_else_if_let_chain_runs_correct_arm"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_chain_falls_through_to_final_else"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_or_pattern_dispatches_to_either_alternative"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_nested_shadowing_restores_outer_binding"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_composite_scrutinee_binds_call_result"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_optional_scrutinee_some"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_optional_scrutinee_null"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_statement_form_with_return_in_then"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_binds_when_pattern_matches"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_takes_else_branch_when_pattern_does_not_match"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_destructure_binds_fields_at_runtime"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_or_pattern_matches_either_alternative"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_break_in_else_inside_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_continue_in_else_inside_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_multiple_consecutive_bindings"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_second_miss_skips_first_binding"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_throw_in_else_is_caught_by_outer_catch"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_throw_in_else_propagates_when_uncaught"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

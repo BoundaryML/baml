@@ -545,9 +545,9 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
-                // Place::Capture has no local base — skip def counting for capture stores.
-                if !matches!(destination, Place::Capture(_)) {
-                    defs[destination.base_local().0] += 1;
+                // Capture-rooted places have no local definition to count.
+                if let Some(local) = destination.base_local() {
+                    defs[local.0] += 1;
                 }
             }
         }
@@ -561,8 +561,8 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
                 | Terminator::Await { destination, .. }
                 | Terminator::AwaitAny { destination, .. }
                 | Terminator::ShortCircuit { destination, .. },
-            ) => Some(destination.base_local()),
-            Some(Terminator::Spawn { future, .. }) => Some(future.base_local()),
+            ) => destination.base_local(),
+            Some(Terminator::Spawn { future, .. }) => future.base_local(),
             _ => None,
         } {
             defs[dest.0] += 1;
@@ -1143,11 +1143,11 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
-                Terminator::Call { destination, .. } => Some(destination.base_local()),
-                Terminator::VirtualCall { destination, .. } => Some(destination.base_local()),
-                Terminator::Await { destination, .. } => Some(destination.base_local()),
-                Terminator::AwaitAny { destination, .. } => Some(destination.base_local()),
-                Terminator::SysOp { destination, .. } => Some(destination.base_local()),
+                Terminator::Call { destination, .. } => destination.base_local(),
+                Terminator::VirtualCall { destination, .. } => destination.base_local(),
+                Terminator::Await { destination, .. } => destination.base_local(),
+                Terminator::AwaitAny { destination, .. } => destination.base_local(),
+                Terminator::SysOp { destination, .. } => destination.base_local(),
                 Terminator::NarrowBind { destination, .. } => Some(*destination),
                 // ShortCircuit is side-effect-free (pure control flow), so its
                 // destination can be dead-eliminated like any other local.
