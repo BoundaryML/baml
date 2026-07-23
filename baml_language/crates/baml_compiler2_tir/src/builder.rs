@@ -75,6 +75,12 @@ struct MemberAccess<'a> {
     bound: bool,
 }
 
+enum ClassFieldLookup {
+    Found(Ty),
+    Duplicate,
+    NotFound,
+}
+
 enum ClassMethodLookup<'db> {
     Found {
         ty: Ty,
@@ -10670,8 +10676,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         match base_ty {
             Ty::Class(class_name, type_args, _) => {
                 // Check class fields
-                let class_fields = self.lookup_class_fields(class_name, type_args);
-                if let Some(field_ty) = class_fields.get(member) {
+                let field_ty = match self.lookup_class_field(class_name, type_args, member) {
+                    ClassFieldLookup::Found(ty) => Some(ty),
+                    ClassFieldLookup::Duplicate => {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
+                    ClassFieldLookup::NotFound => None,
+                };
+                if let Some(field_ty) = field_ty {
                     if self.class_has_inherent_method(class_name, member) {
                         return Ty::Error {
                             attr: TyAttr::default(),
@@ -10687,7 +10701,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             },
                         );
                     }
-                    return field_ty.clone();
+                    return field_ty;
                 }
 
                 // Check class methods via the item tree (methods are stored
@@ -12046,22 +12060,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Look up class fields from the package items (via item tree).
+    /// Look up a class field from the package items (via item tree).
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
     /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
     /// When non-empty, field types are resolved with the binding keys in scope and then substituted
     /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     ///
-    /// Returns a map of field name → resolved field type.
-    fn lookup_class_fields(
+    fn lookup_class_field(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
-    ) -> FxHashMap<Name, Ty> {
-        self.class_all_fields_ordered(class_name, class_type_args, true)
+        field_name: &Name,
+    ) -> ClassFieldLookup {
+        let mut matches = self
+            .class_all_fields_ordered(class_name, class_type_args, true)
             .into_iter()
-            .collect()
+            .filter(|(name, _)| name == field_name);
+        let Some((_, ty)) = matches.next() else {
+            return ClassFieldLookup::NotFound;
+        };
+        if matches.next().is_some() {
+            ClassFieldLookup::Duplicate
+        } else {
+            ClassFieldLookup::Found(ty)
+        }
     }
 
     fn class_actual_fields_ordered(

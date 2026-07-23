@@ -15,22 +15,36 @@ pub(crate) enum GeneratorIdent {
     BootstrapPackage,
     RuntimePackage,
     ContextParameter,
+    ReceiverParameter,
     ErrorLocal,
+    CallbackErrorLocal,
     ResultLocal,
     ZeroLocal,
     ArgumentsLocal,
+    CallbackOptionalCountLocal,
     OptionsParameter,
     OptionLocal,
     OptionValueParameter,
     ClassValueLocal,
     DecodedLocal,
     CodecValueParameter,
+    UnionArmLocal,
+    UnionOkLocal,
+    UnionNullLocal,
+    UnionSelectedLocal,
+    UnionPayloadLocal,
+    UnionVariantField,
     StringType,
     Int64Type,
     Float64Type,
     BoolType,
     ByteType,
     ErrorType,
+    ClassNameMethod,
+    InputMethod,
+    ReflectedTypeInputMethod,
+    ReflectedTypeOutputMethod,
+    UnionArmMatchMethod,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,6 +55,12 @@ pub(crate) enum ClassCodecDirection {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum EnumCodecDirection {
+    Encode,
+    Decode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UnionCodecDirection {
     Encode,
     Decode,
 }
@@ -58,6 +78,59 @@ pub(crate) struct ClassCodecIdent {
 pub(crate) struct EnumCodecIdent {
     direction: EnumCodecDirection,
     index: usize,
+}
+
+pub(crate) struct UnionCodecIdent {
+    direction: UnionCodecDirection,
+    index: usize,
+}
+
+pub(crate) struct CallbackCodecIdent {
+    index: usize,
+}
+
+pub(crate) struct CallbackArgumentIdent {
+    index: usize,
+}
+
+impl CallbackArgumentIdent {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for CallbackArgumentIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlCallbackArg{}_", self.index)
+    }
+}
+
+impl CallbackCodecIdent {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for CallbackCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlEncodeCallback{}", self.index)
+    }
+}
+
+impl UnionCodecIdent {
+    pub(crate) fn new(direction: UnionCodecDirection, index: usize) -> Self {
+        Self { direction, index }
+    }
+}
+
+impl fmt::Display for UnionCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let direction = match self.direction {
+            UnionCodecDirection::Encode => "Encode",
+            UnionCodecDirection::Decode => "Decode",
+        };
+        write!(f, "_baml{direction}Union{}", self.index)
+    }
 }
 
 impl EnumCodecIdent {
@@ -102,22 +175,36 @@ impl GeneratorIdent {
         Self::BootstrapPackage,
         Self::RuntimePackage,
         Self::ContextParameter,
+        Self::ReceiverParameter,
         Self::ErrorLocal,
+        Self::CallbackErrorLocal,
         Self::ResultLocal,
         Self::ZeroLocal,
         Self::ArgumentsLocal,
+        Self::CallbackOptionalCountLocal,
         Self::OptionsParameter,
         Self::OptionLocal,
         Self::OptionValueParameter,
         Self::ClassValueLocal,
         Self::DecodedLocal,
         Self::CodecValueParameter,
+        Self::UnionArmLocal,
+        Self::UnionOkLocal,
+        Self::UnionNullLocal,
+        Self::UnionSelectedLocal,
+        Self::UnionPayloadLocal,
+        Self::UnionVariantField,
         Self::StringType,
         Self::Int64Type,
         Self::Float64Type,
         Self::BoolType,
         Self::ByteType,
         Self::ErrorType,
+        Self::ClassNameMethod,
+        Self::InputMethod,
+        Self::ReflectedTypeInputMethod,
+        Self::ReflectedTypeOutputMethod,
+        Self::UnionArmMatchMethod,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -127,22 +214,35 @@ impl GeneratorIdent {
             Self::BootstrapPackage => "bootstrap",
             Self::RuntimePackage => "baml_go",
             Self::ContextParameter => "ctx_",
+            Self::ReceiverParameter => "receiver_",
             Self::ErrorLocal => "err_",
+            Self::CallbackErrorLocal => "callbackErr_",
             Self::ResultLocal => "result_",
             Self::ZeroLocal => "zero_",
             Self::ArgumentsLocal => "arguments_",
+            Self::CallbackOptionalCountLocal => "optionalCount_",
             Self::OptionsParameter => "options_",
             Self::OptionLocal => "option_",
             Self::OptionValueParameter => "value_",
             Self::ClassValueLocal => "classValue_",
             Self::DecodedLocal => "decoded_",
             Self::CodecValueParameter => "value_",
+            Self::UnionArmLocal => "arm_",
+            Self::UnionOkLocal => "ok_",
+            Self::UnionNullLocal => "null_",
+            Self::UnionSelectedLocal => "selected_",
+            Self::UnionPayloadLocal => "payload_",
+            Self::UnionVariantField => "variant_",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",
             Self::BoolType => "bool",
             Self::ByteType => "byte",
             Self::ErrorType => "error",
+            Self::ClassNameMethod => "BAMLClassName",
+            Self::InputMethod => "BAMLInput",
+            Self::ReflectedTypeInputMethod | Self::ReflectedTypeOutputMethod => "Type",
+            Self::UnionArmMatchMethod => "MatchesUnionArm",
         }
     }
 }
@@ -231,6 +331,22 @@ mod tests {
         assert_eq!(
             EnumCodecIdent::new(EnumCodecDirection::Decode, 4).to_string(),
             "_bamlDecodeEnum4"
+        );
+    }
+
+    #[test]
+    fn callback_identifiers_are_generator_owned_and_stable() {
+        assert_eq!(
+            CallbackCodecIdent::new(3).to_string(),
+            "_bamlEncodeCallback3"
+        );
+        assert_eq!(
+            CallbackArgumentIdent::new(4).to_string(),
+            "_bamlCallbackArg4_"
+        );
+        assert_eq!(
+            GeneratorIdent::CallbackErrorLocal.to_string(),
+            "callbackErr_"
         );
     }
 

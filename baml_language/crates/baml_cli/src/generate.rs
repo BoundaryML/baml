@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use baml_codegen_types::{GeneratedOutputFile, write_generated_output};
 use baml_db::{
     FileId, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
@@ -42,6 +43,7 @@ struct GeneratorDef {
     /// Required for Go so generated packages can import the SDK root and one
     /// another. Other generators leave this unset.
     sdk_import_path: Option<String>,
+    max_typed_union_arity: usize,
 }
 
 impl GenerateArgs {
@@ -247,15 +249,19 @@ impl GenerateArgs {
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
-                OutputType::Go => sdkgen_go::to_source_code_with_bytecode(
+                OutputType::Go => sdkgen_go::try_to_source_code_with_bytecode_and_options(
                     &pool,
                     &baml_bytecode,
-                    generator.naming_convention,
-                    generator
-                        .sdk_import_path
-                        .as_deref()
-                        .expect("validated Go generator must have sdk_import_path"),
+                    &sdkgen_go::GoGenOptions {
+                        naming_convention: generator.naming_convention,
+                        sdk_import_path: generator
+                            .sdk_import_path
+                            .as_deref()
+                            .expect("validated Go generator must have sdk_import_path"),
+                        max_typed_union_arity: generator.max_typed_union_arity,
+                    },
                 )
+                .map_err(|error| anyhow!("Go SDK generation failed: {error}"))?
                 .into_iter()
                 .map(|(path, content)| (path, content.into_bytes()))
                 .collect(),
@@ -293,24 +299,17 @@ impl GenerateArgs {
                 OutputType::CSharp => unreachable!("C# generation commits atomically above"),
             };
 
-            std::fs::create_dir_all(&output_dir).with_context(|| {
+            let output = generated
+                .into_iter()
+                .map(|(path, contents)| GeneratedOutputFile::new(path, contents))
+                .collect();
+            let report = write_generated_output(&output_dir, output).with_context(|| {
                 format!(
-                    "Failed to create output directory: {}",
+                    "Failed to install generated output in {}",
                     output_dir.display()
                 )
             })?;
-            let output_dir = std::fs::canonicalize(&output_dir).unwrap_or(output_dir);
-
-            let mut count = 0;
-            for (rel_path, content) in &generated {
-                let dest = output_dir.join(rel_path);
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(&dest, content)
-                    .with_context(|| format!("Failed to write {}", dest.display()))?;
-                count += 1;
-            }
+            let count = report.written_files.len();
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo
@@ -399,6 +398,51 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         } else {
             None
         };
+        let max_typed_union_arity = if matches!(output_type, Some(OutputType::Go)) {
+            match generator.max_typed_union_arity.as_ref() {
+                None => sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY,
+                Some(value) if *value.get_ref() >= 0 => *value.get_ref() as usize,
+                Some(value) => {
+                    diags.push(
+                        Diagnostic::error(
+                            DiagnosticId::InvalidGeneratorPropertyValue,
+                            format!(
+                                "Go generator `{name}` requires `max_typed_union_arity` to be zero or greater"
+                            ),
+                        )
+                        .with_primary(
+                            Span {
+                                file_id: manifest_file_id(),
+                                range: to_text_range(value.span()),
+                            },
+                            "negative union threshold",
+                        )
+                        .with_phase(DiagnosticPhase::Validation),
+                    );
+                    sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
+                }
+            }
+        } else {
+            if let Some(value) = generator.max_typed_union_arity.as_ref() {
+                diags.push(
+                    Diagnostic::error(
+                        DiagnosticId::InvalidGeneratorPropertyValue,
+                        format!(
+                            "generator `{name}` sets Go-only property `max_typed_union_arity` on a non-Go target"
+                        ),
+                    )
+                    .with_primary(
+                        Span {
+                            file_id: manifest_file_id(),
+                            range: to_text_range(value.span()),
+                        },
+                        "remove this Go-only property",
+                    )
+                    .with_phase(DiagnosticPhase::Validation),
+                );
+            }
+            sdkgen_go::DEFAULT_MAX_TYPED_UNION_ARITY
+        };
 
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with the target-owned generated directory appended.
@@ -447,6 +491,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             output_dir,
             naming_convention,
             sdk_import_path,
+            max_typed_union_arity,
         });
     }
 
@@ -585,7 +630,24 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
 
 #[cfg(test)]
 mod tests {
-    use super::is_valid_go_import_path;
+    use std::fs;
+
+    use super::{Diagnostic, GeneratorDef, discover_generators, is_valid_go_import_path};
+
+    fn go_manifest(threshold: Option<i64>) -> String {
+        let threshold = threshold
+            .map(|value| format!("max_typed_union_arity = {value}\n"))
+            .unwrap_or_default();
+        format!(
+            "[package]\nname = \"test\"\n\n[generator.go]\noutput_type = \"go\"\nnaming_convention = \"language\"\nsdk_import_path = \"example.com/test/baml_sdk\"\n{threshold}"
+        )
+    }
+
+    fn discover_with_manifest(content: &str) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join("baml.toml"), content).unwrap();
+        discover_generators(directory.path())
+    }
 
     #[test]
     fn go_import_paths_reject_relative_empty_and_platform_specific_segments() {
@@ -604,5 +666,37 @@ mod tests {
             assert!(!is_valid_go_import_path(invalid), "accepted {invalid:?}");
         }
         assert!(is_valid_go_import_path("example.com/project/baml_sdk"));
+    }
+
+    #[test]
+    fn go_union_threshold_defaults_to_three_and_accepts_zero() {
+        let (defaults, default_diags) = discover_with_manifest(&go_manifest(None));
+        assert!(default_diags.is_empty(), "{default_diags:?}");
+        assert_eq!(defaults[0].max_typed_union_arity, 3);
+
+        let (disabled, disabled_diags) = discover_with_manifest(&go_manifest(Some(0)));
+        assert!(disabled_diags.is_empty(), "{disabled_diags:?}");
+        assert_eq!(disabled[0].max_typed_union_arity, 0);
+    }
+
+    #[test]
+    fn negative_go_union_threshold_is_rejected() {
+        let (_, diagnostics) = discover_with_manifest(&go_manifest(Some(-1)));
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            format!("{diagnostics:?}").contains("zero or greater"),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn go_union_threshold_on_non_go_generator_is_rejected() {
+        let manifest = "[package]\nname = \"test\"\n\n[generator.ts]\noutput_type = \"typescript/node\"\nnaming_convention = \"language\"\nmax_typed_union_arity = 3\n";
+        let (_, diagnostics) = discover_with_manifest(manifest);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            format!("{diagnostics:?}").contains("Go-only property"),
+            "{diagnostics:?}"
+        );
     }
 }

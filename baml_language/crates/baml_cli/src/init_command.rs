@@ -203,6 +203,7 @@ name = "{name}"
 # output_dir = "."
 # naming_convention = "language"
 # sdk_import_path = "example.com/my-project/baml_sdk"
+# max_typed_union_arity = 3 # larger unions are generated as `any`
 "#,
     )
 }
