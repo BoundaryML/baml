@@ -86,13 +86,6 @@ pub enum FileContent {
 }
 
 impl FileContent {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            FileContent::Text(s) => s.as_bytes(),
-            FileContent::Binary(b) => b,
-        }
-    }
-
     pub fn into_bytes(self) -> Vec<u8> {
         match self {
             FileContent::Text(s) => s.into_bytes(),

@@ -21,7 +21,7 @@ use std::{
 
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, symlink_customizable, watch_dir,
+    load_fixture, symlink_customizable, watch_dir, write_codegen_output,
 };
 
 /// Per-fixture compile-and-run driver, written to `<fixture>/generated/test.sh`.
@@ -96,28 +96,7 @@ fn codegen_fixture(
         sdkgen_cpp::to_source_code_with_bytecode(&pool, &user_baml_paths, &baml_bytecode)
     }));
     match codegen_result {
-        Ok(output) => {
-            for (rel, content) in output {
-                let path = baml_sdk.join(&rel);
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = fs::create_dir_all(parent) {
-                        diagnostics.record(
-                            "codegen_write",
-                            fixture,
-                            format!("create_dir_all {}: {e}", parent.display()),
-                        );
-                        continue;
-                    }
-                }
-                if let Err(e) = fs::write(&path, content) {
-                    diagnostics.record(
-                        "codegen_write",
-                        fixture,
-                        format!("write {}: {e}", path.display()),
-                    );
-                }
-            }
-        }
+        Ok(output) => write_codegen_output(&baml_sdk, output, fixture, diagnostics),
         Err(_) => {
             diagnostics.record(
                 "codegen",

@@ -738,6 +738,7 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_builtins2",
+ "baml_codegen_types",
  "baml_db",
  "baml_exec",
  "baml_fmt",
@@ -796,7 +797,12 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_type",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2",
  "strum",
+ "tempfile",
 ]
 
 [[package]]
@@ -6715,7 +6721,6 @@ dependencies = [
  "baml_codegen_types",
  "bex_vm_types",
  "borsh",
- "fs2",
  "serde",
  "serde_json",
  "sha2",

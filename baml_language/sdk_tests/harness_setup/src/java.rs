@@ -42,7 +42,7 @@ use sdkgen_java::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, emit_cargo_line,
-    fixtures_root_from_manifest, load_fixture, watch_dir,
+    fixtures_root_from_manifest, load_fixture, watch_dir, write_codegen_output,
 };
 
 /// Per-fixture build.gradle.kts — no placeholder; written verbatim.
@@ -198,26 +198,7 @@ fn codegen_fixture(
         &baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    for (rel, content) in output {
-        let path = baml_sdk.join(&rel);
-        if let Some(parent) = path.parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                diagnostics.record(
-                    "codegen_write",
-                    fixture,
-                    format!("create_dir_all {}: {e}", parent.display()),
-                );
-                continue;
-            }
-        }
-        if let Err(e) = fs::write(&path, content) {
-            diagnostics.record(
-                "codegen_write",
-                fixture,
-                format!("write {}: {e}", path.display()),
-            );
-        }
-    }
+    write_codegen_output(&baml_sdk, output, fixture, diagnostics);
 
     let custom = fixture_root.join("customizable");
     if custom.exists() {

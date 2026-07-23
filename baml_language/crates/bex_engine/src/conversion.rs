@@ -3287,6 +3287,80 @@ fn class_annotation_can_refine(annotation: &RuntimeTy, contextual: &RuntimeTy) -
                     .all(|(annotation, contextual)| runtime_ty_compatible(annotation, contextual))))
 }
 
+/// The generated host SDKs expose primitive media through the corresponding
+/// handle-backed stdlib wrapper class. Some bridges therefore annotate the
+/// class-shaped `_data` payload with that wrapper's exact FQN even when the
+/// contextual BAML slot is the primitive `image`/`audio`/`video`/`pdf` type.
+///
+/// Keep this conversion contextual: the same wrapper remains an ordinary
+/// nominal class when passed as the receiver of a `baml.media.Image` method.
+fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaKind> {
+    let RuntimeTy::Class(name, args, _) = annotation else {
+        return None;
+    };
+    if !args.is_empty() {
+        return None;
+    }
+    match name.render_dotted(false).as_str() {
+        "baml.media.Image" => Some(baml_type::MediaKind::Image),
+        "baml.media.Audio" => Some(baml_type::MediaKind::Audio),
+        "baml.media.Video" => Some(baml_type::MediaKind::Video),
+        "baml.media.Pdf" => Some(baml_type::MediaKind::Pdf),
+        _ => None,
+    }
+}
+
+fn resolve_runtime_alias<'a>(
+    mut ty: &'a RuntimeTy,
+    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> Option<&'a RuntimeTy> {
+    let mut visited = std::collections::HashSet::new();
+    while let RuntimeTy::TypeAlias(name, _) = ty {
+        if !visited.insert(name) {
+            return None;
+        }
+        ty = aliases.get(name)?;
+    }
+    Some(ty)
+}
+
+fn stdlib_media_wrapper_matches(
+    annotation: &RuntimeTy,
+    contextual: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    allow_generic: bool,
+) -> bool {
+    let Some(wrapper_kind) = stdlib_media_wrapper_kind(annotation) else {
+        return false;
+    };
+    let Some(contextual) = resolve_runtime_alias(contextual, aliases) else {
+        return false;
+    };
+    let RuntimeTy::Media(contextual_kind, _) = contextual else {
+        return false;
+    };
+    wrapper_kind == *contextual_kind
+        || (allow_generic && *contextual_kind == baml_type::MediaKind::Generic)
+}
+
+/// Return the concrete primitive media type against which a wrapper's `_data`
+/// payload must be checked. In a generic `media` context the wrapper still
+/// promises one exact kind, so validate that promise before widening the
+/// resulting carrier back to the contextual type.
+fn stdlib_media_wrapper_payload_type(
+    annotation: &RuntimeTy,
+    contextual: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> Option<RuntimeTy> {
+    let wrapper_kind = stdlib_media_wrapper_kind(annotation)?;
+    let RuntimeTy::Media(contextual_kind, attr) = resolve_runtime_alias(contextual, aliases)?
+    else {
+        return None;
+    };
+    (*contextual_kind == wrapper_kind || *contextual_kind == baml_type::MediaKind::Generic)
+        .then(|| RuntimeTy::Media(wrapper_kind, attr.clone()))
+}
+
 fn refine_class_annotation_args(
     annotation: &[RuntimeTy],
     contextual: &[RuntimeTy],
@@ -3407,6 +3481,18 @@ fn coerce_arg_to_declared_type_with_aliases(
                         runtime_ty_assignable_with_aliases(value_type, member, aliases)
                     })
                 })
+                // Prefer the exact primitive kind before the generic `media`
+                // supertype, independent of union declaration order.
+                .or_else(|| {
+                    members.iter().find(|member| {
+                        stdlib_media_wrapper_matches(value_type, member, aliases, false)
+                    })
+                })
+                .or_else(|| {
+                    members.iter().find(|member| {
+                        stdlib_media_wrapper_matches(value_type, member, aliases, true)
+                    })
+                })
                 .cloned();
             let selected_type = match selected_type {
                 Some(selected) => selected,
@@ -3454,9 +3540,12 @@ fn coerce_arg_to_declared_type_with_aliases(
                     ),
                 });
             }
+            let media_payload_type =
+                stdlib_media_wrapper_payload_type(value_type, &selected_type, aliases);
+            let payload_type = media_payload_type.as_ref().unwrap_or(&selected_type);
             let coerced = coerce_arg_to_declared_type_with_aliases(
                 annotation_coerced,
-                &selected_type,
+                payload_type,
                 aliases,
                 classes,
                 ambiguity_policy,
@@ -3478,9 +3567,14 @@ fn coerce_arg_to_declared_type_with_aliases(
             if metadata.is_inbound_type_annotation =>
         {
             let value_type = &metadata.selected_option;
-            let effective_type = if runtime_ty_assignable_with_aliases(
-                value_type, declared, aliases,
-            ) {
+            let media_payload_type =
+                stdlib_media_wrapper_payload_type(value_type, declared, aliases);
+            let effective_type = if media_payload_type.is_some() {
+                // Validate the payload against its nominal annotation below,
+                // then unwrap its sole `_data` field using the primitive
+                // contextual type.
+                declared
+            } else if runtime_ty_assignable_with_aliases(value_type, declared, aliases) {
                 value_type
             } else if class_annotation_can_refine(value_type, declared) {
                 declared
@@ -3511,9 +3605,10 @@ fn coerce_arg_to_declared_type_with_aliases(
                     ),
                 });
             }
+            let payload_type = media_payload_type.as_ref().unwrap_or(effective_type);
             let coerced = coerce_arg_to_declared_type_with_aliases(
                 annotation_coerced,
-                effective_type,
+                payload_type,
                 aliases,
                 classes,
                 ambiguity_policy,
@@ -3580,13 +3675,22 @@ fn coerce_arg_to_declared_type_with_aliases(
                     ),
                 });
             }
-            coerce_arg_to_declared_type_with_aliases(
+            let coerced = coerce_arg_to_declared_type_with_aliases(
                 data,
                 media_ty,
                 aliases,
                 classes,
                 ambiguity_policy,
-            )
+            )?;
+            if !value_matches_type_with_definitions(&coerced, media_ty, aliases, classes) {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "host media payload `{}` does not inhabit contextual type `{media_ty}`",
+                        coerced.type_name()
+                    ),
+                });
+            }
+            Ok(coerced)
         }
         // ── Class / enum naming (incoming only) ──────────────────────────
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
@@ -3845,6 +3949,28 @@ mod union_container_selection_tests {
             },
             None,
         ))))
+    }
+
+    fn media_wrapper_ty(kind: MediaKind) -> RuntimeTy {
+        let name = match kind {
+            MediaKind::Image => "baml.media.Image",
+            MediaKind::Audio => "baml.media.Audio",
+            MediaKind::Video => "baml.media.Video",
+            MediaKind::Pdf => "baml.media.Pdf",
+            MediaKind::Generic => panic!("generic media has no stdlib wrapper class"),
+        };
+        RuntimeTy::Class(TypeName::from_dotted_path(name), vec![], TyAttr::default())
+    }
+
+    fn media_wrapper_value(kind: MediaKind) -> BexExternalValue {
+        let RuntimeTy::Class(name, ..) = media_wrapper_ty(kind) else {
+            unreachable!()
+        };
+        BexExternalValue::Instance {
+            class_name: name.to_string(),
+            type_args: vec![],
+            fields: indexmap::IndexMap::from([("_data".to_string(), media_value(kind))]),
+        }
     }
 
     fn callback_ty(param_freshness: Freshness) -> RuntimeTy {
@@ -4469,6 +4595,170 @@ mod union_container_selection_tests {
         assert!(!runtime_ty_structurally_equal(
             &media_ty(MediaKind::Image),
             &media_ty(MediaKind::Generic)
+        ));
+    }
+
+    #[test]
+    fn stdlib_media_wrapper_annotation_coerces_only_in_primitive_context() {
+        let wrapper_ty = media_wrapper_ty(MediaKind::Image);
+        let typed_wrapper =
+            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), wrapper_ty.clone());
+
+        let coerced =
+            coerce_arg_to_declared_type(typed_wrapper, &media_ty(MediaKind::Image)).unwrap();
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected sparse type carrier")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &media_ty(MediaKind::Image)
+        ));
+        assert!(matches!(
+            *value,
+            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
+                if media.kind == MediaKind::Image
+        ));
+
+        let nominal = coerce_arg_to_declared_type(
+            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), wrapper_ty.clone()),
+            &wrapper_ty,
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = nominal else {
+            panic!("expected sparse type carrier")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &wrapper_ty
+        ));
+        assert!(matches!(*value, BexExternalValue::Instance { .. }));
+    }
+
+    #[test]
+    fn generic_media_still_validates_the_wrappers_concrete_kind() {
+        let typed_wrapper = BexExternalValue::typed(
+            media_wrapper_value(MediaKind::Audio),
+            media_wrapper_ty(MediaKind::Image),
+        );
+
+        let error =
+            coerce_arg_to_declared_type(typed_wrapper, &media_ty(MediaKind::Generic)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("does not inhabit contextual type `image`"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn local_class_cannot_spoof_a_stdlib_media_wrapper_fqn() {
+        let local_spoof = RuntimeTy::Class(
+            TypeName::new(
+                Name::new("user"),
+                vec![Name::new("baml"), Name::new("media")],
+                Name::new("Image"),
+            ),
+            vec![],
+            TyAttr::default(),
+        );
+        let RuntimeTy::Class(name, ..) = &local_spoof else {
+            unreachable!()
+        };
+        assert_eq!(name.display_name().as_str(), "baml.media.Image");
+        assert_eq!(name.render_dotted(false), "user.baml.media.Image");
+        assert_eq!(stdlib_media_wrapper_kind(&local_spoof), None);
+
+        let typed_spoof =
+            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), local_spoof);
+        let error =
+            coerce_arg_to_declared_type(typed_spoof, &media_ty(MediaKind::Image)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("is not assignable to declared type `image`"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn stdlib_media_wrapper_selects_alias_union_arm_and_retains_alias_metadata() {
+        let alias_name = TypeName::from_dotted_path("user.aliases.ImageAlias");
+        let alias = RuntimeTy::TypeAlias(alias_name.clone(), TyAttr::default());
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(alias_name, media_ty(MediaKind::Image));
+        let declared = RuntimeTy::union([alias.clone(), RuntimeTy::string()]);
+        let typed_wrapper = BexExternalValue::typed(
+            media_wrapper_value(MediaKind::Image),
+            media_wrapper_ty(MediaKind::Image),
+        );
+
+        let coerced = coerce_arg_to_declared_type_with_aliases(
+            typed_wrapper,
+            &declared,
+            &aliases,
+            &indexmap::IndexMap::new(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+        .unwrap();
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected selected union carrier")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &alias
+        ));
+        assert!(matches!(
+            *value,
+            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
+                if media.kind == MediaKind::Image
+        ));
+    }
+
+    #[test]
+    fn stdlib_media_wrapper_alias_resolution_rejects_cycles() {
+        let first_name = TypeName::from_dotted_path("user.aliases.First");
+        let second_name = TypeName::from_dotted_path("user.aliases.Second");
+        let first = RuntimeTy::TypeAlias(first_name.clone(), TyAttr::default());
+        let second = RuntimeTy::TypeAlias(second_name.clone(), TyAttr::default());
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first_name, second);
+        aliases.insert(second_name, first.clone());
+
+        assert!(!stdlib_media_wrapper_matches(
+            &media_wrapper_ty(MediaKind::Image),
+            &first,
+            &aliases,
+            true,
+        ));
+    }
+
+    #[test]
+    fn stdlib_image_wrapper_selects_primitive_arm_over_user_image_class() {
+        let primitive_image = media_ty(MediaKind::Image);
+        let user_image = RuntimeTy::Class(
+            TypeName::from_dotted_path("user.media.Image"),
+            vec![],
+            TyAttr::default(),
+        );
+        let declared = RuntimeTy::union([primitive_image.clone(), user_image]);
+        let typed_wrapper = BexExternalValue::typed(
+            media_wrapper_value(MediaKind::Image),
+            media_wrapper_ty(MediaKind::Image),
+        );
+
+        let coerced = coerce_arg_to_declared_type(typed_wrapper, &declared).unwrap();
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected selected union carrier")
+        };
+        assert!(runtime_ty_structurally_equal(
+            &metadata.selected_option,
+            &primitive_image
+        ));
+        assert!(matches!(
+            *value,
+            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
+                if media.kind == MediaKind::Image
         ));
     }
 
