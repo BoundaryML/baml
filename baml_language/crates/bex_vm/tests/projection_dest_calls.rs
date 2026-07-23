@@ -112,15 +112,20 @@ fn method_call_result_can_be_the_base_of_nested_field_assignment() {
         class Record { info: Info }
         class Store {
             record: Record
-            function require(self) -> Record { self.record }
+            calls: int
+            function require(self) -> Record {
+                self.calls += 1;
+                self.record
+            }
         }
 
         function main() -> bool {
             let store = Store {
                 record: Record { info: Info { title: null } },
+                calls: 0,
             };
             store.require().info.title = "triage";
-            store.record.info.title == "triage"
+            store.record.info.title == "triage" && store.calls == 1
         }
     "#;
 
