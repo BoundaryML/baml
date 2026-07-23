@@ -293,4 +293,40 @@ mod builder_tests {
         check_attribute_string_args!(ast::Attribute, SyntaxKind::ATTRIBUTE);
         check_attribute_string_args!(ast::BlockAttribute, SyntaxKind::BLOCK_ATTRIBUTE);
     }
+
+    fn build_named_definition(kind: SyntaxKind) -> SyntaxNode {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(kind);
+        builder.start_node(SyntaxKind::EXPR);
+        builder.token(SyntaxKind::WORD, "nested");
+        builder.finish_node();
+        builder.token(SyntaxKind::WORD, "direct");
+        builder.finish_node();
+        SyntaxNode::new_root(builder.finish())
+    }
+
+    macro_rules! check_direct_definition_name {
+        ($definition:ty, $kind:expr) => {
+            assert_eq!(
+                <$definition>::cast(build_named_definition($kind))
+                    .expect("expected definition")
+                    .name()
+                    .expect("expected direct name")
+                    .text(),
+                "direct"
+            );
+        };
+    }
+
+    #[test]
+    fn definition_names_ignore_nested_word_tokens() {
+        check_direct_definition_name!(ast::TemplateStringDef, SyntaxKind::TEMPLATE_STRING_DEF);
+        check_direct_definition_name!(ast::ClassDef, SyntaxKind::CLASS_DEF);
+        check_direct_definition_name!(ast::InterfaceDef, SyntaxKind::INTERFACE_DEF);
+        check_direct_definition_name!(ast::EnumDef, SyntaxKind::ENUM_DEF);
+        check_direct_definition_name!(ast::ClientDef, SyntaxKind::CLIENT_DEF);
+        check_direct_definition_name!(ast::RetryPolicyDef, SyntaxKind::RETRY_POLICY_DEF);
+        check_direct_definition_name!(ast::TestDef, SyntaxKind::TEST_DEF);
+        check_direct_definition_name!(ast::TypeAliasDef, SyntaxKind::TYPE_ALIAS_DEF);
+    }
 }

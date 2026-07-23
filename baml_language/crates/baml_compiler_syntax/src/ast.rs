@@ -184,6 +184,13 @@ fn attribute_string_arg(syntax: &SyntaxNode) -> Option<String> {
     (!result.is_empty()).then_some(result)
 }
 
+fn first_direct_word(syntax: &SyntaxNode) -> Option<SyntaxToken> {
+    syntax
+        .children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| token.kind() == SyntaxKind::WORD && token.parent() == Some(syntax.clone()))
+}
+
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     /// Get the syntax kind of this node.
@@ -1193,12 +1200,7 @@ impl FunctionDef {
 impl TemplateStringDef {
     /// Get the template string name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
+        first_direct_word(&self.syntax)
     }
 
     /// Get the parameter list.
@@ -2111,13 +2113,7 @@ impl ParameterList {
 impl ClassDef {
     /// Get the class name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (class keyword is KW_CLASS, not WORD)
+        first_direct_word(&self.syntax)
     }
 
     /// Get all fields.
@@ -2147,13 +2143,7 @@ impl ClassDef {
 impl InterfaceDef {
     /// Get the interface name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0)
+        first_direct_word(&self.syntax)
     }
 
     /// Field signatures declared directly in the interface body.
@@ -2437,13 +2427,7 @@ impl Field {
 impl EnumDef {
     /// Get the enum name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (enum keyword is KW_ENUM, not WORD)
+        first_direct_word(&self.syntax)
     }
 
     /// Check if this enum has a body (braces).
@@ -2484,13 +2468,7 @@ impl EnumVariant {
 impl ClientDef {
     /// Get the client name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (client keyword is KW_CLIENT, not WORD)
+        first_direct_word(&self.syntax)
     }
 
     /// Get the config block.
@@ -2502,13 +2480,7 @@ impl ClientDef {
 impl RetryPolicyDef {
     /// Get the retry policy name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0)
+        first_direct_word(&self.syntax)
     }
 
     /// Get the config block.
@@ -2820,13 +2792,7 @@ impl TestDef {
 
     /// Get the test name.
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
+        first_direct_word(&self.syntax)
     }
 
     /// Get the function name that this test is for (first function only).
@@ -2896,12 +2862,7 @@ impl TypeAliasDef {
     /// Get the type alias name — the first direct WORD child (the `type`
     /// keyword is a `KW_TYPE` token, so no skipping is needed).
     pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
+        first_direct_word(&self.syntax)
     }
 
     /// Get the aliased type expression.
