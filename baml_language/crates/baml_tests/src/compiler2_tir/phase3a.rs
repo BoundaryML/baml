@@ -475,6 +475,53 @@ function build(option: string) -> Config {
 }
 
 #[test]
+fn explicit_unknown_class_field_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  Config { badField: 5 }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic for an explicit property, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn inferred_object_rejects_explicit_unknown_class_field() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  let config = Config { badField: 5 };
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected inference to diagnose an explicit unknown field, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
+}
+
+#[test]
 fn unresolved_function_call_reports_callee_span() {
     let mut db = make_db();
     let file = db.add_file(

@@ -5803,29 +5803,44 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn report_unknown_class_property_shorthand(
+    fn report_unknown_class_property(
         &mut self,
+        object_expr: ExprId,
         class_name: &crate::ty::QualifiedTypeName,
         field_name: &Name,
         field_expr: ExprId,
         declared_fields: &FxHashMap<Name, Ty>,
     ) {
-        let is_shorthand = self
+        let (is_shorthand, is_synthetic_object) = self
             .body_source_map
             .as_ref()
-            .is_some_and(|source_map| source_map.is_property_shorthand_expr(field_expr));
-        if !is_shorthand {
+            .map(|source_map| {
+                (
+                    source_map.is_property_shorthand_expr(field_expr),
+                    source_map.is_synthetic_expr(object_expr),
+                )
+            })
+            .unwrap_or_default();
+        if !is_shorthand && is_synthetic_object {
             return;
         }
 
-        self.context.report_simple(
+        let suggestions = Self::similar_name_suggestions(field_name, declared_fields.keys());
+        let error = if is_shorthand {
             TirTypeError::UnknownClassPropertyShorthand {
                 class_name: class_name.clone(),
                 name: field_name.clone(),
-                suggestions: Self::similar_name_suggestions(field_name, declared_fields.keys()),
-            },
-            field_expr,
-        );
+                suggestions,
+            }
+        } else {
+            TirTypeError::UnknownClassField {
+                class_name: class_name.clone(),
+                field_name: field_name.clone(),
+                suggestions,
+            }
+        };
+
+        self.context.report_simple(error, field_expr);
     }
 
     #[inline(never)]
@@ -6020,7 +6035,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
-                    self.report_unknown_class_property_shorthand(
+                    self.report_unknown_class_property(
+                        expr_id,
                         class_name,
                         field_name,
                         *field_expr,
@@ -6152,7 +6168,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
-                    self.report_unknown_class_property_shorthand(
+                    self.report_unknown_class_property(
+                        expr_id,
                         class_name,
                         field_name,
                         *field_expr,

@@ -121,6 +121,12 @@ pub enum TirTypeError {
         name: Name,
         suggestions: Vec<Name>,
     },
+    /// A class constructor explicitly names a field the class does not declare.
+    UnknownClassField {
+        class_name: crate::ty::QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -890,7 +896,12 @@ impl fmt::Display for TirTypeError {
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
-            TirTypeError::UnknownClassPatternField {
+            TirTypeError::UnknownClassField {
+                class_name,
+                field_name,
+                suggestions,
+            }
+            | TirTypeError::UnknownClassPatternField {
                 class_name,
                 field_name,
                 suggestions,
