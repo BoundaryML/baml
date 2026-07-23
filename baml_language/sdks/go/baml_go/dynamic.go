@@ -116,11 +116,14 @@ func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 		if err != nil {
 			return nil, fmt.Errorf("selected union payload: %w", err)
 		}
-		annotated := *value
+		annotated := &cffi.InboundValue{
+			ValueType: value.ValueType,
+			Value:     value.Value,
+		}
 		if annotated.ValueType == nil {
 			annotated.ValueType = selectedType.value
 		}
-		return &annotated, nil
+		return annotated, nil
 	}
 	if payload.deferred == nil {
 		value, err := prepare(nil)
