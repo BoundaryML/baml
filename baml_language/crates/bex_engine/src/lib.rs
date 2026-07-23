@@ -78,7 +78,7 @@ mod trace_value_encode;
 pub mod value_capture;
 use std::{
     collections::{HashMap, VecDeque},
-    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -2244,15 +2244,19 @@ impl BexEngine {
             };
 
             let (handler, error) = next;
-            if let Err(panic) = catch_unwind(AssertUnwindSafe(|| handler(error.clone()))) {
+            if catch_unwind(AssertUnwindSafe(|| handler(error.clone()))).is_err() {
                 let mut state = self
                     .unhandled_spawn_state
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 state.queued.push_front(error);
+                state.handler = None;
                 state.delivering = false;
                 drop(state);
-                resume_unwind(panic);
+                tracing::error!(
+                    "unhandled spawn error handler panicked; handler removed and report requeued"
+                );
+                return;
             }
         }
     }

@@ -272,7 +272,7 @@ async fn installing_handler_drains_already_queued_errors() {
 }
 
 #[tokio::test]
-async fn panicking_handler_preserves_the_current_report() {
+async fn panicking_handler_does_not_unwind_gc_and_preserves_the_current_report() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
@@ -281,20 +281,16 @@ async fn panicking_handler_preserves_the_current_report() {
         }
     "#;
     let engine = make_engine(source);
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(|_| {
+        panic!("handler failed");
+    })));
+
     assert_eq!(
         call_main(&engine, true).await.unwrap(),
         BexExternalValue::Int(1)
     );
     engine.shutdown().await;
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        engine.set_unhandled_spawn_error_handler(Some(Arc::new(|_| {
-            panic!("handler failed");
-        })));
-    }));
-    assert!(result.is_err());
-
-    engine.set_unhandled_spawn_error_handler(None);
     let errors = engine.take_unhandled_spawn_errors();
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
