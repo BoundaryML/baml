@@ -2913,6 +2913,11 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_hir::body::let_body(db, let_loc);
 
                     if let LetBody::Expr(expr_body) = body.as_ref() {
+                        if let Some(source_map) =
+                            baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                        {
+                            builder.set_body_source_map(source_map);
+                        }
                         // Infer the root expression type bottom-up.
                         if let Some(root_expr) = expr_body.root_expr {
                             builder.infer_expr(root_expr, expr_body);

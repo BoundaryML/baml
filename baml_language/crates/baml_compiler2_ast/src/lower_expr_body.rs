@@ -4106,6 +4106,7 @@ impl LoweringContext {
         }
 
         let mut fields = Vec::new();
+        let mut field_name_spans = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_args: Vec<TypeExpr> = vec![];
@@ -4142,13 +4143,14 @@ impl LoweringContext {
         // brace, so the segments are always present.
         let type_name = TypePath::new(type_path_segments);
 
-        // Object fields are child nodes after L_BRACE
-        // They come as key-value pairs: WORD COLON expr or SPREAD expr
+        // Object fields are child nodes after L_BRACE. They come as key-value
+        // pairs (`WORD COLON expr`), shorthand (`WORD`), or spreads.
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr, or shorthand WORD.
                     let mut key_segments = Vec::new();
+                    let mut key_span: Option<TextRange> = None;
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -4159,6 +4161,12 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
+                                key_span = Some(match key_span {
+                                    Some(span) => {
+                                        TextRange::new(span.start(), t.text_range().end())
+                                    }
+                                    None => t.text_range(),
+                                });
                                 key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
@@ -4171,12 +4179,24 @@ impl LoweringContext {
                             rowan::NodeOrToken::Node(_) => {}
                         }
                     }
+                    if !seen_colon
+                        && key_segments.len() == 1
+                        && let Some(span) = key_span
+                    {
+                        let val_id =
+                            self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
+                        self.source_map.property_shorthand_exprs.insert(val_id);
+                        val = Some(val_id);
+                    }
                     let key = if key_segments.is_empty() {
                         None
                     } else {
                         Some(Name::new(key_segments.join(".")))
                     };
                     if let (Some(k), Some(val_id)) = (key, val) {
+                        if let Some(span) = key_span {
+                            field_name_spans.push((val_id, span));
+                        }
                         fields.push((k, val_id));
                     }
                     position += 1;
@@ -4201,7 +4221,7 @@ impl LoweringContext {
             }
         }
 
-        self.alloc_expr(
+        let object_id = self.alloc_expr(
             Expr::Object {
                 type_name,
                 type_args,
@@ -4209,12 +4229,18 @@ impl LoweringContext {
                 spreads,
             },
             node.span_range(),
-        )
+        );
+        for (value_id, field_name_span) in field_name_spans {
+            self.source_map
+                .object_field_name_spans
+                .insert((object_id, value_id), field_name_span);
+        }
+        object_id
     }
 
     fn lower_map_literal(&mut self, node: &SyntaxNode) -> ExprId {
         // MAP_LITERAL uses OBJECT_FIELD children (same as OBJECT_LITERAL).
-        // Each OBJECT_FIELD: key (WORD or expr), COLON, value expr.
+        // Each OBJECT_FIELD is `key: value` or shorthand `key`.
         // For maps the key can also be a string literal or expression.
         let entries = node
             .children()
@@ -4224,6 +4250,7 @@ impl LoweringContext {
                 let mut key_expr = None;
                 let mut val_expr = None;
                 let mut seen_colon = false;
+                let mut shorthand_name = None;
 
                 for elem in field_node.children_with_tokens() {
                     match elem {
@@ -4233,6 +4260,7 @@ impl LoweringContext {
                             } else if !seen_colon && key_expr.is_none() && is_ident_token(t.kind())
                             {
                                 let span = t.text_range();
+                                shorthand_name = Some((Name::new(t.text()), span));
                                 key_expr = Some(self.alloc_expr(
                                     Expr::Literal(Literal::String(t.text().to_string())),
                                     span,
@@ -4259,6 +4287,12 @@ impl LoweringContext {
                             }
                         }
                     }
+                }
+
+                if !seen_colon && let Some((name, span)) = shorthand_name {
+                    let value = self.alloc_expr(Expr::Path(vec![name]), span);
+                    self.source_map.property_shorthand_exprs.insert(value);
+                    val_expr = Some(value);
                 }
 
                 match (key_expr, val_expr) {

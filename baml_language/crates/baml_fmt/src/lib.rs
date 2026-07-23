@@ -1084,6 +1084,18 @@ mod map_literal_format_tests {
     }
 
     #[test]
+    fn test_property_shorthand_is_preserved() {
+        let source = "function f(options: string) -> map<string, string> {\n    { options, explicit: options }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_object_property_shorthand_is_preserved() {
+        let source = "class Config {\n    options: string,\n}\n\nfunction f(options: string) -> Config {\n    Config { options }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
     fn test_empty_map_with_block_comment_keeps_padding() {
         // An interior comment is real content, so the padding stays.
         let source = "function f() -> int {\n    { /* keep */ };\n    0\n}\n";
