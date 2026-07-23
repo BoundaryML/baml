@@ -27,6 +27,8 @@ set(protobuf_BUILD_PROTOC_BINARIES OFF)
 set(protobuf_BUILD_LIBUPB OFF)
 set(protobuf_INSTALL OFF)
 set(protobuf_FORCE_FETCH_DEPENDENCIES ON)
+# Match CMake's default dynamic MSVC runtime used by SDK consumers.
+set(protobuf_MSVC_STATIC_RUNTIME OFF)
 
 FetchContent_Declare(protobuf
   GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git

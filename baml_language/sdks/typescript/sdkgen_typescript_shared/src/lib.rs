@@ -184,15 +184,6 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
     path
 }
 
-pub fn to_source_code_with_bytecode(
-    pool: &SymbolPool,
-    baml_bytecode: &[u8],
-    naming_convention: NamingConvention,
-    config: GeneratorConfig,
-) -> HashMap<PathBuf, String> {
-    to_source_code(pool, baml_bytecode, naming_convention, config)
-}
-
 fn render_inlinedbaml(bytecode: &[u8]) -> String {
     let mut out = String::from("export const BYTECODE = new Uint8Array([\n");
     for chunk in bytecode.chunks(24) {

@@ -227,6 +227,41 @@ mod tests {
     }
 
     #[test]
+    fn runtime_owned_fqns_resolve_through_generated_public_leaves() {
+        let media_leaf = LeafPath {
+            segments: vec!["baml".into(), "media".into()],
+        };
+        let llm_leaf = LeafPath {
+            segments: vec!["baml".into(), "llm".into()],
+        };
+        let mut bodies = BTreeMap::new();
+        bodies.insert(
+            media_leaf.clone(),
+            body(
+                media_leaf,
+                vec![class_sym(name("baml", &["media"], "Image"), "Image")],
+            ),
+        );
+        bodies.insert(
+            llm_leaf.clone(),
+            body(
+                llm_leaf,
+                vec![class_sym(name("baml", &["llm"], "Stream"), "Stream")],
+            ),
+        );
+        let out = render_typemap_module(&bodies, "baml_sdk", "@boundaryml/baml-bridge-web");
+        assert!(out.contains("import * as __leaf_0 from \"./baml/llm/index.js\";"));
+        assert!(out.contains("import * as __leaf_1 from \"./baml/media/index.js\";"));
+        assert!(out.contains(
+            "\"baml.llm.Stream\": () => (__leaf_0 as Record<string, unknown>)[\"Stream\"],"
+        ));
+        assert!(out.contains(
+            "\"baml.media.Image\": () => (__leaf_1 as Record<string, unknown>)[\"Image\"],"
+        ));
+        assert!(!out.contains("baml_sdk.baml.media.Image"));
+    }
+
+    #[test]
     fn root_leaf_uses_baml_sdk_module_path() {
         let mut bodies = BTreeMap::new();
         let leaf = LeafPath { segments: vec![] };

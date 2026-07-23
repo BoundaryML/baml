@@ -224,9 +224,9 @@ func TestNestedDecodersPropagateOneOwnerThroughEveryShape(t *testing.T) {
 	assertOwner(field)
 
 	union := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_UnionVariantValue{UnionVariantValue: &cffi.BamlValueUnionVariant{
-		SelfType:     UnionBAMLType(ImageBAMLType(), PrimitiveBAMLType(StringType)).value,
-		SelectedType: ImageBAMLType().value,
-		Value:        leaf,
+		SelfType:            UnionBAMLType(ImageBAMLType(), PrimitiveBAMLType(StringType)).value,
+		SelectedOptionIndex: uint32Pointer(0),
+		Value:               leaf,
 	}}}, owner: owner}
 	_, payload, err := union.UnionVariant()
 	if err != nil {

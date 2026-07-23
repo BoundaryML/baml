@@ -3,17 +3,31 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/cpp/sdkgen_cpp",
+  "sdks/csharp/sdkgen_csharp",
   "sdks/go/sdkgen_go",
+  "sdks/java/bridge_java",
+  "sdks/java/sdkgen_java",
   "sdks/typescript/bridge_typescript",
   "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
+  "sdks/swift/rust/*",
   "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
+  # `sdk_tests/crates/java` follows typescript_node's soft-fail model
+  # (see below); its per-fixture tests are `#[ignore]`d while
+  # `sdkgen_java` is a stub.
+  "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
+  "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
+  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
+  # (sdkgen_swift is early); the swift toolchain tests themselves are
+  # macOS-only and setup.sh (xcframework assembly) is bound in
+  # .config/nextest.toml for macOS hosts.
+  "sdk_tests/crates/swift",
   "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
@@ -67,8 +81,12 @@ baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
+sdkgen_csharp = { path = "sdks/csharp/sdkgen_csharp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
+sdkgen_java = { path = "sdks/java/sdkgen_java" }
+bridge_java = { path = "sdks/java/bridge_java" }
+sdkgen_swift = { path = "sdks/swift/rust/sdkgen_swift" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -83,7 +101,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_cache = { path = "crates/bex_cache" }
+bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -109,6 +127,7 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
+sys_wasm = { path = "crates/sys_wasm" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_resource_types = { path = "crates/bex_resource_types" }
@@ -129,7 +148,6 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
-arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
@@ -163,12 +181,12 @@ crossbeam-channel = { version = "0.5" }
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).
 crossbeam-utils = { version = "0.8" }
-crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
+fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
@@ -210,7 +228,6 @@ prost = "0.14"
 prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
-ratatui = "0.29"
 rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
@@ -238,7 +255,6 @@ serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserv
 # package-renamed so `use serde_yaml::` imports stay unchanged.
 serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
-similar = { version = "2.4.0", features = [ "inline" ] }
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
@@ -271,6 +287,7 @@ tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
+jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
@@ -287,6 +304,13 @@ wasm-logger = "0.2.0"
 web-time = "1.1.0"
 getrandom = { version = "0.2" }
 getrandom_03 = { package = "getrandom", version = "0.3", features = [ "wasm_js" ] }
+# Pinned to the rand 0.8-era ecosystem (rand_core 0.6) to share the `RngCore`
+# trait with `num-bigint`'s `rand` feature below, so the `baml.random`
+# generators can drive `num-bigint` sampling (future `bigint.random`). Bumping
+# to rand_core 0.9 would fork that trait and is deliberately avoided.
+rand_core = "0.6"
+rand_chacha = "0.3"
+rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
@@ -434,11 +458,19 @@ inherits = "release"
 # contract mandates `panic = "unwind"` for a library loaded into a user's
 # server).
 #
+# `bridge_java` is the JVM analog: a cdylib `System.load`ed into the user's JVM
+# process. Its `catch_unwind` boundary turns an engine panic into a catchable
+# `BamlPanic` instead of `SIGABRT`ing the JVM (which no `try`/`catch` could
+# recover), so it needs `panic = "unwind"` for exactly the same reason as
+# `bridge_cffi` — the 8-target Java native matrix selects
+# `--profile release-bridge-java`.
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
 # binary can't mix strategies), so these artifacts need their own profile rather
 # than a package override. maturin (`--profile release-bridge-python`), napi
-# (`--profile release-bridge-node`), and the standalone cdylib matrix
-# (`--profile release-bridge-cffi`) select these at build time. The CLI and wasm
+# (`--profile release-bridge-node`), the standalone cdylib matrix
+# (`--profile release-bridge-cffi`), and the Java native matrix
+# (`--profile release-bridge-java`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -449,6 +481,14 @@ panic = "unwind"
 inherits = "release"
 panic = "unwind"
 
+[profile.release-bridge-swift]
+inherits = "release"
+panic = "unwind"
+
 [profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-java]
 inherits = "release"
 panic = "unwind"

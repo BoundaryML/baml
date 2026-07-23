@@ -6,6 +6,47 @@ function call_with_callback(callback: (int) -> string, x: int) -> string {
     callback(x)
 }
 
+// ─── Callback-throws inference (typed-language only) ────────────────────────
+//
+// A callback with an omitted `throws` gets an inferred effect param `E`. What
+// the *outer* function throws then depends on the body — cases python/TS erase
+// but Rust surfaces as real, distinct `Error<…>` types. (The callback's return
+// type must be concrete — the engine validates the host's returned value
+// against it — so these use `() -> int`, not `() -> void`.)
+
+// The callback's error is caught and replaced, so the outer function throws
+// nothing (`throws never`): `Error<Infallible>`, with the effect param used
+// only in the callback bound.
+function callback_error_caught(cb: () -> int) -> int {
+    cb() catch (e) {
+        _ => 0
+    }
+}
+
+// The callback's error is caught and a different value is thrown; the outer
+// function throws `string | int` — a union that does NOT include the effect
+// param.
+function callback_error_replaced(cb: () -> int) -> int {
+    cb() catch (e) {
+        _ => {
+            throw "oops"
+        }
+    }
+    throw 1
+}
+
+// The callback's error is re-thrown, so the effect param escapes: the outer
+// function throws `int | E` — a generic union that DOES carry the effect
+// param.
+function callback_error_rethrown(cb: () -> int) -> int {
+    cb() catch (e) {
+        _ => {
+            throw e
+        }
+    }
+    throw 1
+}
+
 // Callback taking multiple args, exercising arg-tuple decoding on the
 // Python dispatch side.
 function call_with_two_args(callback: (int, string) -> string, x: int, prefix: string) -> string {
@@ -213,6 +254,26 @@ function call_with_throwing(callback: (int) -> string throws baml.errors.HostCal
     callback(x) catch (e) {
         _ => "caught:" + e.class_name
     }
+}
+
+function call_with_throwing_propagating(
+    callback: (int) -> string throws baml.errors.HostCallable,
+    x: int,
+) -> string throws baml.errors.HostCallable {
+    callback(x)
+}
+
+function call_returned_callback(factory: () -> ((int) -> string throws never) throws never, x: int) -> string {
+    let callback = factory()
+    callback(x)
+}
+
+function call_returned_callback_in_list(
+    factory: () -> (((int) -> string throws never)[]) throws never,
+    x: int,
+) -> string {
+    let callbacks = factory()
+    callbacks[0](x)
 }
 
 // User-defined error class returned from a host callable. The Python side

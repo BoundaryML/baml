@@ -1594,6 +1594,17 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn collect_garbage(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The engine handles this intrinsic before consulting the platform IO
+        // table. Returning success is the safe fallback for other runtimes.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _h: &Arc<BexHeap>,
@@ -1746,6 +1757,29 @@ impl io::IoNamespaceTime for DefaultIoOps {
     }
 }
 
+impl io::IoClassRandomSystemRandom for DefaultIoOps {
+    fn random(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _bytes: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "randomness".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn random_int(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "randomness".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceRandom for DefaultIoOps {}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
@@ -1792,12 +1826,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `env` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_env_instance(Arc::new(T::default()))
-    }
-
     /// Override the `io` namespace with a pre-built instance.
     #[must_use]
     pub fn with_io_instance(
@@ -1835,12 +1863,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `io` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_io<T: io::IoNamespaceIo + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_io_instance(Arc::new(T::default()))
     }
 
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
@@ -1954,6 +1976,21 @@ impl IoSysOpsBuilder {
         self
     }
 
+    /// Override only `baml.fs.read`, leaving every other filesystem operation unsupported.
+    #[must_use]
+    pub fn with_fs_read_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_fs_read = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
     /// Override the `fs` namespace with a default-constructible type.
     #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
@@ -1985,12 +2022,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `glob` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_glob_instance(Arc::new(T::default()))
     }
 
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
@@ -2086,10 +2117,40 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `http` namespace with a default-constructible type.
+    /// Override the non-streaming HTTP client operations only.
+    ///
+    /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
+    /// leaving SSE, server, TLS, and response-construction slots unsupported.
     #[must_use]
-    pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_http_instance(Arc::new(T::default()))
+    pub fn with_http_fetch_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_http__fetch = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__fetch(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http__send = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_text = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_bytes = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
     }
 
     /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
@@ -2231,12 +2292,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `host` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_host<T: io::IoNamespaceHost + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_host_instance(Arc::new(T::default()))
-    }
-
     /// Override the `time` namespace (`Instant.now`) with a pre-built instance.
     #[must_use]
     pub fn with_time_instance(
@@ -2252,10 +2307,26 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `time` namespace with a default-constructible type.
+    /// Override the `random` namespace (`SystemRandom.random` / `random_int`)
+    /// with a pre-built instance.
     #[must_use]
-    pub fn with_time<T: io::IoNamespaceTime + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_time_instance(Arc::new(T::default()))
+    pub fn with_random_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceRandom + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_random_systemrandom_rng_random = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_random_systemrandom_rng_random(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_random_systemrandom_rng_random_int = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_random_systemrandom_rng_random_int(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
     }
 }
 
@@ -2270,7 +2341,7 @@ use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, SysOpContext, SysOpOutput,
-    VmBamlError, VmRustFnError,
+    VmBamlError, VmPanic, VmRustFnError,
 };
 pub use io::SysOps;
 

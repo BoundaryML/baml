@@ -44,7 +44,10 @@ use sha2::{Digest, Sha256};
 /// `sig_referenced_names`, and the stdlib bytecode + typed-interface blobs.
 /// Any bump turns every older entry into a miss via the header version check —
 /// there is never a hand-written migration.
-pub const FORMAT_VERSION: u32 = 1;
+///
+/// Version 2: `Function` gained the borsh-serialized `docstring` field
+/// (BEP-062 `reflect.signature`).
+pub const FORMAT_VERSION: u32 = 2;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -978,7 +981,7 @@ mod tests {
         cache.store(&key, &Program::default()).expect("store");
 
         cache
-            .trim(std::time::Duration::from_secs(3600))
+            .trim(std::time::Duration::from_hours(1))
             .expect("trim");
         assert!(cache.load(&key).is_some(), "fresh entry survives trim");
 

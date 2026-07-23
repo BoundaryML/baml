@@ -187,13 +187,14 @@ func TestGenericClassAnyPreservesTypeArgumentsAndInputMarshaler(t *testing.T) {
 		t.Fatal(err)
 	}
 	class := encoded.GetClassValue()
-	if class == nil || class.ClassTy == nil {
+	classType := encoded.GetValueType().GetClassTy()
+	if class == nil || classType == nil {
 		t.Fatalf("class = %#v", class)
 	}
-	if class.ClassTy.Name != "user.tests.Box" || len(class.ClassTy.TypeArgs) != 1 {
-		t.Fatalf("class type = %#v", class.ClassTy)
+	if classType.Name != "user.tests.Box" || len(classType.TypeArgs) != 1 {
+		t.Fatalf("class type = %#v", classType)
 	}
-	if got := (BAMLType{value: class.ClassTy.TypeArgs[0]}); !got.Equal(PrimitiveBAMLType(IntType)) {
+	if got := (BAMLType{value: classType.TypeArgs[0]}); !got.Equal(PrimitiveBAMLType(IntType)) {
 		t.Fatalf("class type arg = %#v", got)
 	}
 	if len(class.Fields) != 1 || class.Fields[0].GetStringKey() != "value" || class.Fields[0].Value.GetIntValue() != 42 {
@@ -251,7 +252,7 @@ func TestDynamicGenericUnionPreservesNominalCandidateTypes(t *testing.T) {
 	decoder := DynamicUnionDecoder(DynamicDecodeCandidate{
 		Type: classType, Decode: DynamicDecodeAs[genericTestBox[int64]],
 	})
-	decoded, err := decoder(outboundUnion(UnionBAMLType(classType, PrimitiveBAMLType(StringType)), classType, nil, classPayload))
+	decoded, err := decoder(outboundUnion(UnionBAMLType(classType, PrimitiveBAMLType(StringType)), uint32Pointer(0), classPayload))
 	box, ok := decoded.(genericTestBox[int64])
 	if err != nil || !ok || box.Value != 11 {
 		t.Fatalf("dynamic class = %#v, %v", decoded, err)
@@ -264,7 +265,7 @@ func TestDynamicGenericUnionPreservesNominalCandidateTypes(t *testing.T) {
 	decoder = DynamicUnionDecoder(DynamicDecodeCandidate{
 		Type: enumType, Decode: DynamicDecodeAs[genericTestEnum],
 	})
-	decoded, err = decoder(outboundUnion(UnionBAMLType(enumType, PrimitiveBAMLType(StringType)), enumType, nil, enumPayload))
+	decoded, err = decoder(outboundUnion(UnionBAMLType(enumType, PrimitiveBAMLType(StringType)), uint32Pointer(0), enumPayload))
 	gotEnum, ok := decoded.(genericTestEnum)
 	if err != nil || !ok || gotEnum != "ONE" {
 		t.Fatalf("dynamic enum = %#v, %v", decoded, err)

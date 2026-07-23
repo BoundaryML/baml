@@ -472,20 +472,6 @@ impl SyntaxKind {
         )
     }
 
-    /// Check if this is a literal token.
-    pub fn is_literal(self) -> bool {
-        matches!(
-            self,
-            SyntaxKind::BIGINT_LITERAL
-                | SyntaxKind::INTEGER_LITERAL
-                | SyntaxKind::FLOAT_LITERAL
-                | SyntaxKind::STRING_LITERAL
-                | SyntaxKind::RAW_STRING_LITERAL
-                | SyntaxKind::BYTE_STRING_LITERAL
-                | SyntaxKind::BACKTICK_STRING_LITERAL
-        )
-    }
-
     /// Check if this is an operator token.
     pub fn is_operator(self) -> bool {
         use SyntaxKind::{

@@ -55,7 +55,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	}}
 	variant := &cffi.BamlValueUnionVariant{
 		SelfType:            selfType,
-		SelectedType:        selected.value,
 		SelectedOptionIndex: &index,
 		Value:               &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "wrapped"}},
 	}
@@ -66,7 +65,7 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	}
 	badIndex := uint32(0)
 	wrapped.value.GetUnionVariantValue().SelectedOptionIndex = &badIndex
-	if _, err := wrapped.JSON(); err == nil || !strings.Contains(err.Error(), "disagrees") {
+	if _, err := wrapped.JSON(); err == nil {
 		t.Fatalf("invalid union metadata error = %v", err)
 	}
 
@@ -74,7 +73,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	bigintIndex := uint32(0)
 	forgedNonJSON := outboundUnion(
 		UnionBAMLType(bigint, selected),
-		bigint,
 		&bigintIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "forged"}},
 	)
@@ -85,7 +83,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	stringIndex := uint32(0)
 	forgedMismatch := outboundUnion(
 		UnionBAMLType(selected, PrimitiveBAMLType(IntType)),
-		selected,
 		&stringIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_IntValue{IntValue: 7}},
 	)
@@ -97,7 +94,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	listIndex := uint32(0)
 	forgedList := outboundUnion(
 		UnionBAMLType(listOfInt, selected),
-		listOfInt,
 		&listIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ListValue{ListValue: &cffi.BamlValueList{Items: []*cffi.BamlOutboundValue{
 			{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "wrong"}},
@@ -111,7 +107,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	mapIndex := uint32(0)
 	forgedMap := outboundUnion(
 		UnionBAMLType(mapOfInt, selected),
-		mapOfInt,
 		&mapIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_MapValue{MapValue: &cffi.BamlValueMap{Entries: []*cffi.BamlOutboundMapEntry{
 			{Key: "wrong", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "wrong"}}},
@@ -125,7 +120,6 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	unionIndex := uint32(0)
 	forgedNestedUnion := outboundUnion(
 		UnionBAMLType(jsonOnlyUnion, PrimitiveBAMLType(BoolType)),
-		jsonOnlyUnion,
 		&unionIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_BoolValue{BoolValue: true}},
 	)

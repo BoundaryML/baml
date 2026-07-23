@@ -18,11 +18,13 @@
 //! (`GenericBox::<i64> { .. }`).
 
 use baml_bridge::Map;
+// ADAPTATION(rust): the `T | string | null` union enum is named for its arms
+// (`TOrString`), not its declaring field (python's `ContainerShapesMixed`).
 use baml_sdk::generic_tests::{
-    ContainerShapes, ContainerShapesMixed, GenericBox, GenericPair, GenericRecursive,
-    GenericTriple, NamedStatic, StringIntPair, choose, consume_int_wrapper, extract, identity,
-    list_head, make_int_box, make_int_container, make_int_str_bool_triple, make_nested_box,
-    make_triple, one_type_arg, parse_as, read_items, second_of, tag_or_value, two_type_args, wrap,
+    ContainerShapes, GenericBox, GenericPair, GenericRecursive, GenericTriple, NamedStatic,
+    StringIntPair, TOrString, choose, consume_int_wrapper, extract, identity, list_head,
+    make_int_box, make_int_container, make_int_str_bool_triple, make_nested_box, make_triple,
+    one_type_arg, parse_as, read_items, second_of, tag_or_value, two_type_args, wrap,
 };
 
 // ===========================================================================
@@ -79,11 +81,14 @@ fn test_tag_or_value_explicit() {
     // `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
     // the substituted `T | string | null`. Proves `T` is bound from the
     // subscript.
-    // Provisional: the union-typed parameter is assumed to accept any arm's
-    // value directly (an `Into`-style conversion on the generated union).
-    assert_eq!(tag_or_value::<i64>(5).unwrap(), "int");
+    // ADAPTATION(rust): the `T` arm of the generated union has no `From` impl
+    // (a blanket `From<T>` would overlap the concrete arms' under coherence),
+    // so union values are constructed by naming the variant. The union is
+    // untagged on the wire, so with `T = String` the `T` and `String`
+    // variants encode identically.
+    assert_eq!(tag_or_value::<i64>(TOrString::T(5)).unwrap(), "int");
     assert_eq!(
-        tag_or_value::<String>("plain".to_string()).unwrap(),
+        tag_or_value::<String>(TOrString::T("plain".to_string())).unwrap(),
         "string"
     );
     let pair = StringIntPair {
@@ -91,7 +96,7 @@ fn test_tag_or_value_explicit() {
         my_int: 2,
     };
     assert!(
-        tag_or_value::<StringIntPair>(pair)
+        tag_or_value::<StringIntPair>(TOrString::T(pair))
             .unwrap()
             .contains("StringIntPair")
     );
@@ -202,9 +207,10 @@ fn test_genericbox_pair_with_explicit() {
 
 #[test]
 fn test_genericbox_new_static_explicit() {
-    // Provisional: the BAML static's own `V` is assumed to render as the
-    // struct's type-parameter position in Rust, so the subscripted call is
-    // `GenericBox::<i64>::new(...)`.
+    // ADAPTATION(rust): the static's own `V` is a method-level generic,
+    // inferred here from the argument. The class turbofish names the impl —
+    // BAML follows Rust in that the class params belong on the struct — but
+    // a static consumes no class params and none ride the wire.
     let boxed = GenericBox::<i64>::new(5).unwrap();
     // DIVERGENCE(rust): python's `isinstance(box, GenericBox)` is guaranteed
     // by the static return type.
@@ -213,11 +219,12 @@ fn test_genericbox_new_static_explicit() {
 
 #[test]
 fn test_generic_static_infers_binding() {
-    // A generic static method's own `V` appears in a parameter (`value: V`), so
-    // a bare call now INFERS it from the value — no subscript needed. (Was a
-    // hard SDK error pre-inference; see test_generic_inference.rs for the
-    // inference suite. The explicit subscript form still works above.)
-    let boxed = GenericBox::new(5).unwrap();
+    // A generic static method's own `V` appears in a parameter (`value: V`),
+    // so `V` needs no subscript — rustc infers it from the value.
+    // ADAPTATION(rust): the impl's class param must still be named to reach
+    // the associated function (arbitrary here — the static consumes no class
+    // params and sends none on the wire).
+    let boxed = GenericBox::<()>::new(5).unwrap();
     assert_eq!(boxed.value, 5);
 }
 
@@ -228,11 +235,14 @@ fn test_generic_static_infers_binding() {
 
 #[test]
 fn test_named_static_distinct_typevar_names() {
-    // Provisional: the static's own TypeVars (`D`, `E`) are turbofished on the
-    // method; the enclosing class params (`A`, `B`, `C`) play no part in the
-    // call and are assumed not to need binding on this path.
+    // The static's own TypeVars (`D`, `E`) are turbofished on the method.
+    // ADAPTATION(rust): the enclosing class params (`A`, `B`, `C`) must be
+    // named to reach the associated function (the turbofish belongs on the
+    // struct), but they play no part in the call — the wire carries only
+    // `[D, E]`, which is exactly the "no phantom class params" contract this
+    // test pins.
     assert_eq!(
-        NamedStatic::make::<i64, String>(1, "x".to_string()).unwrap(),
+        NamedStatic::<(), (), ()>::make::<i64, String>(1, "x".to_string()).unwrap(),
         "int | string"
     );
 }
@@ -355,9 +365,9 @@ fn test_read_items_explicit() {
         items: vec![1, 2, 3],
         by_key: Map::from([("k".to_string(), 4)]),
         maybe: None,
-        // Provisional: the `T | string | null` union field is assumed to
-        // codegen as an `Option` of a generated union enum, so the null arm is
-        // a bare `None`.
+        // The `T | string | null` union field codegens as an `Option` of the
+        // generated union enum (`TOrString<T>`), so the null arm is a bare
+        // `None`.
         mixed: None,
     };
     assert_eq!(read_items::<i64>(container).unwrap(), vec![1, 2, 3]);
@@ -422,10 +432,11 @@ fn test_make_int_container_reified() {
     assert_eq!(c.items, vec![1, 2, 3]);
     assert_eq!(c.by_key, Map::from([("k".to_string(), 4)]));
     assert_eq!(c.maybe, None);
-    // Provisional: the reified `T | string | null` union field is assumed to
-    // codegen as an `Option` of a generated union enum with one variant per
-    // non-null arm, named after the arm.
-    assert_eq!(c.mixed, Some(ContainerShapesMixed::T(5)));
+    // The reified `T | string | null` union field decodes as an `Option` of
+    // the generated union enum, one variant per non-null arm, named after
+    // the arm (`TOrString<i64>` here — decode trial order is declaration
+    // order, so the value lands in the `T` variant).
+    assert_eq!(c.mixed, Some(TOrString::T(5)));
 }
 
 // --- make_nested_box() -> GenericBox<GenericBox<int>> : nested generic arg ---

@@ -345,7 +345,7 @@ test "operator_sub_mul_div_rem_user_class" {
 // ─── Multi-instantiation dispatch: impl chosen by the rhs runtime type ────────
 // Poly implements Add at two instantiations; if dispatch regressed to
 // first-applicable-rule selection (instead of the exact iface-args match in
-// resolve_implements_rule_exact), one of these would call the wrong impl.
+// resolve_implements_rule), one of these would call the wrong impl.
 
 class Poly {
     v int

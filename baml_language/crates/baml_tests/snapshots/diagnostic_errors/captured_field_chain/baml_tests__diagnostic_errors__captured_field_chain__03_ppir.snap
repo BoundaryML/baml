@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40288
+---
+=== PPIR ===
+class user.Inner {
+  value: int
+}
+class user.Inner$stream {
+  value: int | null
+}
+class user.Outer {
+  inner: user.Inner
+  name: string
+}
+class user.Outer$stream {
+  inner: user.Inner$stream | null
+  name: string | null
+}
+function user.test_captured_chain(outer: user.Outer) -> int  [expr] {
+  { let result = [1].map((x) -> { {  } outer.inner.value }) } result[0]
+}
+function user.test_captured_method(outer: user.Outer) -> string  [expr] {
+  { let result = [1].map((x) -> { {  } outer.name }) } result[0]
+}
+function user.test_deep_map_chain(data: map<string, map<string, map<string, int>>>) -> int  [expr] {
+  {  } data.a.b.c
+}
+function user.test_map_chain(data: map<string, map<string, int>>) -> int  [expr] {
+  {  } data.a.b
+}
+
+--- captures ---
+lambda (x) in test_captured_chain: captures [outer]
+lambda (x) in test_captured_method: captures [outer]

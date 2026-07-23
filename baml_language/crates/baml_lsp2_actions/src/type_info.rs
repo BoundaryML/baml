@@ -13,7 +13,7 @@
 //!   with field names and types from `resolve_class_fields`.
 //!
 //! - `ResolvedName::Item(Definition::Enum(_))` — builds `TypeInfo::Enum`
-//!   with variant names from the item tree.
+//!   with variant names from `enum_data`.
 //!
 //! - `ResolvedName::Item(Definition::TypeAlias(_))` — builds `TypeInfo::TypeAlias`
 //!   with the expansion type from `resolve_type_alias`.
@@ -380,8 +380,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
-            let class_data = &item_tree[class_loc.id(db)];
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let class_name = class_data.name.as_str().to_string();
 
             // Use resolved field types (Salsa-cached), rendered canonically so
@@ -397,10 +396,13 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
                     )
                 })
                 .collect();
+            // `implements` targets and associated-type bindings are unresolved
+            // type references rendered via the arena-backed `TypeRef` renderer
+            // (byte-identical to `ast::TypeExpr`'s `Display`).
             let implements = class_data
                 .implements
                 .iter()
-                .map(render_implements_block)
+                .map(|block| render_implements_block(block, &class_data.type_refs))
                 .collect();
 
             let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &class_data.name);
@@ -425,8 +427,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
-            let enum_data = &item_tree[enum_loc.id(db)];
+            let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let variants = enum_data
                 .variants
                 .iter()
@@ -439,8 +440,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::Interface(iface_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let iface = &item_tree[iface_loc.id(db)];
+            let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             TypeInfo::OtherItem {
                 name: iface.name.as_str().to_string(),
                 kind: "interface",
@@ -448,8 +448,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::TypeAlias(alias_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
-            let alias_data = &item_tree[alias_loc.id(db)];
+            let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
             let alias_name = alias_data.name.as_str().to_string();
 
             // Use the resolved (lowered) type for display.
@@ -463,16 +462,14 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::TemplateString(ts_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, ts_loc.file(db));
-            let ts_data = &item_tree[ts_loc.id(db)];
+            let ts_data = baml_compiler2_ppir::item_data::template_string_data(db, ts_loc);
             TypeInfo::TemplateString {
                 name: ts_data.name.as_str().to_string(),
             }
         }
 
         Definition::Client(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
+            let data = baml_compiler2_ppir::item_data::client_data(db, loc);
             TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "client",
@@ -480,8 +477,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::Test(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
+            let data = baml_compiler2_ppir::item_data::test_data(db, loc);
             TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "test",
@@ -489,8 +485,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::RetryPolicy(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
+            let data = baml_compiler2_ppir::item_data::retry_policy_data(db, loc);
             TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "retry_policy",
@@ -498,8 +493,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
         }
 
         Definition::Let(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
+            let data = baml_compiler2_ppir::item_data::let_data(db, loc);
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
                 baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
@@ -513,7 +507,10 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
-fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBlock) -> String {
+fn render_implements_block(
+    block: &baml_compiler2_ppir::item_data::ImplementsData,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+) -> String {
     let mut members = Vec::new();
 
     members.extend(block.field_links.iter().map(|link| {
@@ -525,22 +522,22 @@ fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBloc
     }));
     members.extend(block.associated_type_bindings.iter().map(|binding| {
         let ty = binding
-            .type_expr
-            .as_ref()
-            .map(std::string::ToString::to_string)
+            .type_ref
+            .map(|id| store.display(id).to_string())
             .unwrap_or_else(|| "unknown".to_string());
         format!("type {} = {}", binding.name.as_str(), ty)
     }));
 
+    let target = store.display(block.target);
     if members.is_empty() {
-        format!("implements {} {{}}", block.target)
+        format!("implements {target} {{}}")
     } else {
         let members = members
             .into_iter()
             .map(|member| format!("    {member}"))
             .collect::<Vec<_>>()
             .join("\n");
-        format!("implements {} {{\n{members}\n}}", block.target)
+        format!("implements {target} {{\n{members}\n}}")
     }
 }
 
@@ -627,7 +624,6 @@ fn local_type_info(
     site: DefinitionSite,
 ) -> Option<TypeInfo> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset, None);
@@ -643,13 +639,8 @@ fn local_type_info(
 
     let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
 
-    // Match scope range to a function in the item tree.
-    let (func_local_id, _) = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range)?;
-
-    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+    // Match scope range to a function via the firewall enumeration.
+    let func_loc = crate::utils::function_at_scope_range(db, file, func_scope_range)?;
 
     match site {
         DefinitionSite::Parameter(param_idx) => {

@@ -232,6 +232,13 @@ pub struct FileSemanticIndex<'db> {
     pub item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
 
     /// Per-file item tree — maps `LocalItemId` to item data.
+    ///
+    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
+    /// crates are `pub(crate)`, and everything downstream uses the PPIR
+    /// `item_data` firewall queries instead. This field stays `pub` solely
+    /// because PPIR (a separate crate) builds and reads the index; do not read
+    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
+    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.
@@ -401,13 +408,6 @@ impl FileSemanticIndex<'_> {
             .get(idx)
     }
 
-    pub fn binding_site(&self, binding_id: BindingId) -> Option<DefinitionSite> {
-        match binding_id.kind {
-            BindingKind::Local(_) => self.local_binding(binding_id).map(|binding| binding.site),
-            BindingKind::Parameter(param_idx) => Some(DefinitionSite::Parameter(param_idx)),
-        }
-    }
-
     /// The scope opened for `owner`, if it opened one.
     pub fn item_scope(&self, owner: ItemScopeOwner) -> Option<FileScopeId> {
         self.item_scopes.get(&owner).copied()
@@ -423,16 +423,5 @@ impl FileSemanticIndex<'_> {
             .as_ref()
             .map(|e| e.diagnostics.as_slice())
             .unwrap_or(&[])
-    }
-
-    /// Look up the path resolution for a multi-segment `Path` expression.
-    ///
-    /// Returns `None` if `expr_id` was not a multi-segment path (i.e., single-
-    /// segment paths and non-path expressions are not recorded here).
-    pub fn path_resolution(&self, expr_id: ExprId) -> Option<&PathResolution> {
-        self.path_resolutions
-            .binary_search_by_key(&expr_id, |(id, _)| *id)
-            .ok()
-            .map(|idx| &self.path_resolutions[idx].1)
     }
 }

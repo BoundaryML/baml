@@ -1,6 +1,6 @@
 //! Runtime `IsType` matching against a [`TyTemplate`], using the canonical type
-//! algebra (`baml_type::normalize`) over the running program via
-//! [`RuntimeTypeContext`].
+//! algebra (`baml_type::normalize`) over the running program — the [`BexVm`]
+//! itself is the [`baml_type::normalize::TypeContext`].
 //!
 //! This is the value-directed successor to the tag/pointer `IsType` fast paths
 //! and the type-directed `guard_template_matches`: given a VM value, a template
@@ -11,8 +11,7 @@
 //! # Relation
 //!
 //! The leaf relation is the canonical `baml_type::normalize` algebra — invariant
-//! generic arguments, interface-membership- and alias-aware — never the
-//! deprecated context-free [`RuntimeTy::is_subtype_of`] fork. It is applied with
+//! generic arguments, interface-membership- and alias-aware. It is applied with
 //! a [`Variance`]:
 //!
 //! - **top level** (a value against the arm type) is *covariant* membership
@@ -30,13 +29,15 @@
 //! subtyping is arity-sensitive — are never hand-walked, so a holey function arm
 //! fails closed while a hole-free one is left to the canonical algebra.
 //!
-//! Dormant until MIR/emit routes structural type tests through
-//! `ConstValue::Type` — the sole caller today is a unit-tested `IsType` arm.
+//! Live: the emitter routes element-discriminating containers, unions, and
+//! frame refs through `ConstValue::Type` to [`value_matches_template`], and the
+//! `ClassWithTypeArgs` `IsType` check relates its per-arg positions through
+//! [`class_type_arg_matches`] — both over this same canonical algebra.
 
 use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
 use bex_vm_types::Value;
 
-use crate::{BexVm, type_context::RuntimeTypeContext};
+use crate::BexVm;
 
 /// The variance at a template position the structural walk visits. Only two
 /// arise here:
@@ -57,7 +58,7 @@ use crate::{BexVm, type_context::RuntimeTypeContext};
 /// handed whole to the canonical algebra, which applies parameter contravariance
 /// (and the rest of function subtyping) itself.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Variance {
+pub(crate) enum Variance {
     Covariant,
     Invariant,
 }
@@ -80,9 +81,8 @@ pub(crate) fn value_matches_template(
     // into it (a shallow structural conversion — `ConcreteRealizedTy` is not a
     // deep, transmute-compatible family member with a borrowed upcast).
     let value_ty: Ty = value_ty.into();
-    let ctx = RuntimeTypeContext::new(vm);
     template_relates(
-        &ctx,
+        vm,
         template,
         frame_type_args,
         &value_ty,
@@ -97,7 +97,11 @@ pub(crate) fn value_matches_template(
 /// (`is_subtype` for covariant, `equivalent` for invariant). A subtree that
 /// contains a `Wildcard` is walked structurally so the hole can match anything
 /// at its own position while the rest is still related canonically.
-fn template_relates<C: normalize::TypeContext>(
+///
+/// The `ClassWithTypeArgs` `IsType` check calls this directly with
+/// [`Variance::Invariant`] for each class type-arg (`self` as the `TypeContext`),
+/// which is why it is `pub(crate)`.
+pub(crate) fn template_relates<C: normalize::TypeContext>(
     ctx: &C,
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
@@ -190,9 +194,14 @@ fn template_relates<C: normalize::TypeContext>(
         // nothing. Hole-free function arms never reach here; they take the fast
         // path into the canonical algebra, which applies all of the above.
         TyTemplate::Function { .. } => false,
-        // Interface and projection templates with holes have no structural
-        // runtime membership check yet (Unit-5 work); a hole there matches
-        // nothing until then.
+        // A *holey* interface template (an instantiation position that is a
+        // genuine `Wildcard`, e.g. an unresolved projection) has no runtime
+        // membership check: answering it would need per-position holes in the
+        // resolver's instantiation request, which it does not support — fail
+        // closed. (Hole-free interface templates never reach here; the fast path
+        // above resolves them through canonical interface membership.) A symbolic
+        // projection likewise matches nothing: a value's concrete type carries no
+        // unresolved projection to unify with.
         TyTemplate::Interface(..) | TyTemplate::AssociatedTypeProjection { .. } => false,
         // Frame references and realized leaves contain no `Wildcard`, so the
         // hole-free fast path above already handled them; they cannot be the top

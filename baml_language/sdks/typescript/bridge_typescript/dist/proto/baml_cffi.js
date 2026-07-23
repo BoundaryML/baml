@@ -47,6 +47,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * Properties of an InboundValue.
                  * @memberof baml_bridge.cffi.v1
                  * @interface IInboundValue
+                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [valueType] InboundValue valueType
                  * @property {string|null} [stringValue] InboundValue stringValue
                  * @property {number|Long|null} [intValue] InboundValue intValue
                  * @property {number|null} [floatValue] InboundValue floatValue
@@ -59,7 +60,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Uint8Array|null} [uint8arrayValue] InboundValue uint8arrayValue
                  * @property {string|null} [bigintValue] InboundValue bigintValue
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [tyValue] InboundValue tyValue
-                 * @property {baml_bridge.cffi.v1.IInboundUnionVariantValue|null} [unionVariantValue] InboundValue unionVariantValue
                  */
 
                 /**
@@ -76,6 +76,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             if (properties[keys[i]] != null && keys[i] !== "__proto__")
                                 this[keys[i]] = properties[keys[i]];
                 }
+
+                /**
+                 * InboundValue valueType.
+                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} valueType
+                 * @memberof baml_bridge.cffi.v1.InboundValue
+                 * @instance
+                 */
+                InboundValue.prototype.valueType = null;
 
                 /**
                  * InboundValue stringValue.
@@ -173,25 +181,17 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  */
                 InboundValue.prototype.tyValue = null;
 
-                /**
-                 * InboundValue unionVariantValue.
-                 * @member {baml_bridge.cffi.v1.IInboundUnionVariantValue|null|undefined} unionVariantValue
-                 * @memberof baml_bridge.cffi.v1.InboundValue
-                 * @instance
-                 */
-                InboundValue.prototype.unionVariantValue = null;
-
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
 
                 /**
                  * InboundValue value.
-                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"unionVariantValue"|undefined} value
+                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|undefined} value
                  * @memberof baml_bridge.cffi.v1.InboundValue
                  * @instance
                  */
                 Object.defineProperty(InboundValue.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue", "unionVariantValue"]),
+                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -223,6 +223,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         q = 0;
                     if (q > $util.recursionLimit)
                         throw Error("max depth exceeded");
+                    if (message.valueType != null && Object.hasOwnProperty.call(message, "valueType"))
+                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
                     if (message.stringValue != null && Object.hasOwnProperty.call(message, "stringValue"))
                         writer.uint32(/* id 2, wireType 2 =*/18).string(message.stringValue);
                     if (message.intValue != null && Object.hasOwnProperty.call(message, "intValue"))
@@ -247,8 +249,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 12, wireType 2 =*/98).string(message.bigintValue);
                     if (message.tyValue != null && Object.hasOwnProperty.call(message, "tyValue"))
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.tyValue, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
-                    if (message.unionVariantValue != null && Object.hasOwnProperty.call(message, "unionVariantValue"))
-                        $root.baml_bridge.cffi.v1.InboundUnionVariantValue.encode(message.unionVariantValue, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -289,6 +289,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (tag === error)
                             break;
                         switch (tag >>> 3) {
+                        case 1: {
+                                message.valueType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
                         case 2: {
                                 message.stringValue = reader.string();
                                 break;
@@ -337,10 +341,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
-                        case 14: {
-                                message.unionVariantValue = $root.baml_bridge.cffi.v1.InboundUnionVariantValue.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
                         default:
                             reader.skipType(tag & 7, long);
                             break;
@@ -381,6 +381,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (long > $util.recursionLimit)
                         return "maximum nesting depth exceeded";
                     let properties = {};
+                    if (message.valueType != null && message.hasOwnProperty("valueType")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.valueType, long + 1);
+                        if (error)
+                            return "valueType." + error;
+                    }
                     if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
                         properties.value = 1;
                         if (!$util.isString(message.stringValue))
@@ -481,16 +486,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "tyValue." + error;
                         }
                     }
-                    if (message.unionVariantValue != null && message.hasOwnProperty("unionVariantValue")) {
-                        if (properties.value === 1)
-                            return "value: multiple values";
-                        properties.value = 1;
-                        {
-                            let error = $root.baml_bridge.cffi.v1.InboundUnionVariantValue.verify(message.unionVariantValue, long + 1);
-                            if (error)
-                                return "unionVariantValue." + error;
-                        }
-                    }
                     return null;
                 };
 
@@ -512,6 +507,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (long > $util.recursionLimit)
                         throw Error("maximum nesting depth exceeded");
                     let message = new $root.baml_bridge.cffi.v1.InboundValue();
+                    if (object.valueType != null) {
+                        if (!$util.isObject(object.valueType))
+                            throw TypeError(".baml_bridge.cffi.v1.InboundValue.valueType: object expected");
+                        message.valueType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.valueType, long + 1);
+                    }
                     if (object.stringValue != null)
                         message.stringValue = String(object.stringValue);
                     if (object.intValue != null)
@@ -564,11 +564,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             throw TypeError(".baml_bridge.cffi.v1.InboundValue.tyValue: object expected");
                         message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.tyValue, long + 1);
                     }
-                    if (object.unionVariantValue != null) {
-                        if (!$util.isObject(object.unionVariantValue))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundValue.unionVariantValue: object expected");
-                        message.unionVariantValue = $root.baml_bridge.cffi.v1.InboundUnionVariantValue.fromObject(object.unionVariantValue, long + 1);
-                    }
                     return message;
                 };
 
@@ -589,6 +584,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (q > $util.recursionLimit)
                         throw Error("max depth exceeded");
                     let object = {};
+                    if (options.defaults)
+                        object.valueType = null;
+                    if (message.valueType != null && message.hasOwnProperty("valueType"))
+                        object.valueType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.valueType, options, q + 1);
                     if (message.stringValue != null && message.hasOwnProperty("stringValue")) {
                         object.stringValue = message.stringValue;
                         if (options.oneofs)
@@ -654,11 +653,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (options.oneofs)
                             object.value = "tyValue";
                     }
-                    if (message.unionVariantValue != null && message.hasOwnProperty("unionVariantValue")) {
-                        object.unionVariantValue = $root.baml_bridge.cffi.v1.InboundUnionVariantValue.toObject(message.unionVariantValue, options, q + 1);
-                        if (options.oneofs)
-                            object.value = "unionVariantValue";
-                    }
                     return object;
                 };
 
@@ -691,295 +685,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 return InboundValue;
             })();
 
-            v1.InboundUnionVariantValue = (function() {
-
-                /**
-                 * Properties of an InboundUnionVariantValue.
-                 * @memberof baml_bridge.cffi.v1
-                 * @interface IInboundUnionVariantValue
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [selfType] InboundUnionVariantValue selfType
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [selectedType] InboundUnionVariantValue selectedType
-                 * @property {baml_bridge.cffi.v1.IInboundValue|null} [value] InboundUnionVariantValue value
-                 */
-
-                /**
-                 * Constructs a new InboundUnionVariantValue.
-                 * @memberof baml_bridge.cffi.v1
-                 * @classdesc Represents an InboundUnionVariantValue.
-                 * @implements IInboundUnionVariantValue
-                 * @constructor
-                 * @param {baml_bridge.cffi.v1.IInboundUnionVariantValue=} [properties] Properties to set
-                 */
-                function InboundUnionVariantValue(properties) {
-                    if (properties)
-                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                                this[keys[i]] = properties[keys[i]];
-                }
-
-                /**
-                 * InboundUnionVariantValue selfType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} selfType
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @instance
-                 */
-                InboundUnionVariantValue.prototype.selfType = null;
-
-                /**
-                 * InboundUnionVariantValue selectedType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} selectedType
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @instance
-                 */
-                InboundUnionVariantValue.prototype.selectedType = null;
-
-                /**
-                 * InboundUnionVariantValue value.
-                 * @member {baml_bridge.cffi.v1.IInboundValue|null|undefined} value
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @instance
-                 */
-                InboundUnionVariantValue.prototype.value = null;
-
-                /**
-                 * Creates a new InboundUnionVariantValue instance using the specified properties.
-                 * @function create
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IInboundUnionVariantValue=} [properties] Properties to set
-                 * @returns {baml_bridge.cffi.v1.InboundUnionVariantValue} InboundUnionVariantValue instance
-                 */
-                InboundUnionVariantValue.create = function create(properties) {
-                    return new InboundUnionVariantValue(properties);
-                };
-
-                /**
-                 * Encodes the specified InboundUnionVariantValue message. Does not implicitly {@link baml_bridge.cffi.v1.InboundUnionVariantValue.verify|verify} messages.
-                 * @function encode
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IInboundUnionVariantValue} message InboundUnionVariantValue message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                InboundUnionVariantValue.encode = function encode(message, writer, q) {
-                    if (!writer)
-                        writer = $Writer.create();
-                    if (q === undefined)
-                        q = 0;
-                    if (q > $util.recursionLimit)
-                        throw Error("max depth exceeded");
-                    if (message.selfType != null && Object.hasOwnProperty.call(message, "selfType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.selfType, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
-                    if (message.selectedType != null && Object.hasOwnProperty.call(message, "selectedType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.selectedType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
-                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
-                        $root.baml_bridge.cffi.v1.InboundValue.encode(message.value, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
-                    return writer;
-                };
-
-                /**
-                 * Encodes the specified InboundUnionVariantValue message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.InboundUnionVariantValue.verify|verify} messages.
-                 * @function encodeDelimited
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IInboundUnionVariantValue} message InboundUnionVariantValue message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                InboundUnionVariantValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
-                };
-
-                /**
-                 * Decodes an InboundUnionVariantValue message from the specified reader or buffer.
-                 * @function decode
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @param {number} [length] Message length if known beforehand
-                 * @returns {baml_bridge.cffi.v1.InboundUnionVariantValue} InboundUnionVariantValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                InboundUnionVariantValue.decode = function decode(reader, length, error, long) {
-                    if (!(reader instanceof $Reader))
-                        reader = $Reader.create(reader);
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $Reader.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.InboundUnionVariantValue();
-                    while (reader.pos < end) {
-                        let tag = reader.uint32();
-                        if (tag === error)
-                            break;
-                        switch (tag >>> 3) {
-                        case 1: {
-                                message.selfType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 2: {
-                                message.selectedType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 3: {
-                                message.value = $root.baml_bridge.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        default:
-                            reader.skipType(tag & 7, long);
-                            break;
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Decodes an InboundUnionVariantValue message from the specified reader or buffer, length delimited.
-                 * @function decodeDelimited
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @returns {baml_bridge.cffi.v1.InboundUnionVariantValue} InboundUnionVariantValue
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                InboundUnionVariantValue.decodeDelimited = function decodeDelimited(reader) {
-                    if (!(reader instanceof $Reader))
-                        reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
-                };
-
-                /**
-                 * Verifies an InboundUnionVariantValue message.
-                 * @function verify
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {Object.<string,*>} message Plain object to verify
-                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
-                 */
-                InboundUnionVariantValue.verify = function verify(message, long) {
-                    if (typeof message !== "object" || message === null)
-                        return "object expected";
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        return "maximum nesting depth exceeded";
-                    if (message.selfType != null && message.hasOwnProperty("selfType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.selfType, long + 1);
-                        if (error)
-                            return "selfType." + error;
-                    }
-                    if (message.selectedType != null && message.hasOwnProperty("selectedType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.selectedType, long + 1);
-                        if (error)
-                            return "selectedType." + error;
-                    }
-                    if (message.value != null && message.hasOwnProperty("value")) {
-                        let error = $root.baml_bridge.cffi.v1.InboundValue.verify(message.value, long + 1);
-                        if (error)
-                            return "value." + error;
-                    }
-                    return null;
-                };
-
-                /**
-                 * Creates an InboundUnionVariantValue message from a plain object. Also converts values to their respective internal types.
-                 * @function fromObject
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {Object.<string,*>} object Plain object
-                 * @returns {baml_bridge.cffi.v1.InboundUnionVariantValue} InboundUnionVariantValue
-                 */
-                InboundUnionVariantValue.fromObject = function fromObject(object, long) {
-                    if (object instanceof $root.baml_bridge.cffi.v1.InboundUnionVariantValue)
-                        return object;
-                    if (!$util.isObject(object))
-                        throw TypeError(".baml_bridge.cffi.v1.InboundUnionVariantValue: object expected");
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    let message = new $root.baml_bridge.cffi.v1.InboundUnionVariantValue();
-                    if (object.selfType != null) {
-                        if (!$util.isObject(object.selfType))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundUnionVariantValue.selfType: object expected");
-                        message.selfType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.selfType, long + 1);
-                    }
-                    if (object.selectedType != null) {
-                        if (!$util.isObject(object.selectedType))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundUnionVariantValue.selectedType: object expected");
-                        message.selectedType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.selectedType, long + 1);
-                    }
-                    if (object.value != null) {
-                        if (!$util.isObject(object.value))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundUnionVariantValue.value: object expected");
-                        message.value = $root.baml_bridge.cffi.v1.InboundValue.fromObject(object.value, long + 1);
-                    }
-                    return message;
-                };
-
-                /**
-                 * Creates a plain object from an InboundUnionVariantValue message. Also converts values to other types if specified.
-                 * @function toObject
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {baml_bridge.cffi.v1.InboundUnionVariantValue} message InboundUnionVariantValue
-                 * @param {$protobuf.IConversionOptions} [options] Conversion options
-                 * @returns {Object.<string,*>} Plain object
-                 */
-                InboundUnionVariantValue.toObject = function toObject(message, options, q) {
-                    if (!options)
-                        options = {};
-                    if (q === undefined)
-                        q = 0;
-                    if (q > $util.recursionLimit)
-                        throw Error("max depth exceeded");
-                    let object = {};
-                    if (options.defaults) {
-                        object.selfType = null;
-                        object.selectedType = null;
-                        object.value = null;
-                    }
-                    if (message.selfType != null && message.hasOwnProperty("selfType"))
-                        object.selfType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.selfType, options, q + 1);
-                    if (message.selectedType != null && message.hasOwnProperty("selectedType"))
-                        object.selectedType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.selectedType, options, q + 1);
-                    if (message.value != null && message.hasOwnProperty("value"))
-                        object.value = $root.baml_bridge.cffi.v1.InboundValue.toObject(message.value, options, q + 1);
-                    return object;
-                };
-
-                /**
-                 * Converts this InboundUnionVariantValue to JSON.
-                 * @function toJSON
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @instance
-                 * @returns {Object.<string,*>} JSON object
-                 */
-                InboundUnionVariantValue.prototype.toJSON = function toJSON() {
-                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-                };
-
-                /**
-                 * Gets the default type url for InboundUnionVariantValue
-                 * @function getTypeUrl
-                 * @memberof baml_bridge.cffi.v1.InboundUnionVariantValue
-                 * @static
-                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns {string} The default type url
-                 */
-                InboundUnionVariantValue.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
-                    if (typeUrlPrefix === undefined) {
-                        typeUrlPrefix = "type.googleapis.com";
-                    }
-                    return typeUrlPrefix + "/baml_bridge.cffi.v1.InboundUnionVariantValue";
-                };
-
-                return InboundUnionVariantValue;
-            })();
-
             v1.InboundListValue = (function() {
 
                 /**
@@ -987,7 +692,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @memberof baml_bridge.cffi.v1
                  * @interface IInboundListValue
                  * @property {Array.<baml_bridge.cffi.v1.IInboundValue>|null} [values] InboundListValue values
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [itemType] InboundListValue itemType
                  */
 
                 /**
@@ -1013,14 +717,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 InboundListValue.prototype.values = $util.emptyArray;
-
-                /**
-                 * InboundListValue itemType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} itemType
-                 * @memberof baml_bridge.cffi.v1.InboundListValue
-                 * @instance
-                 */
-                InboundListValue.prototype.itemType = null;
 
                 /**
                  * Creates a new InboundListValue instance using the specified properties.
@@ -1053,8 +749,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.values != null && message.values.length)
                         for (let i = 0; i < message.values.length; ++i)
                             $root.baml_bridge.cffi.v1.InboundValue.encode(message.values[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
-                    if (message.itemType != null && Object.hasOwnProperty.call(message, "itemType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.itemType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1099,10 +793,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 if (!(message.values && message.values.length))
                                     message.values = [];
                                 message.values.push($root.baml_bridge.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1));
-                                break;
-                            }
-                        case 2: {
-                                message.itemType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -1153,11 +843,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "values." + error;
                         }
                     }
-                    if (message.itemType != null && message.hasOwnProperty("itemType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.itemType, long + 1);
-                        if (error)
-                            return "itemType." + error;
-                    }
                     return null;
                 };
 
@@ -1189,11 +874,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.values[i] = $root.baml_bridge.cffi.v1.InboundValue.fromObject(object.values[i], long + 1);
                         }
                     }
-                    if (object.itemType != null) {
-                        if (!$util.isObject(object.itemType))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundListValue.itemType: object expected");
-                        message.itemType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.itemType, long + 1);
-                    }
                     return message;
                 };
 
@@ -1216,15 +896,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     let object = {};
                     if (options.arrays || options.defaults)
                         object.values = [];
-                    if (options.defaults)
-                        object.itemType = null;
                     if (message.values && message.values.length) {
                         object.values = [];
                         for (let j = 0; j < message.values.length; ++j)
                             object.values[j] = $root.baml_bridge.cffi.v1.InboundValue.toObject(message.values[j], options, q + 1);
                     }
-                    if (message.itemType != null && message.hasOwnProperty("itemType"))
-                        object.itemType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.itemType, options, q + 1);
                     return object;
                 };
 
@@ -1264,8 +940,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @memberof baml_bridge.cffi.v1
                  * @interface IInboundMapValue
                  * @property {Array.<baml_bridge.cffi.v1.IInboundMapEntry>|null} [entries] InboundMapValue entries
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [keyType] InboundMapValue keyType
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [valueType] InboundMapValue valueType
                  */
 
                 /**
@@ -1291,22 +965,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 InboundMapValue.prototype.entries = $util.emptyArray;
-
-                /**
-                 * InboundMapValue keyType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} keyType
-                 * @memberof baml_bridge.cffi.v1.InboundMapValue
-                 * @instance
-                 */
-                InboundMapValue.prototype.keyType = null;
-
-                /**
-                 * InboundMapValue valueType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} valueType
-                 * @memberof baml_bridge.cffi.v1.InboundMapValue
-                 * @instance
-                 */
-                InboundMapValue.prototype.valueType = null;
 
                 /**
                  * Creates a new InboundMapValue instance using the specified properties.
@@ -1339,10 +997,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.entries != null && message.entries.length)
                         for (let i = 0; i < message.entries.length; ++i)
                             $root.baml_bridge.cffi.v1.InboundMapEntry.encode(message.entries[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
-                    if (message.keyType != null && Object.hasOwnProperty.call(message, "keyType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.keyType, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
-                    if (message.valueType != null && Object.hasOwnProperty.call(message, "valueType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.valueType, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -1387,14 +1041,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 if (!(message.entries && message.entries.length))
                                     message.entries = [];
                                 message.entries.push($root.baml_bridge.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
-                                break;
-                            }
-                        case 2: {
-                                message.keyType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 3: {
-                                message.valueType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -1445,16 +1091,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "entries." + error;
                         }
                     }
-                    if (message.keyType != null && message.hasOwnProperty("keyType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.keyType, long + 1);
-                        if (error)
-                            return "keyType." + error;
-                    }
-                    if (message.valueType != null && message.hasOwnProperty("valueType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.valueType, long + 1);
-                        if (error)
-                            return "valueType." + error;
-                    }
                     return null;
                 };
 
@@ -1486,16 +1122,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.entries[i] = $root.baml_bridge.cffi.v1.InboundMapEntry.fromObject(object.entries[i], long + 1);
                         }
                     }
-                    if (object.keyType != null) {
-                        if (!$util.isObject(object.keyType))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundMapValue.keyType: object expected");
-                        message.keyType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.keyType, long + 1);
-                    }
-                    if (object.valueType != null) {
-                        if (!$util.isObject(object.valueType))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundMapValue.valueType: object expected");
-                        message.valueType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.valueType, long + 1);
-                    }
                     return message;
                 };
 
@@ -1518,19 +1144,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     let object = {};
                     if (options.arrays || options.defaults)
                         object.entries = [];
-                    if (options.defaults) {
-                        object.keyType = null;
-                        object.valueType = null;
-                    }
                     if (message.entries && message.entries.length) {
                         object.entries = [];
                         for (let j = 0; j < message.entries.length; ++j)
                             object.entries[j] = $root.baml_bridge.cffi.v1.InboundMapEntry.toObject(message.entries[j], options, q + 1);
                     }
-                    if (message.keyType != null && message.hasOwnProperty("keyType"))
-                        object.keyType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.keyType, options, q + 1);
-                    if (message.valueType != null && message.hasOwnProperty("valueType"))
-                        object.valueType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.valueType, options, q + 1);
                     return object;
                 };
 
@@ -1949,7 +1567,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @memberof baml_bridge.cffi.v1
                  * @interface IInboundClassValue
                  * @property {Array.<baml_bridge.cffi.v1.IInboundMapEntry>|null} [fields] InboundClassValue fields
-                 * @property {baml_bridge.cffi.v1.IBamlTyClass|null} [classTy] InboundClassValue classTy
                  */
 
                 /**
@@ -1975,14 +1592,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 InboundClassValue.prototype.fields = $util.emptyArray;
-
-                /**
-                 * InboundClassValue classTy.
-                 * @member {baml_bridge.cffi.v1.IBamlTyClass|null|undefined} classTy
-                 * @memberof baml_bridge.cffi.v1.InboundClassValue
-                 * @instance
-                 */
-                InboundClassValue.prototype.classTy = null;
 
                 /**
                  * Creates a new InboundClassValue instance using the specified properties.
@@ -2015,8 +1624,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.fields != null && message.fields.length)
                         for (let i = 0; i < message.fields.length; ++i)
                             $root.baml_bridge.cffi.v1.InboundMapEntry.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
-                    if (message.classTy != null && Object.hasOwnProperty.call(message, "classTy"))
-                        $root.baml_bridge.cffi.v1.BamlTyClass.encode(message.classTy, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2061,10 +1668,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 if (!(message.fields && message.fields.length))
                                     message.fields = [];
                                 message.fields.push($root.baml_bridge.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
-                                break;
-                            }
-                        case 3: {
-                                message.classTy = $root.baml_bridge.cffi.v1.BamlTyClass.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -2115,11 +1718,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "fields." + error;
                         }
                     }
-                    if (message.classTy != null && message.hasOwnProperty("classTy")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTyClass.verify(message.classTy, long + 1);
-                        if (error)
-                            return "classTy." + error;
-                    }
                     return null;
                 };
 
@@ -2151,11 +1749,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.fields[i] = $root.baml_bridge.cffi.v1.InboundMapEntry.fromObject(object.fields[i], long + 1);
                         }
                     }
-                    if (object.classTy != null) {
-                        if (!$util.isObject(object.classTy))
-                            throw TypeError(".baml_bridge.cffi.v1.InboundClassValue.classTy: object expected");
-                        message.classTy = $root.baml_bridge.cffi.v1.BamlTyClass.fromObject(object.classTy, long + 1);
-                    }
                     return message;
                 };
 
@@ -2178,15 +1771,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     let object = {};
                     if (options.arrays || options.defaults)
                         object.fields = [];
-                    if (options.defaults)
-                        object.classTy = null;
                     if (message.fields && message.fields.length) {
                         object.fields = [];
                         for (let j = 0; j < message.fields.length; ++j)
                             object.fields[j] = $root.baml_bridge.cffi.v1.InboundMapEntry.toObject(message.fields[j], options, q + 1);
                     }
-                    if (message.classTy != null && message.hasOwnProperty("classTy"))
-                        object.classTy = $root.baml_bridge.cffi.v1.BamlTyClass.toObject(message.classTy, options, q + 1);
                     return object;
                 };
 
@@ -14797,7 +14386,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [selfType] BamlValueUnionVariant selfType
                  * @property {string|null} [valueOptionName] BamlValueUnionVariant valueOptionName
                  * @property {baml_bridge.cffi.v1.IBamlOutboundValue|null} [value] BamlValueUnionVariant value
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [selectedType] BamlValueUnionVariant selectedType
                  * @property {number|null} [selectedOptionIndex] BamlValueUnionVariant selectedOptionIndex
                  */
 
@@ -14865,14 +14453,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlValueUnionVariant.prototype.value = null;
 
                 /**
-                 * BamlValueUnionVariant selectedType.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} selectedType
-                 * @memberof baml_bridge.cffi.v1.BamlValueUnionVariant
-                 * @instance
-                 */
-                BamlValueUnionVariant.prototype.selectedType = null;
-
-                /**
                  * BamlValueUnionVariant selectedOptionIndex.
                  * @member {number|null|undefined} selectedOptionIndex
                  * @memberof baml_bridge.cffi.v1.BamlValueUnionVariant
@@ -14929,8 +14509,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 5, wireType 2 =*/42).string(message.valueOptionName);
                     if (message.value != null && Object.hasOwnProperty.call(message, "value"))
                         $root.baml_bridge.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 6, wireType 2 =*/50).fork(), q + 1).ldelim();
-                    if (message.selectedType != null && Object.hasOwnProperty.call(message, "selectedType"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.selectedType, writer.uint32(/* id 7, wireType 2 =*/58).fork(), q + 1).ldelim();
                     if (message.selectedOptionIndex != null && Object.hasOwnProperty.call(message, "selectedOptionIndex"))
                         writer.uint32(/* id 8, wireType 0 =*/64).uint32(message.selectedOptionIndex);
                     return writer;
@@ -14995,10 +14573,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 6: {
                                 message.value = $root.baml_bridge.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 7: {
-                                message.selectedType = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 8: {
@@ -15067,11 +14641,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (error)
                             return "value." + error;
                     }
-                    if (message.selectedType != null && message.hasOwnProperty("selectedType")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.selectedType, long + 1);
-                        if (error)
-                            return "selectedType." + error;
-                    }
                     if (message.selectedOptionIndex != null && message.hasOwnProperty("selectedOptionIndex")) {
                         properties._selectedOptionIndex = 1;
                         if (!$util.isInteger(message.selectedOptionIndex))
@@ -15116,11 +14685,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             throw TypeError(".baml_bridge.cffi.v1.BamlValueUnionVariant.value: object expected");
                         message.value = $root.baml_bridge.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
                     }
-                    if (object.selectedType != null) {
-                        if (!$util.isObject(object.selectedType))
-                            throw TypeError(".baml_bridge.cffi.v1.BamlValueUnionVariant.selectedType: object expected");
-                        message.selectedType = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.selectedType, long + 1);
-                    }
                     if (object.selectedOptionIndex != null)
                         message.selectedOptionIndex = object.selectedOptionIndex >>> 0;
                     return message;
@@ -15150,7 +14714,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.selfType = null;
                         object.valueOptionName = "";
                         object.value = null;
-                        object.selectedType = null;
                     }
                     if (message.name != null && message.hasOwnProperty("name"))
                         object.name = message.name;
@@ -15164,8 +14727,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.valueOptionName = message.valueOptionName;
                     if (message.value != null && message.hasOwnProperty("value"))
                         object.value = $root.baml_bridge.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
-                    if (message.selectedType != null && message.hasOwnProperty("selectedType"))
-                        object.selectedType = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.selectedType, options, q + 1);
                     if (message.selectedOptionIndex != null && message.hasOwnProperty("selectedOptionIndex")) {
                         object.selectedOptionIndex = message.selectedOptionIndex;
                         if (options.oneofs)

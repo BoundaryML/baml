@@ -18,12 +18,13 @@ option optimize_for = LITE_RUNTIME;
 // Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-// Core value type. Most values remain shape-only because not every language has
-// union/class concepts. Containers may optionally carry host-known element
-// types so empty values retain information that payload inspection cannot
-// recover. The engine still validates against the function signature.
+// Core value type. `value_type` is a sparse exact-type annotation for this
+// node, never a copy of the enclosing union. Most values omit it and are
+// decoded from the declared contextual type plus payload shape. Hosts set it
+// only when shape/context cannot preserve their choice (for example an empty
+// container, an overlapping union arm, or a literal-vs-primitive selection).
 message InboundValue {
-  reserved 1;
+  BamlTy value_type = 1;
   oneof value {
     string string_value = 2;
     int64 int_value = 3;
@@ -40,33 +41,16 @@ message InboundValue {
     // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
-    // A host-selected arm of a structural union. This is authoritative for
-    // overlapping arms (for example `string | "draft"` or
-    // `int[] | int?[]`) and avoids reconstructing identity from value shape.
-    InboundUnionVariantValue union_variant_value = 14;
   }
   // Absent oneof = null value.
 }
 
-message InboundUnionVariantValue {
-  // Full canonical union descriptor generated for the host surface.
-  BamlTy self_type = 1;
-  // Exact arm selected by the host constructor.
-  BamlTy selected_type = 2;
-  InboundValue value = 3;
-}
-
 message InboundListValue {
   repeated InboundValue values = 1;
-  // Optional host-known element type. Absent keeps legacy shape inference.
-  BamlTy item_type = 2;
 }
 
 message InboundMapValue {
   repeated InboundMapEntry entries = 1;
-  // Optional host-known key/value types. Absent keeps legacy shape inference.
-  BamlTy key_type = 2;
-  BamlTy value_type = 3;
 }
 
 message InboundMapEntry {
@@ -80,12 +64,8 @@ message InboundMapEntry {
 }
 
 message InboundClassValue {
-  reserved 1;  // formerly `name` — the class FQN now lives on `class_ty.name`
+  reserved 1;
   repeated InboundMapEntry fields = 2;
-  // The instance's class as a nominal type: `class_ty.name` is the FQN used to
-  // bind the class, and `class_ty.type_args` carries a generic instance's
-  // concrete args. Always set for a well-formed class value.
-  BamlTyClass class_ty = 3;
 }
 
 message InboundEnumValue {

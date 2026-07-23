@@ -1,6 +1,6 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
+use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy, selected_arm_equal};
 use indexmap::IndexMap;
 
 use crate::{
@@ -112,9 +112,6 @@ pub fn external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
-                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
-                        &metadata.selected_option,
-                    )),
                     selected_option_index: Some(selected_option_index),
                 },
             )))
@@ -292,9 +289,6 @@ pub(crate) fn artifact_safe_external_to_outbound(
                     )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
-                    selected_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
-                        &metadata.selected_option,
-                    )),
                     selected_option_index: Some(selected_option_index),
                 },
             )))
@@ -373,7 +367,10 @@ fn selected_union_option_index(
             union: union_type.to_string(),
         });
     };
-    let Some(index) = members.iter().position(|member| member == selected_option) else {
+    let Some(index) = members
+        .iter()
+        .position(|member| selected_arm_equal(member, selected_option))
+    else {
         return Err(CtypesError::UnionSelectedTypeNotMember {
             selected: selected_option.to_string(),
             union: union_type.to_string(),
@@ -528,6 +525,7 @@ pub fn build_to_host_call(
 mod tests {
     use std::sync::Arc;
 
+    use baml_type::{Freshness, Literal, TyAttr};
     use bex_project::{
         BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
         PromptAst, PromptAstSimple,
@@ -568,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn outbound_union_encodes_exact_selected_type_for_ambiguous_numeric_arms() {
+    fn outbound_union_encodes_selected_index_for_ambiguous_numeric_arms() {
         let options = CffiHandleTableOptions::for_in_process();
         let int = ambiguous_numeric_union(RuntimeTy::int(), BexExternalValue::Int(1));
         let float = ambiguous_numeric_union(RuntimeTy::float(), BexExternalValue::Float(1.0));
@@ -576,41 +574,28 @@ mod tests {
         let encoded_int = extract_union(external_to_outbound(&int, &options).unwrap());
         let encoded_float = extract_union(external_to_outbound(&float, &options).unwrap());
 
-        assert_eq!(
-            encoded_int.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::int()))
-        );
-        assert_eq!(
-            encoded_float.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::float()))
-        );
-        assert_ne!(encoded_int.selected_type, encoded_float.selected_type);
         assert_eq!(encoded_int.selected_option_index, Some(0));
         assert_eq!(encoded_float.selected_option_index, Some(1));
     }
 
     #[test]
-    fn artifact_safe_union_encodes_exact_selected_type() {
+    fn artifact_safe_union_encodes_selected_index() {
         let value = ambiguous_numeric_union(RuntimeTy::float(), BexExternalValue::Float(1.0));
         let encoded = extract_union(artifact_safe_external_to_outbound(&value).unwrap());
 
-        assert_eq!(
-            encoded.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::float()))
-        );
         assert_eq!(encoded.selected_option_index, Some(1));
     }
 
     #[test]
     fn outbound_optional_null_preserves_declared_member_index() {
-        let value = BexExternalValue::optional(BexExternalValue::Null, RuntimeTy::string());
+        let value = BexExternalValue::union(
+            BexExternalValue::Null,
+            [RuntimeTy::string(), RuntimeTy::null()],
+            RuntimeTy::null(),
+        );
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
-        assert_eq!(
-            encoded.selected_type,
-            Some(crate::ty_encode::runtime_ty_to_proto_ty(&RuntimeTy::null()))
-        );
         // RuntimeTy::optional preserves [inner, null] order.
         assert_eq!(encoded.selected_option_index, Some(1));
     }
@@ -631,6 +616,31 @@ mod tests {
             artifact_error,
             CtypesError::UnionSelectedTypeNotMember { .. }
         ));
+    }
+
+    #[test]
+    fn outbound_union_matches_structurally_equivalent_selected_type() {
+        let declared = RuntimeTy::Literal(
+            Literal::String("draft".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
+        let rebuilt = RuntimeTy::Literal(
+            Literal::String("draft".to_string()),
+            Freshness::Fresh,
+            TyAttr::default(),
+        );
+        assert_ne!(declared, rebuilt);
+
+        let value = BexExternalValue::union(
+            BexExternalValue::String("draft".into()),
+            [declared],
+            rebuilt,
+        );
+        let encoded = extract_union(
+            external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
+        );
+        assert_eq!(encoded.selected_option_index, Some(0));
     }
 
     #[test]

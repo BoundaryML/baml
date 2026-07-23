@@ -209,7 +209,7 @@ func assertHostCallableFailure(t *testing.T, completed struct {
 		t.Fatalf("decode host failure: %v", err)
 	}
 	class := inbound.GetClassValue()
-	if class == nil || class.GetClassTy().GetName() != "baml.errors.HostCallable" {
+	if class == nil || inbound.GetValueType().GetClassTy().GetName() != "baml.errors.HostCallable" {
 		t.Fatalf("host failure class = %#v", class)
 	}
 	for _, field := range class.Fields {

@@ -48,15 +48,21 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 			})
 		}
 
-		return &cffi.InboundValue{Value: &cffi.InboundValue_ClassValue{
-			ClassValue: &cffi.InboundClassValue{
-				Fields: entries,
-				ClassTy: &cffi.BamlTyClass{
-					Name:     name,
-					TypeArgs: encodedTypeArgs,
+		return &cffi.InboundValue{
+			ValueType: &cffi.BamlTy{
+				Ty: &cffi.BamlTy_ClassTy{
+					ClassTy: &cffi.BamlTyClass{
+						Name:     name,
+						TypeArgs: encodedTypeArgs,
+					},
 				},
 			},
-		}}, nil
+			Value: &cffi.InboundValue_ClassValue{
+				ClassValue: &cffi.InboundClassValue{
+					Fields: entries,
+				},
+			},
+		}, nil
 	}
 	if inputsAreStatic(inputs) {
 		value, err := prepare(nil)

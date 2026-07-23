@@ -3,6 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
+  type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
   class Bool { methods: [] }
@@ -278,6 +279,11 @@ namespace baml.panics:
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
   class UserPanic { methods: [] }
+namespace baml.random:
+  class ChaCha20 { methods: [new, _new, random, random_int] }
+  type Rng
+  class SystemRandom { methods: [get, random, random_int] }
+  class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class SpawnParams<T, E> { methods: [] }
@@ -290,6 +296,7 @@ namespace baml.sys:
   class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
+  function collect_garbage
   function exec
   function exit
   function now_ms

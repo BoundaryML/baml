@@ -98,9 +98,9 @@ func InvalidInput(message string) Input {
 	return Input{err: fmt.Errorf("%s", message)}
 }
 
-// SelectedUnionInput attaches the exact generated arm identity to a union
-// payload. The BAML runtime validates both the descriptor and the payload
-// against the callable's canonical parameter type.
+// SelectedUnionInput projects a generated union to its selected payload and
+// attaches that arm's exact node type. The enclosing union stays in the BAML
+// callable's declared type; inbound values never carry a union envelope.
 func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 	if payload.err != nil {
 		return payload
@@ -116,13 +116,11 @@ func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
 		if err != nil {
 			return nil, fmt.Errorf("selected union payload: %w", err)
 		}
-		return &cffi.InboundValue{Value: &cffi.InboundValue_UnionVariantValue{
-			UnionVariantValue: &cffi.InboundUnionVariantValue{
-				SelfType:     unionType.value,
-				SelectedType: selectedType.value,
-				Value:        value,
-			},
-		}}, nil
+		annotated := *value
+		if annotated.ValueType == nil {
+			annotated.ValueType = selectedType.value
+		}
+		return &annotated, nil
 	}
 	if payload.deferred == nil {
 		value, err := prepare(nil)

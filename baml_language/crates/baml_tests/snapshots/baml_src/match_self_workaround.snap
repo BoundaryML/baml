@@ -49,7 +49,9 @@ function match_self_workaround.Shape.is_shape(self: match_self_workaround.Shape,
 
 function match_self_workaround.Shape.same_kind(self: match_self_workaround.Shape, other: match_self_workaround.Shape | int) -> string {
     load_var other
-    is_type match_self_workaround.Shape
+    store_var _3
+    load_var _3
+    narrow_bind match_self_workaround.Shape, slot=3
     pop_jump_if_false L0
     jump L1
 

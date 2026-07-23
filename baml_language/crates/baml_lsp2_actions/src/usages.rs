@@ -21,9 +21,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
-use baml_compiler2_hir::{
-    body::FunctionBody, loc::FunctionLoc, scope::ScopeKind, semantic_index::BindingId,
-};
+use baml_compiler2_hir::{body::FunctionBody, scope::ScopeKind, semantic_index::BindingId};
 use baml_compiler2_tir::resolve::{ResolvedName, resolve_name_at};
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
@@ -166,8 +164,6 @@ fn find_local_usages(
     target_binding: BindingId,
 ) -> Vec<Location> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
@@ -184,19 +180,15 @@ fn find_local_usages(
         return Vec::new();
     };
 
-    let func_scope_range = index.scopes[enclosing_func_scope.index() as usize].range;
-
-    // Find the function in the item tree by matching its span.
-    let func_entry = item_tree
-        .functions
-        .iter()
-        .find(|(_, f)| f.span == func_scope_range);
-
-    let Some((func_local_id, _)) = func_entry else {
+    // The recorded item↔scope link, not a span match (which cannot tell a
+    // function from its companions — they share one span). A template-string
+    // scope has a non-Function owner and returns early here.
+    let owner_scope = index.scope_ids[enclosing_func_scope.index() as usize];
+    let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+        baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+    else {
         return Vec::new();
     };
-
-    let func_loc = FunctionLoc::new(db, file, *func_local_id);
 
     // We need an expression body and source map.
     let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -308,7 +300,6 @@ fn find_field_definition_usages(
     use baml_compiler2_tir::ty::Ty;
 
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let scope_id = index.scope_at_offset(offset, None);
     let scope = &index.scopes[scope_id.index() as usize];
 
@@ -316,16 +307,15 @@ fn find_field_definition_usages(
     if !matches!(scope.kind, ScopeKind::Class) {
         return Vec::new();
     }
-    let class_name = match &scope.name {
-        Some(n) => n.clone(),
-        None => return Vec::new(),
-    };
 
-    // Find the ClassLoc for this class
-    let class_entry = item_tree.classes.iter().find(|(_, c)| c.name == class_name);
-    let Some((class_local_id, class_data)) = class_entry else {
+    // The class that opened this scope, from the recorded item↔scope link.
+    let owner_scope = index.scope_ids[scope_id.index() as usize];
+    let Some(baml_compiler2_ppir::item_data::ScopeOwner::Class(class_loc)) =
+        baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+    else {
         return Vec::new();
     };
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     // Verify the cursor is actually on this field
     let field_match = class_data
@@ -335,8 +325,6 @@ fn find_field_definition_usages(
     if !field_match {
         return Vec::new();
     }
-
-    let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_local_id);
 
     // Collect all source files
     let source_files = collect_source_files(db, file);
@@ -351,7 +339,6 @@ fn find_field_definition_usages(
         }
 
         let sf_index = baml_compiler2_hir::file_semantic_index(db, sf);
-        let sf_item_tree = baml_compiler2_hir::file_item_tree(db, sf);
 
         // Scan each function scope in the file
         for (scope_idx, scope) in sf_index.scopes.iter().enumerate() {
@@ -359,16 +346,14 @@ fn find_field_definition_usages(
                 continue;
             }
 
-            // Find matching function in item tree
-            let func_entry = sf_item_tree
-                .functions
-                .iter()
-                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name));
-            let Some((func_local_id, _)) = func_entry else {
+            // The function that opened this scope, via the recorded item↔scope
+            // link (template-string scopes have a non-Function owner → skipped).
+            let owner_scope = sf_index.scope_ids[scope_idx];
+            let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+                baml_compiler2_ppir::item_data::scope_owner(db, owner_scope)
+            else {
                 continue;
             };
-
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, sf, *func_local_id);
             let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
                 continue;

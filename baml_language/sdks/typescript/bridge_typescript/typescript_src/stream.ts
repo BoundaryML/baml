@@ -15,6 +15,7 @@
 // pulls, as Python does.
 
 import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+import { supportsSyncStreamPulls } from './platform.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
@@ -55,6 +56,9 @@ export class BamlStream<TStream, TFinal> {
     }
 
     private _callSync(fqn: string): unknown {
+        if (!supportsSyncStreamPulls) {
+            throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
+        }
         const rt = getRuntime();
         const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall() });
         const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null);

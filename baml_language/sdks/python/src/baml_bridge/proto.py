@@ -49,11 +49,16 @@ def _is_pydantic_model_class(cls: type) -> bool:
 
 
 # Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
-# encoder and `_decode_class` unwrap (15b §line 21). The engine FQN
-# for each class is looked up via `get_type_map().py_type_to_baml_type(...)`
-# at encode time; the typemap seeds the PyO3 identity → `baml.media.*`
-# overrides at construction (25b2 §"reverse map overrides").
+# encoder and `_decode_class` unwrap (15b §line 21). Their sparse inbound
+# annotation is the exact primitive media kind; the class-shaped `_data`
+# payload remains an implementation shell around the native handle.
 _MEDIA_PYO3_TYPES = (BamlImage, BamlAudio, BamlVideo, BamlPdf)
+_MEDIA_WIRE_KINDS = {
+    BamlImage: baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE,
+    BamlAudio: baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO,
+    BamlVideo: baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO,
+    BamlPdf: baml_type_pb2.BAML_TY_MEDIA_KIND_PDF,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -254,11 +259,11 @@ def _set_inbound_value(
 
     # Media PyO3 types — wrap into an `InboundClassValue` per 15b. The
     # only field is `_data`, recursively encoded; the recursion lands on
-    # the `BamlPyHandle` branch above. The engine FQN comes from the
-    # typemap's reverse-map seeded overrides (25b2 §"reverse map").
+    # the `BamlPyHandle` branch above. The sparse annotation is the exact
+    # media type, not the implementation class used by the Python wrapper.
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(type(value))
+        inbound_value.value_type.media.kind = _MEDIA_WIRE_KINDS[type(value)]
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
@@ -293,20 +298,17 @@ def _set_inbound_value(
 
     if _is_pydantic_model(value):
         cv = inbound_value.class_value
-        # Bind the class via `class_ty`. Pydantic generic subclasses (`Box[int]`)
-        # keep `__module__` from the base, but we still want the *base* `Box`'s
-        # FQN on the wire — `13b` §2.1. The Rust-side type checker already knows
-        # the declared parameter type from the function signature.
-        cv.class_ty.name = get_type_map().py_type_to_baml_type(
-            _base_class_for_fqn(type(value))
+        # Bind the class via sparse node-level `value_type`. A parameterized
+        # Pydantic generic (`Box[int]`) carries its exact concrete args. An
+        # unparameterized generic carries only nominal class identity (no
+        # args); the engine can refine that hint from one contextual class but
+        # will not use it to choose between multiple concrete instantiations.
+        instance_type_args = pydantic_instance_type_args(value)
+        inbound_value.value_type.class_ty.name = (
+            get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
         )
-        # For a *generic* instance (`Box[int]`), also carry its concrete class
-        # type args (the value-level type channel) so the engine can recover and
-        # type-check `Box<int>` against a declared generic param. Recovered from
-        # Pydantic's generic metadata, in declaration order; empty for
-        # non-generic instances (no metadata args).
-        for arg in pydantic_instance_type_args(value):
-            _fill_inner(cv.class_ty.type_args.add(), arg)
+        for arg in instance_type_args:
+            _fill_inner(inbound_value.value_type.class_ty.type_args.add(), arg)
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into

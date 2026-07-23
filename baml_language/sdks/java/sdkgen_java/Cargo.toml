@@ -1,0 +1,22 @@
+# Java SDK emitter.
+[package]
+name = "sdkgen_java"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_codegen_types = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

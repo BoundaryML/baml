@@ -32,8 +32,7 @@ pub use discovery::discover_baml_files;
 mod project_resolution;
 pub use project_resolution::{
     BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,
-    project_search_dir, project_source_root, resolve_baml_project_root,
-    resolve_project_search_start,
+    project_search_dir, project_source_root, resolve_project_search_start,
 };
 
 /// Database trait for workspace/project context.

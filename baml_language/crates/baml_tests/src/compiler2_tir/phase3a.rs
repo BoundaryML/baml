@@ -7,6 +7,157 @@
 use super::support::{make_db, render_tir};
 
 #[test]
+fn explicit_local_id_is_structural_call_metadata() {
+    use baml_compiler2_ppir::item_data::{file_functions, function_data, function_scope};
+    use baml_compiler2_tir::inference::{ParamBinding, infer_scope_types};
+
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function choose<T>(value: T, fallback: T = value) -> T {
+  value
+}
+
+function main(id: boundary.LocalId) -> int {
+  choose(1, $id = id)
+}
+"#,
+    );
+
+    let rendered = render_tir(&db, file);
+    assert!(
+        !rendered.contains("!!"),
+        "a trailing LocalId side channel must compile cleanly:\n{rendered}"
+    );
+
+    let main_loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let main_scope = function_scope(&db, main_loc).expect("main function scope");
+    let inference = infer_scope_types(&db, main_scope);
+    let plans = inference.iter_call_plans().collect::<Vec<_>>();
+    assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
+
+    let plan = plans[0].1;
+    assert!(
+        plan.side_channels.runtime_id.is_some(),
+        "CallPlan must retain the explicit LocalId expression"
+    );
+    assert_eq!(
+        plan.provided_arg_count(),
+        1,
+        "the LocalId must not count as an ordinary argument"
+    );
+    assert!(matches!(
+        plan.bindings.as_slice(),
+        [
+            ParamBinding::Provided { param_index: 0, .. },
+            ParamBinding::OmittedDefault { param_index: 1, .. }
+        ]
+    ));
+    assert_eq!(
+        plan.type_args.len(),
+        1,
+        "generic inference must still record only the ordinary argument's T"
+    );
+}
+
+#[test]
+fn explicit_local_id_has_targeted_call_diagnostics() {
+    let cases = [
+        (
+            "positional_after_id",
+            "target($id = id, 1)",
+            "`$id` must be the final call argument",
+        ),
+        (
+            "named_after_id",
+            "target($id = id, x = 1)",
+            "`$id` must be the final call argument",
+        ),
+        (
+            "duplicate_id",
+            "target(1, $id = id, $id = id)",
+            "duplicate `$id` call argument",
+        ),
+        (
+            "wrong_type",
+            "target(1, $id = \"not-a-local-id\")",
+            "`$id` at a call site expects `boundary.LocalId`, got",
+        ),
+        (
+            "missing_ordinary_arg",
+            "target($id = id)",
+            "expected 1 argument(s), got 0",
+        ),
+    ];
+
+    for (label, call, expected) in cases {
+        let mut db = make_db();
+        let source = format!(
+            r#"
+function target(x: int) -> int {{ x }}
+function main(id: boundary.LocalId) -> int {{
+  {call}
+}}
+"#
+        );
+        let file = db.add_file("test.baml", &source);
+        let rendered = render_tir(&db, file);
+        assert!(
+            rendered.contains(expected),
+            "[{label}] expected {expected:?}, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn explicit_local_id_preserves_real_named_argument_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function target(a: int, b: int) -> int { a + b }
+function main(id: boundary.LocalId) -> int {
+  target(a = 1, $id = id)
+}
+"#,
+    );
+
+    let rendered = render_tir(&db, file);
+    assert!(
+        rendered.contains("missing required argument `b`"),
+        "a real named argument must retain per-parameter diagnostics:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("expected 2 argument(s), got 1"),
+        "the trailing LocalId must not hide the real named argument:\n{rendered}"
+    );
+}
+
+#[test]
+fn explicit_local_id_on_native_target_remains_a_runtime_contract() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function main(id: boundary.LocalId) -> string {
+  baml.json.to_string(7, $id = id) catch (e) {
+    baml.errors.InvalidArgument => "caught"
+  }
+}
+"#,
+    );
+    let rendered = render_tir(&db, file);
+    assert!(
+        !rendered.contains("!!"),
+        "TIR must allow the VM to throw the catchable native-target error:\n{rendered}"
+    );
+}
+
+#[test]
 fn backtick_llm_function_compiles_to_prompt_closure() {
     // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
     // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
@@ -270,6 +421,104 @@ fn unresolved_variable_in_let() {
       !! 30..43: unresolved name: unknown_thing
     }
     ");
+}
+
+#[test]
+fn property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(option: string) -> map<string, string> {
+  { options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand-specific near-match diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: options"),
+        "shorthand should not fall back to the generic unresolved-name diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn class_property_shorthand_suggests_field_to_variable_mapping() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(option: string) -> Config {
+  Config { option }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "class `Config` has no field `option` for property shorthand. Did you mean \
+             `options: option`?"
+        ),
+        "expected an exact-field-name shorthand diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: option"),
+        "the shorthand value resolves; only the class-field mismatch should be diagnosed:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_unknown_class_field_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  Config { badField: 5 }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic for an explicit property, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn inferred_object_rejects_explicit_unknown_class_field() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  let config = Config { badField: 5 };
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected inference to diagnose an explicit unknown field, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
 }
 
 #[test]

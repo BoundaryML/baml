@@ -70,8 +70,9 @@ func TestAnyEncodesNestedOptionalEnumPointers(t *testing.T) {
 		t.Fatalf("nil enum pointer did not encode as null: %#v", list.Values[1])
 	}
 	wantItemType := OptionalBAMLType(EnumBAMLType("test.PointerEnum"))
-	if list.ItemType == nil || !(BAMLType{value: list.ItemType}).Equal(wantItemType) {
-		t.Fatalf("enum pointer list item type = %#v", list.ItemType)
+	wantListType := ListBAMLType(wantItemType)
+	if input.value.ValueType == nil || !(BAMLType{value: input.value.ValueType}).Equal(wantListType) {
+		t.Fatalf("enum pointer list value type = %#v", input.value.ValueType)
 	}
 }
 
@@ -98,31 +99,30 @@ func TestBAMLTypeEqualityPreservesNestedOptionality(t *testing.T) {
 
 func TestAnyPreservesStaticTypesForEmptyContainers(t *testing.T) {
 	list := Any([]string{})
-	if list.err != nil || list.value.GetListValue().ItemType == nil {
+	if list.err != nil || list.value.GetValueType() == nil {
 		t.Fatalf("empty string list lost item type: %#v, %v", list.value, list.err)
 	}
-	if !(BAMLType{value: list.value.GetListValue().ItemType}).Equal(PrimitiveBAMLType(StringType)) {
-		t.Fatalf("empty string list got wrong item type: %#v", list.value.GetListValue().ItemType)
+	if !(BAMLType{value: list.value.GetValueType()}).Equal(ListBAMLType(PrimitiveBAMLType(StringType))) {
+		t.Fatalf("empty string list got wrong value type: %#v", list.value.GetValueType())
 	}
 
 	mapValue := Any(map[string]int64{})
-	encodedMap := mapValue.value.GetMapValue()
-	if mapValue.err != nil || encodedMap.KeyType == nil || encodedMap.ValueType == nil {
+	if mapValue.err != nil || mapValue.value.GetValueType() == nil {
 		t.Fatalf("empty int map lost types: %#v, %v", mapValue.value, mapValue.err)
 	}
-	if !(BAMLType{value: encodedMap.KeyType}).Equal(PrimitiveBAMLType(StringType)) ||
-		!(BAMLType{value: encodedMap.ValueType}).Equal(PrimitiveBAMLType(IntType)) {
-		t.Fatalf("empty int map got wrong types: %#v", encodedMap)
+	wantMapType := MapBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(IntType))
+	if !(BAMLType{value: mapValue.value.GetValueType()}).Equal(wantMapType) {
+		t.Fatalf("empty int map got wrong value type: %#v", mapValue.value.GetValueType())
 	}
 }
 
 func TestOrdinaryTypedContainerEncodersRemainMetadataOptional(t *testing.T) {
 	list := List([]string{}, String)
-	if list.value.GetListValue().ItemType != nil {
+	if list.value.GetValueType() != nil {
 		t.Fatalf("schema-driven list unexpectedly added dynamic type metadata")
 	}
 	mapValue := Map(map[string]string{}, String)
-	if mapValue.value.GetMapValue().KeyType != nil || mapValue.value.GetMapValue().ValueType != nil {
+	if mapValue.value.GetValueType() != nil {
 		t.Fatalf("schema-driven map unexpectedly added dynamic type metadata")
 	}
 }

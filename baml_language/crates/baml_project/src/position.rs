@@ -106,24 +106,6 @@ pub fn span_to_lsp_range(text: &str, span: &Span) -> Range {
     Range { start, end }
 }
 
-/// Convert a `baml_base::Span` to an LSP `Range` using a pre-built line index.
-///
-/// This is more efficient when converting multiple spans from the same file.
-pub fn span_to_lsp_range_with_index(line_index: &LineIndex, span: &Span) -> Range {
-    let start_offset: u32 = span.range.start().into();
-    let end_offset: u32 = span.range.end().into();
-
-    let start = line_index
-        .offset_to_position(start_offset)
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        });
-    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
-
-    Range { start, end }
-}
-
 /// Convert an LSP `Position` to a byte offset.
 pub fn lsp_position_to_offset(text: &str, pos: &Position) -> usize {
     let line_index = LineIndex::new(text);
@@ -131,35 +113,6 @@ pub fn lsp_position_to_offset(text: &str, pos: &Position) -> usize {
         .position_to_offset(pos)
         .map(|o| o as usize)
         .unwrap_or(text.len())
-}
-
-/// Convert a byte offset to an LSP `Position`.
-pub fn offset_to_lsp_position(text: &str, offset: usize) -> Position {
-    let line_index = LineIndex::new(text);
-    line_index
-        .offset_to_position(to_u32_saturating(offset))
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        })
-}
-
-/// Convert a `text_size::TextRange` to an LSP `Range`.
-pub fn text_range_to_lsp_range(text: &str, range: text_size::TextRange) -> Range {
-    let line_index = LineIndex::new(text);
-
-    let start_offset: u32 = range.start().into();
-    let end_offset: u32 = range.end().into();
-
-    let start = line_index
-        .offset_to_position(start_offset)
-        .unwrap_or(Position {
-            line: 0,
-            character: 0,
-        });
-    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
-
-    Range { start, end }
 }
 
 /// Get the word at a given position in the text.

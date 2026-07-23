@@ -61,6 +61,21 @@ BAML_TEST(round_trip_optional_plus_null) {
                    .has_value());
 }
 
+BAML_TEST(round_trip_str_or_int_list) {
+  using U = baml::variant<std::vector<int64_t>, std::vector<std::string>>;
+  const U strings = std::vector<std::string>{"hello"};
+  const U ints = std::vector<int64_t>{1, 2};
+  const U empty_strings = std::vector<std::string>{};
+  const U empty_ints = std::vector<int64_t>{};
+
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(strings) == strings);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(ints) == ints);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(empty_strings) ==
+              empty_strings);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(empty_ints) ==
+              empty_ints);
+}
+
 BAML_TEST(round_trip_t) {
   BAML_ASSERT(baml_sdk::unions::round_trip_t(T{4}) == T{4});
 }

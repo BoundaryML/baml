@@ -20,6 +20,11 @@ func List[T any](values []T, encode func(T) Input) Input {
 
 func listInput(inputs []Input, itemType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		if itemType != nil {
+			if err := validateBAMLType(itemType.value, 0); err != nil {
+				return nil, fmt.Errorf("list item type: %w", err)
+			}
+		}
 		items := make([]*cffi.InboundValue, 0, len(inputs))
 		for index, input := range inputs {
 			encoded, err := input.encodeValue(transaction)
@@ -28,11 +33,15 @@ func listInput(inputs []Input, itemType *BAMLType) Input {
 			}
 			items = append(items, encoded)
 		}
-		list := &cffi.InboundListValue{Values: items}
-		if itemType != nil {
-			list.ItemType = itemType.value
+		value := &cffi.InboundValue{
+			Value: &cffi.InboundValue_ListValue{
+				ListValue: &cffi.InboundListValue{Values: items},
+			},
 		}
-		return &cffi.InboundValue{Value: &cffi.InboundValue_ListValue{ListValue: list}}, nil
+		if itemType != nil {
+			value.ValueType = ListBAMLType(*itemType).value
+		}
+		return value, nil
 	}
 	if inputsAreStatic(inputs) {
 		value, err := prepare(nil)
@@ -57,6 +66,19 @@ func ListEncoder[T any](encode func(T) Input) func([]T) Input {
 	}
 }
 
+// ListEncoderWithType is the generated-code form of ListEncoder. Generated
+// APIs know the exact BAML item type even when Go reflection cannot distinguish
+// two wire types with the same surface (notably bigint and bigint?).
+func ListEncoderWithType[T any](itemType BAMLType, encode func(T) Input) func([]T) Input {
+	return func(values []T) Input {
+		inputs := make([]Input, 0, len(values))
+		for _, value := range values {
+			inputs = append(inputs, encode(value))
+		}
+		return listInput(inputs, &itemType)
+	}
+}
+
 // Map encodes a present BAML map with string keys. Entries are sorted so the
 // protobuf representation is deterministic. A nil Go map is a present empty
 // map; nullable maps use Optional around MapEncoder.
@@ -76,6 +98,11 @@ func Map[T any](values map[string]T, encode func(T) Input) Input {
 
 func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		if valueType != nil {
+			if err := validateBAMLType(valueType.value, 0); err != nil {
+				return nil, fmt.Errorf("map value type: %w", err)
+			}
+		}
 		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
 		for index, key := range keys {
 			encoded, err := inputs[index].encodeValue(transaction)
@@ -87,12 +114,15 @@ func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 				Value: encoded,
 			})
 		}
-		value := &cffi.InboundMapValue{Entries: entries}
-		if valueType != nil {
-			value.KeyType = PrimitiveBAMLType(StringType).value
-			value.ValueType = valueType.value
+		value := &cffi.InboundValue{
+			Value: &cffi.InboundValue_MapValue{
+				MapValue: &cffi.InboundMapValue{Entries: entries},
+			},
 		}
-		return &cffi.InboundValue{Value: &cffi.InboundValue_MapValue{MapValue: value}}, nil
+		if valueType != nil {
+			value.ValueType = MapBAMLType(PrimitiveBAMLType(StringType), *valueType).value
+		}
+		return value, nil
 	}
 	if inputsAreStatic(inputs) {
 		value, err := prepare(nil)
@@ -128,6 +158,23 @@ func MapEncoder[T any](encode func(T) Input) func(map[string]T) Input {
 			valueType = &inferred
 		}
 		return mapInput(keys, inputs, valueType)
+	}
+}
+
+// MapEncoderWithType is the generated-code form of MapEncoder. It carries the
+// exact BAML value type independently of Go's reflected map element type.
+func MapEncoderWithType[T any](valueType BAMLType, encode func(T) Input) func(map[string]T) Input {
+	return func(values map[string]T) Input {
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		inputs := make([]Input, 0, len(keys))
+		for _, key := range keys {
+			inputs = append(inputs, encode(values[key]))
+		}
+		return mapInput(keys, inputs, &valueType)
 	}
 }
 

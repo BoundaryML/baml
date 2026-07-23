@@ -8,7 +8,7 @@ use crate::{
     generics::{contains_typevar, substitute_ty},
     interfaces::{
         InterfaceImplOrigin, TypeBindings, lower_interface_associated_bindings, match_ty_patterns,
-        normalized_arg_implements_bound, resolve_path_to_interface,
+        normalized_arg_implements_bound, resolve_ref_to_interface,
     },
     lower_type_expr::qualify_def,
     type_context::AliasEquivCtx,
@@ -144,13 +144,13 @@ pub struct ImplDataSourceMap {
 }
 
 /// The qualified name of a resolved interface loc (head identity for building a
-/// `Ty::Interface`). `None` only if the loc no longer points at an interface.
+/// `Ty::Interface`). Always `Some` for a genuine loc (the firewall lookup is
+/// total); the `Option` shape is kept for its many callers.
 pub fn interface_loc_qtn<'db>(
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Option<QualifiedTypeName> {
-    let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let data = tree.interfaces.get(&iface_loc.id(db))?;
+    let data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
     Some(qualify_def(
         db,
         Definition::Interface(iface_loc),
@@ -186,19 +186,22 @@ pub enum ImplDataError {
 
 /// Lower one generic param's bounds to its interface constraints, pushing both
 /// the lowering diagnostics and the non-interface-bound (E0142) diagnostics
-/// into `diags`. `generic_param_names` are the in-scope type-var names so a
+/// into `diags`. `store` is the arena the bound ids index (the declaring item's
+/// `type_refs`); `generic_param_names` are the in-scope type-var names so a
 /// bound naming a sibling param doesn't read as an unresolved type.
 fn lower_generic_param_interface_bounds(
     db: &dyn crate::Db,
-    bounds: &[&baml_compiler2_ast::TypeExpr],
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    bounds: &[baml_compiler2_hir::type_ref::TypeRefId],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns: &[Name],
     generic_param_names: &[Name],
     diags: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<baml_type::Interface> {
     let mut ifaces = Vec::new();
-    for bound in bounds {
-        let ty = crate::lower_type_expr::lower_type_expr(
+    for &bound in bounds {
+        let ty = crate::lower_type_expr::lower_type_ref(
+            store,
             bound,
             &crate::lower_type_expr::ScopeCtx {
                 db,
@@ -211,6 +214,16 @@ fn lower_generic_param_interface_bounds(
             diags,
         );
         match ty {
+            // BEP-062: `baml.AnyFunction` is legal only as a value type (an
+            // existential); as a bound it is rejected and contributes no
+            // constraint (recovery treats the param as unbounded).
+            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                diags.push(
+                    crate::infer_context::TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn,
+                    },
+                );
+            }
             Ty::Interface(qtn, generics, assoc, _) => {
                 // A generic interface used as a bare bound under-instantiates it —
                 // a bound cannot infer the missing argument (mirrors the decl-env
@@ -279,14 +292,10 @@ pub fn impl_data<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> Result<ImplData<'db>, ImplDataError> {
-    use baml_compiler2_hir::item_tree::ImplSubject;
+    use baml_compiler2_ppir::item_data::{ImplSubjectData, function_data, impl_block_data};
 
     let file = impl_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let block = item_tree
-        .impls
-        .get(&impl_loc.id(db))
-        .ok_or(ImplDataError::Malformed)?;
+    let block = impl_block_data(db, impl_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
@@ -307,13 +316,9 @@ pub fn impl_data<'db>(
         bound_diags,
         origin,
     ) = match &block.subject {
-        ImplSubject::InClass { class, out_of_body } => {
-            let class_data = item_tree
-                .classes
-                .get(class)
-                .ok_or(ImplDataError::Malformed)?;
-            let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class);
-            let class_qtn = qualify_def(db, Definition::Class(class_loc), &class_data.name);
+        ImplSubjectData::InClass { class, out_of_body } => {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+            let class_qtn = qualify_def(db, Definition::Class(*class), &class_data.name);
             let for_ty = Ty::Class(
                 class_qtn.clone(),
                 class_data
@@ -335,9 +340,11 @@ pub fn impl_data<'db>(
                 .iter()
                 .zip(class_data.generic_param_bounds.iter())
                 .map(|(name, bound)| {
-                    let bounds: Vec<&baml_compiler2_ast::TypeExpr> = bound.iter().collect();
+                    let bounds: Vec<baml_compiler2_hir::type_ref::TypeRefId> =
+                        bound.iter().copied().collect();
                     let ifaces = lower_generic_param_interface_bounds(
                         db,
+                        &class_data.type_refs,
                         &bounds,
                         pkg_items,
                         ns,
@@ -364,7 +371,7 @@ pub fn impl_data<'db>(
                 },
             )
         }
-        ImplSubject::Free {
+        ImplSubjectData::Free {
             for_target,
             generics,
         } => {
@@ -376,8 +383,9 @@ pub fn impl_data<'db>(
             // `impl_data` via `impls_for_type` regardless of bounds; that cycle is
             // caught by `impl_data`'s `cycle_result` (→ `CyclicHeader`), so such
             // headers are illegal rather than a panic.
-            let for_ty = crate::lower_type_expr::lower_type_expr(
-                for_target,
+            let for_ty = crate::lower_type_expr::lower_type_ref(
+                &block.type_refs,
+                *for_target,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -402,10 +410,10 @@ pub fn impl_data<'db>(
             let generic_params = generics
                 .iter()
                 .map(|g| {
-                    let bounds: Vec<&baml_compiler2_ast::TypeExpr> = g.bounds.iter().collect();
                     let ifaces = lower_generic_param_interface_bounds(
                         db,
-                        &bounds,
+                        &block.type_refs,
+                        &g.bounds,
                         pkg_items,
                         ns,
                         &names,
@@ -426,8 +434,9 @@ pub fn impl_data<'db>(
     };
 
     let mut interface_target_diags = Vec::new();
-    let lowered_interface = crate::lower_type_expr::lower_type_expr(
-        &block.interface_target,
+    let lowered_interface = crate::lower_type_expr::lower_type_ref(
+        &block.type_refs,
+        block.interface_target,
         &crate::lower_type_expr::ScopeCtx {
             db,
             package_items: pkg_items,
@@ -448,7 +457,8 @@ pub fn impl_data<'db>(
     // target still surfaces its diagnostics (and the for-target / bound ones).
     // Associated bindings are skipped here — they can't be checked without the
     // interface declaration.
-    let Some(iface_loc) = resolve_path_to_interface(db, &block.interface_target, pkg_items, ns)
+    let Some(iface_loc) =
+        resolve_ref_to_interface(db, &block.type_refs, block.interface_target, pkg_items, ns)
     else {
         // The head didn't name an interface. If it resolved to a named non-interface type, that
         // is a specialized "not an interface" (E0119); otherwise the head is unknown, so the
@@ -481,11 +491,7 @@ pub fn impl_data<'db>(
             .collect();
         return Err(ImplDataError::InterfaceUnresolved { diagnostics });
     };
-    let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-    let iface_data = iface_tree
-        .interfaces
-        .get(&iface_loc.id(db))
-        .ok_or(ImplDataError::Malformed)?;
+    let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
 
     let mut assoc_diags = Vec::new();
     // The impl's own generic bounds, so a `T.member` projection in a binding value
@@ -498,6 +504,7 @@ pub fn impl_data<'db>(
         iface_data,
         &interface_args,
         &for_ty_pattern,
+        &block.type_refs,
         &block.associated_type_bindings,
         pkg_items,
         ns,
@@ -514,6 +521,18 @@ pub fn impl_data<'db>(
     let mut conformance_diags: Vec<(crate::infer_context::TirTypeError, ImplDiagnosticLocation)> =
         Vec::new();
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
+        // BEP-062 (E0153): `baml.AnyFunction`'s conformance is derived by the
+        // compiler (every function type implements it, in the subtype engine);
+        // a written impl is rejected outright. The block's other diagnostics
+        // still ride along so the user sees everything at once.
+        if iface_qtn.is_builtin_root_type("AnyFunction") {
+            conformance_diags.push((
+                crate::infer_context::TirTypeError::BuiltinInterfaceNotImplementable {
+                    interface: iface_qtn.clone(),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            ));
+        }
         if matches!(origin, InterfaceImplOrigin::OutOfBody) && !iface_data.fields.is_empty() {
             conformance_diags.push((
                 crate::infer_context::TirTypeError::OutOfBodyImplementsFieldInterface {
@@ -525,12 +544,12 @@ pub fn impl_data<'db>(
         let override_names: Vec<&Name> = block
             .methods
             .iter()
-            .map(|id| &item_tree[*id].name)
+            .map(|loc| &function_data(db, *loc).name)
             .collect();
         let default_names: Vec<&Name> = iface_data
             .default_methods
             .iter()
-            .map(|id| &iface_tree[*id].name)
+            .map(|loc| &function_data(db, *loc).name)
             .collect();
         // E0113: a required method with no override and no inherited default.
         for required in &iface_data.required_methods {
@@ -570,11 +589,10 @@ pub fn impl_data<'db>(
         // well-formedness (E0128/E0129/E0130) runs whenever links are present; field coverage
         // (E0124) runs when the interface declares fields.
         if let InterfaceImplOrigin::InBodyClass { class_qtn } = &origin
-            && let ImplSubject::InClass { class, .. } = &block.subject
+            && let ImplSubjectData::InClass { class, .. } = &block.subject
             && (!block.field_links.is_empty() || !iface_data.fields.is_empty())
         {
-            let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class);
-            let class_fields = crate::inference::resolve_class_fields(db, class_loc);
+            let class_fields = crate::inference::resolve_class_fields(db, *class);
             let is_iface_field =
                 |name: &Name| iface_data.fields.iter().any(|fld| fld.name == *name);
             let is_class_field =
@@ -713,10 +731,10 @@ pub fn impl_data<'db>(
         }
         // Bindings written on the `implements` target (`implements I<Item = …>`) instead of in
         // the block are rejected — the block's `type Name = …` is the only binding site.
-        if let baml_compiler2_ast::TypeExprKind::Path {
+        if let baml_compiler2_hir::type_ref::TypeRefKind::Path {
             associated_type_bindings,
             ..
-        } = &block.interface_target.kind
+        } = &block.type_refs[block.interface_target].kind
             && !associated_type_bindings.is_empty()
         {
             conformance_diags.push((
@@ -753,11 +771,7 @@ pub fn impl_data<'db>(
             )
             .collect();
 
-    let methods = block
-        .methods
-        .iter()
-        .map(|id| baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id))
-        .collect();
+    let methods = block.methods.clone();
     let field_links = block
         .field_links
         .iter()
@@ -782,62 +796,68 @@ pub fn impl_data<'db>(
 pub fn impl_data_source_map<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
-) -> Option<ImplDataSourceMap> {
-    use baml_compiler2_hir::item_tree::ImplSubject;
+) -> ImplDataSourceMap {
+    use baml_compiler2_ppir::item_data::{
+        ImplSubjectData, function_data, function_source_map, impl_block_data, impl_block_source_map,
+    };
 
-    let file = impl_loc.file(db);
-    let file_id = file.file_id(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let block = item_tree.impls.get(&impl_loc.id(db))?;
+    let file_id = impl_loc.file(db).file_id(db);
+    let block = impl_block_data(db, impl_loc);
+    let spans = impl_block_source_map(db, impl_loc);
+    let interface_target_range = spans.type_refs.span(block.interface_target);
     // In-body impls attribute to the interface-target span; out-of-body to the
     // whole block span.
     let (impl_range, for_target_span) = match &block.subject {
-        ImplSubject::InClass { .. } => (block.interface_target.span, None),
-        ImplSubject::Free { for_target, .. } => {
-            (block.span, Some(Span::new(file_id, for_target.span)))
-        }
+        ImplSubjectData::InClass { .. } => (interface_target_range, None),
+        ImplSubjectData::Free { for_target, .. } => (
+            spans.span,
+            Some(Span::new(file_id, spans.type_refs.span(*for_target))),
+        ),
     };
     // Group all override spans by name so a same-named duplicate marks every occurrence.
     let mut method_spans: HashMap<Name, Vec<Span>> = HashMap::new();
-    for id in &block.methods {
-        let func = &item_tree[*id];
+    for &func_loc in &block.methods {
         method_spans
-            .entry(func.name.clone())
+            .entry(function_data(db, func_loc).name.clone())
             .or_default()
-            .push(Span::new(file_id, func.span));
+            .push(Span::new(file_id, function_source_map(db, func_loc).span));
     }
     // Group each field link's endpoint spans by name, so a per-name field-link diagnostic
     // (E0128/E0129/E0130) marks every link that mentions that name.
     let mut interface_field_link_spans: HashMap<Name, Vec<Span>> = HashMap::new();
     let mut class_field_link_spans: HashMap<Name, Vec<Span>> = HashMap::new();
-    for link in &block.field_links {
+    for (link, link_spans) in block.field_links.iter().zip(&spans.field_links) {
         interface_field_link_spans
             .entry(link.interface_field.clone())
             .or_default()
-            .push(Span::new(file_id, link.interface_field_span));
+            .push(Span::new(file_id, link_spans.interface_field_span));
         class_field_link_spans
             .entry(link.class_field.clone())
             .or_default()
-            .push(Span::new(file_id, link.class_field_span));
+            .push(Span::new(file_id, link_spans.class_field_span));
     }
     // Group each `type Name = …` binding's name span by name, so a per-name assoc-binding
     // diagnostic (unknown / duplicate / bound violation) marks every binding with that name.
     let mut associated_binding_spans: HashMap<Name, Vec<Span>> = HashMap::new();
-    for binding in &block.associated_type_bindings {
+    for (binding, binding_spans) in block
+        .associated_type_bindings
+        .iter()
+        .zip(&spans.associated_type_bindings)
+    {
         associated_binding_spans
             .entry(binding.name.clone())
             .or_default()
-            .push(Span::new(file_id, binding.name_span));
+            .push(Span::new(file_id, binding_spans.name_span));
     }
-    Some(ImplDataSourceMap {
+    ImplDataSourceMap {
         impl_span: Span::new(file_id, impl_range),
-        interface_target_span: Span::new(file_id, block.interface_target.span),
+        interface_target_span: Span::new(file_id, interface_target_range),
         for_target_span,
         method_spans,
         interface_field_link_spans,
         class_field_link_spans,
         associated_binding_spans,
-    })
+    }
 }
 
 /// Collect every `Ty::TypeVar` name in `ty` (at any depth) into `out` — used to decide which
@@ -901,13 +921,14 @@ fn method_generic_bound_interfaces(
     let empty = crate::lower_type_expr::TypeVarBoundsMap::default();
     spec.generic_bounds()
         .iter()
-        .map(|(name, bound_exprs)| {
-            let conjunction = bound_exprs
+        .map(|(name, bound_ids)| {
+            let conjunction = bound_ids
                 .iter()
-                .filter_map(|te| {
+                .filter_map(|&id| {
                     let mut d = Vec::new();
-                    crate::lower_type_expr::lower_type_expr(
-                        te,
+                    crate::lower_type_expr::lower_type_ref(
+                        spec.bound_store(),
+                        id,
                         &crate::lower_type_expr::ScopeCtx {
                             db,
                             package_items: pkg_items,
@@ -1017,7 +1038,9 @@ pub fn validate_impl_signatures<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> Vec<(crate::infer_context::TirTypeError, ImplDiagnosticLocation)> {
-    use baml_compiler2_hir::item_tree::ImplSubject;
+    use baml_compiler2_ppir::item_data::{
+        ImplSubjectData, function_data, impl_block_data, interface_data,
+    };
 
     use crate::builder::interface_resolution::InterfaceMethodSpec;
 
@@ -1038,10 +1061,7 @@ pub fn validate_impl_signatures<'db>(
         return diags;
     };
     let file = impl_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let Some(block) = item_tree.impls.get(&impl_loc.id(db)) else {
-        return diags;
-    };
+    let block = impl_block_data(db, impl_loc);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let current_package = pkg_info.package.clone();
     let pkg_id = PackageId::new(db, pkg_info.package);
@@ -1058,10 +1078,7 @@ pub fn validate_impl_signatures<'db>(
         bounds: &bounds,
     };
 
-    let iface_tree = baml_compiler2_hir::file_item_tree(db, data.interface.file(db));
-    let Some(iface_data) = iface_tree.interfaces.get(&data.interface.id(db)) else {
-        return diags;
-    };
+    let iface_data = interface_data(db, data.interface);
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
     let iface_pkg_items =
@@ -1070,10 +1087,9 @@ pub fn validate_impl_signatures<'db>(
     // ── E0116: field-type conformance (in-body impls; out-of-body field impls are E0126). ──
     if !iface_data.fields.is_empty()
         && matches!(data.origin, InterfaceImplOrigin::InBodyClass { .. })
-        && let ImplSubject::InClass { class, .. } = &block.subject
+        && let ImplSubjectData::InClass { class, .. } = &block.subject
     {
-        let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class);
-        let class_fields = crate::inference::resolve_class_fields(db, class_loc);
+        let class_fields = crate::inference::resolve_class_fields(db, *class);
         let iface_field_bounds =
             crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
         // Realize the interface's declared field types at the impl's interface args.
@@ -1085,7 +1101,7 @@ pub fn validate_impl_signatures<'db>(
         let self_bound =
             baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
         for iface_field in &iface_data.fields {
-            let Some(iface_field_te) = &iface_field.type_expr else {
+            let Some(iface_field_ref) = iface_field.type_ref else {
                 continue;
             };
             // The satisfying class field: explicit link, else same name. Absent → E0124 (impl_data).
@@ -1112,7 +1128,12 @@ pub fn validate_impl_signatures<'db>(
                 &data.for_ty_pattern,
                 &iface_bindings,
                 |scope| {
-                    crate::lower_type_expr::lower_type_expr(iface_field_te, scope, &mut lower_diags)
+                    crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        iface_field_ref,
+                        scope,
+                        &mut lower_diags,
+                    )
                 },
             );
             // Field types are invariant — the class field must be the same type.
@@ -1203,7 +1224,32 @@ pub fn validate_impl_signatures<'db>(
     let no_bindings = rustc_hash::FxHashMap::<Name, Ty>::default();
 
     for &method_loc in &data.methods {
-        let method_name = item_tree[method_loc.id(db)].name.clone();
+        let method_name = function_data(db, method_loc).name.clone();
+
+        // A `$rust_io_function` (sys-op) override with method-level generics can't
+        // be dispatched through interface (virtual) dispatch — the only way an
+        // impl-block method is reached. Virtual dispatch does not reconstruct the
+        // synthetic type-argument slots a generic sys-op's glue reads off the
+        // stack, so such a call would fail at runtime; reject it at declaration.
+        // (A generic sys-op declared directly on a class lowers to a direct
+        // `SysOp` instruction, which supplies those slots, so it is fine.)
+        if !function_data(db, method_loc).generic_params.is_empty()
+            && matches!(
+                baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(
+                    baml_compiler2_ast::BuiltinKind::Io
+                )
+            )
+        {
+            diags.push((
+                crate::infer_context::TirTypeError::GenericSysOpMethodInInterfaceImpl {
+                    interface: iface_qtn.clone(),
+                    method: method_name.clone(),
+                },
+                ImplDiagnosticLocation::Method(method_name.clone()),
+            ));
+            continue;
+        }
 
         // The interface method this override targets: a required sig or a default's function.
         let iface_spec = if let Some(sig) = iface_data
@@ -1211,15 +1257,13 @@ pub fn validate_impl_signatures<'db>(
             .iter()
             .find(|m| m.name == method_name)
         {
-            InterfaceMethodSpec::from_required(sig)
-        } else if let Some(default_id) = iface_data
+            InterfaceMethodSpec::from_required(iface_data, sig)
+        } else if let Some(&default_loc) = iface_data
             .default_methods
             .iter()
-            .find(|id| iface_tree[**id].name == method_name)
+            .find(|loc| function_data(db, **loc).name == method_name)
         {
-            let loc =
-                baml_compiler2_hir::loc::FunctionLoc::new(db, data.interface.file(db), *default_id);
-            InterfaceMethodSpec::from_default(db, loc)
+            InterfaceMethodSpec::from_default(db, default_loc)
         } else {
             continue; // unknown member → E0115 (impl_data)
         };
@@ -1323,7 +1367,7 @@ pub fn validate_impl_signatures<'db>(
     // Cycle-safe here — `implements_interface` re-enters `impl_data`, never this phase-5 query. ──
     {
         let mut d = Vec::new();
-        for required_te in &iface_data.requires {
+        for &required_ref in &iface_data.requires {
             // A `requires` clause may project `Self.member` (`requires I<Item = Self.Item>`), so
             // realize it with `Self` bound to the implemented interface and `Self -> for_ty` last.
             let required = realize_with_symbolic_self(
@@ -1335,7 +1379,14 @@ pub fn validate_impl_signatures<'db>(
                 &self_bound,
                 &for_ty,
                 &iface_bindings,
-                |scope| crate::lower_type_expr::lower_type_expr(required_te, scope, &mut d),
+                |scope| {
+                    crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        required_ref,
+                        scope,
+                        &mut d,
+                    )
+                },
             );
             // Reduce any `Self.member` projection in the realized obligation
             // (`(for_ty as I).X` -> the for-type's binding) so the associated pins below are
@@ -1420,8 +1471,8 @@ pub struct ResolvedImpl<'db> {
 
 /// Every `implements` block id declared in a package, as stable
 /// [`ImplLoc`](baml_compiler2_hir::loc::ImplLoc)s.
-/// Uniform over in-body and out-of-body impls (both live in
-/// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`). Public so MIR can enumerate
+/// Uniform over in-body and out-of-body impls (both enumerated by
+/// [`file_impls`](baml_compiler2_ppir::item_data::file_impls)). Public so MIR can enumerate
 /// a package's impls to rebuild the runtime interface-implementor tables on the L1 substrate.
 ///
 /// Salsa-tracked: this walks *every file in the project* (to find the
@@ -1443,17 +1494,14 @@ pub fn package_impl_locs<'db>(
         if file_pkg != pkg_id {
             continue;
         }
-        let tree = baml_compiler2_hir::file_item_tree(db, file);
-        // The `impls` map is unordered; iterate in source order so the resolver's
+        // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible (coherence guarantees ≤1 match, but
         // a stable order keeps a coherence-violating program from resolving
         // arbitrarily).
-        let mut file_impls: Vec<_> = tree.impls.iter().collect();
-        file_impls.sort_by_key(|(_, block)| block.span.start());
         out.extend(
-            file_impls
-                .into_iter()
-                .map(|(id, _)| baml_compiler2_hir::loc::ImplLoc::new(db, file, *id)),
+            baml_compiler2_ppir::item_data::file_impls(db, file)
+                .iter()
+                .copied(),
         );
     }
     out
@@ -2110,6 +2158,8 @@ impl<'db> ResolvedImpl<'db> {
     /// [`get_implements_block`] before calling here — never passing a
     /// sub-/super-interface of the one that declares the method.
     pub fn get_method(&self, db: &'db dyn crate::Db, method: &Name) -> Option<ResolvedMethod<'db>> {
+        use baml_compiler2_ppir::item_data::{function_data, interface_data};
+
         let data = impl_data(db, self.impl_loc).as_ref().ok()?;
 
         // The impl's own override — a free function, framed by the impl's
@@ -2117,8 +2167,7 @@ impl<'db> ResolvedImpl<'db> {
         // for-type/interface match left unbound (used only in a bound, say)
         // falls back to the top type, matching the prior resolver.
         for &func_loc in &data.methods {
-            let func_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
-            if func_tree[func_loc.id(db)].name == *method {
+            if function_data(db, func_loc).name == *method {
                 let frame_type_args = data
                     .generic_params
                     .iter()
@@ -2140,21 +2189,16 @@ impl<'db> ResolvedImpl<'db> {
         }
 
         // The interface's default — framed by the realized interface input args.
-        let iface_tree = baml_compiler2_hir::file_item_tree(db, data.interface.file(db));
-        let iface_data = iface_tree.interfaces.get(&data.interface.id(db))?;
-        for &fn_id in &iface_data.default_methods {
-            if iface_tree[fn_id].name == *method {
+        let iface_data = interface_data(db, data.interface);
+        for &fn_loc in &iface_data.default_methods {
+            if function_data(db, fn_loc).name == *method {
                 let frame_type_args = data
                     .interface_args
                     .iter()
                     .map(|arg| substitute_ty(arg, &self.bindings))
                     .collect();
                 return Some(ResolvedMethod {
-                    method: baml_compiler2_hir::loc::FunctionLoc::new(
-                        db,
-                        data.interface.file(db),
-                        fn_id,
-                    ),
+                    method: fn_loc,
                     from_interface_default: true,
                     frame_type_args,
                 });

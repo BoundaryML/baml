@@ -1,0 +1,284 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_member_interp"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          WORD "result"
+          COLON ":"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                FIELD_ACCESS_EXPR
+                  ARRAY_LITERAL "[1,2,3]"
+                    L_BRACKET "["
+                    INTEGER_LITERAL "1"
+                    COMMA ","
+                    INTEGER_LITERAL "2"
+                    COMMA ","
+                    INTEGER_LITERAL "3"
+                    R_BRACKET "]"
+                  DOT "."
+                  WORD "len"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_member_chain_interp"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          WORD "x"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                FIELD_ACCESS_EXPR
+                  CALL_EXPR
+                    FIELD_ACCESS_EXPR
+                      ARRAY_LITERAL "[1,2,3]"
+                        L_BRACKET "["
+                        INTEGER_LITERAL "1"
+                        COMMA ","
+                        INTEGER_LITERAL "2"
+                        COMMA ","
+                        INTEGER_LITERAL "3"
+                        R_BRACKET "]"
+                      DOT "."
+                      WORD "len"
+                    CALL_ARGS "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                  DOT "."
+                  WORD "to_string"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_operator_interp"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          WORD "sum"
+          COLON ":"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              BINARY_EXPR
+                INTEGER_LITERAL "1"
+                PLUS "+"
+                STRING_LITERAL "x"
+                  QUOTE """
+                  WORD "x"
+                  QUOTE """
+              R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_method_interp"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          WORD "v"
+          COLON ":"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                FIELD_ACCESS_EXPR
+                  STRING_LITERAL "abc"
+                    QUOTE """
+                    WORD "abc"
+                    QUOTE """
+                  DOT "."
+                  WORD "nonexistent"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "unresolved_name_interp"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          WORD "v"
+          COLON ":"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR "{undefined_var}"
+              L_BRACE "{"
+              WORD "undefined_var"
+              R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_member_in_for_segment"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "xs"
+        COLON ":"
+        TYPE_EXPR "int[]"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          BACKTICK_FOR_OPEN
+            DOLLAR "$"
+            L_BRACE "{"
+            KW_FOR "for"
+            L_PAREN "("
+            LET_STMT
+              PATTERN
+                BINDING_PATTERN "let x"
+                  KW_LET "let"
+                  WORD "x"
+            KW_IN "in"
+            WORD "xs"
+            R_PAREN ")"
+            R_BRACE "}"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                PATH_EXPR "x.bogus"
+                  WORD "x"
+                  DOT "."
+                  WORD "bogus"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+          BACKTICK_ENDFOR "${endfor}"
+            DOLLAR "$"
+            L_BRACE "{"
+            WORD "endfor"
+            R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "bad_member_in_if_segment"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "show"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BACKTICK_STRING_LITERAL
+          BACKTICK "`"
+          BACKTICK_IF_OPEN
+            DOLLAR "$"
+            L_BRACE "{"
+            KW_IF "if"
+            PAREN_EXPR "(show)"
+              L_PAREN "("
+              WORD "show"
+              R_PAREN ")"
+            R_BRACE "}"
+          BACKTICK_INTERPOLATION
+            DOLLAR "$"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                FIELD_ACCESS_EXPR
+                  STRING_LITERAL "abc"
+                    QUOTE """
+                    WORD "abc"
+                    QUOTE """
+                  DOT "."
+                  WORD "missing"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              R_BRACE "}"
+          BACKTICK_ENDIF "${endif}"
+            DOLLAR "$"
+            L_BRACE "{"
+            WORD "endif"
+            R_BRACE "}"
+          BACKTICK "`"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

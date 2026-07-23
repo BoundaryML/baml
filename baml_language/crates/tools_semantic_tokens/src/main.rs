@@ -1,6 +1,6 @@
 //! Local web viewer for BAML semantic tokens.
 //!
-//! A dev tool (sibling to `tools_sap_visualizer` / `tools_onionskin`) that serves
+//! A dev tool (sibling to `tools_sap_visualizer`) that serves
 //! the `pkg-grammar`-style preview for *semantic* tokens instead of `TextMate`
 //! scopes. Because semantic tokens are computed by the Rust compiler (not a
 //! portable grammar), this tool embeds the compiler directly and serves a small

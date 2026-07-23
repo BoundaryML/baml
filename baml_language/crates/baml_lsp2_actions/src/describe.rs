@@ -6,7 +6,8 @@
 //! dependencies, and reference sites.
 //!
 //! This is a regular function (not a Salsa query). Internally it calls
-//! Salsa-cached queries (`file_outline`, `file_item_tree`, `syntax_tree`, etc.).
+//! Salsa-cached queries (`file_outline`, the `item_data` firewall, `syntax_tree`,
+//! etc.).
 
 use baml_base::SourceFile;
 use baml_compiler_syntax::SyntaxKind;
@@ -424,11 +425,11 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
     let mut results = Vec::new();
 
     for &file in files {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
         let index = baml_compiler2_hir::file_semantic_index(db, file);
 
-        for (&func_local_id, func) in &item_tree.functions {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, func_local_id);
+        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+            let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+            let func_span = baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
 
             // ── Check parameters ─────────────────────────────────────────
@@ -446,9 +447,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         .param_spans
                         .get(param_idx)
                         .copied()
-                        .unwrap_or_else(|| text_size::TextRange::empty(func.span.start()));
+                        .unwrap_or_else(|| text_size::TextRange::empty(func_span.start()));
 
-                let func_name = func.name.as_str().to_string();
+                let func_name = func_data.name.as_str().to_string();
 
                 // Find usages of this parameter within the function.
                 let param_refs = usages_at(db, file, param_span.start())
@@ -468,7 +469,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     .collect();
 
                 // Get the full function body for context display.
-                let func_body = clean_body_source(db, file, func.span);
+                let func_body = clean_body_source(db, file, func_span);
 
                 results.push(SymbolDescription {
                     name: name.to_string(),
@@ -476,12 +477,12 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     file_path: file_path_string(db, file),
                     file,
                     name_span: param_span,
-                    item_range: func.span,
+                    item_range: func_span,
                     shape: format!("{name}{optional}: {type_str}"),
                     full_body: func_body,
                     docstring: None,
                     resolved_type: Some(type_str),
-                    dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
+                    dependencies: vec![make_function_dep(db, func_loc, &func_name)],
                     references: param_refs,
                     instance_methods: Vec::new(),
                     static_methods: Vec::new(),
@@ -494,8 +495,8 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
             // Find the function's scope in the semantic index.
             let func_scope_idx = index.scopes.iter().position(|s| {
                 matches!(s.kind, baml_compiler2_hir::scope::ScopeKind::Function)
-                    && s.name.as_ref() == Some(&func.name)
-                    && s.range == func.span
+                    && s.name.as_ref() == Some(&func_data.name)
+                    && s.range == func_span
             });
 
             let Some(func_scope_idx) = func_scope_idx else {
@@ -562,7 +563,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         }
                     };
 
-                    let func_name = func.name.as_str().to_string();
+                    let func_name = func_data.name.as_str().to_string();
 
                     let binding_refs = usages_at(db, file, binding_span.start())
                         .into_iter()
@@ -580,7 +581,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         })
                         .collect();
 
-                    let func_body = clean_body_source(db, file, func.span);
+                    let func_body = clean_body_source(db, file, func_span);
 
                     results.push(SymbolDescription {
                         name: name.to_string(),
@@ -588,12 +589,12 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         file_path: file_path_string(db, file),
                         file,
                         name_span: binding_span,
-                        item_range: func.span,
+                        item_range: func_span,
                         shape: format!("let {name}: {type_str}"),
                         full_body: func_body,
                         docstring: None,
                         resolved_type: Some(type_str),
-                        dependencies: vec![make_function_dep(db, file, func_local_id, &func_name)],
+                        dependencies: vec![make_function_dep(db, func_loc, &func_name)],
                         references: binding_refs,
                         instance_methods: Vec::new(),
                         static_methods: Vec::new(),
@@ -723,17 +724,19 @@ fn descend_into_lambdas<'a>(
 /// Build a `DepRef` pointing to a function.
 fn make_function_dep(
     db: &dyn crate::Db,
-    file: SourceFile,
-    func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     func_name: &str,
 ) -> DepRef {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
-    let name_span = source_map
-        .function_name_spans
-        .get(&func_id)
-        .copied()
-        .unwrap_or_else(|| item_tree[func_id].span);
+    let file = func_loc.file(db);
+    let source_map = baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
+    // `function_source_map` fills a missing name span with `TextRange::default()`
+    // (empty at offset 0); a real named function's name span is never that, so
+    // fall back to the full declaration span in that (spanless) case.
+    let name_span = if source_map.name_span == TextRange::default() {
+        source_map.span
+    } else {
+        source_map.name_span
+    };
     DepRef {
         name: func_name.to_string(),
         kind: DefinitionKind::Function,
@@ -868,8 +871,7 @@ fn collect_class_methods_impl(
     use baml_compiler2_tir::package_interface::ExportedType;
 
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let class_data = &item_tree[class_loc.id(db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     // Resolved param/return/throws types come from the package interface, which
     // lowers class methods 1:1 with `class_data.methods` (same order, including
@@ -886,8 +888,8 @@ fn collect_class_methods_impl(
 
     let file_path = file_path_string(db, file);
     let mut out = Vec::new();
-    for (idx, method_id) in class_data.methods.iter().enumerate() {
-        let m = &item_tree[*method_id];
+    for (idx, &method_loc) in class_data.methods.iter().enumerate() {
+        let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
         if matches!(
             m.origin,
             baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
@@ -898,7 +900,7 @@ fn collect_class_methods_impl(
         let signature = render_method_signature(
             db,
             file,
-            m,
+            method_loc,
             exported.and_then(|ms| exported_method(ms, idx, &m.name)),
         );
         let docstring = m
@@ -911,7 +913,7 @@ fn collect_class_methods_impl(
             docstring,
             file,
             file_path: file_path.clone(),
-            item_range: m.span,
+            item_range: baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span,
             is_instance,
         });
     }
@@ -926,9 +928,10 @@ fn collect_class_methods_impl(
 fn render_method_signature(
     db: &dyn Db,
     file: SourceFile,
-    m: &baml_compiler2_hir::item_tree::Function,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     exported: Option<&baml_compiler2_tir::package_interface::ExportedFunction>,
 ) -> String {
+    let m = baml_compiler2_ppir::item_data::function_data(db, func_loc);
     let params: Vec<String> = m
         .params
         .iter()
@@ -941,9 +944,12 @@ fn render_method_signature(
             let ty = exported
                 .and_then(|ef| ef.params.get(i))
                 .map(|fp| crate::utils::display_ty_canonical_for_file(db, file, &fp.ty))
-                .or_else(|| p.type_expr.as_ref().map(crate::utils::display_type_expr))
+                .or_else(|| {
+                    p.type_ref
+                        .map(|id| crate::utils::display_type_ref(&m.type_refs, id))
+                })
                 .unwrap_or_else(|| "unknown".to_string());
-            let opt = if p.default.is_some() { "?" } else { "" };
+            let opt = if p.has_default { "?" } else { "" };
             format!("{pname}{opt}: {ty}")
         })
         .collect();
@@ -951,7 +957,10 @@ fn render_method_signature(
     let ret = if m.return_type.is_some() {
         let ty = exported
             .map(|ef| crate::utils::display_ty_canonical_for_file(db, file, &ef.return_type))
-            .or_else(|| m.return_type.as_ref().map(crate::utils::display_type_expr))
+            .or_else(|| {
+                m.return_type
+                    .map(|id| crate::utils::display_type_ref(&m.type_refs, id))
+            })
             .unwrap_or_default();
         format!(" -> {ty}")
     } else {
@@ -970,8 +979,12 @@ fn render_method_signature(
         Some(_) => String::new(),
         None => m
             .throws
-            .as_ref()
-            .map(|te| format!(" throws {}", crate::utils::display_type_expr(te)))
+            .map(|id| {
+                format!(
+                    " throws {}",
+                    crate::utils::display_type_ref(&m.type_refs, id)
+                )
+            })
             .unwrap_or_default(),
     };
 
@@ -1036,19 +1049,19 @@ fn describe_class_method(
     use baml_compiler2_tir::package_interface::ExportedType;
 
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let class_data = &item_tree[class_loc.id(db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     // Locate the (non-auto-derived) method by name.
-    let (idx, method_id) = class_data.methods.iter().enumerate().find(|(_, mid)| {
-        let m = &item_tree[**mid];
+    let (idx, &method_loc) = class_data.methods.iter().enumerate().find(|(_, mid)| {
+        let m = baml_compiler2_ppir::item_data::function_data(db, **mid);
         m.name.as_str() == member_name
             && !matches!(
                 m.origin,
                 baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
             )
     })?;
-    let m = &item_tree[*method_id];
+    let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+    let method_span = baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span;
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
@@ -1059,20 +1072,20 @@ fn describe_class_method(
             ExportedType::Class { methods, .. } => exported_method(methods, idx, &m.name),
             _ => None,
         });
-    let signature = render_method_signature(db, file, m, ef);
+    let signature = render_method_signature(db, file, method_loc, ef);
 
     // Drill-in shows the body; a builtin native body is elided to the signature.
     let full_body = if matches!(
-        m.body,
-        Some(baml_compiler2_ast::ast::FunctionBodyDef::Builtin(_))
+        baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+        baml_compiler2_hir::body::FunctionBody::Builtin(_)
     ) {
         signature.clone()
     } else {
-        clean_body_source(db, file, m.span)
+        clean_body_source(db, file, method_span)
     };
 
-    let name_span = function_def_name_span(db, file, m.span, member_name)
-        .unwrap_or_else(|| TextRange::empty(m.span.start()));
+    let name_span = function_def_name_span(db, file, method_span, member_name)
+        .unwrap_or_else(|| TextRange::empty(method_span.start()));
 
     // The owning class is the container.
     let container =
@@ -1086,7 +1099,7 @@ fn describe_class_method(
             }
         });
 
-    let references = find_references(db, files, file, name_span, m.span);
+    let references = find_references(db, files, file, name_span, method_span);
 
     Some(SymbolDescription {
         name: m.name.as_str().to_string(),
@@ -1094,7 +1107,7 @@ fn describe_class_method(
         file_path: file_path_string(db, file),
         file,
         name_span,
-        item_range: m.span,
+        item_range: method_span,
         shape: signature.clone(),
         full_body,
         docstring: m.docstring.clone(),
@@ -1164,14 +1177,13 @@ fn collect_method_signature_deps(
     use baml_compiler2_tir::package_interface::ExportedType;
 
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let class_data = &item_tree[class_loc.id(db)];
+    let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
 
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let iface = baml_compiler2_tir::package_interface::package_interface(db, pkg_id);
     let Some(methods) = iface
-        .lookup_type(&pkg_info.namespace_path, &class_data.name)
+        .lookup_type(&pkg_info.namespace_path, &class.name)
         .and_then(|t| match t {
             ExportedType::Class { methods, .. } => Some(methods),
             _ => None,
@@ -1180,8 +1192,8 @@ fn collect_method_signature_deps(
         return;
     };
 
-    for (idx, method_id) in class_data.methods.iter().enumerate() {
-        let m = &item_tree[*method_id];
+    for (idx, method_loc) in class.methods.iter().enumerate() {
+        let m = baml_compiler2_ppir::item_data::function_data(db, *method_loc);
         if matches!(
             m.origin,
             baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
@@ -1375,29 +1387,26 @@ fn find_dependencies(
             // Enums are self-contained, no type dependencies.
         }
         baml_compiler2_hir::contributions::Definition::Interface(iface_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-            let iface = &item_tree[iface_loc.id(db)];
+            let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             for field in &iface.fields {
-                if let Some(te) = &field.type_expr {
-                    collect_type_expr_deps(db, file, te, &mut deps, &mut seen);
+                if let Some(id) = field.type_ref {
+                    collect_type_ref_deps(db, file, &iface.type_refs, id, &mut deps, &mut seen);
                 }
             }
-            for parent in &iface.requires {
-                collect_type_expr_deps(db, file, parent, &mut deps, &mut seen);
+            for &parent in &iface.requires {
+                collect_type_ref_deps(db, file, &iface.type_refs, parent, &mut deps, &mut seen);
             }
         }
         baml_compiler2_hir::contributions::Definition::TypeAlias(alias_loc) => {
-            // Walk the alias's target type expression.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-            let alias = &item_tree[alias_loc.id(db)];
-            if let Some(spanned_te) = &alias.type_expr {
-                collect_type_expr_deps(db, file, spanned_te, &mut deps, &mut seen);
+            // Walk the alias's target type reference.
+            let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+            if let Some(id) = alias.value {
+                collect_type_ref_deps(db, file, &alias.type_refs, id, &mut deps, &mut seen);
             }
         }
         baml_compiler2_hir::contributions::Definition::Client(client_loc) => {
             // Surface the retry policy reference if present.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-            let client = &item_tree[client_loc.id(db)];
+            let client = baml_compiler2_ppir::item_data::client_data(db, client_loc);
             if let Some(ref policy_name) = client.retry_policy_name {
                 let name_str = policy_name.as_str().to_string();
                 if seen.insert(name_str.clone()) {
@@ -1409,8 +1418,7 @@ fn find_dependencies(
         }
         baml_compiler2_hir::contributions::Definition::Test(test_loc) => {
             // Extract the test's function references.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-            let test = &item_tree[test_loc.id(db)];
+            let test = baml_compiler2_ppir::item_data::test_data(db, test_loc);
             for func_name in &test.function_refs {
                 let name_str = func_name.as_str().to_string();
                 if seen.insert(name_str.clone()) {
@@ -1487,6 +1495,70 @@ fn collect_type_expr_deps(
             }
         }
         // Primitives and literals have no user-defined deps.
+        _ => {}
+    }
+}
+
+/// Span-free twin of [`collect_type_expr_deps`], walking a `TypeRefStore` arena
+/// (the firewall's item-data type-reference representation) instead of a spanned
+/// `ast::TypeExpr`. Behavior is identical: only the last path segment is treated
+/// as a candidate dependency name; associated-type projections and primitives
+/// contribute none.
+fn collect_type_ref_deps(
+    db: &dyn Db,
+    file: SourceFile,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    deps: &mut Vec<DepRef>,
+    seen: &mut std::collections::HashSet<String>,
+) {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+    match &store[id].kind {
+        TypeRefKind::Path {
+            segments,
+            generic_args,
+            ..
+        } => {
+            if let Some(last) = segments.last() {
+                let name_str = last.as_str().to_string();
+                if seen.insert(name_str.clone()) {
+                    // Try to resolve this name to find its definition.
+                    if let Some(dep) = resolve_dep(db, file, &name_str) {
+                        deps.push(dep);
+                    }
+                }
+            }
+            for &ga in generic_args {
+                collect_type_ref_deps(db, file, store, ga, deps, seen);
+            }
+        }
+        TypeRefKind::Optional { inner } | TypeRefKind::List { inner } => {
+            collect_type_ref_deps(db, file, store, *inner, deps, seen);
+        }
+        TypeRefKind::Map { key, value } => {
+            collect_type_ref_deps(db, file, store, *key, deps, seen);
+            collect_type_ref_deps(db, file, store, *value, deps, seen);
+        }
+        TypeRefKind::Union { variants } => {
+            for &v in variants {
+                collect_type_ref_deps(db, file, store, v, deps, seen);
+            }
+        }
+        TypeRefKind::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            for p in params {
+                collect_type_ref_deps(db, file, store, p.ty, deps, seen);
+            }
+            collect_type_ref_deps(db, file, store, *ret, deps, seen);
+            if let Some(throws) = throws {
+                collect_type_ref_deps(db, file, store, *throws, deps, seen);
+            }
+        }
+        // Primitives, literals, and associated-type projections have no
+        // user-defined deps (matching `collect_type_expr_deps`).
         _ => {}
     }
 }
@@ -1752,10 +1824,9 @@ fn builtin_signature_range(
     let Definition::Function(func_loc) = def? else {
         return None;
     };
-    let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
     if !matches!(
-        item_tree[func_loc.id(db)].body,
-        Some(baml_compiler2_ast::ast::FunctionBodyDef::Builtin(_))
+        baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+        baml_compiler2_hir::body::FunctionBody::Builtin(_)
     ) {
         return None;
     }

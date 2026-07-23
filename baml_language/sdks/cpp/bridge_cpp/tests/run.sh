@@ -1,21 +1,32 @@
 #!/usr/bin/env bash
-# Configure, build, and run the bridge_cpp core smoke against the locally
-# built cdylib. Builds bridge_cffi first if the library is missing. CMake
-# drives the build; the pinned protobuf/abseil sources are cloned once
-# into target/cpp-protobuf-src and target/cpp-absl-src (shared with the
-# sdk-test harness) and passed via FETCHCONTENT_SOURCE_DIR_* overrides.
+# Configure, build, and run the bridge_cpp core smoke against a locally built
+# cdylib. Uses BAML_RUNTIME_PATH when provided; otherwise builds bridge_cffi if
+# the release-profile library is missing. CMake drives the build; the pinned
+# protobuf/abseil sources are cloned once into target/cpp-protobuf-src and
+# target/cpp-absl-src (shared with the sdk-test harness) and passed via
+# FETCHCONTENT_SOURCE_DIR_* overrides.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 bridge_cpp_dir="$PWD"
 cd ../../..
 
-target="${BAML_CPP_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
-libdir="target/$target/release-bridge-cffi"
-if ! ls "$libdir"/libbridge_cffi.* "$libdir"/bridge_cffi.dll > /dev/null 2>&1; then
-    cargo build --profile release-bridge-cffi -p bridge_cffi --target "$target" \
-        ${BAML_CPP_FEATURES:+--no-default-features --features "$BAML_CPP_FEATURES"}
+runtime_path="${BAML_RUNTIME_PATH:-}"
+if [[ -z "$runtime_path" ]]; then
+    target="${BAML_CPP_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
+    libdir="target/$target/release-bridge-cffi"
+    case "$target" in
+        *apple*) runtime_lib="libbridge_cffi.dylib" ;;
+        *windows*) runtime_lib="bridge_cffi.dll" ;;
+        *) runtime_lib="libbridge_cffi.so" ;;
+    esac
+    if [[ ! -f "$libdir/$runtime_lib" ]]; then
+        cargo build --profile release-bridge-cffi -p bridge_cffi --target "$target" \
+            ${BAML_CPP_FEATURES:+--no-default-features --features "$BAML_CPP_FEATURES"}
+    fi
+    runtime_path="$PWD/$libdir/$runtime_lib"
 fi
+[[ -f "$runtime_path" ]] || { echo "bridge_cffi library not found: $runtime_path" >&2; exit 1; }
 
 # Pre-cloned pinned sources (shared with the sdk-test harness; cloned here
 # when missing so this script stays self-sufficient). Atomic temp+rename so
@@ -35,11 +46,7 @@ build_dir="target/bridge-cpp-smoke"
 cmake -B "$build_dir" -S "$bridge_cpp_dir/tests" \
     -DFETCHCONTENT_SOURCE_DIR_PROTOBUF="$PWD/target/cpp-protobuf-src" \
     -DFETCHCONTENT_SOURCE_DIR_ABSL="$PWD/target/cpp-absl-src" > /dev/null
-cmake --build "$build_dir" -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" > /dev/null
+cmake --build "$build_dir" --target runtime_smoke \
+    -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" > /dev/null
 
-case "$target" in
-    *apple*) runtime_lib="libbridge_cffi.dylib" ;;
-    *windows*) runtime_lib="bridge_cffi.dll" ;;
-    *) runtime_lib="libbridge_cffi.so" ;;
-esac
-BAML_RUNTIME_PATH="$PWD/$libdir/$runtime_lib" "$build_dir/runtime_smoke"
+BAML_RUNTIME_PATH="$runtime_path" "$build_dir/runtime_smoke"

@@ -48,6 +48,8 @@ pub struct Artifacts {
     #[serde(default)]
     pub nodejs: Option<SdkArtifact>,
     #[serde(default)]
+    pub java: Option<JavaArtifact>,
+    #[serde(default)]
     pub cffi: Option<CffiArtifact>,
 }
 
@@ -82,6 +84,27 @@ pub struct PythonArtifact {
 /// onto the contract.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SdkArtifact {
+    /// Built best-effort: a build failure must not block the release.
+    #[serde(default)]
+    pub experimental: bool,
+}
+
+/// The per-target `bridge_java` native jar (`baml_bridge`'s `natives-<platform>`
+/// classifier artifact carrying the `bridge_java` cdylib).
+#[derive(Debug, Clone, Deserialize)]
+pub struct JavaArtifact {
+    /// `<os>-<arch>` classifier token for the natives jar
+    /// (`baml-bridge-<version>-natives-<platform>.jar`), also passed to Gradle
+    /// as `-PbamlNativePlatform` and used as the `/native/<platform>/` resource
+    /// dir the loader reads. musl targets carry a `-musl` suffix so their jar
+    /// does not collide with the gnu jar (the runtime loader resolves only the
+    /// bare `<os>-<arch>` token today; the `-musl` jars are for explicit-
+    /// classifier consumers and are experimental).
+    pub platform: String,
+    /// GitHub Actions runner label (native-arch, distinct from the `os` family):
+    /// the cdylib is built natively per target so `cargo build --target` needs
+    /// no cross C toolchain except the musl linker (`setup-musl-cross`).
+    pub runner: String,
     /// Built best-effort: a build failure must not block the release.
     #[serde(default)]
     pub experimental: bool,
@@ -209,6 +232,48 @@ mod tests {
         }
     }
 
+    /// Every target ships a Java native jar, on a native-arch runner.
+    #[test]
+    fn every_target_has_a_java_runner() {
+        for t in platforms().targets {
+            let java = t
+                .artifacts
+                .java
+                .as_ref()
+                .unwrap_or_else(|| panic!("{}: java artifact missing", t.triple));
+            assert!(!java.runner.is_empty(), "{}: empty java runner", t.triple);
+        }
+    }
+
+    /// The Java `platform` token is the `<os>-<arch>` classifier the natives jar
+    /// and the `NativeLibraryLoader` resource path are built from (musl gets a
+    /// `-musl` suffix so its jar does not collide with the gnu jar).
+    #[test]
+    fn java_platform_tokens_follow_the_natives_classifier_convention() {
+        for t in platforms().targets {
+            let Some(java) = &t.artifacts.java else {
+                continue;
+            };
+            let os_token = match t.os.as_str() {
+                "macos" => "macos",
+                "linux" => "linux",
+                "windows" => "windows",
+                other => panic!("{}: unknown os {other}", t.triple),
+            };
+            let base = format!("{os_token}-{}", t.arch);
+            let expected = if t.libc.as_deref() == Some("musl") {
+                format!("{base}-musl")
+            } else {
+                base
+            };
+            assert_eq!(
+                java.platform, expected,
+                "{}: unexpected java platform token",
+                t.triple
+            );
+        }
+    }
+
     /// The recorded cffi asset name must match the loader's filename convention
     /// (`libbaml_cffi-<triple>.{so,dylib}` / `baml_cffi-<triple>.dll`).
     #[test]
@@ -241,5 +306,6 @@ mod tests {
         assert!(p.artifacts.cffi.is_none(), "absent cffi is unsupported");
         assert!(p.artifacts.python.is_none());
         assert!(p.artifacts.nodejs.is_none());
+        assert!(p.artifacts.java.is_none());
     }
 }

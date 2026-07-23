@@ -373,6 +373,61 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+/// A callable that crosses a host boundary may itself be host-owned. APIs such
+/// as the HTTP server retain a callable handle and later ask the engine to
+/// invoke it as a fresh VM root, so that entry path must accept the same
+/// `HostClosure` values that `CallIndirect` accepts inside BAML bytecode.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
+    let source = r#"
+        function retain_callable(f: (int) -> int throws never) -> (int) -> int throws never {
+            return f;
+        }
+    "#;
+    let arc = register_host_callable(|items| {
+        let n = match items.first().and_then(|v| v.value.as_ref()) {
+            Some(baml_outbound_value::Value::IntValue(i)) => *i,
+            other => {
+                return FakeReturn::Err {
+                    class_name: "TypeError".to_string(),
+                    message: format!("expected int arg, got {other:?}"),
+                };
+            }
+        };
+        FakeReturn::Ok(BexExternalValue::Int(n + 1))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+
+    let retained = engine
+        .call_function(
+            "retain_callable",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("retaining the host callable should succeed");
+    let BexExternalValue::Handle(handle) = retained else {
+        panic!("retained callable should cross the boundary as a handle");
+    };
+
+    let result = engine
+        .call_callable(
+            handle,
+            vec![BexExternalValue::Int(41)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host callable handle should be invokable");
+    assert_eq!(result, BexExternalValue::Int(42));
+    drop(arc);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
     let source = r#"
@@ -566,6 +621,40 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
         BexExternalValue::Array { ref items, .. }
             if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
     ));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
+    let source = r#"
+        function call_host_with_id(
+            f: (int) -> int throws baml.errors.InvalidArgument,
+            x: int,
+        ) -> string {
+            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
+                baml.errors.InvalidArgument => "caught"
+            }
+        }
+    "#;
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let result = engine
+        .call_function(
+            "call_host_with_id",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host-callable rejection should be caught in BAML");
+    assert_eq!(result, BexExternalValue::String("caught".into()));
     drop(arc);
 }
 
@@ -1187,6 +1276,70 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 }
 
 // ============================================================================
+// On-contract throw via interface membership: a callback declares
+//         `throws HasMessage` (an interface) and the host throws a
+//         `baml.errors.HostCallable`, which *implements* `HasMessage` (via a
+//         standalone `implement HasMessage for baml.errors.HostCallable` block).
+//         The throws-contract check must see the membership and treat the throw
+//         as on-contract — surfacing it as a catchable `HostCallable`, NOT a
+//         `HostContractViolation` panic.
+//
+//         Pins the fix that routes the contract check through the canonical,
+//         program-aware type algebra (`baml_type::normalize::is_subtype` over the
+//         VM as its `TypeContext`), which resolves interface membership. The prior
+//         context-free `RuntimeTy::is_subtype_of` fork saw no membership —
+//         `Class <: Interface` was simply `false` — and would have wrongly
+//         rejected this throw as a contract violation.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
+    // A method interface (not a field interface — those may only be implemented
+    // in-body, E0126) so `HostCallable` can implement it out-of-body.
+    let source = r#"
+        interface Failure {
+            function kind(self) -> string throws never
+        }
+        implement Failure for baml.errors.HostCallable {
+            function kind(self) -> string throws never { "host" }
+        }
+        function call_typed(f: (int) -> int throws Failure, x: int) -> int {
+            return f(x);
+        }
+    "#;
+
+    // The fake dispatch materializes every throw as a `baml.errors.HostCallable`
+    // instance (per `complete_with_test_error`). `HostCallable` implements the
+    // declared `throws Failure` interface, so the throw is on-contract and must
+    // propagate as a catchable value rather than a contract-violation panic.
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_typed",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_host_callable_throw(&result);
+    drop(arc);
+}
+
+// ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The FFI entry boundary normalizes the synthesized effect
 //         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::BuiltinUnknown` so the contract
@@ -1442,24 +1595,20 @@ async fn host_callable_wrong_enum_identity_panics_as_host_contract_violation() {
 
 // ============================================================================
 // Function-typed return: the callback's declared return type is itself a
-//         callable (`() -> int`) and the host returns a `HostValue`. The engine
-//         can't materialize a *returned* callable (the result-push has no
-//         declared type to bind an `Object::HostClosure`), so the validator
-//         rejects it as a `baml.panics.HostContractViolation` rather than
-//         letting it die downstream as a raw `CannotConvert`.
+// callable (`() -> int`) and the host returns a second `HostValue`. The engine
+// binds that result to a `HostClosure`, which can be invoked immediately.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_returning_a_callable_is_rejected() {
+async fn host_callable_returning_a_callable_can_be_invoked() {
     let source = r#"
         function call_returns_callable(f: (int) -> (() -> int throws never), x: int) -> int {
-            f(x);
-            return 0;
+            return f(x)();
         }
     "#;
 
     // The callback returns *another* host callable (a function-typed value).
-    let returned = HostValueArc::new(next_host_key(), HostValueKind::Callable);
+    let returned = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(99)));
     let returned_for_cb = Arc::clone(&returned);
     let arc = register_host_callable(move |_items| {
         FakeReturn::Ok(BexExternalValue::HostValue(Arc::clone(&returned_for_cb)))
@@ -1483,31 +1632,10 @@ async fn host_callable_returning_a_callable_is_rejected() {
         )
         .await;
 
-    // Returning a callable where a non-function type is declared is a
-    // wrong-return-type contract violation — surfaces as
-    // `baml.panics.HostContractViolation` rather than a raw `CannotConvert`.
-    match result {
-        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance {
-                class_name, fields, ..
-            } => {
-                assert_eq!(class_name, "baml.panics.HostContractViolation");
-                match fields.get("message") {
-                    Some(BexExternalValue::String(m)) => assert!(
-                        // The diagnostic comes from `validate_host_return`'s
-                        // type-mismatch message and surfaces the actual
-                        // value-tree name ("function") rather than literally
-                        // "callable", so check for any non-empty message.
-                        !m.is_empty(),
-                        "expected a non-empty message field, got {m:?}"
-                    ),
-                    other => panic!("expected a message field, got {other:?}"),
-                }
-            }
-            other => panic!("expected Instance, got {other:?}"),
-        },
-        other => panic!("expected UnhandledThrow(HostCallable), got {other:?}"),
-    }
+    assert!(
+        matches!(result, Ok(BexExternalValue::Int(99))),
+        "returned host callable should remain callable, got {result:?}"
+    );
     drop(arc);
     drop(returned);
 }

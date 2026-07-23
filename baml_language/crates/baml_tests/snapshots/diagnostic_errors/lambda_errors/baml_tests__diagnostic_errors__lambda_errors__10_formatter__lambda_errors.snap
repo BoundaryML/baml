@@ -20,23 +20,17 @@ function test_no_annotation_no_context() -> int {
 // Arity mismatch: lambda has wrong number of params for expected type
 function test_arity_mismatch() -> int[] {
     let items: int[] = [1, 2, 3];
-    items
-        .map(
-            (x, y) -> {
-                x
-            },
-        )
+    items.map((x, y) -> {
+        x
+    })
 }
 
 // Wrong param type annotation vs expected
 function test_param_type_mismatch() -> int[] {
     let items: int[] = [1, 2, 3];
-    items
-        .map(
-            (x: string) -> {
-                x
-            },
-        )
+    items.map((x: string) -> {
+        x
+    })
 }
 
 // Unknown type name in lambda param annotation (should report UnresolvedType)

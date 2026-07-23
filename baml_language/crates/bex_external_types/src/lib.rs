@@ -24,6 +24,7 @@
 mod bex_external_value;
 mod handle;
 mod host_return;
+mod runtime_ty_identity;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
@@ -36,3 +37,4 @@ pub use bex_resource_types::{
 pub use bex_str::BexStr;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_return::{HostReturnTypeError, validate_host_return, value_satisfies_json};
+pub use runtime_ty_identity::{runtime_ty_structurally_equal, selected_arm_equal};

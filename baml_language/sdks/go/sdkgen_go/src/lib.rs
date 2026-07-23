@@ -2493,28 +2493,46 @@ fn projected_input_encoder(
         GoTy::Enum(name) | GoTy::EnumVariant(name, _) => codecs
             .enum_ident(name, EnumCodecDirection::Encode)
             .to_string(),
-        GoTy::List(inner) => format!(
-            "{runtime}.ListEncoder({})",
-            projected_input_encoder(
+        GoTy::List(inner) => {
+            let descriptor = scoped_baml_type_descriptor(
                 inner,
                 current_baml_package,
                 current_package,
                 names,
-                codecs,
-                type_vars
+                type_vars,
+            );
+            format!(
+                "{runtime}.ListEncoderWithType({descriptor}, {})",
+                projected_input_encoder(
+                    inner,
+                    current_baml_package,
+                    current_package,
+                    names,
+                    codecs,
+                    type_vars
+                )
             )
-        ),
-        GoTy::Map { value, .. } => format!(
-            "{runtime}.MapEncoder({})",
-            projected_input_encoder(
+        }
+        GoTy::Map { value, .. } => {
+            let descriptor = scoped_baml_type_descriptor(
                 value,
                 current_baml_package,
                 current_package,
                 names,
-                codecs,
-                type_vars
+                type_vars,
+            );
+            format!(
+                "{runtime}.MapEncoderWithType({descriptor}, {})",
+                projected_input_encoder(
+                    value,
+                    current_baml_package,
+                    current_package,
+                    names,
+                    codecs,
+                    type_vars
+                )
             )
-        ),
+        }
         GoTy::Optional(inner) if matches!(inner.as_ref(), GoTy::Bigint) => {
             format!("{runtime}.OptionalBigInt")
         }
@@ -3596,6 +3614,23 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         ),
         GoTy::Function(_) => unreachable!("function values do not have a public Go descriptor"),
         GoTy::Unsupported => unreachable!("unsupported type has no BAML descriptor"),
+    }
+}
+
+fn scoped_baml_type_descriptor(
+    ty: &GoTy,
+    current_baml_package: &BaseName,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    type_vars: TypeVarScope<'_>,
+) -> String {
+    if projected_contains_type_var(ty) {
+        let runtime = GeneratorIdent::RuntimePackage;
+        let go_type =
+            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars);
+        format!("{runtime}.TypeOf[{go_type}]()")
+    } else {
+        baml_type_descriptor(ty, names)
     }
 }
 
@@ -5280,7 +5315,9 @@ mod tests {
                 .contains("\"state\":_bamlEncodeEnum0(value_.State)")
         );
         assert!(functions.contains("baml_go.OptionalEncoder(_bamlEncodeEnum0)(value_.Optional)"));
-        assert!(functions.contains("baml_go.ListEncoder(_bamlEncodeEnum0)"));
+        assert!(functions.contains(
+            "baml_go.ListEncoderWithType(baml_go.EnumBAMLType(\"user.review_queue.response_state\"), _bamlEncodeEnum0)"
+        ));
     }
 
     #[test]
@@ -5671,7 +5708,7 @@ mod tests {
             "func RoundTripOptionalItems(ctx_ context.Context, items *[]*string) (*[]*string, error)"
         ));
         assert!(functions.contains(
-            "baml_go.OptionalEncoder(baml_go.ListEncoder(baml_go.OptionalEncoder(baml_go.String)))(items)"
+            "baml_go.OptionalEncoder(baml_go.ListEncoderWithType(baml_go.OptionalBAMLType(baml_go.PrimitiveBAMLType(baml_go.StringType)), baml_go.OptionalEncoder(baml_go.String)))(items)"
         ));
         assert!(functions.contains(
             "baml_go.OptionalDecoder(baml_go.ListDecoder(baml_go.OptionalDecoder(baml_go.Value.String)))(result_)"

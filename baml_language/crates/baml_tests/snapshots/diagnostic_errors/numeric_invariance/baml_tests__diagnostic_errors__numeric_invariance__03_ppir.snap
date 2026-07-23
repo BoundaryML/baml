@@ -1,0 +1,62 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 51955
+---
+=== PPIR ===
+class user.BigintHolder {
+  count: bigint
+}
+class user.BigintHolder$stream {
+  count: bigint | null
+}
+function user.BigintParamDefaultInt(x: bigint = 0) -> bigint  [expr] {
+  {  } x
+}
+function user.IntArrayToBigintArray() -> bigint[]  [expr] {
+  { let a = [1, 2] } a
+}
+function user.IntArrayToFloatArray() -> float[]  [expr] {
+  { let a = [1, 2] } a
+}
+function user.IntFieldIntoBigintClass() -> user.BigintHolder  [expr] {
+  {  } user.BigintHolder { count: 1 }
+}
+function user.IntLiteralArrayToBigint() -> bigint[]  [expr] {
+  {  } [1, 2]
+}
+function user.IntLiteralToBigint() -> bigint  [expr] {
+  {  } 1
+}
+function user.IntLiteralToFloat() -> float  [expr] {
+  {  } 1
+}
+function user.IntMapLiteralToBigint() -> map<string, bigint>  [expr] {
+  {  } map { "a": 1 }
+}
+function user.IntMapToBigintMap() -> map<string, bigint>  [expr] {
+  { let m = map { "a": 1 } } m
+}
+function user.IntToBigint(x: int) -> bigint  [expr] {
+  {  } x
+}
+function user.IntToFloat(x: int) -> float  [expr] {
+  {  } x
+}
+function user.NestedIntArrayToBigint() -> bigint[][]  [expr] {
+  {  } [[1], [2]]
+}
+function user.OptionalFloatEqBigint(x: float?, y: bigint) -> bool  [expr] {
+  {  } x Eq y
+}
+function user.OptionalFloatLtBigint(x: float?, y: bigint) -> bool  [expr] {
+  {  } x Lt y
+}
+function user.OptionalIntAndInt(x: int?, y: int) -> int  [expr] {
+  {  } x BitAnd y
+}
+function user.OptionalIntLtInt(x: int?, y: int) -> bool  [expr] {
+  {  } x Lt y
+}
+function user.OptionalIntPlusInt(x: int?, y: int) -> int  [expr] {
+  {  } x Add y
+}

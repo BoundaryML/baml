@@ -490,10 +490,8 @@ func (value Value) UnionVariant() (BAMLType, Value, error) {
 }
 
 // validateUnionVariant treats outbound union metadata as untrusted ABI input.
-// The Go bridge and native runtime require an exact product-version match, so
-// self_type and selected_type are mandatory. selected_option_index remains
-// optional solely for envelopes emitted during its protobuf rollout; when it
-// is present, it must agree exactly with selected_type and self_type.
+// The selected arm is derived exclusively from the canonical index into the
+// full self type.
 func validateUnionVariant(variant *cffi.BamlValueUnionVariant) (BAMLType, Value, error) {
 	if variant == nil {
 		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant metadata is missing")
@@ -501,38 +499,26 @@ func validateUnionVariant(variant *cffi.BamlValueUnionVariant) (BAMLType, Value,
 	if variant.SelfType == nil || variant.SelfType.Ty == nil {
 		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant is missing self type metadata")
 	}
-	if variant.SelectedType == nil || variant.SelectedType.Ty == nil {
-		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant is missing selected type metadata")
-	}
 	if variant.Value == nil {
 		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant has an empty value")
+	}
+	if variant.SelectedOptionIndex == nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant is missing selected option index")
 	}
 
 	options, err := unionTypeOptions(variant.SelfType)
 	if err != nil {
 		return BAMLType{}, Value{}, err
 	}
-	selectedIndex := -1
-	for index, option := range options {
-		if equalBAMLType(option, variant.SelectedType, false) {
-			selectedIndex = index
-			break
-		}
+	rawIndex := *variant.SelectedOptionIndex
+	if uint64(rawIndex) >= uint64(len(options)) {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d is outside self type with %d options", rawIndex, len(options))
 	}
-	if selectedIndex < 0 {
-		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected type is not a member of self type")
+	selectedType := options[int(rawIndex)]
+	if err := validateBAMLType(selectedType, 0); err != nil {
+		return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d has invalid type metadata: %w", rawIndex, err)
 	}
-	if variant.SelectedOptionIndex != nil {
-		rawIndex := *variant.SelectedOptionIndex
-		if uint64(rawIndex) >= uint64(len(options)) {
-			return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d is outside self type with %d options", rawIndex, len(options))
-		}
-		index := int(rawIndex)
-		if index != selectedIndex || !equalBAMLType(options[index], variant.SelectedType, false) {
-			return BAMLType{}, Value{}, fmt.Errorf("BAML union variant selected option index %d disagrees with selected type at index %d", index, selectedIndex)
-		}
-	}
-	return BAMLType{value: variant.SelectedType}, Value{value: variant.Value}, nil
+	return BAMLType{value: selectedType}, Value{value: variant.Value}, nil
 }
 
 func unionTypeOptions(selfType *cffi.BamlTy) ([]*cffi.BamlTy, error) {

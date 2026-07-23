@@ -303,7 +303,11 @@ impl<'a> GoTypeProjection<'a> {
                 throws,
                 ..
             } => {
-                let throws = if matches!(throws.as_ref(), Ty::Never { .. }) {
+                let throws = if matches!(throws.as_ref(), Ty::Never { .. })
+                    || matches!(
+                        throws.as_ref(),
+                        Ty::TypeVar(name, _) if name.as_str().starts_with("__effect_param_")
+                    ) {
                     false
                 } else if self.throws_accepts_host_callable(throws, aliases) {
                     true
@@ -1111,6 +1115,15 @@ mod tests {
                 union(vec![validation_error, host_callable_error()]),
             )),
             GoTy::Function(key) if key.throws()
+        ));
+
+        assert!(matches!(
+            projection.project(&callable(
+                vec![],
+                Ty::String { attr: a() },
+                Ty::TypeVar(BaseName::new("__effect_param_0"), a()),
+            )),
+            GoTy::Function(key) if !key.throws()
         ));
     }
 }

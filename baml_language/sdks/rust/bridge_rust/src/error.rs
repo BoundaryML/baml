@@ -135,6 +135,24 @@ pub enum DecodeError {
         /// FQN that arrived on the wire.
         got: String,
     },
+    /// A `baml.errors.HostCallable`'s `_handle` did not resolve to a live
+    /// same-process host value. Always a bridge-lifetime bug: exactly one
+    /// bridge exists per process, and the registry entry must outlive
+    /// every possible arrival of the value.
+    DeadHostHandle {
+        /// The unresolvable handle key.
+        key: u64,
+    },
+    /// A `baml.errors.HostCallable` was decoded into a concrete
+    /// `HostCallable<T>`, but the rehydrated original host error is not a
+    /// `T`. Not engine drift — the value is a genuine host error of some
+    /// *other* type; `decode_result` folds this into [`Error::Runtime`],
+    /// the same as any non-declared error-arm value. Decode into the
+    /// erased `HostCallable` and `downcast` to inspect the real type.
+    HostCallableTypeMismatch {
+        /// The `type_name` of the expected `T`.
+        expected: &'static str,
+    },
     /// An enum value's variant does not exist on the expected enum.
     UnknownEnumVariant {
         /// Expected enum FQN.
@@ -146,6 +164,15 @@ pub enum DecodeError {
     InvalidBigint {
         /// Length of the offending wire string.
         len: usize,
+    },
+    /// A union envelope selected an arm outside the generated union's range.
+    InvalidUnionOptionIndex {
+        /// Generated union type being decoded.
+        union: &'static str,
+        /// Index carried by the wire envelope.
+        index: u32,
+        /// Number of representable generated arms.
+        arm_count: usize,
     },
 }
 
@@ -166,6 +193,24 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::InvalidBigint { len } => {
                 write!(f, "invalid bigint wire string ({len} bytes)")
+            }
+            DecodeError::InvalidUnionOptionIndex {
+                union,
+                index,
+                arm_count,
+            } => write!(
+                f,
+                "union {union} selected option index {index}, but it has {arm_count} arms"
+            ),
+            DecodeError::DeadHostHandle { key } => {
+                write!(
+                    f,
+                    "host-value handle {key} did not resolve to a live entry \
+                     (bridge-lifetime bug)"
+                )
+            }
+            DecodeError::HostCallableTypeMismatch { expected } => {
+                write!(f, "host error is not the expected {expected}")
             }
         }
     }

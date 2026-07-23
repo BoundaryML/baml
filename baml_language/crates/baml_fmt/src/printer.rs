@@ -23,23 +23,6 @@ impl<'a> Printer<'a> {
         }
     }
 
-    #[inline]
-    #[must_use]
-    pub fn new(
-        input: &'a str,
-        config: &'a FormatOptions,
-        output: String,
-        trivia: &'a TriviaInfo,
-    ) -> Self {
-        Printer {
-            input,
-            config,
-            output,
-            trivia,
-            warnings: Vec::new(),
-        }
-    }
-
     /// Prints some number of spaces. Useful for indentation.
     #[inline]
     pub fn print_spaces(&mut self, num: usize) {
@@ -315,18 +298,6 @@ impl<'a> Printer<'a> {
         Printer::new_empty(self.input, self.config, self.trivia)
     }
 
-    /// Runs the function on a sub-printer (a copy of the current printer but with an empty output).
-    ///
-    /// The output of the sub-printer is returned, without changing the current printer.
-    pub fn with_sub_printer(
-        &self,
-        f: impl FnOnce(&mut Printer<'a>) -> PrintInfo,
-    ) -> (String, PrintInfo, Vec<PrinterWarning>) {
-        let mut empty_copy = Printer::new_empty(self.input, self.config, self.trivia);
-        let info = f(&mut empty_copy);
-        (empty_copy.output, info, empty_copy.warnings)
-    }
-
     /// Runs the function on a sub-printer  (a copy of the current printer but with an empty output).
     /// If the function returns `Some(info)`, the sub-printer
     /// is appended to the current printer and the info is returned. Otherwise, the sub-printer is
@@ -380,13 +351,8 @@ impl<'a> Printer<'a> {
 
     /// The current length of the output.
     #[must_use]
-    pub const fn len(&self) -> usize {
+    pub(crate) const fn len(&self) -> usize {
         self.output.len()
-    }
-
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.output.is_empty()
     }
 }
 

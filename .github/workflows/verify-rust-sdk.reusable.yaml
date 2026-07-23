@@ -50,29 +50,43 @@ defaults:
     shell: bash
 
 jobs:
+  platform-matrix:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: release
+      - id: derive
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: ([.targets[]
+            | select((.os == "linux" or .os == "macos")
+                     and .libc != "musl"
+                     and .artifacts.toolchain != null
+                     and .artifacts.cffi != null)
+            | {target: .triple, os: .artifacts.toolchain.runner}]
+            + [{target: "x86_64-unknown-linux-gnu",
+                os: (.targets[]
+                     | select(.triple == "x86_64-unknown-linux-gnu")
+                     | .artifacts.toolchain.runner),
+                toolchain: "1.91.1",
+                label: " (MSRV)",
+                compile_only: true}])}' release/platforms.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   verify:
+    needs: platform-matrix
     name: verify rust sdk (${{ matrix.target }}${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: aarch64-apple-darwin
-            os: macos-14
-          # MSRV leg: prove the packaged crate + generated SDK compile on the
-          # crate's declared minimum Rust. Compile-only — it skips the runtime
-          # engine-acquisition smokes.
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-            toolchain: "1.91.1"
-            label: " (MSRV)"
-            compile_only: true
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
     env:
       TARGET: ${{ matrix.target }}
     steps:
@@ -128,6 +142,7 @@ jobs:
           echo "dylib=$(abspath "$dylib")" >> "$GITHUB_OUTPUT"
 
       - name: Assert version triple (crate == dylib version() == plan canonical)
+        working-directory: baml_language
         run: |
           set -euo pipefail
           crate_version="$(basename "${{ steps.art.outputs.crate }}" .crate)"
@@ -135,7 +150,9 @@ jobs:
           [[ "$crate_version" == "$CANONICAL" ]] || {
             echo "::error::crate version ${crate_version} != plan canonical ${CANONICAL}"; exit 1; }
           # dylib version() must equal the plan canonical too.
-          python3 scripts/smoke-bridge-cffi.py "${{ steps.art.outputs.dylib }}" "$CANONICAL"
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
+            "${{ steps.art.outputs.dylib }}" \
+            "$CANONICAL"
 
       - name: Extract baml-cli from the same-plan toolchain artifact
         id: cli

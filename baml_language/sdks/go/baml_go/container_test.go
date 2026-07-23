@@ -34,16 +34,17 @@ func TestGeneratedContainerEncodersPreserveStaticElementTypes(t *testing.T) {
 	if list.err != nil {
 		t.Fatal(list.err)
 	}
-	want := PrimitiveBAMLType(IntType).value
-	if got := list.value.GetListValue().ItemType; !reflect.DeepEqual(got, want) {
-		t.Fatalf("list item type = %#v, want %#v", got, want)
+	want := ListBAMLType(PrimitiveBAMLType(IntType)).value
+	if got := list.value.GetValueType(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("list value type = %#v, want %#v", got, want)
 	}
 
 	object := MapEncoder(Int64)(nil)
 	if object.err != nil {
 		t.Fatal(object.err)
 	}
-	if got := object.value.GetMapValue().ValueType; !reflect.DeepEqual(got, want) {
+	want = MapBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(IntType)).value
+	if got := object.value.GetValueType(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("map value type = %#v, want %#v", got, want)
 	}
 }

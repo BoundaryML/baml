@@ -103,27 +103,6 @@ pub struct TestSymbol {
     pub args_json: String,
 }
 
-/// List all functions in the project.
-pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
-    let pkg_id = PackageId::new(db, Name::new("user"));
-    let pkg = package_items(db, pkg_id);
-    let mut result = Vec::new();
-    for ns_items in pkg.namespaces.values() {
-        for (name, defn) in &ns_items.values {
-            if defn.kind() == DefinitionKind::Function {
-                result.push(Symbol {
-                    name: name.to_string(),
-                    kind: SymbolKind::Function,
-                    file_path: defn.file(db).path(db).clone(),
-                    span: baml_db::Span::default(),
-                });
-            }
-        }
-    }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
-    result
-}
-
 /// List user-facing functions with metadata for the playground, along with
 /// the shared type table their param schemas reference.
 ///

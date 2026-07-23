@@ -45,9 +45,20 @@ pub enum BridgeLanguage {
     Rust = 4,
     CSharp = 5,
     Cpp = 6,
+    Java = 7,
+    Swift = 8,
 }
 
 impl BridgeLanguage {
+    const fn inbound_union_ambiguity_policy(self) -> bex_project::InboundUnionAmbiguityPolicy {
+        match self {
+            Self::NodeJs | Self::Python => bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
+            Self::Go | Self::Rust | Self::CSharp | Self::Cpp | Self::Java | Self::Swift => {
+                bex_project::InboundUnionAmbiguityPolicy::Reject
+            }
+        }
+    }
+
     pub const fn telemetry_name(self) -> &'static str {
         match self {
             Self::NodeJs => "nodejs",
@@ -56,6 +67,8 @@ impl BridgeLanguage {
             Self::Rust => "rust",
             Self::CSharp => "csharp",
             Self::Cpp => "cpp",
+            Self::Java => "java",
+            Self::Swift => "swift",
         }
     }
 
@@ -67,6 +80,8 @@ impl BridgeLanguage {
             Self::Rust => "Rust",
             Self::CSharp => "C#",
             Self::Cpp => "C++",
+            Self::Java => "Java",
+            Self::Swift => "Swift",
         }
     }
 }
@@ -82,6 +97,8 @@ impl TryFrom<u32> for BridgeLanguage {
             4 => Ok(Self::Rust),
             5 => Ok(Self::CSharp),
             6 => Ok(Self::Cpp),
+            7 => Ok(Self::Java),
+            8 => Ok(Self::Swift),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }
@@ -174,7 +191,11 @@ pub fn register_bridge(info: BridgeInfo) -> Result<&'static BridgeInfo, String> 
             info.language.display_name(),
         ));
     }
-    REGISTERED_BRIDGE.register(info)
+    let registered = REGISTERED_BRIDGE.register(info)?;
+    bex_project::register_inbound_union_ambiguity_policy(
+        registered.language.inbound_union_ambiguity_policy(),
+    )?;
+    Ok(registered)
 }
 
 /// Register the calling bridge and check SDK/runtime compatibility.
@@ -374,6 +395,28 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("already registered by the Node.js SDK"));
         assert!(error.contains("cannot also register the Python SDK"));
+    }
+
+    #[test]
+    fn bridge_language_selects_one_process_wide_inbound_policy() {
+        use bex_project::InboundUnionAmbiguityPolicy::{Reject, SelectDefault};
+
+        assert_eq!(
+            BridgeLanguage::NodeJs.inbound_union_ambiguity_policy(),
+            SelectDefault
+        );
+        assert_eq!(
+            BridgeLanguage::Python.inbound_union_ambiguity_policy(),
+            SelectDefault
+        );
+        for language in [
+            BridgeLanguage::Go,
+            BridgeLanguage::Rust,
+            BridgeLanguage::CSharp,
+            BridgeLanguage::Cpp,
+        ] {
+            assert_eq!(language.inbound_union_ambiguity_policy(), Reject);
+        }
     }
 
     #[test]

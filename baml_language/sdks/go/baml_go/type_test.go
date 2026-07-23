@@ -55,11 +55,11 @@ func TestReflectedTypeDescriptorsComposeAndCompareExactly(t *testing.T) {
 	}
 
 	list := Any([]BAMLType{})
-	if list.err != nil || list.value.GetListValue() == nil || list.value.GetListValue().ItemType == nil {
+	if list.err != nil || list.value.GetListValue() == nil || list.value.GetValueType() == nil {
 		t.Fatalf("empty []BAMLType lost its static descriptor: %#v, %v", list.value, list.err)
 	}
-	if !(BAMLType{value: list.value.GetListValue().ItemType}).Equal(MetaTypeBAMLType()) {
-		t.Fatal("[]BAMLType item descriptor is not the BAML metatype")
+	if !(BAMLType{value: list.value.GetValueType()}).Equal(ListBAMLType(MetaTypeBAMLType())) {
+		t.Fatal("[]BAMLType value descriptor is not a list of the BAML metatype")
 	}
 }
 

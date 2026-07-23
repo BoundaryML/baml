@@ -34,8 +34,9 @@ mod map;
 mod media;
 mod ops;
 mod ops_math;
+mod random;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
+pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
 mod stack_trace;
@@ -118,9 +119,10 @@ pub trait Continuation: Send {
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
-/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch) whose only
-/// job is to dispatch one call and surface its value.
-pub(super) struct PassThroughContinuation;
+/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch,
+/// `reflect.call_any`) whose only job is to dispatch one call and surface its
+/// value.
+pub(crate) struct PassThroughContinuation;
 
 impl Continuation for PassThroughContinuation {
     fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
@@ -379,6 +381,26 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
 // They delegate to the generated glue methods on `VmNatives`.
 // =============================================================================
 
+/// The stdlib packages whose natives this VM implements, each paired with its
+/// dispatcher. Every one dispatches through its generated root trait (see `baml_builtins2_codegen`), so no entry can drift from its
+/// `.baml` declarations.
+///
+/// One entry per package drives both resolution and the missing-native check,
+/// so adding a package is a single line here plus its `build.rs` generation.
+type NativeResolver = fn(&str) -> Option<NativeFunction>;
+
+const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
+    ("baml.", PackageBamlImpl::get_native_fn),
+    (
+        "reflect.",
+        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
+    ),
+    (
+        "boundary.",
+        <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
+    ),
+];
+
 /// Resolves native function pointers for unresolved native functions in objects.
 ///
 /// Only functions in VM-owned native namespaces are resolved here. Functions
@@ -392,22 +414,20 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only attempt resolution for VM-owned native packages. Functions
-                    // from other stdlib packages (assert, testing, …) are deferred.
-                    let native_function = if function.name.starts_with("baml.") {
-                        PackageBamlImpl::get_native_fn(function.name.as_str())
-                    } else if function.name.starts_with("boundary.") {
-                        crate::package_boundary::get_native_fn(function.name.as_str())
-                    } else {
-                        None
-                    };
-                    match native_function {
+                    // Only VM-owned packages resolve here; functions from other
+                    // stdlib packages (assert, testing, …) stay unresolved for a
+                    // future implementation to wire up.
+                    let owner = VM_NATIVE_PACKAGES
+                        .iter()
+                        .find(|(prefix, _)| function.name.starts_with(prefix));
+                    match owner.and_then(|(_, resolve)| resolve(function.name.as_str())) {
                         Some(native_function) => {
                             bex_vm_types::FunctionKind::Native(native_function as *const ())
                         }
-                        None if function.name.starts_with("baml.")
-                            || function.name.starts_with("boundary.") =>
-                        {
+                        // A VM-owned name with no native is a build error, not a
+                        // deferral: the package's generated trait requires an
+                        // implementation for every `$rust_function` it declares.
+                        None if owner.is_some() => {
                             return Err(VmInternalError::MissingNativeFunction {
                                 name: function.name.clone(),
                             });
@@ -420,6 +440,8 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
             Object::Function(Box::new(bex_vm_types::Function {
                 name: function.name,
                 source_file: function.source_file,
+                docstring: function.docstring,
+                declared_name: function.declared_name,
                 arity: function.arity,
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,

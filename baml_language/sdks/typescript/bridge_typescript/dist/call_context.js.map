@@ -1,0 +1,1 @@
+{"version":3,"file":"call_context.js","sourceRoot":"","sources":["../typescript_src/call_context.ts"],"names":[],"mappings":"AAMA,2EAA2E;AAC3E,MAAM,UAAU,iBAAiB,CAC7B,GAAgC,EAChC,MAAc;IAEd,MAAM,UAAU,GAAG,MAAM,CAAC,QAAQ,EAAE,CAAC;IACrC,GAAG,EAAE,aAAa,CAAC,UAAU,CAAC,CAAC;IAC/B,OAAO;QACH,MAAM;YACF,GAAG,EAAE,aAAa,CAAC,UAAU,CAAC,CAAC;QACnC,CAAC;KACJ,CAAC;AACN,CAAC"}

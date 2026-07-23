@@ -22,17 +22,15 @@ const PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk" +
   "+M8AAAQEAQB9eIv5AAAAAElFTkSuQmCC";
 
-describe.runIf(isTestRuntime("node"))(
-  "roundtrip handles — media Image.fromBase64",
-  () => {
-    it("image_from_base64 roundtrips payload", () => {
-      const img = baml.media.Image.fromBase64(PNG_B64, "image/png");
-      expect(img.mimeType()).toBe("image/png");
-      expect(img.base64()).toBe(PNG_B64);
-    });
-  },
-);
+describe("roundtrip handles — media Image.fromBase64", () => {
+  it("image_from_base64 roundtrips payload", () => {
+    const img = baml.media.Image.fromBase64(PNG_B64, "image/png");
+    expect(img.mimeType()).toBe("image/png");
+    expect(img.base64()).toBe(PNG_B64);
+  });
+});
 
+// This fixture owns a local node:http listener, which is not a browser or Workers capability.
 describe.runIf(isTestRuntime("node"))(
   "roundtrip handles — baml.http.Response",
   () => {
@@ -70,6 +68,7 @@ describe.runIf(isTestRuntime("node"))(
   },
 );
 
+// These cases create and mutate temporary host files through Node filesystem APIs.
 describe.runIf(isTestRuntime("node"))(
   "roundtrip handles — baml.fs.File",
   () => {

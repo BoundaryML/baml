@@ -22,7 +22,7 @@
 //!
 //! let error = ParseError::UnexpectedToken { ... };
 //! let diagnostic = error.to_diagnostic();
-//! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::cli());
+//! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::default());
 //! ```
 //!
 //! ## LSP Conversion

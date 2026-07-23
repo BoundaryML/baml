@@ -135,7 +135,7 @@ function optional_function_parameters.ofp_optional_dropping_adapter_uses_default
     load_var ?1
     make_cell
     store_var ?1
-    load_global user.optional_function_parameters.combine
+    load_const user.optional_function_parameters.combine
     store_deref ?1
     load_const 1
     load_const 5

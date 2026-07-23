@@ -9,7 +9,13 @@ license.workspace = true
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
+baml_version = { workspace = true }
+bex_project = { workspace = true }
 bridge_cffi = { workspace = true, default-features = false }
+bridge_ctypes = { workspace = true }
+sys_wasm = { workspace = true }
+js-sys = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 

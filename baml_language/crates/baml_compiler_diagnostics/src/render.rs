@@ -2,6 +2,7 @@
 //!
 //! This module provides rendering of unified `Diagnostic` types to various formats:
 //! - **Ariadne**: Beautiful CLI output with colors and source snippets
+//! - **Agent**: Compact exact locations without source diagrams
 //! - **Concise**: One-line format like `file:line:col: [E0001] message`
 //! - **LSP**: Converts to `lsp_types::Diagnostic` for editor integration
 //!
@@ -14,15 +15,19 @@
 //!     .with_primary_span(span);
 //!
 //! // Render for CLI
-//! let cli_output = render_diagnostic(&diag, &sources, RenderConfig::cli());
+//! let cli_output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::default());
 //!
 //! // Render concise (for tests)
-//! let concise = render_diagnostic(&diag, &sources, RenderConfig::concise());
+//! let concise = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::concise());
 //! ```
 
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 
-use ariadne::{Label, Report, ReportKind, Source};
+use ariadne::{Fmt, Label, Report, ReportKind, Source};
 use baml_base::{FileId, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
@@ -110,6 +115,8 @@ pub enum DiagnosticFormat {
     /// Full Ariadne output with colors and source context.
     #[default]
     Ariadne,
+    /// Compact location-based output for coding agents.
+    Agent,
     /// Concise one-line format: `file:line:col: [E0001] message`
     Concise,
 }
@@ -136,37 +143,11 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
-    /// Configuration for CLI output, always colored (Ariadne).
-    ///
-    /// Prefer [`Self::cli_auto`] for actual CLI surfaces — that variant
-    /// strips ANSI codes when stderr isn't a TTY (e.g. when the user pipes
-    /// to a file, redirects in CI, or runs through `less`) and when the
-    /// `NO_COLOR` env var is set (<https://no-color.org>).
-    pub fn cli() -> Self {
+    /// Configuration for compact agent output.
+    pub fn agent() -> Self {
         Self {
-            format: DiagnosticFormat::Ariadne,
-            color: true,
-            show_error_codes: true,
-        }
-    }
-
-    /// Configuration for CLI output with auto-detected color.
-    ///
-    /// Color is enabled when *both* of:
-    ///   - the `NO_COLOR` env var is unset (per <https://no-color.org>), and
-    ///   - `stderr` is a TTY.
-    ///
-    /// Use this from any `baml` subcommand that renders diagnostics so
-    /// `baml run 2> errors.log` (or piping through `less`/CI) doesn't get
-    /// raw ANSI codes embedded.
-    pub fn cli_auto() -> Self {
-        use std::io::IsTerminal;
-        Self {
-            format: DiagnosticFormat::Ariadne,
-            color: Self::pure_color_decision(
-                std::env::var_os("NO_COLOR").is_some(),
-                std::io::stderr().is_terminal(),
-            ),
+            format: DiagnosticFormat::Agent,
+            color: false,
             show_error_codes: true,
         }
     }
@@ -178,13 +159,6 @@ impl RenderConfig {
             color: false,
             show_error_codes: true,
         }
-    }
-
-    /// Pure helper underlying [`Self::cli_auto`]. Extracted so the
-    /// behavior can be unit-tested without manipulating process env or
-    /// terminal state.
-    fn pure_color_decision(no_color_set: bool, stderr_is_tty: bool) -> bool {
-        !no_color_set && stderr_is_tty
     }
 
     /// Configuration for concise one-line output.
@@ -216,6 +190,17 @@ pub fn render_diagnostic(
             let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
             render_ariadne(diagnostic, sources, &mut cache, config.color)
         }
+        DiagnosticFormat::Agent => {
+            let mut path_cache = HashMap::new();
+            render_agent(
+                diagnostic,
+                sources,
+                file_paths,
+                &mut path_cache,
+                config.color,
+                config.show_error_codes,
+            )
+        }
         DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
     }
 }
@@ -241,12 +226,21 @@ pub fn render_diagnostics(
     // identical (safe under `BAML_CACHE_VERIFY`).
     let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
         .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
+    let mut path_cache = HashMap::new();
     diagnostics
         .iter()
         .map(|d| match (&config.format, &mut ariadne_cache) {
             (DiagnosticFormat::Ariadne, Some(cache)) => {
                 render_ariadne(d, sources, cache, config.color)
             }
+            (DiagnosticFormat::Agent, _) => render_agent(
+                d,
+                sources,
+                file_paths,
+                &mut path_cache,
+                config.color,
+                config.show_error_codes,
+            ),
             _ => render_concise(d, sources, file_paths),
         })
         .collect::<Vec<_>>()
@@ -409,6 +403,178 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
+/// Render one diagnostic as compact, location-first text for coding agents.
+fn render_agent(
+    diagnostic: &Diagnostic,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    path_cache: &mut HashMap<FileId, String>,
+    color: bool,
+    show_error_codes: bool,
+) -> String {
+    let primary_index = diagnostic
+        .annotations
+        .iter()
+        .position(|annotation| annotation.is_primary)
+        .or((!diagnostic.annotations.is_empty()).then_some(0));
+
+    let level = severity_name(diagnostic.severity);
+    let label = if show_error_codes {
+        format!("{level}[{}]", diagnostic.code())
+    } else {
+        level.to_string()
+    };
+    let label = if color {
+        label.fg(severity_color(diagnostic.severity)).to_string()
+    } else {
+        label
+    };
+
+    let mut lines =
+        Vec::with_capacity(1 + diagnostic.annotations.len() + diagnostic.related_info.len());
+    if let Some(index) = primary_index {
+        let location = format_span(
+            diagnostic.annotations[index].span,
+            sources,
+            file_paths,
+            path_cache,
+        );
+        lines.push(format!("{location} {label}: {}", diagnostic.message));
+
+        if diagnostic.annotations[index]
+            .message
+            .as_deref()
+            .is_some_and(|message| message != diagnostic.message)
+        {
+            lines.push(format!(
+                "  primary: {}",
+                diagnostic.annotations[index]
+                    .message
+                    .as_deref()
+                    .unwrap_or_default()
+            ));
+        }
+    } else {
+        lines.push(format!("{label}: {}", diagnostic.message));
+    }
+
+    for (index, annotation) in diagnostic.annotations.iter().enumerate() {
+        if Some(index) == primary_index {
+            continue;
+        }
+        let kind = if annotation.is_primary {
+            "primary"
+        } else {
+            "secondary"
+        };
+        let location = format_span(annotation.span, sources, file_paths, path_cache);
+        match &annotation.message {
+            Some(message) => lines.push(format!("  {kind} {location}: {message}")),
+            None => lines.push(format!("  {kind} {location}")),
+        }
+    }
+
+    for related in &diagnostic.related_info {
+        let location = related.file_path.as_ref().map_or_else(
+            || format_span(related.span, sources, file_paths, path_cache),
+            |path| format_span_with_path(related.span, path, sources),
+        );
+        lines.push(format!("  related {location}: {}", related.message));
+    }
+
+    lines.join("\n")
+}
+
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Info => "info",
+    }
+}
+
+fn severity_color(severity: Severity) -> ariadne::Color {
+    match severity {
+        Severity::Error => ariadne::Color::Red,
+        Severity::Warning => ariadne::Color::Yellow,
+        Severity::Info => ariadne::Color::Fixed(147),
+    }
+}
+
+fn format_span(
+    span: Span,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    path_cache: &mut HashMap<FileId, String>,
+) -> String {
+    let path = path_cache
+        .entry(span.file_id)
+        .or_insert_with(|| shortest_unique_path(span.file_id, file_paths));
+    format_span_with_path(span, path, sources)
+}
+
+fn format_span_with_path(span: Span, path: &str, sources: &HashMap<FileId, String>) -> String {
+    let Some(source) = sources.get(&span.file_id) else {
+        let start: u32 = span.range.start().into();
+        let end: u32 = span.range.end().into();
+        return format!("{path}:bytes:{start}-{end}");
+    };
+
+    let start: usize = span.range.start().into();
+    let end: usize = span.range.end().into();
+    let start = line_column(source, start);
+    let end = line_column(source, end);
+    if start == end {
+        format!("{path}:{}:{}", start.0, start.1)
+    } else {
+        format!("{path}:{}:{}-{}:{}", start.0, start.1, end.0, end.1)
+    }
+}
+
+/// Return a 1-based Unicode-scalar line and column for a byte offset.
+fn line_column(source: &str, byte_offset: usize) -> (usize, usize) {
+    let mut offset = byte_offset.min(source.len());
+    while !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    let prefix = &source[..offset];
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let line_start = prefix.rfind('\n').map_or(0, |position| position + 1);
+    let column = source[line_start..offset].chars().count() + 1;
+    (line, column)
+}
+
+/// Use the shortest path suffix that uniquely identifies this file in the
+/// render batch. Most projects get a filename; duplicate filenames retain just
+/// enough parent directories to disambiguate them.
+fn shortest_unique_path(file_id: FileId, file_paths: &HashMap<FileId, PathBuf>) -> String {
+    let Some(path) = file_paths.get(&file_id) else {
+        return file_id.to_string();
+    };
+
+    let mut suffix = PathBuf::new();
+    for component in path.components().rev() {
+        suffix = if suffix.as_os_str().is_empty() {
+            PathBuf::from(component.as_os_str())
+        } else {
+            PathBuf::from(component.as_os_str()).join(suffix)
+        };
+        let unique = file_paths
+            .iter()
+            .filter(|(other_id, _)| **other_id != file_id)
+            .all(|(_, other)| !other.ends_with(&suffix));
+        if unique {
+            return display_agent_path(&suffix);
+        }
+    }
+    display_agent_path(path)
+}
+
+fn display_agent_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/")
+}
+
 /// Render a diagnostic in concise one-line format.
 fn render_concise(
     diagnostic: &Diagnostic,
@@ -477,35 +643,6 @@ mod tests {
 
     use super::*;
     use crate::diagnostic::DiagnosticId;
-
-    // ── cli_auto color-decision logic ─────────────────────────────────
-
-    /// `NO_COLOR=…` always wins over TTY detection. (<https://no-color.org>)
-    #[test]
-    fn no_color_env_disables_color_even_on_tty() {
-        assert!(!RenderConfig::pure_color_decision(true, true));
-    }
-
-    /// Piped/redirected stderr disables color even with `NO_COLOR` unset.
-    /// Catches the original symptom: `baml run 2> errors.log` was getting
-    /// raw ANSI codes embedded in the log file.
-    #[test]
-    fn non_tty_stderr_disables_color() {
-        assert!(!RenderConfig::pure_color_decision(false, false));
-    }
-
-    /// The only path that produces colored output: stderr is a TTY AND
-    /// the user hasn't opted out via `NO_COLOR`.
-    #[test]
-    fn tty_without_no_color_enables_color() {
-        assert!(RenderConfig::pure_color_decision(false, true));
-    }
-
-    /// Defense in depth: both signals say "no" → definitely no color.
-    #[test]
-    fn no_color_and_non_tty_disables_color() {
-        assert!(!RenderConfig::pure_color_decision(true, false));
-    }
 
     fn make_source() -> HashMap<FileId, String> {
         let mut sources = HashMap::new();
@@ -602,5 +739,76 @@ mod tests {
             !output.contains("─[ 0:"),
             "Should not show file ID, got: {output}"
         );
+    }
+
+    #[test]
+    fn agent_render_is_compact_and_does_not_repeat_the_primary_message() {
+        let diag = Diagnostic::error(DiagnosticId::DuplicateName, "Duplicate class 'Foo'")
+            .with_primary_span(test_span());
+
+        let output = render_diagnostic(
+            &diag,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::agent(),
+        );
+
+        assert_eq!(
+            output,
+            "test.baml:1:7-1:10 error[E0011]: Duplicate class 'Foo'"
+        );
+    }
+
+    #[test]
+    fn agent_render_preserves_secondary_and_related_locations() {
+        let mut sources = HashMap::new();
+        sources.insert(FileId::new(0), "class Foo {}".to_string());
+        sources.insert(FileId::new(1), "class Foo {}".to_string());
+        let mut paths = HashMap::new();
+        paths.insert(FileId::new(0), PathBuf::from("/project/first/main.baml"));
+        paths.insert(FileId::new(1), PathBuf::from("/project/second/main.baml"));
+
+        let first = Span {
+            file_id: FileId::new(0),
+            range: TextRange::new(6.into(), 9.into()),
+        };
+        let second = Span {
+            file_id: FileId::new(1),
+            range: TextRange::new(6.into(), 9.into()),
+        };
+        let diag = Diagnostic::error(DiagnosticId::DuplicateName, "Duplicate class 'Foo'")
+            .with_primary_span(second)
+            .with_secondary(first, "Conflicts with this declaration")
+            .with_related(first, "First defined here");
+
+        let output = render_diagnostic(&diag, &sources, &paths, &RenderConfig::agent());
+
+        assert_eq!(
+            output,
+            "second/main.baml:1:7-1:10 error[E0011]: Duplicate class 'Foo'\n  secondary first/main.baml:1:7-1:10: Conflicts with this declaration\n  related first/main.baml:1:7-1:10: First defined here"
+        );
+    }
+
+    #[test]
+    fn agent_render_uses_character_columns_for_utf8() {
+        let name = "caf\u{e9}";
+        let source = format!("let {name} = 1");
+        let start = source.find(name).unwrap();
+        let end = start + name.len();
+        let span = Span {
+            file_id: FileId::new(0),
+            range: TextRange::new(
+                u32::try_from(start).unwrap().into(),
+                u32::try_from(end).unwrap().into(),
+            ),
+        };
+        let message = format!("Unknown variable `{name}`");
+        let diag =
+            Diagnostic::error(DiagnosticId::UnknownVariable, &message).with_primary_span(span);
+        let sources = HashMap::from([(FileId::new(0), source)]);
+
+        let output = render_diagnostic(&diag, &sources, &make_file_paths(), &RenderConfig::agent());
+
+        assert_eq!(output, format!("test.baml:1:5-1:9 error[E0003]: {message}"));
     }
 }

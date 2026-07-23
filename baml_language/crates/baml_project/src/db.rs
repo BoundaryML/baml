@@ -317,30 +317,6 @@ impl ProjectDatabase {
         self.project
     }
 
-    /// Get the project, if set.
-    ///
-    /// Alias for `get_project()` for API compatibility with old `LspDatabase`.
-    pub fn project(&self) -> Option<Project> {
-        self.project
-    }
-
-    /// Get a reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db()` to get the underlying `RootDatabase`.
-    /// Since `ProjectDatabase` IS the database now, this just returns `self`.
-    pub fn db(&self) -> &Self {
-        self
-    }
-
-    /// Get a mutable reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db_mut()` to get the underlying `RootDatabase`.
-    pub fn db_mut(&mut self) -> &mut Self {
-        self
-    }
-
     /// Seed per-file throw facts from a previous compile of identical file
     /// content (bytecode-cache per-file reuse); keys are full source-file path
     /// strings.
@@ -560,11 +536,6 @@ impl ProjectDatabase {
         self.add_or_update_file(path.as_ref(), content)
     }
 
-    /// Get all files currently in the database.
-    pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
-        self.file_map.values().copied()
-    }
-
     /// Get all file paths currently tracked by the database.
     pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
         self.file_map
@@ -582,23 +553,6 @@ impl ProjectDatabase {
     /// Get a `FileId` by its path.
     pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
-    }
-
-    /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
-        self.file_id_to_path
-            .get(&file_id)
-            .map(std::path::PathBuf::as_path)
-    }
-
-    /// Get a `SourceFile` by its `FileId`.
-    pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path.get(&file_id).and_then(|path| {
-            self.file_map
-                .get(path)
-                .or_else(|| self.compiler2_file_map.get(path))
-                .copied()
-        })
     }
 
     /// Get the compiled bytecode for the project using the compiler2 pipeline.
@@ -670,8 +624,8 @@ impl ProjectDatabase {
 
         let mut result = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -680,8 +634,6 @@ impl ProjectDatabase {
                     continue;
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
@@ -844,8 +796,8 @@ impl ProjectDatabase {
     fn function_header_title(&self, function_name: &str) -> Option<String> {
         let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -853,8 +805,6 @@ impl ProjectDatabase {
                 ) {
                     continue;
                 }
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let text = source_file.text(self);
@@ -1298,17 +1248,16 @@ impl ProjectDatabase {
         // A declarative LLM function and its `$stream`/`$parse_stream` companions
         // share one declaration span, hence one scope range — so multiple
         // functions match here. Prefer the user-authored one (origin order).
-        let (local_id, _) = index
-            .item_tree
-            .functions
+        let func_loc = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))?;
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+            })?;
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
         let is_workflow = matches!(
@@ -1326,8 +1275,8 @@ impl ProjectDatabase {
         let mut memberships = Vec::new();
 
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 let func_name =
                     self.playground_function_name_for_source_file(source_file, &func_data.name);
                 if func_data.name.as_str() == target_function_name
@@ -1336,8 +1285,6 @@ impl ProjectDatabase {
                     continue; // Skip self
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Only workflow (Expr) functions can call other functions
@@ -1417,18 +1364,17 @@ impl ProjectDatabase {
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-        if let Some((local_id, _)) = index
-            .item_tree
-            .functions
+        if let Some(func_loc) = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+            })
         {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);

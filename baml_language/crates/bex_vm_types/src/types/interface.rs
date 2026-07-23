@@ -25,13 +25,6 @@ pub struct InterfaceMethodDef {
     pub errors: baml_type::RuntimeTy,
 }
 
-pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::RuntimeTy)>;
-pub type InterfaceImplementorEntry = (
-    baml_type::TypeName,
-    Vec<baml_type::RuntimeTy>,
-    InterfaceAssociatedBindings,
-);
-
 /// A single interface bound on an impl's generic parameter — `T extends I`, or a
 /// generic / associated-bound form (`T extends Container<U>`, `T extends
 /// Iterator<Item = int>`). `args` and `assoc` are `TyTemplate`s over the impl's
