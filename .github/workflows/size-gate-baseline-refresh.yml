@@ -52,7 +52,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: canary
           persist-credentials: false
@@ -115,7 +115,7 @@ jobs:
 
       - name: "Open/update baseline-refresh PR"
         id: cpr
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           # PAT (not GITHUB_TOKEN) so the PR triggers its own CI, including
           # the size-gate check that confirms the new baseline is green.

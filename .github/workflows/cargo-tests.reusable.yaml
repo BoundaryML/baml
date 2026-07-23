@@ -174,7 +174,7 @@ jobs:
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -275,7 +275,7 @@ jobs:
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -393,7 +393,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const baseMatrix = [
@@ -650,7 +650,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1164,7 +1164,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*
@@ -1183,7 +1183,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats
           pattern: sccache-stats-*
