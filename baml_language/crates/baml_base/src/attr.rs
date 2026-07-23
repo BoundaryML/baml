@@ -80,6 +80,19 @@ impl TyAttr {
         sap_in_progress_never: TyAttrValue::Unset,
     };
 
+    /// Merge an outer attribute set into this inner attribute set.
+    ///
+    /// Each SAP flag uses nesting semantics: `Set` wins via
+    /// [`TyAttrValue::or`].
+    #[must_use]
+    pub fn merge_nested(&self, outer: &TyAttr) -> TyAttr {
+        TyAttr {
+            sap_parse_without_null: self.sap_parse_without_null.or(outer.sap_parse_without_null),
+            sap_pending_never: self.sap_pending_never.or(outer.sap_pending_never),
+            sap_in_progress_never: self.sap_in_progress_never.or(outer.sap_in_progress_never),
+        }
+    }
+
     /// Return the canonical names of all attributes that are `Set`.
     pub fn attr_names(&self) -> Vec<&'static str> {
         let mut names = Vec::new();
@@ -93,5 +106,50 @@ impl TyAttr {
             names.push("sap.in_progress_never");
         }
         names
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TyAttr, TyAttrValue};
+
+    fn attr_with_flag(flag: usize, value: TyAttrValue) -> TyAttr {
+        match flag {
+            0 => TyAttr {
+                sap_parse_without_null: value,
+                ..TyAttr::default()
+            },
+            1 => TyAttr {
+                sap_pending_never: value,
+                ..TyAttr::default()
+            },
+            2 => TyAttr {
+                sap_in_progress_never: value,
+                ..TyAttr::default()
+            },
+            _ => unreachable!("unknown flag"),
+        }
+    }
+
+    #[test]
+    fn merge_nested_ors_every_flag_for_all_pairings() {
+        use TyAttrValue::{Set, Unset};
+
+        let pairings = [
+            (Unset, Unset, Unset),
+            (Unset, Set, Set),
+            (Set, Unset, Set),
+            (Set, Set, Set),
+        ];
+
+        for flag in 0..3 {
+            for (inner, outer, expected) in pairings {
+                assert_eq!(
+                    attr_with_flag(flag, inner).merge_nested(&attr_with_flag(flag, outer)),
+                    attr_with_flag(flag, expected),
+                    "flag {flag}, inner {inner:?}, outer {outer:?}"
+                );
+            }
+        }
     }
 }

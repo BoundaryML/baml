@@ -82,16 +82,6 @@ impl CodegenTy {
     }
 }
 
-fn merge_attr(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
-    TyAttr {
-        sap_parse_without_null: inner
-            .sap_parse_without_null
-            .or(outer.sap_parse_without_null),
-        sap_pending_never: inner.sap_pending_never.or(outer.sap_pending_never),
-        sap_in_progress_never: inner.sap_in_progress_never.or(outer.sap_in_progress_never),
-    }
-}
-
 fn canonical_union(members: Vec<CodegenTy>, attr: TyAttr) -> CodegenTy {
     let mut canonical = Vec::new();
     for member in members {
@@ -121,7 +111,7 @@ fn canonical_union(members: Vec<CodegenTy>, attr: TyAttr) -> CodegenTy {
 }
 
 fn push_canonical_member(canonical: &mut Vec<CodegenTy>, member: CodegenTy, outer: &TyAttr) {
-    let merged = merge_attr(member.attr(), outer);
+    let merged = member.attr().merge_nested(outer);
     let member = member.with_attr(merged);
 
     if matches!(member, CodegenTy::Null { .. })
@@ -129,7 +119,7 @@ fn push_canonical_member(canonical: &mut Vec<CodegenTy>, member: CodegenTy, oute
             .iter_mut()
             .find(|existing| matches!(existing, CodegenTy::Null { .. }))
     {
-        let merged = merge_attr(existing.attr(), member.attr());
+        let merged = existing.attr().merge_nested(member.attr());
         *existing = existing.clone().with_attr(merged);
         return;
     }

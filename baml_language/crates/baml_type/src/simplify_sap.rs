@@ -325,7 +325,7 @@ fn simplify_impl(
                 ty
             } else if let Some(target) = aliases.get(name) {
                 // Non-recursive: expand, merge attrs (nesting), simplify result.
-                let merged = merge_attr_nested(target.attr(), outer_attr);
+                let merged = target.attr().merge_nested(outer_attr);
                 let expanded = target.clone().with_attr(merged);
                 simplify_impl(expanded, aliases, recursive)
             } else {
@@ -384,7 +384,7 @@ fn simplify_union(
     if variants.len() == 1 {
         let v = variants.into_iter().next().unwrap();
         // Merge remaining union-level SAP flags onto the single variant.
-        let merged = merge_attr_nested(v.attr(), &attr);
+        let merged = v.attr().merge_nested(&attr);
         v.with_attr(merged)
     } else {
         RuntimeTy::Union(variants, attr)
@@ -395,19 +395,6 @@ fn simplify_union(
 // Attr helpers
 // ---------------------------------------------------------------------------
 
-/// Merge an outer attr into an inner attr (nesting semantics).
-///
-/// SAP flags: disjunctive (`Set` wins via `or`).
-fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
-    TyAttr {
-        sap_parse_without_null: inner
-            .sap_parse_without_null
-            .or(outer.sap_parse_without_null),
-        sap_pending_never: inner.sap_pending_never.or(outer.sap_pending_never),
-        sap_in_progress_never: inner.sap_in_progress_never.or(outer.sap_in_progress_never),
-    }
-}
-
 /// Distribute union-level attrs into each variant.
 ///
 /// SAP flags are or'd into each variant and preserved at the union level.
@@ -415,7 +402,7 @@ fn distribute_attrs(variants: Vec<RuntimeTy>, union_attr: TyAttr) -> (Vec<Runtim
     let distributed = variants
         .into_iter()
         .map(|v| {
-            let merged = merge_attr_nested(v.attr(), &union_attr);
+            let merged = v.attr().merge_nested(&union_attr);
             v.with_attr(merged)
         })
         .collect();
@@ -433,7 +420,7 @@ fn flatten_union(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
         match v {
             RuntimeTy::Union(inner_variants, inner_attr) => {
                 for iv in inner_variants {
-                    let merged = merge_attr_nested(iv.attr(), &inner_attr);
+                    let merged = iv.attr().merge_nested(&inner_attr);
                     out.push(iv.with_attr(merged));
                 }
             }
