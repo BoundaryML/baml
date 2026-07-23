@@ -4781,8 +4781,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args: obj_type_args,
                 fields,
+                spreads,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields),
+            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields, spreads),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -5810,7 +5811,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
     ) -> Ty {
+        // Spread expressions are ordinary expressions: infer them even before
+        // resolving the destination class so calls nested inside a spread get
+        // their TIR call plans (including omitted-default bindings). Skipping
+        // these used to let MIR fall back to the source argument list, so a
+        // five-parameter factory called with two values emitted no OmittedArg
+        // sentinels and consumed three slots from its caller's VM frame.
+        let spread_types: Vec<(ExprId, Ty)> = spreads
+            .iter()
+            .map(|spread| (spread.expr, self.infer_expr(spread.expr, body)))
+            .collect();
+
         // Class-instance literals only: map literals (`map { .. }`) are routed
         // to `infer_map_object_expr` by the `is_map_object_literal` guard in the
         // `Expr::Object` arm before reaching here. The parser only emits an
@@ -5853,6 +5866,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &field_ty,
                                 &mut bindings,
                             );
+                        }
+                        // An exact-class spread can determine otherwise omitted
+                        // class arguments (`Box { ...box_int }` => `Box<int>`).
+                        for (_, spread_ty) in &spread_types {
+                            if let Ty::Class(spread_name, spread_args, _) = spread_ty
+                                && spread_name == &class_name
+                                && spread_args.len() == class_data.generic_params.len()
+                            {
+                                for (param, arg) in
+                                    class_data.generic_params.iter().zip(spread_args)
+                                {
+                                    bindings.entry(param.clone()).or_insert_with(|| arg.clone());
+                                }
+                            }
                         }
                         // Params that appear in some field's declared type are
                         // inferable in principle, so leaving one unbound (e.g. `T`
@@ -5909,6 +5936,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             ty => ty,
         };
         self.validate_type_generic_bounds(expr_id, &ty);
+        // Class spread is nominal and invariant: the source must be the same
+        // resolved class with compatible generic arguments. Besides preventing
+        // runtime field-layout violations, checking here ensures every nested
+        // expression is fully typed before MIR lowering.
+        for (spread_expr, spread_ty) in &spread_types {
+            if !matches!(spread_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                && !self.is_subtype(spread_ty, &ty)
+            {
+                self.context.report(
+                    TirTypeError::TypeMismatch {
+                        expected: ty.clone(),
+                        got: spread_ty.clone(),
+                    },
+                    *spread_expr,
+                    Vec::new(),
+                );
+            }
+        }
         if let Ty::Class(class_name, type_args, _) = &ty {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
@@ -5980,9 +6025,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
-        if let Ty::Class(lit_qtn, _, _) = &lit_ty
-            && lit_qtn != expected_qtn
-        {
+        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
+            lit_qtn != expected_qtn
+                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+        } else {
+            false
+        };
+        if declared_mismatch {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
                 && !self.is_subtype(&inferred, expected)
@@ -6002,6 +6051,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(never)]
     fn check_object_expr(
         &mut self,
@@ -6009,6 +6059,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
+        spreads: &[ast::SpreadField],
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Ty {
@@ -6027,6 +6078,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         self.validate_type_generic_bounds(expr_id, expected);
         if let Ty::Class(class_name, type_args, _) = expected {
+            for spread in spreads {
+                self.check_expr(spread.expr, body, expected);
+            }
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
                 .into_iter()
@@ -6823,8 +6877,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 type_name,
                 type_args,
+                spreads,
                 ..
-            } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
+            } => self.check_object_expr(
+                expr_id, body, expected, fields, spreads, type_name, type_args,
+            ),
             Expr::Map { entries } => {
                 // Look through aliases, a nullable wrapper (`map<string, int>?`),
                 // and a union with a unique map member (`json` is
