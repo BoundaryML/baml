@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class Box {
+    value: int,
+    value: string,
+}
+
+function repro(box: Box) -> int {
+    box.value
+}
