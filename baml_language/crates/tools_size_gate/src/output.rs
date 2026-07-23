@@ -131,39 +131,7 @@ pub(crate) fn render_markdown(rows: &[ReportRow]) {
 
     let has_any_failure = rows.iter().any(ReportRow::has_failure);
     if has_any_failure {
-        // Print violations
-        let has_violations = rows.iter().any(|r| !r.violations.is_empty());
-        if has_violations {
-            println!("\n### Violations\n");
-            for row in rows {
-                for v in &row.violations {
-                    println!(
-                        "- **{}** `{}`: {} exceeds limit of {} (exceeded by {}, policy: `{}`)",
-                        row.artifact, v.metric, v.actual, v.limit, v.exceeded_by, v.policy_name
-                    );
-                }
-            }
-        }
-
-        // Print missing baselines
-        let missing: Vec<_> = rows.iter().filter(|r| r.baseline.is_none()).collect();
-        if !missing.is_empty() {
-            println!("\n### Missing baselines\n");
-            for row in &missing {
-                if row.platform_file_exists {
-                    println!(
-                        "- **{}** — artifact not found in `.ci/size-gate/{}.toml`",
-                        row.artifact, row.platform
-                    );
-                } else {
-                    println!(
-                        "- **{}** — baseline file `.ci/size-gate/{}.toml` does not exist",
-                        row.artifact, row.platform
-                    );
-                }
-            }
-        }
-
+        print_markdown_failure_details(rows, "\n### Violations\n", "\n### Missing baselines\n");
         print_fix_hint_md(rows);
     }
 }
@@ -197,42 +165,52 @@ pub(crate) fn render_markdown_fragment(rows: &[ReportRow]) {
 
     let has_failure = rows.iter().any(ReportRow::has_failure);
     if has_failure {
-        // Violations
-        let has_violations = rows.iter().any(|r| !r.violations.is_empty());
-        if has_violations {
-            println!("\n<!-- VIOLATIONS -->");
-            for row in rows {
-                for v in &row.violations {
-                    println!(
-                        "- **{}** `{}`: {} exceeds limit of {} (exceeded by {}, policy: `{}`)",
-                        row.artifact, v.metric, v.actual, v.limit, v.exceeded_by, v.policy_name
-                    );
-                }
-            }
-        }
-
-        // Missing baselines
-        let missing: Vec<_> = rows.iter().filter(|r| r.baseline.is_none()).collect();
-        if !missing.is_empty() {
-            println!("\n<!-- MISSING -->");
-            for row in &missing {
-                if row.platform_file_exists {
-                    println!(
-                        "- **{}** — artifact not found in `.ci/size-gate/{}.toml`",
-                        row.artifact, row.platform
-                    );
-                } else {
-                    println!(
-                        "- **{}** — baseline file `.ci/size-gate/{}.toml` does not exist",
-                        row.artifact, row.platform
-                    );
-                }
-            }
-        }
+        print_markdown_failure_details(rows, "\n<!-- VIOLATIONS -->", "\n<!-- MISSING -->");
 
         // Fix hints
         println!("\n<!-- FIX_HINTS -->");
         print_fix_hint_md(rows);
+    }
+}
+
+fn print_markdown_failure_details(
+    rows: &[ReportRow],
+    violations_heading: &str,
+    missing_heading: &str,
+) {
+    if rows.iter().any(|row| !row.violations.is_empty()) {
+        println!("{violations_heading}");
+        for row in rows {
+            for violation in &row.violations {
+                println!(
+                    "- **{}** `{}`: {} exceeds limit of {} (exceeded by {}, policy: `{}`)",
+                    row.artifact,
+                    violation.metric,
+                    violation.actual,
+                    violation.limit,
+                    violation.exceeded_by,
+                    violation.policy_name
+                );
+            }
+        }
+    }
+
+    let missing: Vec<_> = rows.iter().filter(|row| row.baseline.is_none()).collect();
+    if !missing.is_empty() {
+        println!("{missing_heading}");
+        for row in missing {
+            if row.platform_file_exists {
+                println!(
+                    "- **{}** \u{2014} artifact not found in `.ci/size-gate/{}.toml`",
+                    row.artifact, row.platform
+                );
+            } else {
+                println!(
+                    "- **{}** \u{2014} baseline file `.ci/size-gate/{}.toml` does not exist",
+                    row.artifact, row.platform
+                );
+            }
+        }
     }
 }
 
