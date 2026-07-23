@@ -6,7 +6,8 @@ use rowan::TextRange;
 use crate::{
     ast::{
         BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, Type, UnaryOp, tokens as t, try_print_single_line_comma_separated,
+        Token, Type, UnaryOp, print_multi_line_parenthesized_comma_separated, tokens as t,
+        try_print_single_line_comma_separated,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
@@ -2581,40 +2582,13 @@ impl KnownKind for CallArgs {
 impl PrintMultiLine for CallArgs {
     /// Always multi-lined, even if there are no arguments it would still be `(\n<indent>)`
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-        let inner_shape = Shape {
-            width: printer.config.line_width.saturating_sub(inner_indent),
-            indent: inner_indent,
-            first_line_offset: 0,
-        };
-
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
-        printer.print_newline();
-
-        for (arg, comma) in &self.args {
-            printer.print_trivia_all_leading_with_newline_for(
-                arg.leftmost_token(),
-                inner_shape.indent,
-            );
-            printer.print_spaces(inner_shape.indent);
-            printer.print(arg, inner_shape.clone());
-            if let Some(comma) = comma {
-                printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span());
-            } else {
-                printer.print_str(",");
-                printer.print_trivia_all_trailing_for(arg.rightmost_token());
-            }
-            printer.print_newline();
-        }
-
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_shape.indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
-
-        PrintInfo::default_multi_lined()
+        print_multi_line_parenthesized_comma_separated(
+            &self.open_paren,
+            &self.args,
+            &self.close_paren,
+            &shape,
+            printer,
+        )
     }
 }
 

@@ -61,6 +61,45 @@ fn try_print_single_line_comma_separated<T: Printable>(
     Some(())
 }
 
+fn print_multi_line_parenthesized_comma_separated<T: Printable>(
+    open_paren: &LParen,
+    items: &[(T, Option<Comma>)],
+    close_paren: &RParen,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let inner_indent = shape.indent + printer.config.indent_width;
+    let inner_shape = Shape {
+        width: printer.config.line_width.saturating_sub(inner_indent),
+        indent: inner_indent,
+        first_line_offset: 0,
+    };
+
+    printer.print_raw_token(open_paren);
+    printer.print_trivia_all_trailing_for(open_paren.span());
+    printer.print_newline();
+
+    for (item, comma) in items {
+        printer
+            .print_trivia_all_leading_with_newline_for(item.leftmost_token(), inner_shape.indent);
+        printer.print_spaces(inner_shape.indent);
+        printer.print(item, inner_shape.clone());
+        if let Some(comma) = comma {
+            printer.print_raw_token(comma);
+            printer.print_trivia_all_trailing_for(comma.span());
+        } else {
+            printer.print_str(",");
+            printer.print_trivia_all_trailing_for(item.rightmost_token());
+        }
+        printer.print_newline();
+    }
+
+    printer.print_trivia_all_leading_with_newline_for(close_paren.span(), inner_shape.indent);
+    printer.print_spaces(shape.indent);
+    printer.print_raw_token(close_paren);
+    PrintInfo::default_multi_lined()
+}
+
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
 }
