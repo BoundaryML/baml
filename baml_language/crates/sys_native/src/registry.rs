@@ -151,15 +151,10 @@ impl ResourceRegistry {
     }
 
     #[cfg(feature = "bundle-http")]
-    /// Register an HTTP response and return an opaque handle.
-    pub fn register_http_response(
-        self: &Arc<Self>,
-        response: reqwest::Response,
-        url: String,
-    ) -> ResourceHandle {
+    fn register_response_body(self: &Arc<Self>, body: ResponseBody, url: String) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
         let resource = ResponseResource {
-            body: Arc::new(TokioMutex::new(ResponseBody::Real(Some(response)))),
+            body: Arc::new(TokioMutex::new(body)),
         };
 
         self.entries
@@ -176,6 +171,16 @@ impl ResourceRegistry {
     }
 
     #[cfg(feature = "bundle-http")]
+    /// Register an HTTP response and return an opaque handle.
+    pub fn register_http_response(
+        self: &Arc<Self>,
+        response: reqwest::Response,
+        url: String,
+    ) -> ResourceHandle {
+        self.register_response_body(ResponseBody::Real(Some(response)), url)
+    }
+
+    #[cfg(feature = "bundle-http")]
     /// Register a synthetic error HTTP response with the error message as body.
     ///
     /// Used when a network error occurs, so BAML code can check `ok() == false`
@@ -185,22 +190,7 @@ impl ResourceRegistry {
         url: String,
         error_message: String,
     ) -> ResourceHandle {
-        let key = self.next_key.fetch_add(1, Ordering::SeqCst);
-        let resource = ResponseResource {
-            body: Arc::new(TokioMutex::new(ResponseBody::Error(Some(error_message)))),
-        };
-
-        self.entries
-            .write()
-            .unwrap()
-            .insert(key, RegistryEntry::Response(resource));
-
-        ResourceHandle::new(
-            key,
-            ResourceType::Response,
-            url,
-            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
-        )
+        self.register_response_body(ResponseBody::Error(Some(error_message)), url)
     }
 
     #[cfg(feature = "bundle-http")]
@@ -294,3 +284,93 @@ impl Default for ResourceRegistry {
 /// Global resource registry instance.
 pub static REGISTRY: std::sync::LazyLock<Arc<ResourceRegistry>> =
     std::sync::LazyLock::new(|| Arc::new(ResourceRegistry::new()));
+
+#[cfg(all(test, feature = "bundle-http"))]
+mod tests {
+    use std::sync::{Arc, Barrier};
+
+    use bex_resource_types::ResourceType;
+
+    use super::{ResourceRegistry, ResponseBody};
+
+    #[tokio::test]
+    async fn response_wrappers_preserve_order_url_and_body_variant() {
+        let registry = Arc::new(ResourceRegistry::new());
+        let response = reqwest::Response::from(hyper::Response::new("body"));
+
+        let real =
+            registry.register_http_response(response, "https://example.com/real".to_string());
+        let error = registry.register_error_http_response(
+            "https://example.com/error".to_string(),
+            "transport failed".to_string(),
+        );
+
+        assert_eq!(real.key(), 1);
+        assert_eq!(error.key(), 2);
+        assert_eq!(real.kind(), ResourceType::Response);
+        assert_eq!(error.kind(), ResourceType::Response);
+        assert_eq!(real.display_name(), "https://example.com/real");
+        assert_eq!(error.display_name(), "https://example.com/error");
+
+        let real_body = registry.get_http_response_body(real.key()).unwrap();
+        let real_body = real_body.lock().await;
+        match &*real_body {
+            ResponseBody::Real(Some(response)) => assert_eq!(response.status(), 200),
+            _ => panic!("expected a real response body"),
+        }
+
+        let error_body = registry.get_http_response_body(error.key()).unwrap();
+        let error_body = error_body.lock().await;
+        match &*error_body {
+            ResponseBody::Error(Some(message)) => assert_eq!(message, "transport failed"),
+            _ => panic!("expected an error response body"),
+        }
+    }
+
+    #[test]
+    fn concurrent_error_response_registrations_are_unique_and_visible() {
+        const COUNT: usize = 16;
+
+        let registry = Arc::new(ResourceRegistry::new());
+        let barrier = Arc::new(Barrier::new(COUNT));
+        let registrations = (0..COUNT)
+            .map(|index| {
+                let registry = Arc::clone(&registry);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let handle = registry.register_error_http_response(
+                        format!("https://example.com/{index}"),
+                        format!("error-{index}"),
+                    );
+                    (index, handle)
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|registration| registration.join().unwrap())
+            .collect::<Vec<_>>();
+
+        let mut keys = registrations
+            .iter()
+            .map(|(_, handle)| handle.key())
+            .collect::<Vec<_>>();
+        keys.sort_unstable();
+        assert_eq!(keys, (1..=COUNT).collect::<Vec<_>>());
+
+        for (index, handle) in &registrations {
+            assert_eq!(
+                handle.display_name(),
+                format!("https://example.com/{index}")
+            );
+            let body = registry.get_http_response_body(handle.key()).unwrap();
+            let body = body.try_lock().unwrap();
+            match &*body {
+                ResponseBody::Error(Some(message)) => {
+                    assert_eq!(message, &format!("error-{index}"));
+                }
+                _ => panic!("expected an error response body"),
+            }
+        }
+    }
+}
