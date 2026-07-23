@@ -125,6 +125,9 @@ mod tests {
     #[test]
     fn formats_sources_far_larger_than_os_pipe_capacity() {
         const PAYLOAD_SIZE: usize = 8 * 1024 * 1024;
+        if Command::new("gofmt").arg("-h").output().is_err() {
+            return;
+        }
         let mut source = String::with_capacity(PAYLOAD_SIZE + 40);
         source.push_str("package example\nvar Value = \"");
         source.extend(std::iter::repeat_n('z', PAYLOAD_SIZE));

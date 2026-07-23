@@ -460,13 +460,18 @@ fn is_root_writer_infrastructure(path: &Path) -> bool {
 fn validate_no_file_directory_collisions<'a>(
     paths: impl IntoIterator<Item = &'a str>,
 ) -> Result<(), OutputWriterError> {
-    let mut lowercase = paths.into_iter().map(str::to_lowercase).collect::<Vec<_>>();
-    lowercase.sort();
-    for pair in lowercase.windows(2) {
-        if pair[1].starts_with(&format!("{}/", pair[0])) {
-            return Err(OutputWriterError::FileDirectoryPathCollision(
-                PathBuf::from(&pair[0]),
-            ));
+    let lowercase = paths
+        .into_iter()
+        .map(str::to_lowercase)
+        .collect::<BTreeSet<_>>();
+    for path in &lowercase {
+        for (separator, _) in path.match_indices('/') {
+            let ancestor = &path[..separator];
+            if lowercase.contains(ancestor) {
+                return Err(OutputWriterError::FileDirectoryPathCollision(
+                    PathBuf::from(ancestor),
+                ));
+            }
         }
     }
     Ok(())
@@ -1423,6 +1428,7 @@ fn sync_directory(path: &Path) -> Result<(), OutputWriterError> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn sync_directory(_path: &Path) -> Result<(), OutputWriterError> {
     Ok(())
 }
@@ -1535,6 +1541,14 @@ mod tests {
                 vec![file("models", "x"), file("models/type.go", "y")]
             ),
             Err(OutputWriterError::FileDirectoryPathCollision(_))
+        ));
+        assert!(matches!(
+            write_generated_output(
+                &root.path().join("sdk"),
+                vec![file("A", "x"), file("a-b", "y"), file("a/child.go", "z")]
+            ),
+            Err(OutputWriterError::FileDirectoryPathCollision(path))
+                if path == Path::new("a")
         ));
     }
 
