@@ -23,7 +23,7 @@ use anyhow::{Context, Result};
 use baseline::{PlatformBaseline, baseline_path, current_git_sha, now_iso8601};
 use ceilings::sync_ceilings;
 use clap::{Parser, Subcommand, ValueEnum};
-use compare::check_policy;
+use compare::{check_policy, format_bytes};
 use config::{Config, host_triple};
 use measure::{ArtifactMeasurement, build_artifact, locate_artifact_public, measure_artifact};
 use output::{
@@ -256,8 +256,8 @@ fn build_and_measure(
 
             eprintln!(
                 "  file: {} | gzip: {}",
-                format_bytes_short(measurement.file_bytes),
-                format_bytes_short(measurement.gzip_bytes)
+                format_bytes(measurement.file_bytes),
+                format_bytes(measurement.gzip_bytes)
             );
 
             platform_results.push((name.clone(), measurement));
@@ -565,15 +565,5 @@ fn render_output(args: &Args, rows: &[ReportRow]) {
         OutputFormat::Markdown => render_markdown(rows),
         OutputFormat::MarkdownFragment => render_markdown_fragment(rows),
         OutputFormat::Json => render_json(rows),
-    }
-}
-
-fn format_bytes_short(bytes: u64) -> String {
-    if bytes >= 1_000_000 {
-        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
-    } else if bytes >= 1_000 {
-        format!("{:.1} KB", bytes as f64 / 1_000.0)
-    } else {
-        format!("{bytes} B")
     }
 }
