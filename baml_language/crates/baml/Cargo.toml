@@ -13,6 +13,10 @@ license = { workspace = true }
 [lints]
 workspace = true
 
+[features]
+default = []
+no-self-update = []
+
 [dependencies]
 baml_release = { workspace = true }
 anyhow = { workspace = true }
