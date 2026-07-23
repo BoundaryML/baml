@@ -5803,6 +5803,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn report_unknown_class_property_shorthand(
+        &mut self,
+        class_name: &crate::ty::QualifiedTypeName,
+        field_name: &Name,
+        field_expr: ExprId,
+        declared_fields: &FxHashMap<Name, Ty>,
+    ) {
+        let is_shorthand = self
+            .body_source_map
+            .as_ref()
+            .is_some_and(|source_map| source_map.is_property_shorthand_expr(field_expr));
+        if !is_shorthand {
+            return;
+        }
+
+        self.context.report_simple(
+            TirTypeError::UnknownClassPropertyShorthand {
+                class_name: class_name.clone(),
+                name: field_name.clone(),
+                suggestions: Self::similar_name_suggestions(field_name, declared_fields.keys()),
+            },
+            field_expr,
+        );
+    }
+
     #[inline(never)]
     fn infer_object_expr(
         &mut self,
@@ -5995,6 +6020,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
+                    self.report_unknown_class_property_shorthand(
+                        class_name,
+                        field_name,
+                        *field_expr,
+                        &field_types,
+                    );
                     self.infer_expr(*field_expr, body);
                 }
             }
@@ -6121,6 +6152,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     self.check_expr(*field_expr, body, &declared_ty);
                 } else {
+                    self.report_unknown_class_property_shorthand(
+                        class_name,
+                        field_name,
+                        *field_expr,
+                        &field_types,
+                    );
                     self.infer_expr(*field_expr, body);
                 }
             }
@@ -9745,8 +9782,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .is_none()
                 && !is_dep_package
             {
-                self.context
-                    .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
+                let error = if self
+                    .body_source_map
+                    .as_ref()
+                    .is_some_and(|source_map| source_map.is_property_shorthand_expr(expr_id))
+                {
+                    TirTypeError::UnresolvedPropertyShorthand {
+                        name: name.clone(),
+                        suggestions: Self::similar_name_suggestions(name, self.locals.keys()),
+                    }
+                } else {
+                    TirTypeError::UnresolvedName { name: name.clone() }
+                };
+                self.context.report_simple(error, expr_id);
             }
             ty
         } else if segments.len() >= 2 {
@@ -16439,12 +16487,22 @@ impl TypeInferenceBuilder<'_> {
         unknown_field: &Name,
         declared_fields: &[Name],
     ) -> Vec<Name> {
-        let needle = unknown_field.as_str().to_ascii_lowercase();
+        Self::similar_name_suggestions(unknown_field, declared_fields.iter())
+    }
+
+    /// Rank close names for diagnostics. Prefix and substring relationships get
+    /// a small boost so singular/plural and missing-suffix mistakes remain
+    /// helpful without suggesting unrelated short identifiers.
+    fn similar_name_suggestions<'a>(
+        unknown_name: &Name,
+        candidates: impl IntoIterator<Item = &'a Name>,
+    ) -> Vec<Name> {
+        let needle = unknown_name.as_str().to_ascii_lowercase();
         if needle.is_empty() {
             return Vec::new();
         }
-        let mut scored: Vec<(f64, Name)> = declared_fields
-            .iter()
+        let mut scored: Vec<(f64, Name)> = candidates
+            .into_iter()
             .map(|candidate| {
                 let candidate_lower = candidate.as_str().to_ascii_lowercase();
                 let mut score = strsim::jaro_winkler(&needle, &candidate_lower);

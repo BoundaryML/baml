@@ -424,6 +424,57 @@ fn unresolved_variable_in_let() {
 }
 
 #[test]
+fn property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(option: string) -> map<string, string> {
+  { options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand-specific near-match diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: options"),
+        "shorthand should not fall back to the generic unresolved-name diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn class_property_shorthand_suggests_field_to_variable_mapping() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(option: string) -> Config {
+  Config { option }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "class `Config` has no field `option` for property shorthand. Did you mean \
+             `options: option`?"
+        ),
+        "expected an exact-field-name shorthand diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: option"),
+        "the shorthand value resolves; only the class-field mismatch should be diagnosed:\n{tir}"
+    );
+}
+
+#[test]
 fn unresolved_function_call_reports_callee_span() {
     let mut db = make_db();
     let file = db.add_file(

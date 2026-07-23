@@ -608,6 +608,11 @@ pub struct AstSourceMap {
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// Value expressions synthesized from property shorthand. For example,
+    /// `{ options }` lowers to the same key/value shape as
+    /// `{ options: options }`, while this set preserves that the user wrote the
+    /// shorthand so diagnostics can explain its exact-name requirement.
+    pub property_shorthand_exprs: HashSet<ExprId>,
 
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
@@ -635,6 +640,7 @@ impl AstSourceMap {
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
+            property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
             synthetic_patterns: HashSet::new(),
@@ -649,6 +655,12 @@ impl AstSourceMap {
     /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
+    }
+
+    /// Whether `id` is the value expression synthesized for a shorthand
+    /// property such as the `options` value in `{ options }`.
+    pub fn is_property_shorthand_expr(&self, id: ExprId) -> bool {
+        self.property_shorthand_exprs.contains(&id)
     }
 
     /// Look up the source span of a statement by its `StmtId`.

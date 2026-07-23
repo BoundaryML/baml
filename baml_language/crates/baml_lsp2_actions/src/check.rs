@@ -1924,7 +1924,10 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnknownClassPatternField { .. } => DiagnosticId::NoSuchField,
-        TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
+        TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
+            DiagnosticId::UnknownVariable
+        }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,

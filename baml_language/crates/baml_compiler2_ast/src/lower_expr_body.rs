@@ -4142,13 +4142,14 @@ impl LoweringContext {
         // brace, so the segments are always present.
         let type_name = TypePath::new(type_path_segments);
 
-        // Object fields are child nodes after L_BRACE
-        // They come as key-value pairs: WORD COLON expr or SPREAD expr
+        // Object fields are child nodes after L_BRACE. They come as key-value
+        // pairs (`WORD COLON expr`), shorthand (`WORD`), or spreads.
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::OBJECT_FIELD => {
-                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr
+                    // OBJECT_FIELD: WORD (DOT WORD)* COLON expr, or shorthand WORD.
                     let mut key_segments = Vec::new();
+                    let mut shorthand_span = None;
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -4159,6 +4160,9 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
+                                if shorthand_span.is_none() {
+                                    shorthand_span = Some(t.text_range());
+                                }
                                 key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
@@ -4170,6 +4174,15 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(_) => {}
                             rowan::NodeOrToken::Node(_) => {}
                         }
+                    }
+                    if !seen_colon
+                        && key_segments.len() == 1
+                        && let Some(span) = shorthand_span
+                    {
+                        let val_id =
+                            self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
+                        self.source_map.property_shorthand_exprs.insert(val_id);
+                        val = Some(val_id);
                     }
                     let key = if key_segments.is_empty() {
                         None
@@ -4214,7 +4227,7 @@ impl LoweringContext {
 
     fn lower_map_literal(&mut self, node: &SyntaxNode) -> ExprId {
         // MAP_LITERAL uses OBJECT_FIELD children (same as OBJECT_LITERAL).
-        // Each OBJECT_FIELD: key (WORD or expr), COLON, value expr.
+        // Each OBJECT_FIELD is `key: value` or shorthand `key`.
         // For maps the key can also be a string literal or expression.
         let entries = node
             .children()
@@ -4224,6 +4237,7 @@ impl LoweringContext {
                 let mut key_expr = None;
                 let mut val_expr = None;
                 let mut seen_colon = false;
+                let mut shorthand_name = None;
 
                 for elem in field_node.children_with_tokens() {
                     match elem {
@@ -4233,6 +4247,7 @@ impl LoweringContext {
                             } else if !seen_colon && key_expr.is_none() && is_ident_token(t.kind())
                             {
                                 let span = t.text_range();
+                                shorthand_name = Some((Name::new(t.text()), span));
                                 key_expr = Some(self.alloc_expr(
                                     Expr::Literal(Literal::String(t.text().to_string())),
                                     span,
@@ -4259,6 +4274,12 @@ impl LoweringContext {
                             }
                         }
                     }
+                }
+
+                if !seen_colon && let Some((name, span)) = shorthand_name {
+                    let value = self.alloc_expr(Expr::Path(vec![name]), span);
+                    self.source_map.property_shorthand_exprs.insert(value);
+                    val_expr = Some(value);
                 }
 
                 match (key_expr, val_expr) {
