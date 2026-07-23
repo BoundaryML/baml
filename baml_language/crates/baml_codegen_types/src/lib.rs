@@ -4,11 +4,13 @@
 
 mod errors;
 mod generator_fields;
+mod output_writer;
 mod symbols;
 mod ty;
 
 pub use errors::*;
 pub use generator_fields::*;
+pub use output_writer::*;
 pub use symbols::*;
 pub use ty::*;
 
