@@ -830,7 +830,7 @@ fn resolved_interface_from_ty(db: &dyn crate::Db, ty: Ty) -> Option<ResolvedInte
     Some(ResolvedInterface { loc, qtn })
 }
 
-/// The `TypeRef`-arena twin of [`resolve_path_to_interface`].
+/// Resolve a `TypeRef`-arena entry to an interface declaration.
 pub fn resolve_ref_to_interface<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,

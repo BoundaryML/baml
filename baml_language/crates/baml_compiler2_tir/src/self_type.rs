@@ -27,7 +27,7 @@ pub fn self_type_for_interface_default() -> Ty {
     Ty::TypeVar(Name::new("Self"), TyAttr::default())
 }
 
-/// [`self_type_for_class`] at explicit generic `args` (`TypeVar`s or concrete): the builtin
+/// Build a class receiver type at explicit generic `args` (`TypeVar`s or concrete): the builtin
 /// container roots are their structural sugar (`baml.Array<int>` → `int[]`), everything else
 /// a nominal `Ty::Class`. This is the receiver shape a value actually has — an array value is
 /// a `Ty::List`, never a `Ty::Class(baml.Array, …)` — so a static-form call

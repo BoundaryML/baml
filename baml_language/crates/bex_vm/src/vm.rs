@@ -5522,7 +5522,7 @@ impl BexVm {
         let op: OpCode = unsafe { std::mem::transmute(op_byte) };
 
         // Tagged-int comparisons skip untagging by comparing bits directly
-        // (see `Value::tagged_int_add` for the encoding rationale; the
+        // (see `Value::tagged_int_add_checked` for the encoding rationale; the
         // shift-left-by-1 preserves signed ordering between operands that
         // share the same tag bit). Float comparisons unwrap two heap-boxed
         // floats and apply the operator; both pops are guaranteed Float by

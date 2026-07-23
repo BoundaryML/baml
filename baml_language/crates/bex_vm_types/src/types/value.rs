@@ -112,14 +112,14 @@ impl Value {
     /// Sum of two `Int`-tagged Values, or `None` on i63 overflow — computed
     /// without untagging.
     ///
-    /// The result equals [`Value::tagged_int_add`] whenever it is `Some`. The
-    /// overflow test is exact and nearly free: in the tag encoding a value `x`
+    /// When present, the result is the exact tagged sum. The overflow test is
+    /// exact and nearly free: in the tag encoding a value `x`
     /// is stored as `(x << 1) | 1`, so `a + (b - 1)` (the tagged sum, as a
     /// *signed* i64) overflows i64 precisely when `x + y` leaves the i63 range
     /// `[INT_MIN, INT_MAX]`. So the hardware signed-overflow flag of one add is
     /// the i63 range check — no shift-out/range-compare/re-encode needed.
     ///
-    /// Same `Int`-tagged safety contract as [`Value::tagged_int_add`].
+    /// Both inputs must be `Int`-tagged; debug builds assert this contract.
     #[inline(always)]
     pub const fn tagged_int_add_checked(a: Value, b: Value) -> Option<Value> {
         debug_assert!(
@@ -136,8 +136,8 @@ impl Value {
 
     /// Difference of two `Int`-tagged Values, or `None` on i63 overflow.
     ///
-    /// See [`Value::tagged_int_add_checked`]; the result equals
-    /// [`Value::tagged_int_sub`] whenever it is `Some`.
+    /// See [`Value::tagged_int_add_checked`] for the encoding and overflow
+    /// details. When present, the result is the exact tagged difference.
     #[inline(always)]
     pub const fn tagged_int_sub_checked(a: Value, b: Value) -> Option<Value> {
         debug_assert!(

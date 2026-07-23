@@ -5,7 +5,6 @@
 pub mod attr;
 pub mod client_options;
 pub mod core_types;
-pub mod debug_log;
 pub mod dedent;
 pub mod escape;
 pub mod files;
@@ -16,7 +15,6 @@ pub mod qualified_name;
 pub use attr::*;
 pub use client_options::*;
 pub use core_types::*;
-pub use debug_log::DebugMessage;
 pub use files::*;
 pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
 

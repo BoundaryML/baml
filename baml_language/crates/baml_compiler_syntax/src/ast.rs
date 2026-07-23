@@ -2320,8 +2320,7 @@ impl TestDef {
 
     /// Get complete function references from the legacy `function(s)` config.
     ///
-    /// Unlike [`Self::function_names`], this preserves qualified references
-    /// such as `workflows.Classify` as one value.
+    /// Preserves qualified references such as `workflows.Classify` as one value.
     pub fn function_reference_names(&self) -> Vec<String> {
         let Some(value) = self
             .function_config_item()
