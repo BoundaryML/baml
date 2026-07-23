@@ -84,6 +84,12 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
+    /// Resolve a named SAP type without first constructing a borrowed
+    /// [`Ty::Unresolved`] wrapper.
+    pub fn resolve_name(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
+        self.types.get(ident).map(TyResolved::as_ref)
+    }
+
     /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
     #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_with_meta(
