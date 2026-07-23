@@ -2824,7 +2824,7 @@ impl LoweringContext {
         )
     }
 
-    fn lower_index_expr(&mut self, node: &SyntaxNode) -> ExprId {
+    fn lower_index_parts(&mut self, node: &SyntaxNode) -> (ExprId, ExprId) {
         let mut base = None;
         let mut index = None;
         let mut seen_lbracket = false;
@@ -2854,7 +2854,11 @@ impl LoweringContext {
 
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        (base, index)
+    }
 
+    fn lower_index_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let (base, index) = self.lower_index_parts(node);
         let id = self.alloc_expr(Expr::Index { base, index }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
@@ -2910,37 +2914,7 @@ impl LoweringContext {
     }
 
     fn lower_optional_index_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // OPTIONAL_INDEX_EXPR: <base_expr> QUESTION_DOT L_BRACKET <index_expr> R_BRACKET
-        let mut base = None;
-        let mut index = None;
-        let mut seen_lbracket = false;
-
-        for elem in node.children_with_tokens() {
-            match elem {
-                rowan::NodeOrToken::Node(child) => {
-                    if !seen_lbracket {
-                        if base.is_none() {
-                            base = Some(self.lower_expr_in_chain(&child));
-                        }
-                    } else if index.is_none() {
-                        index = Some(self.lower_expr(&child));
-                    }
-                }
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::L_BRACKET {
-                        seen_lbracket = true;
-                    } else if !seen_lbracket && base.is_none() {
-                        base = self.try_lower_bare_token(&token);
-                    } else if seen_lbracket && index.is_none() {
-                        index = self.try_lower_bare_token(&token);
-                    }
-                }
-            }
-        }
-
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-
+        let (base, index) = self.lower_index_parts(node);
         let id = self.alloc_expr(Expr::OptionalIndex { base, index }, node.span_range());
         self.needs_chain_wrap.remove(&base);
         self.needs_chain_wrap.insert(id);
