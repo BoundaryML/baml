@@ -1,4 +1,5 @@
 pub mod collector;
+mod framing;
 pub mod history;
 pub mod ids;
 pub mod metadata;

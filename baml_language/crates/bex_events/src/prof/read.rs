@@ -6,8 +6,6 @@
 
 use std::io::{self, Read};
 
-use prost::Message;
-
 use crate::prof::pb;
 
 /// A parsed `.bamlprof`.
@@ -29,35 +27,8 @@ pub fn read_bamlprof_from_reader(mut reader: impl Read) -> io::Result<BamlprofCo
 }
 
 pub fn read_bamlprof_from_bytes(bytes: &[u8]) -> io::Result<BamlprofContents> {
-    let mut buf = bytes;
-    let header = pb::EventFileHeaderV1::decode_length_delimited(&mut buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let mut events = Vec::new();
-    let mut truncated = false;
-
-    while !buf.is_empty() {
-        let delimiter_len = buf.len();
-        let frame_len = match prost::encoding::decode_length_delimiter(&mut buf) {
-            Ok(frame_len) => frame_len,
-            Err(err) => {
-                if delimiter_len < 10 {
-                    truncated = true;
-                    break;
-                }
-                return Err(io::Error::new(io::ErrorKind::InvalidData, err));
-            }
-        };
-        if buf.len() < frame_len {
-            truncated = true;
-            break;
-        }
-        let (frame, rest) = buf.split_at(frame_len);
-        let event = pb::DiskEventV1::decode(frame)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        events.push(event);
-        buf = rest;
-    }
-
+    let (header, events, truncated) =
+        crate::framing::read_length_delimited_records(bytes, |event: pb::DiskEventV1| Ok(event))?;
     Ok(BamlprofContents {
         header,
         events,
@@ -203,6 +174,19 @@ mod tests {
 
         let Err(error) = super::read_bamlprof_from_bytes(&bytes) else {
             panic!("malformed event frame should fail");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn malformed_complete_event_delimiter_is_invalid_data() {
+        let header = fixed_header();
+        let mut bytes = Vec::new();
+        encode_length_delimited_message(&mut bytes, &header).unwrap();
+        bytes.extend_from_slice(&[0x80; 10]);
+
+        let Err(error) = super::read_bamlprof_from_bytes(&bytes) else {
+            panic!("malformed event delimiter should fail");
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }

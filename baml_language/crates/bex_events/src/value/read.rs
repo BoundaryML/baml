@@ -2,8 +2,6 @@
 
 use std::io::{self, Read};
 
-use prost::Message;
-
 use crate::value::{LogRecord, ValueFileRecord, ValueRecord, pb};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,35 +18,8 @@ pub fn read_bamlvalue_from_reader(mut reader: impl Read) -> io::Result<Bamlvalue
 }
 
 pub fn read_bamlvalue_from_bytes(bytes: &[u8]) -> io::Result<BamlvalueContents> {
-    let mut buf = bytes;
-    let header = pb::ValueFileHeaderV1::decode_length_delimited(&mut buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let mut records = Vec::new();
-    let mut truncated = false;
-
-    while !buf.is_empty() {
-        let delimiter_len = buf.len();
-        let frame_len = match prost::encoding::decode_length_delimiter(&mut buf) {
-            Ok(frame_len) => frame_len,
-            Err(err) => {
-                if delimiter_len < 10 {
-                    truncated = true;
-                    break;
-                }
-                return Err(io::Error::new(io::ErrorKind::InvalidData, err));
-            }
-        };
-        if buf.len() < frame_len {
-            truncated = true;
-            break;
-        }
-        let (frame, rest) = buf.split_at(frame_len);
-        let record = pb::ValueRecordV1::decode(frame)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        records.push(file_record_from_proto(record)?);
-        buf = rest;
-    }
-
+    let (header, records, truncated) =
+        crate::framing::read_length_delimited_records(bytes, file_record_from_proto)?;
     Ok(BamlvalueContents {
         header,
         records,
@@ -219,6 +190,18 @@ mod tests {
 
         let Err(error) = super::read_bamlvalue_from_bytes(&bytes) else {
             panic!("malformed complete record should fail");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn malformed_complete_record_delimiter_is_invalid_data() {
+        let mut bytes = Vec::new();
+        encode_header(&mut bytes, BoundaryId::from_bytes([3; 16])).unwrap();
+        bytes.extend_from_slice(&[0x80; 10]);
+
+        let Err(error) = super::read_bamlvalue_from_bytes(&bytes) else {
+            panic!("malformed record delimiter should fail");
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
