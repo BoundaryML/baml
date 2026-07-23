@@ -18,50 +18,13 @@
 
 use std::sync::{Arc, Once, OnceLock};
 
-use bex_project::{BexArgs, BexExternalAdt, CallId, MediaKind, MediaValue, RuntimeTy};
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, kwargs_to_bex_values};
-use indexmap::IndexMap;
+use bex_project::{BexExternalAdt, MediaKind, MediaValue};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JByteArray, JClass, JString, JValue},
     sys::{jboolean, jint, jlong},
 };
-use prost::Message;
-
-/// Decoded `CallFunctionArgs` — the JVM analog of `bridge_python`'s
-/// `DecodedCallArgs`.
-struct DecodedCallArgs {
-    kwargs: BexArgs,
-    call_id: CallId,
-    /// Explicit, named `TypeVar` bindings for a generic call, in De Bruijn
-    /// order (empty for non-generic calls). See `CallFunctionArgs.type_args`.
-    type_args: IndexMap<String, RuntimeTy>,
-}
-
-/// Decode protobuf-encoded `CallFunctionArgs` bytes into `BexArgs`.
-///
-/// Returns a `BridgeError` (not a thrown exception) so the byte-returning
-/// call site can route the failure through `bridge_cffi::error_to_outbound`
-/// into the structured `BamlOutboundResult` envelope, exactly like
-/// `bridge_python` does — the Java side then decodes + raises uniformly.
-fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
-        .map_err(bridge_ctypes::CtypesError::from)?;
-
-    if args.call_id == 0 {
-        return Err(bridge_cffi::BridgeError::InvalidCallId);
-    }
-
-    let call_id = CallId(args.call_id);
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
-    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-
-    Ok(DecodedCallArgs {
-        kwargs: kwargs.into(),
-        call_id,
-        type_args,
-    })
-}
 
 /// Shared synchronous call body. Mirrors `bridge_python`'s
 /// `call_function_sync`: pre-call host-boundary failures (uninitialized
@@ -72,26 +35,22 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
         let runtime = bridge_cffi::get_runtime()?;
-        let decoded = decode_args(args_proto)?;
+        let (kwargs, call_ctx) = bridge_cffi::decode_function_call_args(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, decoded, rt))
+        Ok((runtime, kwargs, call_ctx, rt))
     })();
 
-    let (runtime, decoded, rt) = match prepared {
+    let (runtime, kwargs, call_ctx, rt) = match prepared {
         Ok(v) => v,
         Err(e) => return bridge_cffi::error_to_outbound(e),
     };
-
-    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-        .with_type_args(decoded.type_args)
-        .build();
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
     // (`rt.block_on(...)`). Returns the encoded `BamlOutboundResult` bytes.
     rt.block_on(bridge_cffi::call_and_encode(
         runtime,
         function_name,
-        decoded.kwargs,
+        kwargs,
         call_ctx,
     ))
 }
@@ -312,12 +271,12 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
         let runtime = bridge_cffi::get_runtime()?;
-        let decoded = decode_args(&args_proto)?;
+        let (kwargs, call_ctx) = bridge_cffi::decode_function_call_args(&args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
-        Ok((runtime, decoded, rt))
+        Ok((runtime, kwargs, call_ctx, rt))
     })();
 
-    let (runtime, decoded, rt) = match prepared {
+    let (runtime, kwargs, call_ctx, rt) = match prepared {
         Ok(v) => v,
         Err(e) => {
             // Same envelope bytes the sync path returns, delivered on this
@@ -326,15 +285,6 @@ fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
             return;
         }
     };
-
-    let DecodedCallArgs {
-        kwargs,
-        call_id: engine_call_id,
-        type_args,
-    } = decoded;
-    let call_ctx = bridge_cffi::function_call_context_builder(engine_call_id)
-        .with_type_args(type_args)
-        .build();
 
     rt.spawn(async move {
         // Inner task so a panic during result *encoding* is caught (via the

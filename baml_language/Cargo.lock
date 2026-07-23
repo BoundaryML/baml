@@ -1631,9 +1631,7 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
- "indexmap",
  "jni 0.21.1",
- "prost",
  "tokio",
 ]
 
@@ -1646,7 +1644,6 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
- "indexmap",
  "log",
  "prost",
  "pyo3",
@@ -1667,7 +1664,6 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
- "indexmap",
  "log",
  "napi",
  "napi-build",

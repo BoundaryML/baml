@@ -25,9 +25,7 @@ baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
-indexmap = { workspace = true }
 jni = { workspace = true }
-prost = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [package.metadata.ci]
