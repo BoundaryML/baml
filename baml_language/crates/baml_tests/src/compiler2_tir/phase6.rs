@@ -505,6 +505,47 @@ fn string_missing_method_produces_unresolved_member() {
     );
 }
 
+#[test]
+fn builtin_missing_members_report_type_and_member_span() {
+    let cases = [
+        ("int[]", "int[]"),
+        ("map<string, int>", "map<string, int>"),
+        ("string", "string"),
+        ("int", "int"),
+        ("bigint", "bigint"),
+        ("float", "float"),
+        ("bool", "bool"),
+        ("null", "null"),
+        ("type", "type"),
+        ("image", "image"),
+    ];
+
+    let assert_diagnostic = |source: &str, rendered_ty: &str| {
+        let mut db = make_db();
+        let member_start = source.find("x.missing").unwrap();
+        let file = db.add_file("test.baml", source);
+        let output = render_tir(&db, file);
+        let expected = format!(
+            "!! {member_start}..{}: type `{rendered_ty}` has no member `missing`",
+            member_start + "x.missing".len()
+        );
+        assert!(
+            output.contains(&expected),
+            "Expected `{expected}`, got:\n{output}"
+        );
+    };
+
+    for (source_ty, rendered_ty) in cases {
+        let source = format!("function f(x: {source_ty}) -> int {{ return x.missing; }}");
+        assert_diagnostic(&source, rendered_ty);
+    }
+
+    assert_diagnostic(
+        "function value() -> int { 1 }\nfunction f() -> int { let x = spawn { value() }; return x.missing; }",
+        "Future<int, null>",
+    );
+}
+
 // ── Snapshot: full rendering of a function using builtin methods ──────────────
 
 #[test]

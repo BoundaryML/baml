@@ -10468,6 +10468,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         // interpolatable.
     }
 
+    fn report_unresolved_member(&self, base_ty: &Ty, member: &Name, at: ExprId) -> Ty {
+        self.context.report_at_member_simple(
+            TirTypeError::UnresolvedMember {
+                base_type: base_ty.clone(),
+                member: member.clone(),
+            },
+            at,
+        );
+        Ty::Unknown {
+            attr: TyAttr::default(),
+        }
+    }
+
     /// Resolve a member access on a known base type.
     ///
     /// For class types, checks data fields. For enum types, validates variants.
@@ -10689,18 +10702,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             bound,
                         )
                     })
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+                    .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             Ty::Map {
                 key: key_ty,
@@ -10717,18 +10719,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("map"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                })
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             Ty::Future(value_ty, error_ty, _) => {
                 // Bridge: Future<T, E> → baml.future.Future class
@@ -10741,18 +10732,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("future"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                })
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => {
                 // Bridge: string / string-literal → String class
@@ -10766,18 +10746,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             bound,
                         )
                     })
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+                    .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             // int literal / int → Int companion class
             Ty::Int { .. } | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
@@ -10785,90 +10754,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("int"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at)),
             // bigint literal / bigint → Bigint companion class
             Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
                 .resolve_builtin_member(&["Bigint"], &[], member, at)
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("bigint"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at)),
             // float literal / float → Float companion class
             Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
                 .resolve_builtin_member(&["Float"], &[], member, at)
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("float"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at)),
             // bool literal / bool → Bool companion class
             Ty::Bool { .. } | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
                 .resolve_builtin_member(&["Bool"], &[], member, at)
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("bool"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at)),
             // null / Null companion class
             Ty::Null { .. } => self
                 .resolve_builtin_member(&["Null"], &[], member, at)
                 .or_else(|| {
                     self.resolve_member_from_impls(base_ty, Name::new("null"), member, at, bound)
                 })
-                .unwrap_or_else(|| {
-                    self.context.report_at_member_simple(
-                        TirTypeError::UnresolvedMember {
-                            base_type: base_ty.clone(),
-                            member: member.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
-                }),
+                .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at)),
             Ty::Type { .. } => {
                 // Bridge: type → TypeValue companion class (provides `.to_string()`, etc.)
                 self.resolve_builtin_member(&["TypeValue"], &[], member, at)
@@ -10881,18 +10795,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             bound,
                         )
                     })
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+                    .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             Ty::Uint8Array { .. } | Ty::Media(_, _) => {
                 // Bridge: media / binary primitives with builtin companion classes
@@ -10914,18 +10817,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             bound,
                         )
                     })
-                    .unwrap_or_else(|| {
-                        self.context.report_at_member_simple(
-                            TirTypeError::UnresolvedMember {
-                                base_type: base_ty.clone(),
-                                member: member.clone(),
-                            },
-                            at,
-                        );
-                        Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }
-                    })
+                    .unwrap_or_else(|| self.report_unresolved_member(base_ty, member, at))
             }
             // Universal `to_json` / `from_json` on generic type variables.
             //
