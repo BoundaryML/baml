@@ -1286,6 +1286,32 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn finish_type_argument_list(&mut self) {
+        self.type_args_depth -= 1;
+
+        if self.type_args_depth != 0 || self.pending_greaters == 0 {
+            return;
+        }
+
+        if let Some(span) = self.pending_greater_span {
+            self.error(
+                format!(
+                    "Unmatched '>' in type expression (found {} extra)",
+                    self.pending_greaters
+                ),
+                span,
+            );
+        }
+        for _ in 0..self.pending_greaters {
+            self.events.push(Event::Token {
+                kind: SyntaxKind::GREATER,
+                text: ">".to_string(),
+            });
+        }
+        self.pending_greaters = 0;
+        self.pending_greater_span = None;
+    }
+
     /// Skip tokens until we find a balanced closing parenthesis.
     /// Used for error recovery in tuple/parenthesized type expressions.
     fn skip_to_balanced_paren(&mut self) {
@@ -3920,28 +3946,7 @@ impl<'a> Parser<'a> {
 
             p.expect_greater(); // >
         });
-        self.type_args_depth -= 1;
-
-        // If we just exited the outermost generic and have pending '>', report error.
-        if self.type_args_depth == 0 && self.pending_greaters > 0 {
-            if let Some(span) = self.pending_greater_span {
-                self.error(
-                    format!(
-                        "Unmatched '>' in type expression (found {} extra)",
-                        self.pending_greaters
-                    ),
-                    span,
-                );
-            }
-            for _ in 0..self.pending_greaters {
-                self.events.push(Event::Token {
-                    kind: SyntaxKind::GREATER,
-                    text: ">".to_string(),
-                });
-            }
-            self.pending_greaters = 0;
-            self.pending_greater_span = None;
-        }
+        self.finish_type_argument_list();
     }
 
     fn parse_field(&mut self) {
@@ -6720,28 +6725,7 @@ impl<'a> Parser<'a> {
 
             p.expect_greater();
         });
-        self.type_args_depth -= 1;
-
-        // If we just exited the outermost generic and have pending '>', report error.
-        if self.type_args_depth == 0 && self.pending_greaters > 0 {
-            if let Some(span) = self.pending_greater_span {
-                self.error(
-                    format!(
-                        "Unmatched '>' in type expression (found {} extra)",
-                        self.pending_greaters
-                    ),
-                    span,
-                );
-            }
-            for _ in 0..self.pending_greaters {
-                self.events.push(Event::Token {
-                    kind: SyntaxKind::GREATER,
-                    text: ">".to_string(),
-                });
-            }
-            self.pending_greaters = 0;
-            self.pending_greater_span = None;
-        }
+        self.finish_type_argument_list();
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>
@@ -6765,28 +6749,7 @@ impl<'a> Parser<'a> {
 
             p.expect_greater();
         });
-        self.type_args_depth -= 1;
-
-        // If we just exited the outermost generic and have pending '>', report error
-        if self.type_args_depth == 0 && self.pending_greaters > 0 {
-            if let Some(span) = self.pending_greater_span {
-                self.error(
-                    format!(
-                        "Unmatched '>' in type expression (found {} extra)",
-                        self.pending_greaters
-                    ),
-                    span,
-                );
-            }
-            for _ in 0..self.pending_greaters {
-                self.events.push(Event::Token {
-                    kind: SyntaxKind::GREATER,
-                    text: ">".to_string(),
-                });
-            }
-            self.pending_greaters = 0;
-            self.pending_greater_span = None;
-        }
+        self.finish_type_argument_list();
     }
 
     /// Check if the current position looks like a map literal rather than a block
@@ -8603,6 +8566,86 @@ function read_int<T extends Converter<int>>(m: T) -> int {
             generic_param_lists, 2,
             "expected interface and function generic params"
         );
+    }
+
+    #[test]
+    fn generic_list_completion_handles_nested_and_trailing_lists() {
+        let source = r#"
+interface Wrapper<T> {}
+
+function f<T extends Wrapper<int>,>(
+  value: map<string, Wrapper<int>,>,
+) -> int {
+  foo<Wrapper<map<string, int>>,>(value)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(root.text().to_string(), source);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+                .count(),
+            2
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::GENERIC_ARGS)
+                .count(),
+            1
+        );
+    }
+
+    fn assert_unmatched_greater_recovery(source: &str) {
+        let expected_start =
+            u32::try_from(source.find(">>").expect("expected `>>`") + 1).expect("source too large");
+        let (root, errors) = parse_source(source);
+
+        assert_eq!(root.text().to_string(), source);
+        assert_eq!(
+            root.descendants_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|token| token.kind() == SyntaxKind::GREATER)
+                .count(),
+            2,
+            "expected split greater tokens in {source}"
+        );
+
+        let [ParseError::InvalidSyntax { message, span }] = errors.as_slice() else {
+            panic!("expected one unmatched-greater diagnostic, got: {errors:#?}");
+        };
+        assert_eq!(message, "Unmatched '>' in type expression (found 1 extra)");
+        assert_eq!(u32::from(span.range.start()), expected_start);
+        assert_eq!(u32::from(span.range.end()), expected_start + 1);
+    }
+
+    #[test]
+    fn generic_list_completion_recovers_extra_greater_for_every_list_kind() {
+        for source in [
+            "function f<T>>() -> T { throw 1 }",
+            "function f(value: map<string>>) -> int { 1 }",
+            "function f(value: int) -> int { value.as<int>> }",
+        ] {
+            assert_unmatched_greater_recovery(source);
+        }
+    }
+
+    #[test]
+    fn generic_list_completion_preserves_missing_close_recovery() {
+        for source in [
+            "function f<T(value: T) -> T { value }",
+            "function f(value: map<string) -> int { 1 }",
+        ] {
+            let (root, errors) = parse_source(source);
+            assert_eq!(root.text().to_string(), source);
+            assert!(
+                errors.iter().any(|error| matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. } if expected == "'>'"
+                )),
+                "expected missing `>` diagnostic, got: {errors:#?}"
+            );
+        }
     }
 
     #[test]
