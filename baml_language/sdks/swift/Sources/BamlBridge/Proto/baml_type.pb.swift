@@ -567,8 +567,9 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyUnknown: Sendable {
 
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
-/// its source string to preserve formatting). Literal types widen to their base
-/// primitive at decode time.
+/// its source string to preserve formatting). Decoders preserve literal
+/// identity so `InboundValue.value_type` remains exact rather than being
+/// widened to the corresponding primitive payload shape.
 nonisolated struct BamlBridge_Cffi_V1_BamlTyLiteral: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

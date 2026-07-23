@@ -62,28 +62,44 @@ extension BamlUnion2: Hashable where T0: Hashable, T1: Hashable {}
 extension BamlUnion2: Sendable where T0: Sendable, T1: Sendable {}
 
 extension BamlUnion2: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
+    // The selected arm's value rides bare, annotated with that arm's exact
+    // current-node type rather than an inbound union wrapper.
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
         }
     }
 }
 
 extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "unmatched union value")
@@ -145,31 +161,46 @@ extension BamlUnion3: Hashable where T0: Hashable, T1: Hashable, T2: Hashable {}
 extension BamlUnion3: Sendable where T0: Sendable, T1: Sendable, T2: Sendable {}
 
 extension BamlUnion3: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
         }
     }
 }
 
 extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion3", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == arm { return .t2(try T2._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -238,34 +269,50 @@ extension BamlUnion4: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion4: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable {}
 
 extension BamlUnion4: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
-        case .t3(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
         }
     }
 }
 
 extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            case 3: return .t3(try T3._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion4", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == arm { return .t2(try T2._bamlDecode(v)) }
             if let identity = T3._bamlArmIdentity, identity == arm { return .t3(try T3._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -341,21 +388,38 @@ extension BamlUnion5: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion5: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable {}
 
 extension BamlUnion5: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
-        case .t3(let v): return v._bamlEncode()
-        case .t4(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
         }
     }
 }
 
 extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            case 3: return .t3(try T3._bamlDecode(v))
+            case 4: return .t4(try T4._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion5", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
@@ -363,7 +427,7 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == arm { return .t3(try T3._bamlDecode(v)) }
             if let identity = T4._bamlArmIdentity, identity == arm { return .t4(try T4._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
@@ -371,7 +435,7 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -454,22 +518,40 @@ extension BamlUnion6: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion6: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable {}
 
 extension BamlUnion6: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
-        case .t3(let v): return v._bamlEncode()
-        case .t4(let v): return v._bamlEncode()
-        case .t5(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
+        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
         }
     }
 }
 
 extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            case 3: return .t3(try T3._bamlDecode(v))
+            case 4: return .t4(try T4._bamlDecode(v))
+            case 5: return .t5(try T5._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion6", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
@@ -478,7 +560,7 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == arm { return .t4(try T4._bamlDecode(v)) }
             if let identity = T5._bamlArmIdentity, identity == arm { return .t5(try T5._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
@@ -487,7 +569,7 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -577,23 +659,42 @@ extension BamlUnion7: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion7: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable, T6: Sendable {}
 
 extension BamlUnion7: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType, T6._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
-        case .t3(let v): return v._bamlEncode()
-        case .t4(let v): return v._bamlEncode()
-        case .t5(let v): return v._bamlEncode()
-        case .t6(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
+        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
+        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
         }
     }
 }
 
 extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable, T6: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            case 3: return .t3(try T3._bamlDecode(v))
+            case 4: return .t4(try T4._bamlDecode(v))
+            case 5: return .t5(try T5._bamlDecode(v))
+            case 6: return .t6(try T6._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion7", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
@@ -603,7 +704,7 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == arm { return .t5(try T5._bamlDecode(v)) }
             if let identity = T6._bamlArmIdentity, identity == arm { return .t6(try T6._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
@@ -613,7 +714,7 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -710,24 +811,44 @@ extension BamlUnion8: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion8: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable, T6: Sendable, T7: Sendable {}
 
 extension BamlUnion8: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable, T7: BamlEncodable {
-    // The selected arm's value rides bare — no union wrapper inbound.
+    public static var _bamlType: BamlTypeDescriptor? {
+        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType, T6._bamlType, T7._bamlType]
+        guard options.allSatisfy({ $0 != nil }) else { return nil }
+        return .union(options.compactMap { $0 })
+    }
+
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()
-        case .t1(let v): return v._bamlEncode()
-        case .t2(let v): return v._bamlEncode()
-        case .t3(let v): return v._bamlEncode()
-        case .t4(let v): return v._bamlEncode()
-        case .t5(let v): return v._bamlEncode()
-        case .t6(let v): return v._bamlEncode()
-        case .t7(let v): return v._bamlEncode()
+        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
+        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
+        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
+        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
+        case .t7(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T7._bamlType)
         }
     }
 }
 
 extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable, T6: BamlDecodable, T7: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
-        // 1. Wire metadata: the engine names the selected arm.
+        // 1. Canonical wire discriminator.
+        if let selected = v.unionSelectedOptionIndex() {
+            switch selected {
+            case 0: return .t0(try T0._bamlDecode(v))
+            case 1: return .t1(try T1._bamlDecode(v))
+            case 2: return .t2(try T2._bamlDecode(v))
+            case 3: return .t3(try T3._bamlDecode(v))
+            case 4: return .t4(try T4._bamlDecode(v))
+            case 5: return .t5(try T5._bamlDecode(v))
+            case 6: return .t6(try T6._bamlDecode(v))
+            case 7: return .t7(try T7._bamlDecode(v))
+            default:
+                throw BamlDecodeError.typeMismatch(expected: "BamlUnion8", got: "union option index \(selected)")
+            }
+        }
+        // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
             if let identity = T0._bamlArmIdentity, identity == arm { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == arm { return .t1(try T1._bamlDecode(v)) }
@@ -738,7 +859,7 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == arm { return .t6(try T6._bamlDecode(v)) }
             if let identity = T7._bamlArmIdentity, identity == arm { return .t7(try T7._bamlDecode(v)) }
         }
-        // 2. Class-arm FQN off the wire class value.
+        // 3. Class-arm FQN off the wire class value.
         if let fqn = v.wireClassFQN() {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
@@ -749,7 +870,7 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
             if let identity = T7._bamlArmIdentity, identity == fqn { return .t7(try T7._bamlDecode(v)) }
         }
-        // 3. Structural fallback, declared order.
+        // 4. Structural fallback, declared order.
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }

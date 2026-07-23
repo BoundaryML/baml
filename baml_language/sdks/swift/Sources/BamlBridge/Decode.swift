@@ -12,8 +12,8 @@ public struct BamlOutboundValue: Sendable {
 
     /// Union wrappers unwrap for non-union decode paths (Python
     /// discards the metadata the same way). Union decode reads the
-    /// wrapper FIRST via `unionSelectedArm()` — the metadata names the
-    /// selected arm and is authoritative there.
+    /// wrapper FIRST: generated unions use `selected_option_index` as
+    /// the canonical arm identity, with the display name as a legacy fallback.
     var normalized: BamlBridge_Cffi_V1_BamlOutboundValue {
         var current = raw
         while case .unionVariantValue(let variant) = current.value {
@@ -29,6 +29,16 @@ public struct BamlOutboundValue: Sendable {
         guard case .unionVariantValue(let variant) = raw.value else { return nil }
         let name = variant.valueOptionName
         return name.isEmpty ? nil : name
+    }
+
+    /// Canonical selected-arm position in the outer union's `self_type`.
+    /// Presence is significant because zero is the first valid arm. Generated
+    /// union decoders consult this before display names or payload shape.
+    public func unionSelectedOptionIndex() -> Int? {
+        guard case .unionVariantValue(let variant) = raw.value,
+              variant.hasSelectedOptionIndex
+        else { return nil }
+        return Int(variant.selectedOptionIndex)
     }
 
     /// The wire class FQN if this value's arm is a class, else nil.
