@@ -127,7 +127,7 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn format_delta_bytes(bytes: i64) -> String {
+pub(crate) fn format_delta_bytes(bytes: i64) -> String {
     let abs = bytes.unsigned_abs();
     let sign = if bytes >= 0 { "+" } else { "-" };
     if abs >= 1_000_000 {

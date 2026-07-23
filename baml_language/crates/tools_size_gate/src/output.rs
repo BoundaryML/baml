@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    compare::{Violation, format_bytes},
+    compare::{Violation, format_bytes, format_delta_bytes},
     config::GateMetric,
     measure::ArtifactMeasurement,
 };
@@ -364,18 +364,6 @@ fn delta_strings(row: &ReportRow) -> (String, String) {
             (format_delta_bytes(delta), format!("{pct:+.1}%"))
         }
         (None, _) => ("n/a".into(), "n/a".into()),
-    }
-}
-
-fn format_delta_bytes(bytes: i64) -> String {
-    let abs = bytes.unsigned_abs();
-    let sign = if bytes >= 0 { "+" } else { "-" };
-    if abs >= 1_000_000 {
-        format!("{sign}{:.1} MB", abs as f64 / 1_000_000.0)
-    } else if abs >= 1_000 {
-        format!("{sign}{:.1} KB", abs as f64 / 1_000.0)
-    } else {
-        format!("{sign}{abs} B")
     }
 }
 
