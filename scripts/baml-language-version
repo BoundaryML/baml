@@ -14,7 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(
+    os.environ.get(
+        "BAML_LANGUAGE_VERSION_ROOT",
+        Path(__file__).resolve().parents[1],
+    )
+).resolve()
 RELEASE_TOML = ROOT / "baml_language" / "release.toml"
 BAML_VERSION_RS = ROOT / "baml_language" / "crates" / "baml_version" / "src" / "lib.rs"
 PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
@@ -28,6 +33,32 @@ GO_RUNTIME_VERSION = ROOT / "baml_language" / "sdks" / "go" / "baml_go" / "versi
 RUST_BRIDGE_VERSION_RS = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "src" / "version.rs"
 RUST_BRIDGE_CARGO_TOML = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "Cargo.toml"
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
+CSHARP_PROJECT = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "csharp"
+    / "bridge_csharp"
+    / "src"
+    / "Baml.Bridge.csproj"
+)
+JAVA_BRIDGE_BUILD = ROOT / "baml_language" / "sdks" / "java" / "baml_bridge" / "build.gradle.kts"
+JAVA_KOTLIN_BUILD = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "java"
+    / "baml-bridge-kotlin"
+    / "build.gradle.kts"
+)
+GRADLE_PLUGIN_BUILD = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "java"
+    / "gradle-plugin"
+    / "build.gradle.kts"
+)
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CANONICAL_RE = re.compile(
@@ -39,14 +70,21 @@ SHA_RE = re.compile(r"^[a-z]$")
 # `registry_versions` map instead of a flat `pypi_version` field, so a new
 # registry adds a map entry rather than a top-level field. The loader fails
 # closed on any other schema.
-PLAN_SCHEMA = 2
+PLAN_SCHEMA = 3
 
-# Registries whose package version this plan carries. crates.io and npm both
-# accept the canonical SemVer verbatim (identity translation); PyPI needs the
-# `.devN` encoding (see `to_pypi_version`). No .NET/NuGet registry ships yet,
-# so it is intentionally absent — a plan must never claim a registry it does
-# not produce.
-PLAN_REGISTRIES = ("pypi", "npm", "crates_io")
+# Registries whose package version this plan carries. npm, crates.io, NuGet,
+# Maven Central, the Gradle Plugin Portal, and SwiftPM git tags accept the
+# canonical SemVer verbatim (identity translation); PyPI needs the `.devN`
+# encoding (see `to_pypi_version`).
+PLAN_REGISTRIES = (
+    "pypi",
+    "npm",
+    "crates_io",
+    "nuget",
+    "maven",
+    "gradle_plugin",
+    "swiftpm",
+)
 
 
 @dataclass(frozen=True, order=True)
@@ -86,6 +124,7 @@ class ReleasePlan:
     canonical_version: str
     registry_versions: dict[str, str]
     git_tag: str
+    released_at: str
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -103,6 +142,22 @@ class ReleasePlan:
     @property
     def crates_io_version(self) -> str:
         return self.registry_versions["crates_io"]
+
+    @property
+    def nuget_version(self) -> str:
+        return self.registry_versions["nuget"]
+
+    @property
+    def maven_version(self) -> str:
+        return self.registry_versions["maven"]
+
+    @property
+    def gradle_plugin_version(self) -> str:
+        return self.registry_versions["gradle_plugin"]
+
+    @property
+    def swiftpm_version(self) -> str:
+        return self.registry_versions["swiftpm"]
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -273,6 +328,11 @@ def release_tags() -> list[str]:
 
 
 def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None) -> str:
+    override = os.environ.get("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER")
+    if override:
+        if SHA_RE.fullmatch(override) is None:
+            fail("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER must be one lowercase letter")
+        return override
     prefix = f"baml-language-{base}-nightly.{date}."
     used = sorted(
         tag.removeprefix(prefix)
@@ -319,10 +379,35 @@ def registry_versions_for(canonical: str) -> dict[str, str]:
         "pypi": to_pypi_version(canonical),
         "npm": canonical,
         "crates_io": canonical,
+        "nuget": canonical,
+        "maven": canonical,
+        "gradle_plugin": canonical,
+        "swiftpm": canonical,
     }
     # Keep the map and the declared registry set in lockstep.
     assert set(translations) == set(PLAN_REGISTRIES)
     return translations
+
+
+def released_at_for_plan() -> str:
+    value = os.environ.get("BAML_LANGUAGE_RELEASED_AT")
+    if not value:
+        value = git_output("show", "-s", "--format=%cI", "HEAD")
+    try:
+        timestamp = dt.datetime.fromisoformat(value) if value else None
+    except ValueError:
+        timestamp = None
+    if timestamp is None or timestamp.tzinfo is None:
+        fail(
+            "BAML_LANGUAGE_RELEASED_AT or the source commit timestamp "
+            "must be an ISO-8601 timestamp with a timezone"
+        )
+    return (
+        timestamp.astimezone(dt.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def make_plan(channel: str) -> ReleasePlan:
@@ -334,6 +419,9 @@ def make_plan(channel: str) -> ReleasePlan:
         canonical_version=canonical,
         registry_versions=registry_versions_for(canonical),
         git_tag=f"baml-language-{canonical}",
+        # The source commit timestamp is deterministic for repair workflows,
+        # unlike generating a fresh manifest timestamp in a rerun attempt.
+        released_at=released_at_for_plan(),
     )
 
 
@@ -359,21 +447,63 @@ def load_plan(path: Path) -> ReleasePlan:
     if not isinstance(raw_registry_versions, dict):
         fail(f"{path} registry_versions must be a JSON object")
     registry_versions = {str(key): str(value) for key, value in raw_registry_versions.items()}
-    missing = [name for name in PLAN_REGISTRIES if name not in registry_versions]
-    if missing:
-        fail(f"{path} registry_versions is missing {', '.join(missing)}")
+    missing = sorted(set(PLAN_REGISTRIES) - set(registry_versions))
+    extra = sorted(set(registry_versions) - set(PLAN_REGISTRIES))
+    if missing or extra:
+        fail(
+            f"{path} registry_versions keys do not match the supported set: "
+            f"missing={missing} extra={extra}"
+        )
 
     try:
-        return ReleasePlan(
+        plan = ReleasePlan(
             schema=PLAN_SCHEMA,
             channel=str(data["channel"]),
             canary_version=str(data["canary_version"]),
             canonical_version=str(data["canonical_version"]),
             registry_versions=registry_versions,
             git_tag=str(data["git_tag"]),
+            released_at=str(data["released_at"]),
         )
     except KeyError as exc:
         fail(f"{path} is missing {exc.args[0]!r}")
+
+    try:
+        canary = Version.parse(plan.canary_version)
+    except ValueError as exc:
+        fail(f"{path} has an invalid canary_version: {exc}")
+    match = CANONICAL_RE.fullmatch(plan.canonical_version)
+    if match is None:
+        fail(f"{path} has an invalid canonical_version {plan.canonical_version!r}")
+    if plan.channel == "canary":
+        if plan.canonical_version != str(canary):
+            fail(f"{path} canary canonical_version must equal canary_version")
+    elif plan.channel == "nightly":
+        base = f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
+        if base != str(canary.next_patch()) or match.group(4) is None:
+            fail(
+                f"{path} nightly canonical_version must be the next canary patch "
+                "with a nightly suffix"
+            )
+    else:
+        fail(f"{path} has unsupported channel {plan.channel!r}")
+    expected_registry_versions = registry_versions_for(plan.canonical_version)
+    if plan.registry_versions != expected_registry_versions:
+        fail(
+            f"{path} registry_versions do not encode canonical_version: "
+            f"expected {expected_registry_versions!r}"
+        )
+    if plan.git_tag != f"baml-language-{plan.canonical_version}":
+        fail(f"{path} git_tag does not match canonical_version")
+    try:
+        released_at = dt.datetime.fromisoformat(
+            plan.released_at.replace("Z", "+00:00")
+        )
+    except ValueError:
+        fail(f"{path} released_at is not an ISO-8601 timestamp")
+    if released_at.tzinfo is None or not plan.released_at.endswith("Z"):
+        fail(f"{path} released_at must be a UTC timestamp ending in Z")
+    return plan
 
 
 def replace_regex(path: Path, pattern: str, replacement: str) -> None:
@@ -426,6 +556,11 @@ def stamp(plan: ReleasePlan) -> None:
         r'^const DefaultRuntimeVersion = ".*"$',
         f'const DefaultRuntimeVersion = "{plan.canonical_version}"',
     )
+    replace_regex(
+        CSHARP_PROJECT,
+        r"^    <Version>.*</Version>$",
+        f"    <Version>{plan.nuget_version}</Version>",
+    )
 
     text = PY_INIT.read_text(encoding="utf-8")
     version_line = f'__version__ = "{plan.canonical_version}"\n'
@@ -474,6 +609,24 @@ def sync_canary() -> None:
     regenerate_node_bridge()
 
 
+def exact_regex_field(path: Path, pattern: str, expected: str) -> bool:
+    values = re.findall(
+        pattern,
+        path.read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+    return values == [expected]
+
+
+def json_version(path: Path) -> str | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    value = data.get("version") if isinstance(data, dict) else None
+    return value if isinstance(value, str) else None
+
+
 def check_release() -> None:
     current = load_release()
     previous = previous_release_toml()
@@ -488,29 +641,92 @@ def check_release() -> None:
     expected = make_plan("canary")
     mismatches: list[str] = []
     checks = {
-        "baml_version::CANONICAL_VERSION": expected.canonical_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
-        "baml_version::PYPI_VERSION": expected.pypi_version in BAML_VERSION_RS.read_text(encoding="utf-8"),
-        "python pyproject version": f'version = "{expected.pypi_version}"' in PYPROJECT.read_text(encoding="utf-8"),
-        "python __version__": f'__version__ = "{expected.canonical_version}"' in PY_INIT.read_text(encoding="utf-8"),
+        "baml_version::CANONICAL_VERSION": exact_regex_field(
+            BAML_VERSION_RS,
+            r'^pub const CANONICAL_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "baml_version::PYPI_VERSION": exact_regex_field(
+            BAML_VERSION_RS,
+            r'^pub const PYPI_VERSION: &str = "([^"]+)";$',
+            expected.pypi_version,
+        ),
+        "baml_version::CHANNEL": exact_regex_field(
+            BAML_VERSION_RS,
+            r'^pub const CHANNEL: &str = "([^"]+)";$',
+            expected.channel,
+        ),
+        "baml_version::STABLE_VERSION": exact_regex_field(
+            BAML_VERSION_RS,
+            r'^pub const STABLE_VERSION: &str = "([^"]+)";$',
+            expected.canary_version,
+        ),
+        "python pyproject version": exact_regex_field(
+            PYPROJECT,
+            r'^version = "([^"]+)"$',
+            expected.pypi_version,
+        ),
+        "python __version__": exact_regex_field(
+            PY_INIT,
+            r'^__version__ = "([^"]+)"$',
+            expected.canonical_version,
+        ),
         # Load-bearing beyond drift hygiene: the Rust bridge's loader
         # handshakes the loaded engine's version() against this constant,
         # in development builds too.
-        "rust bridge CANONICAL_VERSION": (
-            f'pub(crate) const CANONICAL_VERSION: &str = "{expected.canonical_version}";'
-            in RUST_BRIDGE_VERSION_RS.read_text(encoding="utf-8")
+        "rust bridge CANONICAL_VERSION": exact_regex_field(
+            RUST_BRIDGE_VERSION_RS,
+            r'^pub\(crate\) const CANONICAL_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
         ),
-        "rust bridge Cargo.toml version": (
+        "rust bridge Cargo.toml version": exact_regex_field(
             # stamp() writes this from crates_io_version; check the same
             # property (identity of canonical today, but the encodings may
             # diverge as PyPI's already does).
-            f'version = "{expected.crates_io_version}"'
-            in RUST_BRIDGE_CARGO_TOML.read_text(encoding="utf-8")
+            RUST_BRIDGE_CARGO_TOML,
+            r'^version = "([^"]+)"$',
+            expected.crates_io_version,
         ),
-        "vsix package version": f'"version": "{expected.canonical_version}"' in VSIX_PACKAGE.read_text(encoding="utf-8"),
-        "go runtime version": f'DefaultRuntimeVersion = "{expected.canonical_version}"' in GO_RUNTIME_VERSION.read_text(encoding="utf-8"),
+        "vsix package version": (
+            json_version(VSIX_PACKAGE) == expected.canonical_version
+        ),
+        "go runtime version": exact_regex_field(
+            GO_RUNTIME_VERSION,
+            r'^const DefaultRuntimeVersion = "([^"]+)"$',
+            expected.canonical_version,
+        ),
+        "C# NuGet project version": exact_regex_field(
+            CSHARP_PROJECT,
+            r"^    <Version>([^<]+)</Version>$",
+            expected.nuget_version,
+        ),
+        # Java/Kotlin packages intentionally receive their identity-valued
+        # Maven version from the frozen plan through -PbamlVersion.
+        "Java bridge Maven version input": exact_regex_field(
+            JAVA_BRIDGE_BUILD,
+            r"^version = (bamlVersion)$",
+            "bamlVersion",
+        ),
+        "Kotlin bridge Maven version input": exact_regex_field(
+            JAVA_KOTLIN_BUILD,
+            r"^version = (bamlVersion)$",
+            "bamlVersion",
+        ),
+        "Kotlin bridge exact Java dependency version": exact_regex_field(
+            JAVA_KOTLIN_BUILD,
+            r'^\s*api\("com\.boundaryml:baml-bridge:(\$bamlVersion)"\)$',
+            "$bamlVersion",
+        ),
+        "Gradle Plugin Portal version input": exact_regex_field(
+            GRADLE_PLUGIN_BUILD,
+            r"^version = (bamlVersion)$",
+            "bamlVersion",
+        ),
     }
     if NODE_PACKAGE.exists():
-        checks["node package version"] = f'"version": "{expected.canonical_version}"' in NODE_PACKAGE.read_text(encoding="utf-8")
+        checks["node package version"] = (
+            json_version(NODE_PACKAGE) == expected.npm_version
+        )
         if not NODE_NATIVE_JS.exists():
             mismatches.append(
                 "node native loader version guards: "
@@ -535,7 +751,9 @@ def check_release() -> None:
                     "`scripts/baml-language-version sync` and commit the generated output."
                 )
     if WEB_PACKAGE.exists():
-        checks["web package version"] = f'"version": "{expected.canonical_version}"' in WEB_PACKAGE.read_text(encoding="utf-8")
+        checks["web package version"] = (
+            json_version(WEB_PACKAGE) == expected.npm_version
+        )
 
     for name, ok in checks.items():
         if not ok:
@@ -592,7 +810,9 @@ def main() -> None:
 
     compute_parser = subparsers.add_parser("compute")
     compute_parser.add_argument("--channel", choices=["canary", "nightly"], required=True)
-    compute_parser.add_argument("--pypi", action="store_true")
+    compute_output = compute_parser.add_mutually_exclusive_group()
+    compute_output.add_argument("--pypi", action="store_true")
+    compute_output.add_argument("--registry", choices=PLAN_REGISTRIES)
 
     plan_parser = subparsers.add_parser("plan")
     plan_parser.add_argument("--channel", choices=["canary", "nightly"], required=True)
@@ -627,7 +847,12 @@ def main() -> None:
         sync_canary()
     elif args.command == "compute":
         canonical = compute_version(args.channel)
-        print(to_pypi_version(canonical) if args.pypi else canonical)
+        if args.pypi:
+            print(to_pypi_version(canonical))
+        elif args.registry:
+            print(registry_versions_for(canonical)[args.registry])
+        else:
+            print(canonical)
     elif args.command == "plan":
         args.out.write_text(make_plan(args.channel).to_json(), encoding="utf-8")
     elif args.command == "stamp":

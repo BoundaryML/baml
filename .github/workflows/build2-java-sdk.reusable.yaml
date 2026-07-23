@@ -6,8 +6,9 @@ name: BAML SDK Release - Build Java
 #
 #   - inputs are the frozen release plan (`release_plan_json`) + the exact
 #     commit (`source_sha`); the bare `version` input is gone. The Maven version
-#     is the plan's `canonical_version` (Maven-legal as-is: canary → `0.15.0`,
-#     nightly → `0.15.0-nightly.YYYYMMDD.a`), injected via `-PbamlVersion`.
+#     is the plan's `registry_versions.maven` (currently an identity encoding:
+#     canary → `0.15.0`, nightly → `0.15.0-nightly.YYYYMMDD.a`), injected via
+#     `-PbamlVersion`.
 #   - the 8-target build matrix is generated from the repository platform
 #     contract (`release/platforms.json`) `java` artifact key, not a hand-copied
 #     list. Experimental targets (musl, windows-arm64) carry `experimental: true`
@@ -191,7 +192,7 @@ jobs:
           # at the repo root, the target dir 3 levels up. Relative paths keep the
           # step portable to the Windows (Git Bash) runners, where a
           # $GITHUB_WORKSPACE absolute path (D:\a\...) confuses bash path tests.
-          version="$(jq -r .canonical_version ../../../../release-plan.json)"
+          version="$(jq -r .registry_versions.maven ../../../../release-plan.json)"
           case "$BAML_TARGET" in
             *windows*) libfile="bridge_java.dll" ;;
             *apple*)   libfile="libbridge_java.dylib" ;;
@@ -251,7 +252,7 @@ jobs:
           set -euo pipefail
           # Release plan is 4 levels up at the repo root (relative path — this job
           # is linux-only, but keep it consistent with the natives step).
-          version="$(jq -r .canonical_version ../../../../release-plan.json)"
+          version="$(jq -r .registry_versions.maven ../../../../release-plan.json)"
           # `build` runs the pure-Java tests (the native smoke self-skips via
           # JUnit assumeTrue when no cdylib is present); sourcesJar/javadocJar are
           # named explicitly so the release always carries the two Central-
