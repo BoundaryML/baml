@@ -30,9 +30,7 @@ baml_version = { workspace = true }
 baml_workspace = { workspace = true }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
-bex_events = { workspace = true }
 bex_vm_types = { workspace = true }
-bridge_ctypes = { workspace = true }
 sdkgen_cpp = { workspace = true }
 sdkgen_go = { workspace = true }
 sdkgen_java = { workspace = true }
@@ -53,7 +51,6 @@ indicatif = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 object = { workspace = true }
-prost = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }

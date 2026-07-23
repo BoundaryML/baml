@@ -11,12 +11,7 @@ use bex_engine::{
     FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
     value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
-use bex_events::value::{ValueCodec, ValueRef, ValueWriteOutcome};
-use bridge_ctypes::baml_bridge::cffi::{
-    BamlOutboundValue, baml_outbound_value::Value as OutboundValue,
-};
 use clap::{Args, ValueEnum};
-use prost::Message;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{
@@ -137,8 +132,7 @@ impl RunCtx<'_> {
 
         // Only log bodies are needed here. Periodic draining keeps this queue
         // bounded in practice while leaving enough headroom for bursty tests.
-        let producer =
-            TraceCaptureProducer::new(TraceCaptureConfig::enabled_with_budgets(0, 100_000));
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
         let context = builder
             .with_capture_defaults(CaptureDefaults {
                 values_enabled: false,
@@ -153,24 +147,18 @@ impl RunCtx<'_> {
         let Some(producer) = producer else {
             return;
         };
-        let mut next_id = 0usize;
-        let report = producer.drain_to_value_recorder_report(|draft, body| {
-            next_id += 1;
-            if let Some(log) = &draft.log
-                && self.logs.allows(log.level.as_deref())
-            {
-                let level = log.level.as_deref().unwrap_or("info").to_ascii_uppercase();
-                println!("[{level}] {}", render_log_body(&body));
+        let report = producer.drain_rendered_logs();
+        for log in report.logs {
+            if self.logs.allows(log.metadata.level.as_deref()) {
+                let level = log
+                    .metadata
+                    .level
+                    .as_deref()
+                    .unwrap_or("info")
+                    .to_ascii_uppercase();
+                println!("[{level}] {}", log.body);
             }
-            Ok(ValueWriteOutcome {
-                value_ref: ValueRef::available(
-                    format!("test_log_{next_id}"),
-                    ValueCodec::BamlOutboundValue,
-                    body.len(),
-                    body.len(),
-                ),
-            })
-        });
+        }
         for failure in report.failures {
             eprintln!("WARN test log capture failed: {}", failure.diagnostic);
         }
@@ -204,21 +192,6 @@ impl RunCtx<'_> {
                 }
             }
         })
-    }
-}
-
-fn render_log_body(body: &[u8]) -> String {
-    let Ok(value) = BamlOutboundValue::decode(body) else {
-        return format!("<undecodable BAML log: {} bytes>", body.len());
-    };
-    match value.value.as_ref() {
-        None | Some(OutboundValue::NullValue(_)) => "null".to_string(),
-        Some(OutboundValue::StringValue(value)) => value.clone(),
-        Some(OutboundValue::IntValue(value)) => value.to_string(),
-        Some(OutboundValue::FloatValue(value)) => value.to_string(),
-        Some(OutboundValue::BoolValue(value)) => value.to_string(),
-        Some(OutboundValue::BigintValue(value)) => value.clone(),
-        Some(_) => format!("{value:?}"),
     }
 }
 

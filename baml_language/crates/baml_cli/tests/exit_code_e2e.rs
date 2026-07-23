@@ -539,6 +539,7 @@ test "logs" {
   log.debug("debug-detail");
   log.info("info-detail");
   log.warn("warn-detail");
+  log.warn({"user": "ada", "attempts": [1, 2]});
   log.error("error-detail");
   assert.is_true(true)
 }
@@ -582,6 +583,9 @@ test "fails" {
     let stdout = String::from_utf8_lossy(&info.stdout);
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
+    assert!(stdout.contains("user"), "stdout: {stdout}");
+    assert!(stdout.contains("ada"), "stdout: {stdout}");
+    assert!(stdout.contains("attempts"), "stdout: {stdout}");
     assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
     assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
     assert!(
