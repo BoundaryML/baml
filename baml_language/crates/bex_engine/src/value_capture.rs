@@ -383,9 +383,11 @@ impl TraceCaptureProducer {
         while let Some(draft) = self.pop_pending() {
             let body = match self.encode_snapshot(&draft) {
                 Ok(body) => body,
-                Err(failure) => {
+                Err((reason, diagnostic)) => {
                     let _ = self.trace_heap.release(draft.snapshot);
-                    report.failures.push(failure);
+                    report
+                        .failures
+                        .push(Self::drain_failure(&draft, reason, diagnostic));
                     continue;
                 }
             };
@@ -423,7 +425,7 @@ impl TraceCaptureProducer {
         while let Some(draft) = self.pop_pending() {
             let Some(metadata) = draft.log.clone() else {
                 let _ = self.trace_heap.release(draft.snapshot);
-                report.failures.push(self.drain_failure(
+                report.failures.push(Self::drain_failure(
                     &draft,
                     TraceDrainFailureReason::RecordFailed,
                     "rendered log drain encountered a non-log capture".to_string(),
@@ -432,16 +434,18 @@ impl TraceCaptureProducer {
             };
             let body = match self.encode_snapshot(&draft) {
                 Ok(body) => body,
-                Err(failure) => {
+                Err((reason, diagnostic)) => {
                     let _ = self.trace_heap.release(draft.snapshot);
-                    report.failures.push(failure);
+                    report
+                        .failures
+                        .push(Self::drain_failure(&draft, reason, diagnostic));
                     continue;
                 }
             };
             let _ = self.trace_heap.release(draft.snapshot);
             match render_encoded_trace_value(&body) {
                 Ok(body) => report.logs.push(RenderedTraceLog { metadata, body }),
-                Err(diagnostic) => report.failures.push(self.drain_failure(
+                Err(diagnostic) => report.failures.push(Self::drain_failure(
                     &draft,
                     TraceDrainFailureReason::EncodeFailed,
                     diagnostic,
@@ -451,10 +455,12 @@ impl TraceCaptureProducer {
         report
     }
 
-    fn encode_snapshot(&self, draft: &TraceValueDraft) -> Result<Vec<u8>, TraceDrainFailure> {
+    fn encode_snapshot(
+        &self,
+        draft: &TraceValueDraft,
+    ) -> Result<Vec<u8>, (TraceDrainFailureReason, String)> {
         let Some(snapshot) = self.trace_heap.get(draft.snapshot) else {
-            return Err(self.drain_failure(
-                draft,
+            return Err((
                 TraceDrainFailureReason::SnapshotMissing,
                 format!(
                     "trace snapshot {} was already released",
@@ -462,13 +468,11 @@ impl TraceCaptureProducer {
                 ),
             ));
         };
-        encode_trace_snapshot_body(&snapshot).map_err(|diagnostic| {
-            self.drain_failure(draft, TraceDrainFailureReason::EncodeFailed, diagnostic)
-        })
+        encode_trace_snapshot_body(&snapshot)
+            .map_err(|diagnostic| (TraceDrainFailureReason::EncodeFailed, diagnostic))
     }
 
     fn drain_failure(
-        &self,
         draft: &TraceValueDraft,
         reason: TraceDrainFailureReason,
         diagnostic: String,
