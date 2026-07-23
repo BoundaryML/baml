@@ -428,6 +428,9 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
+      - name: "Validate package-manager artifacts"
+        run: python3 scripts/test-baml-package-manager-artifacts
+
       - name: "Validate canary/nightly version computation"
         env:
           BAML_LANGUAGE_VERSION_DATE: "20260522"

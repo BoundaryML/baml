@@ -1,6 +1,6 @@
 [package]
 name = "baml"
-version = "0.2.0"
+version = "0.2.1"
 publish = false
 authors = { workspace = true }
 edition = { workspace = true }
@@ -14,8 +14,8 @@ license = { workspace = true }
 workspace = true
 
 [features]
-default = []
-no-self-update = []
+default = [  ]
+no-self-update = [  ]
 
 [dependencies]
 baml_release = { workspace = true }

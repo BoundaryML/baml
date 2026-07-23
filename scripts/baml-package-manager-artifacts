@@ -8,9 +8,7 @@ import hashlib
 from pathlib import Path
 
 
-TARGETS = {
-    "mac_arm": "aarch64-apple-darwin",
-    "mac_intel": "x86_64-apple-darwin",
+AUR_BIN_TARGETS = {
     "linux_arm": "aarch64-unknown-linux-gnu",
     "linux_intel": "x86_64-unknown-linux-gnu",
 }
@@ -26,49 +24,29 @@ def sha256(path: Path) -> str:
 
 def wrapper_archive(wrapper_dir: Path, version: str, target: str) -> Path:
     ext = "zip" if target.endswith("windows-msvc") else "tar.gz"
-    path = wrapper_dir / f"baml-wrapper-{version}-{target}.{ext}"
+    path = wrapper_dir / f"baml-wrapper-no-self-update-{version}-{target}.{ext}"
     if not path.exists():
         raise SystemExit(f"missing wrapper archive: {path}")
     return path
 
 
-def render_formula(version: str, shas: dict[str, str]) -> str:
+def render_formula(version: str, source_sha256: str) -> str:
     return f'''class Baml < Formula
-  desc "BAML wrapper - toolchain manager and launcher"
+  desc "Toolchain manager and launcher for the BAML language"
   homepage "https://github.com/BoundaryML/baml"
-  version "{version}"
+  url "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-{version}.tar.gz"
+  sha256 "{source_sha256}"
   license "Apache-2.0"
 
-  on_macos do
-    on_arm do
-      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "{shas["mac_arm"]}"
-    end
-
-    on_intel do
-      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "{shas["mac_intel"]}"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-{version}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "{shas["linux_arm"]}"
-    end
-
-    on_intel do
-      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-{version}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "{shas["linux_intel"]}"
-    end
-  end
+  depends_on "cmake" => :build
+  depends_on "rust" => :build
 
   def install
-    if (buildpath/"bin/baml").exist?
-      bin.install "bin/baml"
-    else
-      bin.install "baml"
-    end
+    system "cargo", "install",
+           *std_cargo_args(
+             path:     "baml_language/crates/baml",
+             features: "no-self-update",
+           )
   end
 
   def caveats
@@ -84,6 +62,34 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
       IDE extension setup is explicit:
         baml ide install --cursor
     EOS
+  end
+
+  test do
+    ENV["BAML_HOME"] = (testpath/"baml-home").to_s
+    ENV["HOME"] = testpath.to_s
+    ENV.delete "BAML_VERSION"
+
+    toolchain = Pathname(ENV["BAML_HOME"])/"toolchains/1.2.3"
+    (toolchain/"bin").mkpath
+    (toolchain/"VERSION").write "1.2.3\\n"
+    (toolchain/"bin/baml-cli").write <<~SH
+      #!/bin/sh
+      printf '%s\\n' "$@"
+    SH
+    (toolchain/"bin/baml-cli").chmod 0755
+
+    (Pathname(ENV["BAML_HOME"])/"config.toml").write <<~TOML
+      [default]
+      selector = "1.2.3"
+
+      [update]
+      auto_check = false
+    TOML
+
+    assert_equal "formula-test\\nargument\\n",
+                 shell_output("#{{bin}}/baml formula-test argument")
+    assert_match "self-update is disabled in this build",
+                 shell_output("#{{bin}}/baml self-update 2>&1", 1)
   end
 end
 '''
@@ -124,23 +130,31 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     shas = {
         name: sha256(wrapper_archive(args.wrapper_dir, args.version, target))
-        for name, target in TARGETS.items()
+        for name, target in AUR_BIN_TARGETS.items()
     }
 
     formula_dir = args.out / "homebrew" / "Formula"
     formula_dir.mkdir(parents=True, exist_ok=True)
-    (formula_dir / "baml.rb").write_text(render_formula(args.version, shas))
+    (formula_dir / "baml.rb").write_text(
+        render_formula(args.version, args.source_sha256)
+    )
 
     pkgver = args.version.replace("-", "_")
-    aur_source = (Path("packaging/aur/baml/PKGBUILD").read_text()
+    aur_source = (
+        Path("packaging/aur/baml/PKGBUILD")
+        .read_text()
         .replace("__VERSION__", pkgver)
         .replace("__VERSION_ORIG__", args.version)
-        .replace("__SHA256__", args.source_sha256))
-    aur_bin = (Path("packaging/aur/baml-bin/PKGBUILD").read_text()
+        .replace("__SHA256__", args.source_sha256)
+    )
+    aur_bin = (
+        Path("packaging/aur/baml-bin/PKGBUILD")
+        .read_text()
         .replace("__VERSION__", pkgver)
         .replace("__VERSION_ORIG__", args.version)
         .replace("__SHA256_X86_64__", shas["linux_intel"])
-        .replace("__SHA256_AARCH64__", shas["linux_arm"]))
+        .replace("__SHA256_AARCH64__", shas["linux_arm"])
+    )
 
     aur_dir = args.out / "aur"
     for pkgname, text in (("baml", aur_source), ("baml-bin", aur_bin)):
@@ -154,9 +168,9 @@ def main() -> None:
             "BAML wrapper - toolchain manager and launcher (prebuilt binary)",
             pkgver,
             [
-                f"\tsource_x86_64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-{args.version}-x86_64-unknown-linux-gnu.tar.gz",
+                f"\tsource_x86_64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-x86_64-unknown-linux-gnu.tar.gz",
                 f"\tsha256sums_x86_64 = {shas['linux_intel']}",
-                f"\tsource_aarch64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-{args.version}-aarch64-unknown-linux-gnu.tar.gz",
+                f"\tsource_aarch64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-aarch64-unknown-linux-gnu.tar.gz",
                 f"\tsha256sums_aarch64 = {shas['linux_arm']}",
             ],
         )
