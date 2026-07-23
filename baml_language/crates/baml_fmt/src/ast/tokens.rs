@@ -1,4 +1,4 @@
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt, SyntaxToken};
 use rowan::{TextRange, TextSize};
 
 use crate::{
@@ -8,6 +8,12 @@ use crate::{
 
 pub trait Token {
     fn span(&self) -> TextRange;
+}
+
+impl Token for SyntaxToken {
+    fn span(&self) -> TextRange {
+        self.text_range()
+    }
 }
 
 macro_rules! define_keyword_tokens {
