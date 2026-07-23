@@ -249,6 +249,10 @@ impl LeafBody {
     /// import block is identical across `.py` and `.pyi`. The
     /// `TYPE_CHECKING` guard makes the extras free at runtime.
     pub(crate) fn root_imports_py(&self) -> RootImports {
+        self.all_import_sets().into_imports()
+    }
+
+    fn all_import_sets(&self) -> RootImportSets {
         let mut acc = RootImportSets::default();
         let current = &self.leaf;
         for (sym, _) in &self.symbols {
@@ -288,7 +292,7 @@ impl LeafBody {
                 EmittedSymbol::Enum(_) => {}
             }
         }
-        acc.into_imports()
+        acc
     }
 
     /// Field-edge cross-leaf refs, expressed as relative-anchored
@@ -329,46 +333,7 @@ impl LeafBody {
     /// Mirrors `root_imports_py`'s walk shape but returns the
     /// `RelImport` form used by the post-25b2 render path.
     pub(crate) fn all_rel_imports_py(&self) -> Vec<RelImport> {
-        let mut acc = RootImportSets::default();
-        let current = &self.leaf;
-        for (sym, _) in &self.symbols {
-            match sym {
-                EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
-                        collect_root_imports(&prop.ty, current, &mut acc);
-                    }
-                    for m in &c.static_methods {
-                        for arg in &m.required_args {
-                            collect_root_imports(&arg.ty, current, &mut acc);
-                        }
-                        for arg in &m.optional_args {
-                            collect_root_imports(&arg.ty, current, &mut acc);
-                        }
-                        collect_root_imports(&m.return_ty, current, &mut acc);
-                    }
-                    for m in &c.instance_methods {
-                        for arg in &m.required_args {
-                            collect_root_imports(&arg.ty, current, &mut acc);
-                        }
-                        for arg in &m.optional_args {
-                            collect_root_imports(&arg.ty, current, &mut acc);
-                        }
-                        collect_root_imports(&m.return_ty, current, &mut acc);
-                    }
-                }
-                EmittedSymbol::Function(f) => {
-                    for ty in &f.arg_tys {
-                        collect_root_imports(ty, current, &mut acc);
-                    }
-                    collect_root_imports(&f.return_ty, current, &mut acc);
-                }
-                EmittedSymbol::TypeAlias(a) => {
-                    collect_root_imports(&a.resolves_to, current, &mut acc);
-                }
-                EmittedSymbol::Enum(_) => {}
-            }
-        }
-        acc.into_rel()
+        self.all_import_sets().into_rel()
     }
 
     /// Whether this leaf's `.pyi` needs `import typing`. Any rendered
