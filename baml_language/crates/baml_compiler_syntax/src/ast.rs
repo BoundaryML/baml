@@ -139,95 +139,254 @@ macro_rules! define_ast_node {
                 &self.syntax
             }
         }
-    };
-}
 
-macro_rules! validated_field_type {
-    (required token $expected:tt) => {
-        SyntaxToken
-    };
-    (optional token $expected:tt) => {
-        Option<SyntaxToken>
-    };
-    (required node $expected:ty) => {
-        $expected
-    };
-    (optional node $expected:ty) => {
-        Option<$expected>
-    };
-}
+        impl AstElement for $name {
+            fn can_cast_element(kind: SyntaxKind) -> bool {
+                <Self as AstNode>::can_cast(kind)
+            }
 
-macro_rules! parse_validated_field {
-    ($elements:ident, $parent:ident, required token $expected:ident) => {{
-        let element = $elements.next().ok_or(AstShapeError::Missing {
-            expected: stringify!($expected),
-            parent: $parent,
-        })?;
-        match element {
-            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::$expected => token,
-            other => {
-                return Err(AstShapeError::Unexpected {
-                    expected: stringify!($expected),
-                    found: other.kind(),
-                    at: other.text_range(),
-                });
-            }
-        }
-    }};
-    ($elements:ident, $parent:ident, optional token $expected:ident) => {{
-        let present = $elements
-            .peek()
-            .is_some_and(|element| element.kind() == SyntaxKind::$expected);
-        if present {
-            match $elements.next().expect("peeked element must exist") {
-                rowan::NodeOrToken::Token(token) => Some(token),
-                rowan::NodeOrToken::Node(_) => unreachable!("token kind cannot belong to a node"),
-            }
-        } else {
-            None
-        }
-    }};
-    ($elements:ident, $parent:ident, required node $expected:ty) => {{
-        let element = $elements.next().ok_or(AstShapeError::Missing {
-            expected: stringify!($expected),
-            parent: $parent,
-        })?;
-        match element {
-            rowan::NodeOrToken::Node(node) => {
-                let found = node.kind();
-                let at = node.text_range();
-                <$expected as AstNode>::cast(node).ok_or(AstShapeError::Unexpected {
-                    expected: stringify!($expected),
+            fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                let found = element.kind();
+                let at = element.text_range();
+                let node = element.into_node().ok_or(AstShapeError::Unexpected {
+                    expected: stringify!($kind),
                     found,
                     at,
-                })?
-            }
-            rowan::NodeOrToken::Token(token) => {
-                return Err(AstShapeError::Unexpected {
-                    expected: stringify!($expected),
-                    found: token.kind(),
-                    at: token.text_range(),
-                });
+                })?;
+                <Self as AstNode>::cast(node).ok_or(AstShapeError::Unexpected {
+                    expected: stringify!($kind),
+                    found,
+                    at,
+                })
             }
         }
-    }};
-    ($elements:ident, $parent:ident, optional node $expected:ty) => {{
-        let present = $elements.peek().is_some_and(|element| {
-            element
-                .as_node()
-                .is_some_and(|node| <$expected as AstNode>::can_cast(node.kind()))
-        });
-        if present {
-            match $elements.next().expect("peeked element must exist") {
-                rowan::NodeOrToken::Node(node) => {
-                    Some(<$expected as AstNode>::cast(node).expect("node kind was checked"))
-                }
-                rowan::NodeOrToken::Token(_) => unreachable!("node kind cannot belong to a token"),
-            }
+    };
+}
+
+pub trait AstElement: Sized {
+    fn can_cast_element(kind: SyntaxKind) -> bool;
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError>;
+}
+
+pub trait AstToken {
+    fn span(&self) -> TextRange;
+}
+
+impl AstToken for SyntaxToken {
+    fn span(&self) -> TextRange {
+        self.text_range()
+    }
+}
+
+trait AstField: Sized {
+    fn parse(cursor: &mut AstCursor) -> Result<Self, AstShapeError>;
+}
+
+impl<T: AstElement> AstField for T {
+    fn parse(cursor: &mut AstCursor) -> Result<Self, AstShapeError> {
+        let element = cursor.next().ok_or(AstShapeError::Missing {
+            expected: std::any::type_name::<T>(),
+            parent: cursor.parent,
+        })?;
+        T::cast_element(element)
+    }
+}
+
+impl<T: AstElement> AstField for Option<T> {
+    fn parse(cursor: &mut AstCursor) -> Result<Self, AstShapeError> {
+        if cursor
+            .peek()
+            .is_some_and(|element| T::can_cast_element(element.kind()))
+        {
+            cursor.parse().map(Some)
         } else {
-            None
+            Ok(None)
         }
-    }};
+    }
+}
+
+impl<T: AstElement> AstField for Vec<T> {
+    fn parse(cursor: &mut AstCursor) -> Result<Self, AstShapeError> {
+        let mut values = Vec::new();
+        while cursor
+            .peek()
+            .is_some_and(|element| T::can_cast_element(element.kind()))
+        {
+            values.push(cursor.parse()?);
+        }
+        Ok(values)
+    }
+}
+
+struct AstCursor {
+    elements: std::iter::Peekable<std::vec::IntoIter<SyntaxElement>>,
+    parent: TextRange,
+}
+
+impl AstCursor {
+    fn new(node: &SyntaxNode) -> Self {
+        let elements = node
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
+            .collect::<Vec<_>>();
+        Self {
+            elements: elements.into_iter().peekable(),
+            parent: node.text_range(),
+        }
+    }
+
+    fn peek(&mut self) -> Option<&SyntaxElement> {
+        self.elements.peek()
+    }
+
+    fn next(&mut self) -> Option<SyntaxElement> {
+        self.elements.next()
+    }
+
+    fn parse<T: AstField>(&mut self) -> Result<T, AstShapeError> {
+        T::parse(self)
+    }
+
+    fn finish(mut self) -> Result<(), AstShapeError> {
+        if let Some(extra) = self.next() {
+            return Err(AstShapeError::Extra {
+                found: extra.kind(),
+                at: extra.text_range(),
+                parent: self.parent,
+            });
+        }
+        Ok(())
+    }
+}
+
+macro_rules! ast_token {
+    ($name:ident, $kind:ident) => {
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $name {
+            pub token_span: TextRange,
+        }
+
+        impl $name {
+            #[must_use]
+            pub fn new_from_span(token_span: TextRange) -> Self {
+                Self { token_span }
+            }
+
+            #[must_use]
+            pub fn span(&self) -> TextRange {
+                self.token_span
+            }
+        }
+
+        impl AstToken for $name {
+            fn span(&self) -> TextRange {
+                self.token_span
+            }
+        }
+
+        impl AstElement for $name {
+            fn can_cast_element(kind: SyntaxKind) -> bool {
+                kind == SyntaxKind::$kind
+            }
+
+            fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                let found = element.kind();
+                let at = element.text_range();
+                match element.into_token() {
+                    Some(_) if found == SyntaxKind::$kind => Ok(Self { token_span: at }),
+                    _ => Err(AstShapeError::Unexpected {
+                        expected: stringify!($kind),
+                        found,
+                        at,
+                    }),
+                }
+            }
+        }
+    };
+}
+
+macro_rules! ast_token_enum {
+    (
+        pub enum $name:ident {
+            $($variant:ident($token:ty),)*
+        }
+    ) => {
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub enum $name {
+            $($variant($token),)*
+        }
+
+        impl AstToken for $name {
+            fn span(&self) -> TextRange {
+                match self {
+                    $(Self::$variant(token) => token.span(),)*
+                }
+            }
+        }
+
+        impl AstElement for $name {
+            fn can_cast_element(kind: SyntaxKind) -> bool {
+                false $(|| <$token as AstElement>::can_cast_element(kind))*
+            }
+
+            fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                let kind = element.kind();
+                $(
+                    if <$token as AstElement>::can_cast_element(kind) {
+                        return <$token as AstElement>::cast_element(element).map(Self::$variant);
+                    }
+                )*
+                Err(AstShapeError::Unexpected {
+                    expected: stringify!($name),
+                    found: kind,
+                    at: element.text_range(),
+                })
+            }
+        }
+    };
+}
+
+macro_rules! ast_spanned_element {
+    ($name:ident, $($kind:ident)|+) => {
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $name {
+            pub token_span: TextRange,
+        }
+
+        impl $name {
+            #[must_use]
+            pub fn new_from_span(token_span: TextRange) -> Self {
+                Self { token_span }
+            }
+        }
+
+        impl AstToken for $name {
+            fn span(&self) -> TextRange {
+                self.token_span
+            }
+        }
+
+        impl AstElement for $name {
+            fn can_cast_element(kind: SyntaxKind) -> bool {
+                matches!(kind, $(SyntaxKind::$kind)|+)
+            }
+
+            fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                let found = element.kind();
+                let at = element.text_range();
+                if Self::can_cast_element(found) {
+                    Ok(Self { token_span: at })
+                } else {
+                    Err(AstShapeError::Unexpected {
+                        expected: stringify!($name),
+                        found,
+                        at,
+                    })
+                }
+            }
+        }
+    };
 }
 
 /// Macro to define AST node types.
@@ -239,7 +398,7 @@ macro_rules! ast_node {
         $name:ident, $kind:ident,
         validated $validated:ident {
             $(
-                $cardinality:ident $element_kind:ident $field:ident: $expected:tt;
+                $field:ident: $field_ty:ty;
             )*
         }
     ) => {
@@ -249,32 +408,17 @@ macro_rules! ast_node {
         pub struct $validated {
             syntax: $name,
             $(
-                pub $field: validated_field_type!($cardinality $element_kind $expected),
+                pub $field: $field_ty,
             )*
         }
 
         impl $name {
             pub fn validate(self) -> Result<$validated, AstShapeError> {
-                let parent = self.syntax.text_range();
-                let mut elements = self
-                    .syntax
-                    .children_with_tokens()
-                    .filter(|element| !element.kind().is_trivia())
-                    .peekable();
+                let mut elements = AstCursor::new(&self.syntax);
                 $(
-                    let $field = parse_validated_field!(
-                        elements,
-                        parent,
-                        $cardinality $element_kind $expected
-                    );
+                    let $field = elements.parse()?;
                 )*
-                if let Some(extra) = elements.next() {
-                    return Err(AstShapeError::Extra {
-                        found: extra.kind(),
-                        at: extra.text_range(),
-                        parent,
-                    });
-                }
+                elements.finish()?;
                 Ok($validated {
                     syntax: self,
                     $($field,)*
@@ -289,27 +433,311 @@ macro_rules! ast_node {
             }
         }
 
+        impl AstElement for $validated {
+            fn can_cast_element(kind: SyntaxKind) -> bool {
+                <$name as AstElement>::can_cast_element(kind)
+            }
+
+            fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                <$name as AstElement>::cast_element(element)?.validate()
+            }
+        }
+
         impl TryFrom<SyntaxElement> for $validated {
             type Error = AstShapeError;
 
             fn try_from(element: SyntaxElement) -> Result<Self, Self::Error> {
-                let found = element.kind();
-                let at = element.text_range();
-                let node = element.into_node().ok_or(AstShapeError::Unexpected {
-                    expected: stringify!($kind),
-                    found,
-                    at,
-                })?;
-                let syntax = <$name as AstNode>::cast(node).ok_or(AstShapeError::Unexpected {
-                    expected: stringify!($kind),
-                    found,
-                    at,
-                })?;
-                syntax.validate()
+                <Self as AstElement>::cast_element(element)
             }
         }
     };
 }
+
+pub mod token {
+    use super::*;
+
+    ast_token!(Class, KW_CLASS);
+    ast_token!(Enum, KW_ENUM);
+    ast_token!(Interface, KW_INTERFACE);
+    ast_token!(Implements, KW_IMPLEMENTS);
+    ast_token!(Implement, KW_IMPLEMENT);
+    ast_token!(Extends, KW_EXTENDS);
+    ast_token!(Requires, KW_REQUIRES);
+    ast_token!(Function, KW_FUNCTION);
+    ast_token!(Client, KW_CLIENT);
+    ast_token!(Generator, KW_GENERATOR);
+    ast_token!(Test, KW_TEST);
+    ast_token!(TestSet, KW_TESTSET);
+    ast_token!(RetryPolicy, KW_RETRY_POLICY);
+    ast_token!(TemplateString, KW_TEMPLATE_STRING);
+    ast_token!(TypeBuilder, KW_TYPE_BUILDER);
+    ast_token!(If, KW_IF);
+    ast_token!(Else, KW_ELSE);
+    ast_token!(For, KW_FOR);
+    ast_token!(While, KW_WHILE);
+    ast_token!(Let, KW_LET);
+    ast_token!(Const, KW_CONST);
+    ast_token!(In, KW_IN);
+    ast_token!(Break, KW_BREAK);
+    ast_token!(Continue, KW_CONTINUE);
+    ast_token!(Return, KW_RETURN);
+    ast_token!(Throw, KW_THROW);
+    ast_token!(Match, KW_MATCH);
+    ast_token!(Catch, KW_CATCH);
+    ast_token!(CatchAll, KW_CATCH_ALL);
+    ast_token!(CatchAllPanics, KW_CATCH_ALL_PANICS);
+    ast_token!(Instanceof, KW_INSTANCEOF);
+    ast_token!(Is, KW_IS);
+    ast_token!(Dynamic, KW_DYNAMIC);
+    ast_token!(Spawn, KW_SPAWN);
+    ast_token!(With, KW_WITH);
+    ast_token!(Throws, KW_THROWS);
+    ast_token!(TypeKw, KW_TYPE);
+    ast_token!(As, KW_AS);
+    ast_token!(LBrace, L_BRACE);
+    ast_token!(RBrace, R_BRACE);
+    ast_token!(LParen, L_PAREN);
+    ast_token!(RParen, R_PAREN);
+    ast_token!(LBracket, L_BRACKET);
+    ast_token!(RBracket, R_BRACKET);
+    ast_token!(Colon, COLON);
+    ast_token!(DoubleColon, DOUBLE_COLON);
+    ast_token!(Comma, COMMA);
+    ast_token!(Semicolon, SEMICOLON);
+    ast_token!(DotDotDot, DOT_DOT_DOT);
+    ast_token!(DotDot, DOT_DOT);
+    ast_token!(Dot, DOT);
+    ast_token!(Dollar, DOLLAR);
+    ast_token!(Arrow, ARROW);
+    ast_token!(Equals, EQUALS);
+    ast_token!(PlusEquals, PLUS_EQUALS);
+    ast_token!(MinusEquals, MINUS_EQUALS);
+    ast_token!(StarEquals, STAR_EQUALS);
+    ast_token!(SlashEquals, SLASH_EQUALS);
+    ast_token!(PercentEquals, PERCENT_EQUALS);
+    ast_token!(AndEquals, AND_EQUALS);
+    ast_token!(PipeEquals, PIPE_EQUALS);
+    ast_token!(CaretEquals, CARET_EQUALS);
+    ast_token!(LessLessEquals, LESS_LESS_EQUALS);
+    ast_token!(GreaterGreaterEquals, GREATER_GREATER_EQUALS);
+    ast_token!(FatArrow, FAT_ARROW);
+    ast_token!(AtAt, AT_AT);
+    ast_token!(At, AT);
+    ast_token!(Pipe, PIPE);
+    ast_token!(Question, QUESTION);
+    ast_token!(EqualsEquals, EQUALS_EQUALS);
+    ast_token!(NotEquals, NOT_EQUALS);
+    ast_token!(LessEquals, LESS_EQUALS);
+    ast_token!(GreaterEquals, GREATER_EQUALS);
+    ast_token!(LessLess, LESS_LESS);
+    ast_token!(GreaterGreater, GREATER_GREATER);
+    ast_token!(Less, LESS);
+    ast_token!(Greater, GREATER);
+    ast_token!(AndAnd, AND_AND);
+    ast_token!(OrOr, OR_OR);
+    ast_token!(Not, NOT);
+    ast_token!(And, AND);
+    ast_token!(Caret, CARET);
+    ast_token!(Tilde, TILDE);
+    ast_token!(PlusPlus, PLUS_PLUS);
+    ast_token!(MinusMinus, MINUS_MINUS);
+    ast_token!(Plus, PLUS);
+    ast_token!(Minus, MINUS);
+    ast_token!(Star, STAR);
+    ast_token!(Slash, SLASH);
+    ast_token!(Percent, PERCENT);
+    ast_token!(QuestionDot, QUESTION_DOT);
+    ast_token!(QuestionQuestion, QUESTION_QUESTION);
+
+    ast_token_enum! {
+        pub enum BindingKeyword {
+            Let(Let),
+            Const(Const),
+        }
+    }
+
+    ast_token_enum! {
+        pub enum AssignmentOp {
+            Equals(Equals),
+            PlusEquals(PlusEquals),
+            MinusEquals(MinusEquals),
+            StarEquals(StarEquals),
+            SlashEquals(SlashEquals),
+            PercentEquals(PercentEquals),
+            AndEquals(AndEquals),
+            PipeEquals(PipeEquals),
+            CaretEquals(CaretEquals),
+            LessLessEquals(LessLessEquals),
+            GreaterGreaterEquals(GreaterGreaterEquals),
+        }
+    }
+
+    ast_token_enum! {
+        pub enum BinaryOp {
+            EqualsEquals(EqualsEquals),
+            NotEquals(NotEquals),
+            Less(Less),
+            Greater(Greater),
+            LessEquals(LessEquals),
+            GreaterEquals(GreaterEquals),
+            AndAnd(AndAnd),
+            OrOr(OrOr),
+            And(And),
+            Pipe(Pipe),
+            Caret(Caret),
+            Instanceof(Instanceof),
+            LessLess(LessLess),
+            GreaterGreater(GreaterGreater),
+            Plus(Plus),
+            Minus(Minus),
+            Star(Star),
+            Slash(Slash),
+            Percent(Percent),
+            Equals(Equals),
+            PlusEquals(PlusEquals),
+            MinusEquals(MinusEquals),
+            StarEquals(StarEquals),
+            SlashEquals(SlashEquals),
+            PercentEquals(PercentEquals),
+            AndEquals(AndEquals),
+            PipeEquals(PipeEquals),
+            CaretEquals(CaretEquals),
+            LessLessEquals(LessLessEquals),
+            GreaterGreaterEquals(GreaterGreaterEquals),
+            QuestionQuestion(QuestionQuestion),
+        }
+    }
+
+    ast_token_enum! {
+        pub enum UnaryOp {
+            Not(Not),
+            Minus(Minus),
+        }
+    }
+
+    ast_spanned_element!(IntegerLiteral, INTEGER_LITERAL);
+    ast_spanned_element!(FloatLiteral, FLOAT_LITERAL);
+    ast_spanned_element!(Word, WORD);
+    ast_spanned_element!(KeywordLiteral, KW_TRUE | KW_FALSE | KW_NULL);
+
+    macro_rules! ast_delimited_span {
+        ($name:ident, $node_kind:ident, $start_kind:ident) => {
+            #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+            pub struct $name {
+                pub token_span: TextRange,
+            }
+
+            impl $name {
+                #[must_use]
+                pub fn new_from_span(token_span: TextRange) -> Self {
+                    Self { token_span }
+                }
+            }
+
+            impl AstToken for $name {
+                fn span(&self) -> TextRange {
+                    self.token_span
+                }
+            }
+
+            impl AstElement for $name {
+                fn can_cast_element(kind: SyntaxKind) -> bool {
+                    kind == SyntaxKind::$node_kind
+                }
+
+                fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+                    let found = element.kind();
+                    let at = element.text_range();
+                    let node = element.into_node().ok_or(AstShapeError::Unexpected {
+                        expected: stringify!($node_kind),
+                        found,
+                        at,
+                    })?;
+                    if found != SyntaxKind::$node_kind {
+                        return Err(AstShapeError::Unexpected {
+                            expected: stringify!($node_kind),
+                            found,
+                            at,
+                        });
+                    }
+                    let start = node
+                        .children_with_tokens()
+                        .find(|child| child.kind() == SyntaxKind::$start_kind)
+                        .ok_or(AstShapeError::Missing {
+                            expected: stringify!($start_kind),
+                            parent: at,
+                        })?;
+                    Ok(Self {
+                        token_span: TextRange::new(start.text_range().start(), at.end()),
+                    })
+                }
+            }
+        };
+    }
+
+    ast_delimited_span!(QuotedString, STRING_LITERAL, QUOTE);
+    ast_delimited_span!(RawString, RAW_STRING_LITERAL, HASH);
+    ast_delimited_span!(ByteString, BYTE_STRING_LITERAL, WORD);
+    ast_delimited_span!(HeaderComment, HEADER_COMMENT, SLASH);
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub struct BacktickString {
+        pub token_span: TextRange,
+        pub dedent_safe: bool,
+    }
+
+    impl AstToken for BacktickString {
+        fn span(&self) -> TextRange {
+            self.token_span
+        }
+    }
+
+    impl AstElement for BacktickString {
+        fn can_cast_element(kind: SyntaxKind) -> bool {
+            kind == SyntaxKind::BACKTICK_STRING_LITERAL
+        }
+
+        fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+            let found = element.kind();
+            let at = element.text_range();
+            let node = element.into_node().ok_or(AstShapeError::Unexpected {
+                expected: "BACKTICK_STRING_LITERAL",
+                found,
+                at,
+            })?;
+            if found != SyntaxKind::BACKTICK_STRING_LITERAL {
+                return Err(AstShapeError::Unexpected {
+                    expected: "BACKTICK_STRING_LITERAL",
+                    found,
+                    at,
+                });
+            }
+            let start = node
+                .children_with_tokens()
+                .find(|child| child.kind() == SyntaxKind::BACKTICK)
+                .ok_or(AstShapeError::Missing {
+                    expected: "BACKTICK",
+                    parent: at,
+                })?;
+            let dedent_safe = !node.children().any(|child| match child.kind() {
+                SyntaxKind::BACKTICK_FOR_OPEN
+                | SyntaxKind::BACKTICK_ENDFOR
+                | SyntaxKind::BACKTICK_IF_OPEN
+                | SyntaxKind::BACKTICK_ELSE_IF
+                | SyntaxKind::BACKTICK_ELSE
+                | SyntaxKind::BACKTICK_ENDIF => true,
+                SyntaxKind::BACKTICK_INTERPOLATION => child.text().to_string().contains('\n'),
+                _ => false,
+            });
+            Ok(Self {
+                token_span: TextRange::new(start.text_range().start(), at.end()),
+                dedent_safe,
+            })
+        }
+    }
+}
+
+pub use token::*;
 
 // Define all AST node types
 ast_node!(SourceFile, SOURCE_FILE);
@@ -358,6 +786,7 @@ ast_node!(PromptText, PROMPT_TEXT);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
+ast_node!(AttributeArgsNode, ATTRIBUTE_ARGS);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
 ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
@@ -1070,16 +1499,16 @@ ast_node!(
     BreakStmt,
     BREAK_STMT,
     validated ValidatedBreakStmt {
-        required token keyword: KW_BREAK;
-        optional token semicolon: SEMICOLON;
+        keyword: Break;
+        semicolon: Option<Semicolon>;
     }
 );
 ast_node!(
     ContinueStmt,
     CONTINUE_STMT,
     validated ValidatedContinueStmt {
-        required token keyword: KW_CONTINUE;
-        optional token semicolon: SEMICOLON;
+        keyword: Continue;
+        semicolon: Option<Semicolon>;
     }
 );
 ast_node!(DeferStmt, DEFER_STMT);
@@ -1101,10 +1530,290 @@ ast_node!(
     ThrowsClause,
     THROWS_CLAUSE,
     validated ValidatedThrowsClause {
-        required token keyword: KW_THROWS;
-        required node ty: TypeExpr;
+        keyword: Throws;
+        ty: TypeExpr;
     }
 );
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeNamePart {
+    Word(Word),
+    Keyword(TextRange),
+}
+
+impl AttributeNamePart {
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Word(word) => word.span().len().into(),
+            Self::Keyword(range) => range.len().into(),
+        }
+    }
+
+    fn parse(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        let found = element.kind();
+        let at = element.text_range();
+        if found == SyntaxKind::WORD {
+            return Word::cast_element(element).map(Self::Word);
+        }
+        if found.is_keyword() && element.as_token().is_some() {
+            return Ok(Self::Keyword(at));
+        }
+        Err(AstShapeError::Unexpected {
+            expected: "attribute name part",
+            found,
+            at,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttributeName {
+    pub first: AttributeNamePart,
+    pub rest: Vec<(Dot, AttributeNamePart)>,
+}
+
+fn parse_attribute_name(cursor: &mut AstCursor) -> Result<AttributeName, AstShapeError> {
+    let first = cursor.next().ok_or(AstShapeError::Missing {
+        expected: "attribute name part",
+        parent: cursor.parent,
+    })?;
+    let first = AttributeNamePart::parse(first)?;
+    let mut rest = Vec::new();
+    while cursor
+        .peek()
+        .is_some_and(|element| element.kind() == SyntaxKind::DOT)
+    {
+        let dot = cursor.parse()?;
+        let part = cursor.next().ok_or(AstShapeError::Missing {
+            expected: "attribute name part",
+            parent: cursor.parent,
+        })?;
+        rest.push((dot, AttributeNamePart::parse(part)?));
+    }
+    Ok(AttributeName { first, rest })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeArg {
+    QuotedString(QuotedString),
+    RawString(RawString),
+    Backtick(BacktickString),
+    AttrExpr(TextRange),
+    UnquotedString(Word),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Literal {
+    String(QuotedString),
+    Integer(IntegerLiteral),
+    Float(FloatLiteral),
+    Keyword(KeywordLiteral),
+}
+
+impl AstElement for Literal {
+    fn can_cast_element(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::STRING_LITERAL
+                | SyntaxKind::INTEGER_LITERAL
+                | SyntaxKind::FLOAT_LITERAL
+                | SyntaxKind::KW_TRUE
+                | SyntaxKind::KW_FALSE
+                | SyntaxKind::KW_NULL
+        )
+    }
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        match element.kind() {
+            SyntaxKind::STRING_LITERAL => QuotedString::cast_element(element).map(Self::String),
+            SyntaxKind::INTEGER_LITERAL => IntegerLiteral::cast_element(element).map(Self::Integer),
+            SyntaxKind::FLOAT_LITERAL => FloatLiteral::cast_element(element).map(Self::Float),
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
+                KeywordLiteral::cast_element(element).map(Self::Keyword)
+            }
+            found => Err(AstShapeError::Unexpected {
+                expected: "literal",
+                found,
+                at: element.text_range(),
+            }),
+        }
+    }
+}
+
+impl AstElement for AttributeArg {
+    fn can_cast_element(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::STRING_LITERAL
+                | SyntaxKind::RAW_STRING_LITERAL
+                | SyntaxKind::BACKTICK_STRING_LITERAL
+                | SyntaxKind::EXPR
+                | SyntaxKind::UNQUOTED_STRING
+        )
+    }
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        match element.kind() {
+            SyntaxKind::STRING_LITERAL => {
+                QuotedString::cast_element(element).map(Self::QuotedString)
+            }
+            SyntaxKind::RAW_STRING_LITERAL => RawString::cast_element(element).map(Self::RawString),
+            SyntaxKind::BACKTICK_STRING_LITERAL => {
+                BacktickString::cast_element(element).map(Self::Backtick)
+            }
+            SyntaxKind::EXPR => {
+                let parent = element.text_range();
+                let node = element.into_node().expect("EXPR is a node kind");
+                let start = node
+                    .children_with_tokens()
+                    .find(|child| child.kind() == SyntaxKind::L_BRACE)
+                    .ok_or(AstShapeError::Missing {
+                        expected: "L_BRACE",
+                        parent,
+                    })?;
+                Ok(Self::AttrExpr(TextRange::new(
+                    start.text_range().start(),
+                    parent.end(),
+                )))
+            }
+            SyntaxKind::UNQUOTED_STRING => {
+                let node = element.into_node().expect("UNQUOTED_STRING is a node kind");
+                let mut cursor = AstCursor::new(&node);
+                let word = cursor.parse()?;
+                cursor.finish()?;
+                Ok(Self::UnquotedString(word))
+            }
+            found => Err(AstShapeError::Unexpected {
+                expected: "attribute argument",
+                found,
+                at: element.text_range(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedAttributeArgs {
+    syntax: AttributeArgsNode,
+    pub open_paren: LParen,
+    pub args: Vec<(AttributeArg, Option<Comma>)>,
+    pub close_paren: RParen,
+}
+
+impl AstElement for ValidatedAttributeArgs {
+    fn can_cast_element(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::ATTRIBUTE_ARGS
+    }
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        let syntax = AttributeArgsNode::cast_element(element)?;
+        let mut cursor = AstCursor::new(syntax.syntax());
+        let open_paren = cursor.parse()?;
+        let mut args = Vec::new();
+        let close_paren = loop {
+            if cursor
+                .peek()
+                .is_some_and(|element| element.kind() == SyntaxKind::R_PAREN)
+            {
+                break cursor.parse()?;
+            }
+            let arg = cursor.parse()?;
+            let comma = cursor.parse()?;
+            args.push((arg, comma));
+        };
+        cursor.finish()?;
+        Ok(Self {
+            syntax,
+            open_paren,
+            args,
+            close_paren,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedAttribute {
+    syntax: Attribute,
+    pub at: At,
+    pub name: AttributeName,
+    pub args: Option<ValidatedAttributeArgs>,
+}
+
+impl ValidatedAttribute {
+    #[must_use]
+    pub fn non_wrappable_len(&self) -> usize {
+        1 + self.name.first.len()
+            + self
+                .name
+                .rest
+                .iter()
+                .map(|(_, part)| 1 + part.len())
+                .sum::<usize>()
+            + usize::from(self.args.is_some())
+    }
+}
+
+impl AstElement for ValidatedAttribute {
+    fn can_cast_element(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::ATTRIBUTE
+    }
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        let syntax = Attribute::cast_element(element)?;
+        let mut cursor = AstCursor::new(syntax.syntax());
+        let at = cursor.parse()?;
+        let name = parse_attribute_name(&mut cursor)?;
+        let args = cursor.parse()?;
+        cursor.finish()?;
+        Ok(Self {
+            syntax,
+            at,
+            name,
+            args,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedBlockAttribute {
+    syntax: BlockAttribute,
+    pub atat: AtAt,
+    pub name: AttributeName,
+    pub args: Option<ValidatedAttributeArgs>,
+}
+
+impl ValidatedBlockAttribute {
+    pub fn name_parts_str<'s>(&self, input: &'s str) -> impl Iterator<Item = &'s str> {
+        std::iter::once(&self.name.first)
+            .chain(self.name.rest.iter().map(|(_, part)| part))
+            .map(|part| match part {
+                AttributeNamePart::Word(word) => &input[word.span()],
+                AttributeNamePart::Keyword(range) => &input[*range],
+            })
+    }
+}
+
+impl AstElement for ValidatedBlockAttribute {
+    fn can_cast_element(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::BLOCK_ATTRIBUTE
+    }
+
+    fn cast_element(element: SyntaxElement) -> Result<Self, AstShapeError> {
+        let syntax = BlockAttribute::cast_element(element)?;
+        let mut cursor = AstCursor::new(syntax.syntax());
+        let atat = cursor.parse()?;
+        let name = parse_attribute_name(&mut cursor)?;
+        let args = cursor.parse()?;
+        cursor.finish()?;
+        Ok(Self {
+            syntax,
+            atat,
+            name,
+            args,
+        })
+    }
+}
 
 // Implement accessor methods
 impl SourceFile {

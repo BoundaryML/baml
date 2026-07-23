@@ -1,5 +1,6 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
+pub use baml_db::baml_compiler_syntax::Literal;
 use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
@@ -420,37 +421,14 @@ impl Printable for Expression {
     }
 }
 
-#[derive(Debug)]
-pub enum Literal {
-    String(t::QuotedString),
-    Integer(t::IntegerLiteral),
-    Float(t::FloatLiteral),
-    /// `true` / `false` / `null`.
-    Keyword(t::KeywordLiteral),
+trait LiteralPrintExt {
+    fn single_line_width(&self, input: &Printer<'_>) -> Option<usize>;
 }
 
-impl FromCST for Literal {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::STRING_LITERAL => Ok(Literal::String(t::QuotedString::from_cst(elem)?)),
-            SyntaxKind::INTEGER_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::from_cst(elem)?)),
-            SyntaxKind::FLOAT_LITERAL => Ok(Literal::Float(t::FloatLiteral::from_cst(elem)?)),
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
-                Ok(Literal::Keyword(t::KeywordLiteral::from_cst(elem)?))
-            }
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "a literal".into(),
-                found: elem.kind(),
-                at: elem.text_range(),
-            }),
-        }
-    }
-}
-
-impl Literal {
+impl LiteralPrintExt for Literal {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+    fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         match self {
             Literal::String(s) => {
                 if input.input[s.span()].contains('\n') {

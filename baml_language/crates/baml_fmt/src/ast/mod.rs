@@ -10,7 +10,7 @@ use std::{borrow::Cow, path::Path};
 
 pub use attributes::*;
 use baml_db::baml_compiler_syntax::{
-    AstShapeError, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken,
+    AstElement, AstShapeError, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken,
 };
 pub use declarations::*;
 pub use expressions::*;
@@ -27,6 +27,12 @@ use crate::{
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
+}
+
+impl<T: AstElement> FromCST for T {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        T::cast_element(elem).map_err(Into::into)
+    }
 }
 
 /// This AST node only ever has exactly one [`SyntaxKind`].
@@ -323,9 +329,12 @@ impl SyntaxNodeIter {
     /// - Otherwise, the element will parse as the given type.
     ///
     /// Consumes an element even if it returns an error.
-    pub fn expect_parse<T: KnownKind + FromCST>(&mut self) -> Result<T, StrongAstError> {
+    pub fn expect_parse<T: FromCST>(&mut self) -> Result<T, StrongAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing(T::kind(), self.parent));
+            return Err(StrongAstError::missing_desc(
+                std::any::type_name::<T>(),
+                self.parent,
+            ));
         };
         T::from_cst(elem)
     }

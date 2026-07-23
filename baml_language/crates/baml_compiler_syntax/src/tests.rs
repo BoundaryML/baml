@@ -2,7 +2,9 @@
 mod builder_tests {
     use rowan::ast::AstNode;
 
-    use crate::{AstShapeError, SyntaxKind, SyntaxNode, ast, builder::SyntaxTreeBuilder};
+    use crate::{
+        AstShapeError, SyntaxKind, SyntaxNode, TextRange, ast, builder::SyntaxTreeBuilder,
+    };
 
     #[test]
     fn test_build_function() {
@@ -129,8 +131,11 @@ mod builder_tests {
         let syntax = ast::BreakStmt::cast(SyntaxNode::new_root(builder.finish())).unwrap();
         let validated = syntax.validate().unwrap();
 
-        assert_eq!(validated.keyword.text(), "break");
-        assert_eq!(validated.semicolon.unwrap().text(), ";");
+        assert_eq!(validated.keyword.span(), TextRange::new(0.into(), 5.into()));
+        assert_eq!(
+            validated.semicolon.unwrap().span(),
+            TextRange::new(6.into(), 7.into())
+        );
     }
 
     #[test]
@@ -188,7 +193,7 @@ mod builder_tests {
         let syntax = ast::ThrowsClause::cast(SyntaxNode::new_root(builder.finish())).unwrap();
         let validated = syntax.validate().unwrap();
 
-        assert_eq!(validated.keyword.text(), "throws");
+        assert_eq!(validated.keyword.span(), TextRange::new(0.into(), 6.into()));
         assert_eq!(validated.ty.syntax().text(), "Error");
     }
 }
