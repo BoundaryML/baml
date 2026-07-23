@@ -783,7 +783,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    async fn rejects_non_wasm_body_handles_synchronously() {
+    fn rejects_non_wasm_body_handles_synchronously() {
         let http = test_http();
         let output = text(
             &http,
