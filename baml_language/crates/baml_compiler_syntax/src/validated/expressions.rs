@@ -70,8 +70,8 @@ validated_ast_data! {
     ///
     /// Rather than a single whole-node span, this carries the node's true first and
     /// last *token* ranges. The trivia classifier keys leading/trailing comments to
-    /// individual token ranges, so [`Printable::leftmost_token`] /
-    /// [`Printable::rightmost_token`] must return those exact token ranges for a
+    /// individual token ranges, so `Printable::leftmost_token` /
+    /// `Printable::rightmost_token` must return those exact token ranges for a
     /// comment to attach and emit. A whole-node span never matches a token key, so
     /// a trailing comment on the node was silently dropped - the `defer` statement
     /// comment-loss bug (B-629), and the same class of bug for a braceless `return`

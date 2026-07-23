@@ -517,7 +517,7 @@ validated_ast_node! {
 validated_ast_enum! {
     /// Any of the valid keys in a [`ConfigItem`].
     ///
-    /// See `Parser::parse_config_item` in [`baml_db::baml_compiler_parser`]
+    /// See `Parser::parse_config_item` in `baml_db::baml_compiler_parser`.
     pub enum ConfigItemKey {
         WORD => Word(t::Word),
         STRING_LITERAL => String(t::QuotedString),
