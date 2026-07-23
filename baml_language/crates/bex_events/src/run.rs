@@ -2158,7 +2158,7 @@ fn epoch_ms() -> u64 {
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
-fn run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
+pub(crate) fn run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
     if let Some(project_id) = &filter.project_id
         && &run.request.project_id != project_id
     {
@@ -2213,7 +2213,7 @@ fn run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
     }
 }
 
-fn summarize_run(run: &Run) -> RunSummary {
+pub(crate) fn summarize_run(run: &Run) -> RunSummary {
     let mut touched = Vec::<FunctionName>::new();
     match &run.target {
         RunTarget::Function { function_name } | RunTarget::Companion { function_name, .. } => {

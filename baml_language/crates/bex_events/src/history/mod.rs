@@ -26,11 +26,10 @@ use crate::{
     ids::BoundaryId,
     prof::{pb, read::read_bamlprof_from_bytes},
     run::{
-        CancellationState, DiagnosticSeverity, FunctionName, PayloadEvent, PayloadId,
-        ProfileEventEnvelope, RedactionMetadata, Run, RunDiagnostic, RunError, RunErrorClass,
-        RunFilter, RunResult, RunRetentionState, RunStatus, RunSummary, RunTarget, RunVisibility,
-        RunVisibilityFilter, attach_payload_ids_to_calls, call_node_id,
-        reconstruct_with_function_table,
+        CancellationState, DiagnosticSeverity, PayloadEvent, PayloadId, ProfileEventEnvelope,
+        RedactionMetadata, Run, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunResult,
+        RunStatus, RunSummary, attach_payload_ids_to_calls, call_node_id,
+        reconstruct_with_function_table, run_matches_filter, summarize_run,
     },
     value::{
         BlobRef, BlobStore, CaptureLossRecord, RunCompletedRecord, RunStartedRecord,
@@ -1287,90 +1286,11 @@ fn history_diagnostic(code: impl Into<String>, message: String) -> RunDiagnostic
 }
 
 pub fn summarize_history_run(run: &Run) -> RunSummary {
-    let mut touched = Vec::<FunctionName>::new();
-    match &run.target {
-        RunTarget::Function { function_name } | RunTarget::Companion { function_name, .. } => {
-            touched.push(function_name.clone());
-        }
-        RunTarget::Preview {
-            parent_function_name,
-            ..
-        } => touched.push(parent_function_name.clone()),
-        RunTarget::Test { .. } | RunTarget::Internal { .. } => {}
-    }
-    for call in &run.calls {
-        if let Some(function_name) = &call.function_name
-            && !touched.contains(function_name)
-        {
-            touched.push(function_name.clone());
-        }
-    }
-    RunSummary {
-        boundary_id: run.boundary_id,
-        target: run.target.clone(),
-        visibility: run.visibility.clone(),
-        status: run.status,
-        request: run.request.clone(),
-        touched_functions: touched,
-        created_at_ms: run.created_at_ms,
-        completed_at_ms: run.completed_at_ms,
-        retention: RunRetentionState::Full,
-    }
+    summarize_run(run)
 }
 
 pub fn history_run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
-    if let Some(project_id) = &filter.project_id
-        && &run.request.project_id != project_id
-    {
-        return false;
-    }
-    if let Some(project_generation) = filter.project_generation
-        && run.request.project_generation != project_generation
-    {
-        return false;
-    }
-    if !filter.kinds.is_empty() && !filter.kinds.contains(&run.target.kind()) {
-        return false;
-    }
-    if !filter.statuses.is_empty() && !filter.statuses.contains(&run.status) {
-        return false;
-    }
-    if let Some(function_name) = &filter.call_tree_contains_function {
-        let target_matches = match &run.target {
-            RunTarget::Function {
-                function_name: target,
-            }
-            | RunTarget::Companion {
-                function_name: target,
-                ..
-            } => target == function_name,
-            RunTarget::Preview {
-                parent_function_name,
-                ..
-            } => parent_function_name == function_name,
-            RunTarget::Test { .. } | RunTarget::Internal { .. } => false,
-        };
-        let call_matches = run
-            .calls
-            .iter()
-            .any(|call| call.function_name.as_ref() == Some(function_name));
-        if !target_matches && !call_matches {
-            return false;
-        }
-    }
-    match (&filter.visibility, &run.visibility) {
-        (RunVisibilityFilter::HistoryOnly, RunVisibility::History) => true,
-        (RunVisibilityFilter::HistoryOnly, _) => false,
-        (
-            RunVisibilityFilter::Scope { scope_id },
-            RunVisibility::Scoped {
-                scope_id: run_scope,
-            },
-        ) => scope_id == run_scope,
-        (RunVisibilityFilter::Scope { .. }, _) => false,
-        (RunVisibilityFilter::IncludeHidden, RunVisibility::DebugOnly) => false,
-        (RunVisibilityFilter::IncludeHidden | RunVisibilityFilter::AllForDebug, _) => true,
-    }
+    run_matches_filter(run, filter)
 }
 
 #[cfg(test)]
@@ -1380,7 +1300,8 @@ mod tests {
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
         prof::{encode::encode_disk_event, read::read_bamlprof_from_bytes},
         run::{
-            ProjectGeneration, ProjectId, RequestId, RunRequestSummary, RunTimeAnchor, StartGuard,
+            ProjectGeneration, ProjectId, RequestId, RunRequestSummary, RunTarget, RunTimeAnchor,
+            StartGuard,
         },
         value::{
             BlobRef, CaptureLossKind, CaptureLossReason, CaptureLossRecord, ValueCaptureKind,
