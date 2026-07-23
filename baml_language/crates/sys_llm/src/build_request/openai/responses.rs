@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use baml_base::MediaKind;
-use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+use baml_builtins2::{MediaValue, PromptAst, PromptAstSimple};
 use serde::Serialize;
 
 // ============================================================================
@@ -179,19 +179,19 @@ fn responses_media_part(
 
     match media.kind {
         MediaKind::Image => media.read_content(|c| {
-            let url = content_to_url_or_data_url(c, &mime)?;
+            let url = super::content_to_url_or_data_url(c, &mime)?;
             Ok(ResponsesContentPart::InputImage {
                 image_url: Some(url),
                 file_id: None,
             })
         }),
         MediaKind::Audio => media.read_content(|c| {
-            let data = content_to_base64(c)?;
+            let data = super::content_to_base64(c)?;
             let format = audio_format_from_mime(&mime);
             Ok(ResponsesContentPart::InputAudio { data, format })
         }),
         MediaKind::Pdf => media.read_content(|c| {
-            let data_url = content_to_url_or_data_url(c, &mime)?;
+            let data_url = super::content_to_url_or_data_url(c, &mime)?;
             Ok(ResponsesContentPart::InputFile {
                 file_id: None,
                 filename: None,
@@ -205,41 +205,6 @@ fn responses_media_part(
             "generic media kind not supported by OpenAI Responses API".to_string(),
         )),
     }
-}
-
-// ============================================================================
-// Media helpers
-// ============================================================================
-
-fn content_to_url_or_data_url(
-    content: &MediaContent,
-    mime: &str,
-) -> Result<String, crate::build_request::BuildRequestError> {
-    if let Some(url) = content.url() {
-        return Ok(url.to_string());
-    }
-    if let Some(b64) = content.base64_data() {
-        return Ok(format!("data:{mime};base64,{b64}"));
-    }
-    Err(crate::build_request::BuildRequestError::FileNotResolved(
-        content.file_path().unwrap_or("<unknown>").to_string(),
-    ))
-}
-
-fn content_to_base64(
-    content: &MediaContent,
-) -> Result<String, crate::build_request::BuildRequestError> {
-    if let Some(b64) = content.base64_data() {
-        return Ok(b64.to_string());
-    }
-    if let Some(url) = content.url() {
-        return Err(crate::build_request::BuildRequestError::UnsupportedMedia(
-            format!("audio URL not pre-fetched: {url}"),
-        ));
-    }
-    Err(crate::build_request::BuildRequestError::FileNotResolved(
-        content.file_path().unwrap_or("<unknown>").to_string(),
-    ))
 }
 
 fn audio_format_from_mime(mime: &str) -> String {
