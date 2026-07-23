@@ -1059,6 +1059,7 @@ jobs:
     # like PyPI/npm above. Match the builder's runner + toolchain so the
     # repackaged `.crate` is byte-reproducible.
     runs-on: ubuntu-22.04
+    environment: release
     permissions:
       id-token: write
       contents: read
