@@ -372,21 +372,9 @@ impl HistoryStore {
         codec: ValueCodec,
         body: Vec<u8>,
     ) -> io::Result<ValueWriteOutcome> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "history boundary {} was not begun",
-                    boundary_id.to_wire_string()
-                ),
-            ));
-        };
-        ensure_run_started_written(state)?;
-        state.writer.append_value_body(capture, codec, body)
+        self.with_started_writer(boundary_id, |writer| {
+            writer.append_value_body(capture, codec, body)
+        })
     }
 
     pub fn append_log_body(
@@ -396,21 +384,9 @@ impl HistoryStore {
         codec: ValueCodec,
         body: Vec<u8>,
     ) -> io::Result<ValueWriteOutcome> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "history boundary {} was not begun",
-                    boundary_id.to_wire_string()
-                ),
-            ));
-        };
-        ensure_run_started_written(state)?;
-        state.writer.append_log_body(event, codec, body)
+        self.with_started_writer(boundary_id, |writer| {
+            writer.append_log_body(event, codec, body)
+        })
     }
 
     pub fn append_capture_loss(
@@ -418,6 +394,14 @@ impl HistoryStore {
         boundary_id: BoundaryId,
         record: &CaptureLossRecord,
     ) -> io::Result<()> {
+        self.with_started_writer(boundary_id, |writer| writer.append_capture_loss(record))
+    }
+
+    fn with_started_writer<T>(
+        &self,
+        boundary_id: BoundaryId,
+        write: impl FnOnce(&mut BoundaryWriter) -> io::Result<T>,
+    ) -> io::Result<T> {
         let mut inner = self
             .inner
             .lock()
@@ -432,7 +416,7 @@ impl HistoryStore {
             ));
         };
         ensure_run_started_written(state)?;
-        state.writer.append_capture_loss(record)
+        write(&mut state.writer)
     }
 
     pub fn complete(
@@ -1357,6 +1341,145 @@ mod tests {
         let dir = PathBuf::from(format!("1782339566657-paulo.StringWidening-{wire}"));
 
         assert_eq!(boundary_id_from_dir_name(&dir), Some(boundary_id));
+    }
+
+    #[test]
+    fn history_append_methods_share_exact_missing_boundary_error() {
+        let project = temp_project("append-missing-boundary");
+        let boundary_id = BoundaryId::from_bytes([44; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let trace = root_trace();
+        let errors = [
+            store
+                .append_value_body(
+                    boundary_id,
+                    ValueCapture {
+                        kind: ValueCaptureKind::RootOutput,
+                        call: trace,
+                    },
+                    ValueCodec::BamlOutboundValue,
+                    vec![1],
+                )
+                .unwrap_err(),
+            store
+                .append_log_body(
+                    boundary_id,
+                    LogEventRecord {
+                        call: trace,
+                        level: None,
+                        source: None,
+                        timestamp_ms: 1,
+                        message_preview: None,
+                    },
+                    ValueCodec::BamlOutboundValue,
+                    vec![2],
+                )
+                .unwrap_err(),
+            store
+                .append_capture_loss(
+                    boundary_id,
+                    &CaptureLossRecord {
+                        kind: CaptureLossKind::Value,
+                        reason: CaptureLossReason::QueueFull,
+                        skipped_count: 1,
+                        call: Some(trace),
+                        message: None,
+                        timestamp_ms: 1,
+                    },
+                )
+                .unwrap_err(),
+        ];
+        let expected = format!(
+            "history boundary {} was not begun",
+            boundary_id.to_wire_string()
+        );
+        for error in errors {
+            assert_eq!(error.kind(), io::ErrorKind::NotFound);
+            assert_eq!(error.to_string(), expected);
+        }
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_append_writes_start_once_before_payload_records() {
+        let project = temp_project("append-record-order");
+        let boundary_id = BoundaryId::from_bytes([45; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        store.begin(&project, &start_context(boundary_id)).unwrap();
+        let trace = TraceCallKey {
+            thread_id: BexThreadId(0),
+            ..root_trace()
+        };
+
+        store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: trace,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![1],
+            )
+            .unwrap();
+        store
+            .append_log_body(
+                boundary_id,
+                LogEventRecord {
+                    call: trace,
+                    level: None,
+                    source: None,
+                    timestamp_ms: 1,
+                    message_preview: None,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![2],
+            )
+            .unwrap();
+        store
+            .append_capture_loss(
+                boundary_id,
+                &CaptureLossRecord {
+                    kind: CaptureLossKind::Value,
+                    reason: CaptureLossReason::QueueFull,
+                    skipped_count: 1,
+                    call: Some(trace),
+                    message: None,
+                    timestamp_ms: 2,
+                },
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                3,
+            )
+            .unwrap();
+
+        let boundary_dir = find_boundary_dir(std::slice::from_ref(&project), boundary_id).unwrap();
+        let segments = value_segment_paths(&boundary_dir);
+        assert_eq!(segments.len(), 1);
+        let records = read_bamlvalue_from_bytes(&std::fs::read(&segments[0]).unwrap())
+            .unwrap()
+            .records;
+        assert!(matches!(
+            records.as_slice(),
+            [
+                ValueFileRecord::RunStarted(_),
+                ValueFileRecord::CapturedValue(_),
+                ValueFileRecord::LogEvent(_),
+                ValueFileRecord::CaptureLoss(_),
+                ValueFileRecord::RunCompleted(_),
+            ]
+        ));
+
+        let _ = std::fs::remove_dir_all(project);
     }
 
     fn call_event() -> pb::DiskEventV1 {
