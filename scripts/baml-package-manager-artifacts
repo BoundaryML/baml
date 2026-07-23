@@ -38,6 +38,11 @@ def render_formula(version: str, source_sha256: str) -> str:
   sha256 "{source_sha256}"
   license "Apache-2.0"
 
+  livecheck do
+    url :stable
+    regex(/^baml-wrapper[._-]v?(\\d+(?:\\.\\d+)+)$/i)
+  end
+
   depends_on "cmake" => :build
   depends_on "rust" => :build
 
@@ -69,25 +74,11 @@ def render_formula(version: str, source_sha256: str) -> str:
     ENV["HOME"] = testpath.to_s
     ENV.delete "BAML_VERSION"
 
-    toolchain = Pathname(ENV["BAML_HOME"])/"toolchains/1.2.3"
-    (toolchain/"bin").mkpath
-    (toolchain/"VERSION").write "1.2.3\\n"
-    (toolchain/"bin/baml-cli").write <<~SH
-      #!/bin/sh
-      printf '%s\\n' "$@"
-    SH
-    (toolchain/"bin/baml-cli").chmod 0755
-
-    (Pathname(ENV["BAML_HOME"])/"config.toml").write <<~TOML
-      [default]
-      selector = "1.2.3"
-
-      [update]
-      auto_check = false
-    TOML
-
-    assert_equal "formula-test\\nargument\\n",
-                 shell_output("#{{bin}}/baml formula-test argument")
+    system bin/"baml", "toolchain", "use", "canary"
+    system bin/"baml", "init", "--name", "homebrew-test"
+    assert_path_exists testpath/"baml.toml"
+    assert_path_exists testpath/"baml_src/main.baml"
+    system bin/"baml", "check"
     assert_match "self-update is disabled in this build",
                  shell_output("#{{bin}}/baml self-update 2>&1", 1)
   end

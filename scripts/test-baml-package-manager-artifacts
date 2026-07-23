@@ -49,10 +49,19 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             formula = (output / "homebrew/Formula/baml.rb").read_text()
             self.assertIn(f"archive/refs/tags/baml-wrapper-{VERSION}.tar.gz", formula)
             self.assertIn(f'sha256 "{SOURCE_SHA256}"', formula)
+            self.assertIn(
+                r"regex(/^baml-wrapper[._-]v?(\d+(?:\.\d+)+)$/i)", formula
+            )
             self.assertIn('depends_on "rust" => :build', formula)
             self.assertIn('features: "no-self-update"', formula)
             self.assertIn("test do", formula)
+            self.assertIn(
+                'system bin/"baml", "toolchain", "use", "canary"', formula
+            )
+            self.assertIn('system bin/"baml", "init"', formula)
+            self.assertIn('system bin/"baml", "check"', formula)
             self.assertIn("self-update is disabled in this build", formula)
+            self.assertNotIn('toolchains/1.2.3', formula)
             self.assertNotIn("on_macos", formula)
             self.assertNotIn("/releases/download/", formula)
             subprocess.run(
