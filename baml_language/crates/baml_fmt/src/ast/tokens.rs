@@ -1,9 +1,7 @@
+pub use baml_db::baml_compiler_syntax::{AstToken as Token, ast::token::*};
 use rowan::{TextRange, TextSize};
 
 use crate::printer::{PrintInfo, Printable, Printer, Shape};
-
-pub use baml_db::baml_compiler_syntax::AstToken as Token;
-pub use baml_db::baml_compiler_syntax::ast::token::*;
 
 impl Printable for BinaryOp {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {

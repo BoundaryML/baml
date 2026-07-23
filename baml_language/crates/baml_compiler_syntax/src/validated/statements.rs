@@ -1,7 +1,7 @@
 use super::{
     BlockExpr, BreakStmt, ContinueStmt, Expression, FromCST, HeaderComment, KnownKind,
-    MatchPattern, ParenExpr, StrongAstError, SyntaxElement, SyntaxKind, SyntaxNodeIter,
-    TestExprDecl, TestSetDecl, TextRange, t,
+    MatchPattern, OptionalUnless, ParenExpr, SyntaxElement, SyntaxKind, SyntaxNodeIter,
+    TestExprDecl, TestSetDecl, TextRange, ValidatedAstError, t,
 };
 
 validated_ast_data! {
@@ -32,7 +32,7 @@ validated_ast_data! {
 }
 
 impl FromCST for Statement {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
         match elem.kind() {
             SyntaxKind::LET_STMT => LetStmt::from_cst(elem).map(Statement::Let),
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
@@ -41,10 +41,10 @@ impl FromCST for Statement {
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
             SyntaxKind::BREAK_STMT => BreakStmt::try_from(elem)
                 .map(Statement::Break)
-                .map_err(StrongAstError::from),
+                .map_err(ValidatedAstError::from),
             SyntaxKind::CONTINUE_STMT => ContinueStmt::try_from(elem)
                 .map(Statement::Continue)
-                .map_err(StrongAstError::from),
+                .map_err(ValidatedAstError::from),
             SyntaxKind::SEMICOLON => t::Semicolon::from_cst(elem).map(Statement::EmptySemicolon),
             SyntaxKind::HEADER_COMMENT => {
                 t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
@@ -68,7 +68,7 @@ validated_ast_data! {
 }
 
 impl FromCST for ExpressionStmt {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
         let expr = Expression::from_cst(elem)?;
         Ok(ExpressionStmt {
             expr,
@@ -101,9 +101,9 @@ validated_ast_data! {
 }
 
 impl FromCST for LetStmt {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::LET_STMT)?;
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+        let node = ValidatedAstError::assert_is_node(elem)?;
+        ValidatedAstError::assert_kind_node(&node, SyntaxKind::LET_STMT)?;
         let mut it = SyntaxNodeIter::new(&node);
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -153,45 +153,20 @@ validated_ast_node! {
     /// framing with `if let`'s `pattern = scrutinee` head, but - like `if let` and
     /// unlike plain `while` - emits no parens around the scrutinee, and has no
     /// `else` clause (loops produce unit).
-    custom WhileLetStmt, WHILE_LET_STMT, parse_while_let_stmt {
-        keyword: t::While,
+    WhileLetStmt, WHILE_LET_STMT {
+        keyword: required t::While;
         /// Standalone leading binding introducer, present only for top-level
         /// array-pattern heads (`while let [x] = xs`), where the parser keeps the
         /// introducer at the statement level instead of inside the pattern. For
         /// binding / class / type heads the introducer lives inside `pattern` and
         /// this is `None`. Mirrors
         /// `LetStmt::let_keyword`.
-        let_keyword: Option<t::BindingKeyword>,
-        pattern: MatchPattern,
-        equals: t::Equals,
-        scrutinee: Box<Expression>,
-        body: BlockExpr,
+        let_keyword: optional_element t::BindingKeyword;
+        pattern: required MatchPattern;
+        equals: required t::Equals;
+        scrutinee: boxed Expression;
+        body: required BlockExpr;
     }
-}
-
-fn parse_while_let_stmt(elem: SyntaxElement) -> Result<WhileLetStmt, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::WHILE_LET_STMT)?;
-    let mut it = SyntaxNodeIter::new(&node);
-    let keyword = it.expect_parse()?;
-    let let_keyword = it
-        .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
-        .map(t::BindingKeyword::from_cst)
-        .transpose()?;
-    let pattern = it.expect_parse()?;
-    let equals = it.expect_parse()?;
-    let scrutinee_elem = it.expect_next("while-let scrutinee expression")?;
-    let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
-    let body: BlockExpr = it.expect_parse()?;
-    it.expect_end()?;
-    Ok(WhileLetStmt {
-        keyword,
-        let_keyword,
-        pattern,
-        equals,
-        scrutinee,
-        body,
-    })
 }
 
 validated_ast_node! {
@@ -203,9 +178,9 @@ validated_ast_node! {
     }
 }
 
-fn parse_for_stmt(elem: SyntaxElement) -> Result<ForStmt, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::FOR_EXPR)?;
+fn parse_for_stmt(elem: SyntaxElement) -> Result<ForStmt, ValidatedAstError> {
+    let node = ValidatedAstError::assert_is_node(elem)?;
+    ValidatedAstError::assert_kind_node(&node, SyntaxKind::FOR_EXPR)?;
     let mut it = SyntaxNodeIter::new(&node);
     let keyword = it.expect_parse()?;
     let open_paren: Option<t::LParen> = it
@@ -232,14 +207,14 @@ fn parse_for_stmt(elem: SyntaxElement) -> Result<ForStmt, StrongAstError> {
         })
     } else {
         let ForBinding::Let(let_stmt) = binding else {
-            return Err(StrongAstError::UnexpectedKindDesc {
+            return Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "C-style for loops require a `let` initializer".into(),
                 found: SyntaxKind::FOR_EXPR,
                 at: it.parent,
             });
         };
         let Some(open_paren) = open_paren else {
-            return Err(StrongAstError::UnexpectedKindDesc {
+            return Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "C-style for loops require parentheses".into(),
                 found: SyntaxKind::FOR_EXPR,
                 at: it.parent,
@@ -312,29 +287,11 @@ validated_ast_data! {
 
 validated_ast_node! {
     /// Corresponds to a [`SyntaxKind::RETURN_STMT`] node.
-    custom ReturnStmt, RETURN_STMT, parse_return_stmt {
-        keyword: t::Return,
+    ReturnStmt, RETURN_STMT {
+        keyword: required t::Return;
         /// Currently since all functions return a value, this should always be `Some` for valid code.
         /// However, we still handle the case of a missing return value here.
-        value: Option<Expression>,
-        semicolon: Option<t::Semicolon>,
+        value: spec OptionalUnless<Expression, t::Semicolon>;
+        semicolon: optional_element t::Semicolon;
     }
-}
-
-fn parse_return_stmt(elem: SyntaxElement) -> Result<ReturnStmt, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::RETURN_STMT)?;
-    let mut it = SyntaxNodeIter::new(&node);
-    let keyword = it.expect_parse()?;
-    let value = it
-        .next_if(|elem| elem.kind() != SyntaxKind::SEMICOLON)
-        .map(Expression::from_cst)
-        .transpose()?;
-    let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
-    it.expect_end()?;
-    Ok(ReturnStmt {
-        keyword,
-        value,
-        semicolon,
-    })
 }

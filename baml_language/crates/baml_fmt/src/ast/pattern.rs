@@ -1,10 +1,11 @@
+pub(super) use baml_db::baml_compiler_syntax::validated::*;
+use rowan::TextRange;
+
 use crate::{
     ast::{Token, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
-pub(super) use baml_db::baml_compiler_syntax::validated::*;
-use rowan::TextRange;
 fn try_print_trivia_single_line_spaced(
     printer: &mut Printer,
     trivia: &[EmittableTrivia],

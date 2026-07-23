@@ -1,6 +1,6 @@
 use super::{
-    FromCST, GenericArgs, KnownKind, StrongAstError, SyntaxElement, SyntaxKind, SyntaxNode,
-    SyntaxNodeIter, Type, TypeArgs, t,
+    FromCST, GenericArgs, KnownKind, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeIter, Type,
+    TypeArgs, ValidatedAstError, t,
 };
 
 validated_ast_node! {
@@ -18,9 +18,9 @@ validated_ast_node! {
     }
 }
 
-fn parse_match_pattern(elem: SyntaxElement) -> Result<MatchPattern, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::PATTERN)?;
+fn parse_match_pattern(elem: SyntaxElement) -> Result<MatchPattern, ValidatedAstError> {
+    let node = ValidatedAstError::assert_is_node(elem)?;
+    ValidatedAstError::assert_kind_node(&node, SyntaxKind::PATTERN)?;
     let mut it = SyntaxNodeIter::new(&node);
     let inner = it.expect_next("pattern body")?;
     it.expect_end()?;
@@ -30,8 +30,8 @@ fn parse_match_pattern(elem: SyntaxElement) -> Result<MatchPattern, StrongAstErr
 impl MatchPattern {
     /// Convert one of the inner pattern kinds (an atom, `UNION_PATTERN`, or
     /// `CHAIN_PATTERN`) into the rich enum.
-    fn from_inner(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
+    fn from_inner(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+        let node = ValidatedAstError::assert_is_node(elem)?;
         match node.kind() {
             SyntaxKind::WILDCARD_PATTERN => {
                 WildcardPattern::from_node(&node).map(MatchPattern::Wildcard)
@@ -47,7 +47,7 @@ impl MatchPattern {
             SyntaxKind::DESTRUCTURE_PATTERN => {
                 DestructurePattern::from_node(&node).map(MatchPattern::Destructure)
             }
-            found => Err(StrongAstError::UnexpectedKindDesc {
+            found => Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "a pattern kind".into(),
                 found,
                 at: node.text_range(),
@@ -65,7 +65,7 @@ validated_ast_data! {
 }
 
 impl WildcardPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -96,7 +96,7 @@ validated_ast_data! {
 }
 
 impl BindingPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = t::BindingKeyword::from_cst(it.expect_next("binding introducer")?)?;
         let name = it.expect_parse()?;
@@ -137,11 +137,11 @@ validated_ast_data! {
 }
 
 impl FromCST for DestructureTypeArgs {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
         match elem.kind() {
             SyntaxKind::GENERIC_ARGS => GenericArgs::from_cst(elem).map(Self::Generic),
             SyntaxKind::TYPE_ARGS => TypeArgs::from_cst(elem).map(Self::Type),
-            found => Err(StrongAstError::UnexpectedKindDesc {
+            found => Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "GENERIC_ARGS or TYPE_ARGS".into(),
                 found,
                 at: elem.text_range(),
@@ -151,7 +151,7 @@ impl FromCST for DestructureTypeArgs {
 }
 
 impl DestructurePattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let let_keyword = it
             .next_if(|elem| matches!(elem.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST))
@@ -177,7 +177,7 @@ impl DestructurePattern {
         let mut fields = Vec::new();
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
+                return Err(ValidatedAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             if elem.kind() == SyntaxKind::R_BRACE {
                 break t::RBrace::from_cst(elem)?;
@@ -211,9 +211,9 @@ validated_ast_data! {
 }
 
 impl FromCST for FieldPattern {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FIELD_PATTERN)?;
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+        let node = ValidatedAstError::assert_is_node(elem)?;
+        ValidatedAstError::assert_kind_node(&node, SyntaxKind::FIELD_PATTERN)?;
         let mut it = SyntaxNodeIter::new(&node);
         let name = it.expect_parse()?;
         let pattern = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
@@ -240,13 +240,13 @@ validated_ast_data! {
 }
 
 impl ArrayPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let open_bracket = it.expect_parse()?;
         let mut elements = Vec::new();
         let close_bracket = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
+                return Err(ValidatedAstError::missing(SyntaxKind::R_BRACKET, it.parent));
             };
             if elem.kind() == SyntaxKind::R_BRACKET {
                 break t::RBracket::from_cst(elem)?;
@@ -283,9 +283,9 @@ validated_ast_data! {
 }
 
 impl FromCST for ArrayPatternElement {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_PATTERN_ELEMENT)?;
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+        let node = ValidatedAstError::assert_is_node(elem)?;
+        ValidatedAstError::assert_kind_node(&node, SyntaxKind::ARRAY_PATTERN_ELEMENT)?;
         let mut it = SyntaxNodeIter::new(&node);
         let rest = it
             .next_if_kind(SyntaxKind::DOT_DOT)
@@ -306,7 +306,7 @@ validated_ast_data! {
 }
 
 impl TypePattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let ty = it.expect_parse()?;
         it.expect_end()?;
@@ -324,7 +324,7 @@ validated_ast_data! {
 }
 
 impl ParenPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let open_paren = it.expect_parse()?;
         let pattern = it.expect_parse()?;
@@ -348,7 +348,7 @@ validated_ast_data! {
 }
 
 impl UnionPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let first_elem = it.expect_next("a pattern atom")?;
         let first = MatchPattern::from_inner(first_elem)?;
@@ -375,7 +375,7 @@ validated_ast_data! {
 }
 
 impl ChainPattern {
-    fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
+    fn from_node(node: &SyntaxNode) -> Result<Self, ValidatedAstError> {
         let mut it = SyntaxNodeIter::new(node);
         let first_elem = it.expect_next("a pattern atom")?;
         let first = MatchPattern::from_inner(first_elem)?;

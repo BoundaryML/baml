@@ -1,6 +1,6 @@
 use super::{
-    Attribute, FromCST, KnownKind, Literal, StrongAstError, SyntaxElement, SyntaxKind,
-    SyntaxNodeIter, TextRange, ThrowsClause, t,
+    Attribute, FromCST, KnownKind, Literal, SyntaxElement, SyntaxKind, SyntaxNodeIter, TextRange,
+    ThrowsClause, ValidatedAstError, t,
 };
 
 validated_ast_node! {
@@ -24,9 +24,9 @@ validated_ast_node! {
     }
 }
 
-fn parse_type(elem: SyntaxElement) -> Result<Type, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_EXPR)?;
+fn parse_type(elem: SyntaxElement) -> Result<Type, ValidatedAstError> {
+    let node = ValidatedAstError::assert_is_node(elem)?;
+    ValidatedAstError::assert_kind_node(&node, SyntaxKind::TYPE_EXPR)?;
     let mut it = SyntaxNodeIter::new(&node);
     let first = UnionTypeMember::take(&mut it)?;
     let mut rest = Vec::new();
@@ -126,7 +126,7 @@ impl UnionTypeMember {
     /// If there are postix operators, they will remain in the iterator.
     ///
     /// So Paren, Path, String, or Function.
-    fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+    fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, ValidatedAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
             SyntaxKind::L_PAREN => {
@@ -153,7 +153,7 @@ impl UnionTypeMember {
                 let mut params = Vec::new();
                 let close_paren = loop {
                     let Some(elem) = it.next() else {
-                        return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
+                        return Err(ValidatedAstError::missing(SyntaxKind::R_PAREN, it.parent));
                     };
                     match elem.kind() {
                         SyntaxKind::R_PAREN => {
@@ -168,7 +168,7 @@ impl UnionTypeMember {
                             params.push((param, comma));
                         }
                         _ => {
-                            return Err(StrongAstError::UnexpectedKindDesc {
+                            return Err(ValidatedAstError::UnexpectedKindDesc {
                                 expected_desc: "FUNCTION_TYPE_PARAM or R_PAREN".into(),
                                 found: elem.kind(),
                                 at: elem.text_range(),
@@ -241,7 +241,7 @@ impl UnionTypeMember {
                 let string = Literal::from_cst(first)?;
                 Ok(UnionTypeMember::Literal(string))
             }
-            found => Err(StrongAstError::UnexpectedKindDesc {
+            found => Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "L_PAREN, WORD, STRING_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL"
                     .into(),
                 found,
@@ -249,7 +249,7 @@ impl UnionTypeMember {
             }),
         }
     }
-    pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+    pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, ValidatedAstError> {
         let mut ty = Self::take_base_type(it)?;
         loop {
             if it
@@ -359,13 +359,13 @@ validated_ast_data! {
 }
 
 impl TypeArg {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
         match elem.kind() {
             SyntaxKind::TYPE_EXPR => Type::from_cst(elem).map(TypeArg::Type),
             SyntaxKind::ASSOCIATED_TYPE_DECL => {
                 AssociatedTypeArgBinding::from_cst(elem).map(TypeArg::Associated)
             }
-            found => Err(StrongAstError::UnexpectedKindDesc {
+            found => Err(ValidatedAstError::UnexpectedKindDesc {
                 expected_desc: "TYPE_EXPR or ASSOCIATED_TYPE_DECL".into(),
                 found,
                 at: elem.text_range(),
@@ -374,24 +374,11 @@ impl TypeArg {
     }
 }
 
-validated_ast_data! {
-    pub struct AssociatedTypeArgBinding {
-        pub name: t::Word,
-        pub equals: t::Equals,
-        pub ty: Type,
-    }
-}
-
-impl FromCST for AssociatedTypeArgBinding {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ASSOCIATED_TYPE_DECL)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let name = it.expect_parse()?;
-        let equals = it.expect_parse()?;
-        let ty = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(AssociatedTypeArgBinding { name, equals, ty })
+validated_ast_node! {
+    AssociatedTypeArgBinding, ASSOCIATED_TYPE_DECL {
+        name: required t::Word;
+        equals: required t::Equals;
+        ty: required Type;
     }
 }
 
@@ -405,22 +392,22 @@ validated_ast_node! {
     }
 }
 
-fn parse_type_args(elem: SyntaxElement) -> Result<TypeArgs, StrongAstError> {
-    let node = StrongAstError::assert_is_node(elem)?;
-    StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
+fn parse_type_args(elem: SyntaxElement) -> Result<TypeArgs, ValidatedAstError> {
+    let node = ValidatedAstError::assert_is_node(elem)?;
+    ValidatedAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
     let mut it = SyntaxNodeIter::new(&node);
     let open_angle: t::Less = it.expect_parse()?;
     let first = TypeArg::from_cst(it.expect_next("type argument")?)?;
     let mut rest = Vec::new();
     let close_angle = loop {
         let Some(elem) = it.next() else {
-            return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+            return Err(ValidatedAstError::missing(SyntaxKind::GREATER, it.parent));
         };
         match elem.kind() {
             SyntaxKind::COMMA => {
                 let comma = t::Comma::from_cst(elem)?;
                 let Some(next_elem) = it.peek() else {
-                    return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+                    return Err(ValidatedAstError::missing(SyntaxKind::GREATER, it.parent));
                 };
                 if next_elem.kind() == SyntaxKind::GREATER {
                     continue;
@@ -432,7 +419,7 @@ fn parse_type_args(elem: SyntaxElement) -> Result<TypeArgs, StrongAstError> {
                 break t::Greater::from_cst(elem)?;
             }
             _ => {
-                return Err(StrongAstError::UnexpectedKindDesc {
+                return Err(ValidatedAstError::UnexpectedKindDesc {
                     expected_desc: "COMMA or GREATER".into(),
                     found: elem.kind(),
                     at: elem.text_range(),
@@ -471,8 +458,8 @@ validated_ast_data! {
 }
 
 impl FromCST for FunctionTypeParam {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+        let node = ValidatedAstError::assert_is_node(elem)?;
         let mut it = SyntaxNodeIter::new(&node);
         let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
             let name = t::Word::new_from_span(name.text_range());

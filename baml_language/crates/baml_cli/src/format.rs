@@ -126,7 +126,7 @@ impl FormatArgs {
                                 path.display()
                             ));
                         }
-                        baml_fmt::FormatterError::StrongAstError(err) => {
+                        baml_fmt::FormatterError::ValidatedAstError(err) => {
                             let err = err.print_with_file_context(path, &source);
                             crate::reporter::print_error(format_args!("while formatting: {err}"));
                         }

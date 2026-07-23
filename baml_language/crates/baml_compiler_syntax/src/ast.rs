@@ -557,6 +557,20 @@ pub mod token {
     }
 
     ast_token_enum! {
+        pub enum ImplementsKeyword {
+            Implements(Implements),
+            Implement(Implement),
+        }
+    }
+
+    ast_token_enum! {
+        pub enum ClassFieldDelimiter {
+            Comma(Comma),
+            Semicolon(Semicolon),
+        }
+    }
+
+    ast_token_enum! {
         pub enum AssignmentOp {
             Equals(Equals),
             PlusEquals(PlusEquals),

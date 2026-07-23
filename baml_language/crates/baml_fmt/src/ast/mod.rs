@@ -6,14 +6,15 @@ mod pattern;
 mod statements;
 mod tokens;
 mod types;
-use crate::{
-    printer::{PrintInfo, Printable, Printer, Shape},
-    trivia_classifier::TriviaSliceExt as _,
-};
 pub use attributes::*;
 pub use expressions::*;
 use rowan::TextRange;
 pub use tokens::*;
+
+use crate::{
+    printer::{PrintInfo, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt as _,
+};
 impl Printable for SourceFile {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         assert_eq!(shape.indent, 0);
@@ -52,12 +53,13 @@ impl Printable for SourceFile {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_db::{
         baml_compiler_parser::parse_green,
         baml_compiler_syntax::{SyntaxElement, SyntaxNode},
     };
     use baml_project::ProjectDatabase;
+
+    use super::*;
     #[test]
     fn test_parse_source_file() {
         let source = r#"

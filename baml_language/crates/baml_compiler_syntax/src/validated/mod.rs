@@ -1,11 +1,12 @@
-use super::token as t;
+use std::{borrow::Cow, marker::PhantomData, path::Path};
+
+pub use super::token::ClassFieldDelimiter;
 use super::{
     AstElement, AstShapeError, AstToken, BinaryOp, HeaderComment, Literal, SyntaxElement,
     SyntaxKind, SyntaxNode, SyntaxToken, TextRange, UnaryOp, ValidatedAttribute as Attribute,
     ValidatedBlockAttribute as BlockAttribute, ValidatedBreakStmt as BreakStmt,
-    ValidatedContinueStmt as ContinueStmt,
+    ValidatedContinueStmt as ContinueStmt, token as t,
 };
-use std::{borrow::Cow, path::Path};
 
 macro_rules! parse_validated_field {
     ($iter:ident, $field:ident, required $ty:ty) => {
@@ -40,6 +41,9 @@ macro_rules! parse_validated_field {
         }
         values
     }};
+    ($iter:ident, $field:ident, spec $ty:ty) => {
+        <$ty as $crate::validated::ValidatedFieldSpec>::parse(&mut $iter)?
+    };
 }
 
 macro_rules! validated_ast_node {
@@ -62,9 +66,9 @@ macro_rules! validated_ast_node {
         }
 
         impl FromCST for $name {
-            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-                let node = StrongAstError::assert_is_node(elem)?;
-                StrongAstError::assert_kind_node(&node, SyntaxKind::$kind)?;
+            fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+                let node = ValidatedAstError::assert_is_node(elem)?;
+                ValidatedAstError::assert_kind_node(&node, SyntaxKind::$kind)?;
                 let mut iter = SyntaxNodeIter::new(&node);
                 $(
                     let $field = parse_validated_field!(iter, $field, $mode $field_ty);
@@ -98,6 +102,9 @@ macro_rules! validated_ast_node {
     (@field_type rest $field_ty:ty) => {
         Vec<$field_ty>
     };
+    (@field_type spec $field_ty:ty) => {
+        <$field_ty as $crate::validated::ValidatedFieldSpec>::Output
+    };
     (
         $(#[$meta:meta])*
         custom $name:ident, $kind:ident, $parser:ident {
@@ -117,7 +124,7 @@ macro_rules! validated_ast_node {
         }
 
         impl FromCST for $name {
-            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
                 $parser(elem)
             }
         }
@@ -136,7 +143,7 @@ macro_rules! validated_ast_node {
         $item
 
         impl FromCST for $name {
-            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
                 $parser(elem)
             }
         }
@@ -156,6 +163,269 @@ macro_rules! validated_ast_data {
     };
 }
 
+macro_rules! validated_ast_enum {
+    (
+        $(#[$meta:meta])*
+        pub enum $name:ident {
+            $(
+                $kind:ident => $variant:ident($ty:ty),
+            )*
+            _ => $fallback:ident,
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug)]
+        pub enum $name {
+            $($variant($ty),)*
+            $fallback(TextRange),
+        }
+
+        impl FromCST for $name {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+                match elem.kind() {
+                    $(
+                        SyntaxKind::$kind => <$ty>::from_cst(elem).map(Self::$variant),
+                    )*
+                    _ => Ok(Self::$fallback(elem.text_range())),
+                }
+            }
+        }
+    };
+    (
+        $(#[$meta:meta])*
+        pub enum $name:ident {
+            $(
+                $kind:ident => $variant:ident($ty:ty),
+            )*
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug)]
+        pub enum $name {
+            $($variant($ty),)*
+        }
+
+        impl FromCST for $name {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
+                match elem.kind() {
+                    $(
+                        SyntaxKind::$kind => <$ty>::from_cst(elem).map(Self::$variant),
+                    )*
+                    found => Err(ValidatedAstError::UnexpectedKindDesc {
+                        expected_desc: stringify!($($kind),*).into(),
+                        found,
+                        at: elem.text_range(),
+                    }),
+                }
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+pub trait ValidatedFieldSpec {
+    type Output;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError>;
+}
+
+#[doc(hidden)]
+pub struct Until<Item, End>(PhantomData<(Item, End)>);
+
+impl<Item, End> ValidatedFieldSpec for Until<Item, End>
+where
+    Item: FromCST,
+    End: AstElement,
+{
+    type Output = Vec<Item>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        let mut items = Vec::new();
+        while iter
+            .peek()
+            .is_some_and(|element| !End::can_cast_element(element.kind()))
+        {
+            items.push(iter.expect_parse()?);
+        }
+        Ok(items)
+    }
+}
+
+#[doc(hidden)]
+pub struct SeparatedUntil<Item, Separator, End>(PhantomData<(Item, Separator, End)>);
+
+impl<Item, Separator, End> ValidatedFieldSpec for SeparatedUntil<Item, Separator, End>
+where
+    Item: FromCST,
+    Separator: AstElement + FromCST,
+    End: AstElement,
+{
+    type Output = Vec<(Item, Option<Separator>)>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        let mut items = Vec::new();
+        while iter
+            .peek()
+            .is_some_and(|element| !End::can_cast_element(element.kind()))
+        {
+            let item: Item = iter.expect_parse()?;
+            let separator = iter
+                .next_if(|element| Separator::can_cast_element(element.kind()))
+                .map(Separator::from_cst)
+                .transpose()?;
+            items.push((item, separator));
+        }
+        Ok(items)
+    }
+}
+
+#[doc(hidden)]
+pub struct SeparatedValuesUntil<Item, Separator, End>(PhantomData<(Item, Separator, End)>);
+
+impl<Item, Separator, End> ValidatedFieldSpec for SeparatedValuesUntil<Item, Separator, End>
+where
+    Item: FromCST,
+    Separator: AstElement + FromCST,
+    End: AstElement,
+{
+    type Output = Vec<Item>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        let mut items = Vec::new();
+        while iter
+            .peek()
+            .is_some_and(|element| !End::can_cast_element(element.kind()))
+        {
+            items.push(iter.expect_parse()?);
+            let _separator = iter
+                .next_if(|element| Separator::can_cast_element(element.kind()))
+                .map(Separator::from_cst)
+                .transpose()?;
+        }
+        Ok(items)
+    }
+}
+
+#[doc(hidden)]
+pub trait WithSeparator<Separator> {
+    #[must_use]
+    fn with_separator(self, separator: Option<Separator>) -> Self;
+}
+
+#[doc(hidden)]
+pub struct AttachedSeparatedUntil<Item, Separator, End>(PhantomData<(Item, Separator, End)>);
+
+impl<Item, Separator, End> ValidatedFieldSpec for AttachedSeparatedUntil<Item, Separator, End>
+where
+    Item: FromCST + WithSeparator<Separator>,
+    Separator: AstElement + FromCST,
+    End: AstElement,
+{
+    type Output = Vec<Item>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        let mut items = Vec::new();
+        while iter
+            .peek()
+            .is_some_and(|element| !End::can_cast_element(element.kind()))
+        {
+            if iter
+                .peek()
+                .is_some_and(|element| Separator::can_cast_element(element.kind()))
+            {
+                iter.next();
+                continue;
+            }
+            let item: Item = iter.expect_parse()?;
+            let separator = iter
+                .next_if(|element| Separator::can_cast_element(element.kind()))
+                .map(Separator::from_cst)
+                .transpose()?;
+            items.push(item.with_separator(separator));
+        }
+        Ok(items)
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionalRemaining<Item>(PhantomData<Item>);
+
+impl<Item> ValidatedFieldSpec for OptionalRemaining<Item>
+where
+    Item: FromCST,
+{
+    type Output = Option<Item>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        iter.next().map(Item::from_cst).transpose()
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionalUnless<Item, Stop>(PhantomData<(Item, Stop)>);
+
+impl<Item, Stop> ValidatedFieldSpec for OptionalUnless<Item, Stop>
+where
+    Item: FromCST,
+    Stop: AstElement,
+{
+    type Output = Option<Item>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        if iter
+            .peek()
+            .is_none_or(|element| Stop::can_cast_element(element.kind()))
+        {
+            Ok(None)
+        } else {
+            iter.expect_parse().map(Some)
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionalPrefixed<Prefix, Value>(PhantomData<(Prefix, Value)>);
+
+impl<Prefix, Value> ValidatedFieldSpec for OptionalPrefixed<Prefix, Value>
+where
+    Prefix: AstElement + FromCST,
+    Value: FromCST,
+{
+    type Output = Option<(Prefix, Value)>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        let Some(prefix) = iter.next_if(|element| Prefix::can_cast_element(element.kind())) else {
+            return Ok(None);
+        };
+        let prefix = Prefix::from_cst(prefix)?;
+        let value = iter.expect_parse()?;
+        Ok(Some((prefix, value)))
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionalPrefixedOrBare<Prefix, Value>(PhantomData<(Prefix, Value)>);
+
+impl<Prefix, Value> ValidatedFieldSpec for OptionalPrefixedOrBare<Prefix, Value>
+where
+    Prefix: AstElement + FromCST,
+    Value: FromCST + KnownKind,
+{
+    type Output = Option<(Option<Prefix>, Value)>;
+
+    fn parse(iter: &mut SyntaxNodeIter) -> Result<Self::Output, ValidatedAstError> {
+        if let Some(prefix) = iter.next_if(|element| Prefix::can_cast_element(element.kind())) {
+            let prefix = Prefix::from_cst(prefix)?;
+            let value = iter.expect_parse()?;
+            return Ok(Some((Some(prefix), value)));
+        }
+        iter.next_if_kind(Value::kind())
+            .map(Value::from_cst)
+            .transpose()
+            .map(|value| value.map(|value| (None, value)))
+    }
+}
+
 mod declarations;
 mod expressions;
 mod pattern;
@@ -169,10 +439,10 @@ pub use statements::*;
 pub use types::*;
 
 pub trait FromCST: Sized {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError>;
 }
 impl<T: AstElement> FromCST for T {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, ValidatedAstError> {
         T::cast_element(elem).map_err(Into::into)
     }
 }
@@ -185,7 +455,7 @@ pub trait KnownKind {
 }
 /// Errors that can occur when parsing from a [`SyntaxNode`] with [`FromCST`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror :: Error)]
-pub enum StrongAstError {
+pub enum ValidatedAstError {
     #[error("{0}")]
     AstShape(#[from] AstShapeError),
     /// When an element is expected (of a specific [`SyntaxKind`]) but was found to be of a different kind.
@@ -224,11 +494,11 @@ pub enum StrongAstError {
     #[error("An element at {at:?} was a token when it should have been a node.")]
     ShouldBeToken { at: TextRange },
 }
-impl StrongAstError {
+impl ValidatedAstError {
     /// Checks that the given node is of the specified [`SyntaxKind`].
     ///
     /// # Errors
-    /// Returns [`StrongAstError::UnexpectedKind`] if the element not the expected kind.
+    /// Returns [`ValidatedAstError::UnexpectedKind`] if the element not the expected kind.
     pub fn assert_kind_node(node: &SyntaxNode, expected: SyntaxKind) -> Result<(), Self> {
         if node.kind() == expected {
             Ok(())
@@ -243,7 +513,7 @@ impl StrongAstError {
     /// Checks that the given token is of the specified [`SyntaxKind`].
     ///
     /// # Errors
-    /// Returns [`StrongAstError::UnexpectedKind`] if the element not the expected kind.
+    /// Returns [`ValidatedAstError::UnexpectedKind`] if the element not the expected kind.
     #[allow(unused_must_use)]
     pub fn assert_kind_token(token: &SyntaxToken, expected: SyntaxKind) -> Result<(), Self> {
         if token.kind() == expected {
@@ -256,19 +526,19 @@ impl StrongAstError {
             })
         }
     }
-    /// Easy way to create a [`StrongAstError::MissingExpectedElementDesc`] error.
+    /// Easy way to create a [`ValidatedAstError::MissingExpectedElementDesc`] error.
     #[must_use]
     pub fn missing_desc(desc: impl Into<Cow<'static, str>>, parent: TextRange) -> Self {
         let desc = desc.into();
         Self::MissingExpectedElementDesc { desc, parent }
     }
-    /// Easy way to create a [`StrongAstError::MissingExpectedElement`] error.
+    /// Easy way to create a [`ValidatedAstError::MissingExpectedElement`] error.
     #[must_use]
     pub const fn missing(expected: SyntaxKind, parent: TextRange) -> Self {
         Self::MissingExpectedElement { expected, parent }
     }
     /// Checks that the given element is a node.
-    /// - Returns [`StrongAstError::ShouldBeNode`] if the element is a token.
+    /// - Returns [`ValidatedAstError::ShouldBeNode`] if the element is a token.
     /// - Otherwise returns the node.
     #[allow(unused_must_use)]
     pub fn assert_is_node(element: SyntaxElement) -> Result<SyntaxNode, Self> {
@@ -280,7 +550,7 @@ impl StrongAstError {
         }
     }
     /// Checks that the given element is a token.
-    /// - Returns [`StrongAstError::ShouldBeToken`] if the element is a node.
+    /// - Returns [`ValidatedAstError::ShouldBeToken`] if the element is a node.
     /// - Otherwise returns the token.
     pub fn assert_is_token(element: SyntaxElement) -> Result<SyntaxToken, Self> {
         match element {
@@ -300,8 +570,8 @@ impl StrongAstError {
             Some((line, column))
         }
         match self {
-            StrongAstError::AstShape(error) => error.to_string(),
-            StrongAstError::UnexpectedKind {
+            ValidatedAstError::AstShape(error) => error.to_string(),
+            ValidatedAstError::UnexpectedKind {
                 expected,
                 found,
                 at,
@@ -316,7 +586,7 @@ impl StrongAstError {
                     column
                 )
             }
-            StrongAstError::UnexpectedKindDesc {
+            ValidatedAstError::UnexpectedKindDesc {
                 expected_desc,
                 found,
                 at,
@@ -331,7 +601,7 @@ impl StrongAstError {
                     column
                 )
             }
-            StrongAstError::MissingExpectedElement { expected, parent } => {
+            ValidatedAstError::MissingExpectedElement { expected, parent } => {
                 let Some((line, column)) = get_line_and_column(source, parent.start().into())
                 else {
                     return self.to_string();
@@ -343,7 +613,7 @@ impl StrongAstError {
                     column
                 )
             }
-            StrongAstError::MissingExpectedElementDesc { desc, parent } => {
+            ValidatedAstError::MissingExpectedElementDesc { desc, parent } => {
                 let Some((line, column)) = get_line_and_column(source, parent.start().into())
                 else {
                     return self.to_string();
@@ -355,7 +625,7 @@ impl StrongAstError {
                     column
                 )
             }
-            StrongAstError::UnexpectedAdditionalElement { at, .. } => {
+            ValidatedAstError::UnexpectedAdditionalElement { at, .. } => {
                 let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
                     return self.to_string();
                 };
@@ -366,7 +636,7 @@ impl StrongAstError {
                     column,
                 )
             }
-            StrongAstError::ShouldBeNode { at } => {
+            ValidatedAstError::ShouldBeNode { at } => {
                 let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
                     return self.to_string();
                 };
@@ -377,7 +647,7 @@ impl StrongAstError {
                     column,
                 )
             }
-            StrongAstError::ShouldBeToken { at } => {
+            ValidatedAstError::ShouldBeToken { at } => {
                 let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
                     return self.to_string();
                 };
@@ -411,61 +681,61 @@ impl SyntaxNodeIter {
             peeked: None,
         }
     }
-    /// Consumes the next element, returning [`StrongAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
+    /// Consumes the next element, returning [`ValidatedAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
     /// Otherwise, returns the element.
     pub fn expect_next(
         &mut self,
         desc: impl Into<Cow<'static, str>>,
-    ) -> Result<SyntaxElement, StrongAstError> {
+    ) -> Result<SyntaxElement, ValidatedAstError> {
         self.next()
-            .ok_or_else(|| StrongAstError::missing_desc(desc.into(), self.parent))
+            .ok_or_else(|| ValidatedAstError::missing_desc(desc.into(), self.parent))
     }
-    /// Consumes the next element, returning [`StrongAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
-    /// Returns [`StrongAstError::ShouldBeNode`] if the element is not a node.
+    /// Consumes the next element, returning [`ValidatedAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
+    /// Returns [`ValidatedAstError::ShouldBeNode`] if the element is not a node.
     /// Otherwise, returns the node.
     ///
     /// Consumes an element even if it returns an error.
     pub fn expect_node(
         &mut self,
         desc: impl Into<Cow<'static, str>>,
-    ) -> Result<SyntaxNode, StrongAstError> {
+    ) -> Result<SyntaxNode, ValidatedAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing_desc(desc.into(), self.parent));
+            return Err(ValidatedAstError::missing_desc(desc.into(), self.parent));
         };
         let SyntaxElement::Node(node) = elem else {
-            return Err(StrongAstError::ShouldBeNode {
+            return Err(ValidatedAstError::ShouldBeNode {
                 at: elem.text_range(),
             });
         };
         Ok(node)
     }
-    /// Consumes the next element, returning [`StrongAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
-    /// Returns [`StrongAstError::ShouldBeToken`] if the element is not a token.
+    /// Consumes the next element, returning [`ValidatedAstError::MissingExpectedElementDesc`] if it's not found, with the given description.
+    /// Returns [`ValidatedAstError::ShouldBeToken`] if the element is not a token.
     /// Otherwise, returns the token.
     ///
     /// Consumes an element even if it returns an error.
     pub fn expect_token(
         &mut self,
         desc: impl Into<Cow<'static, str>>,
-    ) -> Result<SyntaxToken, StrongAstError> {
+    ) -> Result<SyntaxToken, ValidatedAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing_desc(desc.into(), self.parent));
+            return Err(ValidatedAstError::missing_desc(desc.into(), self.parent));
         };
         let SyntaxElement::Token(token) = elem else {
-            return Err(StrongAstError::ShouldBeToken {
+            return Err(ValidatedAstError::ShouldBeToken {
                 at: elem.text_range(),
             });
         };
         Ok(token)
     }
     /// Consumes the next element and checks it:
-    /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
+    /// - If there are no more elements, returns [`ValidatedAstError::MissingExpectedElement`].
     /// - Otherwise, the element will parse as the given type.
     ///
     /// Consumes an element even if it returns an error.
-    pub fn expect_parse<T: FromCST>(&mut self) -> Result<T, StrongAstError> {
+    pub fn expect_parse<T: FromCST>(&mut self) -> Result<T, ValidatedAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing_desc(
+            return Err(ValidatedAstError::missing_desc(
                 std::any::type_name::<T>(),
                 self.parent,
             ));
@@ -473,17 +743,17 @@ impl SyntaxNodeIter {
         T::from_cst(elem)
     }
     /// Checks that there are no more elements left.
-    /// Returns [`StrongAstError::UnexpectedAdditionalElement`] if there are.
+    /// Returns [`ValidatedAstError::UnexpectedAdditionalElement`] if there are.
     ///
     /// If it returns an error, the next element has been consumed.
     ///
     /// # Errors
-    /// Returns [`StrongAstError::UnexpectedAdditionalElement`] if there is any more elements.
-    pub fn expect_end(&mut self) -> Result<(), StrongAstError> {
+    /// Returns [`ValidatedAstError::UnexpectedAdditionalElement`] if there is any more elements.
+    pub fn expect_end(&mut self) -> Result<(), ValidatedAstError> {
         let Some(elem) = self.next() else {
             return Ok(());
         };
-        Err(StrongAstError::UnexpectedAdditionalElement {
+        Err(ValidatedAstError::UnexpectedAdditionalElement {
             parent: self.parent,
             at: elem.text_range(),
         })

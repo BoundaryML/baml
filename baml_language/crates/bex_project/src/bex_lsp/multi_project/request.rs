@@ -869,7 +869,7 @@ impl BexLspRequest for BexMulitProject {
         let formatted = match baml_fmt::format(&text, &options) {
             Ok(f) => f,
             Err(baml_fmt::FormatterError::ParseErrors { .. }) => return Ok(None),
-            Err(baml_fmt::FormatterError::StrongAstError(e)) => {
+            Err(baml_fmt::FormatterError::ValidatedAstError(e)) => {
                 return Err(crate::RuntimeError::Other(format!(
                     "Failed to build strong AST: {}",
                     e.print_with_file_context(path.as_str(), &text)

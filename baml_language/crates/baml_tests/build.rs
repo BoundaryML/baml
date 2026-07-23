@@ -1201,7 +1201,7 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                         baml_fmt::FormatterError::ParseErrors(e) => {
                             format!("=== PARSER ERROR ===\n{:?}", e)
                         }
-                        baml_fmt::FormatterError::StrongAstError(e) => {
+                        baml_fmt::FormatterError::ValidatedAstError(e) => {
                             let e = e.print_with_file_context(#relative_path, &content);
                             format!("=== STRONG AST ERROR ===\n{}", e)
                         }

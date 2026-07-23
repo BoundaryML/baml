@@ -1,11 +1,12 @@
+pub use baml_db::baml_compiler_syntax::Literal;
+pub(super) use baml_db::baml_compiler_syntax::validated::*;
+use rowan::TextRange;
+
 use crate::{
     ast::{BinaryOp, Token, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
-pub use baml_db::baml_compiler_syntax::Literal;
-pub(super) use baml_db::baml_compiler_syntax::validated::*;
-use rowan::TextRange;
 pub(crate) trait ExpressionFormatExt {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.

@@ -39,11 +39,11 @@ pub fn format_salsa(
 
     let cst = SyntaxNode::new_root(parsed);
     let trivia = TriviaInfo::classify_trivia(&cst);
-    let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
+    let validated_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
     let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
     printer.print(
-        &strong_ast,
+        &validated_ast,
         Shape {
             width: options.line_width,
             indent: 0,
@@ -74,7 +74,7 @@ pub enum FormatterError {
     #[error("{0:?}")]
     ParseErrors(Vec<ParseError>),
     #[error("{0}")]
-    StrongAstError(#[from] ast::StrongAstError),
+    ValidatedAstError(#[from] ast::ValidatedAstError),
 }
 
 #[cfg(test)]

@@ -1,11 +1,12 @@
+pub(super) use baml_db::baml_compiler_syntax::validated::*;
+use rowan::TextRange;
+
 use crate::{
     EmittableTrivia,
     ast::{BlockAttribute, Token, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt as _,
 };
-pub(super) use baml_db::baml_compiler_syntax::validated::*;
-use rowan::TextRange;
 
 impl Printable for TopLevelDeclaration {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
@@ -725,7 +726,7 @@ impl Printable for ImplementsItem {
 impl Printable for ImplementsBlock {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_str("implements");
-        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword_span);
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
         let trivia_len = printer.print_trivia_squished(keyword_trailing);
         if trivia_len == 0 {
             printer.print_str(" ");
@@ -764,7 +765,7 @@ impl Printable for ImplementsBlock {
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword_span
+        self.keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
@@ -1425,11 +1426,11 @@ impl Printable for TestExprDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print(&self.name, shape.clone());
-        if let Some(wc) = &self.with_clause {
+        if let Some((keyword, expr)) = &self.with_clause {
             printer.print_str(" ");
-            printer.print_raw_token(&wc.keyword);
+            printer.print_raw_token(keyword);
             printer.print_str(" ");
-            printer.print(&wc.expr, shape.clone());
+            printer.print(expr, shape.clone());
         }
         printer.print_str(" ");
         printer.print(&self.body, shape)
@@ -1446,11 +1447,11 @@ impl Printable for TestSetDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print(&self.name, shape.clone());
-        if let Some(wc) = &self.with_clause {
+        if let Some((keyword, expr)) = &self.with_clause {
             printer.print_str(" ");
-            printer.print_raw_token(&wc.keyword);
+            printer.print_raw_token(keyword);
             printer.print_str(" ");
-            printer.print(&wc.expr, shape.clone());
+            printer.print(expr, shape.clone());
         }
         printer.print_str(" ");
         printer.print(&self.body, shape)

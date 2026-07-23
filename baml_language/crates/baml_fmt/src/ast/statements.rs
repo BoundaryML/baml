@@ -1,13 +1,14 @@
-use crate::{
-    ast::Token,
-    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
-    trivia_classifier::TriviaSliceExt,
-};
 pub(super) use baml_db::baml_compiler_syntax::validated::*;
 use baml_db::baml_compiler_syntax::{
     ValidatedBreakStmt as BreakStmt, ValidatedContinueStmt as ContinueStmt,
 };
 use rowan::TextRange;
+
+use crate::{
+    ast::Token,
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt,
+};
 impl Printable for Statement {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {

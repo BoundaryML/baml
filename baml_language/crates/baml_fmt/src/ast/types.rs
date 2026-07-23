@@ -1,10 +1,11 @@
+pub(super) use baml_db::baml_compiler_syntax::validated::*;
+use rowan::{TextRange, TextSize};
+
 use crate::{
     ast::Token,
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
 };
-pub(super) use baml_db::baml_compiler_syntax::validated::*;
-use rowan::{TextRange, TextSize};
 impl Printable for Type {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
@@ -804,12 +805,13 @@ impl<T: Printable> Printable for ConstrainedType<T> {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_db::{
         baml_compiler_parser::parse_green,
         baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
     };
     use baml_project::ProjectDatabase;
+
+    use super::*;
     fn function_type_param(source: &str, index: usize) -> FunctionTypeParam {
         let mut db = ProjectDatabase::new();
         let file = db.add_file("test.baml", source);
