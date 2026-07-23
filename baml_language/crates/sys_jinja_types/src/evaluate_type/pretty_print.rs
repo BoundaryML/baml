@@ -9,6 +9,19 @@ fn pretty_print_call_arg(arg: &CallArg) -> String {
     }
 }
 
+fn pretty_print_call_args(args: &[CallArg]) -> String {
+    args.iter()
+        .map(pretty_print_call_arg)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn pretty_print_optional_call_args(args: &[CallArg]) -> String {
+    (!args.is_empty())
+        .then(|| format!("({})", pretty_print_call_args(args)))
+        .unwrap_or_default()
+}
+
 pub(super) fn pretty_print(expr: &Expr) -> String {
     match expr {
         Expr::Var(v) => v.id.to_string(),
@@ -76,17 +89,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                     .map(|x| pretty_print(x))
                     .unwrap_or("".into()),
                 expr.name,
-                match expr.args.len() {
-                    0 => "".into(),
-                    _ => format!(
-                        "({})",
-                        expr.args
-                            .iter()
-                            .map(pretty_print_call_arg)
-                            .collect::<Vec<_>>()
-                            .join(",")
-                    ),
-                }
+                pretty_print_optional_call_args(&expr.args)
             )
         }
         Expr::Test(expr) => {
@@ -94,17 +97,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                 "{} is {}{}",
                 pretty_print(&expr.expr),
                 expr.name,
-                match expr.args.len() {
-                    0 => "".into(),
-                    _ => format!(
-                        "({})",
-                        expr.args
-                            .iter()
-                            .map(pretty_print_call_arg)
-                            .collect::<Vec<_>>()
-                            .join(",")
-                    ),
-                }
+                pretty_print_optional_call_args(&expr.args)
             )
         }
         Expr::GetAttr(attr) => {
@@ -121,11 +114,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
             format!(
                 "{}({})",
                 pretty_print(&expr.expr),
-                expr.args
-                    .iter()
-                    .map(pretty_print_call_arg)
-                    .collect::<Vec<_>>()
-                    .join(",")
+                pretty_print_call_args(&expr.args)
             )
         }
         Expr::List(expr) => {
