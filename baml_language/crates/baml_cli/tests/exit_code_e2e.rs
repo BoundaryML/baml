@@ -8,8 +8,9 @@
 mod common;
 
 use std::{
+    io::{BufRead as _, BufReader, Read as _},
     path::Path,
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
 // ============================================================================
@@ -522,6 +523,160 @@ test "passes" {
         "Expected passing test output, got:\n{stdout}"
     );
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
+}
+
+/// BAML log events stay silent by default and become stdout lines only when
+/// the caller opts into a level threshold with `--logs`.
+#[test]
+fn test_logs_flag_routes_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "logs" {
+  log.debug("debug-detail");
+  log.info("info-detail");
+  log.warn("warn-detail");
+  log.error("error-detail");
+  assert.is_true(true)
+}
+
+test "fails" {
+  log.error("failure-detail");
+  assert.is_true(false)
+}
+"#,
+    );
+
+    let quiet = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
+    assert!(
+        quiet.status.success(),
+        "expected default log mode to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
+    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
+    assert!(
+        format!("{quiet_stdout}{quiet_stderr}").contains("1 passed, 0 failed, 1 total"),
+        "stdout: {quiet_stdout}\nstderr: {quiet_stderr}"
+    );
+    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+
+    // Uppercase is intentional: this is the documented shell spelling and
+    // guards clap's case-insensitive value parsing.
+    let info = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs", "--logs", "INFO"],
+    );
+    assert!(
+        info.status.success(),
+        "expected --logs INFO to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&info.stdout),
+        String::from_utf8_lossy(&info.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&info.stdout);
+    assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
+    assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
+    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
+    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
+    assert!(
+        stdout.find("[ERROR] error-detail") < stdout.find("PASS"),
+        "the final captured log must be printed before the test report: {stdout}"
+    );
+
+    let failure = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::fails", "--logs", "ERROR"],
+    );
+    assert_eq!(
+        failure.status.code(),
+        Some(2),
+        "--logs must preserve the test-failure exit code; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&failure.stdout),
+        String::from_utf8_lossy(&failure.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&failure.stdout).contains("[ERROR] failure-detail"),
+        "stdout: {}",
+        String::from_utf8_lossy(&failure.stdout),
+    );
+}
+
+/// A redirected stdout stream is explicitly flushed while a test is still
+/// running, rather than releasing its logs only with the final report.
+#[test]
+fn test_logs_flag_flushes_stdout_during_long_running_test() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "streams" {
+  log.info("stream-start");
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(750n));
+  log.info("stream-end");
+  assert.is_true(true)
+}
+"#,
+    );
+
+    // Warm the compile/discovery cache without executing the sleeping test.
+    let listed = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "--list"]);
+    assert!(
+        listed.status.success(),
+        "failed to prepare streaming test: {}",
+        String::from_utf8_lossy(&listed.stderr),
+    );
+
+    let home = tmp.path().join(".baml-home");
+    let mut child = Command::new(built)
+        .args(["test", "--from", ".", "--logs", "INFO"])
+        .current_dir(tmp.path())
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_HOME", &home)
+        .env("BAML_CACHE_DIR", common::shared_cache_dir())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn baml-cli with piped stdout");
+
+    let mut stdout = BufReader::new(child.stdout.take().expect("child stdout is piped"));
+    let mut captured = String::new();
+    loop {
+        let mut line = String::new();
+        let read = stdout.read_line(&mut line).expect("read streamed log line");
+        assert_ne!(read, 0, "stdout ended before the first log: {captured}");
+        captured.push_str(&line);
+        if line.contains("[INFO] stream-start") {
+            break;
+        }
+    }
+    assert!(
+        child.try_wait().expect("query child status").is_none(),
+        "the first log was buffered until the test process exited: {captured}"
+    );
+
+    stdout
+        .read_to_string(&mut captured)
+        .expect("read remaining stdout");
+    let output = child.wait_with_output().expect("wait for baml-cli");
+    assert!(
+        output.status.success(),
+        "streaming test failed; stdout: {captured}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(captured.contains("[INFO] stream-end"), "stdout: {captured}");
+    assert!(
+        captured.find("[INFO] stream-end") < captured.find("PASS"),
+        "the final log must be flushed before the test report: {captured}"
+    );
 }
 
 /// Failing `assert.equal` should surface both operand values and keep stack
