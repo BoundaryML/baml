@@ -7,7 +7,7 @@
 
 use std::fmt::Write;
 
-use bex_vm_types::types::{Object, Value};
+use bex_vm_types::types::Value;
 
 use super::{BamlClassErrorsErrorContext, BamlClassErrorsStackTrace, PackageBamlImpl, view};
 use crate::BexVm;
@@ -18,27 +18,6 @@ use crate::BexVm;
 fn render_error_value(vm: &BexVm, value: Value) -> String {
     if let Ok(message) = vm.as_string(&value) {
         return message.to_string();
-    }
-    if let Some(ptr) = value.as_object_ptr()
-        && let Object::Instance(instance) = vm.get_object(ptr)
-        && let Object::Class(class) = vm.get_object(instance.class)
-    {
-        let fields = class
-            .fields
-            .iter()
-            .zip(instance.fields.iter())
-            .map(|(field, value)| {
-                format!(
-                    "{}: {}",
-                    field.name,
-                    super::root::render_value_structural(vm, value.load(), true)
-                )
-            })
-            .collect::<Vec<_>>();
-        if fields.is_empty() {
-            return class.name.to_string();
-        }
-        return format!("{} {{{}}}", class.name, fields.join(", "));
     }
     super::root::render_value_structural(vm, value, false)
 }

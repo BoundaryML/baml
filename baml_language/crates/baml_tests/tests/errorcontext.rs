@@ -450,8 +450,9 @@ function main() -> string {
     );
     let rendered = expect_string(output.result.unwrap());
     assert!(
-        rendered
-            .contains(r#"user.AppError {message: "boom", detail: Detail { label: "visible" }}"#),
+        rendered.contains(
+            r#"user.AppError { message: "boom", detail: user.Detail { label: "visible" } }"#
+        ),
         "class error lost its identity or fields:\n{rendered}"
     );
     assert!(
@@ -481,5 +482,95 @@ function main() -> string {
     assert!(
         !rendered.contains("<error>"),
         "non-class error fell back to the old placeholder:\n{rendered}"
+    );
+}
+
+#[tokio::test]
+async fn structural_error_rendering_truncates_object_cycles() {
+    let output = baml_test!(
+        r#"
+class RecursiveError {
+  next RecursiveError?
+}
+
+function fail() -> string {
+  let error = RecursiveError { next: null }
+  error.next = error
+  throw error
+}
+
+function main() -> string {
+  fail() catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    assert!(
+        rendered.contains("user.RecursiveError { next: … }"),
+        "cyclic class error was not safely truncated:\n{rendered}"
+    );
+}
+
+#[tokio::test]
+async fn structural_error_rendering_enforces_depth_and_node_budgets() {
+    let output = baml_test!(
+        r#"
+class Link {
+  next Link?
+}
+
+function fail_deep() -> string {
+  let root = Link { next: null }
+  let current = root
+  let i = 0
+  while (i < 40) {
+    let next = Link { next: null }
+    current.next = next
+    current = next
+    i += 1
+  }
+  throw root
+}
+
+function fail_wide() -> string {
+  let values: int[] = []
+  let i = 0
+  while (i < 300) {
+    values.push(i)
+    i += 1
+  }
+  throw values
+}
+
+function render_deep() -> string {
+  fail_deep() catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+
+function render_wide() -> string {
+  fail_wide() catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+
+function main() -> string {
+  render_deep() + "|" + render_wide()
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    let (deep, wide) = rendered
+        .split_once('|')
+        .expect("expected both bounded renderings");
+    assert!(
+        deep.contains('…'),
+        "deep class error exceeded its budget without truncation:\n{deep}"
+    );
+    assert!(
+        wide.contains('…'),
+        "wide array error exceeded its budget without truncation:\n{wide}"
     );
 }
