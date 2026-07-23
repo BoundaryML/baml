@@ -23,6 +23,7 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems, PackageItemsExtra},
     scope::ScopeId,
     semantic_index::{FileSemanticIndex, ScopeBindings},
+    signature::signature_params_from_item_tree,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -677,21 +678,7 @@ pub fn function_signature<'db>(
     let item_tree = file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p
-                .type_expr
-                .clone()
-                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
-            baml_compiler2_hir::signature::SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params = signature_params_from_item_tree(&func_data.params);
 
     let return_type = func_data.return_type.clone();
 
@@ -712,21 +699,7 @@ pub fn elaborated_function_signature<'db>(
     let item_tree = file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p
-                .type_expr
-                .clone()
-                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
-            baml_compiler2_hir::signature::SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params = signature_params_from_item_tree(&func_data.params);
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();

@@ -40,6 +40,21 @@ pub struct SignatureParam {
     pub has_default: bool,
 }
 
+pub fn signature_params_from_item_tree(
+    params: &[crate::item_tree::FunctionParam],
+) -> Vec<SignatureParam> {
+    params
+        .iter()
+        .map(|param| SignatureParam {
+            name: param.name.clone(),
+            ty: param.type_expr.clone().unwrap_or_else(|| {
+                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+            }),
+            has_default: param.default.is_some(),
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParameterDefaults {
     /// One default-expression reference per parameter, parallel to
@@ -102,20 +117,7 @@ fn function_signature_with_source_map<'db>(
     let func_data = &item_tree[function.id(db)];
 
     // Build semantic signature — strip spans, keep TypeExpr
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params = signature_params_from_item_tree(&func_data.params);
 
     let return_type = func_data.return_type.clone();
 
@@ -231,20 +233,7 @@ fn elaborated_function_signature_with_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params = signature_params_from_item_tree(&func_data.params);
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
