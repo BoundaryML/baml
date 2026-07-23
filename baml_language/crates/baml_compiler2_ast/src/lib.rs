@@ -1958,9 +1958,13 @@ retry_policy MyRetry {
         assert_eq!(let_def.name.as_str(), "MyRetry");
         assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
 
-        let (body, _source_map) = let_def.initializer.as_ref().expect("expected initializer");
+        let (body, source_map) = let_def.initializer.as_ref().expect("expected initializer");
 
         let root_id = body.root_expr.expect("expected root expr");
+        assert!(
+            source_map.is_synthetic_expr(root_id),
+            "retry_policy's class-shaped initializer is compiler-synthesized"
+        );
         let root_expr = &body.exprs[root_id];
 
         let (type_name, fields, _) = match root_expr {

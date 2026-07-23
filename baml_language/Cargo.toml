@@ -3,6 +3,7 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/cpp/sdkgen_cpp",
+  "sdks/csharp/sdkgen_csharp",
   "sdks/go/sdkgen_go",
   "sdks/java/bridge_java",
   "sdks/java/sdkgen_java",
@@ -20,6 +21,7 @@ members = [
   # `sdkgen_java` is a stub.
   "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
+  "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
   # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
   # (sdkgen_swift is early); the swift toolchain tests themselves are
@@ -79,6 +81,7 @@ baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
+sdkgen_csharp = { path = "sdks/csharp/sdkgen_csharp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_java = { path = "sdks/java/sdkgen_java" }
@@ -183,6 +186,7 @@ derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
+fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"

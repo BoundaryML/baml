@@ -4169,8 +4169,10 @@ impl Printable for MapLiteral {
 #[derive(Debug)]
 pub struct ObjectField {
     pub name: ObjectFieldKey,
-    pub colon: t::Colon,
-    pub value: Expression,
+    /// Absent for property shorthand (`{ options }`). The parser only permits
+    /// shorthand for a bare identifier, never for a quoted or qualified key.
+    pub colon: Option<t::Colon>,
+    pub value: Option<Expression>,
 }
 
 impl FromCST for ObjectField {
@@ -4183,10 +4185,17 @@ impl FromCST for ObjectField {
         let name = it.expect_next("WORD or STRING_LITERAL")?;
         let name = ObjectFieldKey::from_cst(name)?;
 
-        let colon = it.expect_parse()?;
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
 
-        let value = it.expect_next("value")?;
-        let value = Expression::from_cst(value)?;
+        let value = if colon.is_some() {
+            let value = it.expect_next("value")?;
+            Some(Expression::from_cst(value)?)
+        } else {
+            None
+        };
 
         it.expect_end()?;
 
@@ -4205,18 +4214,21 @@ impl ObjectField {
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         let name = self.name.single_line_width(input)?;
-        let value = self.value.single_line_width(input)?;
+        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
+            return Some(name);
+        };
+        let value_width = value.single_line_width(input)?;
         // Must match trivia handled by print: colon_trailing + value_leading
         let mut trivia_len = 0usize;
-        let (_, colon_trailing) = input.trivia.get_for_range_split(self.colon.span());
+        let (_, colon_trailing) = input.trivia.get_for_range_split(colon.span());
         for t in colon_trailing {
             trivia_len += t.single_line_len(input.input)?;
         }
-        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        let value_leading = input.trivia.get_leading_for_element(value);
         for t in value_leading {
             trivia_len += t.single_line_len(input.input)?;
         }
-        Some(name + const { ": ".len() } + value + trivia_len)
+        Some(name + const { ": ".len() } + value_width + trivia_len)
     }
 }
 
@@ -4224,20 +4236,26 @@ impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
-        printer.print_raw_token(&self.colon);
-        let (_, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
+        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
+            return PrintInfo { multi_lined };
+        };
+        printer.print_raw_token(colon);
+        let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
         printer.print_str(" ");
         printer.print_trivia_squished(colon_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        let value_leading = printer.trivia.get_leading_for_element(value);
         printer.print_trivia_squished(value_leading);
-        multi_lined |= printer.print(&self.value, shape).multi_lined;
+        multi_lined |= printer.print(value, shape).multi_lined;
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.value.rightmost_token()
+        self.value
+            .as_ref()
+            .map(Printable::rightmost_token)
+            .unwrap_or_else(|| self.name.rightmost_token())
     }
 }
 

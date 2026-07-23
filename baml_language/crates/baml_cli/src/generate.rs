@@ -156,10 +156,39 @@ impl GenerateArgs {
 
         for generator in &generators {
             reporter.spin("Generating", &generator.name);
-            let output_dir = self
+            let requested_output = self
                 .output
                 .clone()
                 .unwrap_or_else(|| generator.output_dir.clone());
+            let output_dir = if requested_output.is_absolute() {
+                requested_output
+            } else {
+                std::env::current_dir()
+                    .context("Failed to resolve the current directory for generated output")?
+                    .join(requested_output)
+            };
+
+            if generator.output_type == OutputType::CSharp {
+                let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
+                    symbols: &pool,
+                    program_bytes: &baml_bytecode,
+                    cli_version: release_version(),
+                    required_bridge_version: baml_version::CANONICAL_VERSION,
+                    program_identity: &generator.name,
+                    output_directory: output_dir.clone(),
+                })?;
+                let count = report.written_files.len();
+                reporter.status(
+                    "Generated",
+                    format!(
+                        "{} ({count} file(s) → {})",
+                        generator.name,
+                        output_dir.display()
+                    ),
+                );
+                total_files += count;
+                continue;
+            }
 
             // Unified to bytes at the write boundary: python/TS emit text
             // only; the rust generator also ships the embedded bytecode as
@@ -261,6 +290,7 @@ impl GenerateArgs {
                 .into_iter()
                 .map(|(path, content)| (path, content.into_bytes()))
                 .collect(),
+                OutputType::CSharp => unreachable!("C# generation commits atomically above"),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {
@@ -347,7 +377,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "go", "rust", "cpp""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "go", "rust", "java", "cpp", "csharp""#,
             table_range,
             &mut diags,
         );
@@ -371,10 +401,10 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         };
 
         // `output_dir` is resolved relative to the project root and defaults
-        // to "..", with `baml_sdk` appended (matching the historic
-        // `generator {}` behavior).
+        // to "..", with the target-owned generated directory appended.
         let raw_output_dir = generator.output_dir.as_deref().unwrap_or("..");
-        let output_dir = root.join(raw_output_dir).join("baml_sdk");
+        let generated_directory = output_type.map_or("baml_sdk", OutputType::generated_directory);
+        let output_dir = root.join(raw_output_dir).join(generated_directory);
 
         // Skip codegen for sections that failed validation; their
         // diagnostics block the run upstream.

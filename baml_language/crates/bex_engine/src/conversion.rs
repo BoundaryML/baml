@@ -1948,8 +1948,8 @@ fn peel_single_container_member<'a>(
 }
 
 /// Whether a host-callable's declared return type contains a position the
-/// host-return validator cannot check. Recurses through `Optional` / `List` /
-/// `Map`-value /
+/// host-return validator cannot check, such as `RuntimeTy::BuiltinUnknown`.
+/// Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
 /// its returned value validated, so binding one is rejected.
@@ -1959,14 +1959,13 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // against these declared types (the host-return validator has no
         // positive discriminator for them), so a host could inject a value that
         // violates the declared type. Reject binding such a callable.
-        //   - nested `Void`/`BuiltinUnknown`: unresolved positions.
+        //   - `BuiltinUnknown`: accept-anything top.
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
         //   - `Future`: the host cannot produce a VM future, and nothing
         //     validates one.
-        RuntimeTy::Void { .. }
-        | RuntimeTy::BuiltinUnknown { .. }
+        RuntimeTy::BuiltinUnknown { .. }
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
@@ -1983,6 +1982,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 
         // Directly validated by the host-return validator.
         RuntimeTy::Null { .. }
+        | RuntimeTy::Void { .. }
         | RuntimeTy::Bool { .. }
         | RuntimeTy::Int { .. }
         | RuntimeTy::Float { .. }
@@ -2684,6 +2684,32 @@ impl BexEngine {
         value: &BexExternalValue,
         expected: &RuntimeTy,
     ) -> Result<(), String> {
+        // `InboundValue.value_type` is carried transiently as an annotated
+        // external union. Coerce its structural payload first so an anonymous
+        // class gains its nominal identity/type args and a class-shaped media
+        // shell becomes the underlying media ADT. The shared boundary guard
+        // has already checked that the annotation is assignable to `expected`;
+        // this pass verifies that the payload actually inhabits it and then
+        // applies the resolved class schema recursively.
+        if matches!(
+            value,
+            BexExternalValue::Union { metadata, .. }
+                if metadata.is_inbound_type_annotation
+        ) {
+            let coerced = self
+                .coerce_inbound_arg(value.clone(), expected)
+                .map_err(|error| error.to_string())?;
+            return match &coerced {
+                BexExternalValue::Union {
+                    value: inner,
+                    metadata,
+                } if metadata.is_inbound_type_annotation => {
+                    self.validate_host_return_schema(inner, expected)
+                }
+                other => self.validate_host_return_schema(other, expected),
+            };
+        }
+
         match expected {
             // `unknown` / opaque-any: accept (defensive — concrete at the FFI
             // boundary).

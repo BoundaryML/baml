@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RestoreSources>$(A3LocalFeed)</RestoreSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference
+      Include="Baml.Bridge.GeneratedCodeContractProbe.Runtime"
+      Version="[0.0.0-a3]" />
+  </ItemGroup>
+</Project>

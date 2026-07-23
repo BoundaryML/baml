@@ -80,6 +80,25 @@ pub fn validate_host_return(
     value: &BexExternalValue,
     expected: &RuntimeTy,
 ) -> Result<(), HostReturnTypeError> {
+    // A sparse inbound `value_type` is represented transiently by a
+    // `BexExternalValue::Union`, but it is not an actual union value. Its
+    // selected type is the authoritative node type; the inner payload may be
+    // deliberately structural at this layer (an anonymous class payload or a
+    // class-shaped media transport shell). Check the annotation against the
+    // host callable's declared return type here. The engine then coerces the
+    // payload with that exact type and performs schema-aware validation.
+    if let BexExternalValue::Union { metadata, .. } = value
+        && metadata.is_inbound_type_annotation
+    {
+        if inbound_annotation_satisfies_ty(&metadata.selected_option, expected) {
+            return Ok(());
+        }
+        return Err(HostReturnTypeError {
+            actual: metadata.selected_option.to_string(),
+            expected: expected.to_string(),
+        });
+    }
+
     if value_satisfies_ty(value, expected) {
         Ok(())
     } else {
@@ -88,6 +107,18 @@ pub fn validate_host_return(
             expected: expected.to_string(),
         })
     }
+}
+
+fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> bool {
+    #[expect(
+        deprecated,
+        reason = "the host boundary has RuntimeTy values but no VM-backed type facts"
+    )]
+    baml_type::normalize::is_subtype(
+        actual.as_ty(),
+        expected.as_ty(),
+        &baml_type::normalize::NoFacts,
+    )
 }
 
 /// Strict, recursive shape match of a `BexExternalValue` against a `RuntimeTy`.
@@ -127,8 +158,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         }
 
         // A host bridge represents a completed `void` callback as Null on the
-        // wire. Void is valid only in this top-level return position; callback
-        // binding rejects nested/unresolved void positions separately.
+        // wire.
         RuntimeTy::Void { .. } | RuntimeTy::Null { .. } => {
             matches!(value, BexExternalValue::Null)
         }
@@ -382,6 +412,15 @@ mod tests {
     }
 
     #[test]
+    fn void_requires_the_null_boundary_value() {
+        let void = RuntimeTy::Void {
+            attr: TyAttr::default(),
+        };
+        assert!(validate_host_return(&BexExternalValue::Null, &void).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &void).is_err());
+    }
+
+    #[test]
     fn literal_value_equality() {
         let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
@@ -572,6 +611,38 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn sparse_class_annotation_is_checked_before_anonymous_payload_shape() {
+        let user = RuntimeTy::Class(
+            TypeName::from_dotted_path("user.callbacks.User"),
+            vec![RuntimeTy::int()],
+            TyAttr::default(),
+        );
+        let anonymous_payload = BexExternalValue::Instance {
+            class_name: String::new(),
+            type_args: vec![],
+            fields: IndexMap::new(),
+        };
+
+        assert!(
+            validate_host_return(
+                &BexExternalValue::typed(anonymous_payload.clone(), user.clone()),
+                &user,
+            )
+            .is_ok()
+        );
+
+        let other = RuntimeTy::Class(
+            TypeName::from_dotted_path("user.callbacks.Other"),
+            vec![RuntimeTy::int()],
+            TyAttr::default(),
+        );
+        let error = validate_host_return(&BexExternalValue::typed(anonymous_payload, other), &user)
+            .expect_err("an annotation for another class must not satisfy User<int>");
+        assert_eq!(error.expected, user.to_string());
+        assert!(error.actual.contains("Other"));
     }
 
     #[test]

@@ -2724,8 +2724,9 @@ impl BexEngine {
         }
     }
 
-    /// Invoke a callable BAML value — a raw function, a closure (with captures),
-    /// or a bound method — referenced by a host [`Handle`](bex_external_types::Handle), as a fresh root call,
+    /// Invoke a callable value — a raw function, a BAML closure (with captures),
+    /// a bound method, or a host closure — referenced by a host
+    /// [`Handle`](bex_external_types::Handle), as a fresh root call,
     /// returning its result. This is the by-value counterpart of
     /// [`Self::call_function`], used to call a BAML callback passed to a sys-op
     /// (e.g. an HTTP server `handler`). The callee's `return`/`throws` types and
@@ -2787,82 +2788,122 @@ impl BexEngine {
         // `Function` pointer to read metadata from. `entry` is the closure value
         // itself (so its captures/upvalues resolve) or, for a bound method, the
         // inner function (its `self` is supplied positionally).
-        let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
-            Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
-            // A plain (or `foo<int>`-instantiated) function reference: the
-            // pooled wrapper over the function's global slot (see emit's
-            // `emit_pooled_function_value`). Resolve to the underlying
-            // `Function` object; its `type_args` seed the frame.
-            Object::GenericFunction(gf) => {
-                let type_args = gf.type_args.to_vec();
-                let inner = thread.vm.globals.get(thread.proof(), gf.function);
-                let func_ptr = inner.as_object_ptr().ok_or_else(|| {
-                    EngineError::Other(
-                        "call_callable: function wrapper resolves to no object".to_string(),
+        let (entry, receiver, seed_type_args, func_ptr, host_signature) =
+            match thread.vm.get_object(entry_ptr) {
+                Object::Function(_) => (entry_ptr, None, Vec::new(), Some(entry_ptr), None),
+                // A plain (or `foo<int>`-instantiated) function reference: the
+                // pooled wrapper over the function's global slot (see emit's
+                // `emit_pooled_function_value`). Resolve to the underlying
+                // `Function` object; its `type_args` seed the frame.
+                Object::GenericFunction(gf) => {
+                    let type_args = gf.type_args.to_vec();
+                    let inner = thread.vm.globals.get(thread.proof(), gf.function);
+                    let func_ptr = inner.as_object_ptr().ok_or_else(|| {
+                        EngineError::Other(
+                            "call_callable: function wrapper resolves to no object".to_string(),
+                        )
+                    })?;
+                    (func_ptr, None, type_args, Some(func_ptr), None)
+                }
+                Object::Closure(closure) => (
+                    entry_ptr,
+                    None,
+                    closure.captured_type_args.to_vec(),
+                    Some(closure.function),
+                    None,
+                ),
+                Object::BoundMethod(bm) => {
+                    let receiver = bm.receiver;
+                    let class_type_args = receiver
+                        .as_object_ptr()
+                        .and_then(|ptr| match thread.vm.get_object(ptr) {
+                            Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    (
+                        bm.function,
+                        Some(receiver),
+                        class_type_args,
+                        Some(bm.function),
+                        None,
                     )
-                })?;
-                (func_ptr, None, type_args, func_ptr)
-            }
-            Object::Closure(closure) => (
-                entry_ptr,
-                None,
-                closure.captured_type_args.to_vec(),
-                closure.function,
-            ),
-            Object::BoundMethod(bm) => {
-                let receiver = bm.receiver;
-                let class_type_args = receiver
-                    .as_object_ptr()
-                    .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                (bm.function, Some(receiver), class_type_args, bm.function)
-            }
-            other => {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("call_callable: handle is not callable ({other:?})"),
-                });
-            }
-        };
+                }
+                Object::HostClosure(host) => {
+                    let throws_type = match &*host.throws_ty {
+                        baml_type::RealizedTy::Never { .. }
+                        | baml_type::RealizedTy::Void { .. } => None,
+                        ty => Some(RuntimeTy::from(ty.clone())),
+                    };
+                    let param_types = host
+                        .params
+                        .iter()
+                        .map(|param| RuntimeTy::from(param.ty.clone()))
+                        .collect();
+                    (
+                        entry_ptr,
+                        None,
+                        Vec::new(),
+                        None,
+                        Some((
+                            RuntimeTy::from((*host.ret_ty).clone()),
+                            throws_type,
+                            host.arity,
+                            param_types,
+                            Vec::new(),
+                        )),
+                    )
+                }
+                other => {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("call_callable: handle is not callable ({other:?})"),
+                    });
+                }
+            };
 
         // Read the inner function's metadata. `param_types` carries declared
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
         let (mut return_type, throws_type, arity, param_types, generic_param_names) =
-            match thread.vm.get_object(func_ptr) {
-                Object::Function(func) => {
-                    // A value referencing an unresolved native builtin can't be an
-                    // entry point (parity with `call_function_bound_args`).
-                    if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
-                        return Err(EngineError::NotInvokableAsEntry {
-                            name: func.name.clone(),
-                            kind: format!("{:?}", func.kind),
+            if let Some(signature) = host_signature {
+                signature
+            } else {
+                match thread
+                    .vm
+                    .get_object(func_ptr.expect("non-host callable must resolve to a function"))
+                {
+                    Object::Function(func) => {
+                        // A value referencing an unresolved native builtin can't be an
+                        // entry point (parity with `call_function_bound_args`).
+                        if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                            return Err(EngineError::NotInvokableAsEntry {
+                                name: func.name.clone(),
+                                kind: format!("{:?}", func.kind),
+                            });
+                        }
+                        // De Bruijn-ordered generic-param names (enclosing class
+                        // params first, then the function's own), bounds stripped to
+                        // the bare TypeVar — used to lower the positional `seed_type_args`
+                        // onto the named `type_args` channel below.
+                        let generic_param_names: Vec<String> = func
+                            .display_type_params
+                            .iter()
+                            .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                            .collect();
+                        (
+                            func.return_type.clone(),
+                            func.throws_type.clone(),
+                            func.arity,
+                            func.param_types.clone(),
+                            generic_param_names,
+                        )
+                    }
+                    _ => {
+                        return Err(EngineError::TypeMismatch {
+                            message: "call_callable: value does not wrap a function".to_string(),
                         });
                     }
-                    // De Bruijn-ordered generic-param names (enclosing class
-                    // params first, then the function's own), bounds stripped to
-                    // the bare TypeVar — used to lower the positional `seed_type_args`
-                    // onto the named `type_args` channel below.
-                    let generic_param_names: Vec<String> = func
-                        .display_type_params
-                        .iter()
-                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
-                        .collect();
-                    (
-                        func.return_type.clone(),
-                        func.throws_type.clone(),
-                        func.arity,
-                        func.param_types.clone(),
-                        generic_param_names,
-                    )
-                }
-                _ => {
-                    return Err(EngineError::TypeMismatch {
-                        message: "call_callable: value does not wrap a function".to_string(),
-                    });
                 }
             };
 
