@@ -44,12 +44,29 @@ const BUILD_AUTHKIT_DOMAIN: Option<&str> = option_env!("BAML_WORKOS_AUTHKIT_DOMA
 const BUILD_CLIENT_ID: Option<&str> = option_env!("BAML_WORKOS_CLIENT_ID");
 const DEFAULT_API_DOMAIN: &str = "https://api.workos.com";
 
-/// Hard cap on how long `baml auth login` waits during interactive steps.
+/// Hard cap on how long the device-authorization poll loop waits for the
+/// user to confirm. (Terminal prompts have no deadline: they block on stdin,
+/// error on EOF, and Ctrl-C is the interactive escape.)
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Per-request cap so a black-holed network fails a login step instead of
+/// stalling it indefinitely.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const JWT_BEARER_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+
+/// A blocking HTTP client with [`REQUEST_TIMEOUT`] applied.
+fn http_client() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        // Falls back to default settings only if the builder ever fails,
+        // which requires a broken TLS backend; a login attempt should still
+        // proceed rather than abort here.
+        .unwrap_or_default()
+}
 
 fn env_or(var: &str, default: &str) -> String {
     std::env::var(var)
@@ -67,16 +84,22 @@ fn env_or(var: &str, default: &str) -> String {
 ///
 /// Returns:
 /// - The runtime value when set and non-blank, otherwise the build-time
-///   value.
+///   value when non-blank. Blank build-time values are treated as unset:
+///   CI expands a missing repo variable to an empty string, which
+///   `option_env!` would otherwise capture as `Some("")`.
 ///
 /// Errors:
-/// - When neither source provides a value, with a message naming the
-///   variable to set.
+/// - When neither source provides a non-blank value, with a message naming
+///   the variable to set.
 fn required(var: &str, build_default: Option<&str>) -> Result<String> {
     std::env::var(var)
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .or_else(|| build_default.map(str::to_string))
+        .or_else(|| {
+            build_default
+                .filter(|v| !v.trim().is_empty())
+                .map(str::to_string)
+        })
         .with_context(|| {
             format!(
                 "This build has no WorkOS environment configured. Set {var} \
@@ -549,7 +572,7 @@ fn discover_endpoints() -> Result<Endpoints> {
         claim_endpoint: format!("{domain}/agent/identity/claim"),
         token_endpoint: format!("{domain}/oauth2/token"),
     };
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let resp = match client
         .get(format!("{domain}/.well-known/oauth-authorization-server"))
         .send()
@@ -715,7 +738,7 @@ fn poll_token_endpoint(
     form: &[(&str, &str)],
     server_interval: Option<u64>,
 ) -> Result<TokenResponse> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let deadline = std::time::Instant::now() + LOGIN_TIMEOUT;
     let mut interval = server_interval
         .map(Duration::from_secs)
@@ -789,7 +812,7 @@ struct TokenUser {
 ///   included in the error so callers can match server error codes), or a
 ///   body that fails to deserialize as `T`.
 fn post_form<T: serde::de::DeserializeOwned>(url: &str, form: &[(&str, &str)]) -> Result<T> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let resp = client
         .post(url)
         .header("content-type", "application/x-www-form-urlencoded")
@@ -821,7 +844,7 @@ fn post_json<T: serde::de::DeserializeOwned>(
     body: &serde_json::Value,
     bearer: Option<&str>,
 ) -> Result<T> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let mut req = client.post(url).json(body);
     if let Some(token) = bearer {
         req = req.bearer_auth(token);
