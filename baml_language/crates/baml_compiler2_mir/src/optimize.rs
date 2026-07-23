@@ -118,46 +118,48 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
 
 /// Rewrite all `BlockId` references in a terminator using old->new mapping.
 fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>]) {
-    let remap = |id: &mut BlockId| {
+    for_each_successor_mut(term, |id| {
         *id = map[id.0].expect("successor block must be reachable");
-    };
+    });
+}
 
+fn for_each_successor_mut(term: &mut Terminator, mut visit: impl FnMut(&mut BlockId)) {
     match term {
-        Terminator::Goto { target } => remap(target),
+        Terminator::Goto { target } => visit(target),
         Terminator::Branch {
             then_block,
             else_block,
             ..
         } => {
-            remap(then_block);
-            remap(else_block);
+            visit(then_block);
+            visit(else_block);
         }
         Terminator::Switch {
             arms, otherwise, ..
         } => {
             for (_, target) in arms {
-                remap(target);
+                visit(target);
             }
-            remap(otherwise);
+            visit(otherwise);
         }
         Terminator::Return => {}
         Terminator::Unreachable => {}
-        Terminator::Spawn { resume, .. } => remap(resume),
+        Terminator::Spawn { resume, .. } => visit(resume),
         Terminator::Call { target, unwind, .. }
         | Terminator::VirtualCall { target, unwind, .. }
         | Terminator::SysOp { target, unwind, .. }
         | Terminator::Await { target, unwind, .. }
         | Terminator::AwaitAny { target, unwind, .. } => {
-            remap(target);
+            visit(target);
             if let Some(u) = unwind {
-                remap(u);
+                visit(u);
             }
         }
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
+        Terminator::ThrowIfPanic { otherwise, .. } => visit(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
-            remap(eval_rhs);
-            remap(join);
+            visit(eval_rhs);
+            visit(join);
         }
     }
 }
@@ -193,50 +195,11 @@ fn rewrite_block_ids_in_terminator_with_map(
     term: &mut Terminator,
     map: &HashMap<BlockId, BlockId>,
 ) {
-    let remap = |id: &mut BlockId| {
+    for_each_successor_mut(term, |id| {
         if let Some(&new_id) = map.get(id) {
             *id = new_id;
         }
-    };
-
-    match term {
-        Terminator::Goto { target } => remap(target),
-        Terminator::Branch {
-            then_block,
-            else_block,
-            ..
-        } => {
-            remap(then_block);
-            remap(else_block);
-        }
-        Terminator::Switch {
-            arms, otherwise, ..
-        } => {
-            for (_, target) in arms {
-                remap(target);
-            }
-            remap(otherwise);
-        }
-        Terminator::Return => {}
-        Terminator::Unreachable => {}
-        Terminator::Spawn { resume, .. } => remap(resume),
-        Terminator::Call { target, unwind, .. }
-        | Terminator::VirtualCall { target, unwind, .. }
-        | Terminator::SysOp { target, unwind, .. }
-        | Terminator::Await { target, unwind, .. }
-        | Terminator::AwaitAny { target, unwind, .. } => {
-            remap(target);
-            if let Some(u) = unwind {
-                remap(u);
-            }
-        }
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
-        Terminator::ShortCircuit { eval_rhs, join, .. } => {
-            remap(eval_rhs);
-            remap(join);
-        }
-    }
+    });
 }
 
 /// Merge passthrough blocks: blocks with no statements and a single Goto terminator
