@@ -1,0 +1,331 @@
+class OpenAiToolMessage {
+  content: string?,
+  tool_calls: json[]?,
+}
+
+class OpenAiToolChoice {
+  message: OpenAiToolMessage,
+  finish_reason: string?,
+}
+
+class OpenAiToolUsage {
+  prompt_tokens: int,
+  completion_tokens: int,
+  prompt_tokens_details: json?,
+  completion_tokens_details: json?,
+}
+
+class OpenAiToolResponse {
+  id: string?,
+  model: string?,
+  choices: OpenAiToolChoice[],
+  usage: OpenAiToolUsage?,
+}
+
+class OpenAiConversation {
+  owner: OpenAi,
+  history: MessageHistory,
+  tools_json: json[],
+  wire_messages: json[],
+
+  implements Conversation {
+    function provider(self) -> Provider throws never { self.owner }
+    function messages(self) -> Messages throws never { self.history }
+  }
+}
+
+function openai_tool_schemas(tools: Tool[]) -> json[] throws never {
+  tools.map((tool: Tool) -> json {
+    {
+      "type": "function",
+      "function": {
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": tool.input_schema,
+        "strict": false,
+      },
+    }
+  })
+}
+
+implements ToolCallingProvider for OpenAi {
+  function begin<T>(self, task: Task<T>) -> Conversation throws never {
+    //# Start the native OpenAI conversation
+    let history = task.messages().to_history();
+    OpenAiConversation {
+      owner: self,
+      history: history,
+      tools_json: openai_tool_schemas(task.tools),
+      wire_messages: [{
+        "role": "user",
+        "content": baml.llm.prompt_to_text(task.prompt),
+      }],
+    }
+  }
+
+  function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
+      throws baml.errors.ToolError | baml.errors.UnknownError {
+    //# Resume the native OpenAI conversation
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
+    };
+    //# Build the request from the active tool roster
+    state.tools_json = openai_tool_schemas(tools);
+    let key = match (self.api_key) {
+      let value: string => value,
+      null => throw baml.errors.UnknownError {
+        data: null,
+        message: ["OpenAI tool calling requires api_key"],
+      },
+    };
+    let body: map<string, json> = {
+      "model": self.model,
+      "messages": state.wire_messages,
+      "tools": state.tools_json,
+      "tool_choice": "auto",
+      "parallel_tool_calls": true,
+      "reasoning_effort": "none",
+    };
+    log.info(baml.json.stringify({
+      "event": "llm.tools.request",
+      "provider": "openai",
+      "model": self.model,
+      "message_count": state.wire_messages.length(),
+      "tool_count": state.tools_json.length(),
+    }));
+    //# Call OpenAI with native tool schemas
+    let response = baml.http.send(baml.http.Request {
+      method: "POST",
+      url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
+      headers: {
+        "Authorization": "Bearer " + key,
+        "Content-Type": "application/json",
+      },
+      body: baml.json.stringify(body),
+    }) catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: ["openai tools send failed"] },
+    };
+    let text = response.text() catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: ["openai tools body failed"] },
+    };
+    log.info(baml.json.stringify({
+      "event": "llm.tools.response",
+      "provider": "openai",
+      "model": self.model,
+      "status_code": response.status_code,
+      "response_bytes": text.length(),
+    }));
+    //# Parse the provider response and usage
+    let wire: OpenAiToolResponse = baml.sap.parse<OpenAiToolResponse>(text) catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: ["openai tools parse failed"] },
+    };
+    let choice = match (wire.choices.at(0)) {
+      let value: OpenAiToolChoice => value,
+      null => throw baml.errors.UnknownError { data: text, message: ["openai tools returned no choice"] },
+    };
+    let message = choice.message;
+    let meta = Meta {
+      provider: self.name(),
+      model: wire.model ?? self.model,
+      request_id: wire.id,
+      finish_reason: choice.finish_reason,
+      usage: match (wire.usage) {
+        let value: OpenAiToolUsage => Usage {
+          input_tokens: value.prompt_tokens,
+          output_tokens: value.completion_tokens,
+          cached_input_tokens: baml.json.path_or<int>(value.prompt_tokens_details, ".cached_tokens", 0),
+          reasoning_tokens: baml.json.path_or<int>(value.completion_tokens_details, ".reasoning_tokens", 0),
+          cost_usd: null,
+        },
+        null => null,
+      },
+      attributes: {},
+      raw: text,
+    };
+    //# Return tool calls or the typed final value
+    match (message.tool_calls) {
+      let raw_calls: json[] => {
+        //## Preserve native tool calls in the conversation
+        state.wire_messages.push({ "role": "assistant", "tool_calls": raw_calls });
+        state.history.entries.push(ChatMessage {
+          message_role: MessageRole.Assistant,
+          content: [ProviderDataPart { provider: "openai", data: { "tool_calls": raw_calls } }],
+          metadata: null,
+        });
+        let calls = ToolCalls {
+          calls: raw_calls.map((raw: json) -> ToolCall {
+            let args_text = baml.json.path_or(raw, ".function.arguments", "{}");
+            ToolCall {
+              id: baml.json.path_or(raw, ".id", ""),
+              name: baml.json.path_or(raw, ".function.name", ""),
+              args: baml.json.parse(args_text) catch (e) { _ => null },
+            }
+          }),
+        };
+        ModelStep<T> { outcome: calls, meta: meta }
+      },
+      null => {
+        //## Parse the final assistant value
+        state.history.entries.push(ChatMessage.assistant(message.content ?? ""));
+        let value = baml.sap.parse<T>(message.content ?? "") catch (e) {
+          _ => throw baml.errors.UnknownError { data: e, message: ["openai agent final parse failed"] },
+        };
+        ModelStep<T> { outcome: value, meta: meta }
+      },
+    }
+  }
+
+  function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
+      throws baml.errors.ToolError {
+    //# Resume the conversation receiving tool results
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
+    };
+    //# Append every tool result to provider wire state
+    for (let result in results) {
+      state.wire_messages.push({
+        "role": "tool",
+        "tool_call_id": result.id,
+        "content": baml.json.stringify(result.output),
+      });
+      state.history.entries.push(ChatMessage {
+        message_role: MessageRole.Tool,
+        content: [ProviderDataPart {
+          provider: "openai",
+          data: { "tool_call_id": result.id, "output": result.output },
+        }],
+        metadata: null,
+      });
+    }
+    state
+  }
+}
+
+function message_role_name(role: MessageRole) -> string throws never {
+  match (role) {
+    MessageRole.System => "system",
+    MessageRole.User => "user",
+    MessageRole.Assistant => "assistant",
+    MessageRole.Tool => "tool",
+  }
+}
+
+function message_text(message: Message) -> string throws never {
+  message.parts().map((part: MessagePart) -> string { part.text() ?? "" }).join("")
+}
+
+function openai_message_provider_data(message: Message) -> json? throws never {
+  for (let part in message.parts()) {
+    match (part) {
+      let data: ProviderDataPart => {
+        if (data.provider == "openai") { return data.data; }
+      },
+      _ => null,
+    }
+  }
+  null
+}
+
+implements ConversationImportProvider for OpenAi {
+  function import_messages(self, messages: Messages) -> ConversationImport throws never {
+    let history = messages.to_history();
+    let wire: json[] = [];
+    for (let message in history.entries) {
+      let provider_data = openai_message_provider_data(message);
+      match (message.role()) {
+        MessageRole.Assistant => {
+          let tool_calls = baml.json.path_or<json[]?>(provider_data, ".tool_calls", null);
+          match (tool_calls) {
+            let calls: json[] => {
+              let frame: json = { "role": "assistant", "tool_calls": calls };
+              wire.push(frame);
+            },
+            null => {
+              let frame: json = { "role": "assistant", "content": message_text(message) };
+              wire.push(frame);
+            },
+          };
+        },
+        MessageRole.Tool => {
+          let call_id = baml.json.path_or<string?>(provider_data, ".tool_call_id", null);
+          match (call_id) {
+            let id: string => {
+              let frame: json = {
+                "role": "tool",
+                "tool_call_id": id,
+                "content": baml.json.stringify(baml.json.path_or(provider_data, ".output", null)),
+              };
+              wire.push(frame);
+            },
+            // A foreign/provider-neutral tool result has no valid OpenAI call
+            // ID. Preserve it as user-visible context instead of emitting an
+            // orphan `role: tool` frame that OpenAI must reject.
+            null => {
+              let frame: json = {
+                "role": "user",
+                "content": "Imported tool result: " + baml.json.stringify(provider_data),
+              };
+              wire.push(frame);
+            },
+          };
+        },
+        _ => {
+          let frame: json = {
+            "role": message_role_name(message.role()),
+            "content": message_text(message),
+          };
+          wire.push(frame);
+        },
+      }
+    }
+    ConversationImport {
+      conversation: OpenAiConversation {
+        owner: self,
+        history: history,
+        tools_json: [],
+        wire_messages: wire,
+      },
+      fidelity: ConversationFidelity.MessagesOnly,
+      warnings: ["message import; matching OpenAI tool-call frames were retained when available"],
+    }
+  }
+}
+
+implements ResumableToolCallingProvider for OpenAi {
+  function save_conversation(self, conversation: Conversation) -> ConversationToken
+      throws baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: OpenAiConversation => value,
+      _ => throw baml.errors.UnknownError { data: null, message: ["wrong OpenAI conversation"] },
+    };
+    ConversationToken {
+      provider: self.name(),
+      version: 1,
+      sealed: baml.json.stringify({
+        "messages": state.wire_messages,
+        "tools": state.tools_json,
+      }),
+    }
+  }
+
+  function restore_conversation(self, token: ConversationToken) -> Conversation
+      throws baml.errors.UnknownError {
+    if (token.provider != self.name() || token.version != 1) {
+      throw baml.errors.UnknownError {
+        data: token,
+        message: ["OpenAI conversation token has the wrong provider or version"],
+      };
+    }
+    let state = baml.json.parse(token.sealed) catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: ["invalid OpenAI conversation token"] },
+    };
+    OpenAiConversation {
+      owner: self,
+      history: MessageHistory.empty(),
+      tools_json: baml.json.path_or<json[]>(state, ".tools", []),
+      wire_messages: baml.json.path_or<json[]>(state, ".messages", []),
+    }
+  }
+}

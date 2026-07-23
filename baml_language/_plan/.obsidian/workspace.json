@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "2fba9570f781e1b7",
+    "type": "split",
+    "children": [
+      {
+        "id": "3c9706c5df51b927",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c1cf60264c354175",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "bepv2/README.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c859b6c11ffe9b5c",
+    "type": "split",
+    "children": [
+      {
+        "id": "b57d1c22c906fa69",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "789ab89db10c22ee",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "5168735a4d6f5924",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "854121894bc310bc",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "a5603b06e4407b09",
+    "type": "split",
+    "children": [
+      {
+        "id": "bbccdc69378476f1",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "514d36a9fd384b89",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "bepv2/README.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for README"
+            }
+          },
+          {
+            "id": "15c96fac36fa6944",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "bepv2/README.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from README"
+            }
+          },
+          {
+            "id": "1274da49adc0ab47",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "7cabbeca7b3420cd",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "00cd713a679c7649",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "bepv2/README.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "c1cf60264c354175",
+  "lastOpenFiles": [
+    "bepv2/_internal/runner-provider-responsibilities.md",
+    "bepv2/_internal/driver-functions-vs-interface-values.md",
+    "bepv2/pages/guide-external-harnesses.md",
+    "bepv2/pages/guide-production.md",
+    "bepv2/pages/guide-observability-and-testing.md",
+    "bepv2/pages/guide-media-and-realtime.md",
+    "bepv2/pages/guide-conversations-and-state.md",
+    "bepv2/pages/guide-routing-and-reliability.md",
+    "bepv2/pages/guide-tools-and-agents.md",
+    "bepv2/pages/guide-tasks-and-providers.md",
+    "bepv2/pages/guide-external-harnesses/06-implement-a-harness-adapter.md",
+    "bepv2/pages/guide-external-harnesses/05-save-and-resume-harness.md",
+    "bepv2/pages/guide-external-harnesses/04-steer-and-interrupt.md",
+    "bepv2/pages/guide-external-harnesses/03-permissions-and-sandboxes.md",
+    "bepv2/pages/guide-external-harnesses/02-stream-harness-events.md",
+    "bepv2/pages/guide-external-harnesses/01-call-a-coding-harness.md",
+    "bepv2/pages/guide-production/05-batching.md",
+    "bepv2/pages/guide-production/04-capability-negotiation.md",
+    "bepv2/pages/guide-production/03-deployment-and-transports.md",
+    "bepv2/pages/guide-external-harnesses",
+    "bepv2/pages/guide-production/02-caching.md",
+    "bepv2/pages/guide-production/01-background-jobs.md",
+    "bepv2/pages/guide-production",
+    "bepv2/pages/guide-observability-and-testing/06-fakes-and-failure-injection.md",
+    "bepv2/pages/guide-observability-and-testing/05-evaluate-provider-quality.md",
+    "bepv2/pages/guide-observability-and-testing/03-usage-and-cost.md",
+    "bepv2/pages/guide-observability-and-testing/04-test-one-task-across-providers.md",
+    "bepv2/pages/guide-observability-and-testing/02-observe-an-agent.md",
+    "bepv2/pages/guide-observability-and-testing",
+    "bepv2/pages/guide-media-and-realtime",
+    "bepv2/pages/guide-conversations-and-state",
+    "bepv2/pages/guide-routing-and-reliability",
+    "bepv2/pages/guide-tools-and-agents",
+    "bepv2/pages/guide-tasks-and-providers",
+    "bepv2/pages/guide-overview",
+    "bepv2/_internal"
+  ]
+}
