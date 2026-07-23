@@ -6681,6 +6681,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Determine param types: annotation takes precedence, else use expected
                 let mut param_tys: Vec<FunctionParamTy> = Vec::new();
+                let mut parameter_mismatch = false;
                 for (i, param) in func_def.params.iter().enumerate() {
                     let expected_param_ty = expected_params
                         .get(i)
@@ -6695,14 +6696,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 self.lower_lambda_type_expr(te, &all_generic_params, te.span);
                             // Check annotation is compatible with expected
                             if !self.is_subtype(&expected_param_ty, &annotated) {
-                                self.context.report(
-                                    TirTypeError::TypeMismatch {
-                                        expected: expected_param_ty.clone(),
-                                        got: annotated.clone(),
-                                    },
-                                    expr_id,
-                                    Vec::new(),
-                                );
+                                parameter_mismatch = true;
                             }
                             annotated
                         }
@@ -6722,7 +6716,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| self.lower_lambda_type_expr(te, &all_generic_params, te.span));
-                let effective_ret = return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
+                let effective_ret = return_annotation
+                    .as_ref()
+                    .or_else(|| (!parameter_mismatch).then_some(expected_ret.as_ref()));
                 let (throws_ty, throws_span, warn_extraneous_throws) = self
                     .choose_lambda_throws_surface(
                         func_def,
@@ -6734,31 +6730,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
-                    Some(effective_ret),
+                    effective_ret,
                     &throws_ty,
                     throws_span,
                     warn_extraneous_throws,
                 );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
-                    if matches!(
-                        expected_ret.as_ref(),
-                        Ty::Unknown { .. } | Ty::TypeVar(_, _)
-                    ) {
+                    if parameter_mismatch
+                        || matches!(
+                            expected_ret.as_ref(),
+                            Ty::Unknown { .. } | Ty::TypeVar(_, _)
+                        )
+                    {
                         ret_ty.clone()
                     } else {
                         expected_ret.as_ref().clone()
                     }
                 });
+                let surface_throws_ty = if parameter_mismatch && func_def.throws.is_none() {
+                    lambda_effective_throws.clone()
+                } else {
+                    throws_ty.clone()
+                };
 
                 let result = Ty::Function {
                     params: param_tys,
                     ret: Box::new(surface_ret_ty),
-                    throws: Box::new(throws_ty),
+                    throws: Box::new(surface_throws_ty.clone()),
                     attr: TyAttr::default(),
                 };
                 self.lambda_effective_throws
                     .insert(expr_id, lambda_effective_throws);
-                if !crate::generics::contains_typevar(expected_fn_ty)
+                if parameter_mismatch {
+                    // Callback effect generics are inferred after lambda checking.
+                    // Resolve them for this diagnostic while keeping outer generics rigid.
+                    let mut diagnostic_bindings = FxHashMap::default();
+                    crate::generics::infer_bindings(
+                        expected_throws,
+                        &surface_throws_ty,
+                        &mut diagnostic_bindings,
+                    );
+                    diagnostic_bindings
+                        .retain(|name, _| !self.generic_params.iter().any(|param| param == name));
+                    let diagnostic_expected =
+                        crate::generics::substitute_ty(expected_fn_ty, &diagnostic_bindings);
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: diagnostic_expected,
+                            got: result.clone(),
+                        },
+                        expr_id,
+                        Vec::new(),
+                    );
+                } else if !crate::generics::contains_typevar(expected_fn_ty)
                     && !self.is_subtype(&result, expected_fn_ty)
                 {
                     self.context.report(
@@ -6770,12 +6794,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 }
-                self.record_function_coercion_if_needed(expr_id, &result, expected_fn_ty);
-                self.record_expr_type(expr_id, result.clone());
+                let expression_ty = if parameter_mismatch {
+                    Ty::Error {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    self.record_function_coercion_if_needed(expr_id, &result, expected_fn_ty);
+                    result.clone()
+                };
+                self.record_expr_type(expr_id, expression_ty.clone());
                 if let Some(fsi) = lambda_fsi {
                     self.nested_lambda_types.insert(fsi, result.clone());
                 }
-                result
+                expression_ty
             }
             _ => {
                 // Non-function expected type: fall through to infer-then-check

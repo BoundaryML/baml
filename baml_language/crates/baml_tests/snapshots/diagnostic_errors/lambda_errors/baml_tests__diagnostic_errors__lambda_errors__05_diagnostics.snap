@@ -32,22 +32,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0005
 ────╯
 
-  [type] error: type mismatch: expected int, got string
+  [type] error: type mismatch: expected (int) -> int throws never, got (x: string) -> string throws never
     ╭─[ lambda_errors.baml:22:15 ]
     │
  22 │     items.map((x: string) -> { x })
     │               ──────────┬─────────  
-    │                         ╰─────────── type mismatch: expected int, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] error: type mismatch: expected int, got string
-    ╭─[ lambda_errors.baml:22:32 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                                ┬  
-    │                                ╰── type mismatch: expected int, got string
+    │                         ╰─────────── type mismatch: expected (int) -> int throws never, got (x: string) -> string throws never
     │ 
     │ Note: Error code: E0001
 ────╯
