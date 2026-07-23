@@ -13,7 +13,8 @@
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-aarch64", "runner": "macos-14" },
-        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true },
+        "csharp": { "rid": "osx-arm64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-14" }
       }
     },
     {
@@ -27,7 +28,8 @@
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-x86_64", "runner": "macos-15-intel" },
-        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" }
+        "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" },
+        "csharp": { "rid": "osx-x64", "native_asset": "libbridge_cffi.dylib", "consumer_runner": "macos-15-intel" }
       }
     },
     {
@@ -41,7 +43,8 @@
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64", "runner": "ubuntu-24.04-arm" },
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true },
+        "csharp": { "rid": "linux-arm64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04-arm" }
       }
     },
     {
@@ -55,7 +58,8 @@
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64-musl", "runner": "ubuntu-latest", "experimental": true },
-        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
+        "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true },
+        "csharp": { "rid": "linux-musl-arm64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-24.04-arm" }
       }
     },
     {
@@ -69,7 +73,8 @@
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64", "runner": "ubuntu-latest" },
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true }
+        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true },
+        "csharp": { "rid": "linux-x64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-latest" }
       }
     },
     {
@@ -83,7 +88,8 @@
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64-musl", "runner": "ubuntu-latest", "experimental": true },
-        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
+        "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true },
+        "csharp": { "rid": "linux-musl-x64", "native_asset": "libbridge_cffi.so", "consumer_runner": "ubuntu-latest" }
       }
     },
     {
@@ -97,7 +103,8 @@
         "python": { "runner": "windows-latest" },
         "nodejs": {},
         "java": { "platform": "windows-x86_64", "runner": "windows-latest" },
-        "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true }
+        "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true },
+        "csharp": { "rid": "win-x64", "native_asset": "bridge_cffi.dll", "consumer_runner": "windows-latest" }
       }
     },
     {
@@ -111,7 +118,8 @@
         "python": { "runner": "windows-11-arm", "architecture": "arm64" },
         "nodejs": {},
         "java": { "platform": "windows-aarch64", "runner": "windows-11-arm", "experimental": true },
-        "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true, "experimental": true }
+        "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true, "experimental": true },
+        "csharp": { "rid": "win-arm64", "native_asset": "bridge_cffi.dll", "consumer_runner": "windows-11-arm" }
       }
     }
   ]

@@ -191,6 +191,8 @@ jobs:
       - name: Rename and checksum artifact
         id: artifact
         working-directory: baml_language
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
         run: |
           set -euo pipefail
           target="${{ matrix._.target }}"
@@ -218,6 +220,18 @@ jobs:
               shasum -a 256 "${asset}"
             fi
           ) > "${outdir}/${asset}.sha256"
+
+          # Provenance identity consumed by the C# product-slice verifier: it
+          # re-derives every field and refuses to package a cdylib whose
+          # identity doesn't match the run that built it.
+          {
+            echo "source_sha=${SOURCE_SHA}"
+            echo "workflow_run_id=${{ github.run_id }}"
+            echo "workflow_run_attempt=${{ github.run_attempt }}"
+            echo "release_version=$(jq -r .canonical_version ../release-plan.json)"
+            echo "target=${target}"
+            echo "asset=${asset}"
+          } > "${outdir}/artifact-identity.txt"
 
           echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
@@ -267,4 +281,5 @@ jobs:
           path: |
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
+            baml_language/${{ steps.artifact.outputs.dir }}/artifact-identity.txt
           if-no-files-found: error
