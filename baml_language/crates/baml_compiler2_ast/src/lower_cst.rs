@@ -243,6 +243,21 @@ fn check_unknown_type(
     }
 }
 
+fn lower_return_type(
+    type_expr: &ast::TypeExpr,
+    callable_name: &Name,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> TypeExpr {
+    let mut expr = lower_type_expr::lower_type_expr_node(type_expr, diags);
+    let span = type_expr.syntax().span_range();
+    let context = format!("return type of `{callable_name}`");
+    check_unknown_type(&expr, context.clone(), span, diags);
+    // Bare void is allowed, but wrapped void is not.
+    lower_type_expr::check_void_type(&expr, context, span, true, diags);
+    lower_type_expr::check_wildcard_type(&mut expr, "a return type", span, diags);
+    expr.with_span(span)
+}
+
 // ── Per-item lowering ───────────────────────────────────────────
 
 fn lower_function(
@@ -297,21 +312,9 @@ fn lower_function(
         })
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
-    let return_type = func.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let te_span = te.syntax().span_range();
-        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
-        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
-        expr.with_span(te_span)
-    });
+    let return_type = func
+        .return_type()
+        .map(|te| lower_return_type(&te, &name, diags));
 
     let throws = func
         .throws_clause()
@@ -1555,20 +1558,9 @@ fn lower_method_sig(
         .map(|params| (params, FunctionDefaults::empty()))
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
-    let return_type = sig.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let te_span = te.syntax().span_range();
-        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
-        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
-        expr.with_span(te_span)
-    });
+    let return_type = sig
+        .return_type()
+        .map(|te| lower_return_type(&te, &name, diags));
 
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
         let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
