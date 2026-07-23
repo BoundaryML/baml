@@ -5,7 +5,8 @@ use bex_vm_types::{HeapPtr, Object, types::Value};
 use num_bigint::BigInt;
 
 use super::{
-    ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, value_type_name,
+    ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, forward_ptr,
+    forward_values, value_type_name,
 };
 use crate::{
     BexVm,
@@ -51,31 +52,14 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
 
 // ── GC bookkeeping helpers ────────────────────────────────────────────────────
 //
-// All callback-driven continuations capture an `f_ptr` (the callable) plus
-// some Values they're operating on. These helpers collect the heap roots and
-// apply forwarding without each continuation re-implementing the same loops.
+// Callback-driven continuations capture Values they're operating on; this
+// helper collects their heap roots without duplicating the loop.
 
 fn collect_value_roots(values: &[Value], roots: &mut Vec<HeapPtr>) {
     for v in values {
         if let Some(p) = v.as_object_ptr() {
             roots.push(p);
         }
-    }
-}
-
-fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    for v in values {
-        if let Some(ptr) = v.as_object_ptr() {
-            if let Some(&new) = forwarding.get(&ptr) {
-                *v = Value::object(new);
-            }
-        }
-    }
-}
-
-fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    if let Some(&new) = forwarding.get(ptr) {
-        *ptr = new;
     }
 }
 

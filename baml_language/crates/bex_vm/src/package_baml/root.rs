@@ -13,7 +13,7 @@ use super::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee, value_type_name,
+    forward_ptr, forward_values, make_compare_callee, make_to_string_callee, value_type_name,
 };
 use crate::{
     BexVm, VmPanic,
@@ -406,15 +406,9 @@ impl Continuation for ToStringWalkContinuation {
     }
 
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(ptr) = self.root.as_object_ptr() {
-            if let Some(&new_ptr) = forwarding.get(&ptr) {
-                self.root = Value::object(new_ptr);
-            }
-        }
+        forward_values(std::slice::from_mut(&mut self.root), forwarding);
         for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
+            forward_ptr(ptr, forwarding);
         }
     }
 }

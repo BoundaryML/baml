@@ -87,6 +87,22 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     "unknown".to_string()
 }
 
+fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    for v in values {
+        if let Some(ptr) = v.as_object_ptr() {
+            if let Some(&new) = forwarding.get(&ptr) {
+                *v = Value::object(new);
+            }
+        }
+    }
+}
+
+fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    if let Some(&new) = forwarding.get(ptr) {
+        *ptr = new;
+    }
+}
+
 /// Result returned by native functions. Non-yielding functions return `Done` or
 /// `Error`; yielding functions (like `array.map`) may return `YieldToCall` to
 /// invoke a bytecode callback via the CPS trampoline.

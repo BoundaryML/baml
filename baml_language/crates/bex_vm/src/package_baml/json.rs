@@ -71,8 +71,8 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl,
-    make_to_json_override_callee, to_json_override_fn_name,
+    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, forward_ptr,
+    forward_values, make_to_json_override_callee, to_json_override_fn_name,
 };
 use crate::{
     BexVm,
@@ -394,15 +394,9 @@ impl Continuation for ToJsonWalkContinuation {
     }
 
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(ptr) = self.root.as_object_ptr()
-            && let Some(&new_ptr) = forwarding.get(&ptr)
-        {
-            self.root = Value::object(new_ptr);
-        }
+        forward_values(std::slice::from_mut(&mut self.root), forwarding);
         for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
+            forward_ptr(ptr, forwarding);
         }
     }
 }
