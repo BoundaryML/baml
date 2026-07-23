@@ -1473,26 +1473,10 @@ fn lower_associated_type_def(
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_unknown_type(
-            &expr,
-            format!("bound of associated type `{name}`"),
-            span,
-            diags,
-        );
-        expr.with_span(span)
+        lower_associated_type_expr(&te, format!("bound of associated type `{name}`"), diags)
     });
     let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_unknown_type(
-            &expr,
-            format!("default of associated type `{name}`"),
-            span,
-            diags,
-        );
-        expr.with_span(span)
+        lower_associated_type_expr(&te, format!("default of associated type `{name}`"), diags)
     });
     Some(AssociatedTypeDef {
         name,
@@ -1516,15 +1500,7 @@ fn lower_associated_type_binding_def(
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
-        let span = te.syntax().span_range();
-        check_unknown_type(
-            &expr,
-            format!("binding of associated type `{name}`"),
-            span,
-            diags,
-        );
-        expr.with_span(span)
+        lower_associated_type_expr(&te, format!("binding of associated type `{name}`"), diags)
     });
     Some(AssociatedTypeBindingDef {
         name,
@@ -1532,6 +1508,17 @@ fn lower_associated_type_binding_def(
         span: decl.syntax().span_range(),
         name_span: name_token.text_range(),
     })
+}
+
+fn lower_associated_type_expr(
+    type_expr: &ast::TypeExpr,
+    context: String,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> TypeExpr {
+    let expr = lower_type_expr::lower_type_expr_node(type_expr, diags);
+    let span = type_expr.syntax().span_range();
+    check_unknown_type(&expr, context, span, diags);
+    expr.with_span(span)
 }
 
 fn lower_method_sig(
