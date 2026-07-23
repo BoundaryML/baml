@@ -19,95 +19,6 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::Name;
 use smallvec::SmallVec;
 
-fn guard_template_matches(
-    template: &baml_type::TyTemplate,
-    frame_type_args: &[baml_type::RealizedTy],
-    actual: &baml_type::RealizedTy,
-) -> bool {
-    use baml_type::{RealizedTy, TyTemplate};
-
-    // A fully-realized template carries no frame refs or holes: compare it to
-    // the actual arg by exact structural equality (the invariant-position rule
-    // for reified type args). This is the flattened successor to the old
-    // `Concrete(expected) => expected == actual` arm.
-    if let Ok(realized) = <&RealizedTy>::try_from(template) {
-        return realized == actual;
-    }
-
-    match template {
-        TyTemplate::Wildcard => true,
-        #[expect(deprecated)]
-        TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(RealizedTy::BuiltinUnknown { .. }) | None => true,
-            // The context-free subtype fork lives on `RuntimeTy`; upcast only to
-            // consult it.
-            Some(expected) => actual
-                .as_runtime_ty()
-                .is_subtype_of(expected.as_runtime_ty()),
-        },
-        TyTemplate::TypeArgRef(n) => frame_type_args.get(*n as usize).map_or_else(
-            || RealizedTy::unknown() == *actual,
-            |expected| expected == actual,
-        ),
-        TyTemplate::List(inner, _) => {
-            matches!(actual, RealizedTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
-        }
-        TyTemplate::Map { key, value, .. } => {
-            matches!(actual, RealizedTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
-        }
-        TyTemplate::Class(name, args, _) => {
-            matches!(actual, RealizedTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
-        }
-        TyTemplate::Interface(name, args, assoc, _) => {
-            matches!(actual, RealizedTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
-            && args.len() == actual_args.len()
-            && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
-            && assoc.iter().all(|(name, template)| {
-                actual_assoc
-                    .iter()
-                    .find(|(actual_name, _)| actual_name == name)
-                    .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
-            }))
-        }
-        TyTemplate::Union(parts, _) => match actual {
-            RealizedTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
-                parts
-                    .iter()
-                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
-            }),
-            _ => parts
-                .iter()
-                .any(|part| guard_template_matches(part, frame_type_args, actual)),
-        },
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            matches!(actual, RealizedTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
-                if params.len() == actual_params.len()
-                && params.iter().zip(actual_params).all(|(param, actual_param)| {
-                    param.mode == actual_param.mode
-                        && guard_template_matches(&param.ty, frame_type_args, &actual_param.ty)
-                })
-                && guard_template_matches(ret, frame_type_args, actual_ret)
-                && guard_template_matches(throws, frame_type_args, actual_throws))
-        }
-        TyTemplate::Future(value, error, _) => {
-            matches!(actual, RealizedTy::Future(actual_value, actual_error, _)
-                if guard_template_matches(value, frame_type_args, actual_value)
-                && guard_template_matches(error, frame_type_args, actual_error))
-        }
-        // A symbolic projection whose witness type was not resolved at compile
-        // time — never a match: a runtime value's concrete type carries no
-        // unresolved projection for it to equal.
-        TyTemplate::AssociatedTypeProjection { .. } => false,
-        // Realized leaves are handled by the fast path above.
-        _ => false,
-    }
-}
-
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
 /// vec the VM frame consumes. Each `(name, ty)` is placed at the index of the
 /// matching name in `param_names` (the callee's De Bruijn-ordered generic
@@ -185,7 +96,6 @@ use crate::{
     errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{NativeCallResult, NativeFunction},
-    type_context::RuntimeTypeContext,
     types::ObjectTrait,
 };
 
@@ -355,12 +265,12 @@ impl Frame {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
 
-    use baml_type::{Name, RealizedTy, RuntimeTy, TyAttr, TyTemplate, TypeName};
+    use baml_type::{RuntimeTy, TyAttr};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
@@ -392,7 +302,7 @@ mod tests {
         }
     }
 
-    fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
+    pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
         let heap = BexHeap::new(compile_time_objects);
         BexVm {
             frames: Vec::new(),
@@ -434,6 +344,8 @@ mod tests {
         Object::Function(Box::new(Function {
             name: "test_native".to_string(),
             source_file: String::new(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -562,99 +474,6 @@ mod tests {
         assert!(
             !forwarding.contains_key(&trampoline),
             "unrooted trampoline function must not be forwarded after return"
-        );
-    }
-
-    // ── B-634: reified type-arg comparison in generic class match arms ──────
-    //
-    // A generic `match` arm `let s: Opt<T>` lowers its runtime type-test to a
-    // template whose frame type-arg is checked against the scrutinee instance's
-    // `class_type_args`. When inference pins `T` to a supertype union of the
-    // value's actual arg (a `default: T` arg subtypes, so `T` reifies to the
-    // un-subsumed join `Shape | Sq`), an EXACT (`==`) comparison wrongly misses.
-    // The fix lowers the arm through the dispatch-guard template so the frame
-    // arg becomes `TypeArgRefOrWildcard` (subtype-or-wildcard), matching the
-    // interface class-dispatch guard path. These tests lock the directional
-    // semantics of `guard_template_matches` — the property that is awkward to
-    // observe from surface BAML because static typing + covariance guarantee a
-    // well-typed scrutinee's runtime arg is always `<:` the frame `T`.
-    #[test]
-    fn guard_template_type_arg_ref_or_wildcard_honors_subtyping() {
-        use super::guard_template_matches;
-
-        let shape = RealizedTy::class("Shape");
-        let sq = RealizedTy::class("Sq");
-        // The reified frame `T` from the B-634 repro: the un-subsumed join.
-        let widened_t = RealizedTy::union([shape.clone(), sq.clone()]);
-
-        // Under-match fix: the value's actual arg (`Shape`) is a member of the
-        // widened frame `T` (`Shape | Sq`), so the subtype-or-wildcard template
-        // now matches. This is the exact B-634 scenario (was `false`).
-        #[expect(deprecated)]
-        let subtype_template = TyTemplate::TypeArgRefOrWildcard(0);
-        assert!(
-            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &shape),
-            "Shape must match a Shape|Sq frame T under subtype-or-wildcard"
-        );
-
-        // The exact `TypeArgRef` template (kept exact on purpose — this is why
-        // the fix is at the MIR layer, swapping which template the arm emits,
-        // rather than broadening every `TypeArgRef` comparison in the VM).
-        let exact_template = TyTemplate::TypeArgRef(0);
-        assert!(
-            !guard_template_matches(&exact_template, std::slice::from_ref(&widened_t), &shape),
-            "exact TypeArgRef must still reject Shape != Shape|Sq"
-        );
-
-        // Directionality / soundness: a strictly WIDER runtime arg must NOT
-        // match a narrower frame `T`. Here `T` is pinned to `Sq` and the value
-        // carries the wider `Shape | Sq`; `(Shape|Sq) <: Sq` is false, so the
-        // arm is skipped (falls to the default). The fix does not over-match.
-        assert!(
-            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &widened_t),
-            "a wider runtime arg (Shape|Sq) must not match a narrower frame T (Sq)"
-        );
-        // Same directionality with two unrelated classes.
-        assert!(
-            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &shape),
-            "an unrelated runtime arg must not match the frame T"
-        );
-
-        // A proper subtype (union member) matches (covariant "belongs to").
-        assert!(
-            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &sq),
-            "Sq must match a Shape|Sq frame T under subtype-or-wildcard"
-        );
-
-        // An unconcretized (all-`unknown`) frame slot matches any instance.
-        assert!(
-            guard_template_matches(&subtype_template, &[RealizedTy::unknown()], &shape),
-            "an unknown frame slot must match any runtime arg"
-        );
-    }
-
-    #[test]
-    fn guard_template_concrete_type_args_still_discriminate() {
-        use super::guard_template_matches;
-
-        // Concrete parametric arms (`Foo<int>` vs `Foo<string>`) take the
-        // concrete path (`contains_typevar == false`) and must keep exact
-        // discrimination — unaffected by the B-634 subtype fix.
-        let foo = TypeName::local(Name::new("Foo"));
-        let foo_int_template = TyTemplate::class(
-            foo.clone(),
-            vec![TyTemplate::from(baml_type::RealizedTy::int())],
-        );
-        let foo_int_value = RealizedTy::class_with_args(foo.clone(), vec![RealizedTy::int()]);
-        let foo_string_value = RealizedTy::class_with_args(foo, vec![RealizedTy::string()]);
-
-        assert!(
-            guard_template_matches(&foo_int_template, &[], &foo_int_value),
-            "Foo<int> template must match a Foo<int> value"
-        );
-        assert!(
-            !guard_template_matches(&foo_int_template, &[], &foo_string_value),
-            "Foo<int> template must not match a Foo<string> value"
         );
     }
 }
@@ -1226,6 +1045,67 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
     })
 }
 
+/// A callable value's reconstructed signature in the shape the `reflect`
+/// natives consume (BEP-062): parameters in declaration order (a bound
+/// method's receiver dropped), the return type, and the throws type.
+/// `throws: None` means "cannot throw"; its user-visible static spelling is
+/// `never` (deliberately not the `void` convention `function_object_ty`
+/// uses — see `FIXME(function-type-matching)` in emit).
+pub(crate) struct CallableSignature {
+    /// The declaration's fully qualified name; `None` for host closures and
+    /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
+    pub(crate) name: Option<String>,
+    pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
+    pub(crate) ret: baml_type::RealizedTy,
+    pub(crate) throws: Option<baml_type::RealizedTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub(crate) docstring: Option<String>,
+}
+
+/// Reconstruct a [`CallableSignature`] from a raw `Function` object.
+/// `drop_receiver` skips the leading `self` parameter for bound methods.
+///
+/// A stored signature slot that does not realize — a generic function's
+/// unresolved `TypeVar`, a symbolic projection — erases to `unknown` for that
+/// slot rather than dropping the whole callable: `reflect.signature` /
+/// `reflect.call_any` prefer the coarse truth over refusing generic
+/// callables. (This is deliberately looser than [`function_object_ty`], whose
+/// `is`-matching consumers must never affirm a type they cannot prove.)
+fn function_callable_signature(
+    f: &bex_vm_types::types::Function,
+    drop_receiver: bool,
+) -> CallableSignature {
+    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy};
+    let realized_or_unknown =
+        |ty: &baml_type::RuntimeTy| realized_arg(ty).unwrap_or_else(RealizedTy::unknown);
+    let params = f
+        .param_types
+        .iter()
+        .enumerate()
+        .skip(usize::from(drop_receiver))
+        .map(|(i, ty)| RealizedFunctionParamTy {
+            name: f
+                .param_names
+                .get(i)
+                .filter(|n| !n.is_empty())
+                .map(|n| Name::new(n.as_str())),
+            ty: realized_or_unknown(ty),
+            mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
+                FunctionParamMode::Optional
+            } else {
+                FunctionParamMode::Required
+            },
+        })
+        .collect();
+    CallableSignature {
+        name: f.declared_name.clone(),
+        params,
+        ret: realized_or_unknown(&f.return_type),
+        throws: f.throws_type.as_ref().map(realized_or_unknown),
+        docstring: f.docstring.clone(),
+    }
+}
+
 /// Get the type tag for any runtime value.
 ///
 /// This is a free function to avoid borrow checker issues when called
@@ -1680,9 +1560,8 @@ impl BexVm {
         template: &baml_type::TyTemplate,
         class_type_args: &[baml_type::RealizedTy],
     ) -> baml_type::RealizedTy {
-        let ctx = RuntimeTypeContext::new(self);
         template
-            .substitute(class_type_args, &ctx)
+            .substitute(class_type_args, self)
             .unwrap_or_else(|e| {
                 unreachable!(
                     "class field type template did not realize against realized class args: {e}"
@@ -1904,6 +1783,122 @@ impl BexVm {
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
+    }
+
+    fn value_matches_type_constant(
+        &self,
+        frame_idx: usize,
+        value: Value,
+        raw_const: &ConstValue,
+        resolved_const: Value,
+    ) -> bool {
+        let frame_type_args = match &self.frames[frame_idx] {
+            Frame::Bytecode(frame) => frame.type_args.as_slice(),
+            Frame::Native(_) => &[],
+        };
+        match raw_const {
+            ConstValue::Type(template) => {
+                crate::type_match::value_matches_template(self, value, template, frame_type_args)
+            }
+            ConstValue::ClassWithTypeArgs {
+                class_obj,
+                type_args_templates,
+            } => {
+                let class_ptr = self.idx_to_ptr(*class_obj);
+                match value.as_object_ptr() {
+                    Some(val_ptr) => match self.get_object(val_ptr) {
+                        Object::Instance(inst) if inst.class == class_ptr => {
+                            type_args_templates.len() == inst.class_type_args.len()
+                                && type_args_templates.iter().zip(&inst.class_type_args).all(
+                                    |(template, actual)| {
+                                        crate::type_match::template_relates(
+                                            self,
+                                            template,
+                                            frame_type_args,
+                                            actual.as_ty(),
+                                            crate::type_match::Variance::Invariant,
+                                        )
+                                    },
+                                )
+                        }
+                        _ => false,
+                    },
+                    None => false,
+                }
+            }
+            _ => {
+                if let Some(expected_ptr) = resolved_const.as_object_ptr() {
+                    match value.as_object_ptr() {
+                        Some(val_ptr) => match self.get_object(val_ptr) {
+                            Object::Instance(instance) => instance.class == expected_ptr,
+                            Object::Variant(variant) => variant.enm == expected_ptr,
+                            _ => false,
+                        },
+                        None => false,
+                    }
+                } else if let Some(tag) = resolved_const.as_int() {
+                    value_type_tag(value) == tag
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// A callable value's [`CallableSignature`] (BEP-062 `reflect`), or `None`
+    /// for a non-callable value.
+    ///
+    /// Every function-pointer value is a wrapper object — a plain reference
+    /// is a pooled empty-type-args `GenericFunction` (see the emit-side
+    /// `emit_pooled_function_value`), so a raw `Object::Function` is never a
+    /// data value and deliberately has no arm here.
+    ///
+    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed
+    /// (receiver dropped) and unresolved slots erase rather than refuse; see
+    /// [`function_callable_signature`] for the coarse-truth rationale.
+    pub(crate) fn callable_signature(&self, value: Value) -> Option<CallableSignature> {
+        use baml_type::RealizedTy;
+        match self.get_object(value.as_object_ptr()?) {
+            Object::Closure(closure) => {
+                // SAFETY: `closure.function` points to a live `Function`, the
+                // same invariant `resolve_callable_target` relies on.
+                match unsafe { closure.function.get() } {
+                    Object::Function(f) => Some(function_callable_signature(f, false)),
+                    _ => None,
+                }
+            }
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| self.get_object(p)) {
+                    Some(Object::Function(f)) => Some(function_callable_signature(f, false)),
+                    _ => None,
+                }
+            }
+            Object::BoundMethod(bm) => {
+                // SAFETY: `bm.function` points to a live `Function` (the bind
+                // site stored it), as at `CallIndirect`'s BoundMethod arm.
+                match unsafe { bm.function.get() } {
+                    Object::Function(f) => Some(function_callable_signature(f, true)),
+                    _ => None,
+                }
+            }
+            Object::HostClosure(hc) => Some(CallableSignature {
+                // Host closures are FFI-constructed; they carry no name.
+                name: None,
+                params: (*hc.params).clone(),
+                // Normalize the stored error type into the `None == never`
+                // convention (host closures store a realized `never`/`void`
+                // for a non-throwing callee rather than omitting it).
+                throws: match &*hc.throws_ty {
+                    RealizedTy::Never { .. } | RealizedTy::Void { .. } => None,
+                    ty => Some(ty.clone()),
+                },
+                ret: (*hc.ret_ty).clone(),
+                // Host closures are FFI-constructed; they carry no docs.
+                docstring: None,
+            }),
+            _ => None,
+        }
     }
 
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
@@ -2469,6 +2464,8 @@ impl BexVm {
         let entry_function = Function {
             name: format!("$entry::{callee_name}"),
             source_file: String::new(),
+            docstring: None,
+            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -4219,6 +4216,93 @@ impl BexVm {
         }
     }
 
+    /// Drain a sys-op's arguments off the eval stack and produce the
+    /// [`VmExecState::SysOp`] yield that hands control to the engine.
+    ///
+    /// This is the single implementation of "run a `$rust_io_function`",
+    /// shared by the dedicated `OpCode::SysOp` handler (a statically-known
+    /// direct call) and the general call funnel
+    /// ([`Self::execute_call_from_locals_offset`], reached when a sys-op is
+    /// invoked as a callable value — virtual/interface dispatch, a bound-method
+    /// value, or a callback handed to a native higher-order builtin). Both
+    /// present the op's `arity` arguments as the top of the stack, so a sys-op
+    /// is dispatched identically however it is reached.
+    ///
+    /// `callee_fn_ptr` must point at an `Object::Function` whose kind is
+    /// [`FunctionKind::SysOp`]. The kind check below is genuinely load-bearing
+    /// for the `OpCode::SysOp` caller (its `as_object_ptr` does not verify the
+    /// kind — see there); the funnel caller has already matched on the kind, so
+    /// for it the check is redundant. Do not delete it.
+    fn dispatch_sysop_yield(
+        &mut self,
+        callee_fn_ptr: HeapPtr,
+        runtime_id: Option<Value>,
+        frame_idx: usize,
+    ) -> Result<VmExecState, VmError> {
+        let (sys_op, function_id, arity, capture, param_names) = {
+            let obj = self.get_object(callee_fn_ptr);
+            let Object::Function(f) = obj else {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::SysOp.into(),
+                    got: ObjectType::of(obj).into(),
+                }
+                .into());
+            };
+            let FunctionKind::SysOp(sys_op) = f.kind else {
+                return Err(VmInternalError::TypeError {
+                    expected: FunctionType::SysOp.into(),
+                    got: FunctionType::from(&f.kind).into(),
+                }
+                .into());
+            };
+            (
+                sys_op,
+                f.function_id,
+                f.arity,
+                f.capture,
+                f.param_names.clone(),
+            )
+        };
+        let args_offset = self
+            .stack
+            .len()
+            .checked_sub(arity)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(arity))?;
+        let args_offset = StackIndex::from_raw(args_offset);
+        let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
+        // PR4b: sys-op calls (LLM calls included) appear on the timeline as a
+        // CallFunction here; the engine emits the matching EndFunction once the
+        // op completes.
+        let call_site_source = self.call_site_source_for_frame(frame_idx, self.cur_pc);
+        let capture_mask = VmCaptureMask::from_props(capture, self.value_capture_auto_enabled);
+        let explicit_local_id = runtime_id
+            .map(|value| self.consume_local_id_value(value))
+            .transpose()?;
+        let capture_mask = explicit_local_id
+            .as_ref()
+            .map_or(capture_mask, |id| capture_mask.with_overrides(id.capture));
+        let call_id = self.prof_enter_sysop(function_id, call_site_source, capture_mask);
+        if let Some(explicit_local_id) = &explicit_local_id {
+            self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
+        }
+        let entries: Vec<(String, Value)> = call_args
+            .iter()
+            .enumerate()
+            .map(|(index, value)| {
+                let name = param_names
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| format!("arg{index}"));
+                (name, *value)
+            })
+            .collect();
+        self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
+        Ok(VmExecState::SysOp {
+            operation: sys_op,
+            args: call_args,
+        })
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -4302,7 +4386,7 @@ impl BexVm {
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
         // GenericFunction), carried on call notifications so the engine can map
         // it to a `FunctionId` without a name lookup.
-        let (callee, _callee_fn_ptr) = match self.get_object(callee_ptr) {
+        let (callee, callee_fn_ptr) = match self.get_object(callee_ptr) {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
@@ -4629,14 +4713,43 @@ impl BexVm {
             }
 
             FunctionKind::SysOp(_) => {
-                log::error!(
-                    "[VM] tried to CALL SysOp function '{callee_name}' via bytecode — SysOps must go through the engine yield path"
+                // A sys-op reached as a callable value — virtual/interface
+                // dispatch, a bound-method value, or a callback handed to a
+                // native higher-order builtin — runs through the same engine
+                // yield as a direct `OpCode::SysOp`: drain its args and suspend.
+                // The resolved sys-op `Function`'s arity already counts the
+                // receiver, so the top-of-stack args are exactly what the op's
+                // glue expects. On resume the engine pushes the result and the
+                // caller's post-call store binds it, identically to a returning
+                // bytecode callee.
+                //
+                // `dispatch_sysop_yield` drains `stack.len() - arity`; every
+                // funnel caller positions the args as the exact top of stack, so
+                // that window is `locals_offset`. Assert it rather than thread
+                // `locals_offset` through the shared helper.
+                debug_assert_eq!(
+                    self.stack.len().checked_sub(callee_arity),
+                    Some(locals_offset.raw()),
+                    "sysop dispatch: args must be the top {callee_arity} stack slots \
+                     (len {}, locals_offset {})",
+                    self.stack.len(),
+                    locals_offset.raw(),
                 );
-                return Err(VmInternalError::TypeError {
-                    expected: FunctionType::Callable.into(),
-                    got: FunctionType::from(&callee_kind).into(),
-                }
-                .into());
+                // Sys-ops do not thread type arguments: a method-level-generic
+                // sys-op is rejected at compile time (E0153), and class/interface
+                // generics are type-erased for the op's glue. Any type args here
+                // would be silently dropped, so fail closed in debug.
+                debug_assert!(
+                    closure_type_args.is_empty()
+                        && bound_method_class_type_args.is_empty()
+                        && gf_type_args.is_empty(),
+                    "sysop dispatch received type args, which it cannot thread to the op",
+                );
+                return Ok(Some(self.dispatch_sysop_yield(
+                    callee_fn_ptr,
+                    runtime_id,
+                    *frame_idx,
+                )?));
             }
 
             FunctionKind::NativeUnresolved => {
@@ -5901,66 +6014,16 @@ impl BexVm {
                     };
                     let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let callee_value = self.globals.get(self.proof(), callee);
-                    let expected_type = FunctionType::SysOp;
-                    let callee_ptr = self.as_object_ptr(callee_value, expected_type.into())?;
-                    let Object::Function(callable_future) = self.get_object(callee_ptr) else {
-                        return Err(VmInternalError::TypeError {
-                            expected: expected_type.into(),
-                            got: ObjectType::of(self.get_object(callee_ptr)).into(),
-                        }
-                        .into());
-                    };
-                    let FunctionKind::SysOp(sys_op) = callable_future.kind else {
-                        return Err(VmInternalError::TypeError {
-                            expected: FunctionType::SysOp.into(),
-                            got: FunctionType::from(&callable_future.kind).into(),
-                        }
-                        .into());
-                    };
-                    let sysop_function_id = callable_future.function_id;
-                    let sysop_arity = callable_future.arity;
-                    let sysop_capture = callable_future.capture;
-                    let sysop_param_names = callable_future.param_names.clone();
-                    let args_offset = self
-                        .stack
-                        .len()
-                        .checked_sub(sysop_arity)
-                        .ok_or(VmInternalError::NotEnoughItemsOnStack(sysop_arity))?;
-                    let args_offset = StackIndex::from_raw(args_offset);
-                    let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
-                    // PR4b: sys-op calls (LLM calls included) appear on the
-                    // timeline as a CallFunction here; the engine emits the
-                    // matching EndFunction once the op completes.
-                    let call_site_source = self.call_site_source_for_frame(*frame_idx, self.cur_pc);
-                    let capture_mask =
-                        VmCaptureMask::from_props(sysop_capture, self.value_capture_auto_enabled);
-                    let explicit_local_id = runtime_id
-                        .map(|value| self.consume_local_id_value(value))
-                        .transpose()?;
-                    let capture_mask = explicit_local_id
-                        .as_ref()
-                        .map_or(capture_mask, |id| capture_mask.with_overrides(id.capture));
-                    let call_id =
-                        self.prof_enter_sysop(sysop_function_id, call_site_source, capture_mask);
-                    if let Some(explicit_local_id) = &explicit_local_id {
-                        self.install_consumed_local_id_for_sysop(call_id, explicit_local_id);
-                    }
-                    let entries: Vec<(String, Value)> = call_args
-                        .iter()
-                        .enumerate()
-                        .map(|(index, value)| {
-                            let name = sysop_param_names
-                                .get(index)
-                                .cloned()
-                                .unwrap_or_else(|| format!("arg{index}"));
-                            (name, *value)
-                        })
-                        .collect();
-                    self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
-                    return Ok(Some(VmExecState::SysOp {
-                        operation: sys_op,
-                        args: call_args,
-                    }));
+                    // `as_object_ptr` only unwraps the value to a heap pointer
+                    // (the `FunctionType` argument is error-message metadata, not
+                    // an assertion). `dispatch_sysop_yield`'s own kind check is
+                    // therefore the load-bearing validation on this path — it
+                    // rejects a non-sys-op global before draining and yields.
+                    let callee_ptr =
+                        self.as_object_ptr(callee_value, FunctionType::SysOp.into())?;
+                    return Ok(Some(
+                        self.dispatch_sysop_yield(callee_ptr, runtime_id, *frame_idx)?,
+                    ));
                 }
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
@@ -6178,17 +6241,11 @@ impl BexVm {
                         }),
                     );
                     let (callee_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
-                            self,
-                            &self_ty,
-                            &iface_qtn,
-                            &iface_args,
-                        )
-                        .ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
+                            })?;
                         let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
                             VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
@@ -6202,8 +6259,8 @@ impl BexVm {
                         // or the interface's args + associated types for an inherited
                         // default), then the method-level type args — matching the
                         // callee's De Bruijn layout `[owner… ++ method…]`.
-                        let mut frame =
-                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
+                        let mut frame = crate::package_baml::ImplResolver::new(self)
+                            .realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (callee, frame)
                     };
@@ -6634,92 +6691,38 @@ impl BexVm {
                 OpCode::IsType => {
                     let const_idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
-                    // Inspect the raw constant first to handle ClassWithTypeArgs
-                    // (parametric class identity check). Other kinds fall through
-                    // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
-                    let result = match raw_const {
-                        // Structural type test against a full `TyTemplate` (a
-                        // container element type, a bare frame ref, a `Wildcard`
-                        // hole, …), matched with the canonical type algebra. Not
-                        // emitted yet — the MIR/emit routing that produces these
-                        // constants lands with the structural-routing unit.
-                        ConstValue::Type(template) => {
-                            let frame_type_args =
-                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                    bf.type_args.clone()
-                                } else {
-                                    vec![]
-                                };
-                            crate::type_match::value_matches_template(
-                                self,
-                                value,
-                                template,
-                                &frame_type_args,
-                            )
-                        }
-                        ConstValue::ClassWithTypeArgs {
-                            class_obj,
-                            type_args_templates,
-                        } => {
-                            let class_ptr = self.idx_to_ptr(*class_obj);
-                            match value.as_object_ptr() {
-                                Some(val_ptr) => match self.get_object(val_ptr) {
-                                    Object::Instance(inst) if inst.class == class_ptr => {
-                                        let frame_type_args =
-                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                                bf.type_args.clone()
-                                            } else {
-                                                vec![]
-                                            };
-                                        // Position-wise match: plain
-                                        // `TypeArgRef` is exact, while
-                                        // guard-only wildcard templates can
-                                        // intentionally leave a position
-                                        // unconstrained.
-                                        type_args_templates.len() == inst.class_type_args.len()
-                                            && type_args_templates
-                                                .iter()
-                                                .zip(&inst.class_type_args)
-                                                .all(|(template, actual)| {
-                                                    guard_template_matches(
-                                                        template,
-                                                        &frame_type_args,
-                                                        actual,
-                                                    )
-                                                })
-                                    }
-                                    _ => false,
-                                },
-                                None => false,
-                            }
-                        }
-                        _ => {
-                            let expected = &function.bytecode.resolved_constants[const_idx];
-                            if let Some(expected_ptr) = expected.as_object_ptr() {
-                                // Class- or enum-pointer identity: `is Foo` checks
-                                // the instance's class object; `is Color` checks the
-                                // variant's enum object. Enum-type tests dispatch on
-                                // enum identity because the shared `ENUM` type tag
-                                // cannot tell `Color` from `Status`.
-                                match value.as_object_ptr() {
-                                    Some(val_ptr) => match self.get_object(val_ptr) {
-                                        Object::Instance(instance) => {
-                                            instance.class == expected_ptr
-                                        }
-                                        Object::Variant(variant) => variant.enm == expected_ptr,
-                                        _ => false,
-                                    },
-                                    None => false,
-                                }
-                            } else if let Some(tag) = expected.as_int() {
-                                value_type_tag(value) == tag
-                            } else {
-                                false
-                            }
-                        }
-                    };
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let result = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
                     self.stack.push(Value::bool(result));
+                }
+
+                OpCode::NarrowBind => {
+                    let const_idx = { read_u32_unchecked(code, pc) as usize };
+                    let destination = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let raw_const = &function.bytecode.constants[const_idx];
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let matched = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
+                    if matched {
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let destination =
+                            Self::local_slot_stack_index(bf.locals_offset, destination);
+                        self.stack[destination] = value;
+                    }
+                    self.stack.push(Value::bool(matched));
                 }
 
                 // ── DenseTag ──────────────────────────────────────────────────
@@ -6860,8 +6863,7 @@ impl BexVm {
                                 } else {
                                     vec![]
                                 };
-                            let ctx = RuntimeTypeContext::new(self);
-                            template.substitute(&frame_type_args, &ctx).map_err(|e| {
+                            template.substitute(&frame_type_args, self).map_err(|e| {
                                 VmInternalError::TypeSubstitution {
                                     message: e.to_string(),
                                 }
@@ -6953,24 +6955,18 @@ impl BexVm {
                         }),
                     );
                     let (function_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
-                            self,
-                            &self_ty,
-                            &iface_qtn,
-                            &iface_args,
-                        )
-                        .ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
+                            })?;
                         let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
                             VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             }
                         })?;
-                        let mut frame =
-                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
+                        let mut frame = crate::package_baml::ImplResolver::new(self)
+                            .realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (method.fqn, frame)
                     };

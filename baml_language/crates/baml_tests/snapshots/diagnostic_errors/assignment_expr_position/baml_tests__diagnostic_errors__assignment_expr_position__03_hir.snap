@@ -1,7 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== HIR2 ===
-function user.assignment_in_expression_position() -> int  [expr] {
-  { let x = 10; let y = <missing> } y
-}

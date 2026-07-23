@@ -633,6 +633,13 @@ pub enum Instruction {
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
 
+    /// Pops and tests the top value, stores it in `destination` on success,
+    /// and pushes the `Bool` result.
+    NarrowBind {
+        ty: usize,
+        destination: usize,
+    },
+
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
     ///
@@ -1002,6 +1009,9 @@ pub enum OpCode {
     // no operands (1 byte); receiver, interface type, and method name are popped
     // from the stack and the resolved bound method is pushed.
     MakeVirtualBoundMethod,
+
+    // Atomic type test plus local binding: u32 type constant + u32 destination.
+    NarrowBind,
 }
 
 impl OpCode {
@@ -1140,7 +1150,7 @@ impl OpCode {
             Self::JumpTable => 9,
 
             // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
-            Self::LoadVar2 | Self::StoreVar2 => 9,
+            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
         }
     }
 }
@@ -1272,6 +1282,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+            x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             _ => Err(byte),
         }
     }
@@ -1400,6 +1411,7 @@ impl std::fmt::Display for OpCode {
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
+            Self::NarrowBind => "NARROW_BIND",
         };
         f.write_str(name)
     }
@@ -1610,6 +1622,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::NarrowBind { ty, destination } => {
+                write!(f, "NARROW_BIND {ty} {destination}")
+            }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
@@ -2297,6 +2312,18 @@ impl Bytecode {
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
                     );
                 }
+                Instruction::NarrowBind { ty, destination } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*ty)
+                            .expect("type constant fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*destination)
+                            .expect("destination slot fits u32")
+                            .to_le_bytes(),
+                    );
+                }
             }
         }
 
@@ -2487,6 +2514,7 @@ impl Bytecode {
             Instruction::Call { .. } => OpCode::Call,
             Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
+            Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,

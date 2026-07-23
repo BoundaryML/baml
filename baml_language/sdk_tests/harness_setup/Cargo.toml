@@ -22,8 +22,10 @@ publish = false
 [dependencies]
 sdkgen_cpp = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_swift = { workspace = true }
 sdkgen_go = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
+sdkgen_java = { workspace = true }
 sdkgen_rust = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_type = { workspace = true }

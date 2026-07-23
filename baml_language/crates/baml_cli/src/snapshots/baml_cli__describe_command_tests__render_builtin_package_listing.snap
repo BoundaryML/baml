@@ -30,7 +30,8 @@ function         baml._from_json_shim             <builtin>/baml/conversions.bam
 function         baml.deep_copy                   <builtin>/baml/core.baml:3
 function         baml.deep_equals                 <builtin>/baml/core.baml:9
 interface        baml.Concrete                    <builtin>/baml/core.baml:15
-class            baml.TaggedString                <builtin>/baml/core.baml:30
+interface        baml.AnyFunction                 <builtin>/baml/core.baml:30
+class            baml.TaggedString                <builtin>/baml/core.baml:42
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
 class            baml.Int                         <builtin>/baml/int.baml:14
@@ -259,6 +260,10 @@ class            baml.panics.SdkPanic             <builtin>/baml/ns_panics/panic
 class            baml.panics.HostContractViolation <builtin>/baml/ns_panics/panics.baml:90
 class            baml.panics.IntegerOverflow      <builtin>/baml/ns_panics/panics.baml:100
 type             baml.panics.Panic                <builtin>/baml/ns_panics/panics.baml:104
+interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
+class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
+class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
+class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
 class            baml.spawn.SpawnParams           <builtin>/baml/ns_spawn/spawn.baml:19
 class            baml.spawn.TaskGroup             <builtin>/baml/ns_spawn/spawn.baml:31
 class            baml.spawn.CancelToken           <builtin>/baml/ns_spawn/spawn.baml:85

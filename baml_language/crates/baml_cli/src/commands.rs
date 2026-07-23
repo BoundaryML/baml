@@ -30,17 +30,8 @@ pub(crate) struct RuntimeCli {
     #[arg(long = "features", value_name = "FEATURE", global = true)]
     pub features: Vec<String>,
 
-    /// When to use colored / hyperlinked output: auto (default), always, or never.
-    ///
-    /// `auto` enables color on an interactive terminal and disables it when the
-    /// output is piped or captured by a known AI coding agent.
-    #[arg(
-        long,
-        value_enum,
-        default_value_t = crate::paint::ColorChoice::Auto,
-        global = true
-    )]
-    pub color: crate::paint::ColorChoice,
+    #[command(flatten)]
+    pub output: crate::output::OutputArgs,
 
     /// Specifies a subcommand to run.
     #[command(subcommand)]
@@ -230,8 +221,8 @@ impl RuntimeCli {
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
 
-        // Resolve color/hyperlink output once, before any subcommand writes.
-        crate::paint::init_color(self.color);
+        // Resolve every output dial once, before any subcommand writes.
+        crate::output::init(self.output);
 
         // Passive skill warning + background freshness refresh, only on the
         // core authoring commands (init, run, generate, pack) so the nag
@@ -359,6 +350,52 @@ mod tests {
         let help = help_for(&["baml-cli", "--help"]);
         assert!(help.contains("playground"), "{help}");
         assert!(help.contains("Open the BAML playground"), "{help}");
+    }
+
+    #[test]
+    fn output_dials_are_global_and_independent() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "check".into(),
+            "--output-preset".into(),
+            "human".into(),
+            "--color".into(),
+            "never".into(),
+            "--hyperlinks".into(),
+            "always".into(),
+            "--diagnostic-format".into(),
+            "agent".into(),
+        ]);
+
+        assert_eq!(cli.output.preset, crate::output::OutputPreset::Human);
+        assert_eq!(cli.output.color, Some(crate::output::ColorChoice::Never));
+        assert_eq!(
+            cli.output.hyperlinks,
+            Some(crate::output::HyperlinkChoice::Always)
+        );
+        assert_eq!(
+            cli.output.diagnostic_format,
+            Some(crate::output::DiagnosticFormatChoice::Agent)
+        );
+    }
+
+    #[test]
+    fn output_dials_expose_documented_environment_variables() {
+        let command = RuntimeCli::command();
+        let expected = [
+            ("preset", "BAML_OUTPUT_PRESET"),
+            ("color", "BAML_COLOR"),
+            ("hyperlinks", "BAML_HYPERLINKS"),
+            ("diagnostic_format", "BAML_DIAGNOSTIC_FORMAT"),
+        ];
+
+        for (id, env) in expected {
+            let arg = command
+                .get_arguments()
+                .find(|arg| arg.get_id() == id)
+                .unwrap_or_else(|| panic!("missing argument {id}"));
+            assert_eq!(arg.get_env(), Some(std::ffi::OsStr::new(env)));
+        }
     }
 
     #[test]

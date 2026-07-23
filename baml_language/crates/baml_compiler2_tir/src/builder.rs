@@ -121,6 +121,19 @@ fn json_decode_error_ty() -> Ty {
     )
 }
 
+/// The exact builtin type accepted by the call-site `$id` side channel.
+fn boundary_local_id_ty() -> Ty {
+    Ty::Class(
+        crate::ty::QualifiedTypeName::new(
+            Name::new(baml_builtins2::PACKAGE_BOUNDARY),
+            vec![],
+            Name::new("LocalId"),
+        ),
+        vec![],
+        TyAttr::default(),
+    )
+}
+
 fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
     crate::ty::QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
 }
@@ -1340,6 +1353,49 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    fn local_is_uncaptured(&self, subject: ExprId, name: &Name) -> bool {
+        if !self.locals.contains_key(name) {
+            return false;
+        }
+        let Some(source_map) = self.body_source_map.as_ref() else {
+            return false;
+        };
+        let db = self.context.db();
+        let file = self.context.scope().file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let offset = source_map.expr_span(subject).start();
+        let use_scope = index.scope_at_offset(offset, None);
+        let Some(binding_id) = index.visible_binding_at(use_scope, offset, name) else {
+            return false;
+        };
+        index
+            .scope_bindings
+            .get(binding_id.scope.index() as usize)
+            .is_some_and(|bindings| !bindings.captured_bindings.contains(&binding_id))
+    }
+
+    fn narrow_uncaptured_local(&mut self, subject: ExprId, name: &Name, ty: Ty) {
+        if self.local_is_uncaptured(subject, name) {
+            self.narrow_local(name.clone(), ty);
+        }
+    }
+
+    fn uncaptured_condition_narrowings(
+        &self,
+        condition: ExprId,
+        body: &ExprBody,
+    ) -> Vec<crate::narrowing::Narrowing> {
+        crate::narrowing::extract_narrowings(
+            condition,
+            body,
+            &self.expressions,
+            &self.pattern_types,
+        )
+        .into_iter()
+        .filter(|narrowing| self.local_is_uncaptured(narrowing.subject, &narrowing.name))
+        .collect()
+    }
+
     /// Seed a captured-name marker as `Ty::Unknown` to suppress false
     /// "unresolved name" diagnostics inside a lambda body. This is NOT a
     /// binding; the actual capture's type is resolved by the parent scope.
@@ -2369,27 +2425,65 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let mut next_positional = 0usize;
         let mut saw_named = false;
+        let mut runtime_id = None;
         let mut reported_overflow_arity = false;
-        let has_named_args =
-            call_args.is_some_and(|call_args| call_args.iter().any(|arg| arg.label.is_some()));
+        let ordinary_arg_count = call_args.map_or(args.len(), |call_args| {
+            call_args
+                .iter()
+                .filter(|arg| {
+                    arg.label
+                        .as_ref()
+                        .is_none_or(|label| label.as_str() != "$id")
+                })
+                .count()
+        });
+        let has_named_args = call_args.is_some_and(|call_args| {
+            call_args.iter().any(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|label| label.as_str() != "$id")
+            })
+        });
         for (arg_index, arg_expr) in args.iter().copied().enumerate() {
             let label = call_args
                 .and_then(|call_args| call_args.get(arg_index))
                 .and_then(|arg| arg.label.as_ref());
 
+            if label.is_some_and(|label| label.as_str() == "$id") {
+                if runtime_id.is_some() {
+                    self.context
+                        .report_simple(TirTypeError::DuplicateRuntimeIdArgument, arg_expr);
+                    self.infer_expr(arg_expr, body);
+                    provided_args.insert(arg_expr);
+                    continue;
+                }
+
+                let got = self.infer_expr(arg_expr, body);
+                if !self.is_subtype(&got, &boundary_local_id_ty()) {
+                    self.context.report_simple(
+                        TirTypeError::RuntimeIdArgumentTypeMismatch { got },
+                        arg_expr,
+                    );
+                }
+                runtime_id = Some(arg_expr);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
+            if runtime_id.is_some() {
+                self.context
+                    .report_simple(TirTypeError::RuntimeIdArgumentMustBeLast, arg_expr);
+                self.infer_expr(arg_expr, body);
+                provided_args.insert(arg_expr);
+                continue;
+            }
+
             if let Some(label) = label {
                 saw_named = true;
                 let Some(param_index) = name_to_index.get(label).copied() else {
-                    // `foo($id = x)` deserves a targeted message: overrides
-                    // are set inside the callee, not at the call site (the
-                    // call-site form is not part of the language surface).
                     self.context.report_simple(
-                        if label.as_str() == "$id" {
-                            TirTypeError::RuntimeIdCallSiteArgument
-                        } else {
-                            TirTypeError::UnknownNamedArgument {
-                                name: label.clone(),
-                            }
+                        TirTypeError::UnknownNamedArgument {
+                            name: label.clone(),
                         },
                         arg_expr,
                     );
@@ -2420,7 +2514,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: effective_params.len(),
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2450,12 +2544,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .filter(|param| param.is_required())
             .count();
-        let reported_positional_arity = !has_named_args && args.len() < required_count;
+        let reported_positional_arity = !has_named_args && ordinary_arg_count < required_count;
         if reported_positional_arity {
             self.context.report_simple(
                 TirTypeError::ArgumentCountMismatch {
                     expected: required_count,
-                    got: args.len(),
+                    got: ordinary_arg_count,
                 },
                 expr_id,
             );
@@ -2476,7 +2570,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.context.report_simple(
                         TirTypeError::ArgumentCountMismatch {
                             expected: required_count,
-                            got: args.len(),
+                            got: ordinary_arg_count,
                         },
                         expr_id,
                     );
@@ -2519,6 +2613,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
+                side_channels: crate::inference::CallSideChannels { runtime_id },
             },
         );
 
@@ -2664,6 +2759,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .or_insert_with(|| crate::inference::CallPlan {
                 bindings: Vec::new(),
                 type_args,
+                side_channels: crate::inference::CallSideChannels::default(),
             });
     }
 
@@ -4124,13 +4220,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
                     .cloned()
                     .collect();
-                // An `Error` expected type is an upstream failure — suppress to avoid a cascade.
-                // An `Unknown` expected (a synthesis position with no annotation) is exactly where
-                // inference was meant to succeed, so a failure there IS reported. Malformed
-                // explicit type args (wrong arity) were already diagnosed at their own site, so
-                // the params they failed to fill must not also report as uninferable.
+                // Cascade suppression: an uninferable parameter is reported only when every
+                // inference source it had was sound. An `Error` expected type is an upstream
+                // failure, so nothing is reported; an `Unknown` expected (a synthesis position
+                // with no annotation) is exactly where inference was meant to succeed, so a
+                // failure there IS reported. Malformed explicit type args (wrong arity) were
+                // already diagnosed at their own site, so the params they failed to fill must
+                // not also report as uninferable. Likewise per parameter: when the variable
+                // occurs in a param whose argument already failed to type (its recorded type
+                // carries an error-recovery sentinel; unlike an expected type, an argument is
+                // only ever `Unknown`/`Error` through its own already-diagnosed failure), the
+                // cannot-infer is a figment of the argument's error, so only the argument's own
+                // diagnostic is kept (B-836).
                 if !matches!(expected, Ty::Error { .. }) && !explicit_type_args_errored {
                     for name in &unresolved_callee_typevars {
+                        let tainted_by_errored_arg = param_arg_pairs.iter().any(|(param, arg)| {
+                            crate::generics::contains_typevar_where(&param.ty, &|n| n == name)
+                                && self
+                                    .expressions
+                                    .get(arg)
+                                    .is_some_and(crate::generics::contains_error_recovery)
+                        });
+                        if tainted_by_errored_arg {
+                            continue;
+                        }
                         self.context.report_simple(
                             TirTypeError::CannotInferTypeParameter { name: name.clone() },
                             expr_id,
@@ -4470,12 +4583,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = crate::narrowing::extract_narrowings(
-                    *condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -4815,33 +4923,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 segments,
             } => {
                 // Untagged backtick (BEP §11). The value is realized by the
-                // desugared `elaborated` concat; type it so codegen has the
-                // `.to_string()` resolutions it needs, but DISCARD its
-                // diagnostics — those describe the synthetic `.to_string()`
-                // calls. The user-facing strict-stringify errors come from the
-                // structured `segments`, anchored on the original `${…}` spans:
-                // each `${expr}` must be non-null and stringable.
+                // desugared `elaborated` concat: each `${expr}` is wrapped in
+                // the total renderer `string.from(...)` and the parts are
+                // folded with `+`. Inferring that tree types every `${expr}`
+                // sub-expression in place (the segment `ExprId`s are shared
+                // with the tree), so every diagnostic it produces is the
+                // user's own, anchored on original spans, and all of them are
+                // KEPT. Discarding any of them lets the sub-expression's
+                // error-recovery type reach MIR, where runtime lowering ICEs
+                // (B-836). The synthetic wrapping itself cannot fail:
+                // `string.from` accepts every type, and its `T` never cascades
+                // a cannot-infer error off an already-errored argument
+                // (`check_call_inner` suppresses that like any other upstream
+                // failure).
                 //
-                // The template's type IS the elaborated tree's type — always a
+                // The template's type IS the elaborated tree's type: always a
                 // string, but literal-preserving for a constant template (e.g.
                 // `` `abc` `` infers `Ty::Literal("abc")`), so constant folding
                 // of comparisons on literal backticks (BEP §9) still fires.
-                let saved = self.context.diagnostic_count();
                 let elaborated_ty = self.infer_expr(*elaborated, body);
-                // The elaborated tree wraps each `${expr}` in a synthetic
-                // `.to_string()` and folds the parts with `+` (a side-effect-only
-                // `${ let … }` splices its statements into one shared concat
-                // block). DISCARD the synthetic member/call noise — a nullable or
-                // non-stringable interp makes `expr.to_string()` report
-                // `NotCallable`/`UnresolvedMember` on a synthetic span — but KEEP
-                // genuine `UnresolvedName`s: a name the user wrote (`${ nope }`,
-                // or `nope` on a spliced `let`'s RHS) is never synthesized by the
-                // `.to_string()` wrapping or the accumulator, so retaining it both
-                // surfaces the real error AND stops a `Ty::Unknown` from reaching
-                // MIR (where runtime lowering would ICE). The user-facing
-                // strict-stringify errors still come from the structured
-                // `segments`, anchored on the original `${…}` spans.
-                self.context.retain_user_name_diagnostics(saved);
+                // The one interpolation rule the elaborated tree cannot
+                // express: each `${expr}` must be non-null (strict stringify,
+                // BEP §7), reported on the original `${…}` spans.
                 self.check_template_interps_stringable(segments, body);
                 elaborated_ty
             }
@@ -6623,12 +6726,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*condition, body);
 
                 // Extract narrowings from the condition expression.
-                let narrowings = crate::narrowing::extract_narrowings(
-                    *condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(*condition, body);
 
                 // Apply then-branch narrowings, saving originals.
                 let saved = crate::narrowing::apply_then_narrowings(&narrowings, &mut self.locals);
@@ -7166,7 +7264,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // register the pattern bindings for the body only, then restore.
                 let snapshot = self.snapshot_scoped_locals();
                 if let Some(name) = &scrutinee_name {
-                    self.narrow_local(name.clone(), result.matched_ty.clone());
+                    self.narrow_uncaptured_local(*scrutinee, name, result.matched_ty.clone());
                 }
                 self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
                 self.loop_depth += 1;
@@ -7541,7 +7639,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         if let Some(matched_ty) = self.pattern_types.get(&pattern).cloned() {
                             let complement =
                                 crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                            self.narrow_local(name, complement);
+                            self.narrow_uncaptured_local(scrutinee, &name, complement);
                         }
                     }
                 }
@@ -7577,12 +7675,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // infer_expr for the Expr::If will re-infer it (idempotent: the
                 // type is recorded and cached in self.expressions).
                 self.infer_expr(condition, body);
-                let narrowings = crate::narrowing::extract_narrowings(
-                    condition,
-                    body,
-                    &self.expressions,
-                    &self.pattern_types,
-                );
+                let narrowings = self.uncaptured_condition_narrowings(condition, body);
 
                 // Run the normal check_stmt (which handles the full Expr::If
                 // including inner narrowing for the branches).
@@ -7768,7 +7861,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Narrow the scrutinee local for the arm body.
             if let Some(name) = &scrutinee_name {
-                self.narrow_local(name.clone(), narrowed.clone());
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, narrowed.clone());
             }
 
             self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
@@ -7956,7 +8049,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pattern bindings, then infer/check the body.
         let snapshot = self.snapshot_scoped_locals();
         if let Some(name) = &scrutinee_name {
-            self.narrow_local(name.clone(), matched_ty.clone());
+            self.narrow_uncaptured_local(scrutinee_expr_id, name, matched_ty.clone());
         }
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         let then_ty = match expected {
@@ -7972,7 +8065,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(name) = &scrutinee_name {
                 let complement =
                     crate::narrowing::subtract_pattern_type(&scrutinee_ty, &matched_ty);
-                self.narrow_local(name.clone(), complement);
+                self.narrow_uncaptured_local(scrutinee_expr_id, name, complement);
             }
             let ty = match expected {
                 Some(exp) => self.check_expr(else_expr, body, exp),
@@ -10428,6 +10521,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Check class fields
                 let class_fields = self.lookup_class_fields(class_name, type_args);
                 if let Some(field_ty) = class_fields.get(member) {
+                    if self.class_has_inherent_method(class_name, member) {
+                        return Ty::Error {
+                            attr: TyAttr::default(),
+                        };
+                    }
                     // Store field resolution for LSP navigation
                     if let Some(class_loc) = self.resolve_class_loc(class_name) {
                         self.resolutions.insert(
@@ -12053,6 +12151,23 @@ impl<'db> TypeInferenceBuilder<'db> {
             Definition::Interface(interface_loc) => Some(interface_loc),
             _ => None,
         }
+    }
+
+    fn class_has_inherent_method(
+        &self,
+        class_name: &crate::ty::QualifiedTypeName,
+        method_name: &Name,
+    ) -> bool {
+        let Some(class_loc) = self.resolve_class_loc(class_name) else {
+            return false;
+        };
+        let db = self.context.db();
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+
+        class_data.methods.iter().copied().any(|method| {
+            baml_compiler2_ppir::item_data::function_data(db, method).name == *method_name
+                && baml_compiler2_ppir::item_data::method_interface_target(db, method).is_none()
+        })
     }
 
     /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.

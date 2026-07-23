@@ -1,0 +1,55 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 45712
+---
+=== PPIR ===
+class user.Holder {
+  cb: (value: int) -> int throws never
+}
+class user.Holder$stream {
+  cb: unknown
+}
+type user.HiddenHandler = (value: int) -> int throws never
+type user.HiddenHandler$stream = unknown
+function user.accept_hidden(cb: user.HiddenHandler) -> int  [expr] {
+  {  } cb(1)
+}
+function user.fail_hidden() -> int  [expr] {
+  {  } accept_hidden(risky)
+}
+function user.fail_returned() -> (value: int) -> int throws never  [expr] {
+  { let local = (value: int) -> int throws string { { throw "boom" } } } local
+}
+function user.fail_stored() -> user.Holder  [expr] {
+  {  } user.Holder { cb: risky }
+}
+function user.nested_position(cb: ((value: int) -> int throws never) -> int) -> int  [expr] {
+  { let inner = (value: int) -> int throws string { { throw "boom" } } } cb(inner)
+}
+function user.risky(value: int) -> int  [expr] {
+  { throw "boom" }
+}
+class user.Worker {
+  factor: int
+}
+class user.Worker$stream {
+  factor: int | null
+}
+function user.builtin_map(cb: (value: int) -> int, values: int[]) -> int[]  [expr] {
+  {  } values.map(cb)
+}
+function user.chain(cb: (value: int) -> int) -> int  [expr] {
+  { let h = forward } h(cb)
+}
+function user.direct(cb: (value: int) -> int) -> int  [expr] {
+  {  } cb(1)
+}
+function user.forward(cb: (value: int) -> int) -> int  [expr] {
+  {  } direct(cb)
+}
+function user.member_map(worker: user.Worker, values: int[]) -> int[]  [expr] {
+  {  } values.map(worker.scale)
+}
+function user.scale(self: ?, value: int) -> int  [expr] {
+  {  } self.factor Mul value
+}

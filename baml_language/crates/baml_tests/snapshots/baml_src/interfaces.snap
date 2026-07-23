@@ -3598,7 +3598,9 @@ function interfaces.fz24_main() -> int {
 
 function interfaces.fz29_describe(a: interfaces.Fz29Animal) -> string {
     load_var a
-    is_type interfaces.Fz29Dog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Fz29Dog, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -3607,7 +3609,7 @@ function interfaces.fz29_describe(a: interfaces.Fz29Animal) -> string {
     jump L2
 
   L1:
-    load_var a
+    load_var _2
     load_field .breed
 
   L2:
@@ -3770,7 +3772,9 @@ function interfaces.fz39_main() -> string {
     call user.interfaces.fz39_risky
     jump L2
     load_var e
-    is_type interfaces.Fz39ConcreteErr
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Fz39IError, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -3781,7 +3785,7 @@ function interfaces.fz39_main() -> string {
     jump L2
 
   L1:
-    load_var e
+    load_var _2
     load_type interfaces.Fz39IError
     load_const "describe"
     virtual_call nargs=1 ntypeargs=0
@@ -3819,7 +3823,9 @@ function interfaces.fz41_main() -> string {
 
 function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string {
     load_var a
-    is_type interfaces.Fz41Dog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Fz41Animal, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -3829,7 +3835,7 @@ function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string 
     jump L2
 
   L1:
-    load_var a
+    load_var _2
     load_type interfaces.Fz41Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
@@ -3881,7 +3887,9 @@ function interfaces.fz44_main() -> int {
 
 function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     load_var x
-    is_type interfaces.Fz45Dog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Fz45Animal, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -3891,7 +3899,7 @@ function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     jump L2
 
   L1:
-    load_var x
+    load_var _2
     load_type interfaces.Fz45Animal
     load_const "speak"
     virtual_call nargs=1 ntypeargs=0
@@ -4345,8 +4353,9 @@ function interfaces.ifvr_main() -> int {
 
 function interfaces.itic_main() -> string {
     alloc_instance user.interfaces.IticDog
-    store_var_load_var value
-    is_type interfaces.IticDog
+    store_var _3
+    load_var _3
+    narrow_bind interfaces.IticDog, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -4356,7 +4365,7 @@ function interfaces.itic_main() -> string {
     jump L2
 
   L1:
-    load_var value
+    load_var _3
     load_type interfaces.IticSwimmer
     load_const "swim"
     virtual_call nargs=1 ntypeargs=0
@@ -4471,8 +4480,9 @@ function interfaces.mdid_main() -> string {
 function interfaces.mdif_main() -> string {
     load_const "Rex"
     init_instance user.interfaces.MdifDog .name
-    store_var_load_var a
-    is_type interfaces.MdifDog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.MdifDog, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -4481,7 +4491,7 @@ function interfaces.mdif_main() -> string {
     jump L2
 
   L1:
-    load_var a
+    load_var _2
     load_field .name
 
   L2:
@@ -4490,7 +4500,7 @@ function interfaces.mdif_main() -> string {
 
 function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     load_var s
-    is_type interfaces.MidrLamp
+    is_type interfaces.MidrSwitch
     pop_jump_if_false L0
     load_var s
     is_type interfaces.MidrLamp
@@ -4534,8 +4544,9 @@ function interfaces.midr_main() -> string {
 function interfaces.mntc_main() -> string {
     load_const "Lab"
     init_instance user.interfaces.MntcDog .breed
-    store_var_load_var a
-    is_type interfaces.MntcDog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.MntcDog, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -4544,7 +4555,7 @@ function interfaces.mntc_main() -> string {
     jump L2
 
   L1:
-    load_var a
+    load_var _2
     load_field .breed
 
   L2:
@@ -4553,7 +4564,9 @@ function interfaces.mntc_main() -> string {
 
 function interfaces.moiw_main() -> string {
     alloc_instance user.interfaces.MoiwDuck
-    is_type interfaces.MoiwDog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.MoiwDog, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -5034,7 +5047,9 @@ function interfaces.tidu_main() -> string {
     store_var _0
     jump L2
     load_var e
-    is_type interfaces.TiduBoom
+    store_var _3
+    load_var _3
+    narrow_bind interfaces.TiduBoom, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -5043,7 +5058,7 @@ function interfaces.tidu_main() -> string {
     rethrow
 
   L1:
-    load_var e
+    load_var _3
     load_field .message
     store_var _0
 
@@ -5110,7 +5125,9 @@ function interfaces.uf01_readName(x: interfaces.Uf01Dog | interfaces.Uf01Named) 
 
 function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slot<string>) -> int {
     load_var x
-    is_type interfaces.Uf02IntSlot
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Uf02Slot<int>, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -5119,10 +5136,11 @@ function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slo
     jump L2
 
   L1:
-    load_var x
+    load_var _2
+    store_var_load_var a
     is_type interfaces.Uf02IntSlot
     pop_jump_if_false L3
-    load_var x
+    load_var a
     load_field .0
     store_var _4
     load_var _4
@@ -5145,7 +5163,9 @@ function interfaces.uf02_main() -> int {
 
 function interfaces.uf05_go(x: interfaces.Uf05Slot<int> | interfaces.Uf05Slot<string>) -> string {
     load_var x
-    is_type interfaces.Uf05IntSlot
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Uf05Slot<int>, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -5290,14 +5310,15 @@ function interfaces.uf08_main() -> string {
 
 function interfaces.uf09_main() -> string {
     alloc_instance user.interfaces.Uf09Cat
-    store_var_load_var v
-    is_type interfaces.Uf09Dog
+    store_var _2
+    load_var _2
+    narrow_bind interfaces.Uf09Dog, slot=1
     pop_jump_if_false L0
     jump L2
 
   L0:
-    load_var v
-    is_type interfaces.Uf09Cat
+    load_var _2
+    narrow_bind interfaces.Uf09Cat, slot=1
     pop_jump_if_false L1
     jump L2
 
@@ -5306,7 +5327,7 @@ function interfaces.uf09_main() -> string {
     jump L5
 
   L2:
-    load_var v
+    load_var _2
     store_var_load_var a
     is_type interfaces.Uf09Dog
     pop_jump_if_false L3

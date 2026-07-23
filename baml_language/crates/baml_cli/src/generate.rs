@@ -85,7 +85,7 @@ impl GenerateArgs {
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli_auto(),
+                &crate::output::policy().diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");
@@ -119,7 +119,7 @@ impl GenerateArgs {
                 &gen_diags,
                 &sources,
                 &file_paths,
-                &render::RenderConfig::cli_auto(),
+                &crate::output::policy().diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");
@@ -245,6 +245,22 @@ impl GenerateArgs {
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
+                OutputType::Java => sdkgen_java::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                )
+                .into_iter()
+                .map(|(path, content)| (path, content.into_bytes()))
+                .collect(),
+                OutputType::Swift => sdkgen_swift::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                )
+                .into_iter()
+                .map(|(path, content)| (path, content.into_bytes()))
+                .collect(),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {

@@ -23,17 +23,35 @@ pub fn kwargs(entries: Vec<(&str, Option<wire::InboundValue>)>) -> Vec<wire::Inb
         .collect()
 }
 
+/// Build the explicit `TypeVar` bindings for a generic call. Each entry
+/// pairs a callee `TypeVar` name with the concrete [`wire::BamlTy`] the
+/// Rust call site monomorphized it to; the engine seeds its entry frame
+/// from them. Entries must be in the callee's `TypeVar` declaration order.
+pub fn type_args(entries: Vec<(&str, wire::BamlTy)>) -> Vec<wire::BamlTyArg> {
+    entries
+        .into_iter()
+        .map(|(name, ty)| wire::BamlTyArg {
+            type_var: name.to_string(),
+            type_value: Some(ty),
+        })
+        .collect()
+}
+
 /// Encode a class instance. `fqn` is the BAML class FQN the generated
 /// impl bakes in; the engine binds the instance nominally through it.
-pub fn class(fqn: &str, fields: Vec<(&str, wire::InboundValue)>) -> wire::InboundValue {
+/// `type_args` carries a generic instance's concrete type arguments in
+/// declaration order (the value-level type channel), empty for a
+/// non-generic class.
+pub fn class(
+    fqn: &str,
+    type_args: Vec<wire::BamlTy>,
+    fields: Vec<(&str, wire::InboundValue)>,
+) -> wire::InboundValue {
     wire::InboundValue {
         value_type: Some(wire::BamlTy {
             ty: Some(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
                 name: fqn.to_string(),
-                // Empty is correct for the current scope: sdkgen skips generic
-                // classes (`analyze.rs`). Generic classes will populate this
-                // same sparse node-level annotation.
-                type_args: Vec::new(),
+                type_args,
             })),
         }),
         value: Some(In::ClassValue(wire::InboundClassValue {

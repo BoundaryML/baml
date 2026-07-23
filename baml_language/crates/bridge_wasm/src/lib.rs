@@ -60,6 +60,7 @@ mod wasm_io_fs;
 mod wasm_io_glob;
 mod wasm_lsp;
 mod wasm_playground;
+mod wasm_random;
 mod wasm_sys;
 mod wasm_time;
 
@@ -760,6 +761,7 @@ impl BamlWasmRuntime {
                 std::sync::Arc::clone(&wasm_vfs_arc),
             )))
             .with_time_instance(std::sync::Arc::new(wasm_time::WasmTime))
+            .with_random_instance(std::sync::Arc::new(wasm_random::WasmRandom))
             // One `WasmHost` per runtime, holding *this* runtime's JS
             // `host_dispatch` callback so a BAML→host call dispatches through
             // the correct wrapper (a process-global callback would let a second

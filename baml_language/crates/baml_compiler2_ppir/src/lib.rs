@@ -623,13 +623,22 @@ pub fn file_symbol_contributions(
 }
 
 /// Canonical item tree (original + *$stream types).
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is the substrate the `item_data` firewall
+/// queries are built on. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries, never the tree itself — that is what gives
+/// per-item invalidation instead of per-file.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
 }
 
 /// Canonical item-tree source map (original + *$stream types).
-pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` firewall
+/// queries in `item_data`.
+pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree_source_map)
 }

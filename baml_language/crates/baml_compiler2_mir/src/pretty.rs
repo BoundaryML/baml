@@ -205,6 +205,17 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, condition)?;
             write!(f, " -> [{then_block}, {else_block}];")
         }
+        Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        } => {
+            write!(f, "{destination} = narrow_bind ")?;
+            write_operand(f, source)?;
+            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
+        }
         Terminator::Switch {
             discriminant,
             arms,
@@ -592,6 +603,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GlobalItem(qn) => write!(f, "const item {qn}"),
         Constant::GenericFunction { item, type_args } => {
             let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
             write!(f, "const fn {item}<{}>", args.join(", "))

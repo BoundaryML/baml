@@ -658,6 +658,18 @@ fn lower_declared_interface_bound(
             builder.report_at_span(diag, span);
         }
         match &bound_ty {
+            // BEP-062: `baml.AnyFunction` is legal only as a value type (an
+            // existential), never as a bound. Mirrors the impl-side check in
+            // `lower_generic_param_interface_bounds`; the constraint is still
+            // returned below so downstream sees the same shape either way.
+            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                builder.report_at_span(
+                    crate::infer_context::TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn.clone(),
+                    },
+                    span,
+                );
+            }
             Ty::Interface(qtn, generics, assoc, _) => {
                 if generics.is_empty()
                     && let Some(arity) = interface_declared_generic_arity(db, qtn)
@@ -1277,6 +1289,14 @@ impl DefaultParameterInference<'_> {
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
     pub type_args: Vec<Ty>,
+    /// Hidden call metadata which is not part of the callee's parameter list.
+    pub side_channels: CallSideChannels,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallSideChannels {
+    /// The trailing `boundary.LocalId` expression supplied as `$id = ...`.
+    pub runtime_id: Option<ExprId>,
 }
 
 impl CallPlan {
@@ -1312,10 +1332,12 @@ impl CallPlan {
     }
 
     pub fn matches_provided_args(&self, args: &[ExprId]) -> bool {
-        self.provided_arg_count() == args.len()
-            && args
-                .iter()
-                .all(|arg| self.provided_args().any(|provided| provided == *arg))
+        let side_channel_count = usize::from(self.side_channels.runtime_id.is_some());
+        self.provided_arg_count() + side_channel_count == args.len()
+            && args.iter().all(|arg| {
+                self.provided_args().any(|provided| provided == *arg)
+                    || self.side_channels.runtime_id == Some(*arg)
+            })
     }
 }
 

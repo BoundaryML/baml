@@ -214,6 +214,16 @@ fn lower_generic_param_interface_bounds(
             diags,
         );
         match ty {
+            // BEP-062: `baml.AnyFunction` is legal only as a value type (an
+            // existential); as a bound it is rejected and contributes no
+            // constraint (recovery treats the param as unbounded).
+            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+                diags.push(
+                    crate::infer_context::TirTypeError::BuiltinInterfaceNotABound {
+                        interface: qtn,
+                    },
+                );
+            }
             Ty::Interface(qtn, generics, assoc, _) => {
                 // A generic interface used as a bare bound under-instantiates it —
                 // a bound cannot infer the missing argument (mirrors the decl-env
@@ -511,6 +521,18 @@ pub fn impl_data<'db>(
     let mut conformance_diags: Vec<(crate::infer_context::TirTypeError, ImplDiagnosticLocation)> =
         Vec::new();
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
+        // BEP-062 (E0153): `baml.AnyFunction`'s conformance is derived by the
+        // compiler (every function type implements it, in the subtype engine);
+        // a written impl is rejected outright. The block's other diagnostics
+        // still ride along so the user sees everything at once.
+        if iface_qtn.is_builtin_root_type("AnyFunction") {
+            conformance_diags.push((
+                crate::infer_context::TirTypeError::BuiltinInterfaceNotImplementable {
+                    interface: iface_qtn.clone(),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            ));
+        }
         if matches!(origin, InterfaceImplOrigin::OutOfBody) && !iface_data.fields.is_empty() {
             conformance_diags.push((
                 crate::infer_context::TirTypeError::OutOfBodyImplementsFieldInterface {
@@ -1203,6 +1225,31 @@ pub fn validate_impl_signatures<'db>(
 
     for &method_loc in &data.methods {
         let method_name = function_data(db, method_loc).name.clone();
+
+        // A `$rust_io_function` (sys-op) override with method-level generics can't
+        // be dispatched through interface (virtual) dispatch — the only way an
+        // impl-block method is reached. Virtual dispatch does not reconstruct the
+        // synthetic type-argument slots a generic sys-op's glue reads off the
+        // stack, so such a call would fail at runtime; reject it at declaration.
+        // (A generic sys-op declared directly on a class lowers to a direct
+        // `SysOp` instruction, which supplies those slots, so it is fine.)
+        if !function_data(db, method_loc).generic_params.is_empty()
+            && matches!(
+                baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(
+                    baml_compiler2_ast::BuiltinKind::Io
+                )
+            )
+        {
+            diags.push((
+                crate::infer_context::TirTypeError::GenericSysOpMethodInInterfaceImpl {
+                    interface: iface_qtn.clone(),
+                    method: method_name.clone(),
+                },
+                ImplDiagnosticLocation::Method(method_name.clone()),
+            ));
+            continue;
+        }
 
         // The interface method this override targets: a required sig or a default's function.
         let iface_spec = if let Some(sig) = iface_data

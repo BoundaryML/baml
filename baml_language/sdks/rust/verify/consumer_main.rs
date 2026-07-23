@@ -8,12 +8,16 @@
 //! Cancellation and streaming are intentionally absent — those SDK features
 //! are not implemented yet; the verifier grows to cover them as they land.
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() {
+fn main() {
     let sync = baml_sdk::rt_int(7).expect("sync rt_int call");
     assert_eq!(sync, 7, "sync roundtrip");
 
-    let asyncd = baml_sdk::rt_int_async(9).await.expect("async rt_int call");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("build Tokio runtime");
+    let asyncd = runtime
+        .block_on(baml_sdk::rt_int_async(9))
+        .expect("async rt_int call");
     assert_eq!(asyncd, 9, "async roundtrip");
 
     let greet = baml_sdk::rt_greet("kai".to_string()).expect("rt_greet call");

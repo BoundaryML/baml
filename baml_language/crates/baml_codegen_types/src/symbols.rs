@@ -4,6 +4,7 @@ use crate::{CodegenTypeError, Ty, ty::validate_ty};
 
 pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
+#[derive(Clone)]
 pub enum Symbol {
     Function(Function),
     Class(Class),
@@ -24,6 +25,7 @@ pub struct Origin {
     pub span_start: u32,
 }
 
+#[derive(Clone)]
 pub struct Function {
     pub name: baml_base::Name,
     /// `TypeVar`s declared on this function. Empty for non-generic functions.
@@ -72,6 +74,7 @@ pub enum DefaultLiteral {
     EmptyMap,
 }
 
+#[derive(Clone)]
 pub struct Class {
     pub name: super::Name,
     /// `TypeVar`s declared on this class. Empty for non-generic classes.
@@ -92,12 +95,14 @@ pub struct Class {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct ClassProperty {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
 }
 
+#[derive(Clone)]
 pub struct Enum {
     pub name: super::Name,
     pub docstring: Option<String>,
@@ -105,12 +110,14 @@ pub struct Enum {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct EnumVariant {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub value: String,
 }
 
+#[derive(Clone)]
 pub struct TypeAlias {
     pub name: super::Name,
     pub resolves_to: super::Ty,

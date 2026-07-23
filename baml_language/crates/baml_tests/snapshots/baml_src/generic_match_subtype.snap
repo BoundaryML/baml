@@ -176,7 +176,9 @@ function generic_match_subtype.mk(v: T) -> generic_match_subtype.Opt<T> | generi
 
 function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string>) -> string {
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -193,25 +195,33 @@ function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> |
 
 function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string> | int | string | bool) -> string {
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _2
+    load_var _2
+    narrow_bind generic_match_subtype.Foo<...>, slot=2
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var x
-    is_type generic_match_subtype.Foo<...>
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Foo<...>, slot=3
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var x
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var x
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
     pop_jump_if_false L3
     jump L4
 
@@ -240,7 +250,9 @@ function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo
 
 function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<T> | generic_match_subtype.Non, default: T) -> T {
     load_var o
-    is_type generic_match_subtype.Opt<...>
+    store_var _3
+    load_var _3
+    narrow_bind generic_match_subtype.Opt<...>, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -249,7 +261,7 @@ function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<T> | gener
     jump L2
 
   L1:
-    load_var o
+    load_var _3
     load_field .value
 
   L2:

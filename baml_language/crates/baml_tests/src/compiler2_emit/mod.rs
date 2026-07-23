@@ -34,6 +34,166 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
     .expect("compilation should succeed")
 }
 
+#[test]
+fn typed_pattern_emits_atomic_narrow_bind() {
+    use bex_vm_types::Instruction;
+
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+class Foo { field: int }
+
+function main(x: Foo | int) -> int {
+  let task = spawn { x = 0; };
+  match (x) {
+    let foo: Foo => foo.field,
+    let n: int => n,
+  }
+}
+"#,
+    );
+    let program = compile(&db);
+    let main_idx = program.function_indices["user.main"];
+    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
+        panic!("expected user.main to be a function")
+    };
+
+    let (narrow_bind_idx, destination) = main
+        .bytecode
+        .instructions
+        .iter()
+        .enumerate()
+        .find_map(|(idx, instruction)| match instruction {
+            Instruction::NarrowBind { destination, .. } => Some((idx, *destination)),
+            _ => None,
+        })
+        .expect("narrow_bind instruction");
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .skip(narrow_bind_idx + 1)
+            .any(|instruction| match instruction {
+                Instruction::LoadVar(slot) | Instruction::StoreVarLoadVar(slot) => {
+                    *slot == destination
+                }
+                Instruction::LoadVar2(first, second) => {
+                    *first == destination || *second == destination
+                }
+                _ => false,
+            }),
+        "{:?}",
+        main.bytecode.instructions
+    );
+}
+
+#[test]
+fn explicit_local_id_selects_runtime_id_bytecodes_only_for_tagged_calls() {
+    use bex_vm_types::Instruction;
+
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+function leaf(n: int) -> int { n }
+
+function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int throws baml.errors.Io {
+  let plain = leaf(0)
+  let tagged = leaf(1, $id = call_id)
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = sysop_id)
+  plain + tagged
+}
+"#,
+    );
+    let program = compile(&db);
+    let main_idx = program.function_indices["user.main"];
+    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
+        panic!("expected user.main to be a function")
+    };
+
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::Call { .. }))
+    );
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::CallWithRuntimeId { .. }))
+    );
+    assert!(
+        main.bytecode
+            .instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::SysOpWithRuntimeId(_)))
+    );
+}
+
+#[test]
+fn explicit_local_id_selects_indirect_optional_and_virtual_bytecodes() {
+    use bex_vm_types::Instruction;
+
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Speaker {
+  function speak(self) -> int throws never
+}
+
+class Dog {
+  function speak(self) -> int { 1 }
+}
+
+implements Speaker for Dog {}
+
+function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
+  callback(1, $id = id)
+}
+
+function optional(callback: ((int) -> int throws never)?, id: boundary.LocalId) -> int? {
+  callback?.(1, $id = id)
+}
+
+function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
+  speaker.speak($id = id)
+}
+"#,
+    );
+    let program = compile(&db);
+
+    for name in ["user.indirect", "user.optional"] {
+        let idx = program.function_indices[name];
+        let bex_vm_types::Object::Function(function) = &(*program.objects)[idx] else {
+            panic!("expected {name} to be a function")
+        };
+        assert!(
+            function
+                .bytecode
+                .instructions
+                .iter()
+                .any(|instruction| matches!(instruction, Instruction::CallIndirectWithRuntimeId)),
+            "{name} did not emit CALL_INDIRECT_WITH_RUNTIME_ID"
+        );
+    }
+
+    let virtual_idx = program.function_indices["user.virtual"];
+    let bex_vm_types::Object::Function(virtual_function) = &(*program.objects)[virtual_idx] else {
+        panic!("expected user.virtual to be a function")
+    };
+    assert!(
+        virtual_function
+            .bytecode
+            .instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::VirtualCallWithRuntimeId { .. })),
+        "virtual call did not emit VIRTUAL_CALL_WITH_RUNTIME_ID"
+    );
+}
+
 macro_rules! emit_snapshot {
     ($name:expr, $output:expr) => {
         assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);

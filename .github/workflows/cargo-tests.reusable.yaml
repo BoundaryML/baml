@@ -463,6 +463,20 @@ jobs:
                 "timeout": 30,
               },
               {
+                // The Java sdk-test crate needs the mise-pinned JDK and
+                // Gradle (setup script builds the bridge_java cdylib and
+                // the baml_bridge jar; test time spawns `gradle` from
+                // PATH, so `java` + `gradle` must be in install-args).
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "linux",
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
+                "rust-cache-key": "linux-cargo",
+                "timeout": 30,
+              },
+              {
                 "sdk-label": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
@@ -523,6 +537,29 @@ jobs:
                 "timeout": 40,
               },
               {
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
+                // Swift is macOS-only: the fixtures need SwiftPM/XCTest,
+                // and the nextest-bound setup script assembles the
+                // BamlBridgeFFI xcframework (host slice) before the run.
+                "sdk-label": "swift",
+                "package-name": "sdk_test_swift",
+                "sdk-path": "swift",
+                "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "macos",
+                "runs-on": "blacksmith-6vcpu-macos-latest",
+                "rust-cache-key": "macos-cargo",
+                "timeout": 40,
+              },
+              {
                 "sdk-label": "go",
                 "package-name": "sdk_test_go",
                 "sdk-path": "go",
@@ -567,6 +604,16 @@ jobs:
                 "package-name": "sdk_test_rust",
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
+                "os-label": "windows",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
+                "rust-cache-key": "windows-cargo",
+                "timeout": 60,
+              },
+              {
+                "sdk-label": "java",
+                "package-name": "sdk_test_java",
+                "sdk-path": "java",
+                "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "windows",
                 "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",

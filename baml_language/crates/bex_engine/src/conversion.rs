@@ -3190,7 +3190,15 @@ fn runtime_ty_assignable_with_aliases(
     {
         return runtime_ty_assignable_with_aliases(actual, expanded, aliases);
     }
-    actual.is_subtype_of(expected)
+    #[expect(
+        deprecated,
+        reason = "inbound annotation matching has aliases but no VM-backed type facts"
+    )]
+    baml_type::normalize::is_subtype(
+        actual.as_ty(),
+        expected.as_ty(),
+        &baml_type::normalize::NoFacts,
+    )
 }
 
 /// An erased generic host object can know its nominal class without knowing
@@ -3589,9 +3597,8 @@ fn coerce_arg_to_declared_type_with_aliases(
 /// Coerce an **outgoing** return value to match the declared return type.
 ///
 /// Handles int↔bigint conversion at the FFI boundary. These conversions exist
-/// **only** at the host boundary — the type system is purely structural and
-/// does not relate `int` and `bigint` (see
-/// `baml_compiler2_tir::normalize::is_subtype_of`). `int → bigint` and
+/// **only** at the host boundary — the type system does not relate `int` and
+/// `bigint` (concrete types are atomic; see `baml_type::normalize`). `int → bigint` and
 /// `int → float` widen unconditionally; `bigint → int` succeeds when the value
 /// fits in i64, erroring on overflow rather than silently truncating. Unions
 /// delegate to member coercion.
@@ -3610,9 +3617,8 @@ pub(crate) fn coerce_return_to_declared_type(
 /// Shared numeric / optional / union coercion used by both arg and return
 /// paths.
 ///
-/// These conversions exist only at the FFI boundary. The compile-time subtype
-/// relation (`baml_compiler2_tir::normalize::is_subtype_of`,
-/// `baml_type::RuntimeTy::is_subtype_of`) is purely structural and does **not** widen
+/// These conversions exist only at the FFI boundary. The subtype relation
+/// (`baml_type::normalize::is_subtype`) is coercion-free and does **not** widen
 /// `int` to `bigint` or `float`; the arms below add those widenings (plus a
 /// checked `bigint → int` narrowing) only when crossing the host boundary.
 fn coerce_numeric_to_declared_type(

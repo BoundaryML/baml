@@ -45,13 +45,15 @@ pub enum BridgeLanguage {
     Rust = 4,
     CSharp = 5,
     Cpp = 6,
+    Java = 7,
+    Swift = 8,
 }
 
 impl BridgeLanguage {
     const fn inbound_union_ambiguity_policy(self) -> bex_project::InboundUnionAmbiguityPolicy {
         match self {
             Self::NodeJs | Self::Python => bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
-            Self::Go | Self::Rust | Self::CSharp | Self::Cpp => {
+            Self::Go | Self::Rust | Self::CSharp | Self::Cpp | Self::Java | Self::Swift => {
                 bex_project::InboundUnionAmbiguityPolicy::Reject
             }
         }
@@ -65,6 +67,8 @@ impl BridgeLanguage {
             Self::Rust => "rust",
             Self::CSharp => "csharp",
             Self::Cpp => "cpp",
+            Self::Java => "java",
+            Self::Swift => "swift",
         }
     }
 
@@ -76,6 +80,8 @@ impl BridgeLanguage {
             Self::Rust => "Rust",
             Self::CSharp => "C#",
             Self::Cpp => "C++",
+            Self::Java => "Java",
+            Self::Swift => "Swift",
         }
     }
 }
@@ -91,6 +97,8 @@ impl TryFrom<u32> for BridgeLanguage {
             4 => Ok(Self::Rust),
             5 => Ok(Self::CSharp),
             6 => Ok(Self::Cpp),
+            7 => Ok(Self::Java),
+            8 => Ok(Self::Swift),
             _ => Err(format!("unknown BAML bridge language ID {value}")),
         }
     }
