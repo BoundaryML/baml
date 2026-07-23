@@ -57,24 +57,32 @@ fn spawn_mock(state: Arc<MockState>) -> String {
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
-            let mut buf = [0u8; 16384];
-            let n = stream.read(&mut buf).unwrap_or(0);
-            let req = String::from_utf8_lossy(&buf[..n]).into_owned();
-            let path = req
-                .lines()
-                .next()
-                .and_then(|l| l.split_whitespace().nth(1))
-                .unwrap_or("")
-                .to_string();
-            let body = req.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
-            let (status, response) = respond(&state, &base_for_thread, &path, &body);
-            let _ = stream.write_all(
-                format!(
-                    "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
-                    response.len()
-                )
-                .as_bytes(),
-            );
+            // One thread per connection: a panic from an assert! inside
+            // `respond` then kills only that connection (the client sees a
+            // reset and errors) instead of the whole accept loop, which
+            // would mask the assertion message behind a hang.
+            let state = state.clone();
+            let base = base_for_thread.clone();
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 16384];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+                let path = req
+                    .lines()
+                    .next()
+                    .and_then(|l| l.split_whitespace().nth(1))
+                    .unwrap_or("")
+                    .to_string();
+                let body = req.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+                let (status, response) = respond(&state, &base, &path, &body);
+                let _ = stream.write_all(
+                    format!(
+                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
+                        response.len()
+                    )
+                    .as_bytes(),
+                );
+            });
         }
     });
     base
@@ -225,6 +233,20 @@ fn anonymous_first_lifecycle_with_claim_ceremony() {
     let (ok, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
     assert!(ok, "{out}");
     assert!(out.contains("Logged in as user@example.com"), "{out}");
+
+    // 6. token prints the current access token.
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "token"], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("at_claimed"), "{out}");
+
+    // 7. logout removes the credentials file; whoami reports logged out.
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "logout"], None);
+    assert!(ok, "{out}");
+    assert!(out.contains("Logged out"), "{out}");
+    assert!(!creds.exists(), "creds.json must be removed on logout");
+    let (ok, out) = run_baml(home.path(), &base, &["auth", "whoami"], None);
+    assert!(!ok, "whoami should exit non-zero when logged out: {out}");
+    assert!(out.contains("Not logged in"), "{out}");
 }
 
 #[test]
