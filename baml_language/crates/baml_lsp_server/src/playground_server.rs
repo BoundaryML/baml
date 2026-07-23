@@ -43,8 +43,7 @@ use bex_events::{
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
-        LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueIdAllocator, ValueRef,
-        ValueWriter,
+        LogEventRecord, ValueCapture, ValueCodec, ValueIdAllocator, ValueRef, ValueWriter,
     },
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
@@ -563,7 +562,7 @@ fn drain_captured_values_and_broadcast(
             }
         } else {
             let capture = ValueCapture {
-                kind: value_capture_kind_from_bex(draft.kind),
+                kind: draft.kind.to_value_capture_kind(),
                 call: draft.call,
             };
             match history_store.append_value_body(
@@ -591,7 +590,7 @@ fn drain_captured_values_and_broadcast(
             failure.boundary_id,
             format!(
                 "{} capture failed: {}",
-                value_capture_kind_from_bex(failure.kind).as_wire_str(),
+                failure.kind.to_value_capture_kind().as_wire_str(),
                 failure.diagnostic
             ),
         );
@@ -765,18 +764,6 @@ fn append_capture_loss_record(
             timestamp_ms: epoch_ms(),
         },
     )
-}
-
-fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
-    match kind {
-        bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
-        bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
-        bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
-        bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
-        bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
-        bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
-        bex_project::CaptureKind::CallInput => ValueCaptureKind::CallInput,
-    }
 }
 
 fn broadcast_value_capture_diagnostic(

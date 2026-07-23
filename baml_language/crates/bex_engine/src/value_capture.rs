@@ -331,7 +331,7 @@ impl TraceCaptureProducer {
                     ValueCodec::BamlOutboundValue,
                     body,
                     Some(ValueCapture {
-                        kind: value_capture_kind(draft.kind),
+                        kind: draft.kind.to_value_capture_kind(),
                         call: draft.call,
                     }),
                 )
@@ -426,18 +426,6 @@ impl TraceDrainFailureReason {
     }
 }
 
-fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
-    match kind {
-        CaptureKind::RootInput => ValueCaptureKind::RootInput,
-        CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
-        CaptureKind::RootError => ValueCaptureKind::RootError,
-        CaptureKind::LogBody => ValueCaptureKind::LogBody,
-        CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
-        CaptureKind::CallError => ValueCaptureKind::CallError,
-        CaptureKind::CallInput => ValueCaptureKind::CallInput,
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CaptureQueueClass {
     Value,
@@ -446,6 +434,18 @@ enum CaptureQueueClass {
 }
 
 impl CaptureKind {
+    pub const fn to_value_capture_kind(self) -> ValueCaptureKind {
+        match self {
+            Self::RootInput => ValueCaptureKind::RootInput,
+            Self::RootOutput => ValueCaptureKind::RootOutput,
+            Self::RootError => ValueCaptureKind::RootError,
+            Self::LogBody => ValueCaptureKind::LogBody,
+            Self::CallOutput => ValueCaptureKind::CallOutput,
+            Self::CallError => ValueCaptureKind::CallError,
+            Self::CallInput => ValueCaptureKind::CallInput,
+        }
+    }
+
     fn queue_class(self) -> CaptureQueueClass {
         match self {
             CaptureKind::RootInput
@@ -550,7 +550,7 @@ mod tests {
     use bex_events::{
         ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
         run::TraceCallKey,
-        value::{ValueCodec, ValueRef, ValueWriteOutcome},
+        value::{ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome},
     };
 
     use crate::{
@@ -584,6 +584,21 @@ mod tests {
             source: None,
             timestamp_ms: 123,
             message_preview: Some("hello".to_string()),
+        }
+    }
+
+    #[test]
+    fn capture_kind_maps_to_value_capture_kind() {
+        for (kind, expected) in [
+            (CaptureKind::RootInput, ValueCaptureKind::RootInput),
+            (CaptureKind::RootOutput, ValueCaptureKind::RootOutput),
+            (CaptureKind::RootError, ValueCaptureKind::RootError),
+            (CaptureKind::LogBody, ValueCaptureKind::LogBody),
+            (CaptureKind::CallOutput, ValueCaptureKind::CallOutput),
+            (CaptureKind::CallError, ValueCaptureKind::CallError),
+            (CaptureKind::CallInput, ValueCaptureKind::CallInput),
+        ] {
+            assert_eq!(kind.to_value_capture_kind(), expected);
         }
     }
 

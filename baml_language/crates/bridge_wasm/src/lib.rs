@@ -88,8 +88,8 @@ use bex_events::{
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
         DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
-        LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCaptureKind,
-        ValueCodec, ValueIdAllocator, ValueRef, ValueWriteOutcome, ValueWriter,
+        LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCodec,
+        ValueIdAllocator, ValueRef, ValueWriteOutcome, ValueWriter,
     },
 };
 pub use bridge_ctypes::{
@@ -1878,7 +1878,7 @@ fn drain_wasm_captured_values(
             }
         } else {
             let capture = ValueCapture {
-                kind: value_capture_kind_from_bex(draft.kind),
+                kind: draft.kind.to_value_capture_kind(),
                 call: draft.call,
             };
             match history_store.borrow_mut().append_value_body(
@@ -1906,7 +1906,7 @@ fn drain_wasm_captured_values(
             failure.boundary_id,
             format!(
                 "{} capture failed: {}",
-                value_capture_kind_from_bex(failure.kind).as_wire_str(),
+                failure.kind.to_value_capture_kind().as_wire_str(),
                 failure.diagnostic
             ),
         );
@@ -2075,18 +2075,6 @@ fn append_wasm_capture_loss_record(
     )
 }
 
-fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
-    match kind {
-        bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
-        bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
-        bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
-        bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
-        bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
-        bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
-        bex_project::CaptureKind::CallInput => ValueCaptureKind::CallInput,
-    }
-}
-
 fn send_wasm_history_diagnostic(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
@@ -2172,6 +2160,7 @@ mod history_tests {
             PayloadKind, ProfileEventSource, ProjectGeneration, RunPatchChange, RunRequestSummary,
             RunStatus, RunTimeAnchor, StartGuard, profile_event_envelope_from_disk_event,
         },
+        value::ValueCaptureKind,
     };
 
     use super::*;
