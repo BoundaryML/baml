@@ -884,7 +884,7 @@ pub fn qualify_def(
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }
 
-/// Build a class receiver type for callers holding firewall
+/// Build a class receiver type from
 /// [`ClassData`](baml_compiler2_ppir::item_data::ClassData) — declared generics
 /// become `TypeVar` arguments, with builtin-container sugar provided by
 /// [`receiver_type_for_class_at`](crate::self_type::receiver_type_for_class_at)).

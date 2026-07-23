@@ -11414,10 +11414,10 @@ async fn union_fuzz_f01_field_read_on_iface_union_member() {
     );
 }
 
-/// F2 [crash]: generic-interface match narrowing ignores the type argument — a
-/// `StrSlot` (only `Slot<string>`) matches the `let a: Slot<int>` arm, so
-/// `a.value + 1` runs integer add on a string and panics (`tagged_int_add_checked`).
-/// SHOULD NOT match the `Slot<int>` arm; falls through -> 0.
+/// F2 regression: generic-interface match narrowing must respect type arguments.
+/// If a `StrSlot` (`Slot<string>`) incorrectly matched the `let a: Slot<int>` arm,
+/// `a.value + 1` would run integer addition on a string and panic. It should
+/// instead fall through and return 0.
 /// Repro: `cat_generic_iface_union/generic_iface_union_2d_unsound.baml`
 #[tokio::test]
 async fn union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash() {
