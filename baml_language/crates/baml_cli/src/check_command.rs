@@ -189,11 +189,13 @@ pub(crate) fn render_project_diagnostics(
             }
         }
     }
-    render::render_diagnostics_with_highlights(
+    let message_highlighter = crate::paint::MessageHighlighter::default();
+    render::render_diagnostics_with_highlighters(
         diagnostics,
         &sources,
         &file_paths,
         &highlights,
+        Some(&message_highlighter),
         &config,
     )
 }

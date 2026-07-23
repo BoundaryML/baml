@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use baml_base::FileId;
 use text_size::TextRange;
 
+use crate::DiagnosticMessageKind;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HighlightColor {
     Green,
@@ -50,3 +52,7 @@ pub struct HighlightSpan {
 }
 
 pub type SourceHighlights = HashMap<FileId, Vec<HighlightSpan>>;
+
+pub trait DiagnosticMessageHighlighter {
+    fn highlight(&self, kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan>;
+}

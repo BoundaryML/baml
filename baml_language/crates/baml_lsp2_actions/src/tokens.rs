@@ -18,6 +18,7 @@
 //!   definition.
 
 use baml_base::{Name, SourceFile};
+use baml_compiler_diagnostics::{HighlightAttributes, HighlightColor, HighlightStyle};
 use baml_compiler_syntax::{
     SyntaxKind, SyntaxNode, SyntaxToken,
     ast::{
@@ -146,6 +147,53 @@ impl SemanticTokenType {
             Self::EscapeSequence => "escapeSequence",
             Self::Boolean => "boolean",
         }
+    }
+}
+
+/// Terminal style for a semantic token.
+///
+/// The named ANSI palette stays legible on light and dark backgrounds.
+/// Modifiers overlay attributes the same way editor themes do.
+pub fn semantic_highlight_style(
+    token_type: SemanticTokenType,
+    modifiers: ModifierSet,
+) -> HighlightStyle {
+    use SemanticTokenType as T;
+
+    let (foreground, base_dim) = match token_type {
+        T::Keyword | T::Modifier => (Some(HighlightColor::Magenta), false),
+        T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
+            (Some(HighlightColor::Yellow), false)
+        }
+        T::Function | T::Method | T::Macro => (Some(HighlightColor::BrightBlue), false),
+        T::EnumMember | T::Property => (Some(HighlightColor::Cyan), false),
+        T::Parameter => (Some(HighlightColor::Yellow), true),
+        T::Namespace => (Some(HighlightColor::BrightCyan), false),
+        T::String | T::Regexp => (Some(HighlightColor::Green), false),
+        T::EscapeSequence => (Some(HighlightColor::BrightMagenta), false),
+        T::Number | T::Boolean => (Some(HighlightColor::BrightYellow), false),
+        T::Comment => (None, true),
+        T::Decorator => (Some(HighlightColor::Magenta), true),
+        T::Operator => (None, true),
+        T::Variable | T::Event => (None, false),
+    };
+    let declaration = modifiers.contains(ModifierSet::DECLARATION);
+    let mut attributes = HighlightAttributes::empty();
+    if declaration {
+        attributes.insert(HighlightAttributes::BOLD);
+    }
+    if base_dim && !declaration {
+        attributes.insert(HighlightAttributes::DIM);
+    }
+    if modifiers.contains(ModifierSet::DEFAULT_LIBRARY) {
+        attributes.insert(HighlightAttributes::ITALIC);
+    }
+    if modifiers.contains(ModifierSet::DEPRECATED) {
+        attributes.insert(HighlightAttributes::STRIKETHROUGH);
+    }
+    HighlightStyle {
+        foreground,
+        attributes,
     }
 }
 

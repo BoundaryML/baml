@@ -40,7 +40,8 @@ use owo_colors::{Style as OwoStyle, Styled};
 use crate::{
     diagnostic::{Annotation, Diagnostic, Severity},
     highlight::{
-        HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
+        DiagnosticMessageHighlighter, HighlightAttributes, HighlightColor, HighlightSpan,
+        HighlightStyle, SourceHighlights,
     },
     message::{DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind},
 };
@@ -176,9 +177,20 @@ pub fn render_diagnostics_with_highlights(
     highlights: &SourceHighlights,
     config: &RenderConfig,
 ) -> String {
+    render_diagnostics_with_highlighters(diagnostics, sources, file_paths, highlights, None, config)
+}
+
+pub fn render_diagnostics_with_highlighters(
+    diagnostics: &[Diagnostic],
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+    source_highlights: &SourceHighlights,
+    message_highlighter: Option<&dyn DiagnosticMessageHighlighter>,
+    config: &RenderConfig,
+) -> String {
     let mut path_cache = HashMap::new();
     let highlighter = (config.format == DiagnosticFormat::Human && config.color)
-        .then(|| DiagnosticHighlighter::new(highlights, file_paths));
+        .then(|| DiagnosticHighlighter::new(source_highlights, file_paths));
     diagnostics
         .iter()
         .map(|diagnostic| match config.format {
@@ -192,6 +204,7 @@ pub fn render_diagnostics_with_highlights(
                     &handler,
                     config.color,
                     config.show_error_codes,
+                    message_highlighter,
                 )
             }
             DiagnosticFormat::Agent => render_agent(
@@ -274,6 +287,7 @@ fn render_miette(
         &handler,
         color,
         show_error_codes,
+        None,
     )
 }
 
@@ -313,9 +327,16 @@ fn render_miette_with_handler(
     handler: &GraphicalReportHandler,
     color: bool,
     show_error_codes: bool,
+    message_highlighter: Option<&dyn DiagnosticMessageHighlighter>,
 ) -> String {
-    let diagnostic =
-        build_rendered_diagnostic(diagnostic, sources, file_paths, color, show_error_codes);
+    let diagnostic = build_rendered_diagnostic(
+        diagnostic,
+        sources,
+        file_paths,
+        color,
+        show_error_codes,
+        message_highlighter,
+    );
     let mut output = String::new();
     if handler.render_report(&mut output, &diagnostic).is_err() {
         return "<error rendering diagnostic>".to_string();
@@ -333,6 +354,7 @@ fn build_rendered_diagnostic(
     file_paths: &HashMap<FileId, PathBuf>,
     color: bool,
     show_error_codes: bool,
+    message_highlighter: Option<&dyn DiagnosticMessageHighlighter>,
 ) -> RenderedDiagnostic {
     let primary_file = diagnostic
         .primary_span()
@@ -357,6 +379,7 @@ fn build_rendered_diagnostic(
             &diagnostic.message_highlights,
             MessageParentStyle::None,
             color,
+            message_highlighter,
         ),
         code: show_error_codes.then(|| diagnostic.code()),
         severity: miette_severity(diagnostic.severity),
@@ -378,6 +401,7 @@ fn build_rendered_diagnostic(
                                 index,
                             },
                             color,
+                            message_highlighter,
                         )
                     });
                 labeled_span(annotation.span, message, annotation.is_primary)
@@ -412,6 +436,7 @@ fn build_rendered_diagnostic(
                             &annotation.message_highlights,
                             MessageParentStyle::None,
                             color,
+                            message_highlighter,
                         )
                     })
                 })
@@ -434,6 +459,7 @@ fn build_rendered_diagnostic(
                 &related.message_highlights,
                 MessageParentStyle::None,
                 color,
+                message_highlighter,
             ),
             code: None,
             severity: MietteSeverity::Advice,
@@ -452,6 +478,9 @@ fn build_rendered_diagnostic(
 
 const MESSAGE_STYLE_START: char = '\u{1d}';
 const MESSAGE_STYLE_END: char = '\u{1e}';
+const MESSAGE_STYLE_CODE_BASE: u32 = 0xe0100;
+const MESSAGE_FOREGROUND_COUNT: u32 = 9;
+const MESSAGE_ATTRIBUTE_COUNT: u32 = 16;
 
 #[derive(Clone, Copy)]
 enum MessageParentStyle {
@@ -473,6 +502,7 @@ fn marked_message(
     highlights: &[DiagnosticMessageHighlight],
     parent: MessageParentStyle,
     color: bool,
+    highlighter: Option<&dyn DiagnosticMessageHighlighter>,
 ) -> String {
     if !color || highlights.is_empty() {
         return message.to_string();
@@ -480,7 +510,7 @@ fn marked_message(
 
     let mut highlights = highlights.to_vec();
     highlights.sort_by_key(|highlight| highlight.start);
-    let mut output = String::with_capacity(message.len() + highlights.len() * 6);
+    let mut resolved = Vec::new();
     let mut cursor = 0;
     for highlight in highlights {
         let start = highlight.start as usize;
@@ -493,44 +523,187 @@ fn marked_message(
         {
             continue;
         }
-        output.push_str(&message[cursor..start]);
-        output.push(MESSAGE_STYLE_START);
-        output.push(message_style_id(highlight.kind));
-        output.push_str(&message[start..end]);
-        output.push(MESSAGE_STYLE_END);
-        output.push(message_style_id(highlight.kind));
-        output.push(parent_style_id(parent));
+        let fragment = &message[start..end];
+        if let Some(highlighter) = highlighter {
+            append_fragment_highlights(
+                &mut resolved,
+                start,
+                fragment,
+                highlighter.highlight(highlight.kind, fragment),
+            );
+        } else {
+            resolved.push(ResolvedMessageHighlight {
+                start,
+                end,
+                style: fallback_message_style(highlight.kind),
+            });
+        }
         cursor = end;
+    }
+
+    let mut output = String::with_capacity(message.len() + resolved.len() * 6);
+    cursor = 0;
+    for highlight in resolved {
+        output.push_str(&message[cursor..highlight.start]);
+        output.push(MESSAGE_STYLE_START);
+        output.push(message_style_code(highlight.style));
+        output.push_str(&message[highlight.start..highlight.end]);
+        output.push(MESSAGE_STYLE_END);
+        output.push(message_style_code(highlight.style));
+        output.push(parent_style_id(parent));
+        cursor = highlight.end;
     }
     output.push_str(&message[cursor..]);
     output
 }
 
-fn message_style_id(kind: DiagnosticMessageKind) -> char {
-    match kind {
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => '\u{1}',
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => '\u{2}',
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => '\u{3}',
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => '\u{4}',
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::EnumVariant) => '\u{5}',
-        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => '\u{6}',
-        DiagnosticMessageKind::TypeExpression => '\u{7}',
-        DiagnosticMessageKind::Code => '\u{8}',
+#[derive(Clone, Copy)]
+struct ResolvedMessageHighlight {
+    start: usize,
+    end: usize,
+    style: HighlightStyle,
+}
+
+fn append_fragment_highlights(
+    output: &mut Vec<ResolvedMessageHighlight>,
+    message_start: usize,
+    fragment: &str,
+    mut highlights: Vec<HighlightSpan>,
+) {
+    highlights.sort_by_key(|highlight| highlight.range.start());
+    let mut cursor = 0;
+    for highlight in highlights {
+        let start: usize = highlight.range.start().into();
+        let end: usize = highlight.range.end().into();
+        if start < cursor
+            || start >= end
+            || end > fragment.len()
+            || !fragment.is_char_boundary(start)
+            || !fragment.is_char_boundary(end)
+        {
+            continue;
+        }
+        if cursor < start {
+            output.push(ResolvedMessageHighlight {
+                start: message_start + cursor,
+                end: message_start + start,
+                style: HighlightStyle::default(),
+            });
+        }
+        output.push(ResolvedMessageHighlight {
+            start: message_start + start,
+            end: message_start + end,
+            style: highlight.style,
+        });
+        cursor = end;
+    }
+    if cursor < fragment.len() {
+        output.push(ResolvedMessageHighlight {
+            start: message_start + cursor,
+            end: message_start + fragment.len(),
+            style: HighlightStyle::default(),
+        });
     }
 }
 
-fn message_style(id: char) -> Option<OwoStyle> {
-    match id {
-        '\u{1}' => Some(OwoStyle::new().yellow()),
-        '\u{2}' => Some(OwoStyle::new().bright_blue()),
-        '\u{3}' => Some(OwoStyle::new().cyan()),
-        '\u{4}' => Some(OwoStyle::new().bright_cyan()),
-        '\u{5}' => Some(OwoStyle::new().bright_yellow()),
-        '\u{6}' => Some(OwoStyle::new().magenta()),
-        '\u{7}' => Some(OwoStyle::new().yellow()),
-        '\u{8}' => Some(OwoStyle::new().bright_cyan()),
-        _ => None,
+fn fallback_message_style(kind: DiagnosticMessageKind) -> HighlightStyle {
+    let foreground = match kind {
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type)
+        | DiagnosticMessageKind::TypeExpression => HighlightColor::Yellow,
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => {
+            HighlightColor::BrightBlue
+        }
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => HighlightColor::Cyan,
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable)
+        | DiagnosticMessageKind::Code => HighlightColor::BrightCyan,
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::EnumVariant) => {
+            HighlightColor::BrightYellow
+        }
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => {
+            HighlightColor::Magenta
+        }
+    };
+    HighlightStyle {
+        foreground: Some(foreground),
+        attributes: HighlightAttributes::empty(),
     }
+}
+
+fn message_style_code(style: HighlightStyle) -> char {
+    let foreground = match style.foreground {
+        None => 0,
+        Some(HighlightColor::Green) => 1,
+        Some(HighlightColor::Yellow) => 2,
+        Some(HighlightColor::Magenta) => 3,
+        Some(HighlightColor::Cyan) => 4,
+        Some(HighlightColor::BrightYellow) => 5,
+        Some(HighlightColor::BrightBlue) => 6,
+        Some(HighlightColor::BrightMagenta) => 7,
+        Some(HighlightColor::BrightCyan) => 8,
+    };
+    let mut attributes = 0;
+    if style.attributes.contains(HighlightAttributes::BOLD) {
+        attributes |= 1;
+    }
+    if style.attributes.contains(HighlightAttributes::DIM) {
+        attributes |= 2;
+    }
+    if style.attributes.contains(HighlightAttributes::ITALIC) {
+        attributes |= 4;
+    }
+    if style
+        .attributes
+        .contains(HighlightAttributes::STRIKETHROUGH)
+    {
+        attributes |= 8;
+    }
+    char::from_u32(MESSAGE_STYLE_CODE_BASE + foreground + MESSAGE_FOREGROUND_COUNT * attributes)
+        .expect("diagnostic message style code is a valid Unicode variation selector")
+}
+
+fn message_style(code: char) -> Option<OwoStyle> {
+    let value = u32::from(code).checked_sub(MESSAGE_STYLE_CODE_BASE)?;
+    if value >= MESSAGE_FOREGROUND_COUNT * MESSAGE_ATTRIBUTE_COUNT {
+        return None;
+    }
+    let foreground = match value % MESSAGE_FOREGROUND_COUNT {
+        0 => None,
+        1 => Some(HighlightColor::Green),
+        2 => Some(HighlightColor::Yellow),
+        3 => Some(HighlightColor::Magenta),
+        4 => Some(HighlightColor::Cyan),
+        5 => Some(HighlightColor::BrightYellow),
+        6 => Some(HighlightColor::BrightBlue),
+        7 => Some(HighlightColor::BrightMagenta),
+        8 => Some(HighlightColor::BrightCyan),
+        _ => unreachable!(),
+    };
+    let attributes = value / MESSAGE_FOREGROUND_COUNT;
+    let mut style = OwoStyle::new();
+    style = match foreground {
+        Some(HighlightColor::Green) => style.green(),
+        Some(HighlightColor::Yellow) => style.yellow(),
+        Some(HighlightColor::Magenta) => style.magenta(),
+        Some(HighlightColor::Cyan) => style.cyan(),
+        Some(HighlightColor::BrightYellow) => style.bright_yellow(),
+        Some(HighlightColor::BrightBlue) => style.bright_blue(),
+        Some(HighlightColor::BrightMagenta) => style.bright_magenta(),
+        Some(HighlightColor::BrightCyan) => style.bright_cyan(),
+        None => style,
+    };
+    if attributes & 1 != 0 {
+        style = style.bold();
+    }
+    if attributes & 2 != 0 {
+        style = style.dimmed();
+    }
+    if attributes & 4 != 0 {
+        style = style.italic();
+    }
+    if attributes & 8 != 0 {
+        style = style.strikethrough();
+    }
+    Some(style)
 }
 
 fn parent_style_id(parent: MessageParentStyle) -> char {
@@ -574,6 +747,7 @@ fn apply_message_styles(input: &str) -> String {
                 break;
             };
             if let Some(style) = message_style(id) {
+                output.push_str("\u{1b}[0m");
                 output.push_str(&style.prefix_formatter().to_string());
                 active_style = Some(style);
             }
@@ -584,8 +758,8 @@ fn apply_message_styles(input: &str) -> String {
                 output.push(ch);
                 break;
             };
-            if let Some(style) = message_style(style_id) {
-                output.push_str(&style.suffix_formatter().to_string());
+            if message_style(style_id).is_some() {
+                output.push_str("\u{1b}[0m");
             }
             if let Some(parent) = parent_style(parent_id) {
                 output.push_str(&parent.prefix_formatter().to_string());
@@ -1303,6 +1477,51 @@ mod tests {
         assert!(output.contains("\u{1b}[33mUser"), "{output:?}");
         assert!(!output.contains(MESSAGE_STYLE_START), "{output:?}");
         assert!(!output.contains(MESSAGE_STYLE_END), "{output:?}");
+    }
+
+    #[test]
+    fn human_renderer_uses_supplied_message_highlights() {
+        struct GreenHighlighter;
+
+        impl DiagnosticMessageHighlighter for GreenHighlighter {
+            fn highlight(&self, _kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan> {
+                vec![HighlightSpan {
+                    range: TextRange::new(
+                        0.into(),
+                        u32::try_from(text.len())
+                            .expect("test diagnostic message fits in u32")
+                            .into(),
+                    ),
+                    style: HighlightStyle {
+                        foreground: Some(HighlightColor::Green),
+                        attributes: HighlightAttributes::empty(),
+                    },
+                }]
+            }
+        }
+
+        let message = crate::DiagnosticText::new()
+            .text("found ")
+            .type_expr("\"not an int\"");
+        let diagnostic =
+            Diagnostic::error(DiagnosticId::TypeMismatch, message).with_primary_span(test_span());
+        let output = render_diagnostics_with_highlighters(
+            &[diagnostic],
+            &make_source(),
+            &make_file_paths(),
+            &SourceHighlights::new(),
+            Some(&GreenHighlighter),
+            &RenderConfig::cli(),
+        );
+
+        assert!(output.contains("\u{1b}[32m\"not an int\""), "{output:?}");
+        assert!(
+            !output.chars().any(
+                |ch| (MESSAGE_STYLE_CODE_BASE..MESSAGE_STYLE_CODE_BASE + 256)
+                    .contains(&u32::from(ch))
+            ),
+            "{output:?}"
+        );
     }
 
     #[test]
