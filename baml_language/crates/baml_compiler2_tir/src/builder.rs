@@ -7606,7 +7606,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // would re-establish the element type from `v`, accepting a
                     // wrong-typed value under the declared one (unsound). The
                     // literal case was already adopted recursively above.
-                    let assigned_ty = if adopt_container_literal {
+                    let assigned_ty = if matches!(decl_ty, Ty::Error { .. }) {
+                        decl_ty.clone()
+                    } else if adopt_container_literal {
                         value_ty
                     } else {
                         match (&value_ty, decl_ty) {

@@ -39,9 +39,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [hir] error: Duplicate parameter `value` in `lambda_last`
-    ╭─[ main.baml:17:29 ]
+    ╭─[ main.baml:18:29 ]
     │
- 17 │     let f = (value: string, value: int) -> string {
+ 18 │     let f = (value: string, value: int) -> string {
     │              ──┬──          ──┬──  
     │                ╰─────────────────── first defined as parameter here
     │                               │    

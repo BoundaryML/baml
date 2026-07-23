@@ -93,10 +93,13 @@ SOURCE_FILE
             ARROW "->"
             TYPE_EXPR "int"
               WORD "int"
-            BLOCK_EXPR "{
-        value
-    }"
+            BLOCK_EXPR
               L_BRACE "{"
+              BINARY_EXPR "value = true"
+                WORD "value"
+                EQUALS "="
+                KW_TRUE "true"
+              SEMICOLON ";"
               WORD "value"
               R_BRACE "}"
           SEMICOLON ";"
@@ -138,10 +141,13 @@ SOURCE_FILE
             ARROW "->"
             TYPE_EXPR "string"
               WORD "string"
-            BLOCK_EXPR "{
-        value
-    }"
+            BLOCK_EXPR
               L_BRACE "{"
+              BINARY_EXPR "value = true"
+                WORD "value"
+                EQUALS "="
+                KW_TRUE "true"
+              SEMICOLON ";"
               WORD "value"
               R_BRACE "}"
           SEMICOLON ";"
