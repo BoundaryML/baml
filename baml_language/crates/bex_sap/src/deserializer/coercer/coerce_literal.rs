@@ -17,6 +17,17 @@ use crate::{
     },
 };
 
+fn single_object_primitive<'a, 's>(
+    object: &'a [(Cow<'s, str>, jsonish::Value<'s>)],
+) -> Option<&'a jsonish::Value<'s>> {
+    let (_, value) = object.first().filter(|_| object.len() == 1)?;
+    matches!(
+        value,
+        jsonish::Value::Number(_, _) | jsonish::Value::Boolean(_) | jsonish::Value::String(_, _)
+    )
+    .then_some(value)
+}
+
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for IntLiteralTy
 where
     't: 's,
@@ -108,19 +119,12 @@ where
                     }
                 }
             }
-            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
-                [
-                    (
-                        _,
-                        v @ (jsonish::Value::Number(_, _)
-                        | jsonish::Value::Boolean(_)
-                        | jsonish::Value::String(_, _)),
-                    ),
-                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+            jsonish::Value::Object(obj, CompletionState::Complete) => single_object_primitive(obj)
+                .ok_or_else(|| ctx.error_unexpected_type(target.ty, value))
+                .and_then(|inner| Self::coerce(ctx, target.clone(), inner))
+                .map(|ret| {
                     ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
                 }),
-                _ => Err(ctx.error_unexpected_type(target.ty, value)),
-            },
             _ => {
                 // inner coerce will handle the completion state
                 let int_target = TyWithMeta::new(&IntTy, target.meta);
@@ -194,19 +198,12 @@ where
                     }
                 }
             }
-            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
-                [
-                    (
-                        _,
-                        v @ (jsonish::Value::Number(_, _)
-                        | jsonish::Value::Boolean(_)
-                        | jsonish::Value::String(_, _)),
-                    ),
-                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+            jsonish::Value::Object(obj, CompletionState::Complete) => single_object_primitive(obj)
+                .ok_or_else(|| ctx.error_unexpected_type(target.ty, value))
+                .and_then(|inner| Self::coerce(ctx, target.clone(), inner))
+                .map(|ret| {
                     ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
                 }),
-                _ => Err(ctx.error_unexpected_type(target.ty, value)),
-            },
             _ => {
                 // Inner coerce handles completion state and all conversion paths;
                 // we then check that the resulting BigInt matches the literal value.
@@ -288,19 +285,12 @@ where
                     }
                 }
             }
-            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
-                [
-                    (
-                        _,
-                        v @ (jsonish::Value::Number(_, _)
-                        | jsonish::Value::Boolean(_)
-                        | jsonish::Value::String(_, _)),
-                    ),
-                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+            jsonish::Value::Object(obj, CompletionState::Complete) => single_object_primitive(obj)
+                .ok_or_else(|| ctx.error_unexpected_type(target.ty, value))
+                .and_then(|inner| Self::coerce(ctx, target.clone(), inner))
+                .map(|ret| {
                     ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
                 }),
-                _ => Err(ctx.error_unexpected_type(target.ty, value)),
-            },
             _ => {
                 let bool_target = TyWithMeta::new(&BoolTy, target.meta);
                 match BoolTy::coerce(ctx, bool_target, value) {
@@ -407,19 +397,12 @@ where
                     }
                 }
             }
-            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
-                [
-                    (
-                        _,
-                        v @ (jsonish::Value::Number(_, _)
-                        | jsonish::Value::Boolean(_)
-                        | jsonish::Value::String(_, _)),
-                    ),
-                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+            jsonish::Value::Object(obj, CompletionState::Complete) => single_object_primitive(obj)
+                .ok_or_else(|| ctx.error_unexpected_type(target.ty, value))
+                .and_then(|inner| Self::coerce(ctx, target.clone(), inner))
+                .map(|ret| {
                     ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
                 }),
-                _ => Err(ctx.error_unexpected_type(target.ty, value)),
-            },
             _ => {
                 let candidates = vec![(target.ty.0.as_ref(), vec![&*target.ty.0])];
                 let literal_match = match_string(

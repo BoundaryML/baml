@@ -1,4 +1,17 @@
-use crate::{baml_db, baml_tyannotated};
+use crate::{
+    baml_db, baml_tyannotated,
+    deserializer::{coercer::ParsingContext, deserialize_flags::Flag},
+    sap_model::{
+        AnnotatedTy, BigintLiteralTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeAnnotations,
+    },
+};
+
+fn bigint_literal(value: i64) -> AnnotatedTy<'static, &'static str> {
+    TyWithMeta::new(
+        Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(value.into()))),
+        TypeAnnotations::default(),
+    )
+}
 
 test_deserializer!(
     test_literal_integer_positive,
@@ -38,6 +51,14 @@ test_deserializer!(
     baml_tyannotated!(false),
     baml_db! {},
     false
+);
+
+test_deserializer!(
+    test_bigint_literal_from_single_primitive_object,
+    r#"{"value": 42}"#,
+    bigint_literal(42),
+    baml_db! {},
+    "42"
 );
 
 test_deserializer!(
@@ -269,6 +290,13 @@ test_failing_deserializer!(
     baml_db! {}
 );
 
+test_failing_deserializer!(
+    test_union_literal_with_multiple_types_from_empty_object,
+    "{}",
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {}
+);
+
 // Test with nested object (should fail)
 test_failing_deserializer!(
     test_union_literal_with_multiple_types_from_nested_object,
@@ -324,3 +352,34 @@ test_partial_deserializer!(
     },
     { "bar": null }
 );
+
+#[test]
+fn object_to_literal_flag_retains_outer_object() {
+    let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(1);
+    let db = baml_db! {};
+    let parsed = crate::jsonish::parse(
+        r#"{"value": 1}"#,
+        crate::jsonish::ParseOptions::default(),
+        true,
+    )
+    .expect("jsonish::parse failed");
+    let ctx = ParsingContext::new(&db);
+    let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+    let value = TyResolvedRef::coerce(&ctx, target_ty, &parsed)
+        .expect("coerce failed")
+        .expect("coerce returned None");
+
+    let source = value.meta.flags.flags().iter().find_map(|flag| match flag {
+        Flag::ObjectToPrimitive(source) => Some(source.as_ref()),
+        _ => None,
+    });
+    let object = match &parsed {
+        crate::jsonish::Value::AnyOf(candidates, _) => candidates
+            .iter()
+            .find(|candidate| matches!(candidate, crate::jsonish::Value::Object(_, _)))
+            .expect("expected an object candidate"),
+        object @ crate::jsonish::Value::Object(_, _) => object,
+        _ => panic!("expected an object parse"),
+    };
+    assert_eq!(source, Some(object));
+}
