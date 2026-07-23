@@ -11,6 +11,7 @@ pub mod escape;
 pub mod files;
 pub mod num_lit;
 pub mod qualified_name;
+pub mod salsa_update;
 
 // Re-export everything for convenience
 pub use attr::*;

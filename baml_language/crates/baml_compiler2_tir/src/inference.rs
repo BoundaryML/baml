@@ -1371,18 +1371,7 @@ pub struct ScopeInferenceExtra<'db> {
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for ScopeInference<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
+        unsafe { baml_base::salsa_update::update_by_eq(old_pointer, new_value) }
     }
 }
 
@@ -3276,18 +3265,7 @@ pub struct ResolvedClassFields {
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for ResolvedClassFields {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
+        unsafe { baml_base::salsa_update::update_by_eq(old_pointer, new_value) }
     }
 }
 
@@ -3302,18 +3280,7 @@ pub struct ResolvedTypeAlias {
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for ResolvedTypeAlias {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
+        unsafe { baml_base::salsa_update::update_by_eq(old_pointer, new_value) }
     }
 }
 
