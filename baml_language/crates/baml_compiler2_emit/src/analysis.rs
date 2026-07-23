@@ -1621,7 +1621,11 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::Assign { destination, value } => {
             // Check if this assignment modifies a variable (or field/index of a variable)
             // that the rvalue reads from.
-            let base_local = get_base_local(destination);
+            let Some(base_local) = destination.base_local() else {
+                // Capture reads are not represented in `rvalue_reads`, so a
+                // capture-rooted write must conservatively block inlining.
+                return true;
+            };
             if rvalue_reads.contains(&base_local) {
                 return true;
             }
@@ -1634,18 +1638,6 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
         StatementKind::Nop => false,
-    }
-}
-
-/// Get the base local from a place, following field/index projections.
-///
-/// Panics for `Place::Capture` — captures have no base local.
-fn get_base_local(place: &Place) -> Local {
-    match place {
-        Place::Local(local) => *local,
-        Place::Capture(_) => panic!("Place::Capture has no base local"),
-        Place::Field { base, .. } => get_base_local(base),
-        Place::Index { base, .. } => get_base_local(base),
     }
 }
 
