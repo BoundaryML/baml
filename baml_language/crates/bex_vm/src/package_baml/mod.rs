@@ -52,7 +52,7 @@ use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ArrayReadGuard, HeapPtr, MapReadGuard,
+    ArrayReadGuard, HeapPtr, MapReadGuard, ObjectType,
     types::{Instance, Object, Type, Value},
 };
 use indexmap::IndexMap;
@@ -67,6 +67,25 @@ pub type NativeFunctionResult = Result<Value, VmRustFnError>;
 
 /// Native function type alias.
 pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeCallResult;
+
+fn value_type_name(vm: &BexVm, value: Value) -> String {
+    if value.is_null() {
+        return "null".to_string();
+    }
+    if value.as_int().is_some() {
+        return "int".to_string();
+    }
+    if value.as_bool().is_some() {
+        return "bool".to_string();
+    }
+    if value.is_omitted() {
+        return "omitted".to_string();
+    }
+    if let Some(ptr) = value.as_object_ptr() {
+        return ObjectType::of(vm.get_object(ptr)).to_string();
+    }
+    "unknown".to_string()
+}
 
 /// Result returned by native functions. Non-yielding functions return `Done` or
 /// `Error`; yielding functions (like `array.map`) may return `YieldToCall` to

@@ -1,10 +1,12 @@
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
+use bex_vm_types::{HeapPtr, Object, types::Value};
 use num_bigint::BigInt;
 
-use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
+use super::{
+    ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, value_type_name,
+};
 use crate::{
     BexVm,
     array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
@@ -159,25 +161,6 @@ enum NaturalKind {
     Float,
     Bigint,
     String,
-}
-
-fn value_type_name(vm: &BexVm, value: Value) -> String {
-    if value.is_null() {
-        return "null".to_string();
-    }
-    if value.as_int().is_some() {
-        return "int".to_string();
-    }
-    if value.as_bool().is_some() {
-        return "bool".to_string();
-    }
-    if value.is_omitted() {
-        return "omitted".to_string();
-    }
-    if let Some(ptr) = value.as_object_ptr() {
-        return ObjectType::of(vm.get_object(ptr)).to_string();
-    }
-    "unknown".to_string()
 }
 
 fn invalid_sort(context: &str, message: impl Into<String>) -> VmRustFnError {

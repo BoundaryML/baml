@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    FutureRead, HeapPtr, ObjectType, ValueKind,
+    FutureRead, HeapPtr, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -13,7 +13,7 @@ use super::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee,
+    make_compare_callee, make_to_string_callee, value_type_name,
 };
 use crate::{
     BexVm, VmPanic,
@@ -848,27 +848,6 @@ fn deep_equals_recursive(
 }
 
 // ── Helpers for the numeric-array reductions ──────────────────────────────────
-
-/// Returns a human-readable runtime type name for the `unreachable!` diagnostics
-/// in `expect_float` / `expect_int`.
-fn value_type_name(vm: &BexVm, value: Value) -> String {
-    if value.is_null() {
-        return "null".to_string();
-    }
-    if value.as_int().is_some() {
-        return "int".to_string();
-    }
-    if value.as_bool().is_some() {
-        return "bool".to_string();
-    }
-    if value.is_omitted() {
-        return "omitted".to_string();
-    }
-    if let Some(ptr) = value.as_object_ptr() {
-        return ObjectType::of(vm.get_object(ptr)).to_string();
-    }
-    "unknown".to_string()
-}
 
 /// Extracts a float from a validated `float[]` element. The `FloatStats` /
 /// `Summable` methods are declared on `float[]`, so by the time execution reaches
