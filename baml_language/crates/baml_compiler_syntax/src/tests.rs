@@ -116,4 +116,76 @@ mod builder_tests {
 
         assert_eq!(root.text(), "function test()");
     }
+
+    fn build_attribute(kind: SyntaxKind, argument_kinds: Option<&[SyntaxKind]>) -> SyntaxNode {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(kind);
+        match kind {
+            SyntaxKind::ATTRIBUTE => builder.token(SyntaxKind::AT, "@"),
+            SyntaxKind::BLOCK_ATTRIBUTE => builder.token(SyntaxKind::AT_AT, "@@"),
+            _ => unreachable!("expected attribute syntax kind"),
+        }
+        builder.token(SyntaxKind::WORD, "test");
+
+        if let Some(argument_kinds) = argument_kinds {
+            builder.start_node(SyntaxKind::ATTRIBUTE_ARGS);
+            builder.token(SyntaxKind::L_PAREN, "(");
+            for (index, argument_kind) in argument_kinds.iter().enumerate() {
+                if index > 0 {
+                    builder.token(SyntaxKind::COMMA, ",");
+                }
+                builder.start_node(*argument_kind);
+                builder.token(SyntaxKind::WORD, "value");
+                builder.finish_node();
+            }
+            builder.token(SyntaxKind::R_PAREN, ")");
+            builder.finish_node();
+        }
+
+        builder.finish_node();
+        SyntaxNode::new_root(builder.finish())
+    }
+
+    macro_rules! check_attribute_argument_accessors {
+        ($attribute:ty, $kind:expr) => {{
+            let attribute =
+                <$attribute>::cast(build_attribute($kind, None)).expect("expected attribute");
+            assert!(!attribute.has_args());
+            assert!(attribute.args_span().is_none());
+            assert_eq!(attribute.arg_count(), 0);
+            assert!(!attribute.arg_is_string_literal());
+            assert!(!attribute.arg_is_string_or_unquoted());
+
+            let cases = [
+                (&[][..], false, false),
+                (&[SyntaxKind::STRING_LITERAL][..], true, true),
+                (&[SyntaxKind::RAW_STRING_LITERAL][..], true, true),
+                (&[SyntaxKind::EXPR][..], false, false),
+                (&[SyntaxKind::UNQUOTED_STRING][..], false, true),
+            ];
+
+            for (argument_kinds, is_string_literal, is_string_or_unquoted) in cases {
+                let attribute = <$attribute>::cast(build_attribute($kind, Some(argument_kinds)))
+                    .expect("expected attribute");
+                assert!(attribute.has_args());
+                assert!(attribute.args_span().is_some());
+                assert_eq!(attribute.arg_count(), argument_kinds.len());
+                assert_eq!(attribute.arg_is_string_literal(), is_string_literal);
+                assert_eq!(attribute.arg_is_string_or_unquoted(), is_string_or_unquoted);
+                assert_eq!(
+                    attribute
+                        .args()
+                        .map(|argument| argument.kind())
+                        .collect::<Vec<_>>(),
+                    argument_kinds
+                );
+            }
+        }};
+    }
+
+    #[test]
+    fn attribute_argument_accessors_agree_for_inline_and_block_attributes() {
+        check_attribute_argument_accessors!(ast::Attribute, SyntaxKind::ATTRIBUTE);
+        check_attribute_argument_accessors!(ast::BlockAttribute, SyntaxKind::BLOCK_ATTRIBUTE);
+    }
 }

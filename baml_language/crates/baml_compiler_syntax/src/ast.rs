@@ -97,6 +97,52 @@ fn decode_raw_string_literal_text(text: &str) -> Option<String> {
     Some(rest[1..rest.len() - 1 - hash_count].to_string())
 }
 
+fn attribute_args_node(syntax: &SyntaxNode) -> Option<SyntaxNode> {
+    syntax
+        .children()
+        .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+}
+
+fn attribute_args_contain(syntax: &SyntaxNode, kinds: &[SyntaxKind]) -> bool {
+    attribute_args_node(syntax).is_some_and(|args| {
+        args.descendants_with_tokens()
+            .any(|child| kinds.contains(&child.kind()))
+    })
+}
+
+fn attribute_arg_is_string_literal(syntax: &SyntaxNode) -> bool {
+    attribute_args_contain(
+        syntax,
+        &[SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL],
+    )
+}
+
+fn attribute_arg_is_string_or_unquoted(syntax: &SyntaxNode) -> bool {
+    attribute_args_contain(
+        syntax,
+        &[
+            SyntaxKind::STRING_LITERAL,
+            SyntaxKind::RAW_STRING_LITERAL,
+            SyntaxKind::UNQUOTED_STRING,
+        ],
+    )
+}
+
+fn attribute_args(syntax: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> + '_ {
+    attribute_args_node(syntax)
+        .into_iter()
+        .flat_map(|args| args.children())
+        .filter(|child| {
+            matches!(
+                child.kind(),
+                SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::EXPR
+                    | SyntaxKind::UNQUOTED_STRING
+            )
+        })
+}
+
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     /// Get the syntax kind of this node.
@@ -2892,17 +2938,12 @@ impl BlockAttribute {
 
     /// Check if block attribute has arguments (parentheses with content).
     pub fn has_args(&self) -> bool {
-        self.syntax
-            .children()
-            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        attribute_args_node(&self.syntax).is_some()
     }
 
     /// Get the text range of the argument node (for error reporting).
     pub fn args_span(&self) -> Option<rowan::TextRange> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .map(|args| args.text_range())
+        attribute_args_node(&self.syntax).map(|args| args.text_range())
     }
 
     /// Get the first string argument value (unquoted).
@@ -2960,20 +3001,7 @@ impl BlockAttribute {
 
     /// Check if the argument is a valid string literal (not an expression or identifier).
     pub fn arg_is_string_literal(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-            )
-        })
+        attribute_arg_is_string_literal(&self.syntax)
     }
 
     /// Get all argument nodes in this attribute.
@@ -2984,20 +3012,7 @@ impl BlockAttribute {
     /// - `EXPR` for `{{ jinja }}`
     /// - `UNQUOTED_STRING` for bare words
     pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .into_iter()
-            .flat_map(|args| args.children())
-            .filter(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::EXPR
-                        | SyntaxKind::UNQUOTED_STRING
-                )
-            })
+        attribute_args(&self.syntax)
     }
 
     /// Count the number of arguments.
@@ -3012,22 +3027,7 @@ impl BlockAttribute {
 
     /// Check if the argument is a string literal or unquoted string (not an expression).
     pub fn arg_is_string_or_unquoted(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-                    | SyntaxKind::UNQUOTED_STRING
-            )
-        })
+        attribute_arg_is_string_or_unquoted(&self.syntax)
     }
 
     /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
@@ -3088,17 +3088,12 @@ impl Attribute {
 
     /// Check if attribute has arguments (parentheses with content).
     pub fn has_args(&self) -> bool {
-        self.syntax
-            .children()
-            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        attribute_args_node(&self.syntax).is_some()
     }
 
     /// Get the text range of the argument node (for error reporting).
     pub fn args_span(&self) -> Option<rowan::TextRange> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .map(|args| args.text_range())
+        attribute_args_node(&self.syntax).map(|args| args.text_range())
     }
 
     /// Get the first string argument value (unquoted).
@@ -3158,21 +3153,7 @@ impl Attribute {
     /// Check if the argument is a valid string literal (not an expression or identifier).
     /// Returns true if the argument contains `STRING_LITERAL` or `RAW_STRING_LITERAL`.
     pub fn arg_is_string_literal(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        // Check if we have a STRING_LITERAL or RAW_STRING_LITERAL node/token
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-            )
-        })
+        attribute_arg_is_string_literal(&self.syntax)
     }
 
     /// Get all argument nodes in this attribute.
@@ -3183,20 +3164,7 @@ impl Attribute {
     /// - `EXPR` for `{{ jinja }}`
     /// - `UNQUOTED_STRING` for bare words
     pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-            .into_iter()
-            .flat_map(|args| args.children())
-            .filter(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::EXPR
-                        | SyntaxKind::UNQUOTED_STRING
-                )
-            })
+        attribute_args(&self.syntax)
     }
 
     /// Count the number of arguments.
@@ -3211,22 +3179,7 @@ impl Attribute {
 
     /// Check if the argument is a string literal or unquoted string (not an expression).
     pub fn arg_is_string_or_unquoted(&self) -> bool {
-        let Some(args) = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
-        else {
-            return false;
-        };
-
-        args.descendants_with_tokens().any(|child| {
-            matches!(
-                child.kind(),
-                SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
-                    | SyntaxKind::UNQUOTED_STRING
-            )
-        })
+        attribute_arg_is_string_or_unquoted(&self.syntax)
     }
 
     /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
@@ -3239,9 +3192,7 @@ impl Attribute {
     /// Returns the raw `SyntaxNode` for the argument list. Used by PPIR to
     /// clone the CST node for deferred parsing in later phases.
     pub fn arg_syntax_node(&self) -> Option<SyntaxNode> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        attribute_args_node(&self.syntax)
     }
 }
 
