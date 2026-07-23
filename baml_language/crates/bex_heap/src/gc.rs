@@ -56,6 +56,83 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     }
 }
 
+fn visit_object_references(obj: &Object, mut visit: impl FnMut(HeapPtr)) {
+    match obj {
+        // SAFETY: GC traversal runs under STW, so no mutator can race with
+        // these reads.
+        Object::Array(arr) => {
+            let data = unsafe { arr.data_unchecked() };
+            for ptr in data.iter().filter_map(Value::as_object_ptr) {
+                visit(ptr);
+            }
+        }
+        Object::Map(map) => {
+            let data = unsafe { map.data_unchecked() };
+            for ptr in data.values().filter_map(Value::as_object_ptr) {
+                visit(ptr);
+            }
+        }
+        Object::Instance(inst) => {
+            visit(inst.class);
+            for ptr in inst
+                .field_values()
+                .filter_map(|value| value.as_object_ptr())
+            {
+                visit(ptr);
+            }
+        }
+        Object::Closure(closure) => {
+            visit(closure.function);
+            for ptr in closure.captures.iter().filter_map(Value::as_object_ptr) {
+                visit(ptr);
+            }
+        }
+        Object::BoundMethod(method) => {
+            visit(method.function);
+            if let Some(ptr) = method.receiver.as_object_ptr() {
+                visit(ptr);
+            }
+        }
+        Object::Cell(cell) => {
+            if let Some(ptr) = cell.load().as_object_ptr() {
+                visit(ptr);
+            }
+        }
+        Object::Variant(var) => visit(var.enm),
+        Object::Future(future) => {
+            if let Some(ptr) = future_object_ref(future) {
+                visit(ptr);
+            }
+        }
+        Object::UnscheduledFuture(future) => {
+            if let Some(ptr) = future.name {
+                visit(ptr);
+            }
+            if let Some(ptr) = future.config {
+                visit(ptr);
+            }
+            visit(future.closure);
+        }
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(_) => {}
+        Object::HostClosure(_)
+        | Object::String(_)
+        | Object::Bigint(_)
+        | Object::Uint8Array(_)
+        | Object::Class(_)
+        | Object::Enum(_)
+        | Object::Interface(_)
+        | Object::Package(_)
+        | Object::ImplRule(_)
+        | Object::Function(_)
+        | Object::GenericFunction(_)
+        | Object::RustData(_)
+        | Object::Collector(_)
+        | Object::Float(_)
+        | Object::Type(_) => {}
+    }
+}
+
 /// Which generation level to collect.
 ///
 /// - `Minor`: Traces Gen0 + Gen1; Gen0 survivors → new Gen1 (via inactive swap),
@@ -475,93 +552,7 @@ impl BexHeap {
 
     /// Add object references to the worklist for tracing.
     fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
-        match obj {
-            // SAFETY (this match arm): GC traversal runs under STW; all
-            // mutator fibers are parked, so no concurrent writer can race
-            // with these reads. Same for the other Array/Map arms below.
-            Object::Array(arr) => {
-                let data = unsafe { arr.data_unchecked() };
-                for value in data.iter() {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::Map(map) => {
-                let data = unsafe { map.data_unchecked() };
-                for value in data.values() {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::Instance(inst) => {
-                worklist.push(inst.class);
-                for value in inst.field_values() {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::Closure(closure) => {
-                worklist.push(closure.function);
-                for value in &closure.captures {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::BoundMethod(bm) => {
-                worklist.push(bm.function);
-                if let Some(ptr) = bm.receiver.as_object_ptr() {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Cell(cell) => {
-                if let Some(ptr) = cell.load().as_object_ptr() {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Variant(var) => {
-                worklist.push(var.enm);
-            }
-            Object::Future(fut) => {
-                if let Some(ptr) = future_object_ref(fut) {
-                    worklist.push(ptr);
-                }
-            }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config {
-                    worklist.push(config_ptr);
-                }
-                worklist.push(future.closure);
-            }
-            // Primitives have no references
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => {}
-            // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
-            // stub, not a heap object) and a `Box<RuntimeTy>` (no `HeapPtr`s).
-            Object::HostClosure(_) => {}
-            // `GenericFunction` references its base function by `GlobalIndex`
-            // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
-            Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::Class(_)
-            | Object::Enum(_)
-            | Object::Interface(_)
-            | Object::Package(_)
-            | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
-            | Object::RustData(_)
-            | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
-        }
+        visit_object_references(obj, |ptr| worklist.push(ptr));
     }
 
     /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
@@ -875,111 +866,11 @@ impl BexHeap {
     /// Like `add_references_to_worklist`, but only enqueues pointers whose
     /// generation is one of [`Generation::Gen0`] or [`Generation::Gen1`].
     fn collect_young_references(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
-        match obj {
-            // SAFETY: GC traversal under STW; no mutator can race.
-            Object::Array(arr) => {
-                let data = unsafe { arr.data_unchecked() };
-                worklist.extend(
-                    data.iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
+        visit_object_references(obj, |ptr| {
+            if self.generation_of(ptr).is_young() {
+                worklist.push(ptr);
             }
-            Object::Map(map) => {
-                let data = unsafe { map.data_unchecked() };
-                worklist.extend(
-                    data.values()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Instance(inst) => {
-                if self.generation_of(inst.class).is_young() {
-                    worklist.push(inst.class);
-                }
-                worklist.extend(
-                    inst.fields
-                        .iter()
-                        .filter_map(|slot| slot.load().as_object_ptr())
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::Closure(closure) => {
-                if self.generation_of(closure.function).is_young() {
-                    worklist.push(closure.function);
-                }
-                worklist.extend(
-                    closure
-                        .captures
-                        .iter()
-                        .filter_map(Value::as_object_ptr)
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
-            Object::BoundMethod(method) => {
-                if self.generation_of(method.function).is_young() {
-                    worklist.push(method.function);
-                }
-                if let Some(ptr) = method.receiver.as_object_ptr()
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Cell(cell) => {
-                if let Some(ptr) = cell.load().as_object_ptr()
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Variant(var) => {
-                if self.generation_of(var.enm).is_young() {
-                    worklist.push(var.enm);
-                }
-            }
-            Object::Future(fut) => {
-                if let Some(ptr) = future_object_ref(fut)
-                    && self.generation_of(ptr).is_young()
-                {
-                    worklist.push(ptr);
-                }
-            }
-            Object::UnscheduledFuture(future) => {
-                if let Some(name_ptr) = future.name
-                    && self.generation_of(name_ptr).is_young()
-                {
-                    worklist.push(name_ptr);
-                }
-                if let Some(config_ptr) = future.config
-                    && self.generation_of(config_ptr).is_young()
-                {
-                    worklist.push(config_ptr);
-                }
-                if self.generation_of(future.closure).is_young() {
-                    worklist.push(future.closure);
-                }
-            }
-            // Primitives/leaf variants have no heap references.
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => {}
-            // `HostClosure` carries no heap references.
-            Object::HostClosure(_) => {}
-            Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::Class(_)
-            | Object::Enum(_)
-            | Object::Interface(_)
-            | Object::Package(_)
-            | Object::ImplRule(_)
-            | Object::Function(_)
-            | Object::GenericFunction(_)
-            | Object::RustData(_)
-            | Object::Collector(_)
-            | Object::Float(_)
-            | Object::Type(_) => {}
-        }
+        });
     }
 
     // -------------------------------------------------------------------------
