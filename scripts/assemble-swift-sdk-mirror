@@ -33,8 +33,17 @@ def main() -> None:
     destination = args.out.resolve()
     if destination == repository or repository in destination.parents:
         raise SystemExit("--out must be outside the source repository")
-
+    # Never rmtree an arbitrary path (home, /, a populated dir): refuse
+    # roots outright, and only clear a pre-existing destination when it
+    # is empty or a prior run of *this* script (marked by SOURCE_SHA).
+    if destination.parent == destination or destination == Path.home():
+        raise SystemExit(f"refusing dangerous --out path: {destination}")
     if destination.exists():
+        contents = list(destination.iterdir())
+        if contents and not (destination / "SOURCE_SHA").exists():
+            raise SystemExit(
+                f"--out exists and is not a prior mirror (no SOURCE_SHA marker): {destination}"
+            )
         shutil.rmtree(destination)
     # The dist/ tree is the source of truth for the mirror's non-generated
     # files: Package.swift template, README, .gitignore.

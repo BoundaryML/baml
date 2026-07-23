@@ -466,9 +466,10 @@ jobs:
         run: baml_language/sdks/swift/scripts/build-xcframework.sh --all
       - name: Zip + checksum (SwiftPM checksum == sha256 of the zip)
         id: pack
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${{ needs.plan.outputs.version }}"
           ZIP="BamlBridgeFFI-${VERSION}.xcframework.zip"
           (cd baml_language/sdks/swift/Binaries \
             && ditto -c -k --keepParent BamlBridgeFFI.xcframework "$RUNNER_TEMP/$ZIP")
@@ -484,7 +485,7 @@ jobs:
           ZIP: ${{ steps.pack.outputs.zip }}
         run: |
           set -euo pipefail
-          url="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ZIP}"
           scripts/assemble-swift-sdk-mirror \
             --out "$RUNNER_TEMP/swift-sdk-mirror" \
             --version "$VERSION" --source-sha "$SOURCE_SHA" \
