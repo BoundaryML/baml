@@ -48,6 +48,33 @@ pub(crate) mod associated_projection;
 pub(crate) mod interface_resolution;
 use interface_resolution::UnionMemberResolution;
 
+pub(crate) fn duplicate_parameter_names<'a>(
+    names: impl IntoIterator<Item = &'a Name>,
+) -> FxHashSet<Name> {
+    let mut seen = FxHashSet::default();
+    let mut duplicates = FxHashSet::default();
+    for name in names {
+        if !seen.insert(name.clone()) {
+            duplicates.insert(name.clone());
+        }
+    }
+    duplicates
+}
+
+pub(crate) fn parameter_binding_ty(
+    name: &Name,
+    declared_ty: &Ty,
+    duplicate_names: &FxHashSet<Name>,
+) -> Ty {
+    if duplicate_names.contains(name) {
+        Ty::Error {
+            attr: TyAttr::default(),
+        }
+    } else {
+        declared_ty.clone()
+    }
+}
+
 // ── Well-known type constructors ──────────────────────────────────────────────
 //
 // These helpers construct `Ty` values for well-known types that appear in
@@ -14870,13 +14897,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         // params shadow outer lets. The lambda param's declared type must
         // replace any outer declaration, and params carry no let-pattern
         // identity.
+        let duplicate_names =
+            duplicate_parameter_names(param_tys.iter().filter_map(|param| param.name.as_ref()));
         for param in param_tys {
             if let Some(name) = &param.name {
+                let ty = parameter_binding_ty(name, &param.ty, &duplicate_names);
                 self.locals.insert(
                     name.clone(),
                     LocalBinding {
-                        current_ty: param.ty.clone(),
-                        declared_ty: Some(param.ty.clone()),
+                        current_ty: ty.clone(),
+                        declared_ty: Some(ty),
                         pattern: None,
                     },
                 );

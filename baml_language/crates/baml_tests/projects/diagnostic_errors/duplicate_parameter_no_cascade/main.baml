@@ -1,0 +1,21 @@
+function named_first(value: int, value: string) -> int {
+    value
+}
+
+function named_last(value: string, value: int) -> string {
+    value
+}
+
+function lambda_first() -> int {
+    let f = (value: int, value: string) -> int {
+        value
+    };
+    0
+}
+
+function lambda_last() -> int {
+    let f = (value: string, value: int) -> string {
+        value
+    };
+    0
+}

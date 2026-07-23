@@ -1,0 +1,152 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "named_first"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    value
+}"
+        L_BRACE "{"
+        WORD "value"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "named_last"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    value
+}"
+        L_BRACE "{"
+        WORD "value"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "lambda_first"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let f"
+              KW_LET "let"
+              WORD "f"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST
+              L_PAREN "("
+              PARAMETER
+                WORD "value"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              COMMA ","
+              PARAMETER
+                WORD "value"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "int"
+              WORD "int"
+            BLOCK_EXPR "{
+        value
+    }"
+              L_BRACE "{"
+              WORD "value"
+              R_BRACE "}"
+          SEMICOLON ";"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "lambda_last"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let f"
+              KW_LET "let"
+              WORD "f"
+          EQUALS "="
+          LAMBDA_EXPR
+            PARAMETER_LIST
+              L_PAREN "("
+              PARAMETER
+                WORD "value"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              COMMA ","
+              PARAMETER
+                WORD "value"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR "string"
+              WORD "string"
+            BLOCK_EXPR "{
+        value
+    }"
+              L_BRACE "{"
+              WORD "value"
+              R_BRACE "}"
+          SEMICOLON ";"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
