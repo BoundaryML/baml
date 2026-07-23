@@ -110,10 +110,9 @@ pub(crate) fn load_project_from(
 /// Variant of [`load_project_from`] that announces each discovered
 /// file through the [`Reporter`] as it's loaded — cargo's
 /// `   Compiling foo v0.1.0` shape but for source files. The per-file
-/// `Loading <path>` flood is verbose-only detail; prefer
-/// [`load_project_for_build`] in command code, which gates this behind the
-/// command's verbosity. `grep`/`describe` stay on the lenient
-/// [`load_project_or_default`].
+/// `Loading <path>` flood is verbose-only detail, reachable through
+/// [`resolve_source_location`] with a reporter; command code goes through
+/// `ProjectSession` instead.
 pub(crate) fn load_project_from_reporting(
     from: Option<&Path>,
     reporter: &Reporter,
@@ -123,25 +122,46 @@ pub(crate) fn load_project_from_reporting(
     })
 }
 
-/// Single front-end every build-style command (`run`/`test`/`generate`/
-/// `check`/`pack`) uses to load its project.
-///
-/// Centralizes the one decision they all share: the per-file `Loading <path>`
-/// flood is *verbose-only* detail. By default the load is silent and the
-/// caller's single aggregate `Compiling N file(s)` line is the only progress
-/// shown for the whole load → check → compile span; a redundant `Checking`
-/// line and ~one `Loading` line per source file are exactly the noise this
-/// removes. Pass the command's own `--verbose` (or `false` when it has none).
-pub(crate) fn load_project_for_build(
+/// Lenient counterpart to [`resolve_project_sources`] for introspection
+/// sessions: `Ok(None)` when no project root is found (instead of an error),
+/// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
+/// key the bytecode cache identically to the strict path, but a broken
+/// manifest must not lock an agent out of `describe`/`grep`.
+pub(crate) fn resolve_project_sources_lenient(
     from: Option<&Path>,
-    reporter: &Reporter,
-    verbose: bool,
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
-    if verbose {
-        load_project_from_reporting(from, reporter)
+) -> Result<Option<ResolvedProject>> {
+    let canonical = resolve_search_start(from)?;
+    let Some(canonical) = find_baml_project_root(&canonical) else {
+        return Ok(None);
+    };
+    let toml_path = canonical.join("baml.toml");
+    let manifest = if toml_path.exists() {
+        std::fs::read_to_string(&toml_path).ok()
     } else {
-        load_project_from(from)
-    }
+        None
+    };
+    let walk_root = project_source_root(&canonical);
+    use rayon::prelude::*;
+    let files = discover_baml_files(&walk_root)
+        .into_par_iter()
+        .map(|path| {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?;
+            Ok((path, content))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Some(ResolvedProject {
+        root: canonical,
+        manifest,
+        files,
+    }))
+}
+
+/// The directory a projectless introspection session roots at (the same
+/// fallback [`load_project_or_default`] uses when no project is found).
+pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
+    let canonical = resolve_search_start(from)?;
+    Ok(project_search_dir(&canonical))
 }
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never
@@ -280,8 +300,12 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     };
 
     let walk_root = project_source_root(&canonical);
+    // Read sources across worker threads; `collect` on an indexed parallel
+    // iterator preserves discovery order, so `FileId` assignment (and with it
+    // diagnostic ordering) is identical to a serial read.
+    use rayon::prelude::*;
     let files = discover_baml_files(&walk_root)
-        .into_iter()
+        .into_par_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)
                 .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -303,10 +327,17 @@ pub(crate) fn build_db_from_sources(
 ) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(&resolved.root);
-    for (path, content) in &resolved.files {
+    for (path, _) in &resolved.files {
         on_file(path);
-        db.add_or_update_file(path, content);
     }
+    // Bulk registration: one project-file-list write instead of one per file
+    // (the per-file path is O(files²) Vec copies + one salsa revision each).
+    db.add_or_update_files(
+        resolved
+            .files
+            .iter()
+            .map(|(path, content)| (path.as_path(), content.as_str())),
+    );
     db
 }
 

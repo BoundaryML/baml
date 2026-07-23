@@ -36,6 +36,7 @@ pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
+pub(crate) mod project_session;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod skill_check;

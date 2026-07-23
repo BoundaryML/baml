@@ -683,38 +683,28 @@ impl RunArgs {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
 
-        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWrite,
+        )?;
         self.vlog(format_args!(
             "Loading project from {}",
-            resolved.root.display()
+            session.root().display()
         ));
-        if resolved.files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", resolved.root.display());
+        if session.is_empty() {
+            anyhow::bail!("No .baml files found in {}", session.root().display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", resolved.files.len()));
-        let needs_format_hint = resolved
-            .files
-            .iter()
-            .any(|(_, source)| source_needs_format_hint(source));
+        self.vlog(format_args!("Found {} .baml file(s)", session.file_count()));
+        let needs_format_hint = session.needs_format_hint();
 
-        // Building the database only sets salsa inputs — the expensive work
-        // (typecheck, emit) happens lazily in the queries below, which a
-        // bytecode-cache hit skips entirely.
-        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
-
-        let cache =
-            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
-        if !crate::bytecode_cache::CacheContext::verify_enabled()
-            && let Some(ctx) = &cache
-            && let Some(program) = ctx.load()
-        {
+        if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
             match BexEngine::new(
                 program,
                 Arc::new(sys_native::SysOps::native()),
                 argv.clone(),
             ) {
-                Ok(engine) => return Ok((db, engine, needs_format_hint)),
+                Ok(engine) => return Ok((session.db, engine, needs_format_hint)),
                 Err(error) => crate::bytecode_cache::cache_debug(format_args!(
                     "cached program rejected by VM; recompiling: {error:?}"
                 )),
@@ -725,20 +715,17 @@ impl RunArgs {
         // build constant, so it applies to every compile independent of the reuse
         // plan and is gated off under verify) and prepare the per-file reuse plan
         // — the same warm-database setup `check` and `test` run.
-        let (reuse_plan, stdlib_interface_hit) = match &cache {
-            Some(ctx) => {
-                let prep = ctx.prepare_warm_db(&mut db);
-                if let Some(plan) = &prep.reuse_plan {
-                    self.vlog(format_args!(
-                        "Per-file reuse: {} clean, {} dirty",
-                        plan.clean_files.len(),
-                        plan.dirty_files.len()
-                    ));
-                }
-                (prep.reuse_plan, prep.stdlib_interface_hit)
-            }
-            None => (None, false),
-        };
+        let warmth = session.warm_prep();
+        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        if let Some(plan) = &reuse_plan {
+            self.vlog(format_args!(
+                "Per-file reuse: {} clean, {} dirty",
+                plan.clean_files.len(),
+                plan.dirty_files.len()
+            ));
+        }
+        let db = &session.db;
+        let cache = &session.cache;
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
@@ -747,22 +734,22 @@ impl RunArgs {
         // checks only the reuse plan's dirty files and serves clean files from
         // their cached blobs, returning the fresh per-file blobs to persist.
         // Without a cache, run the honest full check (no blobs to store).
-        let fresh_diagnostics = if let Some(ctx) = &cache {
-            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+        let fresh_diagnostics = if let Some(ctx) = cache {
+            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
             self.render_and_bail_on_errors(
                 &incremental.merged,
-                &db,
+                db,
                 "Cannot run: compilation errors found",
                 reporter,
             )?;
             Some(incremental.fresh_by_file)
         } else {
-            self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+            self.check_project_diagnostics(db, "Cannot run: compilation errors found", reporter)?;
             None
         };
         self.vlog(format_args!("Compiling..."));
         let compiled = crate::bytecode_cache::compile_program_artifacts(
-            &db,
+            db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
@@ -770,17 +757,17 @@ impl RunArgs {
             reuse_plan.as_ref(),
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-        if let Some(ctx) = &cache {
+        if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                &db,
+                db,
                 &compiled,
                 fresh,
                 reuse_plan.as_ref(),
                 stdlib_interface_hit,
-                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+                || session.honest_db(),
             )?;
         }
         // Warm-incremental evidence: with the diagnostics cache serving clean
@@ -803,7 +790,7 @@ impl RunArgs {
             "Compiled {} user function(s)",
             engine.user_functions().len()
         ));
-        Ok((db, engine, needs_format_hint))
+        Ok((session.db, engine, needs_format_hint))
     }
 
     /// Load a single .baml file in hermetic standalone mode.
