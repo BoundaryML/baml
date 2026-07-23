@@ -1766,18 +1766,7 @@ impl<'a> Parser<'a> {
     /// Will skip *leading* trivia, but only basic trivia is allowed internally
     fn count_consecutive_hashes(&self) -> usize {
         let mut count = 0;
-        let mut i = self.current;
-
-        // Skip all leading trivia (whitespace, newlines, AND comments)
-        while i < self.tokens.len() {
-            if self.is_basic_trivia(self.tokens[i].kind) {
-                i += 1;
-            } else if self.is_line_comment_at(i) || self.is_block_comment_at(i) {
-                i = self.skip_comment_at(i);
-            } else {
-                break;
-            }
-        }
+        let mut i = self.skip_trivia_and_comments_from(self.current);
 
         while i < self.tokens.len() {
             let token = &self.tokens[i];
@@ -1804,18 +1793,7 @@ impl<'a> Parser<'a> {
     /// - `Some(i)` with the first non-basic-trivia token after the hashes. Will always be a valid index in [`Self::tokens`].
     fn find_token_after_hashes(&self, hash_count: usize) -> Option<usize> {
         let mut hashes_seen = 0;
-        let mut i = self.current;
-
-        // Skip all leading trivia (whitespace, newlines, AND comments)
-        while i < self.tokens.len() {
-            if self.is_basic_trivia(self.tokens[i].kind) {
-                i += 1;
-            } else if self.is_line_comment_at(i) || self.is_block_comment_at(i) {
-                i = self.skip_comment_at(i);
-            } else {
-                break;
-            }
-        }
+        let mut i = self.skip_trivia_and_comments_from(self.current);
 
         while i < self.tokens.len() {
             let token = &self.tokens[i];
@@ -8009,6 +7987,25 @@ mod tests {
                 "expected at least one diagnostic for {source:?}"
             );
         }
+    }
+
+    #[test]
+    fn raw_string_hashes_follow_leading_comments() {
+        let source = r##"
+function main() -> string {
+  // line comment
+  /* block comment */ #"value"#
+}
+"##;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(root.text().to_string(), source);
+
+        let raw_string = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
+            .expect("expected raw string literal after comments");
+        assert_eq!(raw_string.text().to_string(), r##"#"value"#"##);
     }
 
     /// A leading `#!` shebang line parses as a comment, so the file behind
