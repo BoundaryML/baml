@@ -45,13 +45,12 @@ function user.test_param_type_mismatch() -> int[] throws never {
   { : int[]
     let items: int[] = [1, 2, 3] : int[]
     items.map<U, E>((x: string) -> { ... }) : int[]
-      (x: string) -> { ... } : (x: string) -> int throws E
+      (x: string) -> { ... } : !error
         {
           x
         }
   }
-  !! 621..641: type mismatch: expected int, got string
-  !! 638..639: type mismatch: expected int, got string
+  !! 621..641: type mismatch: expected (int) -> int throws never, got (x: string) -> string throws never
 }
 lambda user.test_param_type_mismatch {
 }
