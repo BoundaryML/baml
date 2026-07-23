@@ -38,6 +38,56 @@ func TestJSONDecodesCanonicalRecursiveValueAlgebra(t *testing.T) {
 	}
 }
 
+func TestJSONDecodesListsOfObjectsWithHeterogeneousKeysets(t *testing.T) {
+	stringValue := func(value string) *cffi.BamlOutboundValue {
+		return &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: value}}
+	}
+	mapValue := func(entries ...*cffi.BamlOutboundMapEntry) *cffi.BamlOutboundValue {
+		return &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_MapValue{
+			MapValue: &cffi.BamlValueMap{Entries: entries},
+		}}
+	}
+
+	withCacheControl := mapValue(
+		&cffi.BamlOutboundMapEntry{Key: "type", Value: stringValue("text")},
+		&cffi.BamlOutboundMapEntry{Key: "text", Value: stringValue("first")},
+		&cffi.BamlOutboundMapEntry{Key: "cache_control", Value: mapValue(
+			&cffi.BamlOutboundMapEntry{Key: "type", Value: stringValue("ephemeral")},
+		)},
+	)
+	withoutCacheControl := mapValue(
+		&cffi.BamlOutboundMapEntry{Key: "type", Value: stringValue("text")},
+		&cffi.BamlOutboundMapEntry{Key: "text", Value: stringValue("second")},
+	)
+	value := jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ListValue{
+		ListValue: &cffi.BamlValueList{Items: []*cffi.BamlOutboundValue{
+			withCacheControl,
+			withoutCacheControl,
+		}},
+	}})
+
+	got, err := value.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []any{
+		map[string]any{
+			"type": "text",
+			"text": "first",
+			"cache_control": map[string]any{
+				"type": "ephemeral",
+			},
+		},
+		map[string]any{
+			"type": "text",
+			"text": "second",
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("JSON() = %#v, want %#v", got, want)
+	}
+}
+
 func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	alias := TypeAliasBAMLType("baml.json.json")
 	selected := PrimitiveBAMLType(StringType)

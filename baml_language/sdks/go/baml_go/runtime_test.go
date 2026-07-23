@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
@@ -208,6 +209,18 @@ func TestRuntimeInitializationWaitHonorsCancellation(t *testing.T) {
 	state.release()
 }
 
+func TestInitializeContextRejectsInvalidContextBeforeRuntimeWork(t *testing.T) {
+	if err := InitializeContext(nil, nil); err == nil || !strings.Contains(err.Error(), "nil context") {
+		t.Fatalf("nil context error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := InitializeContext(ctx, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled initialization error = %v, want context.Canceled", err)
+	}
+}
+
 func TestWaitForCallResultPreservesExactContextErrorWhenResultAndDoneAreReady(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan []byte, 1)
@@ -228,6 +241,66 @@ func TestWaitForCallResultPreservesExactContextErrorWhenResultAndDoneAreReady(t 
 		case result <- []byte("already completed"):
 		default:
 		}
+	}
+}
+
+func TestCompletePendingCallAcceptsExactlyOneTerminalResult(t *testing.T) {
+	call := &pendingCall{result: make(chan []byte, 1)}
+	id := reservePendingCall(call)
+	t.Cleanup(func() { pendingCalls.Delete(id) })
+
+	var wait sync.WaitGroup
+	for index := range 128 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			completePendingCall(id, []byte{byte(index)})
+		}()
+	}
+	wait.Wait()
+
+	select {
+	case <-call.result:
+	default:
+		t.Fatal("no terminal callback claimed the pending call")
+	}
+	select {
+	case payload := <-call.result:
+		t.Fatalf("duplicate terminal callback delivered payload %v", payload)
+	default:
+	}
+	if _, ok := pendingCalls.Load(id); ok {
+		t.Fatal("terminal callback left the pending call registered")
+	}
+}
+
+func TestReservePendingCallIsUniqueUnderConcurrency(t *testing.T) {
+	const callCount = 512
+	ids := make(chan uint32, callCount)
+	var wait sync.WaitGroup
+	for range callCount {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			ids <- reservePendingCall(&pendingCall{result: make(chan []byte, 1)})
+		}()
+	}
+	wait.Wait()
+	close(ids)
+
+	seen := make(map[uint32]struct{}, callCount)
+	for id := range ids {
+		if id == 0 {
+			t.Fatal("reserved zero callback ID")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			t.Fatalf("reserved duplicate callback ID %d", id)
+		}
+		seen[id] = struct{}{}
+		pendingCalls.Delete(id)
+	}
+	if len(seen) != callCount {
+		t.Fatalf("reserved %d callback IDs, want %d", len(seen), callCount)
 	}
 }
 
