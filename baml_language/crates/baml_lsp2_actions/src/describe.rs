@@ -19,6 +19,7 @@ use text_size::TextRange;
 
 use crate::{
     Db,
+    definition::Location,
     search::{SymbolInfo, search_symbols},
     type_info::type_info_for_definition,
     usages::usages_at,
@@ -454,17 +455,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                 let param_refs = usages_at(db, file, param_span.start())
                     .into_iter()
                     .filter(|loc| !(loc.file == file && loc.range == param_span))
-                    .map(|loc| {
-                        let text = loc.file.text(db);
-                        let (line_number, line_text) = line_at_offset(text, loc.range.start());
-                        RefSite {
-                            file_path: file_path_string(db, loc.file),
-                            file: loc.file,
-                            range: loc.range,
-                            line_text,
-                            line_number,
-                        }
-                    })
+                    .map(|loc| ref_site_from_location(db, &loc))
                     .collect();
 
                 // Get the full function body for context display.
@@ -567,17 +558,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                     let binding_refs = usages_at(db, file, binding_span.start())
                         .into_iter()
                         .filter(|loc| !(loc.file == file && loc.range == binding_span))
-                        .map(|loc| {
-                            let text = loc.file.text(db);
-                            let (line_number, line_text) = line_at_offset(text, loc.range.start());
-                            RefSite {
-                                file_path: file_path_string(db, loc.file),
-                                file: loc.file,
-                                range: loc.range,
-                                line_text,
-                                line_number,
-                            }
-                        })
+                        .map(|loc| ref_site_from_location(db, &loc))
                         .collect();
 
                     let func_body = clean_body_source(db, file, func.span);
@@ -1631,21 +1612,23 @@ fn find_references(
         // and any self-references in its body — e.g. a class used in its own
         // method signatures/bodies). `references` lists *external* usages.
         .filter(|loc| !(loc.file == file && item_range.contains(loc.range.start())))
-        .map(|loc| {
-            let text = loc.file.text(db);
-            let (line_number, line_text) = line_at_offset(text, loc.range.start());
-            RefSite {
-                file_path: file_path_string(db, loc.file),
-                file: loc.file,
-                range: loc.range,
-                line_text,
-                line_number,
-            }
-        })
+        .map(|loc| ref_site_from_location(db, &loc))
         .collect()
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn ref_site_from_location(db: &dyn Db, loc: &Location) -> RefSite {
+    let text = loc.file.text(db);
+    let (line_number, line_text) = line_at_offset(text, loc.range.start());
+    RefSite {
+        file_path: file_path_string(db, loc.file),
+        file: loc.file,
+        range: loc.range,
+        line_text,
+        line_number,
+    }
+}
 
 /// Get the file path as a displayable string.
 fn file_path_string(db: &dyn Db, file: SourceFile) -> String {
