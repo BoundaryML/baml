@@ -2544,8 +2544,10 @@ impl io::IoNamespaceWs for NativeSysOps {
     ) -> SysOpOutput<owned::ws::WsStream> {
         use futures::StreamExt;
         use tokio::sync::Mutex;
-        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-        use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
+        use tokio_tungstenite::tungstenite::{
+            client::IntoClientRequest,
+            http::{HeaderName, HeaderValue},
+        };
 
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
