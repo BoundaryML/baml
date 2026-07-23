@@ -224,37 +224,42 @@ fn write_doc_with_raises(out: &mut String, doc: Option<&str>, raises_names: &[St
     out.push_str(" */\n");
 }
 
-fn write_class_doc(out: &mut String, c: &TypeScriptClass) {
-    let documented_fields = c.properties.iter().any(|p| p.docstring.is_some());
-    let has_doc = c.docstring.as_deref().is_some_and(|d| !d.trim().is_empty());
-    if !has_doc && !documented_fields {
+fn write_named_members_doc<'a>(
+    out: &mut String,
+    doc: Option<&str>,
+    section: &str,
+    members: impl Clone + Iterator<Item = (&'a str, Option<&'a str>)>,
+) {
+    let documented_members = members.clone().any(|(_, doc)| doc.is_some());
+    let has_doc = doc.is_some_and(|d| !d.trim().is_empty());
+    if !has_doc && !documented_members {
         return;
     }
 
     out.push_str("/**\n");
-    if let Some(doc) = c.docstring.as_deref() {
+    if let Some(doc) = doc {
         for line in doc.lines() {
             let _ = writeln!(out, " * {line}");
         }
     }
-    if documented_fields {
+    if documented_members {
         if has_doc {
             out.push_str(" *\n");
         }
-        out.push_str(" * Attributes:\n");
-        for prop in &c.properties {
-            match prop.docstring.as_deref() {
+        let _ = writeln!(out, " * {section}:");
+        for (name, doc) in members {
+            match doc {
                 Some(doc) if !doc.trim().is_empty() => {
                     let mut lines = doc.lines();
                     if let Some(first) = lines.next() {
-                        let _ = writeln!(out, " *   {}: {}", prop.name, first);
+                        let _ = writeln!(out, " *   {name}: {first}");
                     }
                     for line in lines {
                         let _ = writeln!(out, " *     {line}");
                     }
                 }
                 _ => {
-                    let _ = writeln!(out, " *   {}", prop.name);
+                    let _ = writeln!(out, " *   {name}");
                 }
             }
         }
@@ -262,42 +267,26 @@ fn write_class_doc(out: &mut String, c: &TypeScriptClass) {
     out.push_str(" */\n");
 }
 
-fn write_enum_doc(out: &mut String, e: &TypeScriptEnum) {
-    let documented_variants = e.variants.iter().any(|v| v.docstring.is_some());
-    let has_doc = e.docstring.as_deref().is_some_and(|d| !d.trim().is_empty());
-    if !has_doc && !documented_variants {
-        return;
-    }
+fn write_class_doc(out: &mut String, c: &TypeScriptClass) {
+    write_named_members_doc(
+        out,
+        c.docstring.as_deref(),
+        "Attributes",
+        c.properties
+            .iter()
+            .map(|p| (p.name.as_str(), p.docstring.as_deref())),
+    );
+}
 
-    out.push_str("/**\n");
-    if let Some(doc) = e.docstring.as_deref() {
-        for line in doc.lines() {
-            let _ = writeln!(out, " * {line}");
-        }
-    }
-    if documented_variants {
-        if has_doc {
-            out.push_str(" *\n");
-        }
-        out.push_str(" * Members:\n");
-        for variant in &e.variants {
-            match variant.docstring.as_deref() {
-                Some(doc) if !doc.trim().is_empty() => {
-                    let mut lines = doc.lines();
-                    if let Some(first) = lines.next() {
-                        let _ = writeln!(out, " *   {}: {}", variant.ident, first);
-                    }
-                    for line in lines {
-                        let _ = writeln!(out, " *     {line}");
-                    }
-                }
-                _ => {
-                    let _ = writeln!(out, " *   {}", variant.ident);
-                }
-            }
-        }
-    }
-    out.push_str(" */\n");
+fn write_enum_doc(out: &mut String, e: &TypeScriptEnum) {
+    write_named_members_doc(
+        out,
+        e.docstring.as_deref(),
+        "Members",
+        e.variants
+            .iter()
+            .map(|v| (v.ident.as_str(), v.docstring.as_deref())),
+    );
 }
 
 /// `<T, U>` generic-parameter list, or empty.
