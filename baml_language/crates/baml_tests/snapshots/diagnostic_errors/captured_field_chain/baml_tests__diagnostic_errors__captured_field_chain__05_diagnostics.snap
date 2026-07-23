@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `map<string, map<string, int>>` has no member `a`
     ╭─[captured_field_chain.baml:32:3]
  32 │   data.a.b
-    ·   ────┬───
-    ·       ╰── type `map<string, map<string, int>>` has no member `a`
+    ·   ────────
     ╰────
 
   [type] E0007
@@ -16,6 +15,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `map<string, map<string, map<string, int>>>` has no member `a`
     ╭─[captured_field_chain.baml:37:3]
  37 │   data.a.b.c
-    ·   ─────┬────
-    ·        ╰── type `map<string, map<string, map<string, int>>>` has no member `a`
+    ·   ──────────
     ╰────

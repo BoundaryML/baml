@@ -25,6 +25,7 @@ use std::{
     collections::HashMap,
     fmt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use baml_base::{FileId, Span};
@@ -41,6 +42,7 @@ use crate::{
     highlight::{
         HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
     },
+    message::{DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind},
 };
 
 /// Output format for diagnostics.
@@ -175,18 +177,23 @@ pub fn render_diagnostics_with_highlights(
     config: &RenderConfig,
 ) -> String {
     let mut path_cache = HashMap::new();
-    let handler = (config.format == DiagnosticFormat::Human)
-        .then(|| miette_handler(highlights, file_paths, config.color));
+    let highlighter = (config.format == DiagnosticFormat::Human && config.color)
+        .then(|| DiagnosticHighlighter::new(highlights, file_paths));
     diagnostics
         .iter()
         .map(|diagnostic| match config.format {
-            DiagnosticFormat::Human => render_miette_with_handler(
-                diagnostic,
-                sources,
-                file_paths,
-                handler.as_ref().expect("human renderer has a handler"),
-                config.show_error_codes,
-            ),
+            DiagnosticFormat::Human => {
+                let handler =
+                    miette_handler(highlighter.clone(), config.color, diagnostic.severity);
+                render_miette_with_handler(
+                    diagnostic,
+                    sources,
+                    file_paths,
+                    &handler,
+                    config.color,
+                    config.show_error_codes,
+                )
+            }
             DiagnosticFormat::Agent => render_agent(
                 diagnostic,
                 sources,
@@ -258,14 +265,22 @@ fn render_miette(
     color: bool,
     show_error_codes: bool,
 ) -> String {
-    let handler = miette_handler(highlights, file_paths, color);
-    render_miette_with_handler(diagnostic, sources, file_paths, &handler, show_error_codes)
+    let highlighter = color.then(|| DiagnosticHighlighter::new(highlights, file_paths));
+    let handler = miette_handler(highlighter, color, diagnostic.severity);
+    render_miette_with_handler(
+        diagnostic,
+        sources,
+        file_paths,
+        &handler,
+        color,
+        show_error_codes,
+    )
 }
 
 fn miette_handler(
-    highlights: &SourceHighlights,
-    file_paths: &HashMap<FileId, PathBuf>,
+    highlighter: Option<DiagnosticHighlighter>,
     color: bool,
+    severity: Severity,
 ) -> GraphicalReportHandler {
     let mut theme = if color {
         GraphicalTheme::unicode()
@@ -273,16 +288,18 @@ fn miette_handler(
         GraphicalTheme::unicode_nocolor()
     };
     if color {
-        theme.styles.highlights[0] = OwoStyle::new().red().bold();
+        theme.styles.highlights = annotation_styles(severity);
     }
     let mut handler = GraphicalReportHandler::new_themed(theme)
         .with_links(false)
         .with_urls(false)
         .with_show_related_as_nested(true)
+        .with_break_words(false)
         .with_context_lines(0);
     if color {
-        handler =
-            handler.with_syntax_highlighting(DiagnosticHighlighter::new(highlights, file_paths));
+        handler = handler.with_syntax_highlighting(
+            highlighter.expect("colored diagnostics have a source highlighter"),
+        );
     } else {
         handler = handler.without_syntax_highlighting();
     }
@@ -294,20 +311,27 @@ fn render_miette_with_handler(
     sources: &HashMap<FileId, String>,
     file_paths: &HashMap<FileId, PathBuf>,
     handler: &GraphicalReportHandler,
+    color: bool,
     show_error_codes: bool,
 ) -> String {
-    let diagnostic = build_rendered_diagnostic(diagnostic, sources, file_paths, show_error_codes);
+    let diagnostic =
+        build_rendered_diagnostic(diagnostic, sources, file_paths, color, show_error_codes);
     let mut output = String::new();
     if handler.render_report(&mut output, &diagnostic).is_err() {
         return "<error rendering diagnostic>".to_string();
     }
-    output
+    if color {
+        apply_message_styles(&output)
+    } else {
+        output
+    }
 }
 
 fn build_rendered_diagnostic(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
     file_paths: &HashMap<FileId, PathBuf>,
+    color: bool,
     show_error_codes: bool,
 ) -> RenderedDiagnostic {
     let primary_file = diagnostic
@@ -328,18 +352,35 @@ fn build_rendered_diagnostic(
     primary_labels.sort_by_key(|annotation| !annotation.is_primary);
 
     let mut rendered = RenderedDiagnostic {
-        message: diagnostic.message.clone(),
+        message: marked_message(
+            &diagnostic.message,
+            &diagnostic.message_highlights,
+            MessageParentStyle::None,
+            color,
+        ),
         code: show_error_codes.then(|| diagnostic.code()),
         severity: miette_severity(diagnostic.severity),
         source: primary_file.and_then(|file_id| named_source(file_id, sources, file_paths)),
         labels: primary_labels
             .into_iter()
-            .map(|annotation| {
-                labeled_span(
-                    annotation.span,
-                    annotation.message.clone(),
-                    annotation.is_primary,
-                )
+            .enumerate()
+            .map(|(index, annotation)| {
+                let message = annotation
+                    .message
+                    .as_ref()
+                    .filter(|message| message.as_str() != diagnostic.message)
+                    .map(|message| {
+                        marked_message(
+                            message,
+                            &annotation.message_highlights,
+                            MessageParentStyle::Annotation {
+                                severity: diagnostic.severity,
+                                index,
+                            },
+                            color,
+                        )
+                    });
+                labeled_span(annotation.span, message, annotation.is_primary)
             })
             .collect(),
         related: Vec::new(),
@@ -364,7 +405,16 @@ fn build_rendered_diagnostic(
         rendered.related.push(RenderedDiagnostic {
             message: annotations
                 .iter()
-                .find_map(|annotation| annotation.message.clone())
+                .find_map(|annotation| {
+                    annotation.message.as_ref().map(|message| {
+                        marked_message(
+                            message,
+                            &annotation.message_highlights,
+                            MessageParentStyle::None,
+                            color,
+                        )
+                    })
+                })
                 .unwrap_or_else(|| "related location".to_string()),
             code: None,
             severity: MietteSeverity::Advice,
@@ -379,7 +429,12 @@ fn build_rendered_diagnostic(
 
     for related in &diagnostic.related_info {
         rendered.related.push(RenderedDiagnostic {
-            message: related.message.clone(),
+            message: marked_message(
+                &related.message,
+                &related.message_highlights,
+                MessageParentStyle::None,
+                color,
+            ),
             code: None,
             severity: MietteSeverity::Advice,
             source: named_source(related.span.file_id, sources, file_paths),
@@ -393,6 +448,187 @@ fn build_rendered_diagnostic(
     }
 
     rendered
+}
+
+const MESSAGE_STYLE_START: char = '\u{1d}';
+const MESSAGE_STYLE_END: char = '\u{1e}';
+
+#[derive(Clone, Copy)]
+enum MessageParentStyle {
+    None,
+    Annotation { severity: Severity, index: usize },
+}
+
+fn annotation_styles(severity: Severity) -> Vec<OwoStyle> {
+    vec![
+        severity_style(severity).bold(),
+        OwoStyle::new().cyan().bold(),
+        OwoStyle::new().green().bold(),
+        OwoStyle::new().magenta().bold(),
+    ]
+}
+
+fn marked_message(
+    message: &str,
+    highlights: &[DiagnosticMessageHighlight],
+    parent: MessageParentStyle,
+    color: bool,
+) -> String {
+    if !color || highlights.is_empty() {
+        return message.to_string();
+    }
+
+    let mut highlights = highlights.to_vec();
+    highlights.sort_by_key(|highlight| highlight.start);
+    let mut output = String::with_capacity(message.len() + highlights.len() * 6);
+    let mut cursor = 0;
+    for highlight in highlights {
+        let start = highlight.start as usize;
+        let end = highlight.end as usize;
+        if start < cursor
+            || start >= end
+            || end > message.len()
+            || !message.is_char_boundary(start)
+            || !message.is_char_boundary(end)
+        {
+            continue;
+        }
+        output.push_str(&message[cursor..start]);
+        output.push(MESSAGE_STYLE_START);
+        output.push(message_style_id(highlight.kind));
+        output.push_str(&message[start..end]);
+        output.push(MESSAGE_STYLE_END);
+        output.push(message_style_id(highlight.kind));
+        output.push(parent_style_id(parent));
+        cursor = end;
+    }
+    output.push_str(&message[cursor..]);
+    output
+}
+
+fn message_style_id(kind: DiagnosticMessageKind) -> char {
+    match kind {
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => '\u{1}',
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => '\u{2}',
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => '\u{3}',
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => '\u{4}',
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::EnumVariant) => '\u{5}',
+        DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => '\u{6}',
+        DiagnosticMessageKind::TypeExpression => '\u{7}',
+        DiagnosticMessageKind::Code => '\u{8}',
+    }
+}
+
+fn message_style(id: char) -> Option<OwoStyle> {
+    match id {
+        '\u{1}' => Some(OwoStyle::new().yellow()),
+        '\u{2}' => Some(OwoStyle::new().bright_blue()),
+        '\u{3}' => Some(OwoStyle::new().cyan()),
+        '\u{4}' => Some(OwoStyle::new().bright_cyan()),
+        '\u{5}' => Some(OwoStyle::new().bright_yellow()),
+        '\u{6}' => Some(OwoStyle::new().magenta()),
+        '\u{7}' => Some(OwoStyle::new().yellow()),
+        '\u{8}' => Some(OwoStyle::new().bright_cyan()),
+        _ => None,
+    }
+}
+
+fn parent_style_id(parent: MessageParentStyle) -> char {
+    match parent {
+        MessageParentStyle::None => '\u{1}',
+        MessageParentStyle::Annotation { severity, index } => {
+            match index % annotation_styles(severity).len() {
+                0 => match severity {
+                    Severity::Error => '\u{2}',
+                    Severity::Warning => '\u{3}',
+                    Severity::Info => '\u{4}',
+                },
+                1 => '\u{4}',
+                2 => '\u{5}',
+                _ => '\u{6}',
+            }
+        }
+    }
+}
+
+fn parent_style(id: char) -> Option<OwoStyle> {
+    match id {
+        '\u{2}' => Some(OwoStyle::new().red().bold()),
+        '\u{3}' => Some(OwoStyle::new().yellow().bold()),
+        '\u{4}' => Some(OwoStyle::new().cyan().bold()),
+        '\u{5}' => Some(OwoStyle::new().green().bold()),
+        '\u{6}' => Some(OwoStyle::new().magenta().bold()),
+        _ => None,
+    }
+}
+
+fn apply_message_styles(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    let mut active_style = None;
+
+    while let Some(ch) = chars.next() {
+        if ch == MESSAGE_STYLE_START {
+            let Some(id) = chars.next() else {
+                output.push(ch);
+                break;
+            };
+            if let Some(style) = message_style(id) {
+                output.push_str(&style.prefix_formatter().to_string());
+                active_style = Some(style);
+            }
+            continue;
+        }
+        if ch == MESSAGE_STYLE_END {
+            let (Some(style_id), Some(parent_id)) = (chars.next(), chars.next()) else {
+                output.push(ch);
+                break;
+            };
+            if let Some(style) = message_style(style_id) {
+                output.push_str(&style.suffix_formatter().to_string());
+            }
+            if let Some(parent) = parent_style(parent_id) {
+                output.push_str(&parent.prefix_formatter().to_string());
+            }
+            active_style = None;
+            continue;
+        }
+        if ch == '\u{1b}' && chars.peek() == Some(&'[') {
+            let mut sequence = String::from("\u{1b}");
+            for part in chars.by_ref() {
+                sequence.push(part);
+                if part == 'm' {
+                    break;
+                }
+            }
+            let resets_style = sgr_resets_style(&sequence);
+            output.push_str(&sequence);
+            if resets_style {
+                if let Some(style) = active_style {
+                    output.push_str(&style.prefix_formatter().to_string());
+                }
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+
+    output
+}
+
+fn sgr_resets_style(sequence: &str) -> bool {
+    let Some(parameters) = sequence
+        .strip_prefix("\u{1b}[")
+        .and_then(|sequence| sequence.strip_suffix('m'))
+    else {
+        return false;
+    };
+    parameters.split(';').any(|parameter| {
+        matches!(
+            parameter,
+            "" | "0" | "22" | "23" | "24" | "25" | "27" | "28" | "29" | "39" | "49"
+        )
+    })
 }
 
 fn named_source(
@@ -519,9 +755,9 @@ fn miette_severity(severity: Severity) -> MietteSeverity {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct DiagnosticHighlighter {
-    by_name: HashMap<String, Vec<HighlightSpan>>,
+    by_name: Arc<HashMap<String, Vec<HighlightSpan>>>,
 }
 
 impl DiagnosticHighlighter {
@@ -534,7 +770,9 @@ impl DiagnosticHighlighter {
                 (shortest_unique_path(*file_id, file_paths), spans)
             })
             .collect();
-        Self { by_name }
+        Self {
+            by_name: Arc::new(by_name),
+        }
     }
 }
 
@@ -856,7 +1094,7 @@ fn render_concise(
         "{} [{}] {}",
         location,
         diagnostic.code(),
-        diagnostic.message
+        diagnostic.message_with_primary_label()
     )
 }
 
@@ -898,6 +1136,21 @@ mod tests {
         assert!(output.contains("[E0011]"));
         assert!(output.contains("Duplicate class 'Foo'"));
         assert!(output.contains("test.baml:1:7:")); // filename, line 1, column 7
+    }
+
+    #[test]
+    fn concise_renderer_preserves_primary_label() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+            .with_primary(test_span(), "expected `int`, found `string`");
+
+        let output = render_diagnostic(
+            &diag,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::concise(),
+        );
+
+        assert!(output.contains("mismatched types: expected `int`, found `string`"));
     }
 
     #[test]
@@ -982,7 +1235,7 @@ mod tests {
             .find(|line| line.contains(marker) && line.contains(red_prefix))
             .unwrap_or_else(|| panic!("missing red primary label in {output:?}"));
         let styled_secondary = OwoStyle::new()
-            .yellow()
+            .cyan()
             .bold()
             .style(secondary_marker)
             .to_string();
@@ -995,6 +1248,61 @@ mod tests {
                 .any(|line| { line.contains(secondary_marker) && line.contains(secondary_prefix) }),
             "{output:?}"
         );
+    }
+
+    #[test]
+    fn human_renderer_uses_yellow_for_warning_primary_spans() {
+        let marker = "WARNING_COLOR_MARKER";
+        let diagnostic = Diagnostic::warning(DiagnosticId::UnreachableArm, "Test warning")
+            .with_primary(test_span(), marker);
+        let output = render_diagnostic(
+            &diagnostic,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::cli(),
+        );
+        let styled_marker = OwoStyle::new().yellow().bold().style(marker).to_string();
+        let yellow_prefix = styled_marker.split_once(marker).unwrap().0;
+
+        assert!(
+            output
+                .lines()
+                .any(|line| line.contains(marker) && line.contains(yellow_prefix)),
+            "{output:?}"
+        );
+    }
+
+    #[test]
+    fn human_renderer_does_not_repeat_an_unlabeled_primary_message() {
+        let diagnostic = Diagnostic::error(DiagnosticId::TypeMismatch, "Test error")
+            .with_primary_span(test_span());
+        let output = render_diagnostic(
+            &diagnostic,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::test(),
+        );
+
+        assert_eq!(output.matches("Test error").count(), 1, "{output}");
+    }
+
+    #[test]
+    fn human_renderer_highlights_code_in_messages() {
+        let message = crate::DiagnosticText::new()
+            .text("unknown type ")
+            .identifier("User", DiagnosticIdentifierKind::Type);
+        let diagnostic =
+            Diagnostic::error(DiagnosticId::UnknownType, message).with_primary_span(test_span());
+        let output = render_diagnostic(
+            &diagnostic,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::cli(),
+        );
+
+        assert!(output.contains("\u{1b}[33mUser"), "{output:?}");
+        assert!(!output.contains(MESSAGE_STYLE_START), "{output:?}");
+        assert!(!output.contains(MESSAGE_STYLE_END), "{output:?}");
     }
 
     #[test]
@@ -1054,6 +1362,24 @@ mod tests {
         assert_eq!(
             output,
             "test.baml:1:7-1:10 error[E0011]: Duplicate class 'Foo'"
+        );
+    }
+
+    #[test]
+    fn agent_render_preserves_distinct_primary_label() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+            .with_primary(test_span(), "expected `int`, found `string`");
+
+        let output = render_diagnostic(
+            &diag,
+            &make_source(),
+            &make_file_paths(),
+            &RenderConfig::agent(),
+        );
+
+        assert_eq!(
+            output,
+            "test.baml:1:7-1:10 error[E0001]: mismatched types\n  primary: expected `int`, found `string`"
         );
     }
 

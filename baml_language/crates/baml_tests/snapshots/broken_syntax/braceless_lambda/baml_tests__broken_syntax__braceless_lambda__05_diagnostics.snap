@@ -4,11 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [parse] E0010
 
-  × Expected lambda body '{', found '+'
+  × unexpected token
    ╭─[braceless_lambda.baml:8:28]
  8 │   let add1 = (x: int) => x + 1;
    ·                            ┬
-   ·                            ╰── Expected lambda body '{', found '+'
+   ·                            ╰── expected `lambda body '{'`, found `'+'`
    ╰────
 
   [type] E0004
@@ -16,6 +16,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × operator `+` cannot be applied to `"hello"` and `5`
     ╭─[braceless_lambda.baml:15:3]
  15 │   "hello" + 5
-    ·   ─────┬─────
-    ·        ╰── operator `+` cannot be applied to `"hello"` and `5`
+    ·   ───────────
     ╰────

@@ -4,27 +4,27 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected testing.TestRunner | null, got 42
+  × mismatched types
    ╭─[main.baml:4:31]
  4 │ test "wrong runner type" with 42 {
    ·                               ─┬
-   ·                                ╰── type mismatch: expected testing.TestRunner | null, got 42
+   ·                                ╰── expected `testing.TestRunner | null`, found `42`
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected testing.TestRunner | null, got "not a runner"
+  × mismatched types
    ╭─[main.baml:8:30]
  8 │ test "string as runner" with "not a runner" {
    ·                              ───────┬──────
-   ·                                     ╰── type mismatch: expected testing.TestRunner | null, got "not a runner"
+   ·                                     ╰── expected `testing.TestRunner | null`, found `"not a runner"`
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected testing.TestSetRunner | null, got 42
+  × mismatched types
     ╭─[main.baml:12:37]
  12 │ testset "wrong testset runner" with 42 {
     ·                                     ─┬
-    ·                                      ╰── type mismatch: expected testing.TestSetRunner | null, got 42
+    ·                                      ╰── expected `testing.TestSetRunner | null`, found `42`
     ╰────

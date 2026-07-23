@@ -26,27 +26,27 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected function name, found integer
+  × unexpected token
    ╭─[syntax_errors.baml:6:10]
  6 │ function 123Invalid() {}
    ·          ─┬─
-   ·           ╰── Expected function name, found integer
+   ·           ╰── expected `function name`, found `integer`
    ╰────
 
 E0010
 
-  × Expected return type (->), found '{'
+  × unexpected token
    ╭─[syntax_errors.baml:6:23]
  6 │ function 123Invalid() {}
    ·                       ┬
-   ·                       ╰── Expected return type (->), found '{'
+   ·                       ╰── expected `return type (->)`, found `'{'`
    ╰────
 
 E0010
 
-  × Expected '}', found EOF
+  × unexpected token
    ╭─[syntax_errors.baml:6:25]
  6 │ function 123Invalid() {}
    ·                         ▲
-   ·                         ╰── Expected '}', found EOF
+   ·                         ╰── expected `'}'`, found `EOF`
    ╰────

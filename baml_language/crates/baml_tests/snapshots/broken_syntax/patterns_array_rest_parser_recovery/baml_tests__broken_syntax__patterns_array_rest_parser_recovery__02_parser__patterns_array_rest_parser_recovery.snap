@@ -338,72 +338,72 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected only one '..' rest pattern is allowed in an array pattern, found '..'
+  × unexpected token
    ╭─[patterns_array_rest_parser_recovery.baml:8:19]
  8 │         [..let a, ..let b] => a.length() + b.length(),
    ·                   ─┬
-   ·                    ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
+   ·                    ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
    ╰────
 
 E0010
 
-  × Expected pattern, found '...'
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:16:10]
  16 │         [...let r] => r.length(),
     ·          ─┬─
-    ·           ╰── Expected pattern, found '...'
+    ·           ╰── expected `pattern`, found `'...'`
     ╰────
 
 E0010
 
-  × Expected ',' or ']' after array pattern element, found let
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:16:13]
  16 │         [...let r] => r.length(),
     ·             ─┬─
-    ·              ╰── Expected ',' or ']' after array pattern element, found let
+    ·              ╰── expected `',' or ']' after array pattern element`, found `let`
     ╰────
 
 E0010
 
-  × Expected identifier after 'let', found ']'
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:24:15]
  24 │         [..let] => 1,
     ·               ┬
-    ·               ╰── Expected identifier after 'let', found ']'
+    ·               ╰── expected `identifier after 'let'`, found `']'`
     ╰────
 
 E0010
 
-  × Expected pattern, found ':'
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:32:13]
  32 │         [.. : int[]] => 1,
     ·             ┬
-    ·             ╰── Expected pattern, found ':'
+    ·             ╰── expected `pattern`, found `':'`
     ╰────
 
 E0010
 
-  × Expected ',' or ']' after array pattern element, found identifier
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:32:15]
  32 │         [.. : int[]] => 1,
     ·               ─┬─
-    ·                ╰── Expected ',' or ']' after array pattern element, found identifier
+    ·                ╰── expected `',' or ']' after array pattern element`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected ',' or ']' after array pattern element, found ':'
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:40:14]
  40 │         [.._ : int[]] => 1,
     ·              ┬
-    ·              ╰── Expected ',' or ']' after array pattern element, found ':'
+    ·              ╰── expected `',' or ']' after array pattern element`, found `':'`
     ╰────
 
 E0010
 
-  × Expected only one '..' rest pattern is allowed in an array pattern, found '..'
+  × unexpected token
     ╭─[patterns_array_rest_parser_recovery.baml:48:17]
  48 │         [..[.., ..]] => 1,
     ·                 ─┬
-    ·                  ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
+    ·                  ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
     ╰────

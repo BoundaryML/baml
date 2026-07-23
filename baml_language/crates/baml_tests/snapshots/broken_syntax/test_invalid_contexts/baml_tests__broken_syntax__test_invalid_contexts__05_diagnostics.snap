@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [parse] E0010
 
-  × test blocks are only allowed at the top level or inside a testset
+  × invalid syntax
    ╭─[main.baml:4:3]
  4 │   test "inside function" {
    ·   ──┬─
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] E0010
 
-  × testset blocks are only allowed at the top level or inside a testset
+  × invalid syntax
     ╭─[main.baml:10:3]
  10 │   testset "inside function set" {
     ·   ───┬───

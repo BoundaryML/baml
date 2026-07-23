@@ -125,9 +125,9 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected return type (->), found throws
+  × unexpected token
     ╭─[main.baml:15:31]
  15 │ function ThrowsHttpResponse() throws root.http.Response {
     ·                               ───┬──
-    ·                                  ╰── Expected return type (->), found throws
+    ·                                  ╰── expected `return type (->)`, found `throws`
     ╰────

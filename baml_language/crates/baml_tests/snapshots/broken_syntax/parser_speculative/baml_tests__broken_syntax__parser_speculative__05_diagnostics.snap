@@ -4,76 +4,75 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
    ╭─[ambiguous_function.baml:2:45]
  2 │ ╭─▶ function Ambiguous(input: string) -> string {
  3 │ │     client GPT4  // This keyword determines it's an LLM function
  4 │ │     // Even though it starts like it could be expression function
- 5 │ ├─▶ }
-   · ╰──── unresolved name: GPT4
+ 5 │ ╰─▶ }
    ╰────
 
   [parse] E0010
 
-  × Expected LLM function missing 'prompt' field, found '}'
+  × unexpected token
    ╭─[ambiguous_function.baml:5:1]
  5 │ }
    · ┬
-   · ╰── Expected LLM function missing 'prompt' field, found '}'
+   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.llm.Client, got null
+  × mismatched types
     ╭─[ambiguous_function.baml:8:1]
   8 │ ╭─▶ function AnotherLLM(input: string) -> string {
   9 │ │     clent GPT4  // Typo in "client"
  10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
  11 │ ├─▶ }
-    · ╰──── type mismatch: expected baml.llm.Client, got null
+    · ╰──── expected `baml.llm.Client`, found `null`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.llm.Client, got null
+  × mismatched types
     ╭─[ambiguous_function.baml:8:46]
   8 │ ╭─▶ function AnotherLLM(input: string) -> string {
   9 │ │     clent GPT4  // Typo in "client"
  10 │ │     prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
  11 │ ├─▶ }
-    · ╰──── type mismatch: expected baml.llm.Client, got null
+    · ╰──── expected `baml.llm.Client`, found `null`
     ╰────
 
   [parse] E0010
 
-  × Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
+  × unexpected token
    ╭─[ambiguous_function.baml:9:3]
  9 │   clent GPT4  // Typo in "client"
    ·   ──┬──
-   ·     ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
+   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
    ╰────
 
   [parse] E0010
 
-  × Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
+  × unexpected token
    ╭─[ambiguous_function.baml:9:9]
  9 │   clent GPT4  // Typo in "client"
    ·         ──┬─
-   ·           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
+   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
    ╰────
 
   [parse] E0010
 
-  × Expected LLM function missing 'client' field, found '}'
+  × unexpected token
     ╭─[ambiguous_function.baml:11:1]
  11 │ }
     · ┬
-    · ╰── Expected LLM function missing 'client' field, found '}'
+    · ╰── expected `LLM function missing 'client' field`, found `'}'`
     ╰────
 
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
    ╭─[llm_function.baml:1:48]
  1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
  2 │ │     client GPT4
@@ -81,13 +80,12 @@ source: crates/baml_tests/src/generated_tests.rs
  4 │ │       Extract structured data from: {{ text }}
  5 │ │       Return as JSON.
  6 │ │     "#
- 7 │ ├─▶ }
-   · ╰──── unresolved name: GPT4
+ 7 │ ╰─▶ }
    ╰────
 
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
     ╭─[mixed_functions.baml:2:47]
   2 │ ╭─▶ function LLMAnalyze(text: string) -> Analysis {
   3 │ │     client GPT4
@@ -97,13 +95,12 @@ source: crates/baml_tests/src/generated_tests.rs
   7 │ │       
   8 │ │       Return an Analysis object with sentiment and keywords.
   9 │ │     "#
- 10 │ ├─▶ }
-    · ╰──── unresolved name: GPT4
+ 10 │ ╰─▶ }
     ╰────
 
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
     ╭─[mixed_functions.baml:31:50]
  31 │ ╭─▶ function ChainedProcess(input: string) -> string {
  32 │ │     client GPT4
@@ -113,6 +110,5 @@ source: crates/baml_tests/src/generated_tests.rs
  36 │ │       2. Transform it
  37 │ │       3. Return result
  38 │ │     "#
- 39 │ ├─▶ }
-    · ╰──── unresolved name: GPT4
+ 39 │ ╰─▶ }
     ╰────

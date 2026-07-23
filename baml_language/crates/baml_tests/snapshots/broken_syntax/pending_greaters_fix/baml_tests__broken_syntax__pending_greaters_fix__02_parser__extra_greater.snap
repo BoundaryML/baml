@@ -164,7 +164,7 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
    ╭─[extra_greater.baml:7:29]
  7 │   bad_field map<string, int>>
    ·                             ┬
@@ -173,7 +173,7 @@ E0010
 
 E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:23:38]
  23 │ function BadParam(x: map<string, int>>) -> string {
     ·                                      ┬
@@ -182,7 +182,7 @@ E0010
 
 E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:29:45]
  29 │ function BadReturnType() -> map<string, int>> {
     ·                                             ┬
@@ -191,7 +191,7 @@ E0010
 
 E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:35:33]
  35 │ type BadAlias = map<string, int>>
     ·                                 ┬

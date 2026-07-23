@@ -34,7 +34,7 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × default expressions are not allowed in function types
+  × invalid syntax
    ╭─[function_type_defaults.baml:1:68]
  1 │ type BadDefaultInFunctionType = (query: string, max_results: int = 10) -> int throws never
    ·                                                                    ─┬

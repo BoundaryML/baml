@@ -8,6 +8,7 @@ use baml_base::Span;
 use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
     errors::{ErrorContext, NameError, ParseError, TypeError},
+    message::{DiagnosticIdentifierKind, DiagnosticText},
 };
 
 // ============================================================================
@@ -21,21 +22,28 @@ impl ToDiagnostic for ParseError {
                 expected,
                 found,
                 span,
-            } => Diagnostic::error(
-                DiagnosticId::UnexpectedToken,
-                format!("Expected {expected}, found {found}"),
-            )
-            .with_primary_span(*span),
+            } => {
+                let label = DiagnosticText::new()
+                    .text("expected ")
+                    .code(expected)
+                    .text(", found ")
+                    .code(found);
+                Diagnostic::error(DiagnosticId::UnexpectedToken, "unexpected token")
+                    .with_primary(*span, label)
+            }
 
-            ParseError::UnexpectedEof { expected, span } => Diagnostic::error(
-                DiagnosticId::UnexpectedEof,
-                format!("Expected {expected}, found EOF"),
-            )
-            .with_primary_span(*span),
+            ParseError::UnexpectedEof { expected, span } => {
+                let label = DiagnosticText::new()
+                    .text("expected ")
+                    .code(expected)
+                    .text(", found end of file");
+                Diagnostic::error(DiagnosticId::UnexpectedEof, "unexpected end of file")
+                    .with_primary(*span, label)
+            }
 
             ParseError::InvalidSyntax { message, span } => {
-                Diagnostic::error(DiagnosticId::InvalidSyntax, message.clone())
-                    .with_primary_span(*span)
+                Diagnostic::error(DiagnosticId::InvalidSyntax, "invalid syntax")
+                    .with_primary(*span, message.clone())
             }
         };
         diag.with_phase(DiagnosticPhase::Parse)
@@ -63,25 +71,33 @@ impl<C: ErrorContext> TypeError<C> {
                 location,
                 info_location,
             } => {
-                let diag = Diagnostic::error(
-                    DiagnosticId::TypeMismatch,
-                    format!("Expected `{}`, found `{}`", ty_fn(expected), ty_fn(found)),
-                )
-                .with_primary_span(loc_fn(location));
+                let message = DiagnosticText::new()
+                    .text("expected ")
+                    .type_expr(ty_fn(expected))
+                    .text(", found ")
+                    .type_expr(ty_fn(found));
+                let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+                    .with_primary(loc_fn(location), message);
                 if let Some(info_location) = info_location {
-                    diag.with_secondary(loc_fn(info_location), "Type required here")
+                    diag.with_secondary(loc_fn(info_location), "expected due to this")
                 } else {
                     diag
                 }
             }
-            TypeError::UnknownType { name, location } => {
-                Diagnostic::error(DiagnosticId::UnknownType, format!("Unknown type `{name}`"))
-                    .with_primary_span(loc_fn(location))
-            }
+            TypeError::UnknownType { name, location } => Diagnostic::error(
+                DiagnosticId::UnknownType,
+                DiagnosticText::new().text("unknown type ").identifier(
+                    name,
+                    DiagnosticIdentifierKind::Type,
+                ),
+            )
+            .with_primary_span(loc_fn(location)),
 
             TypeError::UnknownVariable { name, location } => Diagnostic::error(
                 DiagnosticId::UnknownVariable,
-                format!("Unknown variable `{name}`"),
+                DiagnosticText::new()
+                    .text("unknown variable ")
+                    .identifier(name, DiagnosticIdentifierKind::Variable),
             )
             .with_primary_span(loc_fn(location)),
 
@@ -90,25 +106,31 @@ impl<C: ErrorContext> TypeError<C> {
                 lhs,
                 rhs,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidOperator,
-                format!(
-                    "Cannot apply operator '{op}' to types `{}` and `{}`",
-                    ty_fn(lhs),
-                    ty_fn(rhs)
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("cannot apply operator ")
+                    .code(op)
+                    .text(" to types ")
+                    .type_expr(ty_fn(lhs))
+                    .text(" and ")
+                    .type_expr(ty_fn(rhs));
+                Diagnostic::error(DiagnosticId::InvalidOperator, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::InvalidUnaryOp {
                 op,
                 operand,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidOperator,
-                format!("Cannot apply operator '{op}' to type `{}`", ty_fn(operand)),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("cannot apply operator ")
+                    .code(op)
+                    .text(" to type ")
+                    .type_expr(ty_fn(operand));
+                Diagnostic::error(DiagnosticId::InvalidOperator, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::ArgumentCountMismatch {
                 expected,
@@ -120,27 +142,37 @@ impl<C: ErrorContext> TypeError<C> {
             )
             .with_primary_span(loc_fn(location)),
 
-            TypeError::NotCallable { ty, location } => Diagnostic::error(
-                DiagnosticId::NotCallable,
-                format!("Type `{}` is not callable", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::NotCallable { ty, location } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" is not callable");
+                Diagnostic::error(DiagnosticId::NotCallable, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::NoSuchField {
                 ty,
                 field,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::NoSuchField,
-                format!("Type `{}` has no field `{field}`", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" has no field ")
+                    .identifier(field, DiagnosticIdentifierKind::Field);
+                Diagnostic::error(DiagnosticId::NoSuchField, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
-            TypeError::NotIndexable { ty, location } => Diagnostic::error(
-                DiagnosticId::NotIndexable,
-                format!("Type `{}` is not indexable", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::NotIndexable { ty, location } => {
+                let message = DiagnosticText::new()
+                    .text("type ")
+                    .type_expr(ty_fn(ty))
+                    .text(" is not indexable");
+                Diagnostic::error(DiagnosticId::NotIndexable, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
             TypeError::NonExhaustiveMatch {
                 scrutinee_type,
@@ -172,20 +204,26 @@ impl<C: ErrorContext> TypeError<C> {
                 enum_name,
                 variant_name,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::UnknownEnumVariant,
-                format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
-            )
-            .with_primary_span(loc_fn(location)),
+            } => {
+                let message = DiagnosticText::new()
+                    .text("unknown variant ")
+                    .identifier(variant_name, DiagnosticIdentifierKind::EnumVariant)
+                    .text(" for enum ")
+                    .identifier(enum_name, DiagnosticIdentifierKind::Type);
+                Diagnostic::error(DiagnosticId::UnknownEnumVariant, message)
+                    .with_primary_span(loc_fn(location))
+            }
 
-            TypeError::MissingReturnExpression { expected, location } => Diagnostic::error(
-                DiagnosticId::MissingReturnExpression,
-                format!(
-                    "Missing return expression. Function expects `{}` but body has no final expression.",
-                    ty_fn(expected)
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
+            TypeError::MissingReturnExpression { expected, location } => {
+                let label = DiagnosticText::new()
+                    .text("expected return value of type ")
+                    .type_expr(ty_fn(expected));
+                Diagnostic::error(
+                    DiagnosticId::MissingReturnExpression,
+                    "missing return expression",
+                )
+                .with_primary(loc_fn(location), label)
+            }
 
             TypeError::NonExhaustiveCatch {
                 unhandled_types,
@@ -585,7 +623,13 @@ mod tests {
 
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0010");
-        assert!(diag.message.contains("Expected"));
+        assert_eq!(diag.message, "unexpected token");
+        assert!(
+            diag.annotations[0]
+                .message
+                .as_deref()
+                .is_some_and(|message| message.contains("expected"))
+        );
         assert_eq!(diag.phase, DiagnosticPhase::Parse);
     }
 
@@ -600,8 +644,10 @@ mod tests {
 
         let diag = error.to_diagnostic(Clone::clone, |s| *s);
         assert_eq!(diag.code(), "E0001");
-        assert!(diag.message.contains("int"));
-        assert!(diag.message.contains("string"));
+        assert_eq!(diag.message, "mismatched types");
+        let label = diag.annotations[0].message.as_deref().unwrap();
+        assert!(label.contains("int"));
+        assert!(label.contains("string"));
         assert_eq!(diag.phase, DiagnosticPhase::Type);
     }
 

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [parse] E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
    ╭─[extra_greater.baml:7:29]
  7 │   bad_field map<string, int>>
    ·                             ┬
@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:23:38]
  23 │ function BadParam(x: map<string, int>>) -> string {
     ·                                      ┬
@@ -22,18 +22,17 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
     ╭─[extra_greater.baml:23:51]
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
  24 │ │     client GPT4
  25 │ │     prompt #"test"#
- 26 │ ├─▶ }
-    · ╰──── unresolved name: GPT4
+ 26 │ ╰─▶ }
     ╰────
 
   [parse] E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:29:45]
  29 │ function BadReturnType() -> map<string, int>> {
     ·                                             ┬
@@ -42,18 +41,17 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0003
 
-  × unresolved name: GPT4
+  × unresolved name: `GPT4`
     ╭─[extra_greater.baml:29:47]
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
  30 │ │     client GPT4
  31 │ │     prompt #"test"#
- 32 │ ├─▶ }
-    · ╰──── unresolved name: GPT4
+ 32 │ ╰─▶ }
     ╰────
 
   [parse] E0010
 
-  × Unmatched '>' in type expression (found 1 extra)
+  × invalid syntax
     ╭─[extra_greater.baml:35:33]
  35 │ type BadAlias = map<string, int>>
     ·                                 ┬

@@ -64,27 +64,27 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected ')', found identifier
+  × unexpected token
    ╭─[unclosed_string.baml:4:25]
  4 │   field3 string @alias("another closed string")  // Should still parse this
    ·                         ───┬───
-   ·                            ╰── Expected ')', found identifier
+   ·                            ╰── expected `')'`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected Unclosed string literal, found EOF
+  × unexpected token
    ╭─[unclosed_string.baml:5:2]
  5 │ }
    ·  ▲
-   ·  ╰── Expected Unclosed string literal, found EOF
+   ·  ╰── expected `Unclosed string literal`, found `EOF`
    ╰────
 
 E0010
 
-  × Expected '}', found EOF
+  × unexpected token
    ╭─[unclosed_string.baml:5:2]
  5 │ }
    ·  ▲
-   ·  ╰── Expected '}', found EOF
+   ·  ╰── expected `'}'`, found `EOF`
    ╰────

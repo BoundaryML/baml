@@ -33,6 +33,7 @@
 pub mod diagnostic;
 pub mod errors;
 pub mod highlight;
+pub mod message;
 pub mod render;
 pub mod to_diagnostic;
 
@@ -42,6 +43,9 @@ pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiag
 pub use errors::{ErrorContext, NameError, ParseError, TypeError};
 pub use highlight::{
     HighlightAttributes, HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
+};
+pub use message::{
+    DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind, DiagnosticText,
 };
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};

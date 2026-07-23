@@ -24,9 +24,9 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected '}', found class
+  × unexpected token
    ╭─[missing_braces.baml:5:1]
  5 │ class Another {  // Should still parse this class
    · ──┬──
-   ·   ╰── Expected '}', found class
+   ·   ╰── expected `'}'`, found `class`
    ╰────

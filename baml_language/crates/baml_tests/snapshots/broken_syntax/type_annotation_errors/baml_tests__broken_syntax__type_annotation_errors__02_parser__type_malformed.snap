@@ -17,18 +17,18 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected '=', found identifier
+  × unexpected token
    ╭─[type_malformed.baml:7:6]
  7 │ type Foo
    ·      ─┬─
-   ·       ╰── Expected '=', found identifier
+   ·       ╰── expected `'='`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected type, found EOF
+  × unexpected token
     ╭─[type_malformed.baml:10:11]
  10 │ type Bar =
     ·           ▲
-    ·           ╰── Expected type, found EOF
+    ·           ╰── expected `type`, found `EOF`
     ╰────

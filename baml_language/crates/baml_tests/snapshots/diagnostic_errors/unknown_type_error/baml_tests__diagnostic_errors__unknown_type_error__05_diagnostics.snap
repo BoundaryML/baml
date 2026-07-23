@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: blah
    ╭─[unknown_type_error.baml:3:19]
  3 │ function Foo() -> blah {
-   ·                   ──┬─
-   ·                     ╰── unresolved type: blah
+   ·                   ────
    ╰────
 
   [type] E0002
@@ -16,8 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: unknown_param_type
    ╭─[unknown_type_error.baml:8:17]
  8 │ function Bar(x: unknown_param_type) -> int {
-   ·                 ─────────┬────────
-   ·                          ╰── unresolved type: unknown_param_type
+   ·                 ──────────────────
    ╰────
 
   [type] E0002
@@ -25,8 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: unknown_optional
     ╭─[unknown_type_error.baml:13:19]
  13 │ function Baz() -> unknown_optional? {
-    ·                   ────────┬────────
-    ·                           ╰── unresolved type: unknown_optional
+    ·                   ─────────────────
     ╰────
 
   [type] E0002
@@ -34,13 +31,12 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: Status.Typo
     ╭─[unknown_type_error.baml:26:38]
  26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {
-    ·                                      ─────┬─────
-    ·                                           ╰── unresolved type: Status.Typo
+    ·                                      ───────────
     ╰────
 
   [type] E0007
 
-  × cannot access field `email` on `unknown`
+  × type `unknown` has no member `email`
     ╭─[unknown_type_error.baml:31:7]
  31 │   raw.email.to_lower_case()
     ·   ─┬─ ──┬──
@@ -55,7 +51,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × cannot access field `email` on `unknown`
+  × type `unknown` has no member `email`
     ╭─[unknown_type_error.baml:39:20]
  39 │   envelope.payload.email
     ·            ───┬─── ──┬──

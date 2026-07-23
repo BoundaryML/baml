@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   ⚠ unreachable code: 1 statement(s) after diverging statement
    ╭─[main.baml:8:5]
  8 │     let y = (x = 5);
-   ·     ────────┬───────
-   ·             ╰── unreachable code: 1 statement(s) after diverging statement
+   ·     ────────────────
    ╰────
 
   [hir] E0010

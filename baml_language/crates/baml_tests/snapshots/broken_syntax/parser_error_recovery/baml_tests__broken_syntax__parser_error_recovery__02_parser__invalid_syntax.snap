@@ -42,81 +42,81 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected class name, found integer
+  × unexpected token
    ╭─[invalid_syntax.baml:1:7]
  1 │ class 123Invalid {  // Invalid class name
    ·       ─┬─
-   ·        ╰── Expected class name, found integer
+   ·        ╰── expected `class name`, found `integer`
    ╰────
 
 E0010
 
-  × Expected '{', found integer
+  × unexpected token
    ╭─[invalid_syntax.baml:1:7]
  1 │ class 123Invalid {  // Invalid class name
    ·       ─┬─
-   ·        ╰── Expected '{', found integer
+   ·        ╰── expected `'{'`, found `integer`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found integer
+  × unexpected token
    ╭─[invalid_syntax.baml:1:7]
  1 │ class 123Invalid {  // Invalid class name
    ·       ─┬─
-   ·        ╰── Expected top-level declaration, found integer
+   ·        ╰── expected `top-level declaration`, found `integer`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
    ╭─[invalid_syntax.baml:1:10]
  1 │ class 123Invalid {  // Invalid class name
    ·          ───┬───
-   ·             ╰── Expected top-level declaration, found identifier
+   ·             ╰── expected `top-level declaration`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found '{'
+  × unexpected token
    ╭─[invalid_syntax.baml:1:18]
  1 │ class 123Invalid {  // Invalid class name
    ·                  ┬
-   ·                  ╰── Expected top-level declaration, found '{'
+   ·                  ╰── expected `top-level declaration`, found `'{'`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
    ╭─[invalid_syntax.baml:2:3]
  2 │   field string
    ·   ──┬──
-   ·     ╰── Expected top-level declaration, found identifier
+   ·     ╰── expected `top-level declaration`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
    ╭─[invalid_syntax.baml:2:9]
  2 │   field string
    ·         ───┬──
-   ·            ╰── Expected top-level declaration, found identifier
+   ·            ╰── expected `top-level declaration`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected top-level declaration, found '}'
+  × unexpected token
    ╭─[invalid_syntax.baml:3:1]
  3 │ }
    · ┬
-   · ╰── Expected top-level declaration, found '}'
+   · ╰── expected `top-level declaration`, found `'}'`
    ╰────
 
 E0010
 
-  × Expected type, found '{'
+  × unexpected token
     ╭─[invalid_syntax.baml:10:19]
  10 │ function Foo() -> {  // Missing return type
     ·                   ┬
-    ·                   ╰── Expected type, found '{'
+    ·                   ╰── expected `type`, found `'{'`
     ╰────

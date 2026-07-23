@@ -4,18 +4,18 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected int, got bool
+  × mismatched types
     ╭─[array_compare.baml:24:6]
  24 │     [f < x, y()]
     ·      ──┬──
-    ·        ╰── type mismatch: expected int, got bool
+    ·        ╰── expected `int`, found `bool`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected "assistant", got "a"
+  × mismatched types
     ╭─[generic_call.baml:23:28]
  23 │     f<"assistant", string>("a", "b")
     ·                            ─┬─
-    ·                             ╰── type mismatch: expected "assistant", got "a"
+    ·                             ╰── expected `"assistant"`, found `"a"`
     ╰────

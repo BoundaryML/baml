@@ -7,17 +7,16 @@ source: crates/baml_tests/src/generated_tests.rs
   × `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
    ╭─[runtime_id.baml:8:5]
  8 │     $id += "-suffix";
-   ·     ─┬─
-   ·      ╰── `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
+   ·     ───
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected string, got 42
+  × mismatched types
     ╭─[runtime_id.baml:15:11]
  15 │     $id = 42;
     ·           ─┬
-    ·            ╰── type mismatch: expected string, got 42
+    ·            ╰── expected `string`, found `42`
     ╰────
 
   [type] E0001
@@ -25,8 +24,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
     ╭─[runtime_id.baml:21:5]
  21 │     $id.len()
-    ·     ───┬───
-    ·        ╰── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    ·     ───────
     ╰────
 
   [type] E0005
@@ -34,8 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × expected 1 argument(s), got 0
     ╭─[runtime_id.baml:31:5]
  31 │     takes_int($id = boundary.id())
-    ·     ───────────────┬──────────────
-    ·                    ╰── expected 1 argument(s), got 0
+    ·     ──────────────────────────────
     ╰────
 
   [hir] E0010
@@ -61,8 +58,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
     ╭─[runtime_id.baml:48:51]
  48 │ function setter_never(s: string) -> string throws never {
-    ·                                                   ──┬──
-    ·                                                     ╰── declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
+    ·                                                   ─────
     ╰────
 
   [type] E0001
@@ -70,8 +66,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
     ╭─[runtime_id.baml:56:5]
  56 │     $id?.len()
-    ·     ────┬───
-    ·         ╰── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    ·     ────────
     ╰────
 
   [hir] E0010

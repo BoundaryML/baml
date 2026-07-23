@@ -64,7 +64,7 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'
+  × invalid syntax
    ╭─[main.baml:7:17]
  7 │         xs.at(0)!
    ·                 ┬

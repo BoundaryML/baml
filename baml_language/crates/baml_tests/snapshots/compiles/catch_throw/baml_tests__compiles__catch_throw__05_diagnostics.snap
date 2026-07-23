@@ -7,6 +7,5 @@ source: crates/baml_tests/src/generated_tests.rs
   ⚠ unreachable code: 1 statement(s) after diverging statement
      ╭─[catch_throw.baml:112:5]
  112 │     throw "error"
-     ·     ──────┬──────
-     ·           ╰── unreachable code: 1 statement(s) after diverging statement
+     ·     ─────────────
      ╰────

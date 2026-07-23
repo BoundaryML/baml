@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int[]` has no member `len`
     ╭─[main.baml:10:24]
  10 │     `result: ${[1,2,3].len()}`
-    ·                        ─┬─
-    ·                         ╰── type `int[]` has no member `len`
+    ·                        ───
     ╰────
 
   [type] E0007
@@ -16,8 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int[]` has no member `len`
     ╭─[main.baml:16:18]
  16 │     `x ${[1,2,3].len().to_string()}`
-    ·                  ─┬─
-    ·                   ╰── type `int[]` has no member `len`
+    ·                  ───
     ╰────
 
   [type] E0004
@@ -25,8 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × operator `+` cannot be applied to `1` and `"x"`
     ╭─[main.baml:21:13]
  21 │     `sum: ${1 + "x"}`
-    ·             ───┬───
-    ·                ╰── operator `+` cannot be applied to `1` and `"x"`
+    ·             ───────
     ╰────
 
   [type] E0007
@@ -34,17 +31,15 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `"abc"` has no member `nonexistent`
     ╭─[main.baml:26:17]
  26 │     `v: ${"abc".nonexistent()}`
-    ·                 ─────┬─────
-    ·                      ╰── type `"abc"` has no member `nonexistent`
+    ·                 ───────────
     ╰────
 
   [type] E0003
 
-  × unresolved name: undefined_var
+  × unresolved name: `undefined_var`
     ╭─[main.baml:33:11]
  33 │     `v: ${undefined_var}`
-    ·           ──────┬──────
-    ·                 ╰── unresolved name: undefined_var
+    ·           ─────────────
     ╰────
 
   [type] E0007
@@ -52,8 +47,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `int` has no member `bogus`
     ╭─[main.baml:39:28]
  39 │     `${for (let x in xs)}${x.bogus()}${endfor}`
-    ·                            ───┬───
-    ·                               ╰── type `int` has no member `bogus`
+    ·                            ───────
     ╰────
 
   [type] E0007
@@ -61,6 +55,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `"abc"` has no member `missing`
     ╭─[main.baml:43:26]
  43 │     `${if (show)}${"abc".missing()}${endif}`
-    ·                          ───┬───
-    ·                             ╰── type `"abc"` has no member `missing`
+    ·                          ───────
     ╰────

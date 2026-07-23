@@ -100,43 +100,43 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected config key, found '.'
+  × unexpected token
    ╭─[test.baml:8:23]
  8 │         model gemini-2.0-flash
    ·                       ┬
-   ·                       ╰── Expected config key, found '.'
+   ·                       ╰── expected `config key`, found `'.'`
    ╰────
 
 E0010
 
-  × Expected config key, found integer
+  × unexpected token
    ╭─[test.baml:8:24]
  8 │         model gemini-2.0-flash
    ·                        ┬
-   ·                        ╰── Expected config key, found integer
+   ·                        ╰── expected `config key`, found `integer`
    ╰────
 
 E0010
 
-  × Expected config key, found '-'
+  × unexpected token
    ╭─[test.baml:8:25]
  8 │         model gemini-2.0-flash
    ·                         ┬
-   ·                         ╰── Expected config key, found '-'
+   ·                         ╰── expected `config key`, found `'-'`
    ╰────
 
 E0010
 
-  × Expected identifier, found '}'
+  × unexpected token
    ╭─[test.baml:9:5]
  9 │     }
    ·     ┬
-   ·     ╰── Expected identifier, found '}'
+   ·     ╰── expected `identifier`, found `'}'`
    ╰────
 
 E0010
 
-  × Header comments (//#) are not allowed inside LLM functions
+  × invalid syntax
     ╭─[test.baml:13:5]
  13 │     //# collect source material
     ·     ─────────────┬─────────────

@@ -4,11 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [parse] E0010
 
-  × Expected '=', found identifier
+  × unexpected token
    ╭─[type_malformed.baml:7:6]
  7 │ type Foo
    ·      ─┬─
-   ·       ╰── Expected '=', found identifier
+   ·       ╰── expected `'='`, found `identifier`
    ╰────
 
   [type] E0002
@@ -16,18 +16,8 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: Foo
    ╭─[type_malformed.baml:7:6]
  7 │ type Foo
-   ·      ─┬─
-   ·       ╰── unresolved type: Foo
+   ·      ───
    ╰────
-
-  [parse] E0010
-
-  × Expected type, found EOF
-    ╭─[type_malformed.baml:10:11]
- 10 │ type Bar =
-    ·           ▲
-    ·           ╰── Expected type, found EOF
-    ╰────
 
   [hir] E0108
 
@@ -36,4 +26,13 @@ source: crates/baml_tests/src/generated_tests.rs
  10 │ type Bar =
     ·           ▲
     ·           ╰── unparseable type
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[type_malformed.baml:10:11]
+ 10 │ type Bar =
+    ·           ▲
+    ·           ╰── expected `type`, found `EOF`
     ╰────

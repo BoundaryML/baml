@@ -4,20 +4,20 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected string, got Status
+  × mismatched types
     ╭─[regressions.baml:25:5]
  25 │     WrapperAlwaysThrows(n) catch (e) {
     ·     ───────────┬──────────
-    ·                ╰── type mismatch: expected string, got Status
+    ·                ╰── expected `string`, found `Status`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected string, got Status
+  × mismatched types
     ╭─[regressions.baml:43:5]
  43 │     ThrowsAllStatusVariants(n) catch (e) {
     ·     ─────────────┬────────────
-    ·                  ╰── type mismatch: expected string, got Status
+    ·                  ╰── expected `string`, found `Status`
     ╰────
 
   [type] E0062
@@ -26,8 +26,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[regressions.baml:92:5]
  92 │ ╭─▶     BuildWithBuildError(ok) catch_all (e) {
  93 │ │           BuildError => "recovered: " + e.reason,
- 94 │ ├─▶     }
-    · ╰──── non-exhaustive catch_all on type string | BuildError; missing: string
+ 94 │ ╰─▶     }
     ╰────
 
   [type] E0146
@@ -35,6 +34,5 @@ source: crates/baml_tests/src/generated_tests.rs
   ⚠ unreachable code: 2 statement(s) after diverging statement
      ╭─[regressions.baml:101:9]
  101 │         throw "error"
-     ·         ──────┬──────
-     ·               ╰── unreachable code: 2 statement(s) after diverging statement
+     ·         ─────────────
      ╰────

@@ -7,6 +7,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × operator `+` cannot be applied to `1` and `"foo"`
    ╭─[simple_type_error.baml:2:3]
  2 │   1 + "foo"
-   ·   ────┬────
-   ·       ╰── operator `+` cannot be applied to `1` and `"foo"`
+   ·   ─────────
    ╰────

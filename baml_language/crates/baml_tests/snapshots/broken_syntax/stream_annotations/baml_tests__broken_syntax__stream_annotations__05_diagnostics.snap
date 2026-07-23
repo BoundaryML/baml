@@ -31,20 +31,20 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] E0010
 
-  × Expected ')', found '['
+  × unexpected token
     ╭─[main.baml:24:54]
  24 │     certifications Education[] @stream.type(Education[])
     ·                                                      ┬
-    ·                                                      ╰── Expected ')', found '['
+    ·                                                      ╰── expected `')'`, found `'['`
     ╰────
 
   [parse] E0010
 
-  × Expected Unexpected token in class body, found ')'
+  × unexpected token
     ╭─[main.baml:24:56]
  24 │     certifications Education[] @stream.type(Education[])
     ·                                                        ┬
-    ·                                                        ╰── Expected Unexpected token in class body, found ')'
+    ·                                                        ╰── expected `Unexpected token in class body`, found `')'`
     ╰────
 
   [hir] E0015

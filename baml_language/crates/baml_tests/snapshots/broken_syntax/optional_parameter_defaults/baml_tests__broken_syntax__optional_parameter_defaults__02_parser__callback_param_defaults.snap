@@ -55,7 +55,7 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × default expressions are not allowed in function types
+  × invalid syntax
    ╭─[callback_param_defaults.baml:7:67]
  7 │ function call_with_defaulted_callback(callback: (x: int, y: int = 10) -> string, x: int) -> string {
    ·                                                                   ─┬

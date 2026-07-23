@@ -62,36 +62,36 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected LLM function missing 'prompt' field, found '}'
+  × unexpected token
    ╭─[ambiguous_function.baml:5:1]
  5 │ }
    · ┬
-   · ╰── Expected LLM function missing 'prompt' field, found '}'
+   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
    ╰────
 
 E0010
 
-  × Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
+  × unexpected token
    ╭─[ambiguous_function.baml:9:3]
  9 │   clent GPT4  // Typo in "client"
    ·   ──┬──
-   ·     ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
+   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
+  × unexpected token
    ╭─[ambiguous_function.baml:9:9]
  9 │   clent GPT4  // Typo in "client"
    ·         ──┬─
-   ·           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
+   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
    ╰────
 
 E0010
 
-  × Expected LLM function missing 'client' field, found '}'
+  × unexpected token
     ╭─[ambiguous_function.baml:11:1]
  11 │ }
     · ┬
-    · ╰── Expected LLM function missing 'client' field, found '}'
+    · ╰── expected `LLM function missing 'client' field`, found `'}'`
     ╰────

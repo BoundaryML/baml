@@ -4,11 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected string, got int
+  × mismatched types
    ╭─[lambda_errors.baml:3:36]
  3 │     let bad = (x: int) -> string { x * 2 }
    ·                                    ──┬──
-   ·                                      ╰── type mismatch: expected string, got int
+   ·                                      ╰── expected `string`, found `int`
    ╰────
 
   [type] E0002
@@ -16,8 +16,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × cannot infer type of lambda parameter `x` — add a type annotation or provide context
    ╭─[lambda_errors.baml:9:15]
  9 │     let bad = (x) -> { x * 2 }
-   ·               ────────┬───────
-   ·                       ╰── cannot infer type of lambda parameter `x` — add a type annotation or provide context
+   ·               ────────────────
    ╰────
 
   [type] E0005
@@ -25,26 +24,25 @@ source: crates/baml_tests/src/generated_tests.rs
   × expected 1 argument(s), got 2
     ╭─[lambda_errors.baml:16:15]
  16 │     items.map((x, y) -> { x })
-    ·               ───────┬───────
-    ·                      ╰── expected 1 argument(s), got 2
+    ·               ───────────────
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected int, got string
+  × mismatched types
     ╭─[lambda_errors.baml:22:15]
  22 │     items.map((x: string) -> { x })
     ·               ──────────┬─────────
-    ·                         ╰── type mismatch: expected int, got string
+    ·                         ╰── expected `int`, found `string`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected int, got string
+  × mismatched types
     ╭─[lambda_errors.baml:22:32]
  22 │     items.map((x: string) -> { x })
     ·                                ┬
-    ·                                ╰── type mismatch: expected int, got string
+    ·                                ╰── expected `int`, found `string`
     ╰────
 
   [type] E0002
@@ -52,8 +50,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: NonExistentType
     ╭─[lambda_errors.baml:27:17]
  27 │     let f = (x: NonExistentType) -> { 0 }
-    ·                 ───────┬───────
-    ·                        ╰── unresolved type: NonExistentType
+    ·                 ───────────────
     ╰────
 
   [type] E0002
@@ -61,6 +58,5 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: NonExistentType
     ╭─[lambda_errors.baml:33:25]
  33 │     let f = (x: int) -> NonExistentType { x }
-    ·                         ───────┬───────
-    ·                                ╰── unresolved type: NonExistentType
+    ·                         ───────────────
     ╰────

@@ -184,43 +184,43 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected attribute argument, found error
+  × unexpected token
    ╭─[nested_quotes.baml:4:34]
  4 │   double_in_single string @alias('She said "hello"')
    ·                                  ┬
-   ·                                  ╰── Expected attribute argument, found error
+   ·                                  ╰── expected `attribute argument`, found `error`
    ╰────
 
 E0010
 
-  × Expected ')', found error
+  × unexpected token
    ╭─[nested_quotes.baml:4:34]
  4 │   double_in_single string @alias('She said "hello"')
    ·                                  ┬
-   ·                                  ╰── Expected ')', found error
+   ·                                  ╰── expected `')'`, found `error`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found error
+  × unexpected token
    ╭─[nested_quotes.baml:4:34]
  4 │   double_in_single string @alias('She said "hello"')
    ·                                  ┬
-   ·                                  ╰── Expected Unexpected token in class body, found error
+   ·                                  ╰── expected `Unexpected token in class body`, found `error`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:4:44]
  4 │   double_in_single string @alias('She said "hello"')
    ·                                            ┬
-   ·                                            ╰── Expected Unexpected token in class body, found '"'
+   ·                                            ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × field 'The' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:5:37]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                     ─┬─
@@ -229,25 +229,25 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found '\'
+  × unexpected token
    ╭─[nested_quotes.baml:5:41]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                         ┬
-   ·                                         ╰── Expected Unexpected token in class body, found '\'
+   ·                                         ╰── expected `Unexpected token in class body`, found `'\'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:5:42]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                          ┬
-   ·                                          ╰── Expected Unexpected token in class body, found '"'
+   ·                                          ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × field 'quote' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:5:43]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                           ──┬──
@@ -256,34 +256,34 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found '\'
+  × unexpected token
    ╭─[nested_quotes.baml:5:48]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                                ┬
-   ·                                                ╰── Expected Unexpected token in class body, found '\'
+   ·                                                ╰── expected `Unexpected token in class body`, found `'\'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:5:49]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                                 ┬
-   ·                                                 ╰── Expected Unexpected token in class body, found '"'
+   ·                                                 ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found is
+  × unexpected token
    ╭─[nested_quotes.baml:5:51]
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    ·                                                   ─┬
-   ·                                                    ╰── Expected Unexpected token in class body, found is
+   ·                                                    ╰── expected `Unexpected token in class body`, found `is`
    ╰────
 
 E0010
 
-  × field 'It' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:6:40]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                        ─┬
@@ -292,16 +292,16 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found error
+  × unexpected token
    ╭─[nested_quotes.baml:6:42]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                          ┬
-   ·                                          ╰── Expected Unexpected token in class body, found error
+   ·                                          ╰── expected `Unexpected token in class body`, found `error`
    ╰────
 
 E0010
 
-  × field 's' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:6:43]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                           ┬
@@ -310,25 +310,25 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found '\'
+  × unexpected token
    ╭─[nested_quotes.baml:6:45]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                             ┬
-   ·                                             ╰── Expected Unexpected token in class body, found '\'
+   ·                                             ╰── expected `Unexpected token in class body`, found `'\'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:6:46]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                              ┬
-   ·                                              ╰── Expected Unexpected token in class body, found '"'
+   ·                                              ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × field 'really' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:6:47]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                               ───┬──
@@ -337,34 +337,34 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found '\'
+  × unexpected token
    ╭─[nested_quotes.baml:6:53]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                     ┬
-   ·                                                     ╰── Expected Unexpected token in class body, found '\'
+   ·                                                     ╰── expected `Unexpected token in class body`, found `'\'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:6:54]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                      ┬
-   ·                                                      ╰── Expected Unexpected token in class body, found '"'
+   ·                                                      ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found error
+  × unexpected token
    ╭─[nested_quotes.baml:6:56]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                        ┬
-   ·                                                        ╰── Expected Unexpected token in class body, found error
+   ·                                                        ╰── expected `Unexpected token in class body`, found `error`
    ╰────
 
 E0010
 
-  × field 'complex' is missing a type annotation
+  × invalid syntax
    ╭─[nested_quotes.baml:6:57]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                         ───┬───
@@ -373,27 +373,27 @@ E0010
 
 E0010
 
-  × Expected Unexpected token in class body, found error
+  × unexpected token
    ╭─[nested_quotes.baml:6:64]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                                ┬
-   ·                                                                ╰── Expected Unexpected token in class body, found error
+   ·                                                                ╰── expected `Unexpected token in class body`, found `error`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found '"'
+  × unexpected token
    ╭─[nested_quotes.baml:6:65]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                                 ┬
-   ·                                                                 ╰── Expected Unexpected token in class body, found '"'
+   ·                                                                 ╰── expected `Unexpected token in class body`, found `'"'`
    ╰────
 
 E0010
 
-  × Expected Unexpected token in class body, found ')'
+  × unexpected token
    ╭─[nested_quotes.baml:6:66]
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    ·                                                                  ┬
-   ·                                                                  ╰── Expected Unexpected token in class body, found ')'
+   ·                                                                  ╰── expected `Unexpected token in class body`, found `')'`
    ╰────

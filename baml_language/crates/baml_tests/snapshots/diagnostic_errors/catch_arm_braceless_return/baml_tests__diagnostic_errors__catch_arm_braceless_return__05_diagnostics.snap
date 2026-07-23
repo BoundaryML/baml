@@ -4,9 +4,9 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected bool, got string
+  × mismatched types
     ╭─[repro.baml:23:22]
  23 │     string => return e
     ·                      ┬
-    ·                      ╰── type mismatch: expected bool, got string
+    ·                      ╰── expected `bool`, found `string`
     ╰────

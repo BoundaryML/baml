@@ -84,7 +84,7 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × field 'field2' is missing a type annotation
+  × invalid syntax
    ╭─[partial_input.baml:4:3]
  4 │   field2  // Missing type entirely
    ·   ───┬──
@@ -93,7 +93,7 @@ E0010
 
 E0010
 
-  × Attribute is missing a name
+  × invalid syntax
    ╭─[partial_input.baml:5:17]
  5 │   field3 string @  // Incomplete attribute
    ·                 ┬
@@ -102,16 +102,16 @@ E0010
 
 E0010
 
-  × Expected ')', found identifier
+  × unexpected token
    ╭─[partial_input.baml:7:10]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
    ·          ───┬──
-   ·             ╰── Expected ')', found identifier
+   ·             ╰── expected `')'`, found `identifier`
    ╰────
 
 E0010
 
-  × field 'string' is missing a type annotation
+  × invalid syntax
    ╭─[partial_input.baml:7:10]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
    ·          ───┬──
@@ -120,54 +120,54 @@ E0010
 
 E0010
 
-  × Expected ')', found function
+  × unexpected token
     ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
     · ────┬───
-    ·     ╰── Expected ')', found function
+    ·     ╰── expected `')'`, found `function`
     ╰────
 
 E0010
 
-  × Expected return type (->), found function
+  × unexpected token
     ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
     · ────┬───
-    ·     ╰── Expected return type (->), found function
+    ·     ╰── expected `return type (->)`, found `function`
     ╰────
 
 E0010
 
-  × Expected function body, found function
+  × unexpected token
     ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
     · ────┬───
-    ·     ╰── Expected function body, found function
+    ·     ╰── expected `function body`, found `function`
     ╰────
 
 E0010
 
-  × Expected '{', found identifier
+  × unexpected token
     ╭─[partial_input.baml:19:3]
  19 │   VALUE2
     ·   ───┬──
-    ·      ╰── Expected '{', found identifier
+    ·      ╰── expected `'{'`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[partial_input.baml:19:3]
  19 │   VALUE2
     ·   ───┬──
-    ·      ╰── Expected top-level declaration, found identifier
+    ·      ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '}'
+  × unexpected token
     ╭─[partial_input.baml:20:1]
  20 │ }
     · ┬
-    · ╰── Expected top-level declaration, found '}'
+    · ╰── expected `top-level declaration`, found `'}'`
     ╰────

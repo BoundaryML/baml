@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × defaulted parameter `max_results` must be passed by name
     ╭─[call_binding.baml:22:18]
  22 │   Search("cats", 5)
-    ·                  ┬
-    ·                  ╰── defaulted parameter `max_results` must be passed by name
+    ·                  ─
     ╰────
 
   [type] E0005
@@ -16,8 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × positional arguments cannot appear after named arguments
     ╭─[call_binding.baml:26:26]
  26 │   Search(query = "cats", 5)
-    ·                          ┬
-    ·                          ╰── positional arguments cannot appear after named arguments
+    ·                          ─
     ╰────
 
   [type] E0005
@@ -25,8 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × duplicate named argument `max_results`
     ╭─[call_binding.baml:30:57]
  30 │   Search(query = "cats", max_results = 1, max_results = 2)
-    ·                                                         ┬
-    ·                                                         ╰── duplicate named argument `max_results`
+    ·                                                         ─
     ╰────
 
   [type] E0005
@@ -34,8 +31,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × missing required argument `query`
     ╭─[call_binding.baml:34:3]
  34 │   Search(q = "cats")
-    ·   ─────────┬────────
-    ·            ╰── missing required argument `query`
+    ·   ──────────────────
     ╰────
 
   [type] E0005
@@ -43,8 +39,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unknown named argument `q`
     ╭─[call_binding.baml:34:14]
  34 │   Search(q = "cats")
-    ·              ───┬──
-    ·                 ╰── unknown named argument `q`
+    ·              ──────
     ╰────
 
   [type] E0001
@@ -52,8 +47,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × default for parameter `a` cannot reference later parameter `b`
     ╭─[call_binding.baml:37:33]
  37 │ function BadForwardRef(a: int = b, b: int = 1) -> int {
-    ·                                 ┬
-    ·                                 ╰── default for parameter `a` cannot reference later parameter `b`
+    ·                                 ─
     ╰────
 
   [type] E0001
@@ -61,8 +55,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × required parameter `b` cannot appear after a defaulted parameter
     ╭─[call_binding.baml:41:46]
  41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
-    ·                                              ───┬──
-    ·                                                 ╰── required parameter `b` cannot appear after a defaulted parameter
+    ·                                              ──────
     ╰────
 
   [hir] E0010
@@ -79,8 +72,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `self` cannot have a default value
    ╭─[unsupported_contexts.baml:9:27]
  9 │   function Current(self = null) -> int {
-   ·                           ──┬─
-   ·                             ╰── `self` cannot have a default value
+   ·                           ────
    ╰────
 
   [hir] E0010
@@ -94,9 +86,9 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
+  × mismatched types
     ╭─[unsupported_contexts.baml:24:23]
  24 │   let f: NamedLimit = Filtered
     ·                       ────┬───
-    ·                           ╰── type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
+    ·                           ╰── expected `NamedLimit`, found `(query: string, filter?: string | null) -> int throws never`
     ╰────

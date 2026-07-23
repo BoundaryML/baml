@@ -280,351 +280,351 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected function name, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:10]
  25 │ function 处理文本(输入: string) -> string {
     ·          ─┬
-    ·           ╰── Expected function name, found error
+    ·           ╰── expected `function name`, found `error`
     ╰────
 
 E0010
 
-  × Expected parameter name, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected parameter name, found error
+    ·                    ╰── expected `parameter name`, found `error`
     ╰────
 
 E0010
 
-  × Expected type annotation, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected type annotation, found error
+    ·                    ╰── expected `type annotation`, found `error`
     ╰────
 
 E0010
 
-  × Expected ')', found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected ')', found error
+    ·                    ╰── expected `')'`, found `error`
     ╰────
 
 E0010
 
-  × Expected return type (->), found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected return type (->), found error
+    ·                    ╰── expected `return type (->)`, found `error`
     ╰────
 
 E0010
 
-  × Expected function body, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected function body, found error
+    ·                    ╰── expected `function body`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:15]
  25 │ function 处理文本(输入: string) -> string {
     ·                   ─┬
-    ·                    ╰── Expected top-level declaration, found error
+    ·                    ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:25:16]
  25 │ function 处理文本(输入: string) -> string {
     ·                     ─┬
-    ·                      ╰── Expected top-level declaration, found error
+    ·                      ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found ':'
+  × unexpected token
     ╭─[unicode_strings.baml:25:17]
  25 │ function 处理文本(输入: string) -> string {
     ·                       ┬
-    ·                       ╰── Expected top-level declaration, found ':'
+    ·                       ╰── expected `top-level declaration`, found `':'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:25:19]
  25 │ function 处理文本(输入: string) -> string {
     ·                         ───┬──
-    ·                            ╰── Expected top-level declaration, found identifier
+    ·                            ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found ')'
+  × unexpected token
     ╭─[unicode_strings.baml:25:25]
  25 │ function 处理文本(输入: string) -> string {
     ·                               ┬
-    ·                               ╰── Expected top-level declaration, found ')'
+    ·                               ╰── expected `top-level declaration`, found `')'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '->'
+  × unexpected token
     ╭─[unicode_strings.baml:25:27]
  25 │ function 处理文本(输入: string) -> string {
     ·                                 ─┬
-    ·                                  ╰── Expected top-level declaration, found '->'
+    ·                                  ╰── expected `top-level declaration`, found `'->'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:25:30]
  25 │ function 处理文本(输入: string) -> string {
     ·                                    ───┬──
-    ·                                       ╰── Expected top-level declaration, found identifier
+    ·                                       ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '{'
+  × unexpected token
     ╭─[unicode_strings.baml:25:37]
  25 │ function 处理文本(输入: string) -> string {
     ·                                           ┬
-    ·                                           ╰── Expected top-level declaration, found '{'
+    ·                                           ╰── expected `top-level declaration`, found `'{'`
     ╰────
 
 E0010
 
-  × Expected config block, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:27:3]
  27 │   prompt #"
     ·   ───┬──
-    ·      ╰── Expected config block, found identifier
+    ·      ╰── expected `config block`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:27:3]
  27 │   prompt #"
     ·   ───┬──
-    ·      ╰── Expected top-level declaration, found identifier
+    ·      ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '#'
+  × unexpected token
     ╭─[unicode_strings.baml:27:10]
  27 │   prompt #"
     ·          ┬
-    ·          ╰── Expected top-level declaration, found '#'
+    ·          ╰── expected `top-level declaration`, found `'#'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '"'
+  × unexpected token
     ╭─[unicode_strings.baml:27:11]
  27 │   prompt #"
     ·           ┬
-    ·           ╰── Expected top-level declaration, found '"'
+    ·           ╰── expected `top-level declaration`, found `'"'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:28:5]
  28 │     Process the text: {{ 输入 }}
     ·     ───┬───
-    ·        ╰── Expected top-level declaration, found identifier
+    ·        ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:28:13]
  28 │     Process the text: {{ 输入 }}
     ·             ─┬─
-    ·              ╰── Expected top-level declaration, found identifier
+    ·              ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:28:17]
  28 │     Process the text: {{ 输入 }}
     ·                 ──┬─
-    ·                   ╰── Expected top-level declaration, found identifier
+    ·                   ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found ':'
+  × unexpected token
     ╭─[unicode_strings.baml:28:21]
  28 │     Process the text: {{ 输入 }}
     ·                     ┬
-    ·                     ╰── Expected top-level declaration, found ':'
+    ·                     ╰── expected `top-level declaration`, found `':'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '{'
+  × unexpected token
     ╭─[unicode_strings.baml:28:23]
  28 │     Process the text: {{ 输入 }}
     ·                       ┬
-    ·                       ╰── Expected top-level declaration, found '{'
+    ·                       ╰── expected `top-level declaration`, found `'{'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '{'
+  × unexpected token
     ╭─[unicode_strings.baml:28:24]
  28 │     Process the text: {{ 输入 }}
     ·                        ┬
-    ·                        ╰── Expected top-level declaration, found '{'
+    ·                        ╰── expected `top-level declaration`, found `'{'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:28:26]
  28 │     Process the text: {{ 输入 }}
     ·                          ─┬
-    ·                           ╰── Expected top-level declaration, found error
+    ·                           ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:28:27]
  28 │     Process the text: {{ 输入 }}
     ·                            ─┬
-    ·                             ╰── Expected top-level declaration, found error
+    ·                             ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '}'
+  × unexpected token
     ╭─[unicode_strings.baml:28:29]
  28 │     Process the text: {{ 输入 }}
     ·                               ┬
-    ·                               ╰── Expected top-level declaration, found '}'
+    ·                               ╰── expected `top-level declaration`, found `'}'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '}'
+  × unexpected token
     ╭─[unicode_strings.baml:28:30]
  28 │     Process the text: {{ 输入 }}
     ·                                ┬
-    ·                                ╰── Expected top-level declaration, found '}'
+    ·                                ╰── expected `top-level declaration`, found `'}'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:29:5]
  29 │     Return result with emojis: ✅ or ❌
     ·     ───┬──
-    ·        ╰── Expected top-level declaration, found identifier
+    ·        ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:29:12]
  29 │     Return result with emojis: ✅ or ❌
     ·            ───┬──
-    ·               ╰── Expected top-level declaration, found identifier
+    ·               ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:29:19]
  29 │     Return result with emojis: ✅ or ❌
     ·                   ──┬─
-    ·                     ╰── Expected top-level declaration, found identifier
+    ·                     ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:29:24]
  29 │     Return result with emojis: ✅ or ❌
     ·                        ───┬──
-    ·                           ╰── Expected top-level declaration, found identifier
+    ·                           ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found ':'
+  × unexpected token
     ╭─[unicode_strings.baml:29:30]
  29 │     Return result with emojis: ✅ or ❌
     ·                              ┬
-    ·                              ╰── Expected top-level declaration, found ':'
+    ·                              ╰── expected `top-level declaration`, found `':'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:29:32]
  29 │     Return result with emojis: ✅ or ❌
     ·                                ─┬
-    ·                                 ╰── Expected top-level declaration, found error
+    ·                                 ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found identifier
+  × unexpected token
     ╭─[unicode_strings.baml:29:34]
  29 │     Return result with emojis: ✅ or ❌
     ·                                   ─┬
-    ·                                    ╰── Expected top-level declaration, found identifier
+    ·                                    ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found error
+  × unexpected token
     ╭─[unicode_strings.baml:29:37]
  29 │     Return result with emojis: ✅ or ❌
     ·                                      ─┬
-    ·                                       ╰── Expected top-level declaration, found error
+    ·                                       ╰── expected `top-level declaration`, found `error`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '"'
+  × unexpected token
     ╭─[unicode_strings.baml:30:3]
  30 │   "#
     ·   ┬
-    ·   ╰── Expected top-level declaration, found '"'
+    ·   ╰── expected `top-level declaration`, found `'"'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '#'
+  × unexpected token
     ╭─[unicode_strings.baml:30:4]
  30 │   "#
     ·    ┬
-    ·    ╰── Expected top-level declaration, found '#'
+    ·    ╰── expected `top-level declaration`, found `'#'`
     ╰────
 
 E0010
 
-  × Expected top-level declaration, found '}'
+  × unexpected token
     ╭─[unicode_strings.baml:31:1]
  31 │ }
     · ┬
-    · ╰── Expected top-level declaration, found '}'
+    · ╰── expected `top-level declaration`, found `'}'`
     ╰────

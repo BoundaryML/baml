@@ -7,24 +7,23 @@ source: crates/baml_tests/src/generated_tests.rs
   × operator `+` cannot be applied to `"a"` and `1`
    ╭─[main.baml:3:6]
  3 │ test "a" + 1 {
-   ·      ───┬───
-   ·         ╰── operator `+` cannot be applied to `"a"` and `1`
+   ·      ───────
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected string, got 42
+  × mismatched types
    ╭─[main.baml:7:6]
  7 │ test 42 {
    ·      ─┬
-   ·       ╰── type mismatch: expected string, got 42
+   ·       ╰── expected `string`, found `42`
    ╰────
 
   [type] E0001
 
-  × type mismatch: expected string, got int
+  × mismatched types
     ╭─[main.baml:13:11]
  13 │     test (5 + i) {
     ·           ──┬──
-    ·             ╰── type mismatch: expected string, got int
+    ·             ╰── expected `string`, found `int`
     ╰────

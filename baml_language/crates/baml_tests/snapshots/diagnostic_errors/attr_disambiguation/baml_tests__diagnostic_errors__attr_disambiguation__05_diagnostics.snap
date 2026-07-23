@@ -16,8 +16,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
     ╭─[nested.baml:18:6]
  18 │   d4 map<NFoo @alias("d4_alias"), NBar>
-    ·      ─────────────────┬────────────────
-    ·                       ╰── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ·      ──────────────────────────────────
     ╰────
 
   [hir] E0106
@@ -34,8 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
     ╭─[nested.baml:21:6]
  21 │   d5 map<NFoo @stream.done, NBar>
-    ·      ──────────────┬─────────────
-    ·                    ╰── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ·      ────────────────────────────
     ╰────
 
   [hir] E0106
@@ -61,8 +59,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
     ╭─[nested.baml:36:7]
  36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
-    ·       ────────────────────────┬───────────────────────
-    ·                               ╰── map keys must be `string`; got `NFoo`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ·       ────────────────────────────────────────────────
     ╰────
 
   [hir] E0106

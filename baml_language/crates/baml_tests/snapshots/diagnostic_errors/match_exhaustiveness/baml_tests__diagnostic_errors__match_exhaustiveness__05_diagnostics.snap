@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
     ╭─[match_exhaustiveness.baml:19:23]
  19 │         let n: int => "never reached"
-    ·                       ───────┬───────
-    ·                              ╰── unreachable arm
+    ·                       ───────────────
     ╰────
 
   [type] E0063
@@ -16,8 +15,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
     ╭─[match_exhaustiveness.baml:27:23]
  27 │         let n: int => "unreachable 1",
-    ·                       ───────┬───────
-    ·                              ╰── unreachable arm
+    ·                       ───────────────
     ╰────
 
   [type] E0063
@@ -25,8 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
     ╭─[match_exhaustiveness.baml:28:23]
  28 │         let m: int => "unreachable 2"
-    ·                       ───────┬───────
-    ·                              ╰── unreachable arm
+    ·                       ───────────────
     ╰────
 
   [type] E0062
@@ -36,8 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
  60 │ ╭─▶     match (x) {
  61 │ │           let n: int if n > 0 => n * 2,
  62 │ │           let n: int if n < 0 => n * -1
- 63 │ ├─▶     }
-    · ╰──── non-exhaustive match on type int; missing: _
+ 63 │ ╰─▶     }
     ╰────
 
   [type] E0062
@@ -46,8 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:244:5]
  244 │ ╭─▶     match (b) {
  245 │ │           true => "yes"
- 246 │ ├─▶     }
-     · ╰──── non-exhaustive match on type bool; missing: false
+ 246 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -56,8 +51,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:251:5]
  251 │ ╭─▶     match (b) {
  252 │ │           false => "no"
- 253 │ ├─▶     }
-     · ╰──── non-exhaustive match on type bool; missing: true
+ 253 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -66,17 +60,16 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:296:5]
  296 │ ╭─▶     match (t) {
  297 │ │           false => "wrong!"
- 298 │ ├─▶     }
-     · ╰──── non-exhaustive match on type AlwaysTrue; missing: true
+ 298 │ ╰─▶     }
      ╰────
 
   [type] E0001
 
-  × type mismatch: expected AlwaysTrue, got false
+  × mismatched types
      ╭─[match_exhaustiveness.baml:297:9]
  297 │         false => "wrong!"
      ·         ──┬──
-     ·           ╰── type mismatch: expected AlwaysTrue, got false
+     ·           ╰── expected `AlwaysTrue`, found `false`
      ╰────
 
   [type] E0062
@@ -85,8 +78,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:303:5]
  303 │ ╭─▶     match (b) {
  304 │ │           true => "yes"
- 305 │ ├─▶     }
-     · ╰──── non-exhaustive match on type CustomBool; missing: false
+ 305 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -96,8 +88,7 @@ source: crates/baml_tests/src/generated_tests.rs
  356 │ ╭─▶     match (role) {
  357 │ │           "user" => "User",
  358 │ │           "assistant" => "Assistant"
- 359 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Role; missing: "system"
+ 359 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -107,8 +98,7 @@ source: crates/baml_tests/src/generated_tests.rs
  397 │ ╭─▶     match (code) {
  398 │ │           200 => "OK",
  399 │ │           201 => "Created"
- 400 │ ├─▶     }
-     · ╰──── non-exhaustive match on type SuccessCode; missing: 204
+ 400 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -118,8 +108,7 @@ source: crates/baml_tests/src/generated_tests.rs
  457 │ ╭─▶     match (s) {
  458 │ │           Status.Active => "active",
  459 │ │           Status.Inactive => "inactive"
- 460 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Status; missing: user.Status.Pending
+ 460 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -128,8 +117,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:465:5]
  465 │ ╭─▶     match (s) {
  466 │ │           Status.Active => "active"
- 467 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+ 467 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -137,8 +125,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:479:26]
  479 │         Status.Active => "second",
-     ·                          ────┬───
-     ·                              ╰── unreachable arm
+     ·                          ────────
      ╰────
 
   [type] E0063
@@ -146,8 +133,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:489:14]
  489 │         1 => "second one",
-     ·              ──────┬─────
-     ·                    ╰── unreachable arm
+     ·              ────────────
      ╰────
 
   [type] E0063
@@ -155,8 +141,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:498:17]
  498 │         true => "second true",
-     ·                 ──────┬──────
-     ·                       ╰── unreachable arm
+     ·                 ─────────────
      ╰────
 
   [type] E0063
@@ -164,8 +149,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:507:19]
  507 │         "user" => "second user",
-     ·                   ──────┬──────
-     ·                         ╰── unreachable arm
+     ·                   ─────────────
      ╰────
 
   [type] E0062
@@ -174,8 +158,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:530:5]
  530 │ ╭─▶     match (code) {
  531 │ │           200 => "OK"
- 532 │ ├─▶     }
-     · ╰──── non-exhaustive match on type MaybeOk; missing: null
+ 532 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -184,8 +167,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:537:5]
  537 │ ╭─▶     match (code) {
  538 │ │           null => "no code"
- 539 │ ├─▶     }
-     · ╰──── non-exhaustive match on type MaybeOk; missing: 200
+ 539 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -195,8 +177,7 @@ source: crates/baml_tests/src/generated_tests.rs
  560 │ ╭─▶     match (x) {
  561 │ │           200 => "http ok",
  562 │ │           "success" => "string success"
- 563 │ ├─▶     }
-     · ╰──── non-exhaustive match on type MixedLiterals; missing: true
+ 563 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -205,8 +186,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:584:5]
  584 │ ╭─▶     match (code) {
  585 │ │           200 => "ok"
- 586 │ ├─▶     }
-     · ╰──── non-exhaustive match on type OkOrCreated; missing: 201
+ 586 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -217,8 +197,7 @@ source: crates/baml_tests/src/generated_tests.rs
  600 │ │           let s: Success => s.data,
  601 │ │           let f: Failure => f.reason,
  602 │ │           null => "nothing"
- 603 │ ├─▶     }
-     · ╰──── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
+ 603 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -226,8 +205,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:600:27]
  600 │         let s: Success => s.data,
-     ·                           ───┬──
-     ·                              ╰── unreachable arm
+     ·                           ──────
      ╰────
 
   [type] E0063
@@ -235,8 +213,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:601:27]
  601 │         let f: Failure => f.reason,
-     ·                           ────┬───
-     ·                               ╰── unreachable arm
+     ·                           ────────
      ╰────
 
   [type] E0062
@@ -246,8 +223,7 @@ source: crates/baml_tests/src/generated_tests.rs
  608 │ ╭─▶     match (dm) {
  609 │ │           let s: Success => s.data,
  610 │ │           let f: Failure => f.reason
- 611 │ ├─▶     }
-     · ╰──── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
+ 611 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -255,8 +231,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:609:27]
  609 │         let s: Success => s.data,
-     ·                           ───┬──
-     ·                              ╰── unreachable arm
+     ·                           ──────
      ╰────
 
   [type] E0063
@@ -264,8 +239,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:610:27]
  610 │         let f: Failure => f.reason
-     ·                           ────┬───
-     ·                               ╰── unreachable arm
+     ·                           ────────
      ╰────
 
   [type] E0062
@@ -274,8 +248,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:621:5]
  621 │ ╭─▶     match (r) {
  622 │ │           let s: Success => s.data
- 623 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Result; missing: Failure { reason: _ }
+ 623 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -285,8 +258,7 @@ source: crates/baml_tests/src/generated_tests.rs
  628 │ ╭─▶     match (r) {
  629 │ │           let s: Success => s.data,
  630 │ │           let f: Failure => f.reason
- 631 │ ├─▶     }
-     · ╰──── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+ 631 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -294,8 +266,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:643:20]
  643 │         "hello" => "unreachable"
-     ·                    ──────┬──────
-     ·                          ╰── unreachable arm
+     ·                    ─────────────
      ╰────
 
   [type] E0062
@@ -306,8 +277,7 @@ source: crates/baml_tests/src/generated_tests.rs
  673 │ │           Status.Active => "active",
  674 │ │           Status.Inactive => "inactive",
  675 │ │           Status.Pending => "pending"
- 676 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Status | null; missing: null
+ 676 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -318,8 +288,7 @@ source: crates/baml_tests/src/generated_tests.rs
  682 │ │           Status.Active => "active",
  683 │ │           Status.Inactive => "inactive",
  684 │ │           null => "no status"
- 685 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Status | null; missing: user.Status.Pending
+ 685 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -328,8 +297,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:705:5]
  705 │ ╭─▶     match (x) {
  706 │ │           let s: Success => s.data
- 707 │ ├─▶     }
-     · ╰──── non-exhaustive match on type SuccessOr200; missing: 200
+ 707 │ ╰─▶     }
      ╰────
 
   [type] E0062
@@ -338,8 +306,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:712:5]
  712 │ ╭─▶     match (x) {
  713 │ │           200 => "http ok"
- 714 │ ├─▶     }
-     · ╰──── non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
+ 714 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -347,8 +314,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:733:26]
  733 │         Status.Active => "unreachable"
-     ·                          ──────┬──────
-     ·                                ╰── unreachable arm
+     ·                          ─────────────
      ╰────
 
   [type] E0062
@@ -357,17 +323,16 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:745:5]
  745 │ ╭─▶     match (b) {
  746 │ │           42 => "wrong type"
- 747 │ ├─▶     }
-     · ╰──── non-exhaustive match on type bool; missing: true, false
+ 747 │ ╰─▶     }
      ╰────
 
   [type] E0001
 
-  × type mismatch: expected bool, got 42
+  × mismatched types
      ╭─[match_exhaustiveness.baml:746:9]
  746 │         42 => "wrong type"
      ·         ─┬
-     ·          ╰── type mismatch: expected bool, got 42
+     ·          ╰── expected `bool`, found `42`
      ╰────
 
   [type] E0062
@@ -376,17 +341,16 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:752:5]
  752 │ ╭─▶     match (x) {
  753 │ │           "hello" => "wrong type"
- 754 │ ├─▶     }
-     · ╰──── non-exhaustive match on type int; missing: _
+ 754 │ ╰─▶     }
      ╰────
 
   [type] E0001
 
-  × type mismatch: expected int, got "hello"
+  × mismatched types
      ╭─[match_exhaustiveness.baml:753:9]
  753 │         "hello" => "wrong type"
      ·         ───┬───
-     ·            ╰── type mismatch: expected int, got "hello"
+     ·            ╰── expected `int`, found `"hello"`
      ╰────
 
   [type] E0062
@@ -395,8 +359,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:764:5]
  764 │ ╭─▶     match (r) {
  765 │ │           let x: Success | Failure => "not pending"
- 766 │ ├─▶     }
-     · ╰──── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+ 766 │ ╰─▶     }
      ╰────
 
   [type] E0063
@@ -404,8 +367,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:785:15]
  785 │         42 => "unreachable"
-     ·               ──────┬──────
-     ·                     ╰── unreachable arm
+     ·               ─────────────
      ╰────
 
   [type] E0063
@@ -413,8 +375,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:793:17]
  793 │         true => "unreachable"
-     ·                 ──────┬──────
-     ·                       ╰── unreachable arm
+     ·                 ─────────────
      ╰────
 
   [type] E0063
@@ -422,8 +383,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:807:27]
  807 │         let f: Failure => 1
-     ·                           ┬
-     ·                           ╰── unreachable arm
+     ·                           ─
      ╰────
 
   [type] E0063
@@ -431,8 +391,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:855:21]
  855 │             true => "unreachable nested"
-     ·                     ──────────┬─────────
-     ·                               ╰── unreachable arm
+     ·                     ────────────────────
      ╰────
 
   [type] E0063
@@ -440,8 +399,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:866:26]
  866 │         Status.Active => "duplicate 1",
-     ·                          ──────┬──────
-     ·                                ╰── unreachable arm
+     ·                          ─────────────
      ╰────
 
   [type] E0063
@@ -449,8 +407,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[match_exhaustiveness.baml:868:26]
  868 │         Status.Active => "duplicate 2",
-     ·                          ──────┬──────
-     ·                                ╰── unreachable arm
+     ·                          ─────────────
      ╰────
 
   [type] E0062
@@ -459,6 +416,5 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[match_exhaustiveness.baml:876:5]
  876 │ ╭─▶     match (s) {
  877 │ │           Status.Active => "active only"
- 878 │ ├─▶     }
-     · ╰──── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+ 878 │ ╰─▶     }
      ╰────

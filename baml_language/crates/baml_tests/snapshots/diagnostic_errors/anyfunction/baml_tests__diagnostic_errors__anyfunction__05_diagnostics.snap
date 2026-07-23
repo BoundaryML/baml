@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `baml.AnyFunction` is a compiler builtin and cannot be implemented by hand; every function type implements it automatically
    ╭─[anyfunction.baml:9:12]
  9 │ implements baml.AnyFunction for MyTool {
-   ·            ────────┬───────
-   ·                    ╰── `baml.AnyFunction` is a compiler builtin and cannot be implemented by hand; every function type implements it automatically
+   ·            ────────────────
    ╰────
 
   [type] E0154
@@ -17,8 +16,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[anyfunction.baml:12:1]
  12 │ ╭─▶ function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
  13 │ │       return f
- 14 │ ├─▶ }
-    · ╰──── `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+ 14 │ ╰─▶ }
     ╰────
 
   [type] E0154
@@ -27,8 +25,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[anyfunction.baml:16:1]
  16 │ ╭─▶ class Holder<T extends baml.AnyFunction> {
  17 │ │       f T
- 18 │ ├─▶ }
-    · ╰──── `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+ 18 │ ╰─▶ }
     ╰────
 
   [type] E0154
@@ -36,42 +33,41 @@ source: crates/baml_tests/src/generated_tests.rs
   × `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
     ╭─[anyfunction.baml:21:25]
  21 │     type Callee extends baml.AnyFunction
-    ·                         ────────┬───────
-    ·                                 ╰── `baml.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: baml.AnyFunction`)
+    ·                         ────────────────
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got (q: string) -> Doc[] throws ToolError
+  × mismatched types
     ╭─[anyfunction.baml:45:55]
  45 │     let bad_ret: baml.AnyFunction<Returns = string> = web_search
     ·                                                       ─────┬────
-    ·                                                            ╰── type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got (q: string) -> Doc[] throws ToolError
+    ·                                                            ╰── expected `baml.AnyFunction<Returns = string, Throws = unknown>`, found `(q: string) -> Doc[] throws ToolError`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.AnyFunction<Throws = never, Returns = unknown>, got (q: string) -> Doc[] throws ToolError
+  × mismatched types
     ╭─[anyfunction.baml:46:56]
  46 │     let bad_throws: baml.AnyFunction<Throws = never> = web_search
     ·                                                        ─────┬────
-    ·                                                             ╰── type mismatch: expected baml.AnyFunction<Throws = never, Returns = unknown>, got (q: string) -> Doc[] throws ToolError
+    ·                                                             ╰── expected `baml.AnyFunction<Throws = never, Returns = unknown>`, found `(q: string) -> Doc[] throws ToolError`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.AnyFunction<Returns = unknown, Throws = unknown>, got 42
+  × mismatched types
     ╭─[anyfunction.baml:47:38]
  47 │     let not_a_fn: baml.AnyFunction = 42
     ·                                      ─┬
-    ·                                       ╰── type mismatch: expected baml.AnyFunction<Returns = unknown, Throws = unknown>, got 42
+    ·                                       ╰── expected `baml.AnyFunction<Returns = unknown, Throws = unknown>`, found `42`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got baml.AnyFunction<Returns = Doc[], Throws = unknown>
+  × mismatched types
     ╭─[anyfunction.baml:49:57]
  49 │     let bad_widen: baml.AnyFunction<Returns = string> = narrow
     ·                                                         ───┬──
-    ·                                                            ╰── type mismatch: expected baml.AnyFunction<Returns = string, Throws = unknown>, got baml.AnyFunction<Returns = Doc[], Throws = unknown>
+    ·                                                            ╰── expected `baml.AnyFunction<Returns = string, Throws = unknown>`, found `baml.AnyFunction<Returns = Doc[], Throws = unknown>`
     ╰────

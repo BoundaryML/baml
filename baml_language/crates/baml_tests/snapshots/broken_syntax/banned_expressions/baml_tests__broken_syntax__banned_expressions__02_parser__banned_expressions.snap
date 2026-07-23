@@ -481,9 +481,9 @@ SOURCE_FILE
 === ERRORS ===
 E0010
 
-  × Expected expression, found let
+  × unexpected token
    ╭─[banned_expressions.baml:3:11]
  3 │   let a = let b = 42
    ·           ─┬─
-   ·            ╰── Expected expression, found let
+   ·            ╰── expected `expression`, found `let`
    ╰────

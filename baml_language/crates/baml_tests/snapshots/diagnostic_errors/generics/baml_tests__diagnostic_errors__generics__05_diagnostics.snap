@@ -4,20 +4,20 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × type mismatch: expected T, got string
+  × mismatched types
     ╭─[classes.baml:75:26]
  75 │         Maker<T> { data: params }
     ·                          ───┬──
-    ·                             ╰── type mismatch: expected T, got string
+    ·                             ╰── expected `T`, found `string`
     ╰────
 
   [type] E0001
 
-  × type mismatch: expected T, got string
+  × mismatched types
     ╭─[classes.baml:96:9]
  96 │         self.data
     ·         ────┬────
-    ·             ╰── type mismatch: expected T, got string
+    ·             ╰── expected `T`, found `string`
     ╰────
 
   [type] E0001
@@ -26,8 +26,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[classes.baml:113:5]
  113 │ ╭─▶     function bad<T>(x: T) -> T {
  114 │ │           x
- 115 │ ├─▶     }
-     · ╰──── type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
+ 115 │ ╰─▶     }
      ╰────
 
   [type] E0001
@@ -35,8 +34,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Box` expects 1 type argument(s), got 2
      ╭─[classes.baml:128:33]
  128 │ function wrong_arity_extra() -> Box<int, string> {
-     ·                                 ────────┬───────
-     ·                                         ╰── type `Box` expects 1 type argument(s), got 2
+     ·                                 ────────────────
      ╰────
 
   [type] E0001
@@ -44,8 +42,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Box` expects 1 type argument(s), got 2
      ╭─[classes.baml:129:5]
  129 │     Box<int, string> { value: 42 }
-     ·     ───────────────┬──────────────
-     ·                    ╰── type `Box` expects 1 type argument(s), got 2
+     ·     ──────────────────────────────
      ╰────
 
   [type] E0001
@@ -53,8 +50,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Pair` expects 2 type argument(s), got 1
      ╭─[classes.baml:133:35]
  133 │ function wrong_arity_partial() -> Pair<int> {
-     ·                                   ────┬────
-     ·                                       ╰── type `Pair` expects 2 type argument(s), got 1
+     ·                                   ─────────
      ╰────
 
   [type] E0001
@@ -62,17 +58,16 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Pair` expects 2 type argument(s), got 1
      ╭─[classes.baml:134:5]
  134 │     Pair<int> { first: 1, second: "two" }
-     ·     ──────────────────┬──────────────────
-     ·                       ╰── type `Pair` expects 2 type argument(s), got 1
+     ·     ─────────────────────────────────────
      ╰────
 
   [type] E0001
 
-  × type mismatch: expected B, got "two"
+  × mismatched types
      ╭─[classes.baml:134:35]
  134 │     Pair<int> { first: 1, second: "two" }
      ·                                   ──┬──
-     ·                                     ╰── type mismatch: expected B, got "two"
+     ·                                     ╰── expected `B`, found `"two"`
      ╰────
 
   [type] E0001
@@ -80,8 +75,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Plain` expects 0 type argument(s), got 1
      ╭─[classes.baml:145:42]
  145 │ function wrong_arity_on_non_generic() -> Plain<int> {
-     ·                                          ─────┬────
-     ·                                               ╰── type `Plain` expects 0 type argument(s), got 1
+     ·                                          ──────────
      ╰────
 
   [type] E0001
@@ -89,8 +83,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × type `Plain` expects 0 type argument(s), got 1
      ╭─[classes.baml:146:5]
  146 │     Plain<int> { name: "hello" }
-     ·     ──────────────┬─────────────
-     ·                   ╰── type `Plain` expects 0 type argument(s), got 1
+     ·     ────────────────────────────
      ╰────
 
   [type] E0063
@@ -98,17 +91,15 @@ source: crates/baml_tests/src/generated_tests.rs
   × unreachable arm
      ╭─[classes.baml:197:21]
  197 │             null => default,
-     ·                     ───┬───
-     ·                        ╰── unreachable arm
+     ·                     ───────
      ╰────
 
   [type] E0003
 
-  × unresolved name: fetch_as
+  × unresolved name: `fetch_as`
    ╭─[fetch_as.baml:9:5]
  9 │     baml.fetch_as<Todo>(baml.HttpRequest {
-   ·     ──────┬──────
-   ·           ╰── unresolved name: fetch_as
+   ·     ─────────────
    ╰────
 
   [type] E0002
@@ -118,15 +109,13 @@ source: crates/baml_tests/src/generated_tests.rs
   9 │ ╭─▶     baml.fetch_as<Todo>(baml.HttpRequest {
  10 │ │           method: baml.HttpMethod.Get,
  11 │ │           url: "dummyjson.com/todos/1",
- 12 │ ├─▶     })
-    · ╰──── unresolved type: baml.HttpRequest
+ 12 │ ╰─▶     })
     ╰────
 
   [type] E0003
 
-  × unresolved name: HttpMethod
+  × unresolved name: `HttpMethod`
     ╭─[fetch_as.baml:10:17]
  10 │         method: baml.HttpMethod.Get,
-    ·                 ─────────┬─────────
-    ·                          ╰── unresolved name: HttpMethod
+    ·                 ───────────────────
     ╰────
