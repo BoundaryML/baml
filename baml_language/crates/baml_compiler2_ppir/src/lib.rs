@@ -747,16 +747,7 @@ pub fn function_signature_source_map<'db>(
     let item_tree = file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    baml_compiler2_hir::signature::SignatureSourceMap {
-        param_spans: func_data.params.iter().map(|p| p.span).collect(),
-        param_type_spans: func_data
-            .params
-            .iter()
-            .map(|p| p.type_expr.as_ref().map(|te| te.span))
-            .collect(),
-        return_type_span: func_data.return_type.as_ref().map(|te| te.span),
-        throws_type_span: func_data.throws.as_ref().map(|te| te.span),
-    }
+    baml_compiler2_hir::signature::signature_source_map_from_item_tree(func_data)
 }
 
 /// Canonical elaborated callable signature source map — spans are unchanged by

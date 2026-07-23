@@ -12,7 +12,10 @@ use baml_compiler2_ast::{FunctionDefaults, FunctionTypeParam, TypeExpr, TypeExpr
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
 
-use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
+use crate::{
+    item_tree::{DefaultExprRef, Function},
+    loc::FunctionLoc,
+};
 
 /// Compiler2 function signature — param names + unresolved `ast::TypeExpr`.
 ///
@@ -106,6 +109,20 @@ pub struct SignatureSourceMap {
     pub throws_type_span: Option<TextRange>,
 }
 
+/// Extracts signature spans from a function stored in an item tree.
+pub fn signature_source_map_from_item_tree(func: &Function) -> SignatureSourceMap {
+    SignatureSourceMap {
+        param_spans: func.params.iter().map(|param| param.span).collect(),
+        param_type_spans: func
+            .params
+            .iter()
+            .map(|param| param.type_expr.as_ref().map(|ty| ty.span))
+            .collect(),
+        return_type_span: func.return_type.as_ref().map(|ty| ty.span),
+        throws_type_span: func.throws.as_ref().map(|ty| ty.span),
+    }
+}
+
 /// Shared implementation — reads from the `ItemTree` (full AST data),
 /// splits into semantic (`TypeExpr`, no spans) + source map (spans only).
 fn function_signature_with_source_map<'db>(
@@ -129,16 +146,7 @@ fn function_signature_with_source_map<'db>(
     });
 
     // Build source map — spans only (separate for early-cutoff)
-    let source_map = SignatureSourceMap {
-        param_spans: func_data.params.iter().map(|p| p.span).collect(),
-        param_type_spans: func_data
-            .params
-            .iter()
-            .map(|p| p.type_expr.as_ref().map(|te| te.span))
-            .collect(),
-        return_type_span: func_data.return_type.as_ref().map(|te| te.span),
-        throws_type_span: func_data.throws.as_ref().map(|te| te.span),
-    };
+    let source_map = signature_source_map_from_item_tree(func_data);
 
     (sig, source_map)
 }
@@ -249,16 +257,7 @@ fn elaborated_function_signature_with_source_map<'db>(
         throws,
     ));
 
-    let source_map = SignatureSourceMap {
-        param_spans: func_data.params.iter().map(|p| p.span).collect(),
-        param_type_spans: func_data
-            .params
-            .iter()
-            .map(|p| p.type_expr.as_ref().map(|te| te.span))
-            .collect(),
-        return_type_span: func_data.return_type.as_ref().map(|te| te.span),
-        throws_type_span: func_data.throws.as_ref().map(|te| te.span),
-    };
+    let source_map = signature_source_map_from_item_tree(func_data);
 
     (signature, source_map)
 }
