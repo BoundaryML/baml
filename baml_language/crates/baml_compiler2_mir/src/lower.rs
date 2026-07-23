@@ -8731,9 +8731,18 @@ impl<'db> LoweringContext<'db> {
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
         use baml_compiler2_ast::BuiltinKind;
 
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
+        match self.callee_builtin(callee) {
+            Some((func_loc, BuiltinKind::Io)) => Some(func_loc),
+            _ => None,
+        }
+    }
+
+    fn callee_builtin(
+        &self,
+        callee: AstExprId,
+    ) -> Option<(FunctionLoc<'db>, baml_compiler2_ast::BuiltinKind)> {
+        let func_loc = match &self.body.exprs[callee] {
+            AstExpr::Path(segments) if segments.len() == 1 => {
                 let span_start = self
                     .source_map
                     .as_ref()
@@ -8751,43 +8760,24 @@ impl<'db> LoweringContext<'db> {
                     ResolvedName::Item(Definition::Function(fl)) => Some(fl),
                     _ => None,
                 }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
+            }
+            AstExpr::Path(_) => {
+                let key = self.expr_metadata_key(callee);
+                self.tir_path_member_resolutions(key)
                     .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return Some(fl);
-                }
+                    .and_then(resolution_func_loc)
+                    .or_else(|| self.tir_resolution(key).and_then(resolution_func_loc))
             }
-        }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return Some(fl);
-                    }
-                }
-            }
-        }
-
-        None
+            AstExpr::MemberAccess { .. } => self
+                .tir_resolution(self.expr_metadata_key(callee))
+                .and_then(resolution_func_loc),
+            _ => None,
+        }?;
+        let body = baml_compiler2_ppir::function_body(self.db, func_loc);
+        let FunctionBody::Builtin(kind) = body.as_ref() else {
+            return None;
+        };
+        Some((func_loc, *kind))
     }
 
     fn check_await_any(&self, callee: AstExprId) -> bool {
@@ -8798,125 +8788,18 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(kind) = body.as_ref() {
-                    return Some(*kind);
-                }
-            }
-        }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(kind) = body.as_ref() {
-                        return Some(*kind);
-                    }
-                }
-            }
-        }
-
-        None
+        self.callee_builtin(callee).map(|(_, kind)| kind)
     }
 
     fn sys_op_synthetic_type_arg_count(&self, callee: AstExprId) -> Option<usize> {
         use baml_compiler2_ast::BuiltinKind;
 
-        // ── Path callee (single- or multi-segment) ─────────────────────────────
-        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            let func_loc = if segments.len() == 1 {
-                let span_start = self
-                    .source_map
-                    .as_ref()
-                    .map(|sm| sm.expr_span(callee).start())
-                    .unwrap_or_default();
-                let resolved = resolve_name_at_in_scope(
-                    self.db,
-                    self.file,
-                    span_start,
-                    &segments[0],
-                    self.scope_func_name.as_ref(),
-                );
-                match resolved {
-                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
-                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
-                    _ => None,
-                }
-            } else {
-                // Multi-segment: check path_member_resolutions first (local-rooted paths
-                // like `file.read_string`), then fall back to flat resolutions (package paths).
-                // The last resolution in path_member_resolutions is the final-segment resolution.
-                let from_pmr = self
-                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
-                    .and_then(|resolutions| resolutions.last())
-                    .and_then(|res| resolution_func_loc(res));
-                if from_pmr.is_some() {
-                    from_pmr
-                } else {
-                    self.tir_resolution(self.expr_metadata_key(callee))
-                        .and_then(|res| resolution_func_loc(res))
-                }
-            };
-            if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
-                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return Some(self.synthetic_type_arg_count_for_sys_op(fl));
-                }
+        match self.callee_builtin(callee) {
+            Some((func_loc, BuiltinKind::Io)) => {
+                Some(self.synthetic_type_arg_count_for_sys_op(func_loc))
             }
+            _ => None,
         }
-
-        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
-        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
-            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
-                let func_loc = resolution_func_loc(resolution);
-                if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return Some(self.synthetic_type_arg_count_for_sys_op(fl));
-                    }
-                }
-            }
-        }
-
-        None
     }
 
     fn synthetic_type_arg_count_for_sys_op(
