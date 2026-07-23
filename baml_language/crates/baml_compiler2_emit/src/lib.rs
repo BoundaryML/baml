@@ -348,11 +348,6 @@ fn build_packages(
         idx.map(ObjectIndex::from_raw)
     };
 
-    // Per interface, every declared method name. A magic direct `cleanup`
-    // method can satisfy an in-body `implements I {}` block when that interface
-    // declares it; TIR has already checked the signature.
-    let mut iface_method_names: indexmap::IndexMap<baml_type::TypeName, indexmap::IndexSet<Name>> =
-        indexmap::IndexMap::new();
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
     // inherits these for any method it doesn't override, so each baked rule's
     // method table is complete (the resolver needs no separate default lookup; a
@@ -374,23 +369,10 @@ fn build_packages(
     for file in all_files {
         for &iface_loc in file_interfaces(db, *file) {
             let iface_data = interface_data(db, iface_loc);
-            let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-            let method_names = iface_method_names.entry(iface_tn.clone()).or_default();
-            method_names.extend(
-                iface_data
-                    .required_methods
-                    .iter()
-                    .map(|method| method.name.clone()),
-            );
-            method_names.extend(
-                iface_data
-                    .default_methods
-                    .iter()
-                    .map(|&method| function_data(db, method).name.clone()),
-            );
             if iface_data.default_methods.is_empty() {
                 continue;
             }
+            let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
             iface_assoc_order
                 .entry(iface_tn.clone())
                 .or_insert_with(|| {
@@ -689,22 +671,6 @@ fn build_packages(
                     ))
                 })
                 .collect();
-            let direct_cleanup_methods: Vec<(Name, String)> = class
-                .methods
-                .iter()
-                .copied()
-                .filter(|&method| method_interface_target(db, method).is_none())
-                .filter(|&method| {
-                    function_data(db, method).name.as_str()
-                        == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
-                })
-                .map(|method| {
-                    (
-                        function_data(db, method).name.clone(),
-                        def_to_item_ref(db, Definition::Function(method)).to_string(),
-                    )
-                })
-                .collect();
 
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
@@ -774,27 +740,6 @@ fn build_packages(
                         ))
                     })
                     .collect();
-                // Explicit implements-block methods win, then the magic direct
-                // cleanup method, then interface defaults. Out-of-body impls
-                // remain self-contained.
-                if !block.is_out_of_body
-                    && let Some(declared_names) = iface_method_names.get(&iface_tn)
-                {
-                    for (name, fqn) in &direct_cleanup_methods {
-                        if !declared_names.contains(name) {
-                            continue;
-                        }
-                        let Some(fqn) = resolve_fqn(fqn) else {
-                            continue;
-                        };
-                        methods
-                            .entry(name.clone())
-                            .or_insert_with(|| ProgramMethodImpl {
-                                fqn,
-                                frame: impl_frame.clone(),
-                            });
-                    }
-                }
                 let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
                 program_packages
