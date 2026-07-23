@@ -218,6 +218,13 @@ pub(crate) struct Parser<'a> {
     /// available to `parse_spawn_expr`. Counter so nested spawns nest
     /// correctly.
     suppress_object_literal_depth: u32,
+    /// While parsing an unparenthesized for-in iterable, permit an object
+    /// literal only when its closing brace is immediately followed by syntax
+    /// that continues the iterable (or by the loop body's opening brace).
+    ///
+    /// This keeps `for let x in xs { body }` unambiguous while allowing
+    /// iterables such as `Values { items }.items`.
+    allow_object_literal_before_for_body_depth: u32,
     /// Suppresses destructure patterns (`Class { fields }`) in pattern
     /// position, mirroring Rust's `Restrictions::NO_STRUCT_LITERAL` for
     /// struct literals in `if` / `while` condition expressions. Bumped
@@ -240,6 +247,7 @@ impl<'a> Parser<'a> {
             suppress_catch_depth: 0,
             testset_body_depth: 0,
             suppress_object_literal_depth: 0,
+            allow_object_literal_before_for_body_depth: 0,
             suppress_destructure_pattern_depth: 0,
         }
     }
@@ -5734,7 +5742,9 @@ impl<'a> Parser<'a> {
                 p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
                 p.suppress_object_literal_depth += 1;
+                p.allow_object_literal_before_for_body_depth += 1;
                 p.parse_expr();
+                p.allow_object_literal_before_for_body_depth -= 1;
                 p.suppress_object_literal_depth -= 1;
             }
 
@@ -6085,7 +6095,10 @@ impl<'a> Parser<'a> {
                 // while parsing the optional name expression — without it,
                 // `spawn nm { y: 1 }` would consume the body's `{ y: 1 }` as
                 // a struct literal and then fail to find a body brace.
-                if self.suppress_object_literal_depth == 0
+                let object_literal_allowed = self.suppress_object_literal_depth == 0
+                    || (self.allow_object_literal_before_for_body_depth > 0
+                        && self.object_literal_can_precede_for_body());
+                if object_literal_allowed
                     && self.events.len() > expr_start
                     && self.looks_like_object_constructor()
                 {
@@ -6283,6 +6296,52 @@ impl<'a> Parser<'a> {
                 })
             }
             _ => false,
+        }
+    }
+
+    /// Whether the current `{ ... }` can be an object literal inside an
+    /// unparenthesized for-in iterable without stealing the loop body.
+    ///
+    /// A matching brace followed by postfix continuation (`.field`, indexing,
+    /// a call, etc.) is still part of the iterable. A second `{` is the
+    /// unambiguous `Constructor { fields } { body }` shape.
+    fn object_literal_can_precede_for_body(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LBrace));
+
+        let mut stack = vec![TokenKind::RBrace];
+        let mut i = 1;
+        loop {
+            let Some(token) = self.peek(i) else {
+                return false;
+            };
+            match token.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if close != expected {
+                        return false;
+                    }
+                    if stack.is_empty() {
+                        return self.peek(i + 1).is_some_and(|next| {
+                            matches!(
+                                next.kind,
+                                TokenKind::LBrace
+                                    | TokenKind::Dot
+                                    | TokenKind::Dollar
+                                    | TokenKind::QuestionDot
+                                    | TokenKind::LBracket
+                                    | TokenKind::LParen
+                            )
+                        });
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
         }
     }
 
@@ -12299,6 +12358,34 @@ function iterate(items: int[]) -> int {
                 .count(),
             1,
             "a real header-closing ')' keeps direct object literals unambiguous"
+        );
+    }
+
+    #[test]
+    fn object_literal_is_allowed_in_unparenthesized_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for let item in Values { items }.items { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "an object literal followed by postfix continuation must remain part of the iterable"
+        );
+        assert!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::FOR_EXPR)
+                .flat_map(|node| node.children())
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
+            "the final brace must remain the loop body"
         );
     }
 }

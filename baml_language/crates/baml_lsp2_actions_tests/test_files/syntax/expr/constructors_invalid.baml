@@ -81,11 +81,11 @@ function Foo() -> Bar {
 //    │ Note: Error code: E0001
 // ───╯
 // error: class `Bar` has no field `c`
-//    ╭─[ expr_constructors_invalid.baml:7:32 ]
+//    ╭─[ expr_constructors_invalid.baml:7:29 ]
 //    │
 //  7 │   let x = Bar { a: "hello", c: 12 };
-//    │                                ─┬
-//    │                                 ╰── class `Bar` has no field `c`
+//    │                             ┬
+//    │                             ╰── class `Bar` has no field `c`
 //    │
 //    │ Note: Error code: E0007
 // ───╯

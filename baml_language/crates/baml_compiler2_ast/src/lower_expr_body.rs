@@ -4106,6 +4106,7 @@ impl LoweringContext {
         }
 
         let mut fields = Vec::new();
+        let mut field_name_spans = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
         let mut type_args: Vec<TypeExpr> = vec![];
@@ -4149,7 +4150,7 @@ impl LoweringContext {
                 SyntaxKind::OBJECT_FIELD => {
                     // OBJECT_FIELD: WORD (DOT WORD)* COLON expr, or shorthand WORD.
                     let mut key_segments = Vec::new();
-                    let mut shorthand_span = None;
+                    let mut key_span: Option<TextRange> = None;
                     let mut val = None;
                     let mut seen_colon = false;
                     for elem in child.children_with_tokens() {
@@ -4160,9 +4161,12 @@ impl LoweringContext {
                             rowan::NodeOrToken::Token(t)
                                 if is_ident_token(t.kind()) && !seen_colon =>
                             {
-                                if shorthand_span.is_none() {
-                                    shorthand_span = Some(t.text_range());
-                                }
+                                key_span = Some(match key_span {
+                                    Some(span) => {
+                                        TextRange::new(span.start(), t.text_range().end())
+                                    }
+                                    None => t.text_range(),
+                                });
                                 key_segments.push(t.text().to_string());
                             }
                             rowan::NodeOrToken::Node(n) if seen_colon && val.is_none() => {
@@ -4177,7 +4181,7 @@ impl LoweringContext {
                     }
                     if !seen_colon
                         && key_segments.len() == 1
-                        && let Some(span) = shorthand_span
+                        && let Some(span) = key_span
                     {
                         let val_id =
                             self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
@@ -4190,6 +4194,9 @@ impl LoweringContext {
                         Some(Name::new(key_segments.join(".")))
                     };
                     if let (Some(k), Some(val_id)) = (key, val) {
+                        if let Some(span) = key_span {
+                            field_name_spans.push((val_id, span));
+                        }
                         fields.push((k, val_id));
                     }
                     position += 1;
@@ -4214,7 +4221,7 @@ impl LoweringContext {
             }
         }
 
-        self.alloc_expr(
+        let object_id = self.alloc_expr(
             Expr::Object {
                 type_name,
                 type_args,
@@ -4222,7 +4229,13 @@ impl LoweringContext {
                 spreads,
             },
             node.span_range(),
-        )
+        );
+        for (value_id, field_name_span) in field_name_spans {
+            self.source_map
+                .object_field_name_spans
+                .insert((object_id, value_id), field_name_span);
+        }
+        object_id
     }
 
     fn lower_map_literal(&mut self, node: &SyntaxNode) -> ExprId {

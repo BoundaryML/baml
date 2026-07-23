@@ -608,6 +608,9 @@ pub struct AstSourceMap {
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// For object-constructor fields, the span of the field name keyed by
+    /// `(object_expr_id, value_expr_id)`.
+    pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
     /// Value expressions synthesized from property shorthand. For example,
     /// `{ options }` lowers to the same key/value shape as
     /// `{ options: options }`, while this set preserves that the user wrote the
@@ -640,6 +643,7 @@ impl AstSourceMap {
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
+            object_field_name_spans: HashMap::new(),
             property_shorthand_exprs: HashSet::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
@@ -703,6 +707,15 @@ impl AstSourceMap {
             .get(&id)
             .and_then(|spans| spans.get(segment_idx).copied())
             .unwrap_or_else(|| self.expr_span(id))
+    }
+
+    /// Look up the field-name span for an object-constructor field.
+    /// Returns the value-expression span as fallback.
+    pub fn object_field_name_span(&self, object_id: ExprId, value_id: ExprId) -> TextRange {
+        self.object_field_name_spans
+            .get(&(object_id, value_id))
+            .copied()
+            .unwrap_or_else(|| self.expr_span(value_id))
     }
 
     /// Look up the source span of a pattern by its `PatId`.

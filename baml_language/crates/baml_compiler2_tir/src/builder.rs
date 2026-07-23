@@ -5840,7 +5840,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
 
-        self.context.report_simple(error, field_expr);
+        if let Some(source_map) = &self.body_source_map {
+            self.context.report_at_span(
+                error,
+                source_map.object_field_name_span(object_expr, field_expr),
+            );
+        } else {
+            self.context.report_simple(error, field_expr);
+        }
     }
 
     #[inline(never)]
