@@ -56,10 +56,12 @@ implements ToolCallingProvider for OpenAi {
       owner: self,
       history: history,
       tools_json: openai_tool_schemas(task.tools),
-      wire_messages: [{
-        "role": "user",
-        "content": baml.llm.prompt_to_text(task.prompt),
-      }],
+      wire_messages: task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
+        {
+          "role": root.ai.prompt_role_or_user(message.role),
+          "content": message.content,
+        }
+      }),
     }
   }
 

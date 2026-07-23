@@ -13,7 +13,7 @@ test "guide 01.04: changing providers re-renders the same task recipe" {
   let second = first.with_provider(careful);
   assert.equal(first.provider_name(), "fast")
   assert.equal(second.provider_name(), "careful")
-  assert.contains(baml.llm.prompt_to_text(second.prompt), "Charged twice")
+  assert.contains(second.prompt.text(), "Charged twice")
 }
 
 testset "integ-test-guide-01-provider-overrides" {
@@ -22,7 +22,7 @@ testset "integ-test-guide-01-provider-overrides" {
     let overridden = original.with_provider(live_anthropic());
     assert.equal(original.provider_name(), "openai")
     assert.equal(overridden.provider_name(), "anthropic")
-    assert.contains(baml.llm.prompt_to_text(overridden.prompt), "Charged twice")
+    assert.contains(overridden.prompt.text(), "Charged twice")
     let response = overridden.run(
       runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );

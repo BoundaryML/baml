@@ -13,7 +13,7 @@ test "guide 08.01: a harness owns its session while returning typed output" {
 test "guide 08.01: the harness task carries the evidence needed by the model" {
   //# Render the harness investigation task
   let task = InvestigateRepository_task(sample_ticket(), fake_resolution());
-  let prompt = baml.llm.prompt_to_text(task.prompt);
+  let prompt = task.prompt.text();
   //# Verify the task carries repository evidence
   assert.contains(prompt, "Ticket: T-100")
   assert.contains(prompt, "Subject: Charged twice")

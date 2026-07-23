@@ -141,10 +141,12 @@ class GeminiManagedCache {
         headers: { "Content-Type": "application/json" },
         body: baml.json.stringify({
           "cachedContent": self.cache_key,
-          "contents": [{
-            "role": "user",
-            "parts": [{ "text": baml.llm.prompt_to_text(task.prompt) }],
-          }],
+          "contents": task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
+            {
+              "role": root.ai.prompt_role_or_user(message.role),
+              "parts": [{ "text": message.content }],
+            }
+          }),
         }),
       }) catch (e) {
         _ => throw baml.errors.UnknownError {

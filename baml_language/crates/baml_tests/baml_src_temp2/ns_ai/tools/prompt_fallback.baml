@@ -89,7 +89,7 @@ function prompt_tool_turn<T>(
   } else {
     baml.llm.assemble_prompt_ast(
       ["", "\n\nConversation so far:\n", ""],
-      [baml.llm.prompt_to_text(rendered), prior],
+      [root.ai.prompt_text_content(rendered), prior],
     )
   };
   let recipe = PromptRenderRecipe {

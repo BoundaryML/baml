@@ -22,7 +22,7 @@ function model_harness_task<T>(
     ...rebound,
     prompt: baml.llm.assemble_prompt_ast(
       ["", "\nHarness steering (follow exactly):\n", ""],
-      [baml.llm.prompt_to_text(rebound.prompt), guidance],
+      [root.ai.prompt_text_content(rebound.prompt), guidance],
     ),
   }
 }

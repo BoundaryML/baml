@@ -16,7 +16,7 @@ testset "integ-test-guide-01-task-and-runners" {
         let task = ResolveTicket_task(sample_ticket(), live_openai());
         assert.equal(task.identity?.name, "ResolveTicket");
         assert.equal(task.provider_name(), "openai");
-        assert.contains(baml.llm.prompt_to_text(task.prompt), "Charged twice");
+        assert.contains(task.prompt.text(), "Charged twice");
         log.info(
             "live task constructed "
                 + {

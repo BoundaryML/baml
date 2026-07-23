@@ -435,7 +435,7 @@ implements RealtimeProvider for OpenAiRealtime {
         "role": "user",
         "content": [{
           "type": "input_text",
-          "text": baml.llm.prompt_to_text(task.prompt),
+          "text": root.ai.prompt_text_content(task.prompt),
         }],
       },
     });

@@ -189,8 +189,32 @@ class ConversationImport {
   warnings: string[],
 }
 
+function prompt_role_or_user(role: string) -> string throws never {
+  if (role.length() == 0) { "user" } else { role }
+}
+
+function prompt_text_content(prompt: baml.llm.PromptAst) -> string throws never {
+  let messages = prompt.messages();
+  messages.map((message: baml.llm.PromptMessage) -> string {
+    message.content
+  }).join("\n")
+}
+
+function prompt_message_role(role: string) -> MessageRole throws never {
+  if (role == "system") { return MessageRole.System; }
+  if (role == "assistant") { return MessageRole.Assistant; }
+  if (role == "tool") { return MessageRole.Tool; }
+  MessageRole.User
+}
+
 function prompt_to_messages(prompt: baml.llm.PromptAst) -> Messages throws never {
   MessageHistory {
-    entries: [ChatMessage.user(baml.llm.prompt_to_text(prompt))],
+    entries: prompt.messages().map((message: baml.llm.PromptMessage) -> Message {
+      ChatMessage {
+        message_role: prompt_message_role(message.role),
+        content: [TextPart { value: message.content, metadata: {} }],
+        metadata: { "prompt_role": prompt_role_or_user(message.role) },
+      }
+    }),
   }
 }

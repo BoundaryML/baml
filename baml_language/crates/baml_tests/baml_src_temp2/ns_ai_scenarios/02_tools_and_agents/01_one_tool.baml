@@ -33,12 +33,12 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
   };
   let tools = root.ai.normalize_tools([search_knowledge]);
   //# Render active tools into the output contract
-  let rendered = baml.llm.prompt_to_text(root.ai.prompt_tool_turn<Resolution | root.ai.ToolCalls>(
+  let rendered = root.ai.prompt_tool_turn<Resolution | root.ai.ToolCalls>(
     provider,
     state,
     tools,
     root.ai.prompt_tool_output_suffix(tools),
-  ).prompt);
+  ).prompt.text();
   //# Execute one prompt-tool turn
   let turn = provider.step<Resolution>(conversation, tools);
   match (turn.outcome) {
