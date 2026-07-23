@@ -42,11 +42,6 @@ class PromptAst {
   }
 }
 
-/// Flatten a rendered prompt to plain text for BAML-authored provider clients.
-function prompt_to_text(prompt: PromptAst) -> string throws never {
-  $rust_io_function
-}
-
 /// BEP-049 §10 (M5b.2). Opaque handle to a prebuilt output-format schema (the
 /// rust `OutputFormatContent` for a return type). Carried on `Context` so
 /// `ctx.output_format_with(...)` can re-render the schema with caller options

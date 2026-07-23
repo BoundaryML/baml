@@ -1239,16 +1239,6 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
-    fn prompt_to_text(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        prompt: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::ok(prompt_ast_to_text(&unwrap_prompt_ast(&prompt)))
-    }
-
     fn from_shorthand(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -1333,41 +1323,6 @@ fn prompt_value_text(v: &BexExternalValue) -> String {
         BexExternalValue::Bool(b) => b.to_string(),
         _ => String::new(),
     }
-}
-
-fn prompt_ast_to_text(ast: &baml_builtins2::PromptAst) -> String {
-    use baml_builtins2::{PromptAst, PromptAstSimple};
-
-    fn append_simple(simple: &PromptAstSimple, output: &mut String) {
-        match simple {
-            PromptAstSimple::String(text) => output.push_str(text),
-            PromptAstSimple::Media(_) => {}
-            PromptAstSimple::Multiple(items) => {
-                for item in items {
-                    append_simple(item, output);
-                }
-            }
-        }
-    }
-
-    fn append_ast(ast: &PromptAst, output: &mut String) {
-        match ast {
-            PromptAst::Simple(simple) => append_simple(simple, output),
-            PromptAst::Message { content, .. } => {
-                append_simple(content, output);
-                output.push('\n');
-            }
-            PromptAst::Vec(items) => {
-                for item in items {
-                    append_ast(item, output);
-                }
-            }
-        }
-    }
-
-    let mut output = String::new();
-    append_ast(ast, &mut output);
-    output.trim_end().to_string()
 }
 
 /// BEP-049 §10 (M5d): fold a tagged template's `parts`/`values` into a

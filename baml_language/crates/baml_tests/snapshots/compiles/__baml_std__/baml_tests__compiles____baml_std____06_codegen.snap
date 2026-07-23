@@ -5565,9 +5565,6 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
     return
 }
 
-function baml.llm.prompt_to_text(prompt: baml.llm.PromptAst) -> string {
-}
-
 function baml.llm.render_output_format(return_type: type) -> string {
 }
 

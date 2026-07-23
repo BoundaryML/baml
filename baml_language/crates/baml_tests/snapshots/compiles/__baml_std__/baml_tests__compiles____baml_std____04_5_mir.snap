@@ -6517,8 +6517,6 @@ fn baml.llm.PromptAst.baml.ToString.to_string(self: baml.llm.PromptAst) -> strin
     }
 }
 
-fn baml.llm.prompt_to_text = builtin(io)
-
 fn baml.llm.Context.output_format_with = builtin(io)
 
 fn baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float {

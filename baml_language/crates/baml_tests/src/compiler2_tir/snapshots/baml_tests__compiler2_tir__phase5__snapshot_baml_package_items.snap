@@ -237,7 +237,6 @@ namespace baml.llm:
   function parse<TStream, TFinal>
   function prompt
   function prompt_template_for
-  function prompt_to_text
   function render_output_format
   function render_prompt
   function render_prompt_values
