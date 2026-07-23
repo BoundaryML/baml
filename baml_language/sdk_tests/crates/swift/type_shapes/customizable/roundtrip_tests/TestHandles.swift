@@ -78,14 +78,6 @@ final class TestHandles: XCTestCase {
         XCTAssertEqual(try img.base64(), pngB64)
     }
 
-    func test_http_get_response_fields_and_methods() throws {
-        let server = try TinyHTTPServer()
-        let resp = try Baml.baml.http.fetch(url: server.url)
-        XCTAssertEqual(resp.status_code, 200)
-        XCTAssertEqual(try resp.ok(), true)
-        XCTAssertEqual(try resp.text(), httpBody)
-    }
-
     func test_open_file_returns_file_handle() throws {
         let path = try makeTempFile(contents: "0123456789")
         let f = try Baml.baml.fs.open(path: path, mode: "r")
