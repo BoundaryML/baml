@@ -2131,6 +2131,21 @@ fn find_unannotated_inbound_member_with_aliases(
             matching.push(member);
         }
     }
+
+    // A nested optional alias can make one null payload match both the alias
+    // member and an explicit null member. That is not distinct host intent:
+    // unlike an empty container, a bare null already identifies its exact leaf
+    // type. Prefer the exact null arm so statically typed SDKs can encode `nil`
+    // without attaching the forbidden root-union/optional annotation.
+    if matches!(value, BexExternalValue::Null)
+        && matching.len() > 1
+        && let Some(exact_null) = matching
+            .iter()
+            .find(|member| runtime_ty_resolves_to_exact_null(member, aliases))
+    {
+        return Ok((**exact_null).clone());
+    }
+
     match matching.as_slice() {
         [member] => Ok((*member).clone()),
         [] => members
@@ -2168,6 +2183,27 @@ fn find_unannotated_inbound_member_with_aliases(
             ),
         }),
     }
+}
+
+fn runtime_ty_resolves_to_exact_null<'a>(
+    mut ty: &'a RuntimeTy,
+    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> bool {
+    // A productive alias chain cannot contain more distinct aliases than the
+    // registry. The bound also makes this defensive against an invalid cycle.
+    for _ in 0..=aliases.len() {
+        match ty {
+            RuntimeTy::Null { .. } => return true,
+            RuntimeTy::TypeAlias(name, _) if name.display_name().as_str() != "baml.json.json" => {
+                let Some(expanded) = aliases.get(name) else {
+                    return false;
+                };
+                ty = expanded;
+            }
+            _ => return false,
+        }
+    }
+    false
 }
 
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
@@ -4191,6 +4227,37 @@ mod union_container_selection_tests {
             panic!("expected the recursive list payload")
         };
         assert!(matches!(items.as_slice(), [BexExternalValue::Union { .. }]));
+    }
+
+    #[test]
+    fn unannotated_null_prefers_exact_null_over_nested_optional_alias() {
+        let alias_name = TypeName::from_dotted_path("user.aliases.OptionalState");
+        let alias = RuntimeTy::TypeAlias(alias_name.clone(), TyAttr::default());
+        let alias_body = RuntimeTy::optional(RuntimeTy::Enum(
+            TypeName::from_dotted_path("user.State"),
+            TyAttr::default(),
+        ));
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(alias_name, alias_body);
+
+        // This is the runtime shape of `OptionalState?`: the alias already
+        // contains null, but applying `?` outside the opaque alias introduces
+        // another explicit null member.
+        let declared = RuntimeTy::union([alias, RuntimeTy::null()]);
+        let coerced = coerce_arg_to_declared_type_with_aliases(
+            BexExternalValue::Null,
+            &declared,
+            &aliases,
+            &indexmap::IndexMap::new(),
+            crate::InboundUnionAmbiguityPolicy::Reject,
+        )
+        .unwrap();
+
+        let BexExternalValue::Union { value, metadata } = coerced else {
+            panic!("expected the outer optional union carrier")
+        };
+        assert!(metadata.selected_option.is_null());
+        assert!(matches!(*value, BexExternalValue::Null));
     }
 
     #[test]

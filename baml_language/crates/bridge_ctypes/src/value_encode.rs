@@ -588,7 +588,11 @@ mod tests {
 
     #[test]
     fn outbound_optional_null_preserves_declared_member_index() {
-        let value = BexExternalValue::optional(BexExternalValue::Null, RuntimeTy::string());
+        let value = BexExternalValue::union(
+            BexExternalValue::Null,
+            [RuntimeTy::string(), RuntimeTy::null()],
+            RuntimeTy::null(),
+        );
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
