@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.same<T>(first: T, second: T) -> T throws never {
+  { : T
+    first : T
+  }
+}
+function user.return_context() -> int throws never {
+  { : int | 1 | "hello"
+    same<T>(1, "hello") : int | 1 | "hello"
+  }
+  !! 97..113: type mismatch: expected int, got int | 1 | "hello"
+}
+function user.without_context() -> string throws never {
+  { : "ok"
+    let result = same<T>(1, "hello") : 1 | "hello" -> int | string
+    "ok" : "ok"
+  }
+}
+function user.needs_int<T>(value: T, count: int) -> T throws never {
+  { : T
+    value : T
+  }
+}
+function user.concrete_parameter_still_checked() -> int throws never {
+  { : int | 1
+    needs_int<T>(1, "hello") : int | 1
+  }
+  !! 337..344: type mismatch: expected int, got "hello"
+}
+function user.explicit_type_still_checked() -> int throws never {
+  { : int
+    same<T>(1, "hello") : int
+  }
+  !! 414..421: type mismatch: expected int, got "hello"
+  !! 414..421: type mismatch: expected int, got "hello"
+}

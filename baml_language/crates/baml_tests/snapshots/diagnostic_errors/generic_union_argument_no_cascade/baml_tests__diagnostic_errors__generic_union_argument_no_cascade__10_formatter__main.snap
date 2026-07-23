@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function same<T>(first: T, second: T) -> T {
+    first
+}
+
+function return_context() -> int {
+    same(1, "hello")
+}
+
+function without_context() -> string {
+    let result = same(1, "hello");
+    "ok"
+}
+
+function needs_int<T>(value: T, count: int) -> T {
+    value
+}
+
+function concrete_parameter_still_checked() -> int {
+    needs_int(1, "hello")
+}
+
+function explicit_type_still_checked() -> int {
+    same<int>(1, "hello")
+}

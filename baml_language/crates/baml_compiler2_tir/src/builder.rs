@@ -3773,7 +3773,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                         let param_ty = &param.ty;
                         let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                        let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                        let direct_inference_var = matches!(
+                            param_ty,
+                            Ty::TypeVar(name, _)
+                                if rigid_self_var.as_ref() != Some(name)
+                                    && (!self.generic_params.iter().any(|param| param == name)
+                                        || generic_params.iter().any(|param| param == name))
+                        );
+                        let arg_ty = if !direct_inference_var
+                            && !crate::generics::contains_typevar(&substituted)
+                        {
                             self.check_expr(*arg, body, &substituted)
                         } else {
                             self.infer_expr(*arg, body)

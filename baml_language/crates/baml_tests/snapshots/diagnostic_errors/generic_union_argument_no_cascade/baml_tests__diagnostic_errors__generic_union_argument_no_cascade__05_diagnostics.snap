@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: type mismatch: expected int, got int | 1 | "hello"
+   ╭─[ main.baml:6:5 ]
+   │
+ 6 │     same(1, "hello")
+   │     ────────┬───────  
+   │             ╰───────── type mismatch: expected int, got int | 1 | "hello"
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected int, got "hello"
+    ╭─[ main.baml:19:18 ]
+    │
+ 19 │     needs_int(1, "hello")
+    │                  ───┬───  
+    │                     ╰───── type mismatch: expected int, got "hello"
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected int, got "hello"
+    ╭─[ main.baml:23:18 ]
+    │
+ 23 │     same<int>(1, "hello")
+    │                  ───┬───  
+    │                     ╰───── type mismatch: expected int, got "hello"
+    │ 
+    │ Note: Error code: E0001
+────╯

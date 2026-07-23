@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.concrete_parameter_still_checked() -> int  [expr] {
+  {  } needs_int(1, "hello")
+}
+function user.explicit_type_still_checked() -> int  [expr] {
+  {  } same(1, "hello")
+}
+function user.needs_int(value: T, count: int) -> T  [expr] {
+  {  } value
+}
+function user.return_context() -> int  [expr] {
+  {  } same(1, "hello")
+}
+function user.same(first: T, second: T) -> T  [expr] {
+  {  } first
+}
+function user.without_context() -> string  [expr] {
+  { let result = same(1, "hello") } "ok"
+}
