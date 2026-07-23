@@ -1,4 +1,4 @@
-#![cfg(feature = "no-self-update")]
+#![cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
 
 use std::process::Command;
 

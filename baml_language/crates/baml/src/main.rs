@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-#[cfg(not(feature = "no-self-update"))]
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 use baml_release::WrapperManifest;
 use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest};
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,7 @@ fn main() {
 
 fn run() -> Result<i32> {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    #[cfg(all(windows, not(feature = "no-self-update")))]
+    #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
     if args.first().map(String::as_str) == Some("--replace") {
         args.remove(0);
         return replace_running_exe(args).map(|()| 0);
@@ -1018,14 +1018,14 @@ fn uninstall_toolchain(version: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "no-self-update")]
+#[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
 fn self_update() -> Result<()> {
     Err(anyhow!(
         "self-update is disabled in this build.\nUpdate BAML with your package manager."
     ))
 }
 
-#[cfg(not(feature = "no-self-update"))]
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn self_update() -> Result<()> {
     let current = env::current_exe()?;
     let manifest = fetch_wrapper_manifest()?;
@@ -1066,7 +1066,7 @@ fn self_update() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "no-self-update"))]
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     let base = baml_release::manifest_base_url();
     let url = format!("{base}/wrapper.json");
@@ -1087,7 +1087,7 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     Ok(manifest)
 }
 
-#[cfg(not(feature = "no-self-update"))]
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn http_client() -> Result<reqwest::blocking::Client> {
     http_client_with_timeout(HTTP_TIMEOUT)
 }
@@ -1100,7 +1100,7 @@ fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Clie
         .context("failed to build HTTP client")
 }
 
-#[cfg(all(windows, not(feature = "no-self-update")))]
+#[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
 fn replace_running_exe(args: Vec<String>) -> Result<()> {
     if args.len() != 2 {
         anyhow::bail!("usage: baml --replace <tmp> <current>");

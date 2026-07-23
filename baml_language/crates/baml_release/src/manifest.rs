@@ -105,6 +105,7 @@ impl ToolchainManifest {
     }
 }
 
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 impl WrapperManifest {
     pub fn validate(&self) -> anyhow::Result<()> {
         validate_schema(self.schema)?;

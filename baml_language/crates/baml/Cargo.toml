@@ -14,8 +14,9 @@ license = { workspace = true }
 workspace = true
 
 [features]
-default = [  ]
-no-self-update = [  ]
+default = [ "self-update" ]
+self-update = [ "baml_release/self-update" ]
+no-self-update = [ "baml_release/no-self-update" ]
 
 [dependencies]
 baml_release = { workspace = true }
