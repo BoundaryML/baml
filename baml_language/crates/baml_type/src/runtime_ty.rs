@@ -179,17 +179,7 @@ impl RuntimeTy {
 
     /// Check if this is a primitive type (including literals of primitive types).
     pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::String { .. }
-                | RuntimeTy::Bool { .. }
-                | RuntimeTy::Null { .. }
-                | RuntimeTy::Uint8Array { .. }
-                | RuntimeTy::Literal(..)
-        )
+        self.as_ty().is_primitive()
     }
 
     // --- Transforms ---
