@@ -6,13 +6,10 @@
 //! way as its definition; the caller adds `ModifierSet::DECLARATION` at
 //! definition sites.
 
-use baml_compiler2_hir::{
-    contributions::{Definition, DefinitionKind},
-    semantic_index::DefinitionSite,
-};
+use baml_compiler2_hir::{contributions::Definition, semantic_index::DefinitionSite};
 use baml_compiler2_tir::{inference::MemberResolution, resolve::ResolvedName};
 
-use super::{ModifierSet, SemanticTokenType};
+use super::{ModifierSet, SemanticTokenType, semantic_token_type_for_definition_kind};
 
 /// Primitive type names — the built-in scalar / collection types.
 const PRIMITIVE_TYPES: &[&str] = &[
@@ -58,28 +55,6 @@ pub(super) fn namespace_class(is_builtin: bool) -> (SemanticTokenType, ModifierS
     (SemanticTokenType::Namespace, modifiers)
 }
 
-/// The base token type for a definition kind.
-///
-/// Mirrors `baml_cli::paint::kind_style` so terminal `describe` highlighting and
-/// LSP semantic tokens agree on the palette.
-pub(super) fn token_type_for_kind(kind: DefinitionKind) -> SemanticTokenType {
-    use DefinitionKind as K;
-    use SemanticTokenType as T;
-    match kind {
-        K::Class => T::Class,
-        K::Enum => T::Enum,
-        K::Interface => T::Interface,
-        K::TypeAlias | K::AssociatedType => T::Type,
-        K::Function | K::TemplateString => T::Function,
-        K::Method => T::Method,
-        K::Client | K::Test | K::RetryPolicy => T::Struct,
-        K::Field => T::Property,
-        K::Variant => T::EnumMember,
-        K::Parameter => T::Parameter,
-        K::Let | K::Binding => T::Variable,
-    }
-}
-
 /// Classify a resolved bare name / path root.
 ///
 /// Returns `None` for unresolved names so the walker can fall back to a neutral
@@ -112,7 +87,7 @@ pub(super) fn classify_resolved(
 
 /// The base token type for a resolved top-level definition.
 pub(super) fn token_type_for_definition(def: Definition<'_>) -> SemanticTokenType {
-    token_type_for_kind(def.kind())
+    semantic_token_type_for_definition_kind(def.kind())
 }
 
 /// Classify a member access / path segment resolution.

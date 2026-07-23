@@ -108,7 +108,8 @@ pub use listing::{
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{
-    ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES, semantic_tokens,
+    ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES,
+    semantic_token_type_for_definition_kind, semantic_tokens,
 };
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
 pub use usages::usages_at;

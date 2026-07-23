@@ -25,6 +25,7 @@ use baml_compiler_syntax::{
         ObjectField, TypeExpr,
     },
 };
+use baml_compiler2_hir::contributions::DefinitionKind;
 use baml_compiler2_tir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
@@ -146,6 +147,25 @@ impl SemanticTokenType {
             Self::EscapeSequence => "escapeSequence",
             Self::Boolean => "boolean",
         }
+    }
+}
+
+/// The canonical semantic token type for a definition kind.
+pub fn semantic_token_type_for_definition_kind(kind: DefinitionKind) -> SemanticTokenType {
+    use DefinitionKind as K;
+    use SemanticTokenType as T;
+    match kind {
+        K::Class => T::Class,
+        K::Enum => T::Enum,
+        K::Interface => T::Interface,
+        K::TypeAlias | K::AssociatedType => T::Type,
+        K::Function | K::TemplateString => T::Function,
+        K::Method => T::Method,
+        K::Client | K::Test | K::RetryPolicy => T::Struct,
+        K::Field => T::Property,
+        K::Variant => T::EnumMember,
+        K::Parameter => T::Parameter,
+        K::Let | K::Binding => T::Variable,
     }
 }
 

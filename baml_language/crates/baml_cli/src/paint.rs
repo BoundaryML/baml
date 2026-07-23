@@ -16,7 +16,8 @@ use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
 use baml_db::SourceFile;
 use baml_lsp2_actions::{
-    DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_tokens,
+    DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType,
+    semantic_token_type_for_definition_kind, semantic_tokens,
 };
 use baml_project::ProjectDatabase;
 use console::Style;
@@ -148,21 +149,7 @@ fn style_for_plain(token_type: SemanticTokenType) -> Style {
 /// Color for a definition kind, used to highlight listing rows (which have no
 /// source slice to tokenize). Maps each kind onto the same palette as the body.
 fn kind_style(kind: DefinitionKind) -> Style {
-    use DefinitionKind as K;
-    use SemanticTokenType as T;
-    style_for_plain(match kind {
-        K::Class => T::Class,
-        K::Enum => T::Enum,
-        K::Interface => T::Interface,
-        K::TypeAlias | K::AssociatedType => T::Type,
-        K::Function | K::TemplateString => T::Function,
-        K::Method => T::Method,
-        K::Client | K::Test | K::RetryPolicy => T::Struct,
-        K::Field => T::Property,
-        K::Variant => T::EnumMember,
-        K::Parameter => T::Parameter,
-        K::Let | K::Binding => T::Variable,
-    })
+    style_for_plain(semantic_token_type_for_definition_kind(kind))
 }
 
 /// Highlight a (possibly dotted) name as it would appear in source: each
