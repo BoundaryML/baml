@@ -5214,6 +5214,21 @@ impl BexEngine {
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
     ) -> SysOpResult {
+        if op == SysOp::BamlSysCollectGarbage {
+            // A collection cannot run while this VM holds its active heap
+            // permit. Returning an async operation makes the event loop release
+            // that permit before polling us; the engine can then park every VM,
+            // collect, drain `cleanup()` finalizers, and only afterward resume
+            // the caller.
+            let engine = self.clone();
+            return SysOpResult::Async(Box::pin(async move {
+                engine
+                    .collect_garbage(bex_heap::CollectionLevel::Major)
+                    .await;
+                Ok(BexExternalValue::Null)
+            }));
+        }
+
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
                 if let Err(violation) = sys_types::validate_sys_op_error(op, kind) {

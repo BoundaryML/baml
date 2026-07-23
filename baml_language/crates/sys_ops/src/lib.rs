@@ -1594,6 +1594,17 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn collect_garbage(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The engine handles this intrinsic before consulting the platform IO
+        // table. Returning success is the safe fallback for other runtimes.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _h: &Arc<BexHeap>,
