@@ -1860,38 +1860,41 @@ impl<'a> Parser<'a> {
 
         self.with_node(SyntaxKind::STRING_LITERAL, |p| {
             p.bump(); // Opening quote
-
-            // Collect all tokens until closing quote.
-            // Use at_end_raw / at_raw / bump_raw throughout so that `*/`
-            // and `//` inside the string are kept as literal content instead
-            // of being mis-recognised as comment delimiters.
-            let mut loop_counter = 0;
-            while !p.at_end_raw() {
-                loop_counter += 1;
-                if loop_counter > 100_000 {
-                    p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
-                    return;
-                }
-
-                if p.at_raw(TokenKind::Backslash) {
-                    p.bump_raw(); // Consume backslash
-                    if p.current < p.tokens.len() {
-                        p.bump_raw(); // Consume the escaped character (whatever it is)
-                    }
-                    continue;
-                }
-
-                if p.at_raw(TokenKind::Quote) {
-                    p.bump_raw(); // Consume closing quote
-                    return;
-                }
-                p.bump_raw();
-            }
-
-            p.error_unexpected_token("Unclosed string literal".to_string());
+            p.parse_quoted_content(
+                "String parsing exceeded iteration limit",
+                "Unclosed string literal",
+            );
         });
 
         true
+    }
+
+    /// Uses raw token navigation so comment-looking content remains literal text.
+    fn parse_quoted_content(&mut self, iteration_limit_error: &str, unclosed_error: &str) {
+        let mut loop_counter = 0;
+        while !self.at_end_raw() {
+            loop_counter += 1;
+            if loop_counter > 100_000 {
+                self.error_unexpected_token(iteration_limit_error.to_string());
+                return;
+            }
+
+            if self.at_raw(TokenKind::Backslash) {
+                self.bump_raw();
+                if self.current < self.tokens.len() {
+                    self.bump_raw();
+                }
+                continue;
+            }
+
+            if self.at_raw(TokenKind::Quote) {
+                self.bump_raw();
+                return;
+            }
+            self.bump_raw();
+        }
+
+        self.error_unexpected_token(unclosed_error.to_string());
     }
 
     /// Parse a byte string literal: `b"..."`.
@@ -1919,35 +1922,10 @@ impl<'a> Parser<'a> {
             p.bump_raw(); // Consume the `b` prefix
 
             p.bump_raw(); // Opening quote
-
-            // Collect all tokens until closing quote (same logic as parse_string).
-            let mut loop_counter = 0;
-            while !p.at_end_raw() {
-                loop_counter += 1;
-                if loop_counter > 100_000 {
-                    p.error_unexpected_token(
-                        "Byte string parsing exceeded iteration limit".to_string(),
-                    );
-                    return;
-                }
-
-                if p.at_raw(TokenKind::Backslash) {
-                    p.bump_raw(); // Consume backslash
-                    if p.current < p.tokens.len() {
-                        p.bump_raw(); // Consume the escaped character (whatever it is)
-                    }
-                    continue;
-                }
-
-                if p.at_raw(TokenKind::Quote) {
-                    p.bump_raw(); // Consume closing quote
-                    return;
-                }
-
-                p.bump_raw();
-            }
-
-            p.error_unexpected_token("Unclosed byte string literal".to_string());
+            p.parse_quoted_content(
+                "Byte string parsing exceeded iteration limit",
+                "Unclosed byte string literal",
+            );
         });
 
         true
@@ -7933,6 +7911,88 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn parse_quoted_fragment(
+        source: &str,
+        byte_string: bool,
+    ) -> (bool, SyntaxNode, Vec<ParseError>) {
+        let tokens = lex_lossless(source, FileId::new(0));
+        let mut parser = Parser::new(&tokens);
+        parser.start_node(SyntaxKind::SOURCE_FILE);
+        let parsed = if byte_string {
+            parser.parse_byte_string()
+        } else {
+            parser.parse_string()
+        };
+        while parser.current < tokens.len() {
+            parser.bump_raw();
+        }
+        parser.finish_node();
+        let (green, errors) = parser.build_tree(None);
+        (parsed, SyntaxNode::new_root(green), errors)
+    }
+
+    #[test]
+    fn quoted_content_preserves_raw_text_node_kinds_and_prechecks() {
+        for (source, byte_string, kind, expected_text) in [
+            (
+                "  \"a\\\"///*b\"",
+                false,
+                SyntaxKind::STRING_LITERAL,
+                "\"a\\\"///*b\"",
+            ),
+            (
+                "  b\"a\\\"///*b\"",
+                true,
+                SyntaxKind::BYTE_STRING_LITERAL,
+                "b\"a\\\"///*b\"",
+            ),
+        ] {
+            let (parsed, root, errors) = parse_quoted_fragment(source, byte_string);
+            assert!(parsed, "{source:?}");
+            assert_no_errors(&errors);
+            let literal = root
+                .descendants()
+                .find(|node| node.kind() == kind)
+                .expect("expected literal node");
+            assert_eq!(literal.text().to_string(), expected_text);
+        }
+
+        for (source, byte_string) in [("word", false), ("b \"x\"", true)] {
+            let (parsed, root, errors) = parse_quoted_fragment(source, byte_string);
+            assert!(!parsed, "{source:?}");
+            assert_no_errors(&errors);
+            assert!(root.descendants().all(|node| {
+                !matches!(
+                    node.kind(),
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::BYTE_STRING_LITERAL
+                )
+            }));
+        }
+    }
+
+    #[test]
+    fn quoted_content_preserves_eof_and_iteration_limit_diagnostics() {
+        for (source, byte_string, expected) in [
+            ("\"trailing\\", false, "Unclosed string literal"),
+            ("b\"trailing\\", true, "Unclosed byte string literal"),
+        ] {
+            let (parsed, _, errors) = parse_quoted_fragment(source, byte_string);
+            assert!(parsed);
+            assert_eq!(unexpected_expectations(&errors), [expected]);
+        }
+
+        let content = "+;".repeat(50_001);
+        for (prefix, byte_string, expected) in [
+            ("\"", false, "String parsing exceeded iteration limit"),
+            ("b\"", true, "Byte string parsing exceeded iteration limit"),
+        ] {
+            let source = format!("{prefix}{content}");
+            let (parsed, _, errors) = parse_quoted_fragment(&source, byte_string);
+            assert!(parsed);
+            assert_eq!(unexpected_expectations(&errors), [expected]);
+        }
     }
 
     #[test]
