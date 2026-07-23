@@ -3,526 +3,613 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_fields_constructed_with_class_keys"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "class_own_field_shadowing_interface_field_is_separate_at_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "two_interfaces_same_field_not_merged_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "same_field_name_different_interface_types_not_conflicting_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "same_generic_interface_field_links_select_matching_type_args_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_field_via_requires_chain_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_call_from_override_returns_string"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_resolves_to_current_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "as_projection_same_signature_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "as_projection_works_when_unambiguous_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "self_as_projection_call_inside_unrelated_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "diamond_as_projection_call_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_typed_var_dispatches_to_concrete"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "heterogeneous_interface_array_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "cast_to_parent_interface_via_requires_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_method_dispatch_through_interface_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_default_method_calls_self_param_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_self_param_method_call"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "self_param_method_accepts_matching_nested_self"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "bound_self_method_value_accepts_matching_arg"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_default_method_reference_accepts_explicit_receiver"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "throwing_interface_dispatch_uses_active_catch"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "override_dispatched_not_default"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_narrows_to_concrete_field_access"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_destructures_interface_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_destructures_interface_fields_directly"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_interface_destructure_respects_field_subpatterns"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_destructures_concrete_implementor_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "match_open_interface_with_wildcard_works"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_interface_concrete_type_param_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "same_generic_interface_different_type_params_disambiguated_with_as_projection"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_type_of_interface_to_string"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implements_true_for_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implements_false_for_non_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implemented_by_inverse_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implements_transitive_via_requires"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implementors_lists_lexicographic_order_and_identity"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implementors_empty_for_concrete_class"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implementors_empty_for_primitive"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_implements_inside_generic_function"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 40)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "reflect_interface_does_not_implement_itself"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 41)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "class_own_method_callable_from_implements_block"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 42)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "class_inherent_method_does_not_override_interface_default_through_existential"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 43)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_extends_named_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 44)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_as_projection_selects_generic_interface_instantiation"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 45)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_direct_method_call_dispatches_through_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 46)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_interface_method_preserves_method_type_param"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 47)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_bound_through_extends_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 48)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "self_return_type_carries_concrete_class"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 49)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "self_return_on_interface_typed_receiver_collapses_to_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 50)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "multi_self_method_accepts_concrete_receiver"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 51)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "concrete_receiver_inherited_default_self_param_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 52)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "bounded_generic_forwarded_to_bounded_call_is_accepted"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 53)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "interface_to_interface_conversion_via_unknown_match_narrowing"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 54)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "as_upcast_selects_interface_field_link_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 55)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_function_call_result"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 56)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_array_index_with_field_access"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 57)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_field_access_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 58)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "requires_chain_four_levels_deep"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 59)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "diamond_call_through_interface_typed_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 60)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_chained_three_function_calls_returning_interfaces"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 61)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_chained_methods_returning_interface_each_level"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 62)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_nested_array_of_arrays"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 63)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_field_of_array_of_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 64)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_five_level_field_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 65)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_map_value_field_then_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 66)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_through_branch_assigned_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 67)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "dispatch_for_loop_over_interface_array_collects_results"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 68)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "diamond_six_level_requires_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 69)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "diamond_with_overrides_at_each_level"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 70)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "double_diamond_two_independent_inheritance_paths"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 71)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_called_twice_in_one_override_body"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 72)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_call_with_computed_argument_expression"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 73)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_keyword_shadowed_by_local_variable_resolves_to_local"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 74)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "requires_chain_exposes_parent_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 75)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "requires_chain_parent_field_in_default_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 76)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "out_of_body_implements_is_visible_to_reflection_registry"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 77)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "out_of_body_implements_for_primitive_as_projection_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 78)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_call_from_out_of_body_override_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 79)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "default_call_from_generic_out_of_body_override_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 80)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_out_of_body_override_preserves_method_type_args_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 81)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_requires_parent_args_dispatch_on_class_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 82)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_requires_parent_field_args_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 83)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_requires_parent_field_alias_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 84)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_requires_parent_args_dispatch_on_type_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 85)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "requires_closure_preserves_multiple_parent_instantiations_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces, 86)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -530,316 +617,368 @@ function interfaces.$init_test_ns_interfaces_interfaces(registry: testing.TestCo
 
 function interfaces.$init_test_ns_interfaces_interfaces_2(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.interfaces"
     load_const "form1_dispatches_through_interface_typed_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form1_dispatches_for_different_instantiations"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form1_self_accesses_receiver_fields"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form1_with_generic_interface_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_rule_for_list_receiver_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "generic_rule_for_map_receiver_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_nested_interface_args_dispatch"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_repeated_type_vars_match_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_default_method_inherited_through_generic_rule"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_reflection_sees_generic_class_implementor_once"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form2_dispatches_through_interface_typed_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form2_self_accesses_bound_members"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form2_applies_to_multiple_satisfying_classes"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form2_reflect_implements_returns_true"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form2_reflect_implementors_includes_satisfying_classes"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "blanket_interface_rule_reflection_includes_concrete_container_implementors"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_implementor_satisfies_generic_interface_bound"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_implementor_satisfies_inferred_generic_interface_bound"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_implementor_satisfies_inferred_generic_bound_from_constructor_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "bounded_type_var_rule_satisfies_generic_interface_bound"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "bounded_type_var_rule_satisfies_inferred_generic_interface_bound"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "form1_bounded_generic_receiver_dispatches_when_bound_satisfied"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "unified_rule_requires_closure_preserves_substituted_generic_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug03_implementor_assignable_to_optional_interface_param"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug04_method_call_on_parenthesized_if_expr"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug05_requires_child_override_does_not_leak_into_parent_slot"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug07_generic_default_method_body_can_use_type_param"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug10_generic_interface_as_function_param_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug15_generic_default_method_self_call_through_interface_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 28)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug16_generic_interface_type_param_in_scope_in_default_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 29)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug17_inherited_default_method_callable_on_class_var"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 30)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug18_class_method_preferred_over_aliased_field_view_on_call"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 31)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug20_as_projection_field_uses_own_view_in_requires_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 32)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug21_interface_param_field_uses_own_view_in_requires_chain"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 33)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug23_default_inherited_method_unqualified_call_on_class"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 34)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug24_generic_interface_type_param_in_default_method_signature"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 35)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug29_match_binding_form_narrows_to_concrete"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 36)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug31_method_call_on_match_union_result_does_not_crash"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 37)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug32_interface_value_coerces_to_optional_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 38)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug33_return_implementor_from_optional_interface_function"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 39)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug34_reflect_implements_respects_generic_type_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 40)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug35_reflect_implemented_by_respects_generic_type_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 41)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug36_reflect_implementors_respects_generic_type_args"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 42)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug37_reflect_implementors_deterministic_order"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 43)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug38_throw_subtype_of_declared_throws_interface_is_allowed"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 44)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug39_catch_by_interface_pattern_matches_implementor"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 45)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug40_implementor_assignable_to_interface_union"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 46)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug41_optional_interface_match_null_arm_reachable"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 47)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug42_default_method_callable_on_concrete_class_type"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 48)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug43_generic_fn_with_generic_interface_param_dispatches"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 49)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug44_generic_interface_default_method_body_uses_type_param"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 50)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "fuzz_bug45_interface_union_match_arms_all_reachable"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_2, 51)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -847,172 +986,200 @@ function interfaces.$init_test_ns_interfaces_interfaces_2(registry: testing.Test
 
 function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_generic_requires_chain_default_delegation_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_blanket_on_blanket_chain_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_default_field_access_does_not_crash"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_reflect_type_of_wrapped_generic_substitutes_param_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_reflect_implemented_by_generic_arg_substitution_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_pure_diamond_single_method_dispatches_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_union_of_implementors_assignable_to_interface_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_out_of_body_primitive_impl_visible_to_reflection_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_self_interface_field_access_via_projection_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_out_of_body_method_callable_directly_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_blanket_method_callable_directly_runtime"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_union_member_method_call_works_pins"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_concrete_field_shadows_interface_views_pins"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_bare_generic_interface_reflection_is_wildcard_pins"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "wf3_blanket_implementor_identity_is_bare_class_pins"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_pr_class_union_inherited_default_method"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_pr_reflection_nested_union_arg_order_insensitive"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_pr_function_typed_interface_field_in_union"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_pr_optional_union_interface_field"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_pr_reflection_duplicate_union_members_not_equivalent"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f01_field_read_on_iface_union_member"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f05_generic_match_narrowing_wrong_result"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f06_reflection_generic_union_arg_order_insensitive"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f08_interface_bounded_generic_identity_compiles"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 24)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f09_interface_arm_over_optional_union_compiles"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 25)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "union_fuzz_f10_out_of_body_primitive_string_direct_call"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 26)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.interfaces"
     load_const "positional_typevar_union_interface_args_dispatch"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 27)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

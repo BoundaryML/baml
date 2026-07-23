@@ -3,58 +3,67 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "role_construction_isolation"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_tag_builds_promptast_with_role_messages"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "unqualified_prompt_tag_resolves_to_baml_llm_prompt"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_interpolates_class_and_array_like_ordinary_string"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_interpolation_honors_to_string_override"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_interpolates_ctx_output_format"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_interpolates_ctx_output_format_with"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_output_format_with_omits_leading_optional_arg"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.prompt_tag_runtime"
     load_const "prompt_output_format_with_can_render_null_as_omit"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

@@ -87,6 +87,7 @@ function PassRate(threshold: float) -> TestSetRunner {
       total: report.total,
       failed_names: report.failed_names,
       results: report.results,
+      result_names: report.result_names,
     }
   }
 }

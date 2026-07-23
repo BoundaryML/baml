@@ -3,22 +3,25 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_arm_break_continue.$init_test_ns_match_arm_break_continue_match_arm_break_continue(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_arm_break_continue"
     load_const "bare_break_and_continue_arms_control_the_loop"
     make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_arm_break_continue"
     load_const "bare_break_in_value_position_unifies_and_breaks"
     make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_arm_break_continue"
     load_const "bare_continue_in_value_position_unifies_and_skips"
     make_closure .<lambda($init_test_ns_match_arm_break_continue_match_arm_break_continue, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

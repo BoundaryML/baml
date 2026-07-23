@@ -16,7 +16,7 @@ class user.HasWith$stream {
   with: int | null
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("with as field", () -> void { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
+  { registry.register_test_at("root", "with as field", () -> void { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
 }
 function user.make_foo() -> user.Foo  [expr] {
   {  } user.Foo { x: 1 }

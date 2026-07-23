@@ -144,8 +144,26 @@ unsafe impl salsa::Update for FileAst {
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let path = file.path(db);
+    let package = file_package::file_package(db, file);
+    let test_owner = if package.namespace_path.is_empty() {
+        "root".to_string()
+    } else {
+        format!(
+            "root.{}",
+            package
+                .namespace_path
+                .iter()
+                .map(baml_base::Name::as_str)
+                .collect::<Vec<_>>()
+                .join(".")
+        )
+    };
     let (items, diagnostics, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+        baml_compiler2_ast::lower_file_with_path_and_test_owner(
+            &tree,
+            Some(path.as_path()),
+            Some(&test_owner),
+        );
     FileAst {
         items,
         diagnostics,

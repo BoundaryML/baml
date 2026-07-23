@@ -3,16 +3,18 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function streaming_parsing.$init_test_ns_streaming_parsing_streaming_parsing(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.streaming_parsing"
     load_const "parse_stream_companion_class_in_namespace"
     make_closure .<lambda($init_test_ns_streaming_parsing_streaming_parsing, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.streaming_parsing"
     load_const "stream_done_signal_required"
     make_closure .<lambda($init_test_ns_streaming_parsing_streaming_parsing, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

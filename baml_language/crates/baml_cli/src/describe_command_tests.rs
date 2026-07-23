@@ -1064,6 +1064,18 @@ fn render_keyword_if() {
 }
 
 #[test]
+fn render_keyword_test() {
+    let output = capture_keyword("test");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_testset() {
+    let output = capture_keyword("testset");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_spawn() {
     let output = capture_keyword("spawn");
     insta::assert_snapshot!(output);

@@ -4,17 +4,17 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("wrong runner type", () -> void { ... }, 42) : void
+    registry.register_test_at("root", "wrong runner type", () -> void { ... }, 42) : void
       () -> void { ... } : () -> void throws unknown
         {
           assert.is_true(true)
         }
-    registry.register_test("string as runner", () -> void { ... }, "not a runner") : void
+    registry.register_test_at("root", "string as runner", () -> void { ... }, "not a runner") : void
       () -> void { ... } : () -> void throws unknown
         {
           assert.is_true(true)
         }
-    registry.register_test_set("wrong testset runner", (testset: testing.TestCollector) -> void { ... }, 42) : void
+    registry.register_test_set_at("root", "wrong testset runner", (testset: testing.TestCollector) -> void { ... }, 42) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           testset.register_test("inner", () -> { ... }, null)

@@ -4,7 +4,7 @@ assertion_line: 31822
 ---
 === PPIR ===
 function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test("new style", () -> void { { let result = "hello" } assert.not_null(result) }, null) } null
+  { registry.register_test_at("root", "new style", () -> void { { let result = "hello" } assert.not_null(result) }, null) } null
 }
 function user.Greet(name: string) -> string  [expr] {
   {  } "Hello, {name}!"

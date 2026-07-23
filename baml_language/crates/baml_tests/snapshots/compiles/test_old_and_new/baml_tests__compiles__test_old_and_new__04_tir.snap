@@ -9,7 +9,7 @@ function user.Greet(name: string) -> string throws never {
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("new style", () -> void { ... }, null) : void
+    registry.register_test_at("root", "new style", () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
         {
           let result = "hello"
