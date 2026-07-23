@@ -1,9 +1,7 @@
 use serde::Deserialize;
 
-use super::CompletionUsage;
-use crate::parse_response::{
-    FinishReason, LlmOutput, LlmProviderResponse, ParseResponseError, TokenUsage,
-};
+use super::{CompletionUsage, token_usage_from_completion};
+use crate::parse_response::{FinishReason, LlmOutput, LlmProviderResponse, ParseResponseError};
 
 // == Serde types ===================================================
 
@@ -119,16 +117,7 @@ pub(in crate::parse_response) fn parse_openai_responses_response(
     let usage = response
         .usage
         .as_ref()
-        .map(|u| TokenUsage {
-            input_tokens: Some(u.prompt_tokens),
-            output_tokens: Some(u.completion_tokens),
-            total_tokens: Some(u.total_tokens),
-            cached_input_tokens: u
-                .input_tokens_details
-                .as_ref()
-                .and_then(|details| details.get("cached_tokens"))
-                .and_then(serde_json::Value::as_u64),
-        })
+        .map(token_usage_from_completion)
         .unwrap_or_default();
 
     Ok(LlmProviderResponse {
