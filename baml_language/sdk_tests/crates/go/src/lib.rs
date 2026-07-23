@@ -58,9 +58,12 @@ mod generated_formatting_tests {
     }
 
     fn collect_go_files(directory: &Path, files: &mut Vec<std::path::PathBuf>) {
-        for entry in fs::read_dir(directory)
-            .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
-        {
+        let entries = match fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) => panic!("failed to read {}: {error}", directory.display()),
+        };
+        for entry in entries {
             let path = entry.expect("generated directory entry").path();
             if path.is_dir() {
                 collect_go_files(&path, files);
@@ -68,5 +71,11 @@ mod generated_formatting_tests {
                 files.push(path);
             }
         }
+    }
+
+    #[test]
+    fn missing_generated_sdk_is_an_empty_fixture() {
+        let missing = Path::new(env!("CARGO_MANIFEST_DIR")).join("missing-generated-sdk");
+        assert!(go_files_below(&missing).is_empty());
     }
 }

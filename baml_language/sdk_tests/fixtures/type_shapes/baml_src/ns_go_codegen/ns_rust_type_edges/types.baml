@@ -7,31 +7,31 @@ class ResponseEnvelope {
   responses_by_name map<string, baml.http.Response>
 }
 
-function make_opaque_response(body string) -> baml.http.Response {
+function make_opaque_response(body: string) -> baml.http.Response {
   baml.http.Response.new(207, { "x-baml-go": "opaque" }, body.to_utf8())
 }
 
-function read_opaque_response(response baml.http.Response) -> string throws baml.errors.Io {
+function read_opaque_response(response: baml.http.Response) -> string throws baml.errors.Io {
   response.text()
 }
 
-function round_trip_opaque_response(response baml.http.Response) -> baml.http.Response {
+function round_trip_opaque_response(response: baml.http.Response) -> baml.http.Response {
   response
 }
 
-function round_trip_optional_opaque_response(response baml.http.Response?) -> baml.http.Response? {
+function round_trip_optional_opaque_response(response: baml.http.Response?) -> baml.http.Response? {
   response
 }
 
-function round_trip_opaque_responses(responses baml.http.Response[]) -> baml.http.Response[] {
+function round_trip_opaque_responses(responses: baml.http.Response[]) -> baml.http.Response[] {
   responses
 }
 
-function round_trip_opaque_response_map(responses map<string, baml.http.Response>) -> map<string, baml.http.Response> {
+function round_trip_opaque_response_map(responses: map<string, baml.http.Response>) -> map<string, baml.http.Response> {
   responses
 }
 
-function round_trip_response_envelope(envelope ResponseEnvelope) -> ResponseEnvelope {
+function round_trip_response_envelope(envelope: ResponseEnvelope) -> ResponseEnvelope {
   envelope
 }
 

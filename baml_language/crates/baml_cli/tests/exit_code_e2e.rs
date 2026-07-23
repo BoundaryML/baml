@@ -316,6 +316,37 @@ fn generate_go_writes_sdk_through_cli() {
 }
 
 #[test]
+fn generate_go_first_run_preserves_preexisting_user_files() {
+    if !gofmt_is_available() {
+        return;
+    }
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_go_generator(
+        tmp.path(),
+        "function echo(value: string) -> string { value }\n",
+    );
+    let sdk = tmp.path().join("baml_sdk");
+    std::fs::create_dir(&sdk).unwrap();
+    std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
+        "keep me"
+    );
+    assert!(sdk.join("functions.go").is_file());
+}
+
+#[test]
 fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
     if !gofmt_is_available() {
         return;

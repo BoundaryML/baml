@@ -115,6 +115,9 @@ mod tests {
 
     #[test]
     fn reports_the_generated_path_for_invalid_go() {
+        if Command::new("gofmt").arg("-h").output().is_err() {
+            return;
+        }
         let path = Path::new("packages/example/types.go");
         let error = gofmt_source(path, "package example\nfunc {").unwrap_err();
         let message = error.to_string();

@@ -85,20 +85,23 @@ pub fn try_to_source_code_with_bytecode(
     )
 }
 
-pub fn to_source_code_with_bytecode_and_options(
-    pool: &SymbolPool,
-    baml_bytecode: &[u8],
-    options: &GoGenOptions<'_>,
-) -> HashMap<PathBuf, String> {
-    try_to_source_code_with_bytecode_and_options(pool, baml_bytecode, options)
-        .unwrap_or_else(|error| panic!("Go SDK generation failed: {error}"))
-}
-
 pub fn try_to_source_code_with_bytecode_and_options(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
     options: &GoGenOptions<'_>,
 ) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+    formatting::gofmt_generated_files(render_source_code_with_bytecode_and_options(
+        pool,
+        baml_bytecode,
+        options,
+    ))
+}
+
+fn render_source_code_with_bytecode_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    options: &GoGenOptions<'_>,
+) -> HashMap<PathBuf, String> {
     assert!(
         matches!(options.naming_convention, NamingConvention::Language),
         "sdkgen_go requires naming_convention = language"
@@ -186,7 +189,7 @@ pub fn try_to_source_code_with_bytecode_and_options(
             );
         }
     }
-    formatting::gofmt_generated_files(files)
+    files
 }
 
 #[cfg(test)]
@@ -4336,6 +4339,8 @@ fn go_type(ty: &Ty) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
         CallableParam, Class, ClassProperty, CodegenFunctionParamMode, DefaultLiteral, EnumVariant,
@@ -4343,6 +4348,31 @@ mod tests {
     };
 
     use super::*;
+
+    fn to_source_code_with_bytecode(
+        pool: &SymbolPool,
+        baml_bytecode: &[u8],
+        naming_convention: NamingConvention,
+        sdk_import_path: &str,
+    ) -> HashMap<PathBuf, String> {
+        render_source_code_with_bytecode_and_options(
+            pool,
+            baml_bytecode,
+            &GoGenOptions {
+                naming_convention,
+                sdk_import_path,
+                max_typed_union_arity: DEFAULT_MAX_TYPED_UNION_ARITY,
+            },
+        )
+    }
+
+    fn to_source_code_with_bytecode_and_options(
+        pool: &SymbolPool,
+        baml_bytecode: &[u8],
+        options: &GoGenOptions<'_>,
+    ) -> HashMap<PathBuf, String> {
+        render_source_code_with_bytecode_and_options(pool, baml_bytecode, options)
+    }
 
     fn without_horizontal_whitespace(value: &str) -> String {
         value
@@ -5765,7 +5795,7 @@ mod tests {
         );
         assert_eq!(
             files[&PathBuf::from("functions.go")],
-            format!("{BANNER}package baml_sdk\n")
+            format!("{BANNER}package baml_sdk\n\n")
         );
         assert!(files[&PathBuf::from("types.go")].contains("Next *Node"));
     }
@@ -5912,7 +5942,7 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert_eq!(functions, &format!("{BANNER}package baml_sdk\n"));
+        assert_eq!(functions, &format!("{BANNER}package baml_sdk\n\n"));
     }
 
     #[test]
@@ -6503,6 +6533,9 @@ mod tests {
 
     #[test]
     fn formatted_generation_is_byte_stable_and_sorts_imports() {
+        if Command::new("gofmt").arg("-h").output().is_err() {
+            return;
+        }
         let function = Name::new(
             BaseName::new("user"),
             vec![],
