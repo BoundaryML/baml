@@ -603,7 +603,7 @@ impl LazyRefresh {
 
 /// Kick off a background refresh of any freshness cache older than the TTL,
 /// at most one attempt per TTL window (failures are silent; the marker in
-/// [`should_attempt_refresh`] throttles retries). Returns `None` when
+/// [`baml_release::skills::should_attempt_refresh`] throttles retries). Returns `None` when
 /// nothing is due or `[update] auto_check = false` — the common case, which
 /// costs only a few mtime checks and lets the caller keep the exec fast path.
 fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
@@ -612,9 +612,10 @@ fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
     }
 
     let manifest_due = is_channel(&selector.selector)
-        && should_attempt_refresh(
+        && baml_release::skills::should_attempt_refresh(
             &manifest_cache_dir(&baml_release::manifest_base_url())
                 .join(format!("{}.json", selector.selector)),
+            CHANNEL_CACHE_TTL,
         );
     if !manifest_due {
         return None;
@@ -633,38 +634,6 @@ fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
         let _ = sender.send(());
     });
     Some(LazyRefresh { done, deadline })
-}
-
-/// A cache file is due for a refresh attempt when both the file itself and
-/// its attempt marker are older than the TTL. The marker is touched before
-/// every attempt (success or failure) so an unreachable network is retried at
-/// most once per TTL window instead of on every command.
-fn should_attempt_refresh(cache_path: &Path) -> bool {
-    let marker = refresh_marker_path(cache_path);
-    if !file_older_than(cache_path, CHANNEL_CACHE_TTL)
-        || !file_older_than(&marker, CHANNEL_CACHE_TTL)
-    {
-        return false;
-    }
-    if let Some(parent) = marker.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    fs::write(&marker, "").is_ok()
-}
-
-fn refresh_marker_path(cache_path: &Path) -> PathBuf {
-    let mut path = cache_path.as_os_str().to_owned();
-    path.push(".last-check");
-    PathBuf::from(path)
-}
-
-/// True when the file is missing or its mtime is older than `ttl`.
-fn file_older_than(path: &Path, ttl: Duration) -> bool {
-    path.metadata()
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
-        .is_none_or(|age| age > ttl)
 }
 
 /// Passive freshness check for channel selectors, run on every pass-through
@@ -1268,26 +1237,19 @@ mod tests {
     }
 
     #[test]
-    fn missing_file_counts_as_older_than_ttl() {
-        let missing = Path::new("/tmp/definitely-missing-baml-freshness-file");
-        assert!(file_older_than(missing, CHANNEL_CACHE_TTL));
-    }
-
-    #[test]
-    fn fresh_file_is_not_older_than_ttl() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
-        assert!(!file_older_than(tmp.path(), CHANNEL_CACHE_TTL));
-    }
-
-    #[test]
     fn refresh_attempt_is_throttled_by_marker() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = tmp.path().join("latest-commit.json");
         // Cache missing and no marker: attempt allowed, marker gets created.
-        assert!(should_attempt_refresh(&cache));
-        assert!(refresh_marker_path(&cache).exists());
+        assert!(baml_release::skills::should_attempt_refresh(
+            &cache,
+            CHANNEL_CACHE_TTL
+        ));
         // Fresh marker: no retry within the TTL window.
-        assert!(!should_attempt_refresh(&cache));
+        assert!(!baml_release::skills::should_attempt_refresh(
+            &cache,
+            CHANNEL_CACHE_TTL
+        ));
     }
 
     #[test]

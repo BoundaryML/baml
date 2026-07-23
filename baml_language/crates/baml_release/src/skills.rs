@@ -167,7 +167,9 @@ pub fn should_attempt_latest_commit_refresh() -> bool {
     should_attempt_refresh(&latest_skill_commit_cache_path(), LATEST_COMMIT_CACHE_TTL)
 }
 
-fn should_attempt_refresh(cache_path: &Path, ttl: Duration) -> bool {
+/// Returns whether a cache is due for a refresh attempt and creates its
+/// attempt marker before returning `true`.
+pub fn should_attempt_refresh(cache_path: &Path, ttl: Duration) -> bool {
     let marker = refresh_marker_path(cache_path);
     if !file_older_than(cache_path, ttl) || !file_older_than(&marker, ttl) {
         return false;
@@ -514,6 +516,21 @@ mod tests {
         assert!(refresh_marker_path(&cache).exists());
         // Fresh marker: no retry within the TTL window.
         assert!(!should_attempt_refresh(&cache, LATEST_COMMIT_CACHE_TTL));
+    }
+
+    #[test]
+    fn missing_file_counts_as_older_than_ttl() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(file_older_than(
+            &tmp.path().join("missing"),
+            LATEST_COMMIT_CACHE_TTL
+        ));
+    }
+
+    #[test]
+    fn fresh_file_is_not_older_than_ttl() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        assert!(!file_older_than(tmp.path(), LATEST_COMMIT_CACHE_TTL));
     }
 
     #[test]
