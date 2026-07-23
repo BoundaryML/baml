@@ -2199,6 +2199,12 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::Class(qtn, args, _) => self
                 .interface_view_for_class_tir_ty(qtn, args, target_tn)
                 .or_else(|| self.realized_interface_view_for(ty, target_tn)),
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.interface_view_for_tir_ty(target, target_tn))
+                .or_else(|| self.realized_interface_view_for(ty, target_tn)),
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
@@ -12089,6 +12095,10 @@ impl LoweringContext<'_> {
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
+                // A projection assignment may use an arbitrary expression as
+                // its base (`store.require().info.title = ...`). Materialize
+                // that base exactly once before projecting through it.
+                self.lower_expr(expr_id, Place::Local(temp));
                 Place::Local(temp)
             }
         }
