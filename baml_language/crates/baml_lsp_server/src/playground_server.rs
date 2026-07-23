@@ -37,8 +37,8 @@ use bex_events::{
         AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
         DiagnosticSeverity, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
         ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
-        RunErrorClass, RunFilter, RunKind, RunOutcome, RunPatch, RunResult, RunSubscription,
-        RunTarget, RunVisibilityFilter, StartedHostRun,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
+        RunVisibilityFilter, StartedHostRun,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -758,7 +758,10 @@ fn append_capture_loss_record(
             reason: CaptureLossReason::QueueFull,
             skipped_count: skipped,
             call: None,
-            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
+            message: Some(RunDiagnostic::value_capture_loss_message(
+                kind.as_wire_str(),
+                skipped,
+            )),
             timestamp_ms: epoch_ms(),
         },
     )
@@ -804,34 +807,10 @@ fn broadcast_value_capture_loss_diagnostic(
     skipped: u64,
 ) {
     if let Some(patch) =
-        value_capture_loss_diagnostic_patch(run_store, boundary_id, capture_kind, skipped)
+        run_store.add_value_capture_loss_diagnostic(boundary_id, capture_kind, skipped)
     {
         broadcast_run_patch(broadcast_tx, &patch);
     }
-}
-
-fn value_capture_loss_diagnostic_patch(
-    run_store: &InMemoryRunStore,
-    boundary_id: BoundaryId,
-    capture_kind: &str,
-    skipped: u64,
-) -> Option<RunPatch> {
-    run_store.add_diagnostic(
-        boundary_id,
-        RunDiagnostic {
-            severity: DiagnosticSeverity::Warning,
-            code: Some("valueCaptureLoss".to_string()),
-            message: capture_loss_message(capture_kind, skipped),
-            call_node_id: None,
-            payload_id: None,
-        },
-    )
-}
-
-fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
-    format!(
-        "Skipped {skipped} captured {capture_kind} value(s) because the trace capture queue was full"
-    )
 }
 
 #[derive(Clone, Debug)]
@@ -3068,8 +3047,16 @@ mod tests {
             .find(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
             .expect("capture loss should be recorded live");
         assert_eq!(
-            diagnostic.message,
-            "Skipped 1 captured value value(s) because the trace capture queue was full"
+            diagnostic,
+            &RunDiagnostic {
+                severity: DiagnosticSeverity::Warning,
+                code: Some("valueCaptureLoss".to_string()),
+                message:
+                    "Skipped 1 captured value value(s) because the trace capture queue was full"
+                        .to_string(),
+                call_node_id: None,
+                payload_id: None,
+            }
         );
 
         let patch = broadcast_rx

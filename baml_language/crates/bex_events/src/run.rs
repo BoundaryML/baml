@@ -632,6 +632,32 @@ pub struct RunDiagnostic {
     pub payload_id: Option<PayloadId>,
 }
 
+impl RunDiagnostic {
+    #[must_use]
+    pub fn value_capture_loss(
+        capture_kind: &str,
+        skipped: u64,
+        message: Option<String>,
+        call_node_id: Option<CallNodeId>,
+    ) -> Self {
+        Self {
+            severity: DiagnosticSeverity::Warning,
+            code: Some("valueCaptureLoss".to_string()),
+            message: message
+                .unwrap_or_else(|| Self::value_capture_loss_message(capture_kind, skipped)),
+            call_node_id,
+            payload_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn value_capture_loss_message(capture_kind: &str, skipped: u64) -> String {
+        format!(
+            "Skipped {skipped} captured {capture_kind} value(s) because the trace capture queue was full"
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Run {
     pub boundary_id: BoundaryId,
@@ -1312,6 +1338,18 @@ impl InMemoryRunStore {
             &retention,
             vec![RunPatchChange::UpsertDiagnostic(diagnostic)],
         ))
+    }
+
+    pub fn add_value_capture_loss_diagnostic(
+        &self,
+        boundary_id: BoundaryId,
+        capture_kind: &str,
+        skipped: u64,
+    ) -> Option<RunPatch> {
+        self.add_diagnostic(
+            boundary_id,
+            RunDiagnostic::value_capture_loss(capture_kind, skipped, None, None),
+        )
     }
 
     pub fn ingest_payload(
@@ -3751,6 +3789,38 @@ pub mod bamlprof {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn value_capture_loss_diagnostic_preserves_fallback_and_overrides() {
+        assert_eq!(
+            RunDiagnostic::value_capture_loss("log", 3, None, None),
+            RunDiagnostic {
+                severity: DiagnosticSeverity::Warning,
+                code: Some("valueCaptureLoss".to_string()),
+                message: "Skipped 3 captured log value(s) because the trace capture queue was full"
+                    .to_string(),
+                call_node_id: None,
+                payload_id: None,
+            }
+        );
+
+        let call_node_id = CallNodeId(17);
+        assert_eq!(
+            RunDiagnostic::value_capture_loss(
+                "value",
+                9,
+                Some("custom capture-loss message".to_string()),
+                Some(call_node_id),
+            ),
+            RunDiagnostic {
+                severity: DiagnosticSeverity::Warning,
+                code: Some("valueCaptureLoss".to_string()),
+                message: "custom capture-loss message".to_string(),
+                call_node_id: Some(call_node_id),
+                payload_id: None,
+            }
+        );
+    }
 
     #[test]
     fn run_contract_keeps_identity_spaces_separate() {

@@ -1206,18 +1206,12 @@ fn boundary_id_from_dir_name(dir: &Path) -> Option<BoundaryId> {
 }
 
 fn capture_loss_replay_diagnostic(record: CaptureLossRecord) -> RunDiagnostic {
-    let mut diagnostic = history_diagnostic(
-        "valueCaptureLoss",
-        record.message.unwrap_or_else(|| {
-            format!(
-                "Skipped {} captured {} value(s) because the trace capture queue was full",
-                record.skipped_count,
-                record.kind.as_wire_str()
-            )
-        }),
-    );
-    diagnostic.call_node_id = record.call.map(|call| call_node_id(&call));
-    diagnostic
+    RunDiagnostic::value_capture_loss(
+        record.kind.as_wire_str(),
+        record.skipped_count,
+        record.message,
+        record.call.map(|call| call_node_id(&call)),
+    )
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -2344,11 +2338,8 @@ mod tests {
                     kind: CaptureLossKind::Log,
                     reason: CaptureLossReason::QueueFull,
                     skipped_count: 4,
-                    call: None,
-                    message: Some(
-                        "Skipped 4 captured log value(s) because the trace capture queue was full"
-                            .to_string(),
-                    ),
+                    call: Some(trace),
+                    message: Some("custom persisted capture-loss message".to_string()),
                     timestamp_ms: 30,
                 },
             )
@@ -2372,10 +2363,15 @@ mod tests {
             .find(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
             .expect("capture loss should replay as diagnostic");
         assert_eq!(
-            diagnostic.message,
-            "Skipped 4 captured log value(s) because the trace capture queue was full"
+            diagnostic,
+            &RunDiagnostic {
+                severity: DiagnosticSeverity::Warning,
+                code: Some("valueCaptureLoss".to_string()),
+                message: "custom persisted capture-loss message".to_string(),
+                call_node_id: Some(call_node_id(&trace)),
+                payload_id: None,
+            }
         );
-        assert_eq!(diagnostic.call_node_id, None);
 
         let _ = std::fs::remove_dir_all(project);
     }

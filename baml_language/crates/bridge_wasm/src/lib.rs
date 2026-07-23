@@ -81,10 +81,9 @@ use bex_events::{
         AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
         EnvResolutionStatus, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
         ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
-        RunErrorClass, RunFilter, RunKind, RunOutcome, RunPatch, RunRequestState, RunResult,
-        RunSubscription, RunSummary, RunTarget, RunVisibilityFilter, RuntimeTarget,
-        StartRunContext, StartedHostRun, TraceCallKey, patch_to_wire, run_summary_to_wire,
-        run_to_wire,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription,
+        RunSummary, RunTarget, RunVisibilityFilter, RuntimeTarget, StartRunContext, StartedHostRun,
+        TraceCallKey, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -2067,7 +2066,10 @@ fn append_wasm_capture_loss_record(
             reason: CaptureLossReason::QueueFull,
             skipped_count: skipped,
             call: None,
-            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
+            message: Some(RunDiagnostic::value_capture_loss_message(
+                kind.as_wire_str(),
+                skipped,
+            )),
             timestamp_ms: epoch_ms(),
         },
     )
@@ -2133,34 +2135,10 @@ fn send_value_capture_loss_diagnostic(
     skipped: u64,
 ) {
     if let Some(patch) =
-        value_capture_loss_diagnostic_patch(run_store, boundary_id, capture_kind, skipped)
+        run_store.add_value_capture_loss_diagnostic(boundary_id, capture_kind, skipped)
     {
         send_run_patch(callback, &patch);
     }
-}
-
-fn value_capture_loss_diagnostic_patch(
-    run_store: &InMemoryRunStore,
-    boundary_id: BoundaryId,
-    capture_kind: &str,
-    skipped: u64,
-) -> Option<RunPatch> {
-    run_store.add_diagnostic(
-        boundary_id,
-        RunDiagnostic {
-            severity: bex_events::run::DiagnosticSeverity::Warning,
-            code: Some("valueCaptureLoss".to_string()),
-            message: capture_loss_message(capture_kind, skipped),
-            call_node_id: None,
-            payload_id: None,
-        },
-    )
-}
-
-fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
-    format!(
-        "Skipped {skipped} captured {capture_kind} value(s) because the trace capture queue was full"
-    )
 }
 
 fn runtime_error_outcome_with_ref(
@@ -2282,20 +2260,21 @@ mod history_tests {
             },
         );
 
-        let patch = value_capture_loss_diagnostic_patch(
-            &run_store,
-            boundary_id,
-            "value",
-            stats.skipped_value_queue_full,
-        )
-        .expect("live capture-loss diagnostic should produce a patch");
+        let patch = run_store
+            .add_value_capture_loss_diagnostic(boundary_id, "value", stats.skipped_value_queue_full)
+            .expect("live capture-loss diagnostic should produce a patch");
+        let expected = RunDiagnostic {
+            severity: bex_events::run::DiagnosticSeverity::Warning,
+            code: Some("valueCaptureLoss".to_string()),
+            message: "Skipped 1 captured value value(s) because the trace capture queue was full"
+                .to_string(),
+            call_node_id: None,
+            payload_id: None,
+        };
         assert!(
-            patch.changes.iter().any(|change| matches!(
-                change,
-                RunPatchChange::UpsertDiagnostic(diagnostic)
-                    if diagnostic.code.as_deref() == Some("valueCaptureLoss")
-                        && diagnostic.message == "Skipped 1 captured value value(s) because the trace capture queue was full"
-            )),
+            patch
+                .changes
+                .contains(&RunPatchChange::UpsertDiagnostic(expected.clone())),
             "expected valueCaptureLoss diagnostic patch, got {patch:#?}"
         );
         assert!(
@@ -2303,8 +2282,7 @@ mod history_tests {
                 .snapshot(boundary_id)
                 .expect("run should exist")
                 .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
+                .contains(&expected)
         );
     }
 
