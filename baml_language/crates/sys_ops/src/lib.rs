@@ -784,11 +784,12 @@ mod schema {
                 RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
                 RuntimeTy::Class(name, _, _) => self.class_ref(name),
                 RuntimeTy::TypeAlias(name, _) => {
-                    if let Some(target) = find_type_alias_definition(self.ctx, name) {
-                        self.ty_schema(&target.clone())
-                    } else {
-                        Ok(json!({}))
-                    }
+                    let target = find_type_alias_definition(self.ctx, name)
+                        .cloned()
+                        .ok_or_else(|| {
+                            format!("json_schema: unknown type alias `{}`", name.display_name())
+                        })?;
+                    self.ty_schema(&target)
                 }
                 RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
                 other => Err(format!(

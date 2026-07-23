@@ -2462,7 +2462,7 @@ impl io::IoClassWsWsStream for NativeSysOps {
         stream: owned::ws::WsStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        use futures::StreamExt;
+        use futures::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message;
 
         SysOpOutput::async_op(async move {
@@ -2472,7 +2472,7 @@ impl io::IoClassWsWsStream for NativeSysOps {
                 .map_err(|_| VmBamlError::DevOther {
                     message: "Invalid WebSocket stream handle type".into(),
                 })?;
-            let (_, source) = crate::registry::REGISTRY
+            let (sink, source) = crate::registry::REGISTRY
                 .get_ws_stream(handle.key())
                 .ok_or_else(|| VmBamlError::DevOther {
                     message: "WebSocket stream handle is invalid".into(),
@@ -2487,7 +2487,16 @@ impl io::IoClassWsWsStream for NativeSysOps {
                         return Ok(Some(String::from_utf8_lossy(&bytes).into_owned()));
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(None),
-                    Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
+                    Some(Ok(Message::Ping(payload))) => {
+                        sink.lock()
+                            .await
+                            .send(Message::Pong(payload))
+                            .await
+                            .map_err(|error| VmBamlError::Io {
+                                message: format!("WebSocket pong failed: {error}"),
+                            })?;
+                    }
+                    Some(Ok(Message::Pong(_) | Message::Frame(_))) => {}
                     Some(Err(error)) => {
                         return Err(VmBamlError::Io {
                             message: format!("WebSocket receive failed: {error}"),
