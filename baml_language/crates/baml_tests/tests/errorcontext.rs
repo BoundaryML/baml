@@ -411,3 +411,75 @@ function main() -> string {
         "expected two chain separators (origin->wrap->cleanup):\n{rendered}"
     );
 }
+
+/// ErrorContext rendering runs inside a native call, so it cannot yield to
+/// user `ToString` implementations. It must still preserve the qualified
+/// thrown class name and recursively render its fields.
+#[tokio::test]
+async fn class_error_renders_qualified_name_and_structural_fields() {
+    let output = baml_test!(
+        r#"
+class Detail {
+  label string
+
+  implements baml.ToString {
+    function to_string(self) -> string throws never { "DETAIL OVERRIDE" }
+  }
+}
+
+class AppError {
+  message string
+  detail Detail
+
+  implements baml.ToString {
+    function to_string(self) -> string throws never { "ERROR OVERRIDE" }
+  }
+}
+
+function main() -> string {
+  (
+    throw AppError {
+      message: "boom",
+      detail: Detail { label: "visible" },
+    }
+  ) catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    assert!(
+        rendered
+            .contains(r#"user.AppError {message: "boom", detail: Detail { label: "visible" }}"#),
+        "class error lost its identity or fields:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("OVERRIDE"),
+        "ErrorContext unexpectedly dispatched a user ToString override:\n{rendered}"
+    );
+}
+
+/// Arbitrary thrown values are legal. Their context should retain the value's
+/// structural representation rather than replacing it with `<error>`.
+#[tokio::test]
+async fn non_class_error_renders_structurally() {
+    let output = baml_test!(
+        r#"
+function main() -> string {
+  (throw {"first": "alpha", "second": "beta"}) catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    assert!(
+        rendered.contains(r#"{"first": "alpha", "second": "beta"}"#),
+        "non-class error was not rendered structurally:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("<error>"),
+        "non-class error fell back to the old placeholder:\n{rendered}"
+    );
+}

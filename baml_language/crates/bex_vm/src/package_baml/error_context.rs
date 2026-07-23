@@ -12,9 +12,9 @@ use bex_vm_types::types::{Object, Value};
 use super::{BamlClassErrorsErrorContext, BamlClassErrorsStackTrace, PackageBamlImpl, view};
 use crate::BexVm;
 
-/// Render a thrown error value for the chain trace: a string is its own
-/// message; an error instance shows its class name (Python's `Type`); anything
-/// else falls back to a placeholder.
+/// Render a thrown error value for the chain trace. Error instances retain
+/// their qualified class name and fields so a caught-and-reported test failure
+/// is as actionable as an error escaping directly from `baml run`.
 fn render_error_value(vm: &BexVm, value: Value) -> String {
     if let Ok(message) = vm.as_string(&value) {
         return message.to_string();
@@ -23,9 +23,24 @@ fn render_error_value(vm: &BexVm, value: Value) -> String {
         && let Object::Instance(instance) = vm.get_object(ptr)
         && let Object::Class(class) = vm.get_object(instance.class)
     {
-        return class.name.to_string();
+        let fields = class
+            .fields
+            .iter()
+            .zip(instance.fields.iter())
+            .map(|(field, value)| {
+                format!(
+                    "{}: {}",
+                    field.name,
+                    super::root::render_value_structural(vm, value.load(), true)
+                )
+            })
+            .collect::<Vec<_>>();
+        if fields.is_empty() {
+            return class.name.to_string();
+        }
+        return format!("{} {{{}}}", class.name, fields.join(", "));
     }
-    "<error>".to_string()
+    super::root::render_value_structural(vm, value, false)
 }
 
 const CHAIN_SEPARATOR: &str = "\n\nDuring handling of the above error, another error occurred:\n\n";

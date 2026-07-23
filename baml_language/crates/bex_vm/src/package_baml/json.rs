@@ -861,8 +861,14 @@ fn ty_value_to_serde(
 
         RealizedTy::Union(_, _) => {
             // Tagged structurally — dispatch on the runtime Value shape rather
-            // than trying each member. Matches json-alias union semantics.
-            Ok(value_to_serde(vm, value))
+            // than trying each member. `value_to_serde` is intentionally only
+            // an untyped-json converter; although it already handles enum
+            // variants, class and media instances become null. Use the complete
+            // structural walker so every representable runtime shape survives.
+            // Empty override tables preserve typed `to_string`'s canonical
+            // behavior: custom `ToJson` implementations are not invoked.
+            let mut counter = 0;
+            render_to_serde(vm, value, &[], &[], &mut counter, path)
         }
 
         RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => Err(raise_serialize(
