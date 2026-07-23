@@ -165,111 +165,89 @@ pub unsafe extern "C" fn __testonly_seed_generic_media(
     )
 }
 
+unsafe fn media_handle(
+    kind: i32,
+    source: *const libc::c_char,
+    mime: *const libc::c_char,
+    out_key: *mut u64,
+    out_type: *mut i32,
+    constructor: fn(MediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>,
+) -> BamlCffiStatus {
+    if source.is_null() || out_key.is_null() || out_type.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    let Some(kind) = media_kind_from_proto(kind) else {
+        return BamlCffiStatus::UnsupportedHandleType;
+    };
+    let source = match unsafe { CStr::from_ptr(source) }.to_str() {
+        Ok(source) => source,
+        Err(_) => return BamlCffiStatus::InternalError,
+    };
+    let mime_type = if mime.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(mime) }.to_str() {
+            Ok(mime_type) => Some(mime_type),
+            Err(_) => return BamlCffiStatus::InternalError,
+        }
+    };
+    match constructor(kind, source, mime_type) {
+        Ok(parts) => write_handle_parts(parts, out_key, out_type),
+        Err(error) => error.into(),
+    }
+}
+
 /// # Safety
-/// `url` and `mime_type_or_null`, when non-null, must point to valid
-/// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
-/// null or valid for writing one value of their pointee type.
+/// `url` and `mime`, when non-null, must point to valid NUL-terminated C
+/// strings. `out_key` and `out_type` must be either null or valid for
+/// writing one value of their pointee type.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_media_from_url(
-    media_kind: i32,
+    kind: i32,
     url: *const libc::c_char,
-    mime_type_or_null: *const libc::c_char,
+    mime: *const libc::c_char,
     out_key: *mut u64,
-    out_handle_type: *mut i32,
+    out_type: *mut i32,
 ) -> BamlCffiStatus {
-    if url.is_null() || out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    let Some(kind) = media_kind_from_proto(media_kind) else {
-        return BamlCffiStatus::UnsupportedHandleType;
-    };
-    let url = match unsafe { CStr::from_ptr(url) }.to_str() {
-        Ok(url) => url,
-        Err(_) => return BamlCffiStatus::InternalError,
-    };
-    let mime_type = if mime_type_or_null.is_null() {
-        None
-    } else {
-        match unsafe { CStr::from_ptr(mime_type_or_null) }.to_str() {
-            Ok(mime_type) => Some(mime_type),
-            Err(_) => return BamlCffiStatus::InternalError,
-        }
-    };
-    match handle::media_from_url(kind, url, mime_type) {
-        Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
-        Err(error) => error.into(),
-    }
+    unsafe { media_handle(kind, url, mime, out_key, out_type, handle::media_from_url) }
 }
 
 /// # Safety
-/// `path` and `mime_type_or_null`, when non-null, must point to valid
-/// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
-/// null or valid for writing one value of their pointee type.
+/// `path` and `mime`, when non-null, must point to valid NUL-terminated C
+/// strings. `out_key` and `out_type` must be either null or valid for
+/// writing one value of their pointee type.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_media_from_file(
-    media_kind: i32,
+    kind: i32,
     path: *const libc::c_char,
-    mime_type_or_null: *const libc::c_char,
+    mime: *const libc::c_char,
     out_key: *mut u64,
-    out_handle_type: *mut i32,
+    out_type: *mut i32,
 ) -> BamlCffiStatus {
-    if path.is_null() || out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    let Some(kind) = media_kind_from_proto(media_kind) else {
-        return BamlCffiStatus::UnsupportedHandleType;
-    };
-    let path = match unsafe { CStr::from_ptr(path) }.to_str() {
-        Ok(path) => path,
-        Err(_) => return BamlCffiStatus::InternalError,
-    };
-    let mime_type = if mime_type_or_null.is_null() {
-        None
-    } else {
-        match unsafe { CStr::from_ptr(mime_type_or_null) }.to_str() {
-            Ok(mime_type) => Some(mime_type),
-            Err(_) => return BamlCffiStatus::InternalError,
-        }
-    };
-    match handle::media_from_file(kind, path, mime_type) {
-        Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
-        Err(error) => error.into(),
-    }
+    unsafe { media_handle(kind, path, mime, out_key, out_type, handle::media_from_file) }
 }
 
 /// # Safety
-/// `base64` and `mime_type_or_null`, when non-null, must point to valid
-/// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
-/// null or valid for writing one value of their pointee type.
+/// `base64` and `mime`, when non-null, must point to valid NUL-terminated C
+/// strings. `out_key` and `out_type` must be either null or valid for
+/// writing one value of their pointee type.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_media_from_base64(
-    media_kind: i32,
+    kind: i32,
     base64: *const libc::c_char,
-    mime_type_or_null: *const libc::c_char,
+    mime: *const libc::c_char,
     out_key: *mut u64,
-    out_handle_type: *mut i32,
+    out_type: *mut i32,
 ) -> BamlCffiStatus {
-    if base64.is_null() || out_key.is_null() || out_handle_type.is_null() {
-        return BamlCffiStatus::UnexpectedNullptr;
-    }
-    let Some(kind) = media_kind_from_proto(media_kind) else {
-        return BamlCffiStatus::UnsupportedHandleType;
-    };
-    let base64 = match unsafe { CStr::from_ptr(base64) }.to_str() {
-        Ok(base64) => base64,
-        Err(_) => return BamlCffiStatus::InternalError,
-    };
-    let mime_type = if mime_type_or_null.is_null() {
-        None
-    } else {
-        match unsafe { CStr::from_ptr(mime_type_or_null) }.to_str() {
-            Ok(mime_type) => Some(mime_type),
-            Err(_) => return BamlCffiStatus::InternalError,
-        }
-    };
-    match handle::media_from_base64(kind, base64, mime_type) {
-        Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
-        Err(error) => error.into(),
+    unsafe {
+        media_handle(
+            kind,
+            base64,
+            mime,
+            out_key,
+            out_type,
+            handle::media_from_base64,
+        )
     }
 }
 
@@ -349,6 +327,12 @@ mod tests {
 
     use super::*;
 
+    const MEDIA_CONSTRUCTORS: [crate::api::BamlMediaConstructorFn; 3] = [
+        baml_media_from_url,
+        baml_media_from_file,
+        baml_media_from_base64,
+    ];
+
     #[test]
     fn clone_reports_unexpected_nullptr_for_null_out_key() {
         assert_eq!(
@@ -374,46 +358,157 @@ mod tests {
 
     #[test]
     fn media_constructor_reports_unexpected_nullptr_for_required_null_pointers() {
-        let url = CString::new("https://example.com/image.png").unwrap();
-        let mut key = 0;
-        let mut handle_type = 0;
+        let source = CString::new("source").unwrap();
+        for constructor in MEDIA_CONSTRUCTORS {
+            let mut key = 11;
+            let mut handle_type = 12;
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        i32::MAX,
+                        ptr::null(),
+                        ptr::null(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::UnexpectedNullptr
+            );
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        MediaTypeEnum::Image as i32,
+                        source.as_ptr(),
+                        ptr::null(),
+                        ptr::null_mut(),
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::UnexpectedNullptr
+            );
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        MediaTypeEnum::Image as i32,
+                        source.as_ptr(),
+                        ptr::null(),
+                        &mut key,
+                        ptr::null_mut(),
+                    )
+                },
+                BamlCffiStatus::UnexpectedNullptr
+            );
+            assert_eq!((key, handle_type), (11, 12));
+        }
+    }
 
-        assert_eq!(
-            unsafe {
-                baml_media_from_url(
-                    MediaTypeEnum::Image as i32,
-                    ptr::null(),
-                    ptr::null(),
-                    &mut key,
-                    &mut handle_type,
-                )
-            },
-            BamlCffiStatus::UnexpectedNullptr
-        );
-        assert_eq!(
-            unsafe {
-                baml_media_from_url(
-                    MediaTypeEnum::Image as i32,
-                    url.as_ptr(),
-                    ptr::null(),
-                    ptr::null_mut(),
-                    &mut handle_type,
-                )
-            },
-            BamlCffiStatus::UnexpectedNullptr
-        );
-        assert_eq!(
-            unsafe {
-                baml_media_from_url(
-                    MediaTypeEnum::Image as i32,
-                    url.as_ptr(),
-                    ptr::null(),
-                    &mut key,
-                    ptr::null_mut(),
-                )
-            },
-            BamlCffiStatus::UnexpectedNullptr
-        );
+    #[test]
+    fn media_constructors_preserve_validation_order() {
+        let source = CString::new("source").unwrap();
+        let invalid_utf8 = [0xff_u8, 0];
+
+        for constructor in MEDIA_CONSTRUCTORS {
+            let mut key = 11;
+            let mut handle_type = 12;
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        i32::MAX,
+                        invalid_utf8.as_ptr().cast(),
+                        invalid_utf8.as_ptr().cast(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::UnsupportedHandleType
+            );
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        MediaTypeEnum::Image as i32,
+                        invalid_utf8.as_ptr().cast(),
+                        ptr::null(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::InternalError
+            );
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        MediaTypeEnum::Image as i32,
+                        source.as_ptr(),
+                        invalid_utf8.as_ptr().cast(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::InternalError
+            );
+            assert_eq!((key, handle_type), (11, 12));
+        }
+    }
+
+    #[test]
+    fn media_constructors_create_the_requested_source_variant() {
+        enum SourceKind {
+            Url,
+            File,
+            Base64,
+        }
+
+        let cases = [
+            (
+                baml_media_from_url as crate::api::BamlMediaConstructorFn,
+                SourceKind::Url,
+                "https://example.com/image.png",
+            ),
+            (
+                baml_media_from_file as crate::api::BamlMediaConstructorFn,
+                SourceKind::File,
+                "/tmp/image.png",
+            ),
+            (
+                baml_media_from_base64 as crate::api::BamlMediaConstructorFn,
+                SourceKind::Base64,
+                "aGVsbG8=",
+            ),
+        ];
+        let mime = CString::new("image/png").unwrap();
+
+        for (constructor, source_kind, expected) in cases {
+            let source = CString::new(expected).unwrap();
+            let mut key = 0;
+            let mut handle_type = 0;
+            assert_eq!(
+                unsafe {
+                    constructor(
+                        MediaTypeEnum::Image as i32,
+                        source.as_ptr(),
+                        mime.as_ptr(),
+                        &mut key,
+                        &mut handle_type,
+                    )
+                },
+                BamlCffiStatus::Ok
+            );
+            let actual = match source_kind {
+                SourceKind::Url => handle::media_url(key, handle_type)
+                    .unwrap()
+                    .expect("expected URL media"),
+                SourceKind::File => handle::media_file(key, handle_type)
+                    .unwrap()
+                    .expect("expected file media"),
+                SourceKind::Base64 => handle::media_base64(key, handle_type).unwrap(),
+            };
+            assert_eq!(actual, expected);
+            assert_eq!(
+                handle::media_mime_type(key, handle_type).unwrap(),
+                Some("image/png".to_string())
+            );
+            handle::release_handle(key).unwrap();
+        }
     }
 
     #[test]
