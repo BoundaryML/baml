@@ -8,6 +8,9 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+use baml_codegen_types::{
+    GeneratedOutputFile, OUTPUT_MANIFEST_FILE, OutputWriterError, write_generated_output,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -93,6 +96,7 @@ pub enum TransactionError {
         backup: PathBuf,
     },
     ManifestSerialization(serde_json::Error),
+    OutputWriter(OutputWriterError),
 }
 
 impl fmt::Display for TransactionError {
@@ -149,6 +153,7 @@ impl fmt::Display for TransactionError {
             Self::ManifestSerialization(source) => {
                 write!(f, "serialize generation manifest: {source}")
             }
+            Self::OutputWriter(source) => source.fmt(f),
         }
     }
 }
@@ -159,6 +164,7 @@ impl std::error::Error for TransactionError {
             Self::Io { source, .. } => Some(source),
             Self::ReplacementRollbackFailed { replacement, .. } => Some(replacement),
             Self::ManifestSerialization(source) => Some(source),
+            Self::OutputWriter(source) => Some(source),
             _ => None,
         }
     }
@@ -397,27 +403,22 @@ fn write_staging_tree(
 ) -> Result<(), TransactionError> {
     fs::create_dir(staging)
         .map_err(|source| io_error("create staging directory", staging, source))?;
-    let marker = staging.join(STAGING_MARKER);
-    fs::write(&marker, STAGING_MARKER_CONTENT)
-        .map_err(|source| io_error("write staging marker", &marker, source))?;
-
     let result = (|| {
-        for file in &tree.files {
-            let destination = staging.join(&file.relative_path);
-            let parent = destination
-                .parent()
-                .expect("validated generated path has a parent");
-            fs::create_dir_all(parent)
-                .map_err(|source| io_error("create generated directory", parent, source))?;
-            fs::write(&destination, &file.contents)
-                .map_err(|source| io_error("write generated source", &destination, source))?;
-        }
+        let output = tree
+            .files
+            .iter()
+            .map(|file| GeneratedOutputFile::new(file.relative_path.clone(), file.contents.clone()))
+            .collect();
+        write_generated_output(staging, output).map_err(TransactionError::OutputWriter)?;
         let mut json = serde_json::to_string_pretty(manifest)
             .map_err(TransactionError::ManifestSerialization)?;
         json.push('\n');
         let path = staging.join(MANIFEST_FILE);
         fs::write(&path, json)
-            .map_err(|source| io_error("write generation manifest", &path, source))
+            .map_err(|source| io_error("write generation manifest", &path, source))?;
+        let marker = staging.join(STAGING_MARKER);
+        fs::write(&marker, STAGING_MARKER_CONTENT)
+            .map_err(|source| io_error("write staging marker", &marker, source))
     })();
 
     if result.is_err() {
@@ -493,7 +494,11 @@ fn collect_staged_files(
                 .strip_prefix(staging)
                 .expect("staged entry is below staging root");
             let portable = portable_path(relative);
-            if portable != MANIFEST_FILE && portable != STAGING_MARKER {
+            if portable != MANIFEST_FILE
+                && portable != OUTPUT_MANIFEST_FILE
+                && portable != ".gitignore"
+                && portable != STAGING_MARKER
+            {
                 files.push(portable);
             }
         } else {
@@ -732,6 +737,10 @@ mod tests {
         let manifest = commit_generated_tree(root.path(), output, &first).unwrap();
         let manifest_bytes = fs::read(root.path().join(output).join(MANIFEST_FILE)).unwrap();
         assert_eq!(manifest.files.len(), 2);
+        assert_eq!(
+            fs::read_to_string(root.path().join(output).join(".gitignore")).unwrap(),
+            baml_codegen_types::GENERATED_GITIGNORE
+        );
 
         commit_generated_tree(root.path(), output, &first).unwrap();
         assert_eq!(

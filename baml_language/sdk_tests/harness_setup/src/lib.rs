@@ -32,7 +32,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_codegen_types::SymbolPool;
+use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
@@ -108,6 +108,27 @@ impl BuildDiagnostics {
                 path.display()
             )
         });
+    }
+}
+
+/// Install an SDK generator's complete output through the same filesystem
+/// transaction used by `baml generate`.
+pub(crate) fn write_codegen_output<C>(
+    output_directory: &Path,
+    output: impl IntoIterator<Item = (PathBuf, C)>,
+    fixture: &str,
+    diagnostics: &mut BuildDiagnostics,
+) where
+    C: AsRef<[u8]>,
+{
+    let files = output
+        .into_iter()
+        .map(|(relative_path, contents)| {
+            GeneratedOutputFile::new(relative_path, contents.as_ref().to_vec())
+        })
+        .collect();
+    if let Err(error) = write_generated_output(output_directory, files) {
+        diagnostics.record("codegen_write", fixture, error);
     }
 }
 

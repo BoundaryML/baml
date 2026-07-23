@@ -40,7 +40,7 @@ use sdkgen_swift::NamingConvention;
 
 use crate::{
     BuildDiagnostics, copy_customizable, discover_fixtures, emit_cargo_line,
-    fixtures_root_from_manifest, load_fixture, watch_dir,
+    fixtures_root_from_manifest, load_fixture, watch_dir, write_codegen_output,
 };
 
 /// Per-fixture Package.swift. `__PACKAGE_NAME__` is substituted per
@@ -152,28 +152,7 @@ fn codegen_fixture(
         )
     }));
     match codegen_result {
-        Ok(output) => {
-            for (rel, content) in output {
-                let path = sources_baml.join(&rel);
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = fs::create_dir_all(parent) {
-                        diagnostics.record(
-                            "codegen_write",
-                            fixture,
-                            format!("create_dir_all {}: {e}", parent.display()),
-                        );
-                        continue;
-                    }
-                }
-                if let Err(e) = fs::write(&path, content) {
-                    diagnostics.record(
-                        "codegen_write",
-                        fixture,
-                        format!("write {}: {e}", path.display()),
-                    );
-                }
-            }
-        }
+        Ok(output) => write_codegen_output(&sources_baml, output, fixture, diagnostics),
         Err(_) => {
             diagnostics.record(
                 "codegen",

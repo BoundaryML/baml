@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use baml_codegen_types::{GeneratedOutputFile, write_generated_output};
 use baml_db::{
     FileId, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
@@ -298,24 +299,17 @@ impl GenerateArgs {
                 OutputType::CSharp => unreachable!("C# generation commits atomically above"),
             };
 
-            std::fs::create_dir_all(&output_dir).with_context(|| {
+            let output = generated
+                .into_iter()
+                .map(|(path, contents)| GeneratedOutputFile::new(path, contents))
+                .collect();
+            let report = write_generated_output(&output_dir, output).with_context(|| {
                 format!(
-                    "Failed to create output directory: {}",
+                    "Failed to install generated output in {}",
                     output_dir.display()
                 )
             })?;
-            let output_dir = std::fs::canonicalize(&output_dir).unwrap_or(output_dir);
-
-            let mut count = 0;
-            for (rel_path, content) in &generated {
-                let dest = output_dir.join(rel_path);
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(&dest, content)
-                    .with_context(|| format!("Failed to write {}", dest.display()))?;
-                count += 1;
-            }
+            let count = report.written_files.len();
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo

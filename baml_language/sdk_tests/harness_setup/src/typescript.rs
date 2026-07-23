@@ -13,7 +13,7 @@ use sdkgen_typescript_shared::sdkgen_typescript::{self, NamingConvention};
 
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
-    load_fixture, watch_dir,
+    load_fixture, watch_dir, write_codegen_output,
 };
 
 const PACKAGE_JSON_TEMPLATE: &str = include_str!("templates/package_node.json");
@@ -82,7 +82,7 @@ fn codegen_fixture(
         &loaded.baml_bytecode,
         NamingConvention::PreserveCase,
     );
-    write_codegen_output(node.join("baml_sdk"), output, fixture, diagnostics);
+    write_codegen_output(&node.join("baml_sdk"), output, fixture, diagnostics);
     if custom.exists() {
         copy_customizable(custom, &node);
     }
@@ -122,34 +122,6 @@ pub(crate) fn clean_generated(generated: &Path) {
             fs::remove_dir_all(&path).unwrap();
         } else {
             fs::remove_file(&path).unwrap();
-        }
-    }
-}
-
-pub(crate) fn write_codegen_output(
-    baml_sdk: PathBuf,
-    output: impl IntoIterator<Item = (PathBuf, String)>,
-    fixture: &str,
-    diagnostics: &mut BuildDiagnostics,
-) {
-    for (relative, content) in output {
-        let path = baml_sdk.join(relative);
-        if let Some(parent) = path.parent() {
-            if let Err(error) = fs::create_dir_all(parent) {
-                diagnostics.record(
-                    "codegen_write",
-                    fixture,
-                    format!("create_dir_all {}: {error}", parent.display()),
-                );
-                continue;
-            }
-        }
-        if let Err(error) = fs::write(&path, content) {
-            diagnostics.record(
-                "codegen_write",
-                fixture,
-                format!("write {}: {error}", path.display()),
-            );
         }
     }
 }

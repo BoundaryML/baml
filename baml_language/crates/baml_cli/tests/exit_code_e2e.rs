@@ -302,6 +302,50 @@ fn generate_go_writes_sdk_through_cli() {
         std::fs::read_to_string(tmp.path().join("baml_sdk/internal/bootstrap/bootstrap.go"))
             .expect("Go bootstrap should be generated");
     assert!(bootstrap.contains("func Ensure() error"));
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("baml_sdk/.gitignore")).unwrap(),
+        baml_codegen_types::GENERATED_GITIGNORE
+    );
+}
+
+#[test]
+fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_go_generator(
+        tmp.path(),
+        "class FormerType {\n  value: string\n}\n\nfunction echo(value: string) -> string { value }\n",
+    );
+
+    let first = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        first.status.success(),
+        "initial Go generation failed:\n{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let sdk = tmp.path().join("baml_sdk");
+    assert!(sdk.join("types.go").is_file());
+    std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
+
+    std::fs::write(
+        tmp.path().join("baml_src/main.baml"),
+        "function echo(value: string) -> string { value }\n",
+    )
+    .unwrap();
+    let second = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        second.status.success(),
+        "second Go generation failed:\n{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    assert!(
+        !sdk.join("types.go").exists(),
+        "types.go from the removed class must not survive regeneration"
+    );
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
+        "keep me"
+    );
 }
 
 // ============================================================================
