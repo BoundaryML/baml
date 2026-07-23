@@ -429,9 +429,13 @@ jobs:
           go-version-file: baml_language/sdks/go/baml_go/go.mod
           cache-dependency-path: baml_language/sdks/go/baml_go/go.sum
       - name: Assemble and test public module
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          scripts/assemble-go-sdk-mirror --out "$RUNNER_TEMP/go-sdk-mirror"
+          scripts/assemble-go-sdk-mirror \
+            --out "$RUNNER_TEMP/go-sdk-mirror" \
+            --version "$VERSION"
           cd "$RUNNER_TEMP/go-sdk-mirror"
           test "$(go list -m)" = "github.com/boundaryml/baml-go"
           go test ./...
@@ -1133,7 +1137,10 @@ jobs:
 
   publish-go-sdk:
     name: Publish Go SDK mirror
-    needs: [plan, build-go-sdk, all-builds]
+    # The exact-version runtime manifest must exist before the public Go tag:
+    # once a tag reaches proxy.golang.org it is immutable, while baml-go needs
+    # that manifest to resolve its native runtime on first use.
+    needs: [plan, build-go-sdk, all-builds, publish-pkg-boundaryml-com]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -1164,8 +1171,55 @@ jobs:
           set -euo pipefail
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
           tag="v$VERSION"
-          rsync -a --delete --exclude .git /tmp/go-sdk-package/ /tmp/baml-go/
+          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$VERSION.json"
+
+          # Do not expose an immutable Go module tag until the exact-version
+          # manifest it needs is live and identifies this same module version.
+          manifest="$(mktemp)"
+          for attempt in $(seq 1 10); do
+            if curl -fsSL "$manifest_url" -o "$manifest"; then
+              break
+            fi
+            if [[ "$attempt" == 10 ]]; then
+              echo "::error::release manifest is unavailable: $manifest_url"
+              exit 1
+            fi
+            sleep "$attempt"
+          done
+          jq -e \
+            --arg version "$VERSION" \
+            --arg module "github.com/boundaryml/baml-go" \
+            '
+              .version == $version
+              and .baml_bridge_go == {
+                "module": $module,
+                "version": ("v" + $version)
+              }
+              and (.cffi | type == "object" and length > 0)
+            ' "$manifest" >/dev/null
+          rm -f "$manifest"
+
+          # Artifact extraction and git clone can give same-sized files the
+          # same second-resolution mtime. Force content comparison so rsync
+          # cannot silently retain bytes from the preceding release.
+          rsync -a --checksum --delete --exclude .git /tmp/go-sdk-package/ /tmp/baml-go/
+          drift="$(
+            rsync -rcni --delete --exclude .git \
+              /tmp/go-sdk-package/ /tmp/baml-go/
+          )"
+          if [[ -n "$drift" ]]; then
+            echo "::error::mirror tree differs from the verified build artifact"
+            printf '%s\n' "$drift"
+            exit 1
+          fi
+
           cd /tmp/baml-go
+          test "$(sed -n '1p' go.mod)" = "module github.com/boundaryml/baml-go"
+          if ! grep -qxF "const DefaultRuntimeVersion = \"$VERSION\"" version.go; then
+            echo "::error::version.go is not stamped for $VERSION"
+            grep -n "DefaultRuntimeVersion" version.go || true
+            exit 1
+          fi
           git add -A
 
           if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
@@ -1374,8 +1428,11 @@ jobs:
 
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-go-sdk, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && needs.publish-go-sdk.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    # This precedes publish-go-sdk intentionally. The Go module dynamically
+    # resolves bridge_cffi through the immutable exact-version manifest, so the
+    # manifest is part of the module's publish preconditions, not a follow-up.
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1432,7 +1489,12 @@ jobs:
             --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
             --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
             "${args[@]}"
-      - name: Upload install scripts, index, and manifests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests
+          path: manifests
+          if-no-files-found: error
+      - name: Upload immutable manifest, install scripts, and index
         run: |
           set -euo pipefail
           upload_immutable() {
@@ -1470,11 +1532,7 @@ jobs:
           }
 
           version="${{ needs.plan.outputs.version }}"
-          channel="${{ needs.plan.outputs.channel }}"
           upload_immutable "manifests/version/$version.json" "manifest/v1/version/$version.json"
-          aws s3 cp "manifests/$channel.json" "s3://$PKG_BUCKET/manifest/v1/$channel.json" \
-            --content-type application/json \
-            --cache-control "public, max-age=60, must-revalidate"
           if [[ -f manifests/wrapper.json ]]; then
             aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
               --content-type application/json \
@@ -1548,9 +1606,37 @@ jobs:
           codesign --force --sign - "$bin"
           "$bin"
 
+  publish-pkg-channel:
+    name: Promote verified release channel manifest
+    # Keep the mutable canary/nightly pointer on the preceding known-good
+    # release until the public Go module resolves, loads its native runtime,
+    # and executes successfully on every supported desktop OS.
+    needs: [plan, publish-pkg-boundaryml-com, publish-go-sdk, smoke-go-release]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-manifests
+          path: manifests
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-language-channel-${{ github.run_id }}
+      - name: Promote mutable channel manifest
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: |
+          set -euo pipefail
+          aws s3 cp "manifests/$CHANNEL.json" \
+            "s3://$PKG_BUCKET/manifest/v1/$CHANNEL.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
+
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
-    needs: [plan, publish-pkg-boundaryml-com, smoke-go-release]
+    needs: [plan, publish-pkg-channel]
     if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     permissions:
