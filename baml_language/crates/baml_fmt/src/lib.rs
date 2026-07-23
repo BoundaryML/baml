@@ -403,6 +403,135 @@ mod linear_formatter_regression_tests {
 }
 
 #[cfg(test)]
+mod spawn_and_hug_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A relocated `spawn { … }` body reindents like any block instead of
+    /// printing verbatim at its original columns, and a call whose sole
+    /// argument is a spawn hugs the parens (`push(spawn {` … `});`).
+    #[test]
+    fn test_spawn_call_arg_hugs_parens() {
+        let source = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures\n            .push(\n                spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        },\n            );\n    }\n    await baml.future.all(futures)\n}\n";
+        let expected = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures.push(spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        });\n    }\n    await baml.future.all(futures)\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A lambda argument hugs the call parens the same way, including with
+    /// leading non-block arguments on the call line.
+    #[test]
+    fn test_trailing_lambda_arg_hugs_parens() {
+        let source = "function f(rows: int[]) -> int {\n    rows.reduce(0, (acc: int, x: int) -> {\n        acc + x + 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000\n    })\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Width used by a hugged trailing argument includes the chain prefix
+    /// exactly once. Double-counting `receiver.method` would wrap parameters
+    /// even though this lambda header fits the configured line width.
+    #[test]
+    fn test_hug_width_accounts_for_chain_prefix_once() {
+        let source = "function f() -> int {\n    receiver.method((a: int, b: int) -> {\n        a + b\n    })\n}\n";
+        let options = FormatOptions {
+            line_width: 45,
+            ..FormatOptions::default()
+        };
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, source);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The hug layout may remove the trailing comma, but comments attached to
+    /// the final argument and comma must remain in the formatted output.
+    #[test]
+    fn test_hug_preserves_trailing_argument_comments() {
+        let source = "function f() -> int {\n    consume(0, /* before spawn */ spawn {\n        let x = 1;\n        x\n    } /* after spawn */, /* after comma */)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "/* before spawn */",
+            "/* after spawn */",
+            "/* after comma */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "hug comment {marker} must survive, got:\n{formatted}"
+            );
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A simple spawn body (`{ tail }`) stays on one line when it fits.
+    #[test]
+    fn test_simple_spawn_stays_single_line() {
+        let source = "function f() -> int {\n    let nm = \"n\";\n    let a = spawn nm { 7 };\n    let b = spawn with baml.spawn.options(name = nm) { 8 };\n    (await a) + (await b)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A spawn body with statements expands into a normal indented block.
+    #[test]
+    fn test_multi_statement_spawn_body_expands() {
+        let source =
+            "function f() -> int {\n    let a = spawn { let x = 1; x + 1 };\n    await a\n}\n";
+        let expected = "function f() -> int {\n    let a = spawn {\n        let x = 1;\n        x + 1\n    };\n    await a\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block with no interior comment collapses to `{}` — most
+    /// visibly in match arms (`null => {},`) and empty `if` bodies.
+    #[test]
+    fn test_empty_blocks_collapse() {
+        let source = "function f(p: string?) -> int {\n    match (p) {\n        null => {\n        },\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {\n    }\n    0\n}\n";
+        let expected = "function f(p: string?) -> int {\n    match (p) {\n        null => {},\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {}\n    0\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block that holds a comment must NOT collapse — the comment
+    /// would be lost.
+    #[test]
+    fn test_empty_block_with_comment_stays_multi_line() {
+        let source = "function f(p: string?) -> int {\n    if (p == null) {\n        // nothing to do\n    }\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("// nothing to do"),
+            "interior comment must survive, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_spawn_header_comments_are_preserved() {
+        let source = "function f(name: string) -> int {\n    let future = spawn // after spawn\n        name /* before with */ with /* before first */ first(), /* after comma */ second() /* before body */ { 1 };\n    await future\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "// after spawn",
+            "/* before with */",
+            "/* before first */",
+            "/* after comma */",
+            "/* before body */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "spawn header comment {marker} must survive, got:\n{formatted}"
+            );
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 
