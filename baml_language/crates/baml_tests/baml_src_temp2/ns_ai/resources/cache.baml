@@ -18,7 +18,7 @@ class FakeCache {
   deleted: bool,
   runs: int,
 
-  function cleanup(self) -> void throws never { self.delete(); }
+  // function cleanup(self) -> void throws never { self.delete(); }
 
   implements Cache {
     function key(self) -> string throws never { self.cache_key }
@@ -118,12 +118,9 @@ class GeminiManagedCache {
   runs: int,
   cached_tokens: int,
 
-  // Direct class method: cleanup is compiler magic only in this position.
-  // An implementation written solely inside `implements Resource` is ordinary
-  // interface dispatch and is not registered as a GC finalizer.
-  function cleanup(self) -> void throws never {
-    self.delete() catch (e) { _ => null };
-  }
+  // function cleanup(self) -> void throws never {
+  //   self.delete() catch (e) { _ => null };
+  // }
 
   implements Cache {
     function key(self) -> string throws never { self.cache_key }

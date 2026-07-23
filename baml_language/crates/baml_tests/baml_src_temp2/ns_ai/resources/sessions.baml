@@ -32,19 +32,19 @@ class FakeSession {
   is_cleaned: bool,
   cleanup_count: int,
 
-  function cleanup(self) -> void throws never {
-    if (!self.is_cleaned) {
-      self.is_cleaned = true;
-      self.cleanup_count = self.cleanup_count + 1;
-    }
-  }
+  // function cleanup(self) -> void throws never {
+  //   if (!self.is_cleaned) {
+  //     self.is_cleaned = true;
+  //     self.cleanup_count = self.cleanup_count + 1;
+  //   }
+  // }
 
   implements Session {
     function provider(self) -> Provider throws never { self.owner }
     function id(self) -> string throws never { self.session_id }
     function run<T>(self, task: Task<T>) -> Response<T>
         throws root.ai.CallError | baml.errors.UnknownError {
-      //# Reject runs after session cleanup
+      //# Reject runs after a provider closes the session
       if (self.is_cleaned) {
         throw baml.errors.UnknownError {
           data: self.session_id,

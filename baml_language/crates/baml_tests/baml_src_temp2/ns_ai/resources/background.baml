@@ -34,7 +34,7 @@ class FakeJob<T> {
   response: Response<T>,
   cancelled: bool,
 
-  function cleanup(self) -> void throws never { self.cancel(); }
+  // function cleanup(self) -> void throws never { self.cancel(); }
 
   implements Job<T> {
     function status(self) -> JobStatus throws never {
@@ -106,13 +106,11 @@ class OpenAiBackgroundJob<T> {
   last_status: JobStatus,
   polls: int,
 
-  function cleanup(self) -> void throws never {
-    // Completed jobs need no cleanup. Pending work is cancelled best-effort;
-    // cleanup is the VM's at-most-once finalizer and cannot throw.
-    if (self.last_status == JobStatus.Pending) {
-      self.cancel() catch (e) { _ => null };
-    }
-  }
+  // function cleanup(self) -> void throws never {
+  //   if (self.last_status == JobStatus.Pending) {
+  //     self.cancel() catch (e) { _ => null };
+  //   }
+  // }
 
   implements Job<T> {
     function status(self) -> JobStatus throws never { self.last_status }

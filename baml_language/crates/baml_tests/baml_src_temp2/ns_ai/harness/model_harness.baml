@@ -37,12 +37,12 @@ class ModelHarnessEventStream<TPartial, T> {
   is_closed: bool,
   cached_run: HarnessRun<T>?,
 
-  function cleanup(self) -> void throws never {
-    if (!self.is_closed) {
-      self.inner._sse.close();
-      self.is_closed = true;
-    }
-  }
+  // function cleanup(self) -> void throws never {
+  //   if (!self.is_closed) {
+  //     self.inner._sse.close();
+  //     self.is_closed = true;
+  //   }
+  // }
 
   implements HarnessEventStream<T> {
     function next(self) -> AgentEvent | baml.stream.StreamFinished

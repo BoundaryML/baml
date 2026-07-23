@@ -17,7 +17,7 @@ class FakeBatch<T> {
   responses: Response<T>[],
   cancelled: bool,
 
-  function cleanup(self) -> void throws never { self.cancel(); }
+  // function cleanup(self) -> void throws never { self.cancel(); }
 
   implements Batch<T> {
     function status(self) -> JobStatus throws never {

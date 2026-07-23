@@ -28,13 +28,13 @@ class LocalHarnessSession {
   steering: string[],
   cleanup_count: int,
 
-  function cleanup(self) -> void throws never {
-    if (!self.is_cleaned) {
-      self.is_cleaned = true;
-      self.is_stopped = true;
-      self.cleanup_count = self.cleanup_count + 1;
-    }
-  }
+  // function cleanup(self) -> void throws never {
+  //   if (!self.is_cleaned) {
+  //     self.is_cleaned = true;
+  //     self.is_stopped = true;
+  //     self.cleanup_count = self.cleanup_count + 1;
+  //   }
+  // }
 
   implements HarnessSession {
     function id(self) -> string throws never { self.session_id }

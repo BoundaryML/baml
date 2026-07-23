@@ -77,7 +77,7 @@ class BufferedLive {
   is_closed: bool,
   control_frames: string[],
 
-  function cleanup(self) -> void throws never { self.close(); }
+  // function cleanup(self) -> void throws never { self.close(); }
 
   implements Live {
     function events(self) -> LiveEvent[] throws never { self.items }
@@ -202,7 +202,7 @@ function openai_realtime_response_create(
 }
 
 // The WebSocket remains inside this Resource. events(), controls, and tool
-// submission therefore all address the same provider session until cleanup().
+// submission therefore all address the same provider session until it closes.
 class OpenAiRealtimeLive {
   socket: baml.ws.WsStream?,
   channel: Channel,
@@ -217,7 +217,7 @@ class OpenAiRealtimeLive {
   cancel_requests: int,
   truncate_positions_ms: int[],
 
-  function cleanup(self) -> void throws never { self.close(); }
+  // function cleanup(self) -> void throws never { self.close(); }
 
   function send_frame(self, frame: string, label: string) -> null
       throws baml.errors.UnknownError {
