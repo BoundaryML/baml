@@ -14,7 +14,7 @@ implements Provider for Fallback {
 
 implements GenerationProvider for Fallback {
   function generate<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     //# Try generation providers in order
     for (let member in self.members) {
@@ -23,7 +23,7 @@ implements GenerationProvider for Fallback {
         let provider: GenerationProvider => {
           //### Attempt generation
           let response = provider.generate<T>(task.with_provider(member)) catch (e) {
-            let failure: baml.errors.Failure => {
+            let failure: root.ai.Failure => {
               //#### Continue only after a replay-safe failure
               if (may_replay(policy, failure)) { continue; }
               throw e;
@@ -41,7 +41,7 @@ implements GenerationProvider for Fallback {
 
 implements CompletionProvider for Fallback {
   function complete<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     //# Try drive providers in order
     for (let member in self.members) {
       //## Select a drive-capable member
@@ -50,11 +50,11 @@ implements CompletionProvider for Fallback {
           let policy = provider.replay_policy<T>(task.with_provider(member));
           //### Attempt provider drive
           let response = provider.complete<T>(task.with_provider(member)) catch (e) {
-            let failure: baml.errors.Failure => {
+            let failure: root.ai.Failure => {
               //#### Continue only after a replay-safe failure
               if (may_replay(policy, failure)) { continue; }
               if (failure.is_retryable()) {
-                throw baml.errors.CannotRetry {
+                throw root.ai.CannotRetry {
                   message: "fallback refused to replay " + member.name(),
                 };
               }

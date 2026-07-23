@@ -15,7 +15,7 @@ function InspectImage_task(
 function InspectImage_manual(
     value: image,
     provider: root.ai.Provider,
-) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+) -> string throws root.ai.CallError | baml.errors.UnknownError {
     root.ai.drivers.complete<string>(InspectImage_task(value, provider))
 }
 
@@ -34,7 +34,7 @@ function InspectPdf_task(
 function InspectPdf_manual(
     value: pdf,
     provider: root.ai.Provider,
-) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+) -> string throws root.ai.CallError | baml.errors.UnknownError {
     root.ai.drivers.complete<string>(InspectPdf_task(value, provider))
 }
 
@@ -58,6 +58,6 @@ function VoiceSupport_task(
 function VoiceSupport_manual(
     instructions: string,
     provider: root.ai.Provider,
-) -> null throws baml.errors.CallError | baml.errors.UnknownError {
+) -> null throws root.ai.CallError | baml.errors.UnknownError {
     root.ai.drivers.complete<null>(VoiceSupport_task(instructions, provider))
 }

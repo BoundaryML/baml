@@ -14,7 +14,7 @@ interface Session requires Resource {
   function provider(self) -> Provider throws never
   function id(self) -> string throws never
   function run<T>(self, task: Task<T>) -> Response<T>
-    throws baml.errors.CallError | baml.errors.UnknownError
+    throws root.ai.CallError | baml.errors.UnknownError
   function token(self) -> SessionToken throws never
 }
 
@@ -43,7 +43,7 @@ class FakeSession {
     function provider(self) -> Provider throws never { self.owner }
     function id(self) -> string throws never { self.session_id }
     function run<T>(self, task: Task<T>) -> Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       //# Reject runs after session cleanup
       if (self.is_cleaned) {
         throw baml.errors.UnknownError {

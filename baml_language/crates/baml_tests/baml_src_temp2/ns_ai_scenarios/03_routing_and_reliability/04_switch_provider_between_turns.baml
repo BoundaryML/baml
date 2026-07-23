@@ -72,12 +72,12 @@ class NamedOpenAiToolProvider {
 
 implements root.ai.ToolCallingProvider for NamedOpenAiToolProvider {
   function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
-      throws baml.errors.ToolError | baml.errors.UnknownError {
+      throws root.ai.ToolError | baml.errors.UnknownError {
     self.inner.begin<T>(task.with_provider(self.inner))
   }
 
   function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.Tool[])
-      -> root.ai.ModelStep<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+      -> root.ai.ModelStep<T> throws root.ai.ToolError | baml.errors.UnknownError {
     self.inner.step<T>(conversation, tools)
   }
 
@@ -85,7 +85,7 @@ implements root.ai.ToolCallingProvider for NamedOpenAiToolProvider {
     self,
     conversation: root.ai.Conversation,
     results: root.ai.ToolResult[],
-  ) -> root.ai.Conversation throws baml.errors.ToolError | baml.errors.UnknownError {
+  ) -> root.ai.Conversation throws root.ai.ToolError | baml.errors.UnknownError {
     self.inner.submit(conversation, results)
   }
 }

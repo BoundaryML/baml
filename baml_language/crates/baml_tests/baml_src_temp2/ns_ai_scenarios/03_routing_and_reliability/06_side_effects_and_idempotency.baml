@@ -2,7 +2,7 @@ test "guide 03.06: retry rejects a completion without replay evidence" {
   let inner = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let effectful = EffectfulProvider { inner: inner };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(effectful, 2)) catch (e) {
-    let refused: baml.errors.CallError => "cannot-retry",
+    let refused: root.ai.CallError => "cannot-retry",
     _ => "unexpected",
   };
   assert.equal(label, "cannot-retry")
@@ -16,7 +16,7 @@ test "guide 03.06: a terminal failure is not retried" {
     failure_mode: root.ai.FakeFailureMode.Terminal,
   };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(failed, 3)) catch (e) {
-    let terminal: baml.errors.CallError => if (!terminal.is_retryable()) { "terminal" } else { "unexpected" },
+    let terminal: root.ai.CallError => if (!terminal.is_retryable()) { "terminal" } else { "unexpected" },
     _ => "unexpected",
   };
   assert.equal(label, "terminal")
@@ -41,7 +41,7 @@ class LiveEffectCommittedFailure {
   request_id: string?,
 }
 
-implements baml.errors.Failure for LiveEffectCommittedFailure {
+implements root.ai.Failure for LiveEffectCommittedFailure {
   function is_retryable(self) -> bool throws never { true }
   function is_effectful(self) -> bool throws never { true }
   function is_policy_refusal(self) -> bool throws never { false }
@@ -49,7 +49,7 @@ implements baml.errors.Failure for LiveEffectCommittedFailure {
   function is_unsupported(self) -> bool throws never { false }
 }
 
-implements baml.errors.CallError for LiveEffectCommittedFailure {
+implements root.ai.CallError for LiveEffectCommittedFailure {
   function is_network_error(self) -> bool throws never { true }
   function is_rate_limit(self) -> bool throws never { false }
   function is_parse_error(self) -> bool throws never { false }
@@ -67,7 +67,7 @@ class EffectfulAfterLiveResponse {
 
   implements root.ai.CompletionProvider {
     function complete<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       self.calls = self.calls + 1;
       let response = self.inner.complete<T>(task.with_provider(self.inner));
       self.observed_request_ids.push(response.meta.request_id ?? "missing");
@@ -91,7 +91,7 @@ testset "integ-test-guide-03-side-effects" {
       sample_ticket(),
       root.ai.retry(effectful, 2),
     ) catch (e) {
-      let refused: baml.errors.CallError => "cannot-retry",
+      let refused: root.ai.CallError => "cannot-retry",
       _ => "unexpected",
     };
     log.info("live replay refusal " + {

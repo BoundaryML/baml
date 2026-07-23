@@ -5,11 +5,11 @@ class ModelStep<T> {
 
 interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Conversation
-    throws baml.errors.ToolError | baml.errors.UnknownError
+    throws root.ai.ToolError | baml.errors.UnknownError
   function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
-    throws baml.errors.ToolError | baml.errors.UnknownError
+    throws root.ai.ToolError | baml.errors.UnknownError
   function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
-    throws baml.errors.ToolError | baml.errors.UnknownError
+    throws root.ai.ToolError | baml.errors.UnknownError
 }
 
 interface ResumableToolCallingProvider requires ToolCallingProvider {

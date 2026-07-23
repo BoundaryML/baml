@@ -50,7 +50,7 @@ class ToolDecision {
 }
 
 interface AgentHooks {
-  function prepare_step(self, context: StepContext) -> StepPlan throws baml.errors.ToolError
+  function prepare_step(self, context: StepContext) -> StepPlan throws root.ai.ToolError
   function before_tool_call(self, event: BeforeToolCall) -> ToolDecision throws never {
     ToolDecision.allow(event.call)
   }

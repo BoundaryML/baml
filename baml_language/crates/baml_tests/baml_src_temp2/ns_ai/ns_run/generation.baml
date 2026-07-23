@@ -6,10 +6,10 @@ class CompletionWithMeta<T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = root.ai.Response<T>
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.complete_with_meta<T>(task)
     }
   }
@@ -20,10 +20,10 @@ class Completion<T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = T
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, task: root.ai.Task<T>) -> T
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.complete<T>(task)
     }
   }
@@ -34,10 +34,10 @@ class GenerationWithMeta<T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = root.ai.Response<T>
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.generate_with_meta<T>(task)
     }
   }
@@ -48,10 +48,10 @@ class Generation<T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = T
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, task: root.ai.Task<T>) -> T
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.generate<T>(task)
     }
   }

@@ -17,10 +17,10 @@ class TranscribeWithMeta {
 
   implements root.ai.Runner<root.ai.AudioStream> {
     type Output = root.ai.Response<string>
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, stream: root.ai.AudioStream) -> root.ai.Response<string>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.transcribe_with_meta(self.provider, stream, self.options)
     }
   }
@@ -43,10 +43,10 @@ class Transcribe {
 
   implements root.ai.Runner<root.ai.AudioStream> {
     type Output = string
-    type Error = baml.errors.CallError | baml.errors.UnknownError
+    type Error = root.ai.CallError | baml.errors.UnknownError
 
     function run(self, stream: root.ai.AudioStream) -> string
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       root.ai.drivers.transcribe(self.provider, stream, self.options)
     }
   }

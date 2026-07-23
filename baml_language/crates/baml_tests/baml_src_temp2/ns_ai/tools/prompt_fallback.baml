@@ -120,11 +120,11 @@ implements ToolCallingProvider for PromptToolProvider {
   }
 
   function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
-      throws baml.errors.ToolError | baml.errors.UnknownError {
+      throws root.ai.ToolError | baml.errors.UnknownError {
     //# Resume the prompt-tool conversation
     let state = match (conversation) {
       let value: PromptToolConversation => value,
-      _ => throw baml.errors.ToolError {
+      _ => throw root.ai.ToolError {
         message: "prompt tool adapter received another provider's conversation",
       },
     };
@@ -172,11 +172,11 @@ implements ToolCallingProvider for PromptToolProvider {
   }
 
   function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
-      throws baml.errors.ToolError {
+      throws root.ai.ToolError {
     //# Resume the prompt conversation receiving results
     let state = match (conversation) {
       let value: PromptToolConversation => value,
-      _ => throw baml.errors.ToolError {
+      _ => throw root.ai.ToolError {
         message: "prompt tool adapter received another provider's conversation",
       },
     };

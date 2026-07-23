@@ -160,7 +160,7 @@ function run_agent<T>(
   run_id: string?,
   resumed: Conversation?,
 ) -> Done<T> | BudgetReached | Handoff
-    throws baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
+    throws root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
   //# Select the conversation-owning provider
   // A provider conversation is authoritative continuation state. Switching its
   // owner requires explicit import; display names are not identity keys.

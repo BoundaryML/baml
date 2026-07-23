@@ -178,7 +178,7 @@ function ResolveTicketWithTools_manual(
   ticket: SupportTicket,
   agent: root.ai.Provider,
   tools: root.ai.Tool[],
-) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
+) -> Resolution throws root.ai.CallError | baml.errors.UnknownError {
   root.ai.drivers.complete<Resolution>(ResolveTicketWithTools_task(
     ticket,
     agent,

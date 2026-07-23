@@ -41,13 +41,13 @@ class Agent<T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff
-    type Error = baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported
+    type Error = root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported
 
     function run(
       self,
       task: root.ai.Task<T>,
     ) -> root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff
-        throws baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
+        throws root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
       root.ai.run_agent<T>(
         task,
         self.budget,

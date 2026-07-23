@@ -29,7 +29,7 @@ test "guide 02.06: a hook can add a tool before the next model step" {
 test "guide 02.06: duplicate tool names fail instead of shadowing" {
   let registry = root.ai.ToolRegistry.new([search_knowledge]);
   let outcome = registry.add(search_knowledge) catch (e) {
-    let collision: baml.errors.ToolError => "collision",
+    let collision: root.ai.ToolError => "collision",
   };
   assert.equal(outcome, "collision")
   assert.equal(registry.snapshot().length(), 1)

@@ -10,7 +10,7 @@ implements Provider for Retry {
 
 implements GenerationProvider for Retry {
   function generate<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     //# Resolve the generation capability
     let provider = match (self.inner) {
       let capability: GenerationProvider => capability,
@@ -22,7 +22,7 @@ implements GenerationProvider for Retry {
     while (attempt <= self.max_attempts) {
       //## Attempt provider generation
       let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
-        let failure: baml.errors.Failure => {
+        let failure: root.ai.Failure => {
           //### Decide whether this failure may replay
           if (attempt >= self.max_attempts || !may_replay(policy, failure)) { throw e; }
           attempt = attempt + 1;
@@ -38,7 +38,7 @@ implements GenerationProvider for Retry {
 
 implements CompletionProvider for Retry {
   function complete<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     //# Resolve the drive capability
     let provider = match (self.inner) {
       let capability: CompletionProvider => capability,
@@ -51,12 +51,12 @@ implements CompletionProvider for Retry {
     while (attempt <= self.max_attempts) {
       //## Attempt provider drive
       let result = provider.complete<T>(task.with_provider(self.inner)) catch (e) {
-        let failure: baml.errors.Failure => {
+        let failure: root.ai.Failure => {
           //### Decide whether this failure may replay
           if (attempt >= self.max_attempts) { throw e; }
           if (!may_replay(policy, failure)) {
             if (failure.is_retryable()) {
-              throw baml.errors.CannotRetry {
+              throw root.ai.CannotRetry {
                 message: "retry refused to replay " + self.inner.name(),
               };
             }

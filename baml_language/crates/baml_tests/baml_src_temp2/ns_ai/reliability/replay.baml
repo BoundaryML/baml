@@ -9,7 +9,7 @@ class ReplayPolicy {
   idempotency_key: string?,
 }
 
-function may_replay(policy: ReplayPolicy, failure: baml.errors.Failure) -> bool throws never {
+function may_replay(policy: ReplayPolicy, failure: root.ai.Failure) -> bool throws never {
   if (!failure.is_retryable()
       || failure.is_effectful()
       || failure.is_policy_refusal()

@@ -64,11 +64,11 @@ implements ToolCallingProvider for OpenAi {
   }
 
   function step<T>(self, conversation: Conversation, tools: Tool[]) -> ModelStep<T>
-      throws baml.errors.ToolError | baml.errors.UnknownError {
+      throws root.ai.ToolError | baml.errors.UnknownError {
     //# Resume the native OpenAI conversation
     let state = match (conversation) {
       let value: OpenAiConversation => value,
-      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
+      _ => throw root.ai.ToolError { message: "OpenAI received another provider's conversation" },
     };
     //# Build the request from the active tool roster
     state.tools_json = openai_tool_schemas(tools);
@@ -177,11 +177,11 @@ implements ToolCallingProvider for OpenAi {
   }
 
   function submit(self, conversation: Conversation, results: ToolResult[]) -> Conversation
-      throws baml.errors.ToolError {
+      throws root.ai.ToolError {
     //# Resume the conversation receiving tool results
     let state = match (conversation) {
       let value: OpenAiConversation => value,
-      _ => throw baml.errors.ToolError { message: "OpenAI received another provider's conversation" },
+      _ => throw root.ai.ToolError { message: "OpenAI received another provider's conversation" },
     };
     //# Append every tool result to provider wire state
     for (let result in results) {

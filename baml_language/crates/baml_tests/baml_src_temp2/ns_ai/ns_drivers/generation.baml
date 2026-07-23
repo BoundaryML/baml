@@ -1,5 +1,5 @@
 function complete_with_meta<T>(task: root.ai.Task<T>) -> root.ai.Response<T>
-    throws baml.errors.CallError | baml.errors.UnknownError {
+    throws root.ai.CallError | baml.errors.UnknownError {
   match (task.provider) {
     let provider: root.ai.CompletionProvider => provider.complete<T>(task),
     _ => throw baml.errors.Unsupported {
@@ -9,12 +9,12 @@ function complete_with_meta<T>(task: root.ai.Task<T>) -> root.ai.Response<T>
 }
 
 function complete<T>(task: root.ai.Task<T>) -> T
-    throws baml.errors.CallError | baml.errors.UnknownError {
+    throws root.ai.CallError | baml.errors.UnknownError {
   complete_with_meta<T>(task).value
 }
 
 function generate_with_meta<T>(task: root.ai.Task<T>) -> root.ai.Response<T>
-    throws baml.errors.CallError | baml.errors.UnknownError {
+    throws root.ai.CallError | baml.errors.UnknownError {
   match (task.provider) {
     let provider: root.ai.GenerationProvider => provider.generate<T>(task),
     _ => throw baml.errors.Unsupported {
@@ -24,6 +24,6 @@ function generate_with_meta<T>(task: root.ai.Task<T>) -> root.ai.Response<T>
 }
 
 function generate<T>(task: root.ai.Task<T>) -> T
-    throws baml.errors.CallError | baml.errors.UnknownError {
+    throws root.ai.CallError | baml.errors.UnknownError {
   generate_with_meta<T>(task).value
 }

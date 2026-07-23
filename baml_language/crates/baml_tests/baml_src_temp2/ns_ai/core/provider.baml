@@ -10,7 +10,7 @@ interface Provider {
 // Response<T> or throw.
 interface CompletionProvider requires Provider {
   function complete<T>(self, task: Task<T>) -> Response<T>
-    throws baml.errors.CallError | baml.errors.UnknownError
+    throws root.ai.CallError | baml.errors.UnknownError
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
     ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null }
   }
@@ -18,10 +18,10 @@ interface CompletionProvider requires Provider {
 
 interface GenerationProvider requires Provider {
   function generate<T>(self, task: Task<T>) -> Response<T>
-    throws baml.errors.CallError | baml.errors.UnknownError
+    throws root.ai.CallError | baml.errors.UnknownError
 }
 
 interface StreamingProvider requires Provider {
   function stream<TPartial, T>(self, task: Task<T>) -> baml.llm.Stream<TPartial, T>
-    throws baml.errors.StreamError | baml.errors.UnknownError | baml.errors.Unsupported
+    throws root.ai.StreamError | baml.errors.UnknownError | baml.errors.Unsupported
 }

@@ -5,7 +5,7 @@ class TranscriptionOptions {
 
 interface TranscriptionProvider requires Provider {
   function transcribe(self, stream: AudioStream, options: TranscriptionOptions) -> Response<string>
-    throws baml.errors.CallError | baml.errors.UnknownError
+    throws root.ai.CallError | baml.errors.UnknownError
 }
 
 class FakeTranscriptionProvider {

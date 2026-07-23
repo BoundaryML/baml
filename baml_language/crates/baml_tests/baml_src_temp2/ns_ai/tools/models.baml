@@ -2,7 +2,7 @@ class Tool {
   name: string,
   description: string,
   input_schema: json,
-  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+  handler: baml.AnyFunction<Returns = unknown, Throws = root.ai.ToolError>,
   handoff: bool,
 
   function as_handoff(self) -> Tool throws never {
@@ -19,7 +19,7 @@ class Tool {
 // Public tool inputs accept ordinary BAML functions. Tool is the normalized
 // representation used after configuration crosses into the runner/provider
 // machinery.
-type ToolInput = Tool | baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>
+type ToolInput = Tool | baml.AnyFunction<Returns = unknown, Throws = root.ai.ToolError>
 
 function coarse_schema(type_name: string) -> json throws never {
   let schema: json = { "type": type_name };
@@ -69,7 +69,7 @@ function schema_for_function(
 // differs from the underlying function declaration. reflect.call_any performs
 // checked named argument dispatch, including ordinary BAML default arguments.
 function tool(
-  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+  handler: baml.AnyFunction<Returns = unknown, Throws = root.ai.ToolError>,
   name: string? = null,
   description: string? = null,
 ) -> Tool throws never {
@@ -86,7 +86,7 @@ function tool(
 function normalize_tool(input: ToolInput) -> Tool throws never {
   match (input) {
     let existing: Tool => existing,
-    let handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError> => tool(handler),
+    let handler: baml.AnyFunction<Returns = unknown, Throws = root.ai.ToolError> => tool(handler),
   }
 }
 
@@ -106,7 +106,7 @@ function tool_from_json_schema(
   name: string,
   description: string,
   input_schema: json,
-  handler: baml.AnyFunction<Returns = unknown, Throws = baml.errors.ToolError>,
+  handler: baml.AnyFunction<Returns = unknown, Throws = root.ai.ToolError>,
 ) -> Tool throws never {
   Tool {
     name: name,
@@ -157,7 +157,7 @@ function invoke_tool(tool: Tool, call: ToolCall) -> ToolResult throws never {
       call,
       `invalid arguments: expected ${invalid.expected}, received ${invalid.got}`,
     ),
-    let failure: baml.errors.ToolError => return ToolResult.error(
+    let failure: root.ai.ToolError => return ToolResult.error(
       call,
       `tool failed: ${failure}`,
     ),
@@ -179,7 +179,7 @@ class ToolRegistryError {
   message: string,
 }
 
-implements baml.errors.Failure for ToolRegistryError {
+implements root.ai.Failure for ToolRegistryError {
   function is_retryable(self) -> bool throws never { false }
   function is_effectful(self) -> bool throws never { false }
   function is_policy_refusal(self) -> bool throws never { false }
@@ -187,7 +187,7 @@ implements baml.errors.Failure for ToolRegistryError {
   function is_unsupported(self) -> bool throws never { false }
 }
 
-implements baml.errors.ToolError for ToolRegistryError {
+implements root.ai.ToolError for ToolRegistryError {
   function is_network_error(self) -> bool throws never { false }
 }
 
@@ -195,14 +195,14 @@ class ToolRegistry {
   roster: Tool[],
   version: int,
 
-  function new(tools: ToolInput[]) -> ToolRegistry throws baml.errors.ToolError {
+  function new(tools: ToolInput[]) -> ToolRegistry throws root.ai.ToolError {
     let registry = ToolRegistry { roster: [], version: 0 };
     //# Seed the registry through validated insertion
     for (let input in tools) { registry.add(input); }
     registry
   }
 
-  function add(self, input: ToolInput) -> null throws baml.errors.ToolError {
+  function add(self, input: ToolInput) -> null throws root.ai.ToolError {
     let tool = normalize_tool(input);
     //# Reject duplicate tool names
     for (let existing in self.roster) {
@@ -218,7 +218,7 @@ class ToolRegistry {
     null
   }
 
-  function add_all(self, tools: ToolInput[]) -> null throws baml.errors.ToolError {
+  function add_all(self, tools: ToolInput[]) -> null throws root.ai.ToolError {
     let combined: ToolInput[] = [];
     for (let existing in self.roster) { combined.push(existing); }
     //# Stage the combined tool roster
@@ -254,7 +254,7 @@ class ToolRegistry {
     replaced
   }
 
-  function replace_all(self, tools: ToolInput[]) -> null throws baml.errors.ToolError {
+  function replace_all(self, tools: ToolInput[]) -> null throws root.ai.ToolError {
     //# Validate the complete replacement roster
     let replacement = ToolRegistry.new(tools);
     self.roster = replacement.roster;

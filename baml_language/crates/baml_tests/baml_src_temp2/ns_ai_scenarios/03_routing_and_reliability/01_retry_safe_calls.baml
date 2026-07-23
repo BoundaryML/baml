@@ -19,7 +19,7 @@ class FlakyOnceLiveGeneration {
 
   implements root.ai.GenerationProvider {
     function generate<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       self.attempts = self.attempts + 1;
       if (self.attempts == 1) {
         throw root.ai.FakeCallFailure {

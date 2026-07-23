@@ -16,12 +16,12 @@ class GuideGenerationCapability<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.Response<T>
-        type Error = baml.errors.CallError | baml.errors.UnknownError
+        type Error = root.ai.CallError | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.Response<T> throws baml.errors.CallError | baml.errors.UnknownError {
+        ) -> root.ai.Response<T> throws root.ai.CallError | baml.errors.UnknownError {
             self.provider.generate<T>(task.with_provider(self.provider))
         }
     }

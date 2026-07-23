@@ -45,6 +45,6 @@ function resume_session(
 function run_in_session<T>(
   session: root.ai.Session,
   task: root.ai.Task<T>,
-) -> root.ai.Response<T> throws baml.errors.CallError | baml.errors.UnknownError {
+) -> root.ai.Response<T> throws root.ai.CallError | baml.errors.UnknownError {
   session.run<T>(task)
 }

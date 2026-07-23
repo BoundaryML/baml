@@ -18,9 +18,9 @@ class NegotiatedRun {
 
 function run_negotiated(
     provider: root.ai.Provider,
-) -> NegotiatedRun throws baml.errors.CallError
+) -> NegotiatedRun throws root.ai.CallError
     | baml.errors.UnknownError
-    | baml.errors.StreamError
+    | root.ai.StreamError
     | baml.errors.Unsupported
     | baml.errors.Io
     | baml.errors.LlmClient

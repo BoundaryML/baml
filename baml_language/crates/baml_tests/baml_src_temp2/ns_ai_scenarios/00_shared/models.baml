@@ -91,13 +91,13 @@ function ResolveTicket_task(
 function ResolveTicket_manual(
   ticket: SupportTicket,
   provider: root.ai.Provider,
-) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
+) -> Resolution throws root.ai.CallError | baml.errors.UnknownError {
   root.ai.drivers.complete<Resolution>(ResolveTicket_task(ticket, provider))
 }
 
 function drain_resolution_stream(
   task: root.ai.Task<Resolution>,
-) -> Resolution throws baml.errors.UnknownError | baml.errors.StreamError
+) -> Resolution throws baml.errors.UnknownError | root.ai.StreamError
     | baml.errors.Unsupported | baml.errors.Io | baml.errors.LlmClient {
   // Concrete execution preserves the exact throws union inside an explicitly
   // annotated helper; Task.run currently leaks its generic Error here.

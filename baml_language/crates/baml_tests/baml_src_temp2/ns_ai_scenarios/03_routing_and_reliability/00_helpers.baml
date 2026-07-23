@@ -20,7 +20,7 @@ class EffectfulProvider {
   }
   implements root.ai.CompletionProvider {
     function complete<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
+        throws root.ai.CallError | baml.errors.UnknownError {
       self.inner.complete<T>(task.with_provider(self.inner))
     }
     function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {

@@ -7,10 +7,10 @@ class Stream<TPartial, T> {
 
   implements root.ai.Runner<root.ai.Task<T>> {
     type Output = baml.llm.Stream<TPartial, T>
-    type Error = baml.errors.StreamError | baml.errors.UnknownError | baml.errors.Unsupported
+    type Error = root.ai.StreamError | baml.errors.UnknownError | baml.errors.Unsupported
 
     function run(self, task: root.ai.Task<T>) -> baml.llm.Stream<TPartial, T>
-        throws baml.errors.StreamError | baml.errors.UnknownError | baml.errors.Unsupported {
+        throws root.ai.StreamError | baml.errors.UnknownError | baml.errors.Unsupported {
       root.ai.drivers.stream<TPartial, T>(task)
     }
   }

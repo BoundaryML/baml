@@ -9,7 +9,7 @@ class FakeCallFailure {
   retryable: bool,
 }
 
-implements baml.errors.Failure for FakeCallFailure {
+implements root.ai.Failure for FakeCallFailure {
   function is_retryable(self) -> bool throws never { self.retryable }
   function is_effectful(self) -> bool throws never { false }
   function is_policy_refusal(self) -> bool throws never { false }
@@ -17,7 +17,7 @@ implements baml.errors.Failure for FakeCallFailure {
   function is_unsupported(self) -> bool throws never { false }
 }
 
-implements baml.errors.CallError for FakeCallFailure {
+implements root.ai.CallError for FakeCallFailure {
   function is_network_error(self) -> bool throws never { self.retryable }
   function is_rate_limit(self) -> bool throws never { false }
   function is_parse_error(self) -> bool throws never { false }
@@ -38,7 +38,7 @@ implements Provider for FakeProvider {
 
 implements GenerationProvider for FakeProvider {
   function generate<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     self.calls = self.calls + 1;
     if (self.failures_remaining > 0) {
       self.failures_remaining = self.failures_remaining - 1;
@@ -84,7 +84,7 @@ implements GenerationProvider for FakeProvider {
 
 implements CompletionProvider for FakeProvider {
   function complete<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.CallError | baml.errors.UnknownError {
+      throws root.ai.CallError | baml.errors.UnknownError {
     self.generate<T>(task)
   }
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
