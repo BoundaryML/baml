@@ -11,6 +11,10 @@ on:
         description: "Exact repository commit whose product is under test"
         type: string
         required: true
+      platform_matrix_json:
+        description: "Validated C# product matrix from the early release preflight"
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -20,48 +24,8 @@ defaults:
     shell: bash
 
 jobs:
-  platform-matrix:
-    name: Compute product consumer matrix
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    outputs:
-      matrix: ${{ steps.derive.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.source_sha }}
-          persist-credentials: false
-          sparse-checkout: release
-
-      - id: derive
-        name: Derive exact RID runners from the platform contract
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          matrix="$(jq -c '{include: [.targets[]
-            | select(.artifacts.csharp != null and .artifacts.cffi != null)
-            | {target: .triple,
-               arch: .arch,
-               libc: .libc,
-               rid: .artifacts.csharp.rid,
-               canonical: .artifacts.csharp.native_asset,
-               runner: .artifacts.csharp.consumer_runner}]}' \
-            release/platforms.json)"
-          jq -e '
-            (.include | length) == 8
-            and ([.include[].target] | unique | length) == 8
-            and ([.include[].rid] | unique | length) == 8
-            and ([.include[].canonical] | unique | length) == 3
-            and ([.include[].runner | select(type == "string")]
-              | length) == 8
-          ' <<<"$matrix"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
   package:
     name: Assemble one provenance-bound package
-    needs: platform-matrix
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -74,17 +38,16 @@ jobs:
         with:
           dotnet-version: 10.0.301
 
-      - uses: ./.github/actions/setup-rust
-        with:
-          enable-cache: false
-          enable-cross: false
-          skip-protoc: true
-
       - uses: actions/download-artifact@v4
         with:
           pattern: bridge-cffi-*
           path: native-downloads
           merge-multiple: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-neutral-preparation
+          path: neutral-preparation
 
       - name: Stamp the frozen release plan
         env:
@@ -92,125 +55,41 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          diff -u \
+            <(jq -S . release-plan.json) \
+            <(jq -S . neutral-preparation/release-plan.json)
           scripts/baml-language-version stamp --plan release-plan.json
-          test "$(scripts/baml-language-version show)" = \
-            "$(jq -r .canonical_version release-plan.json)"
+          canonical_version="$(jq -r .canonical_version release-plan.json)"
+          nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
+          test "$(sed -n \
+            's#^pub const CANONICAL_VERSION: &str = "\([^"]*\)";$#\1#p' \
+            baml_language/crates/baml_version/src/lib.rs)" = \
+            "$canonical_version"
+          test "$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)" = \
+            "$nuget_version"
 
-      - name: Verify Rust-produced callback vectors in the C# schema consumer
-        working-directory: baml_language
+      - name: Stage and bind the required shared producers
         env:
-          BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS: ${{ runner.temp }}/optional-host-call-vectors.tsv
-          RUSTC_WRAPPER: ""
-        run: |
-          set -euo pipefail
-          cargo run -p sdk_test_csharp --bin emit_optional_host_call_vectors
-          test "$(wc -l < "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS")" -eq 5
-          dotnet run --project \
-            sdks/csharp/bridge_csharp/tests/Baml.Bridge.ProtocolProbe/Baml.Bridge.ProtocolProbe.csproj \
-            -- "$BAML_CSHARP_OPTIONAL_HOST_CALL_VECTORS"
-
-      - name: Stage and bind all eight producer identities
-        env:
-          PLATFORM_MATRIX: ${{ needs.platform-matrix.outputs.matrix }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_VERSION: ${{ fromJSON(inputs.release_plan_json).canonical_version }}
         run: |
           set -euo pipefail
-          mkdir -p staging/runtimes
-          jq -r '.include[].target | "bridge-cffi-\(.)"' \
-            <<<"$PLATFORM_MATRIX" | LC_ALL=C sort \
-            > expected-native-artifacts.txt
-          find native-downloads -mindepth 1 -maxdepth 1 -type d \
-            -printf '%f\n' | LC_ALL=C sort \
-            > actual-native-artifacts.txt
-          diff -u expected-native-artifacts.txt actual-native-artifacts.txt
-          test "$(wc -l < actual-native-artifacts.txt)" -eq 8
-          : > native-provenance.unsorted.tsv
-          jq -r '
-            .targets[]
-            | select(.artifacts.csharp != null and .artifacts.cffi != null)
-            | [.triple,
-               .artifacts.cffi.asset,
-               .artifacts.csharp.rid,
-               .artifacts.csharp.native_asset]
-            | @tsv' release/platforms.json |
-          while IFS=$'\t' read -r target asset rid canonical; do
-            artifact_root="native-downloads/bridge-cffi-$target"
-            mapfile -d '' artifact_files < <(
-              find "$artifact_root" -type f -print0
-            )
-            mapfile -d '' sources < <(
-              find "$artifact_root" -type f -name "$asset" -print0
-            )
-            mapfile -d '' sidecars < <(
-              find "$artifact_root" -type f -name "$asset.sha256" -print0
-            )
-            mapfile -d '' identities < <(
-              find "$artifact_root" -type f -name artifact-identity.txt -print0
-            )
-            test "${#artifact_files[@]}" -eq 3
-            test "${#sources[@]}" -eq 1
-            test "${#sidecars[@]}" -eq 1
-            test "${#identities[@]}" -eq 1
-            source="${sources[0]}"
-            sidecar="${sidecars[0]}"
-            identity="${identities[0]}"
-            test "$(dirname "$source")" = "$(dirname "$sidecar")"
-            test "$(dirname "$source")" = "$(dirname "$identity")"
-            test "$(wc -l < "$sidecar")" -eq 1
-            test "$(cut -d ' ' -f 2- "$sidecar")" = " $asset"
-            grep -Fxq "source_sha=$SOURCE_SHA" "$identity"
-            grep -Fxq "workflow_run_id=${{ github.run_id }}" "$identity"
-            grep -Fxq \
-              "workflow_run_attempt=${{ github.run_attempt }}" "$identity"
-            grep -Fxq "release_version=$RELEASE_VERSION" "$identity"
-            grep -Fxq "target=$target" "$identity"
-            grep -Fxq "asset=$asset" "$identity"
-            test "$(wc -l < "$identity")" -eq 6
-            (
-              cd "$(dirname "$sidecar")"
-              sha256sum -c "$(basename "$sidecar")"
-            )
-            producer_digest="$(cut -d ' ' -f 1 "$sidecar")"
-            [[ "$producer_digest" =~ ^[0-9a-f]{64}$ ]]
-            runtime_path="runtimes/$rid/native/$canonical"
-            install -Dm755 "$source" "staging/$runtime_path"
-            test "$(sha256sum "staging/$runtime_path" | cut -d ' ' -f 1)" = \
-              "$producer_digest"
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-              "$producer_digest" \
-              "$SOURCE_SHA" \
-              "$RELEASE_VERSION" \
-              "${{ github.run_id }}" \
-              "${{ github.run_attempt }}" \
-              "$target" \
-              "$asset" \
-              "$runtime_path" \
-              >> native-provenance.unsorted.tsv
-          done
-          LC_ALL=C sort -t $'\t' -k8,8 \
-            native-provenance.unsorted.tsv > native-provenance.tsv
-          test "$(wc -l < native-provenance.tsv)" -eq 8
-          (
-            cd staging
-            find runtimes -type f -print0 | LC_ALL=C sort -z |
-              xargs -0 sha256sum
-          ) > native-manifest.sha256
-          awk -F '\t' 'BEGIN { OFS = "  " } { print $1, $8 }' \
-            native-provenance.tsv | diff -u - native-manifest.sha256
+          scripts/baml-csharp-release-contract stage-native \
+            --downloads native-downloads \
+            --staging staging \
+            --source-sha "$SOURCE_SHA" \
+            --release-version "$RELEASE_VERSION" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --provenance native-provenance.json \
+            --manifest native-manifest.sha256
 
       - name: Verify the C# ABI prefix and ownership lifetimes
         env:
-          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ runner.temp }}/function-calls.bytecode
-          RUSTC_WRAPPER: ""
+          BAML_CSHARP_ABI_PROBE_BYTECODE: ${{ github.workspace }}/neutral-preparation/function-calls.bytecode
         run: |
           set -euo pipefail
-          (
-            cd baml_language
-            cargo test -p sdk_test_harness_setup \
-              csharp_abi_probe_tests::emit_function_calls_bytecode \
-              --lib -- --ignored --exact --nocapture
-          )
           test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
           native="$(jq -er '
             .targets[]
@@ -231,31 +110,18 @@ jobs:
           set -euo pipefail
           product_root="$RUNNER_TEMP/csharp-product"
           package_output="$product_root/packages"
-          generated_output="$product_root/baml_client"
-          mkdir -p "$package_output" "$generated_output"
+          generated_output="$PWD/neutral-preparation/baml_client"
+          mkdir -p "$package_output"
           baml_language/sdks/csharp/bridge_csharp/tools/pack-product.sh \
             staging \
             native-manifest.sha256 \
-            native-provenance.tsv \
+            native-provenance.json \
             release-plan.json \
             "$package_output"
           package="$(find "$package_output" -maxdepth 1 \
             -type f -name 'baml-bridge.*.nupkg' -print)"
           test -n "$package"
           test "$(printf '%s\n' "$package" | wc -l)" -eq 1
-          fixture=baml_language/sdk_tests/crates/csharp/primitive_slice
-          (
-            cd baml_language
-            cargo run --quiet -p baml_cli -- \
-              generate --from sdk_tests/crates/csharp/primitive_slice
-          )
-          while IFS= read -r source; do
-            relative="${source#"$fixture/baml_client/"}"
-            destination="$generated_output/$relative"
-            mkdir -p "$(dirname "$destination")"
-            cp "$source" "$destination"
-          done < <(find "$fixture/baml_client" \
-            -type f -name '*.g.cs' | LC_ALL=C sort)
           LC_ALL=C find "$generated_output" -type f -name '*.g.cs' \
             -printf '%P\n' | LC_ALL=C sort | diff -u <(printf '%s\n' \
               'Baml/Csv/CsvError.g.cs' \
@@ -292,7 +158,7 @@ jobs:
           cp "$package" product-output/
           cmp "$package" "product-output/$(basename "$package")"
           cp native-manifest.sha256 product-output/
-          cp native-provenance.tsv product-output/
+          cp native-provenance.json product-output/
           cp release-plan.json product-output/
           cp -R "$generated_output" product-output/
           mkdir -p product-output/documentation
@@ -314,10 +180,10 @@ jobs:
 
   native-consumer:
     name: Product consumer ${{ matrix.rid }}
-    needs: [platform-matrix, package]
+    needs: [package]
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(inputs.platform_matrix_json) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:

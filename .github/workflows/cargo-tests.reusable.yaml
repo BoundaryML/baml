@@ -699,6 +699,62 @@ jobs:
         with:
           dotnet-version: 10.0.301
 
+      - name: "Test C# NuGet payload comparison"
+        if: matrix.sdk-label == 'csharp'
+        run: |
+          dotnet run --project \
+            baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
+            -- --self-test
+
+      - name: "Test nightly C# package version"
+        if: matrix.sdk-label == 'csharp' && matrix.os-label == 'linux'
+        env:
+          BAML_LANGUAGE_RELEASED_AT: "2026-07-23T12:34:56Z"
+          BAML_LANGUAGE_VERSION_DATE: "20260723"
+          BAML_LANGUAGE_VERSION_NIGHTLY_LETTER: "h"
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          scripts/baml-language-version plan \
+            --channel nightly \
+            --out "$work/release-plan.json"
+          canonical="$(jq -r .canonical_version "$work/release-plan.json")"
+          nuget="$(jq -r .registry_versions.nuget "$work/release-plan.json")"
+          test "$nuget" = "$canonical"
+
+          scripts/baml-csharp-release-contract matrix \
+            | jq -r '.include[]
+              | "runtimes/\(.rid)/native/\(.canonical)"' \
+            | while IFS= read -r runtime_path; do
+                mkdir -p "$work/native/$(dirname "$runtime_path")"
+                printf 'version-only fixture\n' \
+                  > "$work/native/$runtime_path"
+              done
+          printf '<Project />\n' > "$work/baml-bridge.targets"
+          expected_count="$(scripts/baml-csharp-release-contract matrix \
+            | jq '.include | length')"
+          project=baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj
+          dotnet build "$project" --configuration Release --nologo \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget"
+          dotnet pack "$project" --configuration Release --nologo \
+            --no-build --no-restore \
+            --output "$work/package" \
+            -p:NuGetAudit=false \
+            -p:Version="$canonical" \
+            -p:InformationalVersion="$canonical" \
+            -p:PackageVersion="$nuget" \
+            -p:BamlExpectedNativeAssetCount="$expected_count" \
+            -p:BamlNativeAssetRoot="$work/native" \
+            -p:BamlGeneratedTargetsPath="$work/baml-bridge.targets"
+          package="$work/package/baml-bridge.$nuget.nupkg"
+          test -f "$package"
+          test "$(unzip -p "$package" baml-bridge.nuspec \
+            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = "$nuget"
+
       - name: "Verify sccache"
         run: sccache --version
 
