@@ -1850,6 +1850,37 @@ struct DispatchCallLowering<'a> {
     dest: &'a Place,
 }
 
+#[derive(Clone, Copy)]
+enum ConversionFallback {
+    ToString,
+    ToJson,
+}
+
+impl ConversionFallback {
+    fn matches_callee(self, expr: &AstExpr) -> bool {
+        match self {
+            Self::ToString => baml_compiler2_tir::throws_analysis::is_to_string_call_callee(expr),
+            Self::ToJson => baml_compiler2_tir::throws_analysis::is_to_json_call_callee(expr),
+        }
+    }
+
+    fn item_ref(self) -> ItemRef {
+        match self {
+            Self::ToString => ItemRef::Method {
+                package: Name::new("baml"),
+                namespace: vec![],
+                class: Name::new("String"),
+                name: Name::new("from"),
+            },
+            Self::ToJson => ItemRef::Free {
+                package: Name::new("baml"),
+                namespace: vec![Name::new("json")],
+                name: Name::new("from"),
+            },
+        }
+    }
+}
+
 #[derive(Clone)]
 enum InterfaceClassGuard {
     Any,
@@ -7481,145 +7512,13 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
-        if !args.is_empty() {
-            return false;
-        }
-        let callee_expr = self.body.exprs[callee].clone();
-        // Trigger shape (shared with TIR type inference + throws analysis): a
-        // `to_string` member/path call.
-        if !baml_compiler2_tir::throws_analysis::is_to_string_call_callee(&callee_expr) {
-            return false;
-        }
-        // Fires only when TIR left the callee *untyped* (`Unknown`/`Error`) — no
-        // real `to_string` method resolved. A real implementor (any `baml.ToString`
-        // / interface impl) types the callee as a method and is dispatched by the
-        // normal paths. Key on the callee's TIR type, not on resolution presence: a
-        // generic typevar receiver records a placeholder resolution yet still has an
-        // untyped callee, and must take the fallback rather than ICE on it.
-        // A nullable receiver types the missing member as `Unknown | null`, so test
-        // the non-null part (matches the TIR fallback gate).
-        let callee_untyped = self
-            .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    baml_compiler2_tir::narrowing::remove_null(t),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
-        if !callee_untyped {
-            return false;
-        }
-        let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
-            AstExpr::MemberAccess { base, .. } => {
-                let base_id = *base;
-                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id), ty)
-            }
-            AstExpr::Path(segments) => {
-                let receiver_segments = &segments[..segments.len() - 1];
-                // Lower the receiver, mirroring normal path-method receiver
-                // handling: a single-segment root may be a local OR a closure
-                // capture; a multi-segment receiver is a field chain off either.
-                // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
-                // root and `expr_ty(callee)` would ICE on the Unknown callee.)
-                let recv_op = if receiver_segments.len() == 1 {
-                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                        Operand::Copy(Place::Local(recv_local))
-                    } else if let Some(cap_idx) =
-                        self.capture_index_for_name_at(callee, &receiver_segments[0])
-                    {
-                        Operand::Copy(Place::Capture(cap_idx))
-                    } else {
-                        return false;
-                    }
-                } else {
-                    let recv_ty = self
-                        .tir_path_segment_type((
-                            self.current_metadata_scope,
-                            callee,
-                            receiver_segments.len() - 1,
-                        ))
-                        .cloned()
-                        .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
-                            attr: TyAttr::default(),
-                        });
-                    let recv_local = self.builder.temp(recv_ty);
-                    self.lower_multi_segment_path_as_field_chain(
-                        callee,
-                        receiver_segments,
-                        Place::local(recv_local),
-                    );
-                    Operand::Copy(Place::local(recv_local))
-                };
-                let prefix_idx = segments.len() - 2;
-                let ty = self
-                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
-                    .cloned();
-                (recv_op, ty)
-            }
-            _ => return false,
-        };
-
-        // `string.from` is the static `from<T>` on `class String` (baml root
-        // package, no namespace). Pass the receiver's static type as the leading
-        // type arg so `T` binds under monomorphization (a generic receiver `t: T`
-        // would otherwise leave `T` undetermined and ICE). The shim ignores `T` at
-        // runtime, so an out-of-scope typevar or unknown receiver type safely
-        // drops to ntypeargs=0 — matching how `string.from(x)` is normally emitted.
-        let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
-            Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
-            {
-                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
-            }
-            _ => Vec::new(),
-        };
-        let ntypeargs = type_arg_ops.len();
-        let mut all_args = type_arg_ops;
-        all_args.push(recv_op);
-
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Method {
-            package: Name::new("baml"),
-            namespace: vec![],
-            class: Name::new("String"),
-            name: Name::new("from"),
-        }));
-        // `string.from` is `throws never`; the unwind target is harmless/unused.
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let target = self.builder.create_block();
-        // The call destination must be a `Place::Local`; route projection/capture
-        // dests through a temp + assign-through (mirrors the normal call path).
-        if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-        } else {
-            let call_ty = self.expr_ty(expr_id);
-            let tmp = self.builder.temp(call_ty);
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                Place::local(tmp),
-                target,
-                unwind,
-            );
-            self.builder.set_current_block(target);
-            self.builder
-                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
-        }
-        true
+        self.try_lower_conversion_fallback(
+            ConversionFallback::ToString,
+            expr_id,
+            callee,
+            args,
+            dest,
+        )
     }
 
     /// Operator-style `recv.to_json()` -> `baml.json.from(recv)` desugar, the json
@@ -7637,14 +7536,27 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
+        self.try_lower_conversion_fallback(ConversionFallback::ToJson, expr_id, callee, args, dest)
+    }
+
+    fn try_lower_conversion_fallback(
+        &mut self,
+        fallback: ConversionFallback,
+        expr_id: AstExprId,
+        callee: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
         if !args.is_empty() {
             return false;
         }
         let callee_expr = self.body.exprs[callee].clone();
-        if !baml_compiler2_tir::throws_analysis::is_to_json_call_callee(&callee_expr) {
+        if !fallback.matches_callee(&callee_expr) {
             return false;
         }
-        // Fires only when TIR left the callee untyped (no real `to_json` method).
+        // A real `to_string` or `to_json` method has a typed callee and takes
+        // the normal dispatch path. A nullable missing member is `Unknown |
+        // null`, so test its non-null part.
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
             .is_none_or(|t| {
@@ -7664,6 +7576,8 @@ impl<'db> LoweringContext<'db> {
             }
             AstExpr::Path(segments) => {
                 let receiver_segments = &segments[..segments.len() - 1];
+                // A path receiver can be a local, a closure capture, or a field
+                // chain rooted at either.
                 let recv_op = if receiver_segments.len() == 1 {
                     if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
                         Operand::Copy(Place::Local(recv_local))
@@ -7703,10 +7617,10 @@ impl<'db> LoweringContext<'db> {
             _ => return false,
         };
 
-        // `baml.json.from` is the namespace function `from<T>(value: T) -> json`.
-        // Pass the receiver's static type as the leading type arg so `T` binds
-        // under monomorphization (the shim ignores `T` at runtime, so an
-        // out-of-scope typevar / unknown receiver safely drops to ntypeargs=0).
+        // Both fallbacks are generic over the receiver type. Out-of-scope
+        // typevars and unknown receiver types cannot be represented in this
+        // frame, so omit the type argument and let the runtime shim inspect the
+        // value instead.
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
@@ -7723,13 +7637,11 @@ impl<'db> LoweringContext<'db> {
         let mut all_args = type_arg_ops;
         all_args.push(recv_op);
 
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("json")],
-            name: Name::new("from"),
-        }));
+        let callee_op = Operand::Constant(Constant::Function(fallback.item_ref()));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
+        // Calls require a local destination. Route projections and captures
+        // through a temporary, then assign the result to the requested place.
         if let Place::Local(_) = dest {
             self.builder.call_with_type_args(
                 callee_op,
