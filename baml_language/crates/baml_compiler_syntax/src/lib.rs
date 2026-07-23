@@ -7,6 +7,7 @@ pub mod builder;
 pub mod syntax_kind;
 pub mod syntax_node;
 pub mod traversal;
+pub mod validated;
 
 #[cfg(test)]
 mod tests;

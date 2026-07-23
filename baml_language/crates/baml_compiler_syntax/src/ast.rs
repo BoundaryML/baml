@@ -454,7 +454,7 @@ macro_rules! ast_node {
 }
 
 pub mod token {
-    use super::*;
+    use super::{AstElement, AstShapeError, AstToken, SyntaxElement, SyntaxKind, TextRange};
 
     ast_token!(Class, KW_CLASS);
     ast_token!(Enum, KW_ENUM);
@@ -1548,6 +1548,11 @@ impl AttributeNamePart {
             Self::Word(word) => word.span().len().into(),
             Self::Keyword(range) => range.len().into(),
         }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     fn parse(element: SyntaxElement) -> Result<Self, AstShapeError> {
