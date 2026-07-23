@@ -34,6 +34,19 @@ pub enum OutputType {
     /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
     #[strum(serialize = "cpp")]
     Cpp,
+    /// C# SDK compiled directly into an existing .NET project.
+    #[strum(serialize = "csharp")]
+    CSharp,
+}
+
+impl OutputType {
+    /// Conventional generated directory for this target.
+    pub const fn generated_directory(self) -> &'static str {
+        match self {
+            Self::CSharp => "baml_client",
+            _ => "baml_sdk",
+        }
+    }
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as
@@ -48,4 +61,19 @@ pub enum NamingConvention {
     /// Rewrite identifiers to the target language's idiomatic casing
     /// (e.g. `snake_case` for Python functions, `PascalCase` for classes).
     Language,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr as _;
+
+    use super::OutputType;
+
+    #[test]
+    fn csharp_generator_identity_is_canonical() {
+        assert_eq!(OutputType::from_str("csharp"), Ok(OutputType::CSharp));
+        assert_eq!(OutputType::CSharp.to_string(), "csharp");
+        assert_eq!(OutputType::CSharp.generated_directory(), "baml_client");
+        assert_eq!(OutputType::Rust.generated_directory(), "baml_sdk");
+    }
 }

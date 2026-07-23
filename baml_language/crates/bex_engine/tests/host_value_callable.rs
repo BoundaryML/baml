@@ -372,6 +372,61 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+/// A callable that crosses a host boundary may itself be host-owned. APIs such
+/// as the HTTP server retain a callable handle and later ask the engine to
+/// invoke it as a fresh VM root, so that entry path must accept the same
+/// `HostClosure` values that `CallIndirect` accepts inside BAML bytecode.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
+    let source = r#"
+        function retain_callable(f: (int) -> int throws never) -> (int) -> int throws never {
+            return f;
+        }
+    "#;
+    let arc = register_host_callable(|items| {
+        let n = match items.first().and_then(|v| v.value.as_ref()) {
+            Some(baml_outbound_value::Value::IntValue(i)) => *i,
+            other => {
+                return FakeReturn::Err {
+                    class_name: "TypeError".to_string(),
+                    message: format!("expected int arg, got {other:?}"),
+                };
+            }
+        };
+        FakeReturn::Ok(BexExternalValue::Int(n + 1))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+
+    let retained = engine
+        .call_function(
+            "retain_callable",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("retaining the host callable should succeed");
+    let BexExternalValue::Handle(handle) = retained else {
+        panic!("retained callable should cross the boundary as a handle");
+    };
+
+    let result = engine
+        .call_callable(
+            handle,
+            vec![BexExternalValue::Int(41)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host callable handle should be invokable");
+    assert_eq!(result, BexExternalValue::Int(42));
+    drop(arc);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
     let source = r#"

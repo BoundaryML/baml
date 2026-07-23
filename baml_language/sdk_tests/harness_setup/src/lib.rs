@@ -37,6 +37,7 @@ use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
 pub mod cpp;
+pub mod csharp;
 pub mod go;
 pub mod java;
 pub mod python_pydantic2;
@@ -325,4 +326,33 @@ pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod csharp_abi_probe_tests {
+    use std::{env, fs, path::PathBuf};
+
+    #[test]
+    #[ignore = "writes bytecode to the path requested by the C# product workflow"]
+    fn emit_function_calls_bytecode() {
+        let output = PathBuf::from(
+            env::var("BAML_CSHARP_ABI_PROBE_BYTECODE")
+                .expect("BAML_CSHARP_ABI_PROBE_BYTECODE is not set"),
+        );
+        assert!(
+            output.is_absolute(),
+            "C# ABI probe bytecode path must be absolute"
+        );
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("harness_setup is not inside sdk_tests")
+            .join("fixtures");
+        let fixture = super::load_fixture(&fixtures, "function_calls");
+        fs::write(&output, fixture.baml_bytecode).unwrap_or_else(|error| {
+            panic!(
+                "failed to write C# ABI probe bytecode to {}: {error}",
+                output.display()
+            )
+        });
+    }
 }

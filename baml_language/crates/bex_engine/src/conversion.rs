@@ -1714,8 +1714,7 @@ fn peel_single_container_member<'a>(
 }
 
 /// Whether a host-callable's declared return type contains a position the
-/// host-return validator treats as "accept anything": a `RuntimeTy::Void` (the runtime
-/// form of an erased generic type variable, and also a bare `-> void`) or a
+/// host-return validator treats as "accept anything", such as
 /// `RuntimeTy::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
@@ -1726,7 +1725,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // against these declared types (the host-return validator has no
         // positive discriminator for them), so a host could inject a value that
         // violates the declared type. Reject binding such a callable.
-        //   - `Void`/`BuiltinUnknown`: accept-anything tops.
+        //   - `BuiltinUnknown`: accept-anything top.
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
@@ -1734,8 +1733,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         //     only checks enum identity).
         //   - `Future`: the host cannot produce a VM future, and nothing
         //     validates one.
-        RuntimeTy::Void { .. }
-        | RuntimeTy::BuiltinUnknown { .. }
+        RuntimeTy::BuiltinUnknown { .. }
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
@@ -1753,6 +1751,7 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 
         // Directly validated by the host-return validator.
         RuntimeTy::Null { .. }
+        | RuntimeTy::Void { .. }
         | RuntimeTy::Bool { .. }
         | RuntimeTy::Int { .. }
         | RuntimeTy::Float { .. }

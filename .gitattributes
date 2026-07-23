@@ -16,3 +16,5 @@ typescript2/pkg-playground/src/__fixtures__/*.json text eol=lf
 # on Windows) turns every "\n\n" into "\r\n\r\n", so the whole body streams
 # as one chunk and the streaming e2e tests observe zero partials (B-315).
 *.snap.sse text eol=lf
+# The C# union generator emits and byte-checks LF deterministically.
+baml_language/sdks/csharp/bridge_csharp/src/Values/BamlUnion.cs text eol=lf
