@@ -31,7 +31,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
-    builder::TypeInferenceBuilder,
+    builder::{TypeInferenceBuilder, duplicate_parameter_names, parameter_binding_ty},
     infer_context::{InferContext, TypeCheckDiagnostics},
     lower_type_expr::TypeVarBoundsMap,
     ty::{FunctionParamTy, Ty, TyAttr},
@@ -1027,6 +1027,8 @@ fn add_lambda_params_to_builder(
     // The lambda's own generic bounds (its env extends the enclosing scope's) let a
     // `T.member` projection in a parameter type resolve `T`'s declaring interface.
     let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
+    let duplicate_names =
+        duplicate_parameter_names(func_def.params.iter().map(|param| &param.name));
     for (i, param) in func_def.params.iter().enumerate() {
         let param_ty = param
             .type_expr
@@ -1058,7 +1060,8 @@ fn add_lambda_params_to_builder(
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
             });
-        builder.add_local(param.name.clone(), param_ty.clone());
+        let local_ty = parameter_binding_ty(&param.name, &param_ty, &duplicate_names);
+        builder.add_local(param.name.clone(), local_ty);
         builder.param_types.push((param.name.clone(), param_ty));
     }
 }
@@ -2121,6 +2124,8 @@ pub fn infer_scope_types<'db>(
                     builder.set_return_type(return_ty.clone());
 
                     // Add parameter bindings as locals
+                    let duplicate_names =
+                        duplicate_parameter_names(sig.params.iter().map(|param| &param.name));
                     for (i, param) in sig.params.iter().enumerate() {
                         let param_type_span = sig_sm
                             .param_type_spans
@@ -2155,7 +2160,9 @@ pub fn infer_scope_types<'db>(
                             builder
                                 .validate_type_generic_bounds_at_span(param_type_span, &param_ty);
                         }
-                        builder.add_local(param.name.clone(), param_ty.clone());
+                        let local_ty =
+                            parameter_binding_ty(&param.name, &param_ty, &duplicate_names);
+                        builder.add_local(param.name.clone(), local_ty);
                         builder.param_types.push((param.name.clone(), param_ty));
                     }
 
