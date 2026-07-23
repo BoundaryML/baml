@@ -2,22 +2,6 @@ import XCTest
 
 @testable import BamlBridge
 
-private struct FirstIntArm: BamlDecodable, Equatable {
-    let value: Int
-
-    static func _bamlDecode(_ value: BamlOutboundValue) throws -> FirstIntArm {
-        FirstIntArm(value: try Int._bamlDecode(value))
-    }
-}
-
-private struct SecondIntArm: BamlDecodable, Equatable {
-    let value: Int
-
-    static func _bamlDecode(_ value: BamlOutboundValue) throws -> SecondIntArm {
-        SecondIntArm(value: try Int._bamlDecode(value))
-    }
-}
-
 final class FFISmokeTests: XCTestCase {
     /// Proves the full link chain: SwiftPM → BamlBridgeFFI.xcframework →
     /// Rust staticlib → `version()` over the C ABI (including Buffer
@@ -83,27 +67,32 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(payload.fields.isEmpty)
     }
 
-    /// Both test arms accept the same integer payload, so structural fallback
-    /// would always choose the first. The canonical index must select t1 even
-    /// when legacy display metadata is misleading.
-    func testOutboundUnionUsesSelectedOptionIndex() throws {
+    /// The raw engine union contains a null hole that the compact Swift wrapper
+    /// omits. Index 2 must first resolve through self_type to int[] and only then
+    /// select t1; applying index 2 directly to BamlUnion2 would be out of range.
+    func testOutboundUnionResolvesSelectedTypeThroughSelfType() throws {
         var payload = BamlBridge_Cffi_V1_BamlOutboundValue()
-        payload.intValue = 42
+        payload.listValue = BamlBridge_Cffi_V1_BamlValueList()
 
         var union = BamlBridge_Cffi_V1_BamlValueUnionVariant()
         union.value = payload
-        union.valueOptionName = "FirstIntArm"
-        union.selectedOptionIndex = 1
+        union.selfType = BamlTypeDescriptor.union([
+            .null,
+            .list(.string),
+            .list(.int),
+        ]).raw
+        union.valueOptionName = "string[]"
+        union.selectedOptionIndex = 2
 
         var wrapped = BamlBridge_Cffi_V1_BamlOutboundValue()
         wrapped.unionVariantValue = union
-        let decoded = try BamlUnion2<FirstIntArm, SecondIntArm>._bamlDecode(
+        let decoded = try BamlUnion2<[String], [Int]>._bamlDecode(
             BamlOutboundValue(wrapped)
         )
 
-        guard case .t1(let arm) = decoded else {
-            return XCTFail("selected_option_index should select the second arm")
+        guard case .t1(let ints) = decoded else {
+            return XCTFail("selected type should select the compact int[] arm")
         }
-        XCTAssertEqual(arm.value, 42)
+        XCTAssertEqual(ints, [])
     }
 }

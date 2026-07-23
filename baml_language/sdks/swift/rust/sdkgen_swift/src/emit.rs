@@ -594,15 +594,18 @@ pub(crate) fn render_recursive_union_alias(
         out,
         "\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{"
     );
-    out.push_str("\t\tif let selected = v.unionSelectedOptionIndex() {\n\t\t\tswitch selected {\n");
+    out.push_str("\t\tif let selected = try v.unionSelectedType() {\n");
     for (i, ty) in arm_tys.iter().enumerate() {
-        let _ = writeln!(out, "\t\t\tcase {i}: return .t{i}(try {ty}._bamlDecode(v))");
+        let _ = writeln!(
+            out,
+            "\t\t\tif {ty}._bamlDecodeType == selected {{ return .t{i}(try {ty}._bamlDecode(v)) }}"
+        );
     }
     let _ = writeln!(
         out,
-        "\t\t\tdefault: throw BamlDecodeError.typeMismatch(expected: \"{name}\", got: \"union option index \\(selected)\")"
+        "\t\t\tthrow BamlDecodeError.typeMismatch(expected: \"{name}\", got: \"selected type not present in host union\")"
     );
-    out.push_str("\t\t\t}\n\t\t}\n");
+    out.push_str("\t\t}\n");
     out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
     for (i, arm) in arms.iter().enumerate() {
         if let Ty::Class(class_name, _, _) = arm {

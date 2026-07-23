@@ -31,14 +31,34 @@ public struct BamlOutboundValue: Sendable {
         return name.isEmpty ? nil : name
     }
 
-    /// Canonical selected-arm position in the outer union's `self_type`.
-    /// Presence is significant because zero is the first valid arm. Generated
-    /// union decoders consult this before display names or payload shape.
-    public func unionSelectedOptionIndex() -> Int? {
+    /// Exact type selected by the outer union envelope. The wire index is
+    /// resolved through the raw `self_type` options before it reaches a compact
+    /// generated `BamlUnionN`: raw options may contain null holes or optional
+    /// shells that are absent from the Swift union wrapper.
+    public func unionSelectedType() throws -> BamlTypeDescriptor? {
         guard case .unionVariantValue(let variant) = raw.value,
               variant.hasSelectedOptionIndex
         else { return nil }
-        return Int(variant.selectedOptionIndex)
+        guard variant.hasSelfType,
+              case .union(let union)? = variant.selfType.ty
+        else {
+            throw BamlDecodeError.typeMismatch(
+                expected: "union self_type",
+                got: "indexed union without a union self_type"
+            )
+        }
+        let selected = Int(variant.selectedOptionIndex)
+        guard union.options.indices.contains(selected) else {
+            throw BamlDecodeError.typeMismatch(
+                expected: "union option in self_type",
+                got: "union option index \(selected)"
+            )
+        }
+        var selectedType = union.options[selected]
+        while case .optional(let optional)? = selectedType.ty, optional.hasInner {
+            selectedType = optional.inner
+        }
+        return BamlTypeDescriptor(selectedType)
     }
 
     /// The wire class FQN if this value's arm is a class, else nil.
@@ -82,10 +102,18 @@ public protocol BamlDecodable {
     /// extension member) so generic union decode dispatches to the
     /// concrete type's witness.
     static var _bamlArmIdentity: String? { get }
+
+    /// Exact descriptor used to match an indexed outbound selection to this
+    /// host arm. Static types that also conform to `BamlEncodable` inherit this
+    /// from their cheap encode-side descriptor.
+    static var _bamlDecodeType: BamlTypeDescriptor? { get }
 }
 
 extension BamlDecodable {
     public static var _bamlArmIdentity: String? { nil }
+    public static var _bamlDecodeType: BamlTypeDescriptor? {
+        (Self.self as? any BamlEncodable.Type)?._bamlType
+    }
 }
 
 func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {

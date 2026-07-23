@@ -23,11 +23,15 @@ public struct BamlInboundValue: Sendable {
 /// Generated/static Swift values expose this cheaply from their host type; the
 /// encoder attaches it only at a selected union boundary or for nominal class
 /// identity, without walking the runtime value to infer a type.
-public struct BamlTypeDescriptor: @unchecked Sendable {
+public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
     var raw: BamlBridge_Cffi_V1_BamlTy
 
     init(_ raw: BamlBridge_Cffi_V1_BamlTy) {
         self.raw = raw
+    }
+
+    public static func == (lhs: BamlTypeDescriptor, rhs: BamlTypeDescriptor) -> Bool {
+        lhs.raw == rhs.raw
     }
 
     private static func primitive(

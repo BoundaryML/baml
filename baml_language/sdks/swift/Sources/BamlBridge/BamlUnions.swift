@@ -81,13 +81,10 @@ extension BamlUnion2: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable {
 extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -179,14 +176,11 @@ extension BamlUnion3: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion3", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion3", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -288,15 +282,12 @@ extension BamlUnion4: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            case 3: return .t3(try T3._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion4", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion4", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -408,16 +399,13 @@ extension BamlUnion5: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            case 3: return .t3(try T3._bamlDecode(v))
-            case 4: return .t4(try T4._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion5", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion5", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -539,17 +527,14 @@ extension BamlUnion6: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            case 3: return .t3(try T3._bamlDecode(v))
-            case 4: return .t4(try T4._bamlDecode(v))
-            case 5: return .t5(try T5._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion6", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion6", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -681,18 +666,15 @@ extension BamlUnion7: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable, T6: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            case 3: return .t3(try T3._bamlDecode(v))
-            case 4: return .t4(try T4._bamlDecode(v))
-            case 5: return .t5(try T5._bamlDecode(v))
-            case 6: return .t6(try T6._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion7", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeType == selected { return .t6(try T6._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion7", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
@@ -834,19 +816,16 @@ extension BamlUnion8: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, T2: BamlDecodable, T3: BamlDecodable, T4: BamlDecodable, T5: BamlDecodable, T6: BamlDecodable, T7: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
-        if let selected = v.unionSelectedOptionIndex() {
-            switch selected {
-            case 0: return .t0(try T0._bamlDecode(v))
-            case 1: return .t1(try T1._bamlDecode(v))
-            case 2: return .t2(try T2._bamlDecode(v))
-            case 3: return .t3(try T3._bamlDecode(v))
-            case 4: return .t4(try T4._bamlDecode(v))
-            case 5: return .t5(try T5._bamlDecode(v))
-            case 6: return .t6(try T6._bamlDecode(v))
-            case 7: return .t7(try T7._bamlDecode(v))
-            default:
-                throw BamlDecodeError.typeMismatch(expected: "BamlUnion8", got: "union option index \(selected)")
-            }
+        if let selected = try v.unionSelectedType() {
+            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeType == selected { return .t6(try T6._bamlDecode(v)) }
+            if T7._bamlDecodeType == selected { return .t7(try T7._bamlDecode(v)) }
+            throw BamlDecodeError.typeMismatch(expected: "BamlUnion8", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
         if let arm = v.unionSelectedArm() {
