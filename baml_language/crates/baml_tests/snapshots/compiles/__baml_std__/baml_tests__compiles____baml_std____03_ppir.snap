@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4640
 ---
 === PPIR ===
 
@@ -1974,6 +1973,7 @@ class baml.sys.ShellOutput$stream {
   exit_code: int | null
 }
 function baml.sys.argv() -> string[]  [builtin]
+function baml.sys.collect_garbage() -> null  [builtin]
 function baml.sys.exec(program: string, args: string[]?, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.exit(code: int) -> never  [builtin]
 function baml.sys.now_ms() -> int  [builtin]
