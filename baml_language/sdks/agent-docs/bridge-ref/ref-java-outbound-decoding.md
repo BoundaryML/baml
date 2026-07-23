@@ -546,10 +546,20 @@ variant `String`** (`:865-866`).
 5. **bare fallback (load-bearing):** the bare decoded inner value, when the arm
    set / FQN is unregistered or no arm matches.
 
-The descriptor-driven path (`decodeUnionWithDesc:1201`) applies the same rule:
-`extractUnionSelectedType:1465` reads `selected_option_index` off the wire union
-first and, when present, wraps the selected arm directly; otherwise it falls back
-to structural `armMatchesValue` in declaration order.
+The descriptor-driven path (`decodeUnionWithDesc:1201`) applies the same rule, but
+resolves the arm **by type, not by raw wire index**: `extractUnionSelectedType:1465`
+reads `selected_option_index` off the wire and resolves it to the selected *type*
+against `self_type` (`selfTypeOptionAt`), then the decoder locates that type in the
+descriptor's arms by value — `int selectedArm = arms.indexOf(selectedType)`
+(`:1219`) — before `wrapArm`. That match is **unambiguous** because canonical union
+members are structurally distinct: `baml_type::normalize`'s `canonicalize_union`
+sort+dedups members (`normalize.rs:1601`, `flat.sort(); flat.dedup();`), so a union
+can never carry two value-equal arms (e.g. `string | string` collapses to
+`string`). Resolving by value (rather than trusting the raw index into the
+descriptor) is what makes this robust to any order difference between the wire
+`self_type` and the descriptor's declaration-order arms. Only when
+`selected_option_index` is **absent** does it fall back to structural
+`armMatchesValue` in declaration order.
 
 > ⚠ **Deviation from Python — precise contrast on union metadata.** The Python
 > doc says the `union_variant_value` arm returns the "recursively decoded inner

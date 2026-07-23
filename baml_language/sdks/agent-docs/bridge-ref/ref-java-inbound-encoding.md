@@ -246,7 +246,7 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 | `Enum<?>` (unregistered) | `IllegalArgumentException` | An unregistered enum type is not a BAML value. Rejected via `unsupported()` (an `IllegalArgumentException` subclass), named to the owning argument at the top-level kwarg loop (`:189-192`; pinned by `WireCodecTest.inbound_unregistered_enum_throws`). |
 | `BamlMedia` (Image/Audio/Video/Pdf) | `class_value` (8) | Single `_data` field = `handle{cloneKeyForWire, handleType}`; the exact media kind rides `InboundValue.value_type.media.kind` (**not** a class FQN — `writeMediaType`, `ProtoWriter.java:413-426`, `encodeMediaClass:437-455`), mirroring Python's `value_type.media.kind` (`proto.py:264-272`). |
 | bare `BamlHandle` | `handle` (10) | `BamlHandle{key = cloneKeyForWire, handle_type}` (`:200-210`). |
-| `BamlUnion` (Union2…Union10 arm record) | *(unwrapped, arm type annotated)* | No union envelope inbound. When a **contextual union type** is threaded (see "The `value_type` annotation" below), the encoder reads the arm index (`genericUnionArmIndex`, the `Arm{n}` record name), selects that arm's exact declared type from the contextual union, and re-encodes the bare `value()` under it — attaching `value_type` = the selected arm type whenever payload shape would lose it (`ProtoWriter.java:212-228, 311-314`, `unwrapGenericUnion:495-502`). With no contextual union (a bare position) it unwraps to `value()` and encodes bare. |
+| `BamlUnion` (Union2…Union10 arm record) | *(unwrapped, arm type annotated)* | No union envelope inbound. When a **contextual union type** is threaded (see "The `value_type` annotation" below), the encoder reads the arm index (`genericUnionArmIndex`, the `Arm{n}` record name), selects that arm's exact declared type from the contextual union, and re-encodes the bare `value()` under it — attaching `value_type` = the selected arm's exact type **eagerly** (the typed producer serializes the node type its host value already knows; it does not gate on whether *this* node's payload shape happens to be ambiguous — `ProtoWriter.java:212-228, 229, 311-314`, `unwrapGenericUnion:495-502`). With no contextual union (a bare position) it unwraps to `value()` and encodes bare. |
 | nominal union wrapper record | *(unwrapped, arm type annotated)* | Same rule via `TypeRegistry.isUnionRecord` / `unionRecordArmIndex` → select the contextual arm type, encode the inner value under it (`ProtoWriter.java:212-228, 315-319`, `TypeRegistry.unionRecordInner:361-367`, `unionRecordArmIndex:370-373`). |
 | `baml_bridge.BamlStream` (streaming receiver) | `handle` (10) | Delegates to the `BamlHandle` arm: a `handle_value(ADT_TAGGED_HEAP_HANDLE)` over a freshly cloned key (`:226-235`). Landed `a6e3ca99e`. |
 | host callable (`Function`/`BiFunction`/`Supplier`/`Consumer`/`BiConsumer`/`Runnable`, or a generated `BamlHostCallable`) | `handle` (10) | **LANDED (`202883518`)** — `isHostCallable(value)` (`:256, 414-422`) registers it in the Java-side registry via `BamlFfi.registerHostCallable(value)` and emits `handle{key, HOST_VALUE_CALLABLE}` (`:256-268`). The engine binds it to an `Object::HostClosure` and dispatches back through `BamlFfi.hostDispatch` on the daemon executor. Mirrors Python's `register_host_callable` + `Handle{HOST_VALUE_CALLABLE}`. |
@@ -301,11 +301,15 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 > or an outbound decode) and writes one `value_type.class_ty.type_args` entry per
 > token via `BamlType.toWireTy()` (`ProtoWriter.java:344, 402-411`), so a generic
 > instance's concrete args reify across the wire on the *value*. A **non-generic
-> (or unbound) instance has an empty side-table**, so no `type_args` are written
-> and the output is **byte-identical to the pre-generics encoding** (the regression
-> non-generic callers depend on). Explicit generic *bindings* can still travel via
-> the top-level `CallFunctionArgs.type_args` bag (below); the two channels are
-> independent.
+> (or unbound) instance has an empty side-table**, so `writeClassType` writes the
+> bare `value_type.class_ty.name` with **no `type_args`** — the generics-reification
+> channel adds nothing for it (the regression non-generic callers depend on).
+> Note this is *not* byte-identical to the pre-`ceae8ea6c` wire: that migration
+> relocated **all** class identity from the removed `InboundClassValue.class_ty`
+> onto `InboundValue.value_type.class_ty`, so a non-generic class's bytes changed
+> with the relocation even though the generics feature itself contributes nothing.
+> Explicit generic *bindings* can still travel via the top-level
+> `CallFunctionArgs.type_args` bag (below); the two channels are independent.
 
 > ⚠ **Deviation from Python (map keys).** Python can put string/int/bool/enum
 > keys onto `InboundMapEntry` and lets Rust stringify them on decode. Java's
@@ -350,12 +354,20 @@ from a **contextual union** supplied by generated codegen:
 **What gets emitted.** When a `BamlUnion`/union-record meets a contextual `UNION`
 type, `encodeInboundValue` (`ProtoWriter.java:212-228`) picks
 `options.get(armIndex)` — the selected arm's exact declared type — and re-encodes
-the bare inner value under it with `selectedArm = true`. The `selectedArm` flag
-promotes that arm type to `exactNodeType`, and the tail of `encodeInboundValue`
-(`:349-368`) writes it as `value_type` unless the node is already self-describing
-(a class/media value, which annotates directly) or the type is a
-union/optional/typevar/unknown (which cannot name one exact node). This covers
-the three canonical cases end to end:
+the bare inner value under it with `selectedArm = true`. The `selectedArm = true`
+flag sets `exactNodeType = contextualType` unconditionally (`:229`), and the tail
+of `encodeInboundValue` (`:349-368`) then writes it as `value_type` for **every**
+representable selected-arm node — **eagerly**, not gated on whether that node's
+payload shape is ambiguous. The only nodes it skips are ones that are already
+self-describing (a class/media value annotates its identity directly) or whose
+type cannot name one exact node (`union`/`optional`/`typevar`/`unknown`). So an
+`int | string` `Arm0(7L)` still writes `value_type: int` even though a bare
+`int_value` already inhabits only the `int` arm — the typed producer serializes
+the node type it knows rather than reverse-engineering ambiguity per node (this is
+#4087's stated design: "the non-empty child deliberately carries `value_type:
+string[]` even though its element currently makes the arm discoverable"). The
+three canonical cases below are therefore *why* the channel exists, not a runtime
+gate the encoder evaluates:
 
 - **Empty container arm** (`int[] | string[]`, empty `Arm1(int[])`): the list
   node carries `value_type: int[]` (`:259-263`), so the engine binds `int[]`
@@ -366,12 +378,15 @@ the three canonical cases end to end:
   `value_type: literal("draft")`; the engine's decoder preserves literal identity
   (`value_decode.rs`, `typed_literal_preserves_identity_beyond_payload_shape`).
 
-A **top-level or nested container that is NOT inside a union arm stays
-unannotated** — e.g. a plain `List<Long>` argument writes no `value_type`, since
-the declared parameter type already tells the engine the element type. This is the
-sparse contract: annotate the ambiguity, nothing more. This matches Python, which
-also writes `value_type` only for class identity and media kind, never for empty
-containers or union arms (Python cannot know the arm — it has no wrapper).
+The sparseness is at the **boundary**, not per node: only a selected-union-arm
+subtree (plus class identity and media kind) is annotated at all — a **top-level
+or nested container that is NOT inside a union arm stays unannotated**, e.g. a
+plain `List<Long>` argument writes no `value_type` (`selectedArm = false`), since
+the declared parameter type already tells the engine the element type. *Within* a
+selected arm, though, annotation is eager. This still matches Python at the
+boundary — Python writes `value_type` only for class identity and media kind,
+never for empty containers or union arms (Python has no wrapper, so it cannot know
+the arm) — while Java, a typed producer, additionally annotates the arm subtree.
 
 > ⚠ **Deviation from Python (typed producer vs dynamic default).** Python is a
 > registered **dynamic** language: an unannotated ambiguous payload (an empty
@@ -582,15 +597,18 @@ encoder error.
 - Generated Java static types are compile-only. Runtime arg encoding is
   structural and Java-value-driven (`ProtoWriter.encodeInboundValue` dispatches
   on runtime shape, `:200-370`).
-- The inbound wire payload carries class/enum FQNs for generated objects (not
-  declared parameter types) on the node-level `InboundValue.value_type` (class
-  identity moved off the `class_value` payload in `ceae8ea6c`) plus, for a reified
-  generic instance, its concrete `value_type.class_ty.type_args` from the
-  side-table (on parity with Python; `ProtoWriter.java:344, 402-411`). A
-  non-generic/unbound instance writes none, byte-identical to the pre-generics
-  encoding. Selected union arms additionally carry the arm's exact `value_type`
-  (empty containers, overlapping arms, literals). Rust and the engine own coercion
-  and BAML type validation.
+- The inbound wire payload carries generated objects' identities (not declared
+  parameter types), but on **different channels by kind**: a **class** FQN — plus,
+  for a reified generic instance, its concrete `type_args` from the side-table —
+  rides the node-level `InboundValue.value_type.class_ty` (class identity moved off
+  the `class_value` payload in `ceae8ea6c`; `ProtoWriter.java:344, 402-411`), while
+  an **enum**'s FQN + variant ride `InboundEnumValue.name`/`value` (**not**
+  `value_type`; `encodeEnum`). A non-generic/unbound class instance writes no
+  `type_args` — only the bare `value_type.class_ty.name` (the identity itself
+  relocated to `value_type` in `ceae8ea6c`, so this is not byte-identical to the
+  older `InboundClassValue.class_ty` wire). Selected union arms additionally carry
+  the arm's exact `value_type` (empty containers, overlapping arms, literals). Rust
+  and the engine own coercion and BAML type validation.
 - Omit-vs-explicit-null is preserved by the `$Opts` touched-set, not a sentinel:
   a setter never called ⇒ omitted (engine default); a setter called with `null`
   ⇒ an entry with an absent `value` oneof (explicit BAML `null`)
