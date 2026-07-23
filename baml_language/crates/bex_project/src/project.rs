@@ -848,6 +848,15 @@ impl BexProject {
             Vec::new(),
         )
         .map_err(RuntimeError::Engine)?;
+        engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+            let cancelled = error.cancelled;
+            let error = error.into_engine_error();
+            if cancelled {
+                log::warn!("cancelled spawned task failed: {error}");
+            } else {
+                log::error!("unhandled spawned task failed: {error}");
+            }
+        })));
         Ok(EngineCandidate {
             source_revision: compiled.source_revision,
             engine,
@@ -894,26 +903,37 @@ impl BexProject {
         candidate.engine.activate_profiling();
         let engine = Arc::new(candidate.engine);
 
-        let receipt = {
+        let (receipt, retired_engine) = {
             let mut runtime = self.lock_runtime()?;
             let generation = runtime.next_generation;
             runtime.next_generation += 1;
-            runtime.installed = Some(InstalledEngine {
-                source_revision: candidate.source_revision,
-                generation,
-                engine,
-            });
+            let retired_engine = runtime
+                .installed
+                .replace(InstalledEngine {
+                    source_revision: candidate.source_revision,
+                    generation,
+                    engine,
+                })
+                .map(|installed| installed.engine);
             // Derived work bound to the previous engine is superseded; the
             // registry is cleared atomically with the engine swap.
             runtime.supersede_derived();
             runtime.collection_epoch += 1;
             runtime.registry = None;
-            CommitReceipt {
-                source_revision: candidate.source_revision,
-                generation,
-            }
+            (
+                CommitReceipt {
+                    source_revision: candidate.source_revision,
+                    generation,
+                },
+                retired_engine,
+            )
         };
         drop(source);
+        if let Some(engine) = retired_engine {
+            crate::BackgroundSpawner::new().spawn(async move {
+                engine.shutdown().await;
+            });
+        }
         Ok(CommitOutcome::Committed(receipt))
     }
 

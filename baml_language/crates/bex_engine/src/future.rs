@@ -45,6 +45,7 @@ use ::bex_heap::{
 };
 use ::bex_vm_types::{
     FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
+    errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
 use ::core::sync::atomic::AtomicUsize;
@@ -168,11 +169,16 @@ impl FutureManagerGuard<'_> {
 
     /// Transition a future to `Future::Error(value)` with the given BAML
     /// error/panic value.
-    pub fn err_future(&mut self, id: FutureId, err: Value) -> Result<(), EngineError> {
+    pub fn err_future(
+        &mut self,
+        id: FutureId,
+        err: Value,
+        trace: Vec<StackFrame>,
+    ) -> Result<(), EngineError> {
         let heap = ::std::sync::Arc::clone(self.tlab().heap());
         if let Some((fut, self_ptr)) = self.take_pending(id)? {
             // SAFETY: see `fulfill_future`.
-            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err) };
+            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err, trace) };
         }
         Ok(())
     }
@@ -613,7 +619,7 @@ mod tests {
         let (id_a, _) = guard.new_future(CancellationToken::new());
         let (id_b, _) = guard.new_future(CancellationToken::new());
         assert_eq!(guard.active_future_count(), 2);
-        guard.err_future(id_a, Value::int(7)).unwrap();
+        guard.err_future(id_a, Value::int(7), Vec::new()).unwrap();
         guard
             .internal_error_future(
                 id_b,

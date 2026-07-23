@@ -4,7 +4,9 @@ mod common;
 
 use std::sync::{Arc, Mutex};
 
-use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
+use bex_engine::{
+    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder, is_cancelled_engine_error,
+};
 use bex_heap::CollectionLevel;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -142,6 +144,9 @@ async fn unobserved_child_error_surfaces_after_minor_gc() {
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
     assert!(!errors[0].cancelled);
+
+    engine.collect_garbage(CollectionLevel::Major).await;
+    assert!(engine.take_unhandled_spawn_errors().is_empty());
 }
 
 #[tokio::test]
@@ -220,11 +225,8 @@ async fn handler_receives_unhandled_spawn_error() {
     let engine = make_engine(source);
     let handled = Arc::new(Mutex::new(Vec::new()));
     let handled_for_callback = Arc::clone(&handled);
-    engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |value, cancelled| {
-        handled_for_callback
-            .lock()
-            .unwrap()
-            .push((value, cancelled));
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |error| {
+        handled_for_callback.lock().unwrap().push(error);
     })));
 
     assert_eq!(
@@ -233,11 +235,69 @@ async fn handler_receives_unhandled_spawn_error() {
     );
     engine.shutdown().await;
 
-    assert_eq!(
-        *handled.lock().unwrap(),
-        vec![(BexExternalValue::String("boom".into()), false)]
-    );
+    let handled = handled.lock().unwrap();
+    assert_eq!(handled.len(), 1);
+    assert_eq!(handled[0].value, BexExternalValue::String("boom".into()));
+    assert!(!handled[0].trace.is_empty());
+    assert!(!handled[0].cancelled);
     assert!(engine.take_unhandled_spawn_errors().is_empty());
+}
+
+#[tokio::test]
+async fn installing_handler_drains_already_queued_errors() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            spawn { bad() };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+
+    let handled = Arc::new(Mutex::new(Vec::new()));
+    let handled_for_callback = Arc::clone(&handled);
+    engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |error| {
+        handled_for_callback.lock().unwrap().push(error);
+    })));
+
+    let handled = handled.lock().unwrap();
+    assert_eq!(handled.len(), 1);
+    assert_eq!(handled[0].value, BexExternalValue::String("boom".into()));
+    assert!(engine.take_unhandled_spawn_errors().is_empty());
+}
+
+#[tokio::test]
+async fn panicking_handler_preserves_the_current_report() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            spawn { bad() };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        engine.set_unhandled_spawn_error_handler(Some(Arc::new(|_| {
+            panic!("handler failed");
+        })));
+    }));
+    assert!(result.is_err());
+
+    engine.set_unhandled_spawn_error_handler(None);
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
 }
 
 #[tokio::test]
@@ -257,11 +317,10 @@ async fn multiple_unhandled_spawn_errors_are_reported() {
     );
     engine.shutdown().await;
 
-    let mut values: Vec<_> = engine
-        .take_unhandled_spawn_errors()
-        .into_iter()
-        .map(|error| error.value)
-        .collect();
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 2);
+    assert_ne!(errors[0].report_id, errors[1].report_id);
+    let mut values: Vec<_> = errors.into_iter().map(|error| error.value).collect();
     values.sort_by_key(|value| format!("{value:?}"));
     assert_eq!(
         values,
@@ -270,6 +329,100 @@ async fn multiple_unhandled_spawn_errors_are_reported() {
             BexExternalValue::String("two".into())
         ]
     );
+}
+
+#[tokio::test]
+async fn shutdown_waits_for_active_calls_and_rejects_new_calls() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            spawn { bad() };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move { call_main(&call_engine, true).await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    let shutdown_engine = Arc::clone(&engine);
+    let shutdown = tokio::spawn(async move { shutdown_engine.shutdown().await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    assert_eq!(
+        call_main(&engine, true).await,
+        Err(EngineError::ShuttingDown)
+    );
+    assert_eq!(call.await.unwrap().unwrap(), BexExternalValue::Int(1));
+    shutdown.await.unwrap();
+
+    let errors = engine.take_unhandled_spawn_errors();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].value, BexExternalValue::String("boom".into()));
+}
+
+#[tokio::test]
+async fn active_call_can_be_cancelled_while_shutdown_waits() {
+    let source = r#"
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(500n));
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    let call_id = sys_types::CallId::next();
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move {
+        call_engine
+            .call_function(
+                "main",
+                vec![],
+                FunctionCallContextBuilder::new(call_id).build(),
+                true,
+            )
+            .await
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    let shutdown_engine = Arc::clone(&engine);
+    let shutdown = tokio::spawn(async move { shutdown_engine.shutdown().await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+
+    engine.cancel_function_call(call_id).unwrap();
+    let error = call.await.unwrap().unwrap_err();
+    assert!(is_cancelled_engine_error(&error));
+    shutdown.await.unwrap();
+}
+
+#[tokio::test]
+async fn cancelled_shutdown_restores_the_running_state() {
+    let source = r#"
+        function main() -> int {
+            spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
+                42
+            };
+            1
+        }
+    "#;
+    let engine = make_engine(source);
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+
+    let shutdown_engine = Arc::clone(&engine);
+    let shutdown = tokio::spawn(async move { shutdown_engine.shutdown().await });
+    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    shutdown.abort();
+    assert!(shutdown.await.unwrap_err().is_cancelled());
+
+    assert_eq!(
+        call_main(&engine, true).await.unwrap(),
+        BexExternalValue::Int(1)
+    );
+    engine.shutdown().await;
 }
 
 #[tokio::test]

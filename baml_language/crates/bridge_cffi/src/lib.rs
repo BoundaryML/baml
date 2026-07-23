@@ -226,9 +226,10 @@ pub fn initialize_runtime_from_files_with_sys_ops(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
-    runtime.set_unhandled_spawn_error_handler(Some(Arc::new(|value, cancelled| {
+    runtime.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+        let cancelled = error.cancelled;
         platform::dispatch_unhandled_spawn_error(
-            unhandled_spawn_error_to_outbound(value),
+            unhandled_spawn_error_to_outbound(error),
             cancelled,
         );
     })));

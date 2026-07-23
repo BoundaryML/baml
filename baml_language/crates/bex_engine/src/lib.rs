@@ -76,9 +76,10 @@ pub mod trace_heap;
 mod trace_value_encode;
 pub mod value_capture;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
     sync::{
-        Arc, Mutex, RwLock,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -129,15 +130,48 @@ const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
+    pub report_id: usize,
     pub value: BexExternalValue,
+    pub trace: Vec<bex_vm::StackFrame>,
     pub cancelled: bool,
 }
 
-pub type UnhandledSpawnErrorHandler = Arc<dyn Fn(BexExternalValue, bool) + Send + Sync + 'static>;
+impl UnhandledSpawnError {
+    pub fn into_engine_error(self) -> EngineError {
+        EngineError::UnhandledThrow {
+            value: Box::new(self.value),
+            trace: self.trace,
+        }
+    }
+}
 
+pub type UnhandledSpawnErrorHandler = Arc<dyn Fn(UnhandledSpawnError) + Send + Sync + 'static>;
+
+#[derive(Clone)]
 enum RootedUnhandledValue {
     Inline(Value),
     Handle(bex_external_types::Handle),
+}
+
+#[derive(Clone)]
+struct RootedUnhandledSpawnError {
+    report_id: usize,
+    value: RootedUnhandledValue,
+    trace: Vec<bex_vm::StackFrame>,
+    cancelled: bool,
+}
+
+struct UnhandledSpawnState {
+    handler: Option<UnhandledSpawnErrorHandler>,
+    queued: VecDeque<UnhandledSpawnError>,
+    delivering: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EngineLifecycle {
+    Running,
+    Closing,
+    Closed,
 }
 
 /// Reserved header-table row for calls whose function identity cannot be
@@ -339,6 +373,41 @@ struct ActiveCallGuard {
     call_id: CallId,
 }
 
+struct ShutdownGuard {
+    engine: Arc<BexEngine>,
+    completed: bool,
+}
+
+impl ShutdownGuard {
+    fn complete(mut self) {
+        *self
+            .engine
+            .lifecycle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = EngineLifecycle::Closed;
+        self.completed = true;
+        self.engine.lifecycle_changed.notify_waiters();
+    }
+}
+
+impl Drop for ShutdownGuard {
+    fn drop(&mut self) {
+        if self.completed {
+            return;
+        }
+        let mut lifecycle = self
+            .engine
+            .lifecycle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *lifecycle == EngineLifecycle::Closing {
+            *lifecycle = EngineLifecycle::Running;
+        }
+        drop(lifecycle);
+        self.engine.lifecycle_changed.notify_waiters();
+    }
+}
+
 impl ActiveCallGuard {
     /// Atomically reserve `call_id` in `engine.active_calls` and return a
     /// guard that will release the slot on drop. Returns
@@ -348,6 +417,13 @@ impl ActiveCallGuard {
         call_id: CallId,
         cancel: CancellationToken,
     ) -> Result<(Self, CancellationToken), EngineError> {
+        let lifecycle = engine
+            .lifecycle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *lifecycle != EngineLifecycle::Running {
+            return Err(EngineError::ShuttingDown);
+        }
         let mut map = engine
             .active_calls
             .lock()
@@ -370,17 +446,22 @@ impl ActiveCallGuard {
             }
         };
         drop(map);
+        drop(lifecycle);
         Ok((Self { engine, call_id }, cancel))
     }
 
     fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
+        let lifecycle = engine
+            .lifecycle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut map = engine
             .active_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         match map.get(&call_id) {
             Some(existing) => existing.cancel.cancel(),
-            None => {
+            None if *lifecycle == EngineLifecycle::Running => {
                 let cancel = CancellationToken::new();
                 cancel.cancel();
                 map.insert(
@@ -391,7 +472,10 @@ impl ActiveCallGuard {
                     },
                 );
             }
+            None => {}
         }
+        drop(map);
+        drop(lifecycle);
     }
 }
 
@@ -405,12 +489,20 @@ impl Drop for ActiveCallGuard {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.remove(&self.call_id);
+        let empty = map.is_empty();
+        drop(map);
+        if empty {
+            self.engine.lifecycle_changed.notify_waiters();
+        }
     }
 }
 
 /// Errors that can occur during engine execution.
 #[derive(Debug, PartialEq, Error, Clone)]
 pub enum EngineError {
+    #[error("BAML engine is shutting down")]
+    ShuttingDown,
+
     #[error("Function call with ID {call_id} not found")]
     FunctionCallNotFound { call_id: CallId },
 
@@ -693,11 +785,15 @@ pub struct BexEngine {
 
     /// Map of active function calls by ID.
     active_calls: Mutex<HashMap<CallId, ActiveCall>>,
+    lifecycle: Mutex<EngineLifecycle>,
+    lifecycle_changed: tokio::sync::Notify,
+    shutdown_required: AtomicBool,
 
     futures: FutureManager,
 
-    unhandled_spawn_error_handler: RwLock<Option<UnhandledSpawnErrorHandler>>,
-    unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
+    rooted_unhandled_spawn_errors: Mutex<VecDeque<RootedUnhandledSpawnError>>,
+    unhandled_spawn_state: Mutex<UnhandledSpawnState>,
+    unhandled_spawn_delivery: tokio::sync::Mutex<()>,
 
     /// Loaded packages (name → `Object::Package` pointer), shared with every VM
     /// so spawned workers see the same index. The source of truth for interface
@@ -737,12 +833,25 @@ impl Drop for BexEngine {
     /// candidate) drops quietly: it registered no metadata, so it must not
     /// emit a close notification or leave a closed-engine tombstone.
     fn drop(&mut self) {
-        if let Ok(errors) = self.unhandled_spawn_errors.get_mut()
-            && !errors.is_empty()
-        {
+        let rooted = self
+            .rooted_unhandled_spawn_errors
+            .get_mut()
+            .map_or(0, |errors| errors.len());
+        let queued = self
+            .unhandled_spawn_state
+            .get_mut()
+            .map_or(0, |state| state.queued.len());
+        let count = rooted + queued;
+        let shutdown_called = self
+            .lifecycle
+            .get_mut()
+            .is_ok_and(|state| *state == EngineLifecycle::Closed);
+        let shutdown_required = self.shutdown_required.load(Ordering::Acquire);
+        if count != 0 || (shutdown_required && !shutdown_called) {
             tracing::warn!(
-                count = errors.len(),
-                "dropping engine with unhandled spawn errors that were not drained"
+                count,
+                shutdown_called,
+                "dropping engine without a complete unhandled-spawn-error drain"
             );
         }
         if self.prof_enabled && self.prof_activated.load(Ordering::Acquire) {
@@ -1631,9 +1740,17 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
+            lifecycle: Mutex::new(EngineLifecycle::Running),
+            lifecycle_changed: tokio::sync::Notify::new(),
+            shutdown_required: AtomicBool::new(false),
             futures: FutureManager::new(futures_permit),
-            unhandled_spawn_error_handler: RwLock::new(None),
-            unhandled_spawn_errors: Mutex::new(Vec::new()),
+            rooted_unhandled_spawn_errors: Mutex::new(VecDeque::new()),
+            unhandled_spawn_state: Mutex::new(UnhandledSpawnState {
+                handler: None,
+                queued: VecDeque::new(),
+                delivering: false,
+            }),
+            unhandled_spawn_delivery: tokio::sync::Mutex::new(()),
             packages,
             error_class_ptrs,
             panic_class_ptrs,
@@ -1650,6 +1767,7 @@ impl BexEngine {
     /// the ids stamped on each Function during construction — same walk
     /// order, same 1-based sequence).
     pub fn activate_profiling(&self) {
+        self.shutdown_required.store(true, Ordering::Release);
         if !self.prof_enabled {
             return;
         }
@@ -1933,25 +2051,74 @@ impl BexEngine {
     }
 
     pub fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
-        *self
-            .unhandled_spawn_error_handler
-            .write()
-            .expect("unhandled spawn error handler lock poisoned") = handler;
+        self.unhandled_spawn_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .handler = handler;
+        self.drain_unhandled_spawn_errors();
     }
 
     pub fn take_unhandled_spawn_errors(&self) -> Vec<UnhandledSpawnError> {
-        std::mem::take(
-            &mut *self
-                .unhandled_spawn_errors
+        self.unhandled_spawn_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .queued
+            .drain(..)
+            .collect()
+    }
+
+    async fn begin_shutdown(self: &Arc<Self>) -> Option<ShutdownGuard> {
+        loop {
+            let notified = self.lifecycle_changed.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            {
+                let mut lifecycle = self
+                    .lifecycle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                match *lifecycle {
+                    EngineLifecycle::Running => {
+                        *lifecycle = EngineLifecycle::Closing;
+                        return Some(ShutdownGuard {
+                            engine: Arc::clone(self),
+                            completed: false,
+                        });
+                    }
+                    EngineLifecycle::Closed => return None,
+                    EngineLifecycle::Closing => {}
+                }
+            }
+            notified.await;
+        }
+    }
+
+    async fn wait_for_active_calls(&self) {
+        loop {
+            let notified = self.lifecycle_changed.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self
+                .active_calls
                 .lock()
-                .expect("unhandled spawn error queue lock poisoned"),
-        )
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+            {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Wait for spawned work to settle, then run the final GC sweep that
     /// surfaces unreachable unobserved errors.
     pub async fn shutdown(self: &Arc<Self>) {
         const WAIT_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
+
+        let Some(shutdown) = self.begin_shutdown().await else {
+            return;
+        };
+        self.wait_for_active_calls().await;
 
         loop {
             let handles = self
@@ -1982,9 +2149,72 @@ impl BexEngine {
         }
 
         self.collect_garbage(bex_heap::CollectionLevel::Major).await;
+        shutdown.complete();
     }
 
-    async fn dispatch_unhandled_spawn_errors(&self, pending: Vec<(RootedUnhandledValue, bool)>) {
+    fn enqueue_unhandled_spawn_errors(
+        &self,
+        errors: impl IntoIterator<Item = UnhandledSpawnError>,
+    ) {
+        self.unhandled_spawn_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .queued
+            .extend(errors);
+        self.drain_unhandled_spawn_errors();
+    }
+
+    fn drain_unhandled_spawn_errors(&self) {
+        {
+            let mut state = self
+                .unhandled_spawn_state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if state.delivering || state.handler.is_none() || state.queued.is_empty() {
+                return;
+            }
+            state.delivering = true;
+        }
+
+        loop {
+            let next = {
+                let mut state = self
+                    .unhandled_spawn_state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(handler) = state.handler.clone() else {
+                    state.delivering = false;
+                    return;
+                };
+                let Some(error) = state.queued.pop_front() else {
+                    state.delivering = false;
+                    return;
+                };
+                (handler, error)
+            };
+
+            let (handler, error) = next;
+            if let Err(panic) = catch_unwind(AssertUnwindSafe(|| handler(error.clone()))) {
+                let mut state = self
+                    .unhandled_spawn_state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                state.queued.push_front(error);
+                state.delivering = false;
+                drop(state);
+                resume_unwind(panic);
+            }
+        }
+    }
+
+    async fn dispatch_unhandled_spawn_errors(&self) {
+        let _delivery = self.unhandled_spawn_delivery.lock().await;
+        let pending: Vec<_> = self
+            .rooted_unhandled_spawn_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .drain(..)
+            .collect();
         if pending.is_empty() {
             return;
         }
@@ -1992,8 +2222,8 @@ impl BexEngine {
         let active = permit.acquire().await;
         let errors: Vec<_> = pending
             .into_iter()
-            .map(|(rooted, cancelled)| {
-                let value = match rooted {
+            .map(|error| {
+                let value = match error.value {
                     RootedUnhandledValue::Inline(value) => value,
                     RootedUnhandledValue::Handle(handle) => {
                         let ptr = self
@@ -2003,28 +2233,15 @@ impl BexEngine {
                     }
                 };
                 UnhandledSpawnError {
+                    report_id: error.report_id,
                     value: self.vm_value_to_owned(active.proof(), value),
-                    cancelled,
+                    trace: error.trace,
+                    cancelled: error.cancelled,
                 }
             })
             .collect();
         drop(active);
-
-        let handler = self
-            .unhandled_spawn_error_handler
-            .read()
-            .expect("unhandled spawn error handler lock poisoned")
-            .clone();
-        if let Some(handler) = handler {
-            for error in errors {
-                handler(error.value.clone(), error.cancelled);
-            }
-        } else {
-            self.unhandled_spawn_errors
-                .lock()
-                .expect("unhandled spawn error queue lock poisoned")
-                .extend(errors);
-        }
+        self.enqueue_unhandled_spawn_errors(errors);
     }
 
     /// Resolve a [`bex_external_types::Handle`] to its current [`HeapPtr`].
@@ -2131,9 +2348,18 @@ impl BexEngine {
                     .map_or(RootedUnhandledValue::Inline(error.value), |ptr| {
                         RootedUnhandledValue::Handle(self.heap.create_handle(ptr))
                     });
-                (value, error.cancelled)
+                RootedUnhandledSpawnError {
+                    report_id: error.future_id.as_usize(),
+                    value,
+                    trace: error.trace,
+                    cancelled: error.cancelled,
+                }
             })
-            .collect();
+            .collect::<VecDeque<_>>();
+        self.rooted_unhandled_spawn_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(unhandled_spawn_errors);
 
         drop(heap_guard);
 
@@ -2150,8 +2376,7 @@ impl BexEngine {
         // sites release their permit before calling.)
         bex_external_types::host_value::host_release_dispatch::drain();
 
-        self.dispatch_unhandled_spawn_errors(unhandled_spawn_errors)
-            .await;
+        self.dispatch_unhandled_spawn_errors().await;
 
         // BEP-042: run the `cleanup` finalizer for every instance this
         // collection kept alive. The `heap_guard` is dropped (so `call_function`
@@ -3588,10 +3813,11 @@ impl BexEngine {
         thread: &mut ActiveHeapPermit<BexThread>,
         future_id: FutureId,
         value: Value,
+        trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
         let mut guard = self.futures.acquire(thread.proof()).await;
-        guard.err_future(future_id, value)?;
+        guard.err_future(future_id, value, trace)?;
         drop(guard);
         child_cancel.cancel();
         Ok(())
@@ -3762,8 +3988,8 @@ impl BexEngine {
                 let _ = trace;
                 return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
             }
-            self.settle_child_errored(thread, future_id, value).await?;
-            let _ = trace;
+            self.settle_child_errored(thread, future_id, value, trace)
+                .await?;
             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
         }
         // A panic escaping all in-BAML catches to the host is an
@@ -4380,7 +4606,7 @@ impl BexEngine {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             ChildSettleKind::Cancelled
                         } else {
-                            self.settle_child_errored(&mut thread, future_id, value)
+                            self.settle_child_errored(&mut thread, future_id, value, Vec::new())
                                 .await?;
                             ChildSettleKind::Errored
                         };

@@ -36,6 +36,21 @@ struct ScriptExpansion {
     extra_args: Vec<String>,
 }
 
+fn report_unhandled_spawn_errors(engine: &BexEngine, reporter: &Reporter) -> bool {
+    let mut failed = false;
+    for report in engine.take_unhandled_spawn_errors() {
+        if report.cancelled {
+            let error = report.into_engine_error();
+            reporter.warning(format_args!("cancelled spawned task failed: {error}"));
+        } else {
+            let error = report.into_engine_error();
+            crate::reporter::print_error(format_args!("unhandled spawned task failed: {error}"));
+            failed = true;
+        }
+    }
+    failed
+}
+
 /// Parse a script body (as pre-split tokens) into its components.
 ///
 /// Tokens are `baml run` arguments without the `baml run` prefix.
@@ -599,11 +614,16 @@ impl RunArgs {
             json_args,
             output_format,
         ));
+        rt.block_on(engine.shutdown());
+        let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
         match dispatch_result {
-            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Success),
+            Ok(baml_exec::DispatchResult::Ok) if !unhandled_spawn_failed => {
+                Ok(crate::ExitCode::Success)
+            }
+            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
@@ -929,9 +949,12 @@ impl RunArgs {
             }
             Ok(())
         });
+        rt.block_on(engine.shutdown());
+        let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
         match result {
-            Ok(()) => Ok(crate::ExitCode::Success),
+            Ok(()) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
+            Ok(()) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }

@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-use ::bex_vm_types::Value;
+use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, ObjectIndex, WriteBarrier};
 
@@ -54,9 +54,11 @@ pub enum Generation {
 
 /// Error payload preserved from an unreachable, never-observed spawned
 /// future. The engine drains these after the GC pause.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnhandledSpawnError {
+    pub future_id: FutureId,
     pub value: Value,
+    pub trace: Vec<StackFrame>,
     pub cancelled: bool,
 }
 impl Generation {

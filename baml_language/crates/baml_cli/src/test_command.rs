@@ -77,6 +77,23 @@ struct RunCtx<'a> {
     cancel: &'a CancellationToken,
 }
 
+fn finish_engine(ctx: &RunCtx<'_>, reporter: &Reporter) -> usize {
+    ctx.rt.block_on(ctx.engine.shutdown());
+    let mut failed = 0;
+    for report in ctx.engine.take_unhandled_spawn_errors() {
+        if report.cancelled {
+            let error = report.into_engine_error();
+            reporter.warning(format_args!("cancelled spawned task failed: {error}"));
+        } else {
+            let error = report.into_engine_error();
+            eprintln!("FAIL testing::unhandled_spawn_error");
+            eprintln!("  => {error}");
+            failed += 1;
+        }
+    }
+    failed
+}
+
 impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
@@ -325,6 +342,9 @@ impl TestArgs {
                 .copied()
                 .map(cached_legacy_test)
                 .collect();
+            if finish_engine(&run_ctx, &reporter) != 0 {
+                return Ok(crate::ExitCode::TestFailure);
+            }
             return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
         }
 
@@ -377,6 +397,13 @@ impl TestArgs {
                     command_failed = true;
                 }
             }
+        }
+
+        let unhandled_spawn_failures = finish_engine(&run_ctx, &reporter);
+        if unhandled_spawn_failures != 0 {
+            failed += unhandled_spawn_failures;
+            total += unhandled_spawn_failures;
+            command_failed = true;
         }
 
         if total == 0 {

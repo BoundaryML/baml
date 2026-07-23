@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
     mem::MaybeUninit,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
@@ -11,7 +11,7 @@ use std::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{HeapPtr, Value};
+use crate::{HeapPtr, Value, errors::StackFrame};
 
 /// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
 /// underlying engine produced an unrecoverable internal error.
@@ -67,6 +67,8 @@ pub struct Future {
     /// Metadata orthogonal to the terminal state. `observed` is set when an
     /// await delivers an error. `cancel_requested` is set by `f.cancel()` even
     /// when the future already settled and cancellation cannot change it.
+    /// `reported` is set when GC transfers an unreachable error to the
+    /// engine-owned reporting queue.
     flags: AtomicU8,
     /// Set at construction; never modified. Purely for debug/tracing.
     id: FutureId,
@@ -74,6 +76,9 @@ pub struct Future {
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
     value: UnsafeCell<MaybeUninit<Value>>,
+    /// Trace captured when this future settles to `Error`. Kept separately
+    /// from `value` because stack frames contain no GC-managed pointers.
+    error_trace: Arc<OnceLock<Arc<[StackFrame]>>>,
     /// Cancellation signal observed by the producer. Fired by
     /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
     pub cancel: CancellationToken,
@@ -155,6 +160,7 @@ enum FutureTag {
 
 const FUTURE_FLAG_OBSERVED: u8 = 1 << 0;
 const FUTURE_FLAG_CANCEL_REQUESTED: u8 = 1 << 1;
+const FUTURE_FLAG_REPORTED: u8 = 1 << 2;
 
 /// Snapshot view of a [`Future`] used for pattern matching at read sites.
 ///
@@ -219,6 +225,7 @@ impl Future {
             flags: AtomicU8::new(0),
             id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            error_trace: Arc::new(OnceLock::new()),
             cancel,
             ready: Arc::new(tokio::sync::SetOnce::new()),
         }
@@ -268,6 +275,20 @@ impl Future {
 
     pub fn cancel_requested(&self) -> bool {
         self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCEL_REQUESTED != 0
+    }
+
+    /// Mark this future's error as transferred to the engine reporting queue.
+    /// Returns `true` exactly once.
+    pub fn try_mark_reported(&self) -> bool {
+        self.flags.fetch_or(FUTURE_FLAG_REPORTED, Ordering::AcqRel) & FUTURE_FLAG_REPORTED == 0
+    }
+
+    pub fn error_trace(&self) -> Vec<StackFrame> {
+        self.error_trace
+            .get()
+            .map(Arc::as_ref)
+            .unwrap_or_default()
+            .to_vec()
     }
 
     /// Mutable access to the embedded `Value` for `Ready`/`Error` states.
@@ -371,8 +392,10 @@ impl Future {
         heap: &impl crate::WriteBarrier,
         self_ptr: HeapPtr,
         value: Value,
+        trace: Vec<StackFrame>,
     ) -> bool {
         heap.write_barrier(self_ptr, value);
+        let _ = self.error_trace.set(Arc::from(trace));
         // SAFETY: see settle_ready.
         unsafe { (*self.value.get()).write(value) };
         let transitioned = self.state.compare_exchange(
@@ -473,6 +496,7 @@ impl Clone for Future {
             flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
             value: UnsafeCell::new(MaybeUninit::uninit()),
+            error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
             ready: Arc::clone(&self.ready),
         };

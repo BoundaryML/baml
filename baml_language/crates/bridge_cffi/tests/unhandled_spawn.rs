@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use bex_project::{BexArgs, FunctionCallContextBuilder};
+use bridge_cffi::baml_bridge::cffi::{BamlOutboundResult, baml_outbound_result};
+use prost::Message;
 
 static REPORTED: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
 
@@ -16,6 +18,7 @@ extern "C" fn capture(content: *const i8, length: usize, _cancelled: i32) {
 
 #[tokio::test]
 async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
+    REPORTED.lock().unwrap().clear();
     bridge_cffi::register_unhandled_spawn_error_callback(capture);
     bridge_cffi::initialize_runtime(
         ".",
@@ -43,5 +46,12 @@ async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
         .unwrap();
     bridge_cffi::shutdown_runtime().await.unwrap();
 
-    assert_eq!(REPORTED.lock().unwrap().len(), 1);
+    let reported = REPORTED.lock().unwrap();
+    assert_eq!(reported.len(), 1);
+    let envelope = BamlOutboundResult::decode(reported[0].as_slice()).unwrap();
+    let Some(baml_outbound_result::Result::Error(error)) = envelope.result else {
+        panic!("expected an error envelope");
+    };
+    assert!(!error.trace.is_empty());
+    assert!(error.trace.iter().any(|line| line.contains("bad")));
 }

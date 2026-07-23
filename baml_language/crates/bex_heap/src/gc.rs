@@ -297,7 +297,7 @@ impl BexHeap {
         &self,
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
-    ) -> Vec<(Value, bool)> {
+    ) -> Vec<crate::UnhandledSpawnError> {
         let mut errors = Vec::new();
         for space in gens {
             for i in 0..space.len() {
@@ -313,8 +313,15 @@ impl BexHeap {
                 if future.is_observed() {
                     continue;
                 }
-                if let FutureRead::Error(value) = future.read() {
-                    errors.push((value, future.cancel_requested()));
+                if let FutureRead::Error(value) = future.read()
+                    && future.try_mark_reported()
+                {
+                    errors.push(crate::UnhandledSpawnError {
+                        future_id: future.id(),
+                        value,
+                        trace: future.error_trace(),
+                        cancelled: future.cancel_requested(),
+                    });
                 }
             }
         }
@@ -335,7 +342,7 @@ impl BexHeap {
         };
         let mut worklist: Vec<HeapPtr> = errors
             .iter()
-            .filter_map(|(value, _)| value.as_object_ptr())
+            .filter_map(|error| error.value.as_object_ptr())
             .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
@@ -349,15 +356,15 @@ impl BexHeap {
             // SAFETY: `new_ptr` was just initialized in inactive space.
             self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
         }
-        for (value, cancelled) in errors {
-            let value = value.as_object_ptr().map_or(value, |ptr| {
+        for error in errors {
+            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
                 Value::object(
                     *forwarding
                         .get(&ptr)
                         .expect("error payload must be forwarded"),
                 )
             });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, cancelled });
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
         }
     }
 
@@ -373,7 +380,7 @@ impl BexHeap {
         };
         let mut worklist: Vec<HeapPtr> = errors
             .iter()
-            .filter_map(|(value, _)| value.as_object_ptr())
+            .filter_map(|error| error.value.as_object_ptr())
             .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
@@ -394,15 +401,15 @@ impl BexHeap {
                 }
             }
         }
-        for (value, cancelled) in errors {
-            let value = value.as_object_ptr().map_or(value, |ptr| {
+        for error in errors {
+            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
                 Value::object(
                     *forwarding
                         .get(&ptr)
                         .expect("error payload must be forwarded"),
                 )
             });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, cancelled });
+            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
         }
     }
 

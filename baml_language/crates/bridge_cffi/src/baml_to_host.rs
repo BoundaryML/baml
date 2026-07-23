@@ -19,7 +19,10 @@
 
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
-use bex_project::{Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError};
+use bex_project::{
+    Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError,
+    UnhandledSpawnError,
+};
 use bridge_ctypes::{
     CffiHandleTableOptions,
     baml_bridge::cffi::{
@@ -222,10 +225,17 @@ pub fn result_to_outbound(
     }
 }
 
-pub fn unhandled_spawn_error_to_outbound(value: BexExternalValue) -> Vec<u8> {
+pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
+    let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
+        (
+            frame.file_path.as_str(),
+            frame.error_line,
+            frame.function_name.as_str(),
+        )
+    }));
     BamlOutboundResult {
-        result: Some(thrown_arm(value, Vec::new(), &options)),
+        result: Some(thrown_arm(error.value, trace, &options)),
     }
     .encode_to_vec()
 }
