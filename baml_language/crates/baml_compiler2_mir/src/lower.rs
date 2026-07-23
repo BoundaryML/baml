@@ -7207,94 +7207,16 @@ impl LoweringContext<'_> {
         field: &Name,
         dest: Place,
     ) {
-        let base_op = self.lower_to_operand(base);
-
-        // Test: base == null
-        let is_null = Rvalue::BinaryOp {
-            op: BinOp::Eq,
-            left: base_op,
-            right: Operand::Constant(Constant::Null),
-        };
-        let test_local = self.builder.temp(RuntimeTy::Bool {
-            attr: TyAttr::default(),
+        self.lower_optional_operation(base, dest, |this, dest, _| {
+            this.lower_member_access(expr_id, base, field, dest);
         });
-        self.builder.assign(Place::local(test_local), is_null);
-
-        let bb_access = self.builder.create_block();
-
-        if let Some(&bb_null) = self.chain_null_exits.last() {
-            // Inside an OptionalChain — jump to shared null exit
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
-
-            self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest);
-            // Don't create our own join — the OptionalChain handler does that
-        } else {
-            // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
-            let bb_null = self.builder.create_block();
-            let bb_join = self.builder.create_block();
-
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
-
-            self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest.clone());
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(bb_join);
-            }
-
-            self.builder.set_current_block(bb_null);
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            self.builder.goto(bb_join);
-
-            self.builder.set_current_block(bb_join);
-        }
     }
 
     /// Lower `obj?.[index]` — null-check obj, then index or produce null.
     fn lower_optional_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
-        let base_op = self.lower_to_operand(base);
-
-        let is_null = Rvalue::BinaryOp {
-            op: BinOp::Eq,
-            left: base_op,
-            right: Operand::Constant(Constant::Null),
-        };
-        let test_local = self.builder.temp(RuntimeTy::Bool {
-            attr: TyAttr::default(),
+        self.lower_optional_operation(base, dest, |this, dest, bb_null| {
+            this.lower_optional_index_access(base, index, dest, bb_null);
         });
-        self.builder.assign(Place::local(test_local), is_null);
-
-        let bb_access = self.builder.create_block();
-
-        if let Some(&bb_null) = self.chain_null_exits.last() {
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
-
-            self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest, bb_null);
-        } else {
-            let bb_null = self.builder.create_block();
-            let bb_join = self.builder.create_block();
-
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
-
-            self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest.clone(), bb_null);
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(bb_join);
-            }
-
-            self.builder.set_current_block(bb_null);
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            self.builder.goto(bb_join);
-
-            self.builder.set_current_block(bb_join);
-        }
     }
 
     /// Lower the access half of `base?.[index]`, with the base already known
@@ -7342,11 +7264,21 @@ impl LoweringContext<'_> {
         runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
-        let callee_op = self.lower_to_operand(callee);
+        self.lower_optional_operation(callee, dest, |this, dest, _| {
+            this.lower_call(expr_id, callee, args, runtime_id, dest);
+        });
+    }
 
+    fn lower_optional_operation(
+        &mut self,
+        receiver: AstExprId,
+        dest: Place,
+        lower_non_null: impl FnOnce(&mut Self, Place, BlockId),
+    ) {
+        let receiver_op = self.lower_to_operand(receiver);
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: callee_op,
+            left: receiver_op,
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool {
@@ -7354,23 +7286,29 @@ impl LoweringContext<'_> {
         });
         self.builder.assign(Place::local(test_local), is_null);
 
-        let bb_call = self.builder.create_block();
+        let bb_non_null = self.builder.create_block();
 
-        if let Some(&bb_null) = self.chain_null_exits.last() {
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
+        if let Some(bb_null) = self.chain_null_exits.last().copied() {
+            self.builder.branch(
+                Operand::Copy(Place::Local(test_local)),
+                bb_null,
+                bb_non_null,
+            );
 
-            self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest);
+            self.builder.set_current_block(bb_non_null);
+            lower_non_null(self, dest, bb_null);
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
 
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
+            self.builder.branch(
+                Operand::Copy(Place::Local(test_local)),
+                bb_null,
+                bb_non_null,
+            );
 
-            self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest.clone());
+            self.builder.set_current_block(bb_non_null);
+            lower_non_null(self, dest.clone(), bb_null);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
