@@ -11,6 +11,42 @@ use crate::{
     trivia_classifier::TriviaSliceExt as _,
 };
 
+fn print_braced_declaration_items<T: Printable>(
+    open_brace: &t::LBrace,
+    items: &[T],
+    close_brace: &t::RBrace,
+    shape: &Shape,
+    printer: &mut Printer,
+) {
+    let inner_indent = shape.indent + printer.config.indent_width;
+
+    printer.print_raw_token(open_brace);
+    printer.print_trivia_all_trailing_for(open_brace.span());
+    printer.print_newline();
+
+    for (index, item) in items.iter().enumerate() {
+        let (leading, trailing) = printer.trivia.get_for_element(item);
+        let leading = if index == 0 {
+            leading.trim_leading_blanks()
+        } else {
+            leading
+        };
+        printer.print_trivia_with_newline(leading, inner_indent);
+        printer.print_spaces(inner_indent);
+        printer.print(
+            item,
+            Shape::standalone(printer.config.line_width, inner_indent),
+        );
+        printer.print_trivia_trailing(trailing);
+        printer.print_newline();
+    }
+
+    let (close_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
+    printer.print_trivia_with_newline(close_leading.trim_trailing_blanks(), inner_indent);
+    printer.print_spaces(shape.indent);
+    printer.print_raw_token(close_brace);
+}
+
 /// Any of the valid top-level declarations in a [`super::SourceFile`].
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -1086,8 +1122,6 @@ impl KnownKind for ClassDecl {
 
 impl Printable for ClassDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
@@ -1095,31 +1129,13 @@ impl Printable for ClassDecl {
             printer.print(gp, shape.clone());
         }
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            // first has leading empty lines trimmed
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            first.print(inner_shape, printer);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            // rest can have leading empty lines
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        print_braced_declaration_items(
+            &self.open_brace,
+            &self.items,
+            &self.close_brace,
+            &shape,
+            printer,
+        );
 
         PrintInfo::default_multi_lined()
     }
@@ -1667,31 +1683,14 @@ impl Printable for ImplementsBlock {
             return PrintInfo::default_single_line();
         }
 
-        let inner_indent = shape.indent + printer.config.indent_width;
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            first.print(inner_shape, printer);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        print_braced_declaration_items(
+            &self.open_brace,
+            &self.items,
+            &self.close_brace,
+            &shape,
+            printer,
+        );
         PrintInfo::default_multi_lined()
     }
 
@@ -1874,37 +1873,17 @@ impl KnownKind for EnumDecl {
 
 impl Printable for EnumDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            // first has leading empty lines trimmed
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            first.print(inner_shape, printer);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            // rest can have leading empty lines
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        print_braced_declaration_items(
+            &self.open_brace,
+            &self.items,
+            &self.close_brace,
+            &shape,
+            printer,
+        );
 
         PrintInfo::default_multi_lined()
     }
@@ -2823,33 +2802,15 @@ impl KnownKind for TypeBuilderBlock {
 
 impl Printable for TypeBuilderBlock {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            printer.print(first, inner_shape);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        print_braced_declaration_items(
+            &self.open_brace,
+            &self.items,
+            &self.close_brace,
+            &shape,
+            printer,
+        );
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
