@@ -8,7 +8,12 @@ use std::io::Read;
 
 use utils_fs::{NativePathBuf, VfsPathBuf};
 
-/// Native filesystem adapter for BAML's slash-oriented VFS path domain.
+/// Native filesystem adapter for BAML's absolute, slash-oriented VFS paths.
+///
+/// This adapter has no configurable base directory: each VFS path identifies
+/// an absolute path in the host filesystem. `/workspace/...` remains rooted at
+/// `/` on Unix, while `/C:/...` and `/server/share/...` map to drive-rooted and
+/// UNC paths on Windows.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NativeVfs;
 
