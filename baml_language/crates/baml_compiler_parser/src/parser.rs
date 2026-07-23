@@ -6975,10 +6975,18 @@ impl<'a> Parser<'a> {
     /// Parse a single map entry in expression context: key: value
     /// Requires colon between key and value (JSON-style)
     fn parse_map_entry(&mut self) {
+        self.parse_key_value_field(false, "map key", "map value");
+    }
+
+    fn parse_key_value_field(
+        &mut self,
+        allow_client_key: bool,
+        key_diagnostic: &str,
+        value_diagnostic: &str,
+    ) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
-            // Key - can be identifier, qualified identifier, or string literal.
-            if p.at(TokenKind::Word) {
-                p.bump(); // identifier key
+            if p.at(TokenKind::Word) || allow_client_key && p.at(TokenKind::Client) {
+                p.bump();
                 while p.at(TokenKind::Dot) {
                     p.bump();
                     if !p.expect(TokenKind::Word) {
@@ -6986,18 +6994,16 @@ impl<'a> Parser<'a> {
                     }
                 }
             } else if !p.parse_any_string() {
-                p.error_unexpected_token("map key".to_string());
+                p.error_unexpected_token(key_diagnostic.to_string());
                 return;
             }
 
-            // Colon required in expression context
             if !p.expect(TokenKind::Colon) {
-                return; // Error already emitted by expect
+                return;
             }
 
-            // Value - any expression (including nested maps)
             if p.at_statement_recovery_boundary() {
-                p.error_unexpected_token("map value".to_string());
+                p.error_unexpected_token(value_diagnostic.to_string());
                 return;
             }
             p.parse_expr();
@@ -7090,35 +7096,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a single object field: name: value
     fn parse_object_field(&mut self) {
-        self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
-            // Field name - can be identifier, qualified identifier, or string literal.
-            // `client` is a keyword but a valid field name (BEP-049 §10
-            // `Context { client: ... }`).
-            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
-                p.bump(); // identifier field name
-                while p.at(TokenKind::Dot) {
-                    p.bump();
-                    if !p.expect(TokenKind::Word) {
-                        return;
-                    }
-                }
-            } else if !p.parse_any_string() {
-                p.error_unexpected_token("field name".to_string());
-                return;
-            }
-
-            // Colon
-            if !p.expect(TokenKind::Colon) {
-                return; // Error already emitted by expect
-            }
-
-            // Field value - any expression (including nested constructors)
-            if p.at_statement_recovery_boundary() {
-                p.error_unexpected_token("field value".to_string());
-                return;
-            }
-            p.parse_expr();
-        });
+        self.parse_key_value_field(true, "field name", "field value");
     }
 
     /// Get infix operator binding power (precedence)
@@ -7928,6 +7906,76 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    fn parse_key_value_fragment(source: &str, object_field: bool) -> (SyntaxNode, Vec<ParseError>) {
+        let tokens = lex_lossless(source, FileId::new(0));
+        let mut parser = Parser::new(&tokens);
+        parser.start_node(SyntaxKind::SOURCE_FILE);
+        if object_field {
+            parser.parse_object_field();
+        } else {
+            parser.parse_map_entry();
+        }
+        while parser.current < tokens.len() {
+            parser.bump();
+        }
+        parser.finish_node();
+        let (green, errors) = parser.build_tree(None);
+        (SyntaxNode::new_root(green), errors)
+    }
+
+    fn unexpected_expectations(errors: &[ParseError]) -> Vec<&str> {
+        errors
+            .iter()
+            .filter_map(|error| match error {
+                ParseError::UnexpectedToken { expected, .. } => Some(expected.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn key_value_fields_preserve_valid_key_forms_and_newlines() {
+        for object_field in [false, true] {
+            for source in [
+                "name: 1",
+                "\"display name\": value",
+                "namespace.\nfield:\nvalue",
+            ] {
+                let (root, errors) = parse_key_value_fragment(source, object_field);
+                assert_no_errors(&errors);
+                assert_eq!(
+                    root.descendants()
+                        .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
+                        .count(),
+                    1,
+                    "{source:?}"
+                );
+            }
+        }
+
+        let (_, errors) = parse_key_value_fragment("client.part: value", true);
+        assert_no_errors(&errors);
+        let (_, errors) = parse_key_value_fragment("client.part: value", false);
+        assert_eq!(unexpected_expectations(&errors), ["map key"]);
+    }
+
+    #[test]
+    fn key_value_fields_preserve_context_specific_recovery() {
+        for (object_field, key_diagnostic, value_diagnostic) in [
+            (false, "map key", "map value"),
+            (true, "field name", "field value"),
+        ] {
+            let (_, errors) = parse_key_value_fragment("interface: value", object_field);
+            assert_eq!(unexpected_expectations(&errors), [key_diagnostic]);
+
+            let (_, errors) = parse_key_value_fragment("name value", object_field);
+            assert_eq!(unexpected_expectations(&errors), ["':'"]);
+
+            let (_, errors) = parse_key_value_fragment("name: return", object_field);
+            assert_eq!(unexpected_expectations(&errors), [value_diagnostic]);
+        }
     }
 
     #[test]
