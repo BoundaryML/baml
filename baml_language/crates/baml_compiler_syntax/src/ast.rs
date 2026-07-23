@@ -103,6 +103,13 @@ fn attribute_args_node(syntax: &SyntaxNode) -> Option<SyntaxNode> {
         .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
 }
 
+fn child_node_after_token(syntax: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxNode> {
+    syntax
+        .children_with_tokens()
+        .skip_while(|element| element.kind() != kind)
+        .find_map(rowan::NodeOrToken::into_node)
+}
+
 fn attribute_args_contain(syntax: &SyntaxNode, kinds: &[SyntaxKind]) -> bool {
     attribute_args_node(syntax).is_some_and(|args| {
         args.descendants_with_tokens()
@@ -3726,24 +3733,7 @@ impl MatchArm {
     /// The body is the expression after `=>`. It can be a simple expression
     /// or a block expression.
     pub fn body(&self) -> Option<SyntaxNode> {
-        // The body is the last child node that is an expression (not pattern or guard)
-        // Find the fat arrow and return the expression after it
-        let mut found_fat_arrow = false;
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::FAT_ARROW {
-                        found_fat_arrow = true;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    if found_fat_arrow {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
+        child_node_after_token(&self.syntax, SyntaxKind::FAT_ARROW)
     }
 
     /// Check if the body is a block expression.
@@ -3966,22 +3956,7 @@ impl CatchArm {
 
     /// Get the body expression of this arm.
     pub fn body(&self) -> Option<SyntaxNode> {
-        let mut found_fat_arrow = false;
-        for element in self.syntax.children_with_tokens() {
-            match element {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::FAT_ARROW {
-                        found_fat_arrow = true;
-                    }
-                }
-                rowan::NodeOrToken::Node(node) => {
-                    if found_fat_arrow {
-                        return Some(node);
-                    }
-                }
-            }
-        }
-        None
+        child_node_after_token(&self.syntax, SyntaxKind::FAT_ARROW)
     }
 
     /// Check if this catch arm has a block body.

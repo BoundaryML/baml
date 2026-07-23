@@ -329,4 +329,48 @@ mod builder_tests {
         check_direct_definition_name!(ast::TestDef, SyntaxKind::TEST_DEF);
         check_direct_definition_name!(ast::TypeAliasDef, SyntaxKind::TYPE_ALIAS_DEF);
     }
+
+    fn build_arm(kind: SyntaxKind, with_arrow: bool, with_body: bool) -> SyntaxNode {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(kind);
+        builder.start_node(SyntaxKind::EXPR);
+        builder.token(SyntaxKind::WORD, "before");
+        builder.finish_node();
+        if with_arrow {
+            builder.token(SyntaxKind::FAT_ARROW, "=>");
+        }
+        builder.token(SyntaxKind::WORD, "token");
+        if with_body {
+            builder.start_node(SyntaxKind::BLOCK_EXPR);
+            builder.token(SyntaxKind::WORD, "body");
+            builder.finish_node();
+            builder.start_node(SyntaxKind::EXPR);
+            builder.token(SyntaxKind::WORD, "after");
+            builder.finish_node();
+        }
+        builder.finish_node();
+        SyntaxNode::new_root(builder.finish())
+    }
+
+    macro_rules! check_arm_body {
+        ($arm:ty, $kind:expr) => {{
+            let arm = <$arm>::cast(build_arm($kind, true, true)).expect("expected arm");
+            assert_eq!(
+                arm.body().expect("expected body").kind(),
+                SyntaxKind::BLOCK_EXPR
+            );
+
+            let arm = <$arm>::cast(build_arm($kind, false, true)).expect("expected arm");
+            assert!(arm.body().is_none());
+
+            let arm = <$arm>::cast(build_arm($kind, true, false)).expect("expected arm");
+            assert!(arm.body().is_none());
+        }};
+    }
+
+    #[test]
+    fn match_and_catch_bodies_are_first_nodes_after_fat_arrows() {
+        check_arm_body!(ast::MatchArm, SyntaxKind::MATCH_ARM);
+        check_arm_body!(ast::CatchArm, SyntaxKind::CATCH_ARM);
+    }
 }
