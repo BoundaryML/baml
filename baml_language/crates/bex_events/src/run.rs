@@ -1406,6 +1406,36 @@ impl InMemoryRunStore {
         Some(push_payload_patch(record, &retention, payload, None))
     }
 
+    fn ingest_trace_payload(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        kind: PayloadKind,
+    ) -> Option<RunPatch> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let payload_id = inner.allocate_payload_id();
+        let retention = inner.retention.clone();
+        let record = inner.runs.get_mut(&boundary_id)?;
+        let call_node_id = record
+            .run
+            .calls
+            .iter()
+            .any(|node| node.trace_key == call)
+            .then(|| call_node_id(&call));
+        let payload = PayloadEvent {
+            id: payload_id,
+            call_node_id,
+            timestamp_ms: epoch_ms(),
+            kind,
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        };
+        Some(push_payload_patch(record, &retention, payload, None))
+    }
+
     pub fn ingest_call_value_ref(
         &self,
         boundary_id: BoundaryId,
@@ -1423,33 +1453,16 @@ impl InMemoryRunStore {
             ),
             "call value ingestion only accepts call input/output/error roles"
         );
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let payload_id = inner.allocate_payload_id();
-        let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&boundary_id)?;
-        let call_node_id = record
-            .run
-            .calls
-            .iter()
-            .any(|node| node.trace_key == call)
-            .then(|| call_node_id(&call));
-        let payload = PayloadEvent {
-            id: payload_id,
-            call_node_id,
-            timestamp_ms: epoch_ms(),
-            kind: PayloadKind::CapturedValue(CapturedValuePayload {
+        self.ingest_trace_payload(
+            boundary_id,
+            call,
+            PayloadKind::CapturedValue(CapturedValuePayload {
                 role,
                 label,
                 value_ref,
                 trace_call: Some(call),
             }),
-            redaction: RedactionMetadata::display_safe(),
-            body: None,
-        };
-        Some(push_payload_patch(record, &retention, payload, None))
+        )
     }
 
     pub fn ingest_log_value_ref(
@@ -1461,34 +1474,17 @@ impl InMemoryRunStore {
         source: Option<SourceLocation>,
         value_ref: Option<ValueRef>,
     ) -> Option<RunPatch> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let payload_id = inner.allocate_payload_id();
-        let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&boundary_id)?;
-        let call_node_id = record
-            .run
-            .calls
-            .iter()
-            .any(|node| node.trace_key == call)
-            .then(|| call_node_id(&call));
-        let payload = PayloadEvent {
-            id: payload_id,
-            call_node_id,
-            timestamp_ms: epoch_ms(),
-            kind: PayloadKind::Log(LogPayload {
+        self.ingest_trace_payload(
+            boundary_id,
+            call,
+            PayloadKind::Log(LogPayload {
                 level,
                 message,
                 source,
                 value_ref,
                 trace_call: Some(call),
             }),
-            redaction: RedactionMetadata::display_safe(),
-            body: None,
-        };
-        Some(push_payload_patch(record, &retention, payload, None))
+        )
     }
 
     pub fn ingest_fetch_started(
@@ -4850,6 +4846,43 @@ mod tests {
         assert_eq!(payload["kind"]["message"], "watch this");
         assert_eq!(payload["kind"]["source"]["line"], 12);
         assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
+    }
+
+    #[test]
+    fn trace_payload_ingestion_consumes_ids_for_missing_boundaries() {
+        let store = InMemoryRunStore::default();
+        let boundary_id = test_boundary_id(99);
+        let call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(3),
+            call_id: BexCallId(4),
+        };
+
+        assert!(
+            store
+                .ingest_call_value_ref(
+                    boundary_id,
+                    call,
+                    CapturedValueRole::CallOutput,
+                    None,
+                    None,
+                )
+                .is_none()
+        );
+        assert!(
+            store
+                .ingest_log_value_ref(boundary_id, call, None, String::new(), None, None)
+                .is_none()
+        );
+        assert_eq!(
+            store
+                .inner
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .next_payload_id,
+            3
+        );
     }
 
     #[test]
