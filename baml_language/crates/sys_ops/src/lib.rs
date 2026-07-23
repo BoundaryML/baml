@@ -2031,12 +2031,10 @@ impl IoSysOpsBuilder {
         self.with_glob_instance(Arc::new(T::default()))
     }
 
-    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
-    #[must_use]
-    pub fn with_http_instance(
-        mut self,
+    fn install_http_fetch_slots(
+        &mut self,
         instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
-    ) -> Self {
+    ) {
         self.inner.baml_http__fetch = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -2056,11 +2054,20 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http_response_bytes = {
-            let t = instance.clone();
+            let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
+    }
+
+    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_http_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
+    ) -> Self {
+        self.install_http_fetch_slots(instance.clone());
         self.inner.baml_http_fetch_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -2133,30 +2140,7 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_http__fetch = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http__fetch(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http__send = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_text = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_bytes = {
-            let t = instance;
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
+        self.install_http_fetch_slots(instance);
         self
     }
 
@@ -2384,8 +2368,9 @@ pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
 mod tests {
-    use bex_heap::HeapPermit;
+    use bex_heap::{BexValue, HeapPermit};
     use bex_vm_types::SysOp;
+    use sys_types::AsBexExternalValue;
 
     use super::*;
 
@@ -2477,6 +2462,127 @@ mod tests {
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
         let result = fn_ptr(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
+    }
+
+    #[test]
+    fn test_http_builders_install_expected_slots() {
+        let fetch_builder = IoSysOpsBuilder::new();
+        let fetch_defaults = fetch_builder.inner.clone();
+        let fetch_ops = fetch_builder
+            .with_http_fetch_instance(Arc::new(DefaultIoOps))
+            .build();
+
+        let full_builder = IoSysOpsBuilder::new();
+        let full_defaults = full_builder.inner.clone();
+        let full_ops = full_builder
+            .with_http_instance(Arc::new(DefaultIoOps))
+            .build();
+
+        for op in [
+            SysOp::BamlHttpFetch,
+            SysOp::BamlHttpSend,
+            SysOp::BamlHttpResponseText,
+            SysOp::BamlHttpResponseBytes,
+        ] {
+            assert!(!Arc::ptr_eq(fetch_defaults.get(op), fetch_ops.get(op)));
+            assert!(!Arc::ptr_eq(full_defaults.get(op), full_ops.get(op)));
+        }
+
+        for op in [
+            SysOp::BamlHttpFetchSse,
+            SysOp::BamlHttpSseStreamNext,
+            SysOp::BamlHttpSseStreamClose,
+            SysOp::BamlHttpResponseNew,
+            SysOp::BamlHttpResponseNewStreaming,
+            SysOp::BamlHttpResponseWrite,
+            SysOp::BamlHttpResponseEnd,
+            SysOp::BamlHttpTlsConfigNew,
+            SysOp::BamlHttpServerBind,
+            SysOp::BamlHttpServerServe,
+        ] {
+            assert!(Arc::ptr_eq(fetch_defaults.get(op), fetch_ops.get(op)));
+            assert!(!Arc::ptr_eq(full_defaults.get(op), full_ops.get(op)));
+        }
+    }
+
+    fn assert_unsupported_http_result(result: sys_types::SysOpResult, expected_op: SysOp) {
+        use sys_types::{OpErrorPayload, SysOpResult};
+
+        match result {
+            SysOpResult::Ready(Err(error)) => {
+                assert_eq!(error.fn_name, expected_op);
+                assert!(matches!(
+                    error.payload,
+                    OpErrorPayload::Vm(VmRustFnError::BamlError(VmBamlError::Unsupported { .. }))
+                ));
+            }
+            _ => panic!("expected Unsupported error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_http_builders_route_shared_slots() {
+        let heap = test_heap();
+        let ctx = test_ctx();
+        let permit = test_permit().await;
+
+        for ops in [
+            IoSysOpsBuilder::new()
+                .with_http_fetch_instance(Arc::new(DefaultIoOps))
+                .build(),
+            IoSysOpsBuilder::new()
+                .with_http_instance(Arc::new(DefaultIoOps))
+                .build(),
+        ] {
+            let url = BexExternalValue::String("https://example.com".into());
+            let timeout = BexExternalValue::Bigint(num_bigint::BigInt::from(1));
+            let result = (ops.baml_http__fetch)(
+                &heap,
+                permit.proof(),
+                vec![
+                    BexValue::ExternalValue(&url),
+                    BexValue::ExternalValue(&timeout),
+                ],
+                &ctx,
+                CallId::next(),
+            );
+            assert_unsupported_http_result(result, SysOp::BamlHttpFetch);
+
+            let request = io::owned::http::Request::default().into_bex_external_value();
+            let timeout = BexExternalValue::Bigint(num_bigint::BigInt::from(1));
+            let result = (ops.baml_http__send)(
+                &heap,
+                permit.proof(),
+                vec![
+                    BexValue::ExternalValue(&request),
+                    BexValue::ExternalValue(&timeout),
+                ],
+                &ctx,
+                CallId::next(),
+            );
+            assert_unsupported_http_result(result, SysOp::BamlHttpSend);
+
+            for (op, slot) in [
+                (SysOp::BamlHttpResponseText, &ops.baml_http_response_text),
+                (SysOp::BamlHttpResponseBytes, &ops.baml_http_response_bytes),
+            ] {
+                let response = io::owned::http::Response {
+                    status_code: 200,
+                    headers: indexmap::IndexMap::new(),
+                    url: "https://example.com".to_string(),
+                    _body: Arc::new(()),
+                }
+                .into_bex_external_value();
+                let result = slot(
+                    &heap,
+                    permit.proof(),
+                    vec![BexValue::ExternalValue(&response)],
+                    &ctx,
+                    CallId::next(),
+                );
+                assert_unsupported_http_result(result, op);
+            }
+        }
     }
 
     #[test]
