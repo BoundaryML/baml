@@ -807,139 +807,23 @@ impl BamlWasmRuntime {
         name: &str,
         args_bytes: &[u8],
     ) -> Result<(), JsValue> {
-        let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
-            .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
-        let call_id = next_wasm_call_id()?;
-        let host_call_id = HostCallId::Wasm(
-            u32::try_from(call_id.0)
-                .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
-        );
-        let boundary_id = BoundaryId::new_random();
-        let fs_path = bex_project::FsPath::from_str(project.clone());
-        let bex = self
-            .bex
-            .get_bex_for_project(&fs_path)
-            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
-        let project_generation = self.bex.project_generation(&project).unwrap_or(0);
-        let started = self.run_store.create_attached_run(
-            boundary_id,
-            ExecutionRequest {
-                project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
-                project_generation: ProjectGeneration(project_generation),
-                target: RunTarget::Function {
-                    function_name: name.to_string(),
-                },
-                args_summary: None,
-                options_summary: None,
+        self.start_function_run(
+            request_id,
+            project,
+            name,
+            || RunTarget::Function {
+                function_name: name.to_string(),
             },
-            RequestId(u64::from(request_id)),
-            host_call_id,
-        );
-        send_started_host_run(
-            &self.playground_callback,
-            &self.run_store,
-            &started,
-            Some(u64::from(request_id)),
-        );
-        begin_wasm_history(
-            &self.playground_callback,
-            &self.run_store,
-            &self.history_store,
-            &started.start,
-        );
-
-        let run_store = self.run_store.clone();
-        let callback = self.playground_callback.clone();
-        let history_store = self.history_store.clone();
-        let profile_drain = self.profile_drain.clone();
-        let value_store = self.value_store.clone();
-        let function_name = name.to_string();
-        let value_capture =
-            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
-        let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
-            .with_boundary_id(boundary_id)
-            .with_capture_defaults(bex_project::CaptureDefaults {
-                values_enabled: true,
-                logs_enabled: true,
-            })
-            .with_value_capture(value_capture.clone())
-            .build();
-        wasm_bindgen_futures::spawn_local(async move {
-            match bex
-                .call_function_with_trace(&function_name, kwargs.into(), ctx)
-                .await
-            {
-                Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
-                    attach_wasm_history_root_trace(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        boundary_id,
-                        traced.entry_call_ref,
-                    );
-                    let refs = drain_wasm_captured_values(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        &value_store,
-                        boundary_id,
-                        &value_capture,
-                    );
-                    drain_wasm_profiles(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        &profile_drain,
-                        Some(boundary_id),
-                    );
-                    let outcome = match traced.value {
-                        Ok(_result) => {
-                            root_value_success_outcome(refs.output, "baml.outbound.base64")
-                        }
-                        Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
-                    };
-                    complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
-                }
-                Err(e) => {
-                    let refs = drain_wasm_captured_values(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        &value_store,
-                        boundary_id,
-                        &value_capture,
-                    );
-                    complete_wasm_run(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        boundary_id,
-                        runtime_error_outcome_with_ref(&e, refs.error),
-                    );
-                    drain_wasm_profiles(
-                        &callback,
-                        &run_store,
-                        &history_store,
-                        &profile_drain,
-                        Some(boundary_id),
-                    );
-                }
-            }
-        });
-
-        Ok(())
+            args_bytes,
+        )
     }
 
-    /// Start a RunStore-owned prompt/cURL preview run.
-    #[wasm_bindgen(js_name = startPreviewRun)]
-    pub fn start_preview_run(
+    fn start_function_run(
         &self,
         request_id: u32,
         project: String,
-        parent_function_name: &str,
-        helper: &str,
         function_name: &str,
+        build_target: impl FnOnce() -> RunTarget,
         args_bytes: &[u8],
     ) -> Result<(), JsValue> {
         let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
@@ -961,10 +845,7 @@ impl BamlWasmRuntime {
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
-                target: RunTarget::Preview {
-                    parent_function_name: parent_function_name.to_string(),
-                    helper: helper.to_string(),
-                },
+                target: build_target(),
                 args_summary: None,
                 options_summary: None,
             },
@@ -1065,6 +946,29 @@ impl BamlWasmRuntime {
         });
 
         Ok(())
+    }
+
+    /// Start a RunStore-owned prompt/cURL preview run.
+    #[wasm_bindgen(js_name = startPreviewRun)]
+    pub fn start_preview_run(
+        &self,
+        request_id: u32,
+        project: String,
+        parent_function_name: &str,
+        helper: &str,
+        function_name: &str,
+        args_bytes: &[u8],
+    ) -> Result<(), JsValue> {
+        self.start_function_run(
+            request_id,
+            project,
+            function_name,
+            || RunTarget::Preview {
+                parent_function_name: parent_function_name.to_string(),
+                helper: helper.to_string(),
+            },
+            args_bytes,
+        )
     }
 
     /// Handle an LSP notification.
