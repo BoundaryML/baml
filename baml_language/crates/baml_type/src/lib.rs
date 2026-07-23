@@ -140,6 +140,14 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     }
 }
 
+#[derive(Clone, Copy)]
+enum ImplSubjectConcreteness {
+    Both,
+    ImplOnly,
+    ConcreteOnly,
+    Neither,
+}
+
 impl Ty {
     /// Whether this type may be the *implementor* (`for`-target) of an interface
     /// implementation — i.e. `implement I for <Self>` is allowed.
@@ -167,9 +175,16 @@ impl Ty {
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
     ///
-    /// The match is intentionally exhaustive (no wildcard) so a new `Ty` variant
-    /// must be classified here rather than silently defaulting to implementable.
+    /// The shared classification is exhaustive so a new `Ty` variant must be
+    /// classified rather than silently defaulting to implementable.
     pub fn is_valid_impl_subject(&self) -> bool {
+        matches!(
+            self.impl_subject_concreteness(),
+            ImplSubjectConcreteness::Both | ImplSubjectConcreteness::ImplOnly
+        )
+    }
+
+    fn impl_subject_concreteness(&self) -> ImplSubjectConcreteness {
         match self {
             Ty::Int { .. }
             | Ty::Bigint { .. }
@@ -185,25 +200,25 @@ impl Ty {
             | Ty::Map { .. }
             | Ty::Type { .. }
             | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Never { .. }
-            | Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. } => true,
+            | Ty::PromptAst { .. } => ImplSubjectConcreteness::Both,
+            Ty::Never { .. } | Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } => {
+                ImplSubjectConcreteness::ImplOnly
+            }
+            Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::RustType { .. } => ImplSubjectConcreteness::ConcreteOnly,
             Ty::Literal(..)
             | Ty::EnumVariant(..)
             | Ty::Interface(..)
             | Ty::Union(..)
-            | Ty::Future(..)
-            | Ty::Function { .. }
-            | Ty::RustType { .. }
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Infer { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..) => false,
+            | Ty::Infer { .. } => ImplSubjectConcreteness::Neither,
         }
     }
 
@@ -235,43 +250,13 @@ impl Ty {
     /// defines — used to gate an interface-bounded type-parameter argument (an
     /// interface bound admits only a single run-time type, so dispatch is well-defined).
     ///
-    /// Exhaustive (no wildcard) so a new `Ty` variant must be classified here.
+    /// The shared classification is exhaustive so a new `Ty` variant must be
+    /// classified rather than silently defaulting to concrete.
     pub fn is_concrete(&self) -> bool {
-        match self {
-            Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
-            | Ty::Media(..)
-            | Ty::Class(..)
-            | Ty::Enum(..)
-            | Ty::List(..)
-            | Ty::Map { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..)
-            | Ty::Function { .. }
-            | Ty::Future(..)
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::RustType { .. } => true,
-            Ty::Union(..)
-            | Ty::Interface(..)
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Literal(..)
-            | Ty::EnumVariant(..)
-            | Ty::Never { .. }
-            | Ty::Void { .. }
-            | Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. }
-            | Ty::TypeAlias(..)
-            | Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::Infer { .. } => false,
-        }
+        matches!(
+            self.impl_subject_concreteness(),
+            ImplSubjectConcreteness::Both | ImplSubjectConcreteness::ConcreteOnly
+        )
     }
 
     // --- Primitive constructors (default TyAttr) ---
