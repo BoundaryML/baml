@@ -1118,7 +1118,7 @@ impl ProjectDatabase {
                     }
                 }
                 baml_compiler2_tir::resolve::ResolvedName::Local { .. } => {
-                    return self.cursor_context_for_local(source_file, offset);
+                    return self.cursor_context_positional(source_file, offset);
                 }
                 baml_compiler2_tir::resolve::ResolvedName::Unknown => {
                     // Fall through to positional fallback below
@@ -1218,38 +1218,6 @@ impl ProjectDatabase {
                     cursor_offset: Some(u32::from(offset)),
                 }
             }
-        }
-    }
-
-    /// Build cursor context when the cursor resolved to a local variable.
-    /// We look up the enclosing function to provide context.
-    fn cursor_context_for_local(
-        &self,
-        source_file: SourceFile,
-        offset: text_size::TextSize,
-    ) -> CursorContext {
-        let (func_name, is_workflow) = match self.find_enclosing_function(source_file, offset) {
-            Some((name, workflow)) => (Some(name), workflow),
-            None => (None, false),
-        };
-
-        let workflow_memberships = func_name
-            .as_ref()
-            .map(|n| self.find_workflow_memberships(n))
-            .unwrap_or_default();
-
-        let (source_expr_id, source_expr_candidates) =
-            self.find_source_expr_ids_at(source_file, offset);
-
-        CursorContext {
-            function_name: func_name.clone(),
-            is_workflow,
-            workflow_memberships,
-            source_expr_id,
-            source_expr_candidates,
-            source_expr_function_name: func_name,
-            test_name: None,
-            cursor_offset: Some(u32::from(offset)),
         }
     }
 
