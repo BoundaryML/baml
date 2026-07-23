@@ -650,14 +650,12 @@ impl Place {
         Place::Local(local)
     }
 
-    /// Get the base local of this place.
-    ///
-    /// Panics for `Place::Capture` — captures have no local base.
-    pub fn base_local(&self) -> Local {
+    /// Get the base local of this place, if it is rooted in a local.
+    pub fn base_local(&self) -> Option<Local> {
         match self {
-            Place::Local(l) => *l,
+            Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
-            Place::Capture(_) => panic!("Place::Capture has no base local"),
+            Place::Capture(_) => None,
         }
     }
 }
