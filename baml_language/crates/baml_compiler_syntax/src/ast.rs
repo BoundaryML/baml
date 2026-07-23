@@ -143,6 +143,47 @@ fn attribute_args(syntax: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> + '_ 
         })
 }
 
+fn attribute_string_arg(syntax: &SyntaxNode) -> Option<String> {
+    let args = attribute_args_node(syntax)?;
+
+    for child in args.children() {
+        match child.kind() {
+            SyntaxKind::STRING_LITERAL => {
+                return Some(decode_regular_string_literal_text(
+                    &child.text().to_string(),
+                ));
+            }
+            SyntaxKind::RAW_STRING_LITERAL => {
+                if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
+                    return Some(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let result: String = args
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|token| {
+            !matches!(
+                token.kind(),
+                SyntaxKind::WHITESPACE
+                    | SyntaxKind::NEWLINE
+                    | SyntaxKind::LINE_COMMENT
+                    | SyntaxKind::BLOCK_COMMENT
+                    | SyntaxKind::QUOTE
+                    | SyntaxKind::L_PAREN
+                    | SyntaxKind::R_PAREN
+                    | SyntaxKind::COMMA
+            )
+        })
+        .map(|token| token.text().to_string())
+        .collect();
+
+    (!result.is_empty()).then_some(result)
+}
+
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
     /// Get the syntax kind of this node.
@@ -2950,53 +2991,7 @@ impl BlockAttribute {
     /// Returns None if no `ATTRIBUTE_ARGS` or no string literal found.
     /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
-        let args = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
-
-        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
-        for child in args.children() {
-            match child.kind() {
-                SyntaxKind::STRING_LITERAL => {
-                    return Some(decode_regular_string_literal_text(
-                        &child.text().to_string(),
-                    ));
-                }
-                SyntaxKind::RAW_STRING_LITERAL => {
-                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
-                        return Some(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback: collect non-structural tokens (for unquoted strings)
-        let result: String = args
-            .descendants_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                !matches!(
-                    token.kind(),
-                    SyntaxKind::WHITESPACE
-                        | SyntaxKind::NEWLINE
-                        | SyntaxKind::LINE_COMMENT
-                        | SyntaxKind::BLOCK_COMMENT
-                        | SyntaxKind::QUOTE
-                        | SyntaxKind::L_PAREN
-                        | SyntaxKind::R_PAREN
-                        | SyntaxKind::COMMA
-                )
-            })
-            .map(|token| token.text().to_string())
-            .collect();
-
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        attribute_string_arg(&self.syntax)
     }
 
     /// Check if the argument is a valid string literal (not an expression or identifier).
@@ -3101,53 +3096,7 @@ impl Attribute {
     /// For @alias("foo") returns Some("foo").
     /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
-        let args = self
-            .syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
-
-        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
-        for child in args.children() {
-            match child.kind() {
-                SyntaxKind::STRING_LITERAL => {
-                    return Some(decode_regular_string_literal_text(
-                        &child.text().to_string(),
-                    ));
-                }
-                SyntaxKind::RAW_STRING_LITERAL => {
-                    if let Some(value) = decode_raw_string_literal_text(&child.text().to_string()) {
-                        return Some(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback: collect non-structural tokens (for unquoted strings)
-        let result: String = args
-            .descendants_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                !matches!(
-                    token.kind(),
-                    SyntaxKind::WHITESPACE
-                        | SyntaxKind::NEWLINE
-                        | SyntaxKind::LINE_COMMENT
-                        | SyntaxKind::BLOCK_COMMENT
-                        | SyntaxKind::QUOTE
-                        | SyntaxKind::L_PAREN
-                        | SyntaxKind::R_PAREN
-                        | SyntaxKind::COMMA
-                )
-            })
-            .map(|token| token.text().to_string())
-            .collect();
-
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+        attribute_string_arg(&self.syntax)
     }
 
     /// Check if the argument is a valid string literal (not an expression or identifier).

@@ -188,4 +188,109 @@ mod builder_tests {
         check_attribute_argument_accessors!(ast::Attribute, SyntaxKind::ATTRIBUTE);
         check_attribute_argument_accessors!(ast::BlockAttribute, SyntaxKind::BLOCK_ATTRIBUTE);
     }
+
+    fn build_attribute_string_arg(
+        kind: SyntaxKind,
+        with_args: bool,
+        argument_kind: Option<SyntaxKind>,
+        tokens: &[(SyntaxKind, &str)],
+    ) -> SyntaxNode {
+        let mut builder = SyntaxTreeBuilder::new();
+        builder.start_node(kind);
+        match kind {
+            SyntaxKind::ATTRIBUTE => builder.token(SyntaxKind::AT, "@"),
+            SyntaxKind::BLOCK_ATTRIBUTE => builder.token(SyntaxKind::AT_AT, "@@"),
+            _ => unreachable!("expected attribute syntax kind"),
+        }
+        builder.token(SyntaxKind::WORD, "test");
+
+        if with_args {
+            builder.start_node(SyntaxKind::ATTRIBUTE_ARGS);
+            builder.token(SyntaxKind::L_PAREN, "(");
+            if let Some(argument_kind) = argument_kind {
+                builder.start_node(argument_kind);
+                for &(token_kind, text) in tokens {
+                    builder.token(token_kind, text);
+                }
+                builder.finish_node();
+            }
+            builder.token(SyntaxKind::R_PAREN, ")");
+            builder.finish_node();
+        }
+
+        builder.finish_node();
+        SyntaxNode::new_root(builder.finish())
+    }
+
+    macro_rules! check_attribute_string_args {
+        ($attribute:ty, $kind:expr) => {{
+            let cases: &[(
+                bool,
+                Option<SyntaxKind>,
+                &[(SyntaxKind, &str)],
+                Option<&str>,
+            )] = &[
+                (false, None, &[], None),
+                (true, None, &[], None),
+                (
+                    true,
+                    Some(SyntaxKind::STRING_LITERAL),
+                    &[(SyntaxKind::WORD, "\"hello  world\\n\"")],
+                    Some("hello  world\n"),
+                ),
+                (
+                    true,
+                    Some(SyntaxKind::RAW_STRING_LITERAL),
+                    &[(SyntaxKind::WORD, "##\" raw  text \"##")],
+                    Some(" raw  text "),
+                ),
+                (
+                    true,
+                    Some(SyntaxKind::UNQUOTED_STRING),
+                    &[
+                        (SyntaxKind::WHITESPACE, " "),
+                        (SyntaxKind::WORD, "alpha"),
+                        (SyntaxKind::BLOCK_COMMENT, "/* ignored */"),
+                        (SyntaxKind::COMMA, ","),
+                        (SyntaxKind::NEWLINE, "\n"),
+                        (SyntaxKind::WORD, "beta"),
+                    ],
+                    Some("alphabeta"),
+                ),
+                (
+                    true,
+                    Some(SyntaxKind::RAW_STRING_LITERAL),
+                    &[(SyntaxKind::WORD, "#\"unterminated")],
+                    Some("#\"unterminated"),
+                ),
+                (
+                    true,
+                    Some(SyntaxKind::UNQUOTED_STRING),
+                    &[
+                        (SyntaxKind::WHITESPACE, " "),
+                        (SyntaxKind::LINE_COMMENT, "// ignored"),
+                        (SyntaxKind::COMMA, ","),
+                    ],
+                    None,
+                ),
+            ];
+
+            for &(with_args, argument_kind, tokens, expected) in cases {
+                let attribute = <$attribute>::cast(build_attribute_string_arg(
+                    $kind,
+                    with_args,
+                    argument_kind,
+                    tokens,
+                ))
+                .expect("expected attribute");
+                assert_eq!(attribute.string_arg().as_deref(), expected);
+            }
+        }};
+    }
+
+    #[test]
+    fn attribute_string_decoding_agrees_for_inline_and_block_attributes() {
+        check_attribute_string_args!(ast::Attribute, SyntaxKind::ATTRIBUTE);
+        check_attribute_string_args!(ast::BlockAttribute, SyntaxKind::BLOCK_ATTRIBUTE);
+    }
 }
