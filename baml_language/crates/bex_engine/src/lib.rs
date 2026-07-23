@@ -118,6 +118,31 @@ use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
+/// Sets the VM park request flag for the lifetime of a pending GC park request.
+///
+/// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
+/// while it is waiting for active heap permits must not leave every VM believing
+/// that a park is still requested.
+#[cfg(not(target_arch = "wasm32"))]
+struct ParkRequestGuard {
+    park_requested: Arc<AtomicBool>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ParkRequestGuard {
+    fn new(park_requested: Arc<AtomicBool>) -> Self {
+        park_requested.store(true, Ordering::Relaxed);
+        Self { park_requested }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for ParkRequestGuard {
+    fn drop(&mut self) {
+        self.park_requested.store(false, Ordering::Relaxed);
+    }
+}
+
 use crate::value_capture::{CaptureKind, TraceCaptureProducer, TraceLogMetadata};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
@@ -1937,10 +1962,10 @@ impl BexEngine {
         level: bex_heap::CollectionLevel,
     ) -> bex_heap::GcStats {
         #[cfg(not(target_arch = "wasm32"))]
-        self.park_requested.store(true, Ordering::Relaxed);
+        let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
         let mut heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
-        self.park_requested.store(false, Ordering::Relaxed);
+        drop(park_request_guard);
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -5221,6 +5246,21 @@ impl BexEngine {
                 }
             }
         }
+
+        if op == SysOp::BamlSysCollectGarbage {
+            // A collection cannot run while this VM holds its active heap
+            // permit. Returning an async operation makes the event loop release
+            // that permit before polling us; the engine can then park every VM,
+            // collect, drain `cleanup()` finalizers, and only afterward resume
+            // the caller.
+            let engine = self.clone();
+            return SysOpResult::Async(Box::pin(async move {
+                engine
+                    .collect_garbage(bex_heap::CollectionLevel::Major)
+                    .await;
+                Ok(BexExternalValue::Null)
+            }));
+        }
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
@@ -5309,6 +5349,59 @@ impl sys_types::VmSpawner for BexEngine {
 
 #[cfg(test)]
 mod concurrent_tests {
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn cancelling_pending_gc_park_request_clears_vm_flag() {
+        use std::{
+            sync::{
+                Arc,
+                atomic::{AtomicBool, Ordering},
+            },
+            time::Duration,
+        };
+
+        use super::ParkRequestGuard;
+        use crate::HeapPermitManager;
+
+        let permit_manager = Arc::new(HeapPermitManager::new());
+        let active_permit = permit_manager.new_permit(()).await.acquire().await;
+        let park_requested = Arc::new(AtomicBool::new(false));
+
+        let request = {
+            let permit_manager = Arc::clone(&permit_manager);
+            let park_requested = Arc::clone(&park_requested);
+            tokio::spawn(async move {
+                let park_request_guard = ParkRequestGuard::new(park_requested);
+                let _heap_guard = permit_manager.request_park().await;
+                drop(park_request_guard);
+            })
+        };
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !park_requested.load(Ordering::Relaxed) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("GC request should set the VM park flag");
+        assert!(
+            !request.is_finished(),
+            "the active heap permit should keep the GC request pending"
+        );
+
+        request.abort();
+        let join_error = request
+            .await
+            .expect_err("aborted GC request should not complete normally");
+        assert!(join_error.is_cancelled());
+        assert!(
+            !park_requested.load(Ordering::Relaxed),
+            "cancelling the GC request must clear the VM park flag"
+        );
+
+        drop(active_permit);
+    }
+
     /// Test that demonstrates concurrent `call_function` is safe.
     /// This test verifies that:
     /// 1. Multiple concurrent calls complete successfully

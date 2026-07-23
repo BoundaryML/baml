@@ -5822,6 +5822,9 @@ function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
 function baml.sys.argv() -> string[] {
 }
 
+function baml.sys.collect_garbage() -> null {
+}
+
 function baml.sys.exec(program: string, args: string[] | null, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
 }
 
