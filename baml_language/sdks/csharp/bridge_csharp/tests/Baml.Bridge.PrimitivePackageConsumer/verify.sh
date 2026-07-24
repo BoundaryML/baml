@@ -10,7 +10,7 @@ verify_repository_paths() (
   # Include the path separator so a short mount point such as /work does not
   # mistake an unrelated path segment such as /worker.rs for a repository path.
   repository_path_prefix="${repository_root%/}/"
-  if rg -a -F -l -- "$repository_path_prefix" "$publish" > /dev/null; then
+  if grep -r -a -F -l -- "$repository_path_prefix" "$publish" > /dev/null; then
     echo "published consumer contains a repository path" >&2
     return 1
   else
