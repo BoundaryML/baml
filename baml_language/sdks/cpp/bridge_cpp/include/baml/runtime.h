@@ -19,8 +19,6 @@ namespace baml {
 
 namespace detail {
 
-using unhandled_spawn_error_handler = void (*)(std::exception_ptr, bool);
-
 inline void host_default_unhandled_spawn_error(std::exception_ptr error,
                                                bool cancelled) {
   if (cancelled) {
@@ -35,12 +33,6 @@ inline void host_default_unhandled_spawn_error(std::exception_ptr error,
   std::rethrow_exception(error);
 }
 
-inline unhandled_spawn_error_handler& unhandled_spawn_error_handler_storage() {
-  static unhandled_spawn_error_handler handler =
-      host_default_unhandled_spawn_error;
-  return handler;
-}
-
 inline void report_unhandled_spawn_error(std::vector<uint8_t> payload,
                                          bool cancelled) {
   try {
@@ -50,8 +42,7 @@ inline void report_unhandled_spawn_error(std::vector<uint8_t> payload,
     }
     throw_from_result(result);
   } catch (...) {
-    unhandled_spawn_error_handler_storage()(std::current_exception(),
-                                            cancelled);
+    host_default_unhandled_spawn_error(std::current_exception(), cancelled);
   }
 }
 
