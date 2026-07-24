@@ -1,4 +1,4 @@
-// throws whole enum, body throws all variants — no diagnostic
+// Throws tracks enum variants exactly; declaring the enum does not cover thrown variants.
 
 enum Errors {
   AuthError
