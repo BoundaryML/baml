@@ -8426,12 +8426,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Probe the arm pattern's matched type for narrowing.
                 // Bindings/refutability are handled by the per-arm walk
                 // below, after the narrowed type is finalised.
+                let probe_diag_start = self.context.diagnostic_count();
                 let arm_probe = self.analyze_and_lower_no_subtype_check(
                     arm.pattern,
                     &clause_binding_ty,
                     body,
                     arm.body,
                 );
+                self.context.truncate_diagnostics(probe_diag_start);
                 let mut narrowed_ty = arm_probe.matched_ty.clone();
                 let written_arm_ty = arm_expected_ty
                     .clone()

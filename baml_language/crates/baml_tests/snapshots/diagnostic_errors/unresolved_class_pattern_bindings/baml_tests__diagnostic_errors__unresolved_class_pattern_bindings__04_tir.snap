@@ -89,7 +89,6 @@ function user.catch_arm_binding(person: user.Person) -> int throws never {
           0 : 0
   }
   !! 1233..1248: unresolved name: Missing
-  !! 1233..1248: unresolved name: Missing
 }
 class user.Address$stream {
   zip: int | null
