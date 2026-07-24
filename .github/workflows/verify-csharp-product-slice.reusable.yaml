@@ -38,6 +38,17 @@ jobs:
         with:
           dotnet-version: 10.0.301
 
+      - name: Install cross-platform package inspection tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm-18
+          llvm_bin="/usr/lib/llvm-18/bin"
+          for tool in llvm-nm llvm-objdump llvm-readobj; do
+            test -x "$llvm_bin/$tool"
+          done
+          echo "$llvm_bin" >> "$GITHUB_PATH"
+
       - uses: actions/download-artifact@v4
         with:
           pattern: bridge-cffi-*
