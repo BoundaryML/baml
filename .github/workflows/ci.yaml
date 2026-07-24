@@ -1209,18 +1209,52 @@ jobs:
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref_name == 'canary' }}
     permissions:
       actions: write
-      contents: read
+      contents: write
     steps:
-      - name: Dispatch release for this commit
+      - name: Create immutable release workflow ref
+        id: release-workflow-ref
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # --ref canary selects the workflow *definition* from canary HEAD;
-          # source_sha pins the commit that actually gets built and released.
+          release_ref="baml-language-source-$GITHUB_SHA"
+          ref_endpoint="repos/$GITHUB_REPOSITORY/git/ref/tags/$release_ref"
+
+          if ref_json="$(gh api "$ref_endpoint" 2>/dev/null)"; then
+            :
+          elif gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$release_ref" \
+            -f sha="$GITHUB_SHA" >/dev/null; then
+            ref_json="$(gh api "$ref_endpoint")"
+          else
+            # A rerun can race another attempt creating the same immutable tag.
+            # Re-read it and fail below unless it is the exact ref we intended.
+            ref_json="$(gh api "$ref_endpoint")"
+          fi
+
+          ref_type="$(jq -r '.object.type // ""' <<<"$ref_json")"
+          ref_sha="$(jq -r '.object.sha // ""' <<<"$ref_json")"
+          if [[ "$ref_type" != "commit" || "$ref_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::release ref $release_ref resolves to $ref_type $ref_sha, expected commit $GITHUB_SHA"
+            exit 1
+          fi
+
+          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
+          echo "Release workflow ref: $release_ref ($ref_sha)"
+
+      - name: Dispatch release for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
+        run: |
+          set -euo pipefail
+          # Load the workflow definition from the same immutable commit that the
+          # release checks out, even if canary advances while this CI run finishes.
           gh workflow run release-baml-language.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref canary \
+            --ref "$RELEASE_WORKFLOW_REF" \
             -f channel=auto \
             -f dry_run=false \
             -f source_sha="$GITHUB_SHA" \

@@ -686,6 +686,28 @@ class WorkflowGraphTests(unittest.TestCase):
             '-f source_ci_run_id="$GITHUB_RUN_ID"',
             ci_dispatch,
         )
+        self.assertIn("contents: write", ci_dispatch)
+        self.assertIn(
+            'release_ref="baml-language-source-$GITHUB_SHA"',
+            ci_dispatch,
+        )
+        self.assertIn(
+            '-f ref="refs/tags/$release_ref"',
+            ci_dispatch,
+        )
+        self.assertIn(
+            'ref_type" != "commit"',
+            ci_dispatch,
+        )
+        self.assertIn(
+            'ref_sha" != "$GITHUB_SHA"',
+            ci_dispatch,
+        )
+        self.assertIn(
+            '--ref "$RELEASE_WORKFLOW_REF"',
+            ci_dispatch,
+        )
+        self.assertNotIn("--ref canary", ci_dispatch)
 
     def test_production_release_is_ci_attested_and_least_privilege(self) -> None:
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
@@ -707,6 +729,21 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn('"$branch" != "canary"', plan)
         self.assertIn('"$head_sha" != "$INPUT_SOURCE_SHA"', plan)
         self.assertIn('"$conclusion" != "success"', plan)
+        self.assertIn('WORKFLOW_SOURCE_SHA: ${{ github.sha }}', plan)
+        self.assertIn('WORKFLOW_REF_NAME: ${{ github.ref_name }}', plan)
+        self.assertIn('WORKFLOW_REF_TYPE: ${{ github.ref_type }}', plan)
+        self.assertIn(
+            '"$WORKFLOW_SOURCE_SHA" != "$INPUT_SOURCE_SHA"',
+            plan,
+        )
+        self.assertIn(
+            '"$WORKFLOW_REF_TYPE" != "tag"',
+            plan,
+        )
+        self.assertIn(
+            '"$WORKFLOW_REF_NAME" != "$expected_workflow_ref"',
+            plan,
+        )
         self.assertIn('if ! run_json="$(gh api', plan)
         self.assertIn("gh api call failed (attempt $attempt/30); retrying", plan)
         self.assertIn(
@@ -731,6 +768,15 @@ class WorkflowGraphTests(unittest.TestCase):
             '-f source_ci_run_id="$SOURCE_CI_RUN_ID"',
             nightly,
         )
+        self.assertIn(
+            'SOURCE_WORKFLOW_REF: ${{ github.ref_name }}',
+            nightly,
+        )
+        self.assertIn(
+            '--ref "$SOURCE_WORKFLOW_REF"',
+            nightly,
+        )
+        self.assertNotIn("--ref canary", nightly)
 
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
