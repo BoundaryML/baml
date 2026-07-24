@@ -428,6 +428,12 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
             'workbench.colorTheme': 'Default Dark Modern',
             'window.commandCenter': false,
             'workbench.layoutControl.enabled': false,
+            'editor.semanticHighlighting.enabled': true,
+            'editor.semanticTokenColorCustomizations': {
+              rules: {
+                'namespace:baml': '#808080CC',
+              },
+            },
             'editor.wordBasedSuggestions': 'off',
             'editor.minimap.enabled': false,
             'editor.scrollBeyondLastLine': false,
