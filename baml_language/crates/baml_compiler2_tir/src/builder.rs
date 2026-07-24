@@ -423,6 +423,17 @@ enum PatternExpectedTy {
     Partial(Ty),
 }
 
+#[derive(Clone, Copy)]
+enum NamedPatternFieldOwner<'a> {
+    Class(&'a crate::ty::QualifiedTypeName),
+    Interface(&'a Ty),
+}
+
+struct LoweredNamedPatternFields {
+    sub_dpats: Vec<crate::exhaustiveness::DPat>,
+    bindings: Vec<crate::pattern_lowering::PatternBinding>,
+}
+
 impl PatternExpectedTy {
     fn ty(&self) -> &Ty {
         match self {
@@ -16318,6 +16329,85 @@ impl TypeInferenceBuilder<'_> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    fn lower_named_pattern_fields(
+        &mut self,
+        owner: NamedPatternFieldOwner<'_>,
+        fields: &[ast::FieldPat],
+        declared_fields: &[(Name, Ty)],
+        pat_id: PatId,
+        body: &ExprBody,
+        at_expr: ExprId,
+    ) -> LoweredNamedPatternFields {
+        use crate::exhaustiveness::DPat;
+
+        let declared_field_names: Vec<Name> = declared_fields
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let field_slots: FxHashMap<Name, usize> = declared_field_names
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(slot, name)| (name, slot))
+            .collect();
+        let mut sub_dpats: Vec<DPat> = declared_fields
+            .iter()
+            .map(|(_, ty)| DPat::wildcard(ty.clone()))
+            .collect();
+        let mut bindings = Vec::new();
+        let mut seen_fields = FxHashSet::default();
+
+        for field in fields {
+            let Some(&slot) = field_slots.get(&field.field) else {
+                let error = match owner {
+                    NamedPatternFieldOwner::Class(class_name) => {
+                        TirTypeError::UnknownClassPatternField {
+                            class_name: class_name.clone(),
+                            field_name: field.field.clone(),
+                            suggestions: Self::class_pattern_field_suggestions(
+                                &field.field,
+                                &declared_field_names,
+                            ),
+                        }
+                    }
+                    NamedPatternFieldOwner::Interface(interface_ty) => {
+                        TirTypeError::UnresolvedMember {
+                            base_type: interface_ty.clone(),
+                            member: field.field.clone(),
+                        }
+                    }
+                };
+                self.report_at_pat_or_expr(error, pat_id, at_expr);
+                let unknown = Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
+                let result = self.analyze_and_lower(field.pat, &unknown, body, at_expr);
+                bindings.extend(result.bindings);
+                continue;
+            };
+
+            let first_occurrence = seen_fields.insert(field.field.clone());
+            let field_ty = if first_occurrence {
+                declared_fields[slot].1.clone()
+            } else {
+                Ty::Error {
+                    attr: TyAttr::default(),
+                }
+            };
+            let result = self.analyze_and_lower(field.pat, &field_ty, body, at_expr);
+            if first_occurrence {
+                sub_dpats[slot] = result.dpat;
+            }
+            bindings.extend(result.bindings);
+        }
+
+        LoweredNamedPatternFields {
+            sub_dpats,
+            bindings,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn lower_class_pat(
         &mut self,
         class: &[Name],
@@ -16329,10 +16419,7 @@ impl TypeInferenceBuilder<'_> {
         body: &ExprBody,
         at_expr: ExprId,
     ) -> crate::pattern_lowering::PatternResult {
-        use crate::{
-            exhaustiveness::DPat,
-            pattern_lowering::{PatternBinding, PatternResult},
-        };
+        use crate::{exhaustiveness::DPat, pattern_lowering::PatternResult};
 
         // Anchor unresolved-name / type-mismatch diagnostics for the class
         // head and its generic args at the pattern's span (same treatment
@@ -16421,52 +16508,26 @@ impl TypeInferenceBuilder<'_> {
                     attr.clone(),
                 )
             };
-            let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
-            for fp in fields {
-                by_name.insert(fp.field.clone(), fp);
-            }
-
             let field_infos = self.interface_field_infos_ordered_for_ty(&effective_interface_ty);
-            let mut declared_fields: FxHashSet<Name> = FxHashSet::default();
-            let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
-            let mut bindings: Vec<PatternBinding> = Vec::new();
-            for (field_name, field_ty) in field_infos {
-                declared_fields.insert(field_name.clone());
-                match by_name.get(&field_name) {
-                    Some(fp) => {
-                        let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
-                        sub_dpats.push(r.dpat);
-                        bindings.extend(r.bindings);
-                    }
-                    None => sub_dpats.push(DPat::wildcard(field_ty)),
-                }
-            }
-
-            for fp in fields {
-                if declared_fields.contains(&fp.field) {
-                    continue;
-                }
-                self.report_at_pat_or_expr(
-                    TirTypeError::UnresolvedMember {
-                        base_type: effective_interface_ty.clone(),
-                        member: fp.field.clone(),
-                    },
-                    pat_id,
-                    at_expr,
-                );
-                let unknown = Ty::Unknown {
-                    attr: TyAttr::default(),
-                };
-                let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
-                bindings.extend(r.bindings);
-            }
-            let dpat = DPat::interface(effective_interface_ty.clone(), sub_dpats, scrut_ty.clone());
+            let lowered_fields = self.lower_named_pattern_fields(
+                NamedPatternFieldOwner::Interface(&effective_interface_ty),
+                fields,
+                &field_infos,
+                pat_id,
+                body,
+                at_expr,
+            );
+            let dpat = DPat::interface(
+                effective_interface_ty.clone(),
+                lowered_fields.sub_dpats,
+                scrut_ty.clone(),
+            );
             let matched_ty = self.intersect_pattern_flow_types(scrut_ty, &effective_interface_ty);
             return PatternResult {
                 dpat,
                 required_ty: Some(effective_interface_ty),
                 matched_ty,
-                bindings,
+                bindings: lowered_fields.bindings,
             };
         }
 
@@ -16500,67 +16561,21 @@ impl TypeInferenceBuilder<'_> {
             _ => unreachable!("class_ty is Class by check above"),
         };
 
-        // Build a name → source-FieldPat lookup so we can walk in
-        // declaration order.
-        let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
-        for fp in fields {
-            by_name.insert(fp.field.clone(), fp);
-        }
-
-        // Walk the class definition's fields in declaration order. One
-        // item-tree walk gives both names and types — see
-        // `class_field_infos_ordered`.
         let field_infos = self.class_field_infos_ordered(&qtn, &args);
-
-        let mut declared_fields: Vec<Name> = Vec::with_capacity(field_infos.len());
-        let mut declared_field_set: FxHashSet<Name> = FxHashSet::default();
-        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
-        let mut bindings: Vec<PatternBinding> = Vec::new();
-        for (field_name, field_ty) in field_infos {
-            declared_fields.push(field_name.clone());
-            declared_field_set.insert(field_name.clone());
-            match by_name.get(&field_name) {
-                Some(fp) => {
-                    let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
-                    sub_dpats.push(r.dpat);
-                    bindings.extend(r.bindings);
-                }
-                None => {
-                    // Elided field: implicitly wildcard.
-                    sub_dpats.push(DPat::wildcard(field_ty));
-                }
-            }
-        }
-
-        // A written field the class does not declare: report it (with typo
-        // suggestions), but still lower its subpattern against `unknown` so its
-        // bindings are registered and body references don't cascade into
-        // `unresolved name` noise.
-        for fp in fields {
-            if declared_field_set.contains(&fp.field) {
-                continue;
-            }
-            self.report_at_pat_or_expr(
-                TirTypeError::UnknownClassPatternField {
-                    class_name: qtn.clone(),
-                    field_name: fp.field.clone(),
-                    suggestions: Self::class_pattern_field_suggestions(&fp.field, &declared_fields),
-                },
-                pat_id,
-                at_expr,
-            );
-            let unknown = Ty::Unknown {
-                attr: TyAttr::default(),
-            };
-            let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
-            bindings.extend(r.bindings);
-        }
+        let lowered_fields = self.lower_named_pattern_fields(
+            NamedPatternFieldOwner::Class(&qtn),
+            fields,
+            &field_infos,
+            pat_id,
+            body,
+            at_expr,
+        );
 
         PatternResult {
-            dpat: DPat::class_inst(qtn, args, sub_dpats, scrut_ty.clone()),
+            dpat: DPat::class_inst(qtn, args, lowered_fields.sub_dpats, scrut_ty.clone()),
             required_ty: Some(class_ty.clone()),
             matched_ty: class_ty,
-            bindings,
+            bindings: lowered_fields.bindings,
         }
     }
 
