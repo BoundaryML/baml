@@ -27,7 +27,7 @@ fn front_end_errors(source: &str) -> Vec<String> {
     collect_compiler2_diagnostics(&db)
         .into_iter()
         .filter(|d| d.severity == Severity::Error)
-        .map(|d| format!("[{:?}] {}", d.phase, d.message))
+        .map(|d| format!("[{:?}] {}", d.phase, d.message_with_primary_label()))
         .collect()
 }
 

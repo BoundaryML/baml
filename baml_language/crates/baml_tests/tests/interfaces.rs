@@ -66,7 +66,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
                 .map(|span| user_file_ids.contains(&span.file_id))
                 .unwrap_or(false)
         })
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 
@@ -2174,7 +2174,7 @@ fn self_param_method_rejects_heterogeneous_generic_args() {
             return x.eq(y)
         }
         "#,
-        "got U",
+        "expected `S`, found `U`",
     );
 }
 
@@ -2192,7 +2192,7 @@ fn self_param_method_rejects_mismatched_literal_arg() {
             return x.eq(5)
         }
         "#,
-        "expected T, got 5",
+        "expected `T`, found `5`",
     );
 }
 
@@ -2231,7 +2231,7 @@ fn self_param_method_rejects_nested_self_mismatch() {
             return x.addAll(ys)
         }
         "#,
-        "got U[]",
+        "expected `T[]`, found `U[]`",
     );
 }
 
@@ -2279,7 +2279,7 @@ fn bound_self_method_value_rejects_heterogeneous_arg() {
             return f(y)
         }
         "#,
-        "got U",
+        "expected `T`, found `U`",
     );
 }
 
@@ -3510,7 +3510,7 @@ fn same_interface_different_type_args_is_not_assignable() {
             return x
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 
@@ -3559,7 +3559,7 @@ fn generic_interface_method_explicit_type_args_are_checked() {
             return e.echo<int>("nope")
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 
@@ -4024,7 +4024,7 @@ fn concrete_receiver_self_param_method_rejects_wrong_arg() {
             return Num { v: 1 }.neq(Other { w: 2 })
         }
         "#,
-        "got Other",
+        "expected `Num`, found `Other`",
     );
 }
 
@@ -4047,7 +4047,7 @@ fn unbounded_generic_forwarded_to_bounded_call_is_rejected() {
             return same(x)
         }
         "#,
-        "expected Equatable",
+        "expected `Equatable`, found `U`",
     );
 }
 
@@ -4066,7 +4066,7 @@ fn unbounded_generic_forwarded_through_container_is_rejected() {
             return firstEq(xs)
         }
         "#,
-        "expected Equatable",
+        "expected `Equatable`, found `U`",
     );
 }
 
@@ -5949,7 +5949,7 @@ fn inherited_generic_interface_field_construction_uses_parent_args() {
             let b = Box { value: "wrong" }
         }
         "#,
-        "type mismatch: expected int",
+        "expected `int`, found",
     );
 }
 
@@ -12379,7 +12379,7 @@ fn compound_assign_result_not_assignable_to_target_is_rejected() {
             c
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 

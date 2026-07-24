@@ -29,11 +29,11 @@ use std::{
 };
 
 use baml_base::{FileId, Span};
-use miette::highlighters::{Highlighter, HighlighterState};
 use miette::{
     Diagnostic as MietteDiagnosticTrait, GraphicalReportHandler, GraphicalTheme, LabeledSpan,
     MietteError, MietteSpanContents, NamedSource, Severity as MietteSeverity, SourceCode,
     SourceSpan, SpanContents,
+    highlighters::{Highlighter, HighlighterState},
 };
 use owo_colors::{Style as OwoStyle, Styled};
 

@@ -21,7 +21,7 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
                 .map(|span| user_file_ids.contains(&span.file_id))
                 .unwrap_or(false)
         })
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 
