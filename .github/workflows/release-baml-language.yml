@@ -750,8 +750,6 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
-    secrets:
-      NUGET_USER: ${{ secrets.NUGET_USER }}
 
   publish-maven:
     name: Publish Java Maven Central

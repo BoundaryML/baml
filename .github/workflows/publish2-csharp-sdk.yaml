@@ -2,7 +2,8 @@ name: BAML SDK Release - Publish C# NuGet
 
 # Publish only the exact package produced and exercised by
 # verify-csharp-product-slice.reusable.yaml. The trusted-publishing policy on
-# nuget.org must name the calling workflow, release-baml-language.yml.
+# nuget.org must name this reusable workflow, publish2-csharp-sdk.yaml, and the
+# boundary-tools-prod environment.
 on:
   workflow_call:
     inputs:
@@ -14,10 +15,6 @@ on:
         description: "Exact repository commit whose verified package is published"
         type: string
         required: true
-    secrets:
-      NUGET_USER:
-        description: "nuget.org profile name used by the trusted-publishing policy"
-        required: true
 
 defaults:
   run:
@@ -27,6 +24,7 @@ jobs:
   publish-nuget:
     name: Publish and smoke C# NuGet
     runs-on: ubuntu-24.04
+    environment: boundary-tools-prod
     timeout-minutes: 30
     permissions:
       contents: read
@@ -84,6 +82,9 @@ jobs:
             --provenance product-package/native-provenance.json \
             --manifest product-package/native-manifest.sha256 \
             --package "$package"
+          scripts/baml-csharp-release-contract verify-generated-sources \
+            --root product-package/baml_client \
+            --manifest product-package/generated-sources.sha256
 
           digest="$(sha256sum "$package" | cut -d ' ' -f 1)"
           grep -Fxq "$digest  $(basename "$package")" \

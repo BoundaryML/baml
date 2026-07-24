@@ -16,6 +16,9 @@ PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
+CSHARP_PREPARER = (
+    ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
+)
 CSHARP_VERIFIER = (
     ROOT
     / ".github"
@@ -45,6 +48,16 @@ NUGET_NORMALIZER = (
     / "Baml.NuGetNormalizer"
     / "Program.cs"
 )
+PRIMITIVE_CONSUMER = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "csharp"
+    / "bridge_csharp"
+    / "tests"
+    / "Baml.Bridge.PrimitivePackageConsumer"
+    / "verify.sh"
+)
 
 
 class CSharpReleaseContractTests(unittest.TestCase):
@@ -70,6 +83,123 @@ class CSharpReleaseContractTests(unittest.TestCase):
 
     def current_contract(self) -> dict:
         return json.loads(PLATFORMS.read_text(encoding="utf-8"))
+
+    def write_generated_sources(self, root: Path) -> Path:
+        generated = root / "baml_client"
+        sources = {
+            "Baml/Generated/BamlProgram.g.cs": "program",
+            "Baml/Http/Request.g.cs": "request",
+            "CsharpSlice/Functions.g.cs": "functions",
+        }
+        for relative, content in sources.items():
+            path = generated / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        return generated
+
+    def test_generated_source_manifest_accepts_growth_and_pins_exact_content(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated = self.write_generated_sources(root)
+            manifest = root / "generated-sources.sha256"
+            self.run_tool(
+                "write-generated-manifest",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(manifest),
+            )
+            self.run_tool(
+                "verify-generated-sources",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(manifest),
+            )
+            rows = manifest.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(
+                [row.split("  ", maxsplit=1)[1] for row in rows],
+                [
+                    "Baml/Generated/BamlProgram.g.cs",
+                    "Baml/Http/Request.g.cs",
+                    "CsharpSlice/Functions.g.cs",
+                ],
+            )
+
+            (generated / "Baml/Http/Request.g.cs").write_text(
+                "modified",
+                encoding="utf-8",
+            )
+            result = self.run_tool(
+                "verify-generated-sources",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(manifest),
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("modified=['Baml/Http/Request.g.cs']", result.stderr)
+
+    def test_generated_source_manifest_rejects_missing_and_unexpected_inputs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated = self.write_generated_sources(root)
+            manifest = root / "generated-sources.sha256"
+            self.run_tool(
+                "write-generated-manifest",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(manifest),
+            )
+            extra = generated / "Baml/Time/Duration.g.cs"
+            extra.parent.mkdir(parents=True, exist_ok=True)
+            extra.write_text("duration", encoding="utf-8")
+            result = self.run_tool(
+                "verify-generated-sources",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(manifest),
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unexpected=['Baml/Time/Duration.g.cs']", result.stderr)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated = self.write_generated_sources(root)
+            (generated / "CsharpSlice/Functions.g.cs").unlink()
+            result = self.run_tool(
+                "write-generated-manifest",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(root / "generated-sources.sha256"),
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing required entry points", result.stderr)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated = self.write_generated_sources(root)
+            (generated / "unexpected.json").write_text("{}", encoding="utf-8")
+            result = self.run_tool(
+                "write-generated-manifest",
+                "--root",
+                str(generated),
+                "--manifest",
+                str(root / "generated-sources.sha256"),
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("non-.g.cs file", result.stderr)
 
     def test_exact_required_matrix(self) -> None:
         output = self.run_tool("matrix").stdout
@@ -452,7 +582,10 @@ class WorkflowGraphTests(unittest.TestCase):
 
     def test_nuget_repair_and_nightly_pack_contracts_are_fail_closed(self) -> None:
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
+        preparer = CSHARP_PREPARER.read_text(encoding="utf-8")
         verifier = CSHARP_VERIFIER.read_text(encoding="utf-8")
+        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         cargo_tests = CARGO_TESTS.read_text(encoding="utf-8")
         pack = PACK_PRODUCT.read_text(encoding="utf-8")
         normalizer = NUGET_NORMALIZER.read_text(encoding="utf-8")
@@ -468,6 +601,18 @@ class WorkflowGraphTests(unittest.TestCase):
             "- name: Restore and execute the exact public version from a clean cache"
         )
         self.assertNotIn("\n        if:", publisher[smoke : smoke + 300])
+        self.assertIn("environment: boundary-tools-prod", publisher)
+        self.assertIn("publish2-csharp-sdk.yaml", publisher)
+        self.assertNotIn("\n    secrets:\n", publisher)
+        self.assertIn("user: ${{ secrets.NUGET_USER }}", publisher)
+        self.assertNotIn("NUGET_USER: ${{ secrets.NUGET_USER }}", release)
+        self.assertIn("write-generated-manifest", preparer)
+        self.assertIn("verify-generated-sources", verifier)
+        self.assertIn("generated-sources.sha256", verifier)
+        self.assertIn("verify-generated-sources", publisher)
+        self.assertNotIn("Baml/Csv/CsvError.g.cs", preparer)
+        self.assertNotIn("Baml/Csv/CsvError.g.cs", verifier)
+        self.assertNotIn("Baml/Csv/CsvError.g.cs", primitive_consumer)
 
         self.assertIn(".registry_versions.nuget", pack)
         self.assertIn('-p:PackageVersion="$nuget_version"', pack)
