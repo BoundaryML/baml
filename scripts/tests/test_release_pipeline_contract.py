@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_TOOL = ROOT / "scripts" / "baml-csharp-release-contract"
+VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
@@ -372,6 +373,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         *,
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
+        plan = json.loads(self.write_plan(root).read_text(encoding="utf-8"))
         return self.run_tool(
             "stage-native",
             "--downloads",
@@ -381,7 +383,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
             "--source-sha",
             "1" * 40,
             "--release-version",
-            "1.2.3-nightly.20260723.a",
+            plan["canonical_version"],
             "--workflow-run-id",
             "29989654236",
             "--provenance",
@@ -393,25 +395,33 @@ class CSharpReleaseContractTests(unittest.TestCase):
 
     def write_plan(self, root: Path) -> Path:
         path = root / "release-plan.json"
-        path.write_text(
-            json.dumps(
-                {
-                    "schema": 2,
-                    "canonical_version": "1.2.3-nightly.20260723.a",
-                    "registry_versions": {
-                        "nuget": "1.2.3-nightly.20260723.a",
-                    },
-                }
-            ),
-            encoding="utf-8",
+        subprocess.run(
+            [
+                str(VERSION_TOOL),
+                "plan",
+                "--channel",
+                "canary",
+                "--out",
+                str(path),
+            ],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
         )
         return path
 
-    def verify(self, root: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def verify(
+        self,
+        root: Path,
+        *,
+        plan: Path | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
         return self.run_tool(
             "verify-product",
             "--release-plan",
-            str(self.write_plan(root)),
+            str(plan or self.write_plan(root)),
             "--source-sha",
             "1" * 40,
             "--provenance",
@@ -422,6 +432,25 @@ class CSharpReleaseContractTests(unittest.TestCase):
             str(root / "staging"),
             check=check,
         )
+
+    def test_version_tool_plan_is_accepted_and_schema_2_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.stage(root, self.make_downloads(root))
+            plan_path = self.write_plan(root)
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            self.assertEqual(plan["schema"], 3)
+            self.assertIn("nuget", plan["registry_versions"])
+            self.verify(root, plan=plan_path)
+
+            plan["schema"] = 2
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            result = self.verify(root, plan=plan_path, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "release plan must be a schema-3 JSON object",
+                result.stderr,
+            )
 
     def test_library_and_checksum_are_accepted_and_cffi_only_extra_is_ignored(
         self,
