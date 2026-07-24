@@ -101,10 +101,11 @@ repos:
         priority: 4
         stages: [manual]
 
-      - id: cargo-hawk
-        name: cargo hawk (dead public)
-        entry: bash -c 'cd baml_language && scripts/hawk'
-        language: system
-        pass_filenames: false
-        files: ^baml_language/(.*\.rs|.*Cargo\.toml|Cargo\.lock|hawk\.toml|scripts/hawk)$
-        priority: 5
+      # Temporarily disabled while the Hawk check is paused in CI.
+      # - id: cargo-hawk
+      #   name: cargo hawk (dead public)
+      #   entry: bash -c 'cd baml_language && scripts/hawk'
+      #   language: system
+      #   pass_filenames: false
+      #   files: ^baml_language/(.*\.rs|.*Cargo\.toml|Cargo\.lock|hawk\.toml|scripts/hawk)$
+      #   priority: 5
