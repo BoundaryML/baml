@@ -24,6 +24,8 @@ function spawn_name_object.spawn_name_then_map_literal_body_fn() -> int {
     make_closure .<lambda(spawn_name_then_map_literal_body_fn, 0)>, 0
     load_const "task"
     load_const null
+    load_type int
+    load_type null
     spawn
     store_var _5
     load_var _5
@@ -35,6 +37,8 @@ function spawn_name_object.spawn_name_then_struct_body_parses_correctly_fn() -> 
     make_closure .<lambda(spawn_name_then_struct_body_parses_correctly_fn, 0)>, 0
     load_const "task"
     load_const null
+    load_type spawn_name_object.B
+    load_type null
     spawn
     store_var _5
     load_var _5

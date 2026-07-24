@@ -58,6 +58,8 @@ function cancel_token.await_token_cancelled_catches() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _10
     load_var tok
@@ -104,6 +106,8 @@ function cancel_token.detached_spawn_completes() -> int {
     load_var _2
     load_const null
     load_var _7
+    load_type int
+    load_type null
     spawn
     store_var _8
     load_var _8
@@ -153,6 +157,8 @@ function cancel_token.uncancelled_token_completes() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type null
     spawn
     store_var _10
     load_var _10

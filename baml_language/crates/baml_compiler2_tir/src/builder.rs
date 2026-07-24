@@ -15253,9 +15253,13 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
             Ty::Interface(_, _, _, _) => vec![Ctor::NonExhaustive],
-            // Futures are non-exhaustive at the pattern level: there is
-            // no surface syntax to match against `Future<T, E>` other
-            // than a wildcard.
+            // `Future`'s instantiations cannot be enumerated, so a `Future`
+            // column is covered only by a row that is wildcard-shaped at it.
+            // A same-instantiation `Future<T, E>` pattern *is* such a row
+            // (`dpat_for_type` lowers it to a wildcard once the column is
+            // already that instantiation), so a single arm still exhausts a
+            // `Future<int, null>` scrutinee; a differently-instantiated pattern
+            // claims a different union member instead (`atoms_overlap`).
             Ty::Future(..) => vec![Ctor::NonExhaustive],
             // Slice path in `split_ctors` enumerates length classes from
             // the matrix; this branch is only reached if the algorithm
@@ -16119,6 +16123,15 @@ impl TypeInferenceBuilder<'_> {
                 }
                 | Ty::EvolvingMap(b_k, b_v, _),
             ) => self.dispatch_args_compatible(a_k, b_k) && self.dispatch_args_compatible(a_v, b_v),
+            // Future: same head AND both type arguments could be the same
+            // realized argument — invariant positions, exactly like the
+            // containers above. A spawned future carries the `<T, E>` its spawn
+            // site was typed at, so a `Future<int, null>` pattern does not
+            // target a `Future<string, null>` member.
+            (Ty::Future(a_value, a_error, _), Ty::Future(b_value, b_error, _)) => {
+                self.dispatch_args_compatible(a_value, b_value)
+                    && self.dispatch_args_compatible(a_error, b_error)
+            }
             // Function: arities match AND every param pair overlaps AND
             // returns overlap. A `(int) -> int` pattern can never match a
             // `(string) -> int` value, so they must not be reported as

@@ -801,10 +801,11 @@ pub enum VmExecState {
     /// BEP-034: VM yields a `spawn { body }` to the engine.
     ///
     /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM
-    ///   allocated. The struct carries the body closure and the
-    ///   optional spawn name.
+    ///   allocated. The struct carries the body closure, the optional
+    ///   spawn name, and the `Future<T, E>` type arguments this spawn
+    ///   site was typed at.
     /// - Output: the engine builds a fresh `Future::Pending(id)` heap
-    ///   object, dispatches the body on a new `BexThread`, and pushes
+    ///   object at those types, dispatches the body on a new `BexThread`, and pushes
     ///   the future pointer onto the VM stack. Terminal transitions
     ///   (`Ready`/`Error`/`Cancelled`/`InternalError`) happen later
     ///   via the `FutureManager`; the VM only ever sees `Pending`
@@ -1717,6 +1718,25 @@ impl BexVm {
         Ok(ptr)
     }
 
+    /// Pop the `Object::Type` on top of the stack and clone out the type it
+    /// wraps.
+    ///
+    /// The counterpart to a preceding `LoadType`, whose pushed value is already
+    /// resolved against the frame's type args. Opcodes whose type operands ride
+    /// the stack rather than the instruction stream (`AllocArray`, `AllocMap`,
+    /// `Spawn`) consume them this way.
+    fn ensure_pop_type(&mut self) -> Result<baml_type::RealizedTy, VmInternalError> {
+        let value = self.stack.ensure_pop();
+        let ptr = self.as_object_ptr(value, ObjectType::Type)?;
+        match self.get_object(ptr) {
+            Object::Type(ty) => Ok(*ty.clone()),
+            other => Err(VmInternalError::TypeError {
+                expected: ObjectType::Type.into(),
+                got: ObjectType::of(other).into(),
+            }),
+        }
+    }
+
     /// Get string from a Value.
     pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
@@ -1922,12 +1942,13 @@ impl BexVm {
     /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
-    /// has no such type (a raw function/future value or an opaque native handle).
+    /// has no such type (a compile-time definition object or an opaque native handle).
     ///
     /// Primitives construct their leaf directly; an `Instance` narrows its stored
     /// `class_type_args` into the argument list (so `Box<int>` resolves the `Box`
     /// impl at `T = int`); an enum `Variant` maps to its enum; a container narrows
-    /// its element/key/value types; a `Cell` is transparent. A value's arguments
+    /// its element/key/value types; a future reports the `Future<T, E>` its spawn
+    /// site was typed at; a `Cell` is transparent. A value's arguments
     /// are realized by construction, so a per-argument narrow (see [`realized_arg`])
     /// fails (→ `None`) only if a residual type variable leaked in — a bug.
     ///
@@ -2071,11 +2092,19 @@ impl BexVm {
             | Object::Interface(_)
             | Object::ImplRule(_) => return None,
 
-            // A `Future` *is* a concrete type, but the value holds only its
-            // resolved value and state, never its `<V, E>` type arguments, so a
-            // precise `Future<int>` can't be reconstructed; `Future` patterns are
-            // matched by the coarse `FUTURE` type tag instead.
-            Object::Future(_) | Object::UnscheduledFuture(_) => return None,
+            // A future carries the `<T, E>` it was spawned at (resolved against
+            // the spawning frame), so its concrete type is the faithful
+            // `Future<T, E>` — the subject of `is`/`match` arms and
+            // `reflect.type_of`.
+            Object::Future(fut) => ConcreteRealizedTy::Future(
+                Box::new(fut.returns().clone()),
+                Box::new(fut.throws().clone()),
+                TyAttr::default(),
+            ),
+            // An `UnscheduledFuture` is the engine's spawn-request slot, consumed
+            // before control returns to the VM. It is never a value user code can
+            // hold, so it has no type of its own.
+            Object::UnscheduledFuture(_) => return None,
 
             // Opaque native handles are not BAML data types at all.
             Object::RustData(_) | Object::Collector(_) => return None,
@@ -5910,16 +5939,7 @@ impl BexVm {
                     // The declared element type rides on top of the `size`
                     // elements: a preceding `LoadType` pushed it, already resolved
                     // against the frame's type args. Pop it before the values.
-                    let type_slot = self.stack.len() - 1;
-                    let type_value = self.stack[StackIndex::from_raw(type_slot)];
-                    let element_ty = {
-                        let ptr = self.as_object_ptr(type_value, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        *ty.clone()
-                    };
-                    self.stack.truncate(type_slot);
+                    let element_ty = self.ensure_pop_type()?;
                     let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                     let array: Vec<Value> = self.stack.drain(drain_range).collect();
                     let array_index = self.tlab.alloc_array(element_ty, array);
@@ -5932,24 +5952,8 @@ impl BexVm {
                     // below it (two `LoadType`s after the entries, already
                     // resolved against the frame's type args). Pop both before
                     // the entries.
-                    let value_type_value = self.stack[StackIndex::from_raw(self.stack.len() - 1)];
-                    let key_type_value = self.stack[StackIndex::from_raw(self.stack.len() - 2)];
-                    let value_ty = {
-                        let ptr = self.as_object_ptr(value_type_value, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        *ty.clone()
-                    };
-                    let key_ty = {
-                        let ptr = self.as_object_ptr(key_type_value, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        *ty.clone()
-                    };
-                    let entries_top = self.stack.len() - 2;
-                    self.stack.truncate(entries_top);
+                    let value_ty = self.ensure_pop_type()?;
+                    let key_ty = self.ensure_pop_type()?;
                     let map = if n > 0 {
                         let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
                         let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
@@ -6093,7 +6097,13 @@ impl BexVm {
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
                 OpCode::Spawn => {
                     // Stack layout (pushed by emit in this order): closure, name,
-                    // config. So pop in reverse: config (top), name, closure.
+                    // config, the future's `T`, the future's `E`. So pop in
+                    // reverse: `E` (top), `T`, config, name, closure. The two
+                    // types were pushed by `LoadType`, already resolved against
+                    // this frame's type args, and travel with the request so the
+                    // engine can type the heap `Future` it allocates.
+                    let throws = self.ensure_pop_type()?;
+                    let returns = self.ensure_pop_type()?;
                     // `config` is the optional `baml.spawn.SpawnConfig` from a
                     // `with baml.spawn.options(...)` clause, or null.
                     let config_value = self.stack.ensure_pop();
@@ -6132,6 +6142,8 @@ impl BexVm {
                         closure: closure_ptr,
                         name: name_ptr,
                         config: config_ptr,
+                        returns,
+                        throws,
                     };
                     let object_index = self
                         .tlab

@@ -60,6 +60,8 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_var _2
     load_const null
     load_var _8
+    load_type int
+    load_type baml.errors.Io
     spawn
     pop 1
     make_closure .<lambda(caps_active_and_queues_rest, 1)>, 0
@@ -83,6 +85,8 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_var _10
     load_const null
     load_var _16
+    load_type int
+    load_type baml.errors.Io
     spawn
     pop 1
     make_closure .<lambda(caps_active_and_queues_rest, 2)>, 0
@@ -106,6 +110,8 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_var _18
     load_const null
     load_var _24
+    load_type int
+    load_type baml.errors.Io
     spawn
     pop 1
     make_closure .<lambda(caps_active_and_queues_rest, 3)>, 0
@@ -129,6 +135,8 @@ function task_group.caps_active_and_queues_rest() -> int {
     load_var _26
     load_const null
     load_var _32
+    load_type int
+    load_type baml.errors.Io
     spawn
     pop 1
     load_var g
@@ -176,6 +184,8 @@ function task_group.group_cancel_cancels_member() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _10
     load_var g
@@ -228,6 +238,8 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type null
     spawn
     store_var _10
     make_closure .<lambda(queues_excess_and_all_complete, 1)>, 0
@@ -251,6 +263,8 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _12
     load_const null
     load_var _18
+    load_type int
+    load_type null
     spawn
     store_var _19
     make_closure .<lambda(queues_excess_and_all_complete, 2)>, 0
@@ -274,6 +288,8 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _21
     load_const null
     load_var _27
+    load_type int
+    load_type null
     spawn
     store_var _28
     make_closure .<lambda(queues_excess_and_all_complete, 3)>, 0
@@ -297,6 +313,8 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _30
     load_const null
     load_var _36
+    load_type int
+    load_type null
     spawn
     store_var _37
     make_closure .<lambda(queues_excess_and_all_complete, 4)>, 0
@@ -320,6 +338,8 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_var _39
     load_const null
     load_var _45
+    load_type int
+    load_type null
     spawn
     store_var _46
     load_var _10

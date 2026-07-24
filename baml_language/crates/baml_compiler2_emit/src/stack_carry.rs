@@ -696,7 +696,10 @@ fn simulate_terminator_stack(
                 return false;
             }
             // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three.
+            // clause). Mirror `emit`: always push three, pop three. The
+            // future's `T`/`E` types are pushed after it by `load_type` and
+            // popped again by `Spawn`, so like `alloc_array`'s element type
+            // they leave the net stack effect unchanged.
             let null_config = Operand::Constant(Constant::Null);
             let config_op = config.as_deref().unwrap_or(&null_config);
             if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {

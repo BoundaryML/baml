@@ -52,6 +52,8 @@ function spawn_throws.await_rethrows_caught_by_user_catch_fn() -> int {
     make_closure .<lambda(await_rethrows_caught_by_user_catch_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -77,6 +79,8 @@ function spawn_throws.await_uncaught_spawns_io_fn() -> int {
     make_closure .<lambda(await_uncaught_spawns_io_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -100,6 +104,8 @@ function spawn_throws.caught_after_sleep_not_double_surfaced_fn() -> int {
     make_closure .<lambda(caught_after_sleep_not_double_surfaced_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_const 30n
@@ -129,11 +135,15 @@ function spawn_throws.caught_not_preempted_by_unrelated_await_fn() -> int {
     make_closure .<lambda(caught_not_preempted_by_unrelated_await_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     make_closure .<lambda(caught_not_preempted_by_unrelated_await_fn, 1)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _6
     load_var _6
@@ -162,6 +172,8 @@ function spawn_throws.racing_caught_not_double_surfaced_fn() -> int {
     make_closure .<lambda(racing_caught_not_double_surfaced_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -187,6 +199,8 @@ function spawn_throws.racing_successful_spawn_returns_cleanly_fn() -> int {
     make_closure .<lambda(racing_successful_spawn_returns_cleanly_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type null
     spawn
     pop 1
     load_const 7

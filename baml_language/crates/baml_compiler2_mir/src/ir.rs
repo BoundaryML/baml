@@ -482,6 +482,9 @@ pub enum Terminator {
         /// Boxed to keep `Terminator`'s footprint down (clippy
         /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
         config: Option<Box<Operand>>,
+        /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
+        /// same footprint reason as `config`.
+        future_ty: Box<SpawnFutureTy>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.
@@ -560,6 +563,23 @@ pub enum Terminator {
         eval_rhs: BlockId,
         join: BlockId,
     },
+}
+
+/// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
+///
+/// Held as [`TyTemplate`]s rather than resolved types so a spawn inside a
+/// generic function (`fn f<T>(x: T) { spawn { x } }`) resolves against the
+/// frame's type arguments at runtime, exactly as an array literal's element
+/// type does. The runtime stores the resolved pair on the heap `Future` so
+/// reflection and `is`/`match` can see the future's generic parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnFutureTy {
+    /// The `T` of `Future<T, E>` — the value the spawned body returns.
+    pub returns: TyTemplate,
+    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body
+    /// that statically cannot throw spells this `null`, per the BEP's
+    /// `Future<T, never> ≈ Future<T, null>` approximation.
+    pub throws: TyTemplate,
 }
 
 impl Terminator {

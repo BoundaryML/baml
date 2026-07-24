@@ -2000,7 +2000,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
     let _8: void
     let _9: future<testing.NamedChildReport, null>
     let _10: null
-    let _11: null
+    let _11: future<testing.NamedChildReport, null>
     let _12: testing.NamedChildReport[] // named_results
     let _13: unknown // e
     let _14: null
@@ -2028,7 +2028,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
         fresh_cell(_7);
         _7 = copy _6;
         _10 = make_closure lambda[0](copy _7);
-        _11 = spawn copy _10 name=const null -> bb4;
+        _11 = spawn<testing.NamedChildReport, null> copy _10 name=const null -> bb4;
     }
 
     bb4: {

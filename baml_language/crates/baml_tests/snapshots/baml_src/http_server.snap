@@ -143,6 +143,8 @@ function http_server.server_bound_method_handler() -> string {
     make_closure .<lambda(server_bound_method_handler, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _5
     load_const "POST"
@@ -179,6 +181,8 @@ function http_server.server_custom_config() -> int {
     make_closure .<lambda(server_custom_config, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "GET"
@@ -215,6 +219,8 @@ function http_server.server_isolates_handler_panic() -> bool {
     make_closure .<lambda(server_isolates_handler_panic, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "http://"
@@ -264,6 +270,8 @@ function http_server.server_rejects_oversized_body() -> int {
     make_closure .<lambda(server_rejects_oversized_body, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "POST"
@@ -300,6 +308,8 @@ function http_server.server_reserve_after_cancel() -> string {
     make_closure .<lambda(server_reserve_after_cancel, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "http://"
@@ -323,6 +333,8 @@ function http_server.server_reserve_after_cancel() -> string {
     make_closure .<lambda(server_reserve_after_cancel, 2)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _15
     load_const "http://"
@@ -357,6 +369,8 @@ function http_server.server_response_headers() -> string | null {
     make_closure .<lambda(server_response_headers, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "http://"
@@ -396,6 +410,8 @@ function http_server.server_roundtrip() -> string {
     make_closure .<lambda(server_roundtrip, 0)>, 2
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _5
     load_const "POST"
@@ -432,6 +448,8 @@ function http_server.server_status_code() -> int {
     make_closure .<lambda(server_status_code, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "http://"
@@ -462,6 +480,8 @@ function http_server.server_strips_framing_headers() -> string {
     make_closure .<lambda(server_strips_framing_headers, 0)>, 1
     load_const null
     load_const null
+    load_type never
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_const "http://"

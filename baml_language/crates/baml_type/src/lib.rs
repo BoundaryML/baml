@@ -152,11 +152,12 @@ impl Ty {
     /// (it has no values).
     ///
     /// Rejected:
-    ///   - `Future` — the runtime impl registry's `TyTemplate` has no constructor for
-    ///     it, so its `value`/`error` args can't carry a `TypeArgRef`: a generic
-    ///     `Future<T>` for-type would bake a `Concrete` rule carrying an unbindable bare
-    ///     `T` that never matches a real `Future<int>`. Rejected outright rather than
-    ///     silently mis-dispatching; revisit if a `TyTemplate::Future` is ever added.
+    ///   - `Future` — TODO: not implemented yet, not a limitation. The old blocker
+    ///     (no `TyTemplate` constructor, so a generic `Future<T>` for-type could not
+    ///     carry a `TypeArgRef`) is gone: `TyTemplate::Future` exists, and a heap
+    ///     future now records the `Future<T, E>` its spawn site was typed at, so a
+    ///     future value's concrete type reconstructs faithfully for `is`/`match`.
+    ///     Opening `implement I for Future<…>` is just work nobody has done.
     ///   - `Literal` / `EnumVariant` — singleton subtypes whose values dispatch
     ///     through their base (`int`, `Color`), so they have no implementor of
     ///     their own;
@@ -229,8 +230,9 @@ impl Ty {
     ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
     ///
     /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
-    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType`, which are
-    /// concrete yet undispatchable as impl targets, and admitting `Never`/`TypeVar`/a
+    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType` — see there
+    /// for why each is closed, `Future` only for want of the work — and admitting
+    /// `Never`/`TypeVar`/a
     /// projection). This asks the broader "is it a run-time concrete type" the taxonomy
     /// defines — used to gate an interface-bounded type-parameter argument (an
     /// interface bound admits only a single run-time type, so dispatch is well-defined).
@@ -1126,8 +1128,9 @@ mod tests {
             Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
             Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
             Ty::union([ty_int(), ty_string()]),
-            // `Future` has type args `TyTemplate` can't carry — rejected so a generic
-            // `Future<T>` for-type errors rather than baking an undispatchable rule.
+            // `Future` is dispatchable at runtime (a heap future carries its `<T, E>`);
+            // written impls on it are simply not implemented yet — see
+            // `is_valid_impl_subject`.
             Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
                 params: vec![],
@@ -1166,8 +1169,9 @@ mod tests {
 
         // Concrete: a single run-time representation dispatch can key on. Note the
         // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
-        // are concrete types even though they are not written-impl targets, and
-        // the `Evolving*` inference forms are lists/maps.
+        // are concrete types even though they are not written-impl targets (for
+        // `Future`, only because that is unimplemented), and the `Evolving*`
+        // inference forms are lists/maps.
         let concrete = [
             ty_int(),
             Ty::Bigint {

@@ -8,6 +8,7 @@ use std::{
     },
 };
 
+use baml_type::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
@@ -72,6 +73,10 @@ pub struct Future {
     flags: AtomicU8,
     /// Set at construction; never modified. Purely for debug/tracing.
     id: FutureId,
+    /// The return/throws types that the value will match.
+    /// Used for reflection/pattern matching.
+    /// Read-only: set once when the future is created.
+    types: Arc<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
@@ -219,11 +224,17 @@ impl Future {
     /// `cancel` is the future's own cancel token — fired by `f.cancel()`
     /// and observed by the producer. The caller is responsible for deriving
     /// it from the spawning thread's token so cascade cancellation works.
-    pub fn pending(id: FutureId, cancel: CancellationToken) -> Self {
+    pub fn pending(
+        id: FutureId,
+        returns: RealizedTy,
+        throws: RealizedTy,
+        cancel: CancellationToken,
+    ) -> Self {
         Self {
             state: AtomicU8::new(FutureTag::Pending as u8),
             flags: AtomicU8::new(0),
             id,
+            types: Arc::new(FutureOutputTypes { returns, throws }),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::new(OnceLock::new()),
             cancel,
@@ -234,6 +245,14 @@ impl Future {
     /// `FutureId` for debug/tracing purposes.
     pub fn id(&self) -> FutureId {
         self.id
+    }
+
+    pub fn returns(&self) -> &RealizedTy {
+        &self.types.returns
+    }
+
+    pub fn throws(&self) -> &RealizedTy {
+        &self.types.throws
     }
 
     /// Read the current state with appropriate atomic ordering.
@@ -495,6 +514,7 @@ impl Clone for Future {
             state: AtomicU8::new(0), // placeholder; rewritten below
             flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
+            types: Arc::clone(&self.types),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
@@ -579,6 +599,13 @@ pub struct UnscheduledFuture {
     /// heap. `None` when the spawn had no `with` clause. The engine reads the
     /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
     pub config: Option<HeapPtr>,
+    /// The `T` of the `Future<T, E>` this spawn yields, already resolved
+    /// against the spawning frame's type args by `OpCode::Spawn`. Handed to
+    /// [`Future::pending`] so the scheduled future can answer reflection and
+    /// `is`/`match` on its generic parameters.
+    pub returns: RealizedTy,
+    /// The `E` of the `Future<T, E>` this spawn yields. See [`Self::returns`].
+    pub throws: RealizedTy,
 }
 
 /// A unique identifier for a future.
@@ -663,4 +690,9 @@ impl From<&Future> for FutureType {
     fn from(value: &Future) -> Self {
         Self::of(value)
     }
+}
+
+struct FutureOutputTypes {
+    returns: RealizedTy,
+    throws: RealizedTy,
 }
