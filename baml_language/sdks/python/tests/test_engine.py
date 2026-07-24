@@ -10,7 +10,8 @@ Run with:
     uv run pytest tests/ -v
 """
 
-import threading
+import subprocess
+import sys
 
 import pytest
 
@@ -21,7 +22,6 @@ from baml_bridge import (
     get_version,
     call_function,
     call_function_sync,
-    shutdown_runtime,
 )
 
 
@@ -88,33 +88,34 @@ def make_runtime(baml_source: str) -> BamlRuntime:
 
 
 def test_unhandled_spawn_error_uses_host_default():
-    source = """\
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """\
+from baml_bridge import BamlRuntime, call_function_sync, shutdown_runtime
+
+source = '''
 function bad() -> int throws string { throw "boom" }
 function main() -> int {
     spawn { bad() };
     baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
     1
 }
-"""
-    seen = []
-    reported = threading.Event()
-    original_hook = threading.excepthook
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+assert call_function_sync(runtime, "main", {}).result() == 1
+shutdown_runtime()
+raise AssertionError("fatal unhandled spawn error did not terminate the process")
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-    def capture(args):
-        seen.append(args.exc_value)
-        reported.set()
-
-    threading.excepthook = capture
-    try:
-        runtime = make_runtime(source)
-        assert call_function_sync(runtime, "main", {}).result() == 1
-        shutdown_runtime()
-        assert reported.wait(1)
-    finally:
-        threading.excepthook = original_hook
-
-    assert len(seen) == 1
-    assert "boom" in str(seen[0])
+    assert result.returncode == 1
+    assert "boom" in result.stderr
 
 
 # ============================================================================

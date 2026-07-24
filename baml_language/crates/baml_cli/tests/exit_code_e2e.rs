@@ -528,6 +528,41 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+#[test]
+fn test_unhandled_spawn_error_uses_host_default() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function bad() -> int throws string { throw "boom" }
+
+test "passes" {
+  spawn { bad() };
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+  assert.is_true(true)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected TestFailure (2), got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("FAIL testing::unhandled_spawn_error"),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 /// A selector that matches no test must NOT print a green aggregate pass
 /// line: the aggregate of zero tests is a vacuous pass, but stdout that says
 /// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.

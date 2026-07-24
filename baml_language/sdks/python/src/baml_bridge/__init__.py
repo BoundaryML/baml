@@ -7,7 +7,9 @@
 import atexit
 import asyncio
 import functools
-import threading
+import os
+import sys
+import traceback
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from typing_extensions import Sentinel
@@ -62,20 +64,10 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
     try:
         decode_call_result(error_bytes)
     except BaseException as error:
-        if cancelled:
-            import traceback
-
-            traceback.print_exception(error)
-            return
-
-        def raise_on_host_thread(failure: BaseException = error) -> None:
-            raise failure
-
-        threading.Thread(
-            target=raise_on_host_thread,
-            name="baml-unhandled-spawn-error",
-            daemon=True,
-        ).start()
+        traceback.print_exception(error)
+        if not cancelled:
+            sys.stderr.flush()
+            os._exit(1)
 
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)

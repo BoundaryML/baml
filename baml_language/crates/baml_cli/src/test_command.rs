@@ -1,6 +1,15 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{future::Future, io::Write as _, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    io::Write as _,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
@@ -279,6 +288,7 @@ struct RunCtx<'a> {
     engine: &'a Arc<BexEngine>,
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
+    unhandled_spawn_failures: &'a AtomicUsize,
     logs: TestLogLevel,
 }
 
@@ -355,21 +365,9 @@ impl RunCtx<'_> {
     }
 }
 
-fn finish_engine(ctx: &RunCtx<'_>, reporter: &Reporter) -> usize {
+fn finish_engine(ctx: &RunCtx<'_>) -> usize {
     ctx.rt.block_on(ctx.engine.shutdown());
-    let mut failed = 0;
-    for report in ctx.engine.take_unhandled_spawn_errors() {
-        if report.cancelled {
-            let error = report.into_engine_error();
-            reporter.warning(format_args!("cancelled spawned task failed: {error}"));
-        } else {
-            let error = report.into_engine_error();
-            eprintln!("FAIL testing::unhandled_spawn_error");
-            eprintln!("  => {error}");
-            failed += 1;
-        }
-    }
-    failed
+    ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
 impl TestArgs {
@@ -514,6 +512,19 @@ impl TestArgs {
             );
             (engine, legacy)
         };
+        let unhandled_spawn_failures = Arc::new(AtomicUsize::new(0));
+        let unhandled_spawn_failures_for_handler = Arc::clone(&unhandled_spawn_failures);
+        engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |report| {
+            let cancelled = report.cancelled;
+            let error = report.into_engine_error();
+            if cancelled {
+                eprintln!("WARN cancelled spawned task failed: {error}");
+            } else {
+                eprintln!("FAIL testing::unhandled_spawn_error");
+                eprintln!("  => {error}");
+                unhandled_spawn_failures_for_handler.fetch_add(1, Ordering::SeqCst);
+            }
+        })));
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
 
@@ -554,6 +565,7 @@ impl TestArgs {
             engine: &engine,
             rt: &rt,
             cancel: &cancel,
+            unhandled_spawn_failures: &unhandled_spawn_failures,
             logs: invocation.logs,
         };
 
@@ -601,7 +613,7 @@ impl TestArgs {
                 .copied()
                 .map(cached_legacy_test)
                 .collect();
-            if finish_engine(&run_ctx, &reporter) != 0 {
+            if finish_engine(&run_ctx) != 0 {
                 return Ok(crate::ExitCode::TestFailure);
             }
             return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
@@ -658,10 +670,10 @@ impl TestArgs {
             }
         }
 
-        let unhandled_spawn_failures = finish_engine(&run_ctx, &reporter);
-        if unhandled_spawn_failures != 0 {
-            failed += unhandled_spawn_failures;
-            total += unhandled_spawn_failures;
+        let unhandled_spawn_failure_count = finish_engine(&run_ctx);
+        if unhandled_spawn_failure_count != 0 {
+            failed += unhandled_spawn_failure_count;
+            total += unhandled_spawn_failure_count;
             command_failed = true;
         }
 
