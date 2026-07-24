@@ -20,25 +20,20 @@ function MissingMultipleVariants(c: Color) -> string {
 
 //----
 //- diagnostics
-// error: non-exhaustive match on type Color; missing: user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:9:3 ]
-//     │
+// E0062
+//
+//   × non-exhaustive match on type Color; missing: user.Color.Blue
+//     ╭─[match_match_non_exhaustive.baml:9:3]
 //   9 │ ╭─▶   match (c) {
-//     ┆ ┆
-//  12 │ ├─▶   }
-//     │ │
-//     │ ╰───────── non-exhaustive match on type Color; missing: user.Color.Blue
-//     │
-//     │     Note: Error code: E0062
-// ────╯
-// error: non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:16:3 ]
-//     │
+//  10 │ │       Color.Red => "red",
+//  11 │ │       Color.Green => "green"
+//  12 │ ╰─▶   }
+//     ╰────
+// E0062
+//
+//   × non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
+//     ╭─[match_match_non_exhaustive.baml:16:3]
 //  16 │ ╭─▶   match (c) {
-//     ┆ ┆
-//  18 │ ├─▶   }
-//     │ │
-//     │ ╰───────── non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
-//     │
-//     │     Note: Error code: E0062
-// ────╯
+//  17 │ │       Color.Red => "red"
+//  18 │ ╰─▶   }
+//     ╰────

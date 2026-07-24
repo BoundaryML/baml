@@ -2,64 +2,47 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: vertex-ai requires either base_url or location (e.g. us-central1) in options
-   ╭─[ test.baml:7:5 ]
-   │
- 7 │ ╭─▶     options {
-   ┆ ┆   
- 9 │ ├─▶     }
-   │ │           
-   │ ╰─────────── missing options
-   │     
-   │     Note: Error code: E0101
-───╯
+  [parse] E0010
 
-  [parse] error: Expected config key, found '.'
-   ╭─[ test.baml:8:23 ]
-   │
+  × unexpected token
+   ╭─[test.baml:8:23]
  8 │         model gemini-2.0-flash
-   │                       ┬  
-   │                       ╰── Expected config key, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                       ┬
+   ·                       ╰── expected `config key`, found `'.'`
+   ╰────
 
-  [parse] error: Expected config key, found integer
-   ╭─[ test.baml:8:24 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:8:24]
  8 │         model gemini-2.0-flash
-   │                        ┬  
-   │                        ╰── Expected config key, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                        ┬
+   ·                        ╰── expected `config key`, found `integer`
+   ╰────
 
-  [parse] error: Expected config key, found '-'
-   ╭─[ test.baml:8:25 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:8:25]
  8 │         model gemini-2.0-flash
-   │                         ┬  
-   │                         ╰── Expected config key, found '-'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ┬
+   ·                         ╰── expected `config key`, found `'-'`
+   ╰────
 
-  [parse] error: Expected identifier, found '}'
-   ╭─[ test.baml:9:5 ]
-   │
+  [parse] E0010
+
+  × unexpected token
+   ╭─[test.baml:9:5]
  9 │     }
-   │     ┬  
-   │     ╰── Expected identifier, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·     ┬
+   ·     ╰── expected `identifier`, found `'}'`
+   ╰────
 
-  [parse] error: Header comments (//#) are not allowed inside LLM functions
-    ╭─[ test.baml:13:5 ]
-    │
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[test.baml:13:5]
  13 │     //# collect source material
-    │     ─────────────┬─────────────  
-    │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·     ─────────────┬─────────────
+    ·                  ╰── header comments (`//#`) are not allowed inside LLM functions
+    ╰────

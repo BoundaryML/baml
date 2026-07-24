@@ -10,9 +10,21 @@ Run with:
     uv run pytest tests/ -v
 """
 
+import os
+import signal
+import subprocess
+import sys
+
 import pytest
 
-from baml_core import BamlRuntime, FunctionResult, HostSpanManager, get_version, call_function, call_function_sync
+from baml_bridge import (
+    BamlRuntime,
+    FunctionResult,
+    HostSpanManager,
+    get_version,
+    call_function,
+    call_function_sync,
+)
 
 
 # ============================================================================
@@ -55,6 +67,13 @@ function ReturnNull() -> null {
 function ReturnFloat(f: float) -> float {
     f
 }
+
+function ClassifyAmbiguousEmptyList(value: int[] | string[]) -> string {
+    match (value) {
+        let ints: int[] => "ints",
+        let strings: string[] => "strings",
+    }
+}
 """
 
 
@@ -68,6 +87,38 @@ def make_runtime(baml_source: str) -> BamlRuntime:
     return BamlRuntime.initialize_runtime(
         ".", {"main.baml": baml_source}
     )
+
+
+def test_unhandled_spawn_error_uses_host_default():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """\
+from baml_bridge import BamlRuntime, call_function_sync, shutdown_runtime
+
+source = '''
+function bad() -> int throws string { throw "boom" }
+function main() -> int {
+    spawn { bad() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+    1
+}
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+assert call_function_sync(runtime, "main", {}).result() == 1
+shutdown_runtime()
+raise SystemExit(42)
+""",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    expected_returncode = signal.SIGTERM if os.name == "nt" else 1
+    assert result.returncode == expected_returncode
+    assert "boom" in result.stderr
 
 
 # ============================================================================
@@ -169,6 +220,12 @@ class TestCallFunctionSync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
+
+    def test_raw_empty_list_uses_dynamic_union_default(self):
+        """A raw Python [] selects the first matching list arm."""
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": []})
+        assert result.result() == "ints"
 
     def test_missing_argument_raises(self):
         """Missing required argument raises an error.

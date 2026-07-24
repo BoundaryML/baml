@@ -17,6 +17,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     load_var client
     load_const <omitted>
@@ -306,7 +312,7 @@ function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Clien
     store_var client
 
   L0:
-    load_type image | string[]
+    load_type (image | string)[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt
@@ -370,8 +376,8 @@ function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.C
     store_var client
 
   L0:
-    load_type image | string[]
-    load_type image | string[]
+    load_type (image | string)[]
+    load_type (image | string)[]
     load_var json
     call baml.llm.parse
     return
@@ -386,8 +392,8 @@ function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream,
     store_var client
 
   L0:
-    load_type image | string[]
-    load_type image | string[]
+    load_type (image | string)[]
+    load_type (image | string)[]
     load_var2 2 1
     call baml.llm.Client.__make_stream
     return
@@ -423,8 +429,8 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ll
     store_var client
 
   L0:
-    load_type image | string[]
-    load_type image | string[]
+    load_type (image | string)[]
+    load_type (image | string)[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt
@@ -437,10 +443,11 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ll
     return
 }
 
-function user.OpenAIImageResponses$new() -> null {
+function user.OpenAIImageResponses$new(lenient: bool) -> null {
     load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
+    load_var lenient
+    call baml.env.get_or_panic_lenient
+    store_var _3
     load_const "OpenAIImageResponses"
     load_const "openai-responses"
     load_const "gpt-4.1"
@@ -452,7 +459,7 @@ function user.OpenAIImageResponses$new() -> null {
     load_const null
     load_const null
     load_const null
-    load_var _2
+    load_var _3
     load_const null
     load_const null
     load_type string

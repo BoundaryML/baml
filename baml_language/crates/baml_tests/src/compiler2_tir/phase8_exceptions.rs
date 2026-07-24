@@ -169,8 +169,9 @@ function f(e: TimeoutError | OtherError) -> int {
     );
 }
 
+/// Ensures impossible typed bindings report a mismatch without bogus reachability errors.
 #[test]
-fn impossible_typed_match_binding_is_unreachable() {
+fn impossible_typed_match_binding_reports_mismatch() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -184,12 +185,16 @@ fn impossible_typed_match_binding_is_unreachable() {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unreachable arm"),
-        "expected `let s: string` against int scrutinee to be unreachable, got:\n{output}"
+        output.contains("type mismatch: expected int, got string"),
+        "expected `let s: string` against int scrutinee to report a type mismatch, got:\n{output}"
     );
     assert!(
         output.contains("s: string =>"),
         "expected diagnostic output to include the impossible string arm, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "invalid typed patterns should not emit secondary reachability diagnostics, got:\n{output}"
     );
 }
 
@@ -787,7 +792,7 @@ fn alias_hidden_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)
@@ -835,7 +840,7 @@ fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)

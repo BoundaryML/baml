@@ -154,10 +154,7 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::StoreVarLoadVar(index)
-        | Instruction::Watch(index)
-        | Instruction::Unwatch(index)
-        | Instruction::Notify(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
@@ -168,6 +165,15 @@ pub(crate) fn display_instruction(
         | Instruction::InitInstance(_) => operand_meta
             .map(|m| format!("({})", m.as_str()))
             .unwrap_or_default(),
+        Instruction::NarrowBind { ty, destination } => {
+            let destination = function
+                .local_names
+                .get(*destination)
+                .map_or("?", String::as_str);
+            let narrowed_type =
+                operand_meta.map_or_else(|| format!("?{ty}"), |meta| meta.as_str().to_owned());
+            format!("(type {narrowed_type}, {destination})")
+        }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
         | Instruction::JumpIfFalse(offset) => {
@@ -243,6 +249,7 @@ pub(crate) fn display_instruction(
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeVirtualBoundMethod { .. }
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
@@ -422,17 +429,16 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::Spawn
         | Instruction::Await
         | Instruction::AwaitAny => Style::new().green().bright(),
-        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
-            Style::new().red().bright()
-        }
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
+        | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeVirtualBoundMethod { .. }
         | Instruction::MakeGenericFunction { .. }
         | Instruction::MakeGenericFunctionFromValue { .. }
         | Instruction::MakeCell => Style::new().cyan(),
@@ -904,17 +910,16 @@ fn display_instruction_textual(
         Instruction::Return => "return".to_string(),
         Instruction::Unreachable => "unreachable".to_string(),
 
-        // --- Watch/Notify ---
-        Instruction::Watch(idx) => format!("watch {}", meta_str(idx)),
-        Instruction::Unwatch(idx) => format!("unwatch {}", meta_str(idx)),
-        Instruction::Notify(idx) => format!("notify {}", meta_str(idx)),
-
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
         Instruction::IsType(const_idx) => {
             let name = meta_str(const_idx);
             format!("is_type {name}")
+        }
+        Instruction::NarrowBind { ty, destination } => {
+            let name = meta_str(ty);
+            format!("narrow_bind {name}, slot={destination}")
         }
         Instruction::LoadType(const_idx) => {
             let name = meta_str(const_idx);
@@ -947,6 +952,9 @@ fn display_instruction_textual(
         Instruction::MakeBoundMethod(_) => {
             let name = meta_str(&"");
             format!("make_bound_method {name}")
+        }
+        Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+            format!("make_virtual_bound_method ntypeargs={ntypeargs}")
         }
         Instruction::MakeGenericFunction { ntypeargs, .. } => {
             let name = meta_str(&"");
@@ -1134,10 +1142,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::SysOpWithRuntimeId(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
-        | Instruction::AllocVariant(_)
-        | Instruction::Watch(_)
-        | Instruction::Unwatch(_)
-        | Instruction::Notify(_) => meta
+        | Instruction::AllocVariant(_) => meta
             .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
@@ -1325,9 +1330,6 @@ pub fn display_compact_bytecode(
             | OpCode::AllocVariant
             | OpCode::SysOp
             | OpCode::SysOpWithRuntimeId
-            | OpCode::Watch
-            | OpCode::Unwatch
-            | OpCode::Notify
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
@@ -1376,7 +1378,7 @@ pub fn display_compact_bytecode(
                 writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::MakeGenericFunctionFromValue => {
+            OpCode::MakeGenericFunctionFromValue | OpCode::MakeVirtualBoundMethod => {
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "ntypeargs={ntypeargs}")?;
             }
@@ -1398,7 +1400,7 @@ pub fn display_compact_bytecode(
             }
 
             // Two u32 operands (operand-movement superinstructions)
-            OpCode::LoadVar2 | OpCode::StoreVar2 => {
+            OpCode::LoadVar2 | OpCode::StoreVar2 | OpCode::NarrowBind => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;

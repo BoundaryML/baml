@@ -30,21 +30,17 @@ function getProfile(req: Request) -> bool throws Errors {
 
 //----
 //- diagnostics
-// warning: unreachable arm
-//     ╭─[ throw_throws_type_alias_repro.baml:22:28 ]
-//     │
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throws_type_alias_repro.baml:22:28]
 //  22 │     AuthenticationError => { throw e }
-//     │                            ─────┬─────
-//     │                                 ╰─────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: extraneous throws declaration: Errors
-//     ╭─[ throw_throws_type_alias_repro.baml:27:50 ]
-//     │
+//     ·                            ───────────
+//     ╰────
+// E0097
+//
+//   ⚠ extraneous throws declaration: AuthenticationError, AuthorizationError, InternalServerError, NotFoundError
+//     ╭─[throw_throws_type_alias_repro.baml:27:50]
 //  27 │ function getProfile(req: Request) -> bool throws Errors {
-//     │                                                  ───┬──
-//     │                                                     ╰──── extraneous throws declaration: Errors
-//     │
-//     │ Note: Error code: E0097
-// ────╯
+//     ·                                                  ──────
+//     ╰────

@@ -37,172 +37,155 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-error: Expected ')', found is
-   ╭─[ main.baml:6:25 ]
-   │
- 6 │ function bad_param(v: v is int) -> bool { true }
-   │                         ─┬  
-   │                          ╰── Expected ')', found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: Expected return type (->), found is
-   ╭─[ main.baml:6:25 ]
-   │
+  × unexpected token
+   ╭─[main.baml:6:25]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                         ─┬  
-   │                          ╰── Expected return type (->), found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ─┬
+   ·                          ╰── expected `')'`, found `is`
+   ╰────
 
-error: Expected function body, found is
-   ╭─[ main.baml:6:25 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:25]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                         ─┬  
-   │                          ╰── Expected function body, found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ─┬
+   ·                          ╰── expected `return type (->)`, found `is`
+   ╰────
 
-error: Expected top-level declaration, found is
-   ╭─[ main.baml:6:25 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:25]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                         ─┬  
-   │                          ╰── Expected top-level declaration, found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ─┬
+   ·                          ╰── expected `function body`, found `is`
+   ╰────
 
-error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:6:28 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:25]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                            ─┬─  
-   │                             ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                         ─┬
+   ·                          ╰── expected `top-level declaration`, found `is`
+   ╰────
 
-error: Expected top-level declaration, found ')'
-   ╭─[ main.baml:6:31 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:28]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                               ┬  
-   │                               ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                            ─┬─
+   ·                             ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-error: Expected top-level declaration, found '->'
-   ╭─[ main.baml:6:33 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:31]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                                 ─┬  
-   │                                  ╰── Expected top-level declaration, found '->'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                               ┬
+   ·                               ╰── expected `top-level declaration`, found `')'`
+   ╰────
 
-error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:6:36 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:33]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                                    ──┬─  
-   │                                      ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                 ─┬
+   ·                                  ╰── expected `top-level declaration`, found `'->'`
+   ╰────
 
-error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:6:41 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:36]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                                         ┬  
-   │                                         ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                    ──┬─
+   ·                                      ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:6:43 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:41]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                                           ──┬─  
-   │                                             ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                         ┬
+   ·                                         ╰── expected `top-level declaration`, found `'{'`
+   ╰────
 
-error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:6:48 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:43]
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                                                ┬  
-   │                                                ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                           ──┬─
+   ·                                             ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-error: Expected function body, found is
-   ╭─[ main.baml:9:28 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:6:48]
+ 6 │ function bad_param(v: v is int) -> bool { true }
+   ·                                                ┬
+   ·                                                ╰── expected `top-level declaration`, found `'}'`
+   ╰────
+
+E0010
+
+  × unexpected token
+   ╭─[main.baml:9:28]
  9 │ function bad_return() -> v is int { true }
-   │                            ─┬  
-   │                             ╰── Expected function body, found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                            ─┬
+   ·                             ╰── expected `function body`, found `is`
+   ╰────
 
-error: Expected top-level declaration, found is
-   ╭─[ main.baml:9:28 ]
-   │
- 9 │ function bad_return() -> v is int { true }
-   │                            ─┬  
-   │                             ╰── Expected top-level declaration, found is
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:9:31 ]
-   │
+  × unexpected token
+   ╭─[main.baml:9:28]
  9 │ function bad_return() -> v is int { true }
-   │                               ─┬─  
-   │                                ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                            ─┬
+   ·                             ╰── expected `top-level declaration`, found `is`
+   ╰────
 
-error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:9:35 ]
-   │
- 9 │ function bad_return() -> v is int { true }
-   │                                   ┬  
-   │                                   ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:9:37 ]
-   │
+  × unexpected token
+   ╭─[main.baml:9:31]
  9 │ function bad_return() -> v is int { true }
-   │                                     ──┬─  
-   │                                       ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                               ─┬─
+   ·                                ╰── expected `top-level declaration`, found `identifier`
+   ╰────
 
-error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:9:42 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[main.baml:9:35]
  9 │ function bad_return() -> v is int { true }
-   │                                          ┬  
-   │                                          ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                                   ┬
+   ·                                   ╰── expected `top-level declaration`, found `'{'`
+   ╰────
+
+E0010
+
+  × unexpected token
+   ╭─[main.baml:9:37]
+ 9 │ function bad_return() -> v is int { true }
+   ·                                     ──┬─
+   ·                                       ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+E0010
+
+  × unexpected token
+   ╭─[main.baml:9:42]
+ 9 │ function bad_return() -> v is int { true }
+   ·                                          ┬
+   ·                                          ╰── expected `top-level declaration`, found `'}'`
+   ╰────

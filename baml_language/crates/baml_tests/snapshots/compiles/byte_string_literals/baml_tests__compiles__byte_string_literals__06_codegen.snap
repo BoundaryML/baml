@@ -10,6 +10,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.ByteStringBasic() -> int {
     load_const b"\x68\x65\x6c\x6c\x6f"
     call baml.deep_copy
@@ -52,6 +58,8 @@ function user.ByteStringInCondition() -> int {
     load_const b"\x61\x62\x63"
     call baml.deep_copy
     container_len
+    store_var _2
+    load_var _2
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0

@@ -11,14 +11,14 @@ use anyhow::{Context, Result};
 pub fn load_json_source(source: &str) -> Result<serde_json::Value> {
     if source == "-" {
         let input =
-            std::io::read_to_string(std::io::stdin()).context("Failed to read JSON from stdin")?;
-        serde_json::from_str(&input).context("Invalid JSON from stdin")
+            std::io::read_to_string(std::io::stdin()).context("failed to read JSON from stdin")?;
+        serde_json::from_str(&input).context("invalid JSON from stdin")
     } else if let Some(path) = source.strip_prefix('@') {
         let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read file: {path}"))?;
-        serde_json::from_str(&content).with_context(|| format!("Invalid JSON in file: {path}"))
+            .with_context(|| format!("failed to read file: {path}"))?;
+        serde_json::from_str(&content).with_context(|| format!("invalid JSON in file: {path}"))
     } else {
-        serde_json::from_str(source).context("Invalid inline JSON for --json-args")
+        serde_json::from_str(source).context("invalid inline JSON for `--json-args`")
     }
 }
 
@@ -58,7 +58,7 @@ mod tests {
         let err = load_json_source("@/nonexistent/baml-test-args.json").unwrap_err();
         let msg = format!("{err:?}");
         assert!(
-            msg.contains("Failed to read") || msg.contains("nonexistent"),
+            msg.contains("failed to read") || msg.contains("nonexistent"),
             "got: {msg}"
         );
     }
@@ -70,6 +70,6 @@ mod tests {
         std::fs::write(&path, "not json").unwrap();
         let source = format!("@{}", path.display());
         let err = load_json_source(&source).unwrap_err();
-        assert!(format!("{err}").contains("Invalid JSON in file"));
+        assert!(format!("{err}").contains("invalid JSON in file"));
     }
 }

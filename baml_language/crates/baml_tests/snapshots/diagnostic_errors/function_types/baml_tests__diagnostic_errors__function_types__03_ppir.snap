@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 46060
+---
+=== PPIR ===
+type user.BinaryOp = (a: int, b: int) -> int throws never
+type user.BinaryOp$stream = unknown
+type user.Complex = (items: int[], lookup: map<string, int>) -> string? throws never
+type user.Complex$stream = unknown
+type user.Curried = (x: int) -> (y: int) -> int throws never throws never
+type user.Curried$stream = unknown
+type user.FunctionFactory = (config: string) -> (int) -> int throws never throws never
+type user.FunctionFactory$stream = unknown
+type user.IntToInt = (x: int) -> int throws never
+type user.IntToInt$stream = unknown
+type user.MixedParams = (x: int, int, z: string) -> bool throws never
+type user.MixedParams$stream = unknown
+type user.Producer = () -> string throws never
+type user.Producer$stream = unknown
+type user.UnionParam = (value: int | string) -> bool throws never
+type user.UnionParam$stream = unknown
+type user.UnnamedParams = (int, int) -> int throws never
+type user.UnnamedParams$stream = unknown
+function user.GetTransform() -> (x: int) -> int throws never  [expr] {
+  {  } 1
+}

@@ -41,30 +41,36 @@ function bare_type_arm(v: int | string) -> int {
 // Match on a single function type — arm narrows to the callable.
 function call_int_callback(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int => f(10),
+        let f: (int) -> int throws never => f(10),
     }
 }
 
 // Match on a union of two distinct function types; dispatch by signature.
-function dispatch_callback(cb: ((int) -> int) | ((string) -> string)) -> int {
+function dispatch_callback(
+    cb: ((int) -> int throws never) | ((string) -> string throws never),
+) -> int {
     match (cb) {
-        let f: (int) -> int => f(0),
-        (string) -> string => 0,
+        let f: (int) -> int throws never => f(0),
+        (string) -> string throws never => 0,
     }
 }
 
 // Or-pattern across two function-typed alternatives that share the same return.
-function call_either_int_caller(cb: ((int) -> int) | ((bool) -> int)) -> int {
+function call_either_int_caller(
+    cb: ((int) -> int throws never) | ((bool) -> int throws never),
+) -> int {
     match (cb) {
-        (int) -> int => 1,
-        (bool) -> int => 2,
+        (int) -> int throws never => 1,
+        (bool) -> int throws never => 2,
     }
 }
 
 // Function-type narrow with chain-narrow position (`(int) -> T`).
-function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
+function dispatch_with_wildcard(
+    cb: ((int) -> int throws never) | ((string) -> int throws never),
+) -> int {
     match (cb) {
-        (int) -> int => 1,
+        (int) -> int throws never => 1,
         _ => 0,
     }
 }
@@ -72,10 +78,10 @@ function dispatch_with_wildcard(cb: ((int) -> int) | ((string) -> int)) -> int {
 // Generic function-type pattern. T is unified at the call site. The outer
 // parens disambiguate the union — without them the parser binds `|` inside
 // the return type, yielding `(int) -> (T | (string) -> T)`.
-function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
+function unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     match (cb) {
-        let f: (int) -> T => f(0),
-        let f: (string) -> T => f(""),
+        let f: (int) -> T throws never => f(0),
+        let f: (string) -> T throws never => f(""),
     }
 }
 
@@ -87,31 +93,33 @@ function unwrap_typed<T>(cb: ((int) -> T) | ((string) -> T)) -> T {
 // `g: (string) -> (string) -> string`   — two-deep curried string function.
 // The match dispatches on which curried shape was passed and unwraps it.
 function unwrap_curried(
-    f: ((int) -> (int) -> (int) -> int) | ((string) -> (string) -> string),
+    f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never)
+        | ((string) -> ((string) -> string throws never) throws never),
 ) -> int {
     match (f) {
-        let triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3),
-        let pair: (string) -> (string) -> string => 0,
+        let triple: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never => {
+            triple(1)(2)(3)
+        },
+        let pair: (string) -> ((string) -> string throws never) throws never => 0,
     }
 }
 
 // Match on a function that takes a callback. The arm narrows to the
 // callback-accepting shape, then we synthesize an int callback inline.
-function call_with_callback(runner: (((int) -> int) -> int) | (((string) -> int) -> int)) -> int {
+function call_with_callback(
+    runner: (((int) -> int throws never) -> int throws never)
+        | (((string) -> int throws never) -> int throws never),
+) -> int {
     match (runner) {
-        let r: ((int) -> int) -> int => {
-            r(
-                (x: int) -> int {
-                    x + 1
-                },
-            )
+        let r: ((int) -> int throws never) -> int throws never => {
+            r((x: int) -> int {
+                x + 1
+            })
         },
-        let r: ((string) -> int) -> int => {
-            r(
-                (s: string) -> int {
-                    0
-                },
-            )
+        let r: ((string) -> int throws never) -> int throws never => {
+            r((s: string) -> int {
+                0
+            })
         },
     }
 }
@@ -133,7 +141,7 @@ function literal_widens_to_int(v: int) -> int {
 // so `(int) -> int <: (int) -> int | string`.
 function fn_return_widens(cb: (int) -> int | string) -> int {
     match (cb) {
-        (int) -> int | string => 1,
+        (int) -> (int | string) throws never => 1,
     }
 }
 
@@ -158,7 +166,7 @@ function paren_chains_in_or(v: int) -> int {
 
 function fn_pattern(cb: (int) -> int) -> int {
     match (cb) {
-        let f: (int) -> int => f(0),
+        let f: (int) -> int throws never => f(0),
     }
 }
 
@@ -184,9 +192,9 @@ function for_let_ascription(items: int[]) -> int {
 }
 
 // for-let with a function-type narrow.
-function for_let_fn_narrow(items: ((int) -> int)[]) -> int {
+function for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     let total = 0;
-    for (let f: (int) -> int in items) {
+    for (let f: (int) -> int throws never in items) {
         total += f(0)
     }
     total

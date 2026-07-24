@@ -47,11 +47,16 @@ pub enum SyntaxKind {
     KW_DEFER,
 
     // Other keywords
-    KW_WATCH,
     KW_INSTANCEOF,
     KW_IS,
     KW_DYNAMIC,
     KW_WITH,
+    // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
+    KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
+    KW_TYPE,  // associated-type / type-alias `type Name ...`
+    KW_TRUE,  // `true` boolean literal
+    KW_FALSE, // `false` boolean literal
+    KW_NULL,  // `null` literal
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -343,6 +348,17 @@ pub enum SyntaxKind {
     /// arm value (e.g. `_ => return 0`) without the statement-only restriction.
     /// Statement-position `return` still parses as `RETURN_STMT`.
     RETURN_EXPR,
+    /// `break` in expression position — a diverging expression of type `never`
+    /// (mirrors `RETURN_EXPR`). Lets `break` appear as a `catch`/`match` arm
+    /// value (e.g. `0 => break`) without the statement-only restriction.
+    /// Statement-position `break` still parses as `BREAK_STMT`.
+    BREAK_EXPR,
+    /// `continue` in expression position — a diverging expression of type
+    /// `never` (mirrors `RETURN_EXPR`). Lets `continue` appear as a
+    /// `catch`/`match` arm value (e.g. `0 => continue`) without the
+    /// statement-only restriction. Statement-position `continue` still parses
+    /// as `CONTINUE_STMT`.
+    CONTINUE_EXPR,
     /// `spawn name_expr? block` — BEP-034 spawn expression.
     /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
     SPAWN_EXPR,
@@ -368,7 +384,6 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    WATCH_LET,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
@@ -457,20 +472,6 @@ impl SyntaxKind {
         )
     }
 
-    /// Check if this is a literal token.
-    pub fn is_literal(self) -> bool {
-        matches!(
-            self,
-            SyntaxKind::BIGINT_LITERAL
-                | SyntaxKind::INTEGER_LITERAL
-                | SyntaxKind::FLOAT_LITERAL
-                | SyntaxKind::STRING_LITERAL
-                | SyntaxKind::RAW_STRING_LITERAL
-                | SyntaxKind::BYTE_STRING_LITERAL
-                | SyntaxKind::BACKTICK_STRING_LITERAL
-        )
-    }
-
     /// Check if this is an operator token.
     pub fn is_operator(self) -> bool {
         use SyntaxKind::{
@@ -536,6 +537,7 @@ impl SyntaxKind {
                 | Self::KW_LET
                 | Self::KW_CONST
                 | Self::KW_IN
+                | Self::KW_IS
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
@@ -548,9 +550,11 @@ impl SyntaxKind {
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
-                | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
+                | Self::KW_AS
+                | Self::KW_TYPE
         )
     }
 }

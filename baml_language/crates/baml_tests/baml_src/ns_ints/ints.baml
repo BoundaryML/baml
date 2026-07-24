@@ -608,3 +608,101 @@ test "int_mul_max_by_one_no_overflow" {
 test "int_mul_min_by_one_no_overflow" {
     assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
 }
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// A method called directly on a bare integer literal (no wrapping parens) used
+// to lower its receiver to a Missing expr: `.abs()` failed to type-check and
+// `.to_string()` panicked at runtime with "parse error". The receiver must be
+// the literal itself. Kept at the end of the file so the test registry stays
+// append-only.
+test "int_abs_bare_literal" {
+    assert.is_true(baml.deep_equals(3.abs(), 3))
+}
+
+test "int_to_string_bare_literal" {
+    assert.is_true(baml.deep_equals(7.to_string(), "7"))
+}
+
+// ─── literal bases and underscore separators ─────────────────────────────────
+// Hex (0x), octal (0o), and binary (0b) integer literals, with `_` digit
+// separators allowed everywhere Rust allows them. Value parsing/validation
+// lives in baml_base::num_lit; invalid forms are covered by the
+// diagnostic_errors/invalid_numeric_literals project.
+
+test "int_hex_literal" {
+    assert.is_true(baml.deep_equals(0xFF, 255))
+}
+
+test "int_hex_lowercase_digits" {
+    assert.is_true(baml.deep_equals(0xcafe, 51966))
+}
+
+test "int_hex_mixed_case_digits" {
+    assert.is_true(baml.deep_equals(0xCaFe, 51966))
+}
+
+test "int_octal_literal" {
+    assert.is_true(baml.deep_equals(0o755, 493))
+}
+
+test "int_binary_literal" {
+    assert.is_true(baml.deep_equals(0b1010, 10))
+}
+
+test "int_prefixed_zero" {
+    assert.is_true(baml.deep_equals(0x0, 0))
+    assert.is_true(baml.deep_equals(0o0, 0))
+    assert.is_true(baml.deep_equals(0b0, 0))
+}
+
+test "int_negative_prefixed" {
+    assert.is_true(baml.deep_equals(-0xFF, -255))
+    assert.is_true(baml.deep_equals(-0b1010, -10))
+    assert.is_true(baml.deep_equals(-0o755, -493))
+}
+
+test "int_underscore_separators" {
+    assert.is_true(baml.deep_equals(1_000_000, 1000000))
+}
+
+test "int_trailing_underscore" {
+    assert.is_true(baml.deep_equals(1_, 1))
+}
+
+test "int_hex_underscores" {
+    assert.is_true(baml.deep_equals(0xFF_FF, 65535))
+}
+
+test "int_binary_underscores" {
+    assert.is_true(baml.deep_equals(0b10_10, 10))
+}
+
+test "int_octal_underscores" {
+    assert.is_true(baml.deep_equals(0o7_5_5, 493))
+}
+
+test "int_underscore_after_prefix" {
+    assert.is_true(baml.deep_equals(0x_F, 15))
+}
+
+// int.max_value() is 2^62 - 1: the full positive i63 range is reachable in
+// hex. The int-typed expression goes first so `deep_equals` infers T = int
+// rather than the literal type of the hex constant.
+test "int_hex_max_value" {
+    assert.is_true(baml.deep_equals(int.max_value(), 0x3FFF_FFFF_FFFF_FFFF))
+}
+
+// Bitwise ops read naturally with hex/binary operands (previously the bit
+// patterns had to be spelled in decimal).
+test "int_hex_bitwise" {
+    assert.is_true(baml.deep_equals(0xCAFE & 0xFF, 0xFE))
+    assert.is_true(baml.deep_equals(0b1100 | 0b0011, 0b1111))
+    assert.is_true(baml.deep_equals(0b1100 ^ 0b1010, 0b0110))
+}
+
+// Maximal munch: a method call on a bare prefixed literal must not absorb
+// the dot (`0xFF.to_string()` is INTEGER_LITERAL DOT WORD).
+test "int_hex_bare_literal_method" {
+    assert.is_true(baml.deep_equals(0xFF.to_string(), "255"))
+}

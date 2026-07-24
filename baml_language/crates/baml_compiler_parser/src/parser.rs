@@ -10,15 +10,6 @@ use text_size::TextRange;
 
 use crate::ParseError;
 
-/// Parse tokens using a caller-provided [`NodeCache`] so that identical
-/// subtrees from previous parses can be reused.
-pub fn parse_file_with_cache(
-    tokens: &[Token],
-    cache: &mut NodeCache,
-) -> (GreenNode, Vec<ParseError>) {
-    parse_impl(tokens, Some(cache))
-}
-
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
     parse_impl(tokens, None)
 }
@@ -52,7 +43,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Continue => SyntaxKind::KW_CONTINUE,
         TokenKind::Return => SyntaxKind::KW_RETURN,
         TokenKind::Throw => SyntaxKind::KW_THROW,
-        TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
@@ -228,6 +218,13 @@ pub(crate) struct Parser<'a> {
     /// available to `parse_spawn_expr`. Counter so nested spawns nest
     /// correctly.
     suppress_object_literal_depth: u32,
+    /// While parsing an unparenthesized for-in iterable, permit an object
+    /// literal only when its closing brace is immediately followed by syntax
+    /// that continues the iterable (or by the loop body's opening brace).
+    ///
+    /// This keeps `for let x in xs { body }` unambiguous while allowing
+    /// iterables such as `Values { items }.items`.
+    allow_object_literal_before_for_body_depth: u32,
     /// Suppresses destructure patterns (`Class { fields }`) in pattern
     /// position, mirroring Rust's `Restrictions::NO_STRUCT_LITERAL` for
     /// struct literals in `if` / `while` condition expressions. Bumped
@@ -250,6 +247,7 @@ impl<'a> Parser<'a> {
             suppress_catch_depth: 0,
             testset_body_depth: 0,
             suppress_object_literal_depth: 0,
+            allow_object_literal_before_for_body_depth: 0,
             suppress_destructure_pattern_depth: 0,
         }
     }
@@ -636,6 +634,36 @@ impl<'a> Parser<'a> {
         self.tokens
             .get(member_idx)
             .is_some_and(|t| t.kind == TokenKind::Word)
+    }
+
+    /// True when a postfix `(` must NOT be glued onto the expression parsed so
+    /// far as a call, because that expression is *block-terminated* (its last
+    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
+    /// fresh line.
+    ///
+    /// This is the guard-`if` early-return case (B-622):
+    ///   if (x < 0) { throw ... }
+    ///   (x * 2)
+    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
+    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
+    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
+    /// later line than an identifier/`)` callee — parsing as calls, matching
+    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
+    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
+    /// immediately-invoked block) untouched.
+    fn newline_separates_block_expr_from_paren(&self) -> bool {
+        self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
+    }
+
+    /// Kind-check on the most recently *emitted* significant token: is it a
+    /// closing `}`? Trailing trivia after the current expression has not been
+    /// emitted yet at postfix-decision time, so the last non-trivia token event
+    /// is the final real token of the expression parsed so far.
+    fn last_significant_emitted_token_is_block_close(&self) -> bool {
+        self.events.iter().rev().find_map(|event| match event {
+            Event::Token { kind, .. } if !kind.is_trivia() => Some(*kind),
+            _ => None,
+        }) == Some(SyntaxKind::R_BRACE)
     }
 
     /// Check if there's a newline before the next non-trivia token.
@@ -1198,8 +1226,7 @@ impl<'a> Parser<'a> {
             || matches!(
                 self.current().map(|t| t.kind),
                 Some(
-                    TokenKind::Watch
-                        | TokenKind::Return
+                    TokenKind::Return
                         | TokenKind::While
                         | TokenKind::For
                         | TokenKind::Break
@@ -1327,7 +1354,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{invalid_keyword}'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'."
+                "unknown keyword `{invalid_keyword}`; expected `class`, `enum`, `function`, `client`, `generator`, `test`, or `type`"
             ),
             span,
         );
@@ -1388,7 +1415,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{invalid_keyword}'. Did you mean 'type'? Usage: type Name = expression"
+                "unknown keyword `{invalid_keyword}`; did you mean `type`? usage: `type Name = expression`"
             ),
             span,
         );
@@ -1769,11 +1796,13 @@ impl<'a> Parser<'a> {
                 hashes_seen += 1;
                 i += 1;
                 if hashes_seen == hash_count {
-                    // Found all hashes, now skip basic trivia to find next token
+                    // Found all hashes, now skip basic trivia to find next token.
                     while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
                         i += 1;
                     }
-                    return Some(i);
+                    // `None` if the hashes run to EOF with no token after them,
+                    // so callers never index past the end on incomplete input.
+                    return (i < self.tokens.len()).then_some(i);
                 }
             } else if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -1936,7 +1965,9 @@ impl<'a> Parser<'a> {
         // Must be followed by opening quote - check after consuming hashes
         // We need to peek ahead past the hashes to see if there's a quote
         let quote_pos = self.find_token_after_hashes(opening_hashes);
-        if quote_pos.is_none() || quote_pos.map(|i| self.tokens[i].kind) != Some(TokenKind::Quote) {
+        // `find_token_after_hashes` can point at the EOF slot (== tokens.len())
+        // on incomplete input, so index through `get` rather than `[]`.
+        if quote_pos.and_then(|i| self.tokens.get(i)).map(|t| t.kind) != Some(TokenKind::Quote) {
             // Just hashes, not a raw string
             return false;
         }
@@ -2670,7 +2701,14 @@ impl<'a> Parser<'a> {
                 if self.looks_like_for_in_loop() {
                     self.parse_for_in_pattern();
                     self.expect(TokenKind::In);
+                    let suppress_object_literal = !self.has_for_header_closing_paren_ahead();
+                    if suppress_object_literal {
+                        self.suppress_object_literal_depth += 1;
+                    }
                     self.parse_expr();
+                    if suppress_object_literal {
+                        self.suppress_object_literal_depth -= 1;
+                    }
                 } else {
                     self.parse_let_stmt();
                     if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
@@ -2691,7 +2729,9 @@ impl<'a> Parser<'a> {
             // Non-parenthesized iterator form.
             self.parse_for_in_pattern();
             self.expect(TokenKind::In);
+            self.suppress_object_literal_depth += 1;
             self.parse_expr();
+            self.suppress_object_literal_depth -= 1;
         }
     }
 
@@ -2709,7 +2749,7 @@ impl<'a> Parser<'a> {
             if p.has_newline_ahead() {
                 // if the attribute name is not on the same line as the @, that's an error
                 if let Some(at_span) = at_span {
-                    p.error("Attribute is missing a name".to_string(), at_span);
+                    p.error("attribute is missing a name".to_string(), at_span);
                 }
                 return;
             }
@@ -2929,7 +2969,7 @@ impl<'a> Parser<'a> {
                 let span = token.span;
                 let text = token.text.clone();
                 self.error(
-                    format!("Float literal values are not supported: -{text}"),
+                    format!("float literal values are not supported: -{text}"),
                     span,
                 );
             }
@@ -2955,7 +2995,7 @@ impl<'a> Parser<'a> {
         if self.at(TokenKind::FloatLiteral) {
             if let Some(token) = self.current() {
                 self.error(
-                    format!("Float literal values are not supported: {}", token.text),
+                    format!("float literal values are not supported: {}", token.text),
                     token.span,
                 );
             }
@@ -3044,7 +3084,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
-            self.bump();
+            self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
         } else {
             self.error_unexpected_token("`as`".to_string());
         }
@@ -3283,7 +3323,7 @@ impl<'a> Parser<'a> {
 
                     // Emit a helpful error message
                     p.error(
-                        "Enum variants cannot have type annotations".to_string(),
+                        "enum variants cannot have type annotations".to_string(),
                         type_span,
                     );
                 }
@@ -3698,7 +3738,7 @@ impl<'a> Parser<'a> {
             }
 
             if p.at_contextual_kw("as") {
-                p.bump();
+                p.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
             } else {
                 p.error_unexpected_token("`as`".to_string());
             }
@@ -3791,7 +3831,7 @@ impl<'a> Parser<'a> {
     fn parse_associated_type_decl(&mut self, require_binding: bool) {
         self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
             if p.at_contextual_kw("type") {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("`type`".to_string());
             }
@@ -3895,7 +3935,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in generic parameter list (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -3986,7 +4026,8 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LBrace) {
                 let span = p.current().map(|t| t.span).unwrap_or_default();
                 p.error(
-                    "Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }".to_string(),
+                    "old-style function syntax; use `function Name(params...) -> ReturnType { ... }`"
+                        .to_string(),
                     span,
                 );
                 // Create empty parameter list node for AST consistency
@@ -4138,14 +4179,33 @@ impl<'a> Parser<'a> {
                         return false;
                     }
                     if text == "client" || text == "prompt" {
-                        return true;
+                        // An LLM field is `client <value>` / `prompt <template>`.
+                        // A following `=`, `,`, or `)` means a named call arg
+                        // or plain identifier use, so this is an expression body.
+                        let j = self.skip_trivia_and_comments_from(i + 1);
+                        let next = self.tokens.get(j).map(|t| t.kind);
+                        if !matches!(
+                            next,
+                            Some(TokenKind::Equals | TokenKind::Comma | TokenKind::RParen)
+                        ) {
+                            return true;
+                        }
                     }
                 }
-                // `client` as KW_CLIENT: LLM directive is `client Model`, not `client.method(...)`.
+                // `client` as KW_CLIENT: LLM directive is `client Model`, not
+                // `client.method(...)` or the named call arg `client = ...`.
                 TokenKind::Client if brace_depth == 1 => {
                     let j = self.skip_trivia_and_comments_from(i + 1);
                     let next = self.tokens.get(j).map(|t| t.kind);
-                    if next != Some(TokenKind::Dot) {
+                    if !matches!(
+                        next,
+                        Some(
+                            TokenKind::Dot
+                                | TokenKind::Equals
+                                | TokenKind::Comma
+                                | TokenKind::RParen
+                        )
+                    ) {
                         return true;
                     }
                 }
@@ -4190,7 +4250,7 @@ impl<'a> Parser<'a> {
                 if p.at_header_comment_start() {
                     let span = p.header_comment_span();
                     p.error(
-                        "Header comments (//#) are not allowed inside LLM functions".to_string(),
+                        "header comments (`//#`) are not allowed inside LLM functions".to_string(),
                         span,
                     );
                     p.consume_header_comment();
@@ -4211,6 +4271,16 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::TypeBuilder) {
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
+                } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
+                    // LLM-block fields are separated by a newline, not by `,`/`;`.
+                    // Name the real requirement here instead of letting the value
+                    // scanner swallow the separator and misreport `prompt` as
+                    // missing (B-621).
+                    let sep = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                    p.error_here(format!(
+                        "unexpected `{sep}` between LLM function fields; separate `client` and `prompt` with a newline"
+                    ));
+                    p.bump();
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
@@ -4252,18 +4322,49 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::Quote) {
                 p.parse_string();
             } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline or brace
-                // This handles cases like: openai/gpt-4o-mini
+                // Parse unquoted client value - consume tokens until newline, brace,
+                // a field separator, or the start of the next LLM-block field. This
+                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
+                // terminating the scan on a single-line body such as
+                // `{ client: Fast prompt: `...` }`, where the value must not swallow
+                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
+                // keeps them out of the client value so they surface an accurate
+                // block-level diagnostic instead.
+                //
+                // The field-start boundary only applies once a value token has been
+                // consumed: a bare `client` whose value is absent (with the next field
+                // on the following line) must stop immediately via the newline check
+                // rather than absorbing that field, and a client whose name happens to
+                // be `prompt` is still read as the value.
+                let mut consumed_value = false;
                 while !p.at_end() {
-                    if p.at(TokenKind::RBrace) || p.at(TokenKind::LBrace) || p.has_newline_ahead() {
+                    if p.at(TokenKind::RBrace)
+                        || p.at(TokenKind::LBrace)
+                        || p.at(TokenKind::Comma)
+                        || p.at(TokenKind::Semicolon)
+                        || p.has_newline_ahead()
+                        || (consumed_value && p.at_llm_field_start())
+                    {
                         break;
                     }
                     p.bump();
+                    consumed_value = true;
                 }
             } else {
                 p.error_unexpected_token("client name".to_string());
             }
         });
+    }
+
+    /// True when the parser is positioned at the start of an LLM-block field
+    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
+    /// uses this to stop at the next field so that fields written on a single
+    /// line (with no separating newline) are not merged into the client value.
+    fn at_llm_field_start(&self) -> bool {
+        self.at(TokenKind::Client)
+            || self.at(TokenKind::TypeBuilder)
+            || (self.at(TokenKind::Word)
+                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
     }
 
     fn parse_prompt_field(&mut self) {
@@ -4404,9 +4505,7 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at(TokenKind::Watch) {
-            self.parse_watch_let_stmt();
-        } else if self.at_binding_intro_stmt() {
+        if self.at_binding_intro_stmt() {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
@@ -4499,32 +4598,6 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_watch_let_stmt(&mut self) {
-        self.with_node(SyntaxKind::WATCH_LET, |p| {
-            p.expect(TokenKind::Watch);
-            // Same invariant as parse_let_stmt: pattern must start with `let`.
-            if !p.at_binding_intro_stmt() {
-                p.error_unexpected_token("'let'".to_string());
-            }
-            if p.binding_intro_is_followed_by_array_pattern() {
-                p.bump_binding_intro(); // statement-level binding introducer
-                p.parse_pattern();
-            } else {
-                p.parse_pattern();
-            }
-
-            // Initializer
-            if p.eat(TokenKind::Equals) {
-                p.parse_expr_bp(3);
-            } else {
-                p.error_unexpected_token("initializer (=)".to_string());
-            }
-
-            // Consume trailing semicolon
-            p.eat(TokenKind::Semicolon);
-        });
-    }
-
     fn parse_return_stmt(&mut self) {
         self.with_node(SyntaxKind::RETURN_STMT, |p| {
             p.expect(TokenKind::Return);
@@ -4607,6 +4680,28 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse `break` in expression position as a `BREAK_EXPR` — a diverging
+    /// expression of type `never`, mirroring `parse_return_expr`. This is what
+    /// lets a braceless `break` be a `catch`/`match` arm value (`0 => break`).
+    /// Statement position is still handled by `parse_break_stmt` (see
+    /// `parse_stmt`), so this only fires when `break` is reached through
+    /// expression parsing. Unlike the statement form, we don't eat a trailing
+    /// `;` here — that belongs to the enclosing statement, not the expression.
+    fn parse_break_expr(&mut self) {
+        self.with_node(SyntaxKind::BREAK_EXPR, |p| {
+            p.expect(TokenKind::Break);
+        });
+    }
+
+    /// Parse `continue` in expression position as a `CONTINUE_EXPR` — the
+    /// `continue` counterpart of `parse_break_expr`. Statement-position
+    /// `continue` is still handled by `parse_continue_stmt`.
+    fn parse_continue_expr(&mut self) {
+        self.with_node(SyntaxKind::CONTINUE_EXPR, |p| {
+            p.expect(TokenKind::Continue);
+        });
+    }
+
     fn parse_if_expr(&mut self) {
         // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
         // Decided here by peeking past `if` for a `let` token — patterns
@@ -4626,7 +4721,9 @@ impl<'a> Parser<'a> {
             // destructure here must wrap it in parens — parens reset the
             // suppression in `parse_pattern_atom`.
             p.suppress_destructure_pattern_depth += 1;
+            p.suppress_object_literal_depth += 1;
             p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
             p.suppress_destructure_pattern_depth -= 1;
 
             // Then block
@@ -4682,7 +4779,9 @@ impl<'a> Parser<'a> {
             // and apply condition-position destructure suppression so a
             // trailing `is Class { ... }` doesn't eat the then-block.
             p.suppress_destructure_pattern_depth += 1;
+            p.suppress_object_literal_depth += 1;
             p.parse_expr_bp(3);
+            p.suppress_object_literal_depth -= 1;
             p.suppress_destructure_pattern_depth -= 1;
 
             // Then block
@@ -5526,7 +5625,9 @@ impl<'a> Parser<'a> {
             // Condition: same destructure suppression as `if` — see
             // `parse_if_expr` for rationale.
             p.suppress_destructure_pattern_depth += 1;
+            p.suppress_object_literal_depth += 1;
             p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
             p.suppress_destructure_pattern_depth -= 1;
 
             // Body
@@ -5567,7 +5668,9 @@ impl<'a> Parser<'a> {
             // if-let), and apply condition-position destructure suppression so
             // a trailing `is Class { ... }` doesn't eat the loop body block.
             p.suppress_destructure_pattern_depth += 1;
+            p.suppress_object_literal_depth += 1;
             p.parse_expr_bp(3);
+            p.suppress_object_literal_depth -= 1;
             p.suppress_destructure_pattern_depth -= 1;
 
             // Body
@@ -5596,7 +5699,14 @@ impl<'a> Parser<'a> {
                         // Iterator-style: for (let var in expr) / for (const var in expr)
                         p.parse_for_in_pattern();
                         p.expect(TokenKind::In);
+                        let suppress_object_literal = !p.has_for_header_closing_paren_ahead();
+                        if suppress_object_literal {
+                            p.suppress_object_literal_depth += 1;
+                        }
                         p.parse_expr(); // iterator expression
+                        if suppress_object_literal {
+                            p.suppress_object_literal_depth -= 1;
+                        }
                     } else {
                         // C-style: for (let i = 0; cond; update)
                         p.parse_let_stmt();
@@ -5632,7 +5742,11 @@ impl<'a> Parser<'a> {
                 // The `let` is required — bindings always require it.
                 p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
+                p.suppress_object_literal_depth += 1;
+                p.allow_object_literal_before_for_body_depth += 1;
                 p.parse_expr();
+                p.allow_object_literal_before_for_body_depth -= 1;
+                p.suppress_object_literal_depth -= 1;
             }
 
             // Body
@@ -5642,6 +5756,58 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("block after for expression".to_string());
             }
         });
+    }
+
+    /// Whether the current parenthesized for-in header has a closing `)` ahead.
+    ///
+    /// If it does not, a following `{ ... }` must remain available as the loop
+    /// body instead of being consumed as an object literal. Balanced nested
+    /// delimiters are skipped so valid iterables such as `Items { values }`,
+    /// arrays containing objects, and calls continue to work.
+    fn has_for_header_closing_paren_ahead(&self) -> bool {
+        let mut stack: Vec<TokenKind> = Vec::new();
+        let mut saw_top_level_brace = false;
+        let mut i = 0;
+
+        loop {
+            let Some(tok) = self.peek(i) else {
+                return false;
+            };
+            match tok.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => {
+                    if stack.is_empty() {
+                        saw_top_level_brace = true;
+                    }
+                    stack.push(TokenKind::RBrace);
+                }
+                TokenKind::RParen if stack.is_empty() => return true,
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if expected != close {
+                        return false;
+                    }
+                }
+                TokenKind::Semicolon if stack.is_empty() => return false,
+                TokenKind::For
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Let
+                | TokenKind::Return
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Match
+                    if stack.is_empty() && saw_top_level_brace =>
+                {
+                    return false;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
     }
 
     /// Check if this looks like a for-in loop. We're at a binding introducer.
@@ -5811,8 +5977,22 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen {
-                // Function call
+            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
+                // Function call.
+                //
+                // The `newline_separates_block_expr_from_paren()` guard fixes a
+                // guard-style early return (B-622): a block-terminated
+                // statement whose value is discarded, followed on the *next
+                // line* by a parenthesized expression, must not glue into a
+                // call on that value. For example
+                //   if (x < 0) { throw ... }
+                //   (x * 2)
+                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
+                // `if` result (E0006 "`void` is not a function"). Only the
+                // block-terminated + newline shape is separated (mirroring
+                // Rust's expression-statement rule); ordinary calls whose `(`
+                // sits on a later line than a non-`}` callee — e.g. a method
+                // chain broken across lines by comments — still parse as calls.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -5868,7 +6048,7 @@ impl<'a> Parser<'a> {
                         self.bump();
                     } else {
                         self.error_unexpected_token(
-                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                            "field name, `[`, or `(` after `?.`".to_string(),
                         );
                     }
                     self.finish_node();
@@ -5877,7 +6057,7 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
                 self.bump(); // .
-                self.bump(); // contextual `as`
+                self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
                 self.parse_generic_args();
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
@@ -5893,7 +6073,6 @@ impl<'a> Parser<'a> {
                 // uses PATH_EXPR instead (see `parse_path_or_ident`). PATH_EXPR is
                 // created during primary expression parsing when we see `WORD.WORD`.
                 //
-                // Also handles special `.$field` syntax for watch variables.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
@@ -5905,7 +6084,7 @@ impl<'a> Parser<'a> {
                     } else {
                         "'.'"
                     };
-                    self.error_unexpected_token(format!("Expected field name after {punct}"));
+                    self.error_unexpected_token(format!("field name after `{punct}`"));
                 }
                 self.finish_node();
             } else if op == TokenKind::LBrace {
@@ -5917,7 +6096,10 @@ impl<'a> Parser<'a> {
                 // while parsing the optional name expression — without it,
                 // `spawn nm { y: 1 }` would consume the body's `{ y: 1 }` as
                 // a struct literal and then fail to find a body brace.
-                if self.suppress_object_literal_depth == 0
+                let object_literal_allowed = self.suppress_object_literal_depth == 0
+                    || (self.allow_object_literal_before_for_body_depth > 0
+                        && self.object_literal_can_precede_for_body());
+                if object_literal_allowed
                     && self.events.len() > expr_start
                     && self.looks_like_object_constructor()
                 {
@@ -6090,7 +6272,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Peek past the current `{` token to check if the brace content starts with
-    /// `<word> :` or `...` (spread), which indicates an object literal / constructor.
+    /// `<word> :`, a shorthand field (`<word> ,` / `<word> }`), or `...`
+    /// (spread), which indicates an object literal / constructor.
     /// If it starts with something else (e.g. a statement, keyword, or expression),
     /// the `{` is more likely a block body.
     fn brace_content_looks_like_fields(&self) -> bool {
@@ -6108,11 +6291,58 @@ impl<'a> Parser<'a> {
                 {
                     i += 2;
                 }
-                self.peek(i)
-                    .map(|t| t.kind == TokenKind::Colon)
-                    .unwrap_or(false)
+                self.peek(i).is_some_and(|t| {
+                    t.kind == TokenKind::Colon
+                        || (i == 2 && matches!(t.kind, TokenKind::Comma | TokenKind::RBrace))
+                })
             }
             _ => false,
+        }
+    }
+
+    /// Whether the current `{ ... }` can be an object literal inside an
+    /// unparenthesized for-in iterable without stealing the loop body.
+    ///
+    /// A matching brace followed by postfix continuation (`.field`, indexing,
+    /// a call, etc.) is still part of the iterable. A second `{` is the
+    /// unambiguous `Constructor { fields } { body }` shape.
+    fn object_literal_can_precede_for_body(&self) -> bool {
+        debug_assert!(self.at(TokenKind::LBrace));
+
+        let mut stack = vec![TokenKind::RBrace];
+        let mut i = 1;
+        loop {
+            let Some(token) = self.peek(i) else {
+                return false;
+            };
+            match token.kind {
+                TokenKind::LParen => stack.push(TokenKind::RParen),
+                TokenKind::LBracket => stack.push(TokenKind::RBracket),
+                TokenKind::LBrace => stack.push(TokenKind::RBrace),
+                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
+                    let Some(expected) = stack.pop() else {
+                        return false;
+                    };
+                    if close != expected {
+                        return false;
+                    }
+                    if stack.is_empty() {
+                        return self.peek(i + 1).is_some_and(|next| {
+                            matches!(
+                                next.kind,
+                                TokenKind::LBrace
+                                    | TokenKind::Dot
+                                    | TokenKind::Dollar
+                                    | TokenKind::QuestionDot
+                                    | TokenKind::LBracket
+                                    | TokenKind::LParen
+                            )
+                        });
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
         }
     }
 
@@ -6239,6 +6469,15 @@ impl<'a> Parser<'a> {
             // `catch`/`match` arm value. Statement-position `return` is taken by
             // `parse_stmt` before reaching here.
             self.parse_return_expr();
+        } else if self.at(TokenKind::Break) {
+            // Break expression (diverging, type `never`) — lets `break` be a
+            // `catch`/`match` arm value, symmetric with `return`.
+            // Statement-position `break` is taken by `parse_stmt` first.
+            self.parse_break_expr();
+        } else if self.at(TokenKind::Continue) {
+            // Continue expression (diverging, type `never`) — the `continue`
+            // counterpart of the `break` case above.
+            self.parse_continue_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -6251,12 +6490,12 @@ impl<'a> Parser<'a> {
             {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
-            } else if text == "true" || text == "false" {
-                // Boolean literal
-                self.bump();
+            } else if text == "true" {
+                self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+            } else if text == "false" {
+                self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
             } else if text == "null" {
-                // Null literal
-                self.bump();
+                self.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
@@ -6268,15 +6507,17 @@ impl<'a> Parser<'a> {
             // Lambda expression: (params) -> [RetType] { body }
             self.parse_lambda_expr();
         } else if self.at(TokenKind::LParen) {
-            // Parenthesized expression. Parens reset the destructure
-            // suppression: `if (x is Foo { f })` lets the user opt back
-            // into a destructure that condition-position would otherwise
-            // forbid.
+            // Parenthesized expression. Parens reset the destructure and
+            // object-literal suppression: `if (x is Foo { f })` and
+            // `if (Config { enabled })` let the user opt back into syntax that
+            // condition position would otherwise confuse with the body block.
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
                 p.bump(); // (
-                let saved = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+                let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+                let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
                 p.parse_expr();
-                p.suppress_destructure_pattern_depth = saved;
+                p.suppress_destructure_pattern_depth = saved_destructure;
+                p.suppress_object_literal_depth = saved_object;
                 p.expect(TokenKind::RParen);
             });
         } else if self.at(TokenKind::LBracket) {
@@ -6638,7 +6879,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in type expression (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -6683,7 +6924,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "Unmatched '>' in type expression (found {} extra)",
+                        "unmatched `>` in generic argument list (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -6701,7 +6942,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if the current position looks like a map literal rather than a block
-    /// Maps start with { "string": or { identifier:
+    /// Maps start with { "string":, { identifier:, or a shorthand property
+    /// such as { identifier } / { identifier, ... }.
     /// Blocks typically start with { keyword or { expression (but not field:value pattern)
     fn looks_like_map(&self) -> bool {
         // Must start with {
@@ -6749,6 +6991,14 @@ impl<'a> Parser<'a> {
                 }
                 if self.peek(i).map(|t| t.kind) == Some(TokenKind::Colon) {
                     return true; // word: pattern indicates a map
+                }
+                if i == 2
+                    && matches!(
+                        self.peek(i).map(|t| t.kind),
+                        Some(TokenKind::Comma | TokenKind::RBrace)
+                    )
+                {
+                    return true; // bare word followed by ',' / '}' is shorthand
                 }
             }
         }
@@ -6973,14 +7223,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single map entry in expression context: key: value
-    /// Requires colon between key and value (JSON-style)
+    /// Parse a single map entry in expression context: `key: value` or the
+    /// shorthand `key`, which desugars to `key: key` during AST lowering.
     fn parse_map_entry(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Key - can be identifier, qualified identifier, or string literal.
+            let mut shorthand_candidate = false;
             if p.at(TokenKind::Word) {
+                shorthand_candidate = true;
                 p.bump(); // identifier key
                 while p.at(TokenKind::Dot) {
+                    shorthand_candidate = false;
                     p.bump();
                     if !p.expect(TokenKind::Word) {
                         return;
@@ -6988,6 +7241,10 @@ impl<'a> Parser<'a> {
                 }
             } else if !p.parse_any_string() {
                 p.error_unexpected_token("map key".to_string());
+                return;
+            }
+
+            if shorthand_candidate && (p.at(TokenKind::Comma) || p.at(TokenKind::RBrace)) {
                 return;
             }
 
@@ -7089,15 +7346,18 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a single object field: name: value
+    /// Parse a single object field: `name: value` or shorthand `name`.
     fn parse_object_field(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Field name - can be identifier, qualified identifier, or string literal.
             // `client` is a keyword but a valid field name (BEP-049 §10
             // `Context { client: ... }`).
+            let mut shorthand_candidate = false;
             if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                shorthand_candidate = true;
                 p.bump(); // identifier field name
                 while p.at(TokenKind::Dot) {
+                    shorthand_candidate = false;
                     p.bump();
                     if !p.expect(TokenKind::Word) {
                         return;
@@ -7105,6 +7365,10 @@ impl<'a> Parser<'a> {
                 }
             } else if !p.parse_any_string() {
                 p.error_unexpected_token("field name".to_string());
+                return;
+            }
+
+            if shorthand_candidate && (p.at(TokenKind::Comma) || p.at(TokenKind::RBrace)) {
                 return;
             }
 
@@ -7795,7 +8059,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_ALIAS_DEF, |p| {
             // 'type' keyword
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "type").unwrap_or(false) {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("'type' keyword".to_string());
             }
@@ -7929,6 +8193,34 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    /// A run of hashes at EOF (an incomplete raw string like `##`) must
+    /// parse to errors, never panic: `find_token_after_hashes` returns
+    /// `None` at EOF instead of the one-past-the-end index its callers
+    /// would use to index `tokens`.
+    #[test]
+    fn bare_hashes_at_eof_do_not_panic() {
+        for source in [
+            "##",
+            "#",
+            "function main() -> string {\n  ##",
+            "function main() -> string {\n  ## ",
+            "let x = ##",
+            "client<llm> C { key ##",
+            "client<llm> C {\n  provider openai\n  key ##",
+        ] {
+            // Parsing must not index past the token buffer (and must not
+            // loop: config-value recovery leaves the hashes unconsumed, and
+            // the next config-item iteration consumes them as a malformed
+            // key). All of these inputs are malformed, so they must also
+            // surface diagnostics rather than silently parse.
+            let (_root, errors) = parse_source(source);
+            assert!(
+                !errors.is_empty(),
+                "expected at least one diagnostic for {source:?}"
+            );
+        }
     }
 
     /// A leading `#!` shebang line parses as a comment, so the file behind
@@ -8489,6 +8781,32 @@ function read_int<T extends Converter<int>>(m: T) -> int {
     }
 
     #[test]
+    fn extra_generic_parameter_closer_uses_parameter_list_wording() {
+        let (_root, errors) = parse_source("function f<T>>() -> int { 1 }");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "unmatched `>` in generic parameter list (found 1 extra)"
+            )),
+            "expected generic parameter list wording, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn extra_generic_argument_closer_uses_argument_list_wording() {
+        let (_root, errors) = parse_source("function f(x: int) -> int { x.as<int>>() }");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "unmatched `>` in generic argument list (found 1 extra)"
+            )),
+            "expected generic argument list wording, got: {errors:#?}"
+        );
+    }
+
+    #[test]
     fn generic_bound_alias_syntax_is_not_supported() {
         let source = r#"
 interface Converter<T> {
@@ -8848,35 +9166,6 @@ function Demo() -> string {{
     }
 
     #[test]
-    fn incomplete_map_field_value_stops_before_watch_let() {
-        let (root, _errors) = parse_source(
-            r#"
-function GuessGameAgent() -> string {
-  log.info({"famous_person_name":
-  watch let user_input = SimulateHumanGuess(history)
-  user_input
-}
-"#,
-        );
-
-        let map = root
-            .descendants()
-            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
-            .expect("map literal should still be parsed");
-        assert!(
-            !map.text().to_string().contains("watch let"),
-            "unterminated map literal swallowed the following watched statement: {}",
-            map.text()
-        );
-
-        assert!(
-            root.descendants()
-                .any(|node| node.kind() == SyntaxKind::WATCH_LET),
-            "`watch let` should recover as its own statement"
-        );
-    }
-
-    #[test]
     fn parses_function_with_client_as_parameter_name() {
         // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
         let source = r#"
@@ -8915,6 +9204,50 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_call_with_client_named_arg_is_not_llm_body() {
+        let source = r#"
+function main() -> string {
+  Ask("hi", client = override_provider())
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_call_with_prompt_named_arg_is_not_llm_body() {
+        let source = r#"
+function main() -> string {
+  render(prompt = "hello", client = c)
 }
 "#;
 
@@ -8974,6 +9307,154 @@ function Foo() -> {
             func.children()
                 .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
             "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn single_line_llm_body_parses_client_and_prompt_fields() {
+        // B-621: a single-line LLM body with `client` and `prompt` on the same
+        // line must not swallow `prompt` into the unquoted client value and then
+        // misreport it as missing. Both fields must be recognized, error-free.
+        let source = "function F(raw: string) -> C { client: Fast prompt: `hi` }\n";
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY, not an expression body");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            client_field.text().to_string().contains("Fast"),
+            "client field should name `Fast`, got: {}",
+            client_field.text()
+        );
+        // The `prompt` word and its value must land in the PROMPT_FIELD, not the
+        // client value.
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "client value must not swallow the `prompt` field: {}",
+            client_field.text()
+        );
+
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected a PROMPT_FIELD in the single-line body"
+        );
+    }
+
+    #[test]
+    fn llm_body_bare_client_does_not_swallow_next_line_prompt_field() {
+        // B-621 regression guard: a bare `client` with no value on its line must
+        // NOT absorb the `prompt` field that starts on the following line into the
+        // client value. The client value stays empty and the PROMPT_FIELD is parsed.
+        let source = "function F(raw: string) -> C {\n  client\n  prompt #\"hi\"#\n}\n";
+
+        let (root, _errors) = parse_source(source);
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "bare `client` must not swallow the next-line `prompt` field: {}",
+            client_field.text()
+        );
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected the `prompt` field to be parsed as its own PROMPT_FIELD"
+        );
+    }
+
+    #[test]
+    fn llm_body_client_scan_terminates_on_truncated_and_eof_inputs() {
+        // B-621 hang guard: the unquoted client-value scan must make forward
+        // progress and terminate for every input, including bodies truncated at
+        // EOF with no closing brace, newline, or next-field-start to break on.
+        // If the scan can spin, `parse_source` never returns and this test hangs
+        // (surfacing as a timeout instead of relying on wasm-pack to catch it).
+        let inputs = [
+            "function F() -> C { client",
+            "function F() -> C { client:",
+            "function F() -> C { client Fast",
+            "function F() -> C { client: Fast",
+            "function F() -> C { client Fast prompt",
+            "function F() -> C { client Fast prompt:",
+            "function F() -> C { client Fast, ",
+            "function F() -> C { client Fast; ",
+            "function F() -> C { client Fast prompt: `hi`",
+            "function F() -> C { client openai/gpt-4o-mini",
+            "function F() -> C { client openai/gpt-4o-mini prompt",
+            "function F() -> C { client Fast //trailing",
+            "function F() -> C { client Fast /*unterminated",
+            "function F() -> C { client Fast prompt `hi",
+            "function F() -> C {\n  client",
+            "function F() -> C {\n  client\n  prompt",
+            "function F() -> C {\n  client\n",
+        ];
+        for input in inputs {
+            // The assertion is simply that this call returns.
+            let _ = parse_source(input);
+        }
+    }
+
+    #[test]
+    fn single_line_llm_body_comma_separator_reports_targeted_error() {
+        // B-621: `,` between fields is not a valid separator. The diagnostic must
+        // name the real requirement (a newline) rather than falsely claiming the
+        // prompt is missing.
+        let source = "function F(raw: string) -> C { client: Fast, prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn single_line_llm_body_semicolon_separator_reports_targeted_error() {
+        // B-621: same as the comma case, for `;`.
+        let source = "function F(raw: string) -> C { client: Fast; prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
         );
     }
 
@@ -9106,6 +9587,52 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
             .count();
         assert_eq!(throw_expr_count, 2);
+    }
+
+    #[test]
+    fn parses_break_and_continue_as_match_arm_expressions() {
+        // B-619: bare `break`/`continue` are valid in match-arm expression
+        // position (symmetric with `return`), producing BREAK_EXPR/CONTINUE_EXPR
+        // nodes — no `E0010 Expected expression` error.
+        let source = r#"
+function Demo(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let break_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BREAK_EXPR)
+            .count();
+        assert_eq!(break_expr_count, 1, "expected one BREAK_EXPR node");
+
+        let continue_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CONTINUE_EXPR)
+            .count();
+        assert_eq!(continue_expr_count, 1, "expected one CONTINUE_EXPR node");
+
+        // Bare `break`/`continue` in statement position still parse as the
+        // statement forms — the expression forms only fire through expression
+        // parsing (the match arms above).
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::BREAK_STMT)
+                .count(),
+            0,
+            "arm-position break should not be a BREAK_STMT"
+        );
     }
 
     #[test]
@@ -11409,23 +11936,6 @@ function f(r: int | string) -> int {
     }
 
     #[test]
-    fn let_else_rejected_in_watch_let() {
-        // `watch let X = y else { ... };` — combining watched bindings with
-        // let-else divergence is rejected at parse time.
-        let source = r#"
-function f(r: int | string) -> int {
-  watch let v: int = r else { return 0; };
-  v
-}
-"#;
-        let (_, errors) = parse_source(source);
-        assert!(
-            !errors.is_empty(),
-            "expected parse error for `watch let ... else {{ ... }}`"
-        );
-    }
-
-    #[test]
     fn let_else_destructure_pattern_parses() {
         // `let Class { f } = expr else { ... };` — destructure pattern with
         // an else branch; verifies parser handles the structural pattern in
@@ -11623,5 +12133,286 @@ function f() -> int {
 "#;
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn guard_if_then_parenthesized_return_on_next_line_is_two_statements() {
+        // Regression (B-622): a guard `if (cond) { throw ... }` with no else,
+        // followed on the next line by a parenthesized return expression, must
+        // parse as TWO statements. Without the newline guard on the postfix
+        // call branch the parser glued `{ ... }(x * 2)` into a call on the void
+        // `if` result, producing a misleading E0006 downstream.
+        let source = r#"function f(x: int) -> int {
+    if (x < 0) { throw baml.errors.InvalidArgument { message: "neg" } }
+    (x * 2)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The `if` and the `(x * 2)` are separate statements: the parenthesized
+        // return must NOT be wrapped in a CALL_EXPR on the if-result.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 0,
+            "the parenthesized return must not be parsed as a call on the void `if` result"
+        );
+    }
+
+    #[test]
+    fn call_with_paren_on_same_line_still_parses_as_call() {
+        // The block-close guard must not disturb ordinary calls whose `(`
+        // follows the callee on the same line — including multi-line argument
+        // lists, where the `(` still sits on the callee's line.
+        let source = r#"function f() -> int {
+    let a = g(1, 2)
+    let b = g(
+        3,
+        4,
+    )
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "both same-line and multi-line-argument calls must still parse as calls"
+        );
+    }
+
+    #[test]
+    fn non_block_callee_then_paren_on_next_line_still_chains() {
+        // The B-622 fix keys strictly on a block-terminating `}` callee: a
+        // *non*-block callee (here a call `g()`, ending in `)`) followed by `(`
+        // on the next line must STILL glue into a chained call `g()(1)`. This
+        // preserves the deliberately-tested `foo()`-then-`(1)` behavior and
+        // guards against a future over-broad "newline separates" change.
+        let source = r#"function f(g: () -> (int) -> int) -> int {
+    g()
+    (1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // `g()(1)` is one CALL_EXPR wrapping another (the outer call applies the
+        // returned lambda), so two CALL_EXPR nodes total — the newline did NOT
+        // split them into separate statements.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "a non-block callee followed by `(` on the next line must still chain as a call"
+        );
+    }
+
+    #[test]
+    fn parses_map_property_shorthand() {
+        let source = r#"
+function build(options: string, retries: int) -> map<string, string | int> {
+    { options, retries, explicit: "value" }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let map = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
+            .expect("expected shorthand braces to parse as a map literal");
+        let fields = map
+            .children()
+            .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
+            .collect::<Vec<_>>();
+        assert_eq!(fields.len(), 3);
+        assert!(
+            fields[0]
+                .children_with_tokens()
+                .all(|elem| elem.kind() != SyntaxKind::COLON),
+            "the shorthand field must remain distinguishable in the CST"
+        );
+        assert!(
+            fields[2]
+                .children_with_tokens()
+                .any(|elem| elem.kind() == SyntaxKind::COLON),
+            "explicit fields must retain their colon"
+        );
+    }
+
+    #[test]
+    fn parses_object_property_shorthand() {
+        let source = r#"
+class Request { options string retries int }
+function build(options: string, retries: int) -> Request {
+    Request { options, retries }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let object = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+            .expect("expected shorthand braces after Request to parse as an object literal");
+        let fields = object
+            .children()
+            .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
+            .collect::<Vec<_>>();
+        assert_eq!(fields.len(), 2);
+        assert!(fields.iter().all(|field| {
+            field
+                .children_with_tokens()
+                .all(|elem| elem.kind() != SyntaxKind::COLON)
+        }));
+    }
+
+    #[test]
+    fn shorthand_lookahead_does_not_consume_control_flow_bodies() {
+        let source = r#"
+class Flag { enabled bool }
+
+function from_optional(value: int?) -> int {
+    if let v: int = value { v } else { 0 }
+}
+
+function from_if(flag: bool, value: int) -> int {
+    if flag { value } else { 0 }
+}
+
+function from_for(values: int[]) -> int {
+    for let value in values { value }
+    0
+}
+
+function parenthesized_object(enabled: bool) -> bool {
+    if (Flag { enabled }).enabled { true } else { false }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "only the explicitly parenthesized constructor should parse as an object literal"
+        );
+    }
+
+    #[test]
+    fn parenthesized_for_iterable_does_not_consume_body_brace() {
+        let source = r#"
+function iterate(values: int[]) -> int {
+    for (let value in values { value }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::UnexpectedToken {
+                    expected,
+                    found,
+                    ..
+                } if expected == "')'" && found == "'{'"
+            )),
+            "expected the missing ')' diagnostic, got: {errors:#?}"
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            0,
+            "the loop body must not be consumed as an object literal"
+        );
+        assert!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::FOR_EXPR)
+                .flat_map(|node| node.children())
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
+            "the brace after the iterable must remain the loop body"
+        );
+    }
+
+    #[test]
+    fn nested_parens_allow_object_literal_in_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for (let item in (Values { items }).items) { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "nested parentheses must opt back into an explicit object literal"
+        );
+    }
+
+    #[test]
+    fn object_literal_is_allowed_in_parenthesized_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for (let item in Values { items }.items) { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "a real header-closing ')' keeps direct object literals unambiguous"
+        );
+    }
+
+    #[test]
+    fn object_literal_is_allowed_in_unparenthesized_for_iterable() {
+        let source = r#"
+class Values { items int[] }
+
+function iterate(items: int[]) -> int {
+    for let item in Values { items }.items { item }
+    0
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_LITERAL)
+                .count(),
+            1,
+            "an object literal followed by postfix continuation must remain part of the iterable"
+        );
+        assert!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::FOR_EXPR)
+                .flat_map(|node| node.children())
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR),
+            "the final brace must remain the loop body"
+        );
     }
 }

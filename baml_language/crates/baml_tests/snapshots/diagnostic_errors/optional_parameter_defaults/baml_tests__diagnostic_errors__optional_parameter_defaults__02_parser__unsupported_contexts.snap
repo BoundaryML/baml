@@ -33,7 +33,7 @@ SOURCE_FILE
       QUOTE """
       HASH "#"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NamedFilter"
     EQUALS "="
     TYPE_EXPR
@@ -55,8 +55,12 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NamedLimit"
     EQUALS "="
     TYPE_EXPR
@@ -78,6 +82,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   CLASS_DEF
     KW_CLASS "class"
     WORD "Counter"
@@ -94,7 +102,7 @@ SOURCE_FILE
         PARAMETER "self = null"
           WORD "self"
           EQUALS "="
-          WORD "null"
+          KW_NULL "null"
         R_PAREN ")"
       ARROW "->"
       TYPE_EXPR "int"
@@ -170,7 +178,7 @@ SOURCE_FILE
           WORD "string"
           QUESTION "?"
         EQUALS "="
-        WORD "null"
+        KW_NULL "null"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"

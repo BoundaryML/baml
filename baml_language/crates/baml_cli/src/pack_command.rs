@@ -40,7 +40,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{load_project_for_build, resolve_standalone_file, validate_file_from_flags},
+    project_load::{resolve_standalone_file, validate_file_from_flags},
     reporter::Reporter,
 };
 
@@ -132,7 +132,7 @@ impl PackArgs {
             Arc::new(sys_native::SysOps::native()),
             vec![],
         )
-        .map_err(|e| anyhow!("Failed to initialize engine for resolution: {e:?}"))?;
+        .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 
         let (mode, targets) = self.resolve_targets(&engine)?;
         for t in &targets {
@@ -155,7 +155,7 @@ impl PackArgs {
             output_format: self.output_format,
         };
         let serialized = borsh::to_vec(&envelope)
-            .map_err(|e| anyhow!("Failed to serialize pack envelope: {e}"))?;
+            .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
@@ -166,7 +166,7 @@ impl PackArgs {
             .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
         let mut output_file = std::fs::File::create(&output_path)
-            .with_context(|| format!("Failed to create {}", output_path.display()))?;
+            .with_context(|| format!("failed to create {}", output_path.display()))?;
         write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
 
         #[cfg(unix)]
@@ -174,7 +174,7 @@ impl PackArgs {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&output_path, std::fs::Permissions::from_mode(0o755))
                 .with_context(|| {
-                    format!("Failed to set permissions on {}", output_path.display())
+                    format!("failed to set permissions on {}", output_path.display())
                 })?;
         }
 
@@ -208,7 +208,7 @@ impl PackArgs {
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\
-                     \n    baml pack --file {target} -f <NAME>\n",
+                     \n    `baml pack --file {target} -f <NAME>`\n",
                 );
             }
             if !self.functions.is_empty() {
@@ -237,52 +237,112 @@ impl PackArgs {
     }
 
     fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
-        let (db, needs_format_hint) = if let Some(file) = self.file.as_deref() {
-            self.load_standalone(file)?
+        if let Some(file) = self.file.as_deref() {
+            // Standalone `--file` mode has no project root, so there is no
+            // cache seam — always a cold compile, same as `baml run --file`.
+            let (db, needs_format_hint) = self.load_standalone(file)?;
+            check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
+            let program = baml_compiler2_emit::generate_project_bytecode(
+                &db,
+                &baml_compiler2_emit::CompileOptions {
+                    emit_test_cases: false,
+                },
+            )
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            return Ok((db, program, needs_format_hint));
+        }
+        self.load_and_compile_project(reporter)
+    }
+
+    /// Project-mode load + compile through the bytecode cache — the same warm
+    /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
+    /// when nothing changed, per-file unit reuse on a dirty edit, full compile
+    /// otherwise. Pack compiles with `emit_test_cases: false`, so it shares
+    /// run/check's exact cache key space — a pack right after a run (or a
+    /// re-pack) serves the identical `Program`. The packaged bytecode is
+    /// target-independent (the `--target` triple only selects the host binary
+    /// bytes), and emit determinism guarantees a reused image is byte-identical
+    /// to a fresh compile, so serving from cache never changes the artifact.
+    fn load_and_compile_project(
+        &self,
+        reporter: &Reporter,
+    ) -> Result<(ProjectDatabase, Program, bool)> {
+        let mut session = crate::project_session::ProjectSession::open(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadWrite,
+        )?;
+        if session.is_empty() {
+            anyhow::bail!("no `.baml` files found in {}", session.root().display());
+        }
+        // Mirror `baml run`'s per-file format check: probe each source through
+        // the formatter and emit a single advisory if any file would change.
+        let needs_format_hint = session.needs_format_hint();
+
+        if let Some(program) = session.try_cached_program() {
+            crate::bytecode_cache::cache_debug(format_args!(
+                "pack: bytecode cache hit — skipping compile"
+            ));
+            return Ok((session.db, program, needs_format_hint));
+        }
+
+        // Seed the stdlib typed interface and prepare the per-file reuse plan —
+        // the same warm-database setup run/check/test use.
+        let warmth = session.warm_prep();
+        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let db = &session.db;
+        let cache = &session.cache;
+
+        // Keep `baml pack` quiet during compilation. Its visible progress is
+        // packaging/downloading/output-oriented; compile/count status belongs
+        // to `check` and `generate`.
+        //
+        // With a cache, gate diagnostics through the incremental collector: it
+        // checks only the reuse plan's dirty files and serves clean files from
+        // their cached blobs, returning the fresh per-file blobs to persist.
+        // Without a cache, run the honest full check (no blobs to store).
+        let fresh_diagnostics = if let Some(ctx) = cache {
+            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+            bail_on_error_diagnostics(
+                db,
+                &incremental.merged,
+                "cannot pack: compilation errors found",
+                reporter,
+            )?;
+            Some(incremental.fresh_by_file)
         } else {
-            self.load_project(reporter)?
+            check_diagnostics(db, "cannot pack: compilation errors found", reporter)?;
+            None
         };
 
-        // One "Compiling N file(s)" line covers diagnostics + bytecode emit;
-        // file count is the meaningful unit (`self.from` is usually `.` and
-        // reads as noise). A separate "Checking" line just repeated the count.
-        let file_count = db.get_source_files().len();
-        reporter.spin("Compiling", format!("{file_count} file(s)"));
-        check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
-
-        let program = baml_compiler2_emit::generate_project_bytecode(
-            &db,
+        let compiled = crate::bytecode_cache::compile_program_artifacts(
+            db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
+            cache.as_ref(),
+            reuse_plan.as_ref(),
         )
-        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-
-        Ok((db, program, needs_format_hint))
-    }
-
-    fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
-        if baml_files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", from.display());
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        if let Some(ctx) = cache {
+            let fresh = fresh_diagnostics
+                .as_ref()
+                .expect("a cache is present, so fresh diagnostics were computed");
+            ctx.verify_and_store(
+                db,
+                &compiled,
+                fresh,
+                reuse_plan.as_ref(),
+                stdlib_interface_hit,
+                || session.honest_db(),
+            )?;
         }
-        // Mirror `baml run`'s per-file format check: probe each source
-        // through the formatter and emit a single advisory if any file
-        // would change. Cheap enough at compile time (we already read
-        // each file from disk during discovery) and matches the
-        // warning surfaces `baml run` already provides.
-        let needs_format_hint = baml_files.iter().any(|path| {
-            std::fs::read_to_string(path)
-                .map(|source| crate::run_command::source_needs_format_hint(&source))
-                .unwrap_or(false)
-        });
-        Ok((db, needs_format_hint))
+        Ok((session.db, compiled.program, needs_format_hint))
     }
 
     fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
         let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("Failed to read {}", canonical.display()))?;
+            .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
         let mut db = ProjectDatabase::new();
@@ -363,12 +423,12 @@ fn resolve_one(engine: &BexEngine, func: &str) -> Result<ResolvedPackTarget> {
         let suggestions = function_suggestions(engine, func);
         if suggestions.is_empty() {
             anyhow::bail!(
-                "Function `{func}` not found. Use `baml run --list` to see \
+                "function `{func}` not found. Use `baml run --list` to see \
                  available targets."
             );
         }
         anyhow::bail!(
-            "Function `{func}` not found. Did you mean one of:\n{}",
+            "function `{func}` not found. Did you mean one of:\n{}",
             suggestions
                 .iter()
                 .map(|s| format!("  - {s}"))
@@ -407,18 +467,23 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 }
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
+fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
+    let diagnostics = baml_project::collect_diagnostics(db);
+    bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
+}
+
+/// Render any `Error`-severity entries in an already-collected diagnostics
+/// list and bail with `ctx`; no-op when the list is error-free.
 ///
 /// When `reporter` has an active spinner, abandon it before printing so
-/// the multi-line ariadne block lands cleanly instead of getting
+/// the multi-line diagnostic block lands cleanly instead of getting
 /// interleaved with the tick character.
-fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
-    use baml_db::baml_compiler_diagnostics::render;
-
-    let project = db
-        .get_project()
-        .ok_or_else(|| anyhow!("No project context"))?;
-    let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+fn bail_on_error_diagnostics(
+    db: &ProjectDatabase,
+    diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+    ctx: &str,
+    reporter: &Reporter,
+) -> Result<()> {
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -426,18 +491,9 @@ fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Re
     if errors.is_empty() {
         return Ok(());
     }
-    let mut sources = HashMap::new();
-    let mut file_paths = HashMap::new();
-    for sf in &source_files {
-        let file_id = sf.file_id(db);
-        sources.insert(file_id, sf.text(db).to_string());
-        file_paths.insert(file_id, sf.path(db));
-    }
-    let rendered = render::render_diagnostics(
+    let rendered = crate::check_command::render_project_diagnostics(
+        db,
         &errors.iter().copied().cloned().collect::<Vec<_>>(),
-        &sources,
-        &file_paths,
-        &render::RenderConfig::cli_auto(),
     );
     reporter.abandon();
     eprintln!("{rendered}");
@@ -474,16 +530,16 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
 }
 
 fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
-    let exe = std::env::current_exe().context("Failed to locate current executable")?;
+    let exe = std::env::current_exe().context("failed to locate current executable")?;
     let dir = exe
         .parent()
-        .ok_or_else(|| anyhow!("Cannot determine directory of current executable"))?;
+        .ok_or_else(|| anyhow!("cannot determine directory of current executable"))?;
     let host_name = host_binary_name(target_triple);
     let host_path = dir.join(&host_name);
     let is_native = target_triple == release_host_target_triple()?;
     if is_native && host_path.exists() {
         return std::fs::read(&host_path)
-            .with_context(|| format!("Failed to read {}", host_path.display()));
+            .with_context(|| format!("failed to read {}", host_path.display()));
     }
 
     // A workspace-built host sits next to the CLI but we're skipping it
@@ -544,7 +600,7 @@ fn release_host_target_triple() -> Result<&'static str> {
 
 fn validate_release_target_triple(target: &str) -> Result<&str> {
     baml_release::validate_release_target_triple(target)
-        .map_err(|err| anyhow!("Unsupported pack target `{target}`. {err}"))
+        .map_err(|err| anyhow!("unsupported pack target `{target}`. {err}"))
 }
 
 /// Heuristic: does this positional `<TARGET>` look like a filesystem
@@ -578,23 +634,23 @@ fn write_executable(
         // address that can overlap the host's `.bss`, corrupting the envelope
         // (and the host's BSS globals) at startup. See `pack_elf`.
         crate::pack_elf::append_note(host_bytes, PACK_SECTION_NAME, data, writer)
-            .context("Failed to write ELF binary")?;
+            .context("failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
-            .context("Failed to parse PE binary")?
+            .context("failed to parse PE binary")?
             .write_resource(PACK_SECTION_NAME, data.to_vec())
-            .context("Failed to write PE resource")?
+            .context("failed to write PE resource")?
             .build(writer)
-            .context("Failed to build PE binary")?;
+            .context("failed to build PE binary")?;
     } else if target_triple.contains("apple-darwin") {
         libsui::Macho::from(host_bytes.to_vec())
-            .context("Failed to parse Mach-O binary")?
+            .context("failed to parse Mach-O binary")?
             .write_section(PACK_SECTION_NAME, data.to_vec())
-            .context("Failed to write Mach-O section")?
+            .context("failed to write Mach-O section")?
             .build_and_sign(writer)
-            .context("Failed to build Mach-O binary")?;
+            .context("failed to build Mach-O binary")?;
     } else {
-        anyhow::bail!("Unsupported pack target `{target_triple}`");
+        anyhow::bail!("unsupported pack target `{target_triple}`");
     }
     Ok(())
 }
@@ -1067,7 +1123,7 @@ mod tests {
     fn test_validate_release_target_triple_rejects_unknown_target() {
         let err = validate_release_target_triple("wasm32-unknown-unknown").unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("Unsupported pack target"), "got: {msg}");
+        assert!(msg.contains("unsupported pack target"), "got: {msg}");
         assert!(msg.contains("x86_64-unknown-linux-gnu"), "got: {msg}");
     }
 
@@ -1151,9 +1207,9 @@ mod tests {
         assert_eq!(name, "DoesNotExist");
     }
 
-    // ── load_project / load_standalone error paths ────────────────────
+    // ── project / load_standalone error paths ─────────────────────────
 
-    /// An empty directory has no `.baml` files → `load_project` errors
+    /// An empty directory has no `.baml` files → project loading errors
     /// before ever reaching compilation.
     #[test]
     fn test_load_project_empty_dir_errors() {
@@ -1170,9 +1226,9 @@ mod tests {
         let mut args = pack_args();
         args.from = Some(tmp.path().to_path_buf());
         let reporter = Reporter::new();
-        let err = args.load_project(&reporter).unwrap_err();
+        let err = args.load_and_compile_project(&reporter).unwrap_err();
         assert!(
-            format!("{err}").contains("No .baml files"),
+            format!("{err}").contains("no `.baml` files"),
             "expected no-files error; got: {err}",
         );
     }
@@ -1187,7 +1243,7 @@ mod tests {
             .unwrap_err();
         let msg = format!("{err:?}"); // use debug to capture the full context chain
         assert!(
-            msg.contains("File not found") || msg.contains("nonexistent"),
+            msg.contains("file not found") || msg.contains("nonexistent"),
             "expected file-not-found error; got: {msg}",
         );
     }

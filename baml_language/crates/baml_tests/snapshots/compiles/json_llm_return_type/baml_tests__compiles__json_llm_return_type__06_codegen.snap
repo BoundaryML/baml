@@ -17,6 +17,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     load_var client
     load_const <omitted>
@@ -147,7 +153,7 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     return
 }
 
-function user.TestClient$new() -> null {
+function user.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const "gpt-4o-mini"

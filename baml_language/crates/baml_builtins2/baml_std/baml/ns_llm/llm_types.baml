@@ -1,5 +1,45 @@
+/// A single chat message in a rendered prompt: a chat role and its text
+/// content. Produced by `PromptAst.messages()` for offline inspection of a
+/// rendered prompt (e.g. what `<Fn>$render_prompt` produced).
+class PromptMessage {
+  /// The chat role, e.g. "system", "user", "assistant". Empty for role-less
+  /// content — a prompt with no `${role(...)}` markers that was never
+  /// specialized to a client's default role.
+  role string
+  /// The message's rendered text content. Media parts render as a
+  /// human-readable placeholder (e.g. `image::url(...)`).
+  content string
+}
+
+/// The rendered prompt produced by `<Fn>$render_prompt` and the built-in
+/// `prompt` tag: a structural chat-message tree. Use the accessors below to read
+/// it as text or structured messages. To inspect the fully-resolved provider
+/// request instead (URL, headers, body, remapped roles), use
+/// `<Fn>$build_request`.
 class PromptAst {
   _data $rust_type
+
+  /// The rendered prompt as readable plain text: each chat message rendered as a
+  /// `[role]` header line followed by its content, messages separated by a blank
+  /// line (role-less content has no header). This is also what
+  /// `string.from(prompt)`, string interpolation, and `to_string` yield.
+  function text(self) -> string throws never {
+    $rust_io_function
+  }
+
+  /// The rendered prompt as an ordered list of chat messages (role + text
+  /// content). The primary structured accessor for offline prompt inspection.
+  function messages(self) -> PromptMessage[] throws never {
+    $rust_io_function
+  }
+
+  /// Render readably instead of dumping the opaque handle: `string.from(prompt)`,
+  /// string interpolation, and `to_string` all yield `text()`.
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      self.text()
+    }
+  }
 }
 
 /// BEP-049 §10 (M5b.2). Opaque handle to a prebuilt output-format schema (the
@@ -84,9 +124,31 @@ enum ClientType {
 /// Configures automatic retry behavior for an LLM client.
 class RetryPolicy {
   max_retries int
-  initial_delay_ms int
-  multiplier float
-  max_delay_ms int
+  // Delay fields are optional: a `retry_policy` block may omit them (or use a
+  // `strategy { ... }` sub-block the config lowering does not yet expand into
+  // these fields), in which case they arrive as `null` at runtime. Reading a
+  // `null` in the backoff arithmetic below (`null + 0.0`) is a VM type error,
+  // so the `*_or_default` accessors substitute the canonical defaults —
+  // 200ms / 1.5x / 10000ms, matching the legacy engine — and return `float`,
+  // keeping the retry-delay math well-typed. See B-488.
+  initial_delay_ms int?
+  multiplier float?
+  max_delay_ms int?
+
+  /// Initial backoff delay (ms) as a float; defaults to 200 when unset.
+  function initial_delay_or_default(self) -> float throws never {
+    (self.initial_delay_ms ?? 200) + 0.0
+  }
+
+  /// Backoff growth multiplier; defaults to 1.5 when unset.
+  function multiplier_or_default(self) -> float throws never {
+    self.multiplier ?? 1.5
+  }
+
+  /// Maximum backoff delay (ms) as a float; defaults to 10000 when unset.
+  function max_delay_or_default(self) -> float throws never {
+    (self.max_delay_ms ?? 10000) + 0.0
+  }
 }
 
 /// An LLM client (primitive, fallback, or round-robin).
@@ -98,17 +160,25 @@ class Client {
   retry RetryPolicy?
   counter int
 
-  function to_primitive_client(self) -> PrimitiveClient {
+  /// Build the primitive client this client resolves to.
+  ///
+  /// `lenient` controls how the generated constructor reads `env.X` client
+  /// options: when true, a missing variable yields "" instead of panicking.
+  /// Only the offline `render_prompt` path passes `true` — it needs the
+  /// client's provider/role metadata to render a prompt but never its
+  /// credentials. Every network path keeps the default `false`, so a missing
+  /// `api_key` env var still panics for `$call` / `$build_request`.
+  function to_primitive_client(self, lenient: bool = false) -> PrimitiveClient {
     if (self.name.includes("/")) {
       from_shorthand(self.name)
     } else {
-      self.get_constructor()()
+      self.get_constructor()(lenient)
     }
   }
 
   function get_constructor(
     self
-  ) -> (() -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
+  ) -> ((bool) -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
     $rust_io_function
   }
 
@@ -164,15 +234,15 @@ class Client {
     match (self.retry) {
       let r: RetryPolicy => {
         let result: OrchestrationStep[] = [];
-        let current_delay = r.initial_delay_ms + 0.0;
+        let current_delay = r.initial_delay_or_default();
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let delay = 0;
           if (attempt > 0) {
-            delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier;
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0;
+            delay = root._trunc_to_int(current_delay)
+            let next = current_delay * r.multiplier_or_default();
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default();
             } else {
               current_delay = next;
             }
@@ -200,15 +270,15 @@ class Client {
   ) -> Stream<TStream, TFinal> {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            attempt_delay = root._trunc_to_int(current_delay)
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
@@ -315,15 +385,15 @@ class Client {
   ) -> T {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            attempt_delay = root._trunc_to_int(current_delay)
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
@@ -441,7 +511,7 @@ class Client {
 // if it has provider-specific options).
 // ---------------------------------------------------------------------------
 
-// @providers-no-options: openai, openai-generic, openai-responses, ai-gateway-images, ollama, openrouter, google-ai, fallback, round-robin
+// @providers-no-options: openai, openai-generic, openai-responses, ai-gateway-images, ollama, openrouter, fallback, round-robin
 
 class MediaUrlHandler {
   image string | null
@@ -461,7 +531,7 @@ class PrimitiveClientOptions {
   allowed_roles string[] | null
   remap_roles map<string, string> | null
   api_key string | null
-  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null
+  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | GoogleAiOptions | VertexAiOptions | null
   media_url_handler MediaUrlHandler | null
 
   // request stuff here
@@ -485,10 +555,33 @@ class AnthropicOptions {
   max_tokens int | null
 }
 
+// @providers: google-ai
+/// Provider-specific options for `google-ai` clients.
+///
+/// The Google Cloud fields are ignored while the client uses the Gemini API.
+/// When `enterprise` or a `GOOGLE_GENAI_USE_*` environment flag selects the
+/// Vertex backend, they have exactly the same meaning as on `VertexAiOptions`.
+class GoogleAiOptions {
+  /// Route this client through the Gemini Enterprise backend, an alias for
+  /// Vertex AI (google-genai's `GOOGLE_GENAI_USE_ENTERPRISE`). Uses Google
+  /// Cloud credentials (ADC), and an unset location defaults to `global`.
+  /// Equivalent to setting `GOOGLE_GENAI_USE_ENTERPRISE=true`.
+  enterprise bool | null
+  credentials string | null
+  credentials_content string | null
+  location string | null
+  project_id string | null
+}
+
 // @providers: vertex-ai
 /// Provider-specific options for `vertex-ai` clients.
 class VertexAiOptions {
+  /// Path to a Google credential JSON file (service account, authorized user,
+  /// workload identity federation, or impersonated service account). Inline
+  /// JSON is not supported here; use `credentials_content` for inline
+  /// credentials. When neither is set, Application Default Credentials apply.
   credentials string | null
+  /// Inline credential JSON string. Used when `credentials` is not set.
   credentials_content string | null
   location string | null
   project_id string | null
@@ -660,11 +753,11 @@ class PrimitiveClient {
     template: string,
     args: map<string, unknown>,
     return_type: type,
-    prompt_closure: ((Context) -> PromptAst)?,
+    prompt_closure: ((Context) -> PromptAst throws never)?,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
     let prompt = match (prompt_closure) {
       null => self.render_prompt(template, args, return_type),
-      let closure: (Context) -> PromptAst => closure(build_prompt_context(self, return_type)),
+      let closure: (Context) -> PromptAst throws never => closure(build_prompt_context(self, return_type)),
     };
     self.specialize_prompt(prompt)
   }
@@ -730,6 +823,27 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
   $rust_io_function
 }
 
+/// BEP-049 §11. Coerce a tagged prompt's interpolated `values` for assembly so
+/// composites render the same as they do in an ordinary backtick string. The
+/// template desugaring pushes each `${expr}` into `values` *raw* (uncoerced),
+/// which is the right contract for a general tagged template — but the built-in
+/// `prompt` tag stringifies its content, so a class/array/map value reaching the
+/// assembler unrendered would silently produce an empty string (B-563). Route
+/// every value through `string.from` — BAML's implicit `to_string`, the exact
+/// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
+/// — except a `Role` marker (from `${role(...)}`), which stays raw so
+/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
+function render_prompt_values(values: unknown[]) -> unknown[] throws never {
+  let rendered: unknown[] = []
+  for (let value in values) {
+    rendered.push(match (value) {
+      Role => value,
+      _ => string.from(value),
+    })
+  }
+  rendered
+}
+
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
 /// calls this with the call's return type to populate `Context.output_format`,
@@ -779,11 +893,11 @@ function make_role(name: string) -> Role throws never {
 /// messages. `ctx.output_format` schema injection lands in a later slice.
 //baml:tagged_string
 function prompt(
-  body: (role: (string) -> Role, ctx: Context) -> baml.TaggedString throws never,
+  body: (role: (string) -> Role throws never, ctx: Context) -> baml.TaggedString throws never,
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)
-    assemble_prompt_ast(t.parts, t.values)
+    assemble_prompt_ast(t.parts, render_prompt_values(t.values))
   }
   render
 }

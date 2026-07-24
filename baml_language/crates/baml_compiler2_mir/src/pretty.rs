@@ -160,20 +160,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
-        StatementKind::Unwatch(local) => {
-            write!(f, "unwatch({local});")
-        }
-        StatementKind::NotifyBlock { name, level } => {
-            write!(f, "notify_block({name}, level={level});")
-        }
-        StatementKind::WatchOptions { local, filter } => {
-            write!(f, "{local}.$watch.options(")?;
-            write_operand(f, filter)?;
-            write!(f, ");")
-        }
-        StatementKind::WatchNotify(local) => {
-            write!(f, "{local}.$watch.notify();")
-        }
         StatementKind::VizEnter(idx) => {
             write!(f, "viz_enter({idx});")
         }
@@ -218,6 +204,17 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write!(f, "branch ")?;
             write_operand(f, condition)?;
             write!(f, " -> [{then_block}, {else_block}];")
+        }
+        Terminator::NarrowBind {
+            source,
+            ty_template,
+            destination,
+            then_block,
+            else_block,
+        } => {
+            write!(f, "{destination} = narrow_bind ")?;
+            write_operand(f, source)?;
+            write!(f, " as {ty_template:?} -> [{then_block}, {else_block}];")
         }
         Terminator::Switch {
             discriminant,
@@ -552,6 +549,20 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualBoundMethod {
+            iface,
+            method,
+            receiver,
+            type_args,
+        } => {
+            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<{type_args:?}>")?;
+            }
+            write!(f, "(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
@@ -592,6 +603,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::Null => write!(f, "const null"),
         Constant::OmittedArg => write!(f, "const <omitted>"),
         Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::GlobalItem(qn) => write!(f, "const item {qn}"),
         Constant::GenericFunction { item, type_args } => {
             let args: Vec<String> = type_args.iter().map(ToString::to_string).collect();
             write!(f, "const fn {item}<{}>", args.join(", "))

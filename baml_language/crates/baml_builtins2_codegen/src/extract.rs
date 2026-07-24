@@ -61,15 +61,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+}
+
+/// [`extract_native_builtins`] scoped to one stdlib package, so each package
+/// with Rust-implemented builtins gets its own generated dispatch surface.
+#[allow(clippy::type_complexity)]
+pub fn extract_native_builtins_for(
+    package: &str,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
-    {
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -117,8 +124,8 @@ pub fn extract_native_builtins()
         }
 
         // Build the namespace prefix from the file's package and path-derived namespace.
-        // e.g. package="baml", ns_path=["math"] → "baml.math"
-        //      package="baml", ns_path=[]        → "baml"
+        // e.g. package="baml", ns_path=["sys"] → "baml.sys"
+        //      package="baml", ns_path=[]       → "baml"
         let ns_path = builtin_file.namespace_path();
         let namespace_prefix = if ns_path.is_empty() {
             builtin_file.package.to_string()
@@ -157,6 +164,7 @@ pub fn extract_native_builtins()
                     extract_from_implements_for(
                         impl_def,
                         &namespace_prefix,
+                        &cst_root,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
@@ -208,7 +216,21 @@ fn extract_from_class(
         .map(|n| n.as_str().to_string())
         .collect();
 
-    for method in &class_def.methods {
+    // Builtin methods may be declared directly on the class or inside an
+    // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
+    // implementors put their `$rust_function` / `$rust_io_function` methods in
+    // an `implements Rng { ... }` block. A method inside `implements I` is named
+    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
+    // `scoped_implements_method_name`), so it carries the interface qualifier; a
+    // direct method is just `{ns}.{Class}.{method}`.
+    let direct = class_def.methods.iter().map(|m| (m, None));
+    let in_impl = class_def.implements.iter().flat_map(|b| {
+        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
+        // build the method's fully-qualified name, so reuse it verbatim.
+        let iface = b.target.to_string();
+        b.methods.iter().map(move |m| (m, Some(iface.clone())))
+    });
+    for (method, iface_qualifier) in direct.chain(in_impl) {
         let Some(pipeline) = extract_builtin_pipeline(method) else {
             continue;
         };
@@ -226,7 +248,15 @@ fn extract_from_class(
             }
         }
 
-        let path = format!("{namespace_prefix}.{class_name}.{}", method.name.as_str());
+        let path = match &iface_qualifier {
+            Some(iface) => {
+                format!(
+                    "{namespace_prefix}.{class_name}.{iface}.{}",
+                    method.name.as_str()
+                )
+            }
+            None => format!("{namespace_prefix}.{class_name}.{}", method.name.as_str()),
+        };
         let fn_name = path_to_fn_name(&path);
 
         let has_self = method
@@ -496,6 +526,7 @@ fn extract_from_free_function(
 fn extract_from_implements_for(
     impl_def: &ImplementsForDef,
     namespace_prefix: &str,
+    cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
@@ -517,8 +548,9 @@ fn extract_from_implements_for(
     let self_baml = type_expr_to_baml_type(&impl_def.for_target, &impl_generics);
 
     // Container element comparison reads heap values, so it needs a `&BexVm`;
-    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM.
-    let vm_usage = match recv_class {
+    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM. A
+    // method-level `//baml:vm` / `//baml:mut_vm` directive overrides this default.
+    let default_vm_usage = match recv_class {
         "Array" | "Map" => VmUsage::Ref,
         _ => VmUsage::None,
     };
@@ -547,6 +579,35 @@ fn extract_from_implements_for(
             method.name.as_str()
         );
         let fn_name = path_to_fn_name(&path);
+
+        // Scan the method's `//baml:` directives, scoped to this exact method by
+        // its `name_span` (the method names `add` / `div` / … collide across
+        // `implement` blocks, so a name-keyed lookup would be ambiguous). The
+        // `implement` blocks have no `//baml:mut_self` (the receiver is always
+        // `&self`), so only VM-access, yielding, and fallibility are scanned.
+        let has_vm = impl_method_has_directive(cst_root, method, "//baml:vm");
+        let has_mut_vm = impl_method_has_directive(cst_root, method, "//baml:mut_vm");
+        let may_yield = impl_method_has_directive(cst_root, method, "//baml:may_yield");
+        let fallible = impl_method_has_directive(cst_root, method, "//baml:fallible");
+
+        assert!(
+            !(has_vm && has_mut_vm),
+            "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+             -- these are mutually exclusive"
+        );
+        assert!(
+            !may_yield || has_mut_vm,
+            "baml codegen error: {path} has //baml:may_yield without //baml:mut_vm \
+             -- yielding methods require mutable VM access"
+        );
+
+        let vm_usage = if has_mut_vm {
+            VmUsage::MutRef
+        } else if has_vm {
+            VmUsage::Ref
+        } else {
+            default_vm_usage
+        };
 
         let receiver = Some(Receiver {
             class_name: recv_class.to_string(),
@@ -587,8 +648,8 @@ fn extract_from_implements_for(
             generics: all_generics,
             receiver,
             vm_usage,
-            may_yield: false,
-            fallible: false,
+            may_yield,
+            fallible,
             pipeline,
             throws: extract_throws(method),
             source_file: source_file.to_string(),
@@ -716,7 +777,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// Examples:
 /// - `"baml.Array.length"` → `"baml_array_length"`
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
-/// - `"baml.math.trunc"` → `"baml_math_trunc"`
+/// - `"baml.sys.now_ms"` → `"baml_sys_now_ms"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
     path.replace('.', "_").to_lowercase()
@@ -853,6 +914,30 @@ fn has_method_directive(
             if function_node_has_leading_directive(&func_node, directive) {
                 return true;
             }
+        }
+    }
+    false
+}
+
+/// Check if an `implement`-block method has the given `directive` comment before
+/// its `function` keyword in the CST.
+///
+/// Unlike [`has_method_directive`], the lookup is scoped to a single method by
+/// its `name_span` rather than by `(class_name, method_name)`: the method names
+/// in `implement` blocks (`add`, `div`, `eq`, …) repeat across every block, so a
+/// name-keyed search would match the wrong block. Exactly one `FUNCTION_DEF`
+/// node contains the method's name token, so containment uniquely identifies it.
+/// Offsets are compared as raw `u32`s so the match does not depend on the
+/// `text_size` version the AST and CST crates each resolve.
+fn impl_method_has_directive(cst_root: &SyntaxNode, method: &FunctionDef, directive: &str) -> bool {
+    let name_start = u32::from(method.name_span.start());
+    for node in cst_root.descendants() {
+        if node.kind() != SyntaxKind::FUNCTION_DEF {
+            continue;
+        }
+        let range = node.text_range();
+        if u32::from(range.start()) <= name_start && name_start < u32::from(range.end()) {
+            return function_node_has_leading_directive(&node, directive);
         }
     }
     false
@@ -1091,7 +1176,7 @@ mod tests {
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
-        assert_eq!(path_to_fn_name("baml.math.trunc"), "baml_math_trunc");
+        assert_eq!(path_to_fn_name("baml.sys.now_ms"), "baml_sys_now_ms");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
         assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }
@@ -1198,13 +1283,13 @@ mod tests {
             .expect("missing String.length");
         assert_eq!(string_length.fn_name, "baml_string_length");
 
-        let math_trunc = vm_builtins
+        let trunc_to_int = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.math.trunc")
-            .expect("missing math.trunc");
-        assert!(math_trunc.receiver.is_none());
-        assert_eq!(math_trunc.params.len(), 1);
-        assert!(matches!(math_trunc.params[0].ty, BamlType::Float));
+            .find(|b| b.path == "baml._trunc_to_int")
+            .expect("missing _trunc_to_int");
+        assert!(trunc_to_int.receiver.is_none());
+        assert_eq!(trunc_to_int.params.len(), 1);
+        assert!(matches!(trunc_to_int.params[0].ty, BamlType::Float));
 
         let pdf_url = vm_builtins
             .iter()
@@ -1223,7 +1308,7 @@ mod tests {
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
-        assert_eq!(math_trunc.vm_usage, VmUsage::None);
+        assert_eq!(trunc_to_int.vm_usage, VmUsage::None);
 
         let string_split = vm_builtins
             .iter()

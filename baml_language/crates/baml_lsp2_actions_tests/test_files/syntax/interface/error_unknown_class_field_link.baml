@@ -14,12 +14,10 @@ class Person {
 
 //----
 //- diagnostics
-// error: class `Person` has no field `display_name` to link for interface `Named`
-//     ╭─[ interface_error_unknown_class_field_link.baml:11:13 ]
-//     │
+// E0129
+//
+//   × class `Person` has no field `display_name` to link for interface `Named`
+//     ╭─[interface_error_unknown_class_field_link.baml:11:13]
 //  11 │     name as display_name
-//     │             ──────┬─────  
-//     │                   ╰─────── not a field of the class
-//     │ 
-//     │ Note: Error code: E0129
-// ────╯
+//     ·             ────────────
+//     ╰────

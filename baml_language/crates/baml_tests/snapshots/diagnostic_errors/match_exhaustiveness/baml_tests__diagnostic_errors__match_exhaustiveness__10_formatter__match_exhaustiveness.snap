@@ -747,15 +747,15 @@ function EnumVariantAfterTypedEnum(s: Status) -> string {
 // Matching wrong literal type against scrutinee
 // ============================================================================
 
-// Non-exhaustive: int literal pattern on bool scrutinee (type mismatch)
-// The literal 42 should NOT cover the bool type
+// Invalid int literal on bool skips match usefulness after a type error
+// Emit only this invalid pattern type mismatch.
 function WrongLiteralTypeBoolWithInt(b: bool) -> string {
     match (b) {
         42 => "wrong type",
     }
 }
 
-// Non-exhaustive: string literal on int scrutinee
+// Wrong string pattern skips usefulness analysis.
 function WrongLiteralTypeIntWithString(x: int) -> string {
     match (x) {
         "hello" => "wrong type",

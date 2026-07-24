@@ -450,7 +450,7 @@ async function fastestProviderWins(message: string) {
 
   const geminiRegistry = new ClientRegistry()
   geminiRegistry.addLlmClient('Gemini', 'vertex-ai', {
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash',
     location: 'us-central1',
     credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS
   })
@@ -517,7 +517,7 @@ async def fastest_provider_wins(message: str):
     
     gemini_registry = ClientRegistry()
     gemini_registry.add_llm_client('Gemini', 'vertex-ai', {
-        'model': 'gemini-2.5-flash',
+        'model': 'gemini-3.5-flash',
         'location': 'us-central1',
         'credentials': os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_CONTENT')
     })
@@ -614,7 +614,7 @@ func fastestProviderWins(message string) (interface{}, error) {
     
     geminiRegistry, _ := b.NewClientRegistry()
     geminiRegistry.AddLlmClient("Gemini", "vertex-ai", map[string]interface{}{
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.5-flash",
         "location": "us-central1",
         "credentials": os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"),
     })

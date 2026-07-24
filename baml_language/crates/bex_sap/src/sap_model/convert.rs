@@ -100,7 +100,7 @@ impl TypeCtx {
             .map(|(k, v)| {
                 let fields = v.fields.iter().map(|field| {
                     let mut field = field.clone();
-                    field.field_type = ::baml_type::simplify_sap::simplify(
+                    field.field_type = ::baml_type::simplify_sap::simplify_parse_target(
                         field.field_type,
                         &type_alias_definitions,
                         &recursive_aliases,
@@ -163,6 +163,19 @@ impl TypeCtx {
             &ctx.class_definitions,
             ctx.enum_definitions.clone(),
             &type_alias_definitions,
+        )
+    }
+
+    /// Normalize a runtime-materialized parse target before converting it to
+    /// the SAP model. Generic substitution happens after [`TypeCtx::new`] has
+    /// simplified the declared class and alias definitions, so it can create a
+    /// fresh nested union such as `(string | int) | ToolCalls` at runtime.
+    pub(crate) fn normalize_parse_target(&self, ty: baml_type::RuntimeTy) -> baml_type::RuntimeTy {
+        let recursive_aliases = self.type_alias_definitions.keys().cloned().collect();
+        ::baml_type::simplify_sap::simplify_parse_target(
+            ty,
+            &self.type_alias_definitions,
+            &recursive_aliases,
         )
     }
 
@@ -500,7 +513,6 @@ impl TypeCtx {
             | baml_type::RuntimeTy::PromptAst { .. }
             | baml_type::RuntimeTy::Function { .. }
             | baml_type::RuntimeTy::Void { .. }
-            | baml_type::RuntimeTy::WatchAccessor(_, _)
             | baml_type::RuntimeTy::BuiltinUnknown { .. }
             | baml_type::RuntimeTy::Future(_, _, _)
             | baml_type::RuntimeTy::TypeVar(_, _)
@@ -590,7 +602,6 @@ impl TypeCtx {
             | ::baml_type::RuntimeTy::PromptAst { .. }
             | ::baml_type::RuntimeTy::Function { .. }
             | ::baml_type::RuntimeTy::Void { .. }
-            | ::baml_type::RuntimeTy::WatchAccessor(_, _)
             | ::baml_type::RuntimeTy::BuiltinUnknown { .. }
             | ::baml_type::RuntimeTy::Future(_, _, _)
             | ::baml_type::RuntimeTy::TypeVar(_, _)
@@ -777,7 +788,6 @@ fn is_sap_parseable(ty: &baml_type::RuntimeTy) -> Result<Vec<TypeName>, ()> {
         | baml_type::RuntimeTy::PromptAst { .. }
         | baml_type::RuntimeTy::Function { .. }
         | baml_type::RuntimeTy::Void { .. }
-        | baml_type::RuntimeTy::WatchAccessor(..)
         | baml_type::RuntimeTy::BuiltinUnknown { .. }
         | baml_type::RuntimeTy::Future(..)
         | baml_type::RuntimeTy::TypeVar(..)

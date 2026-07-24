@@ -581,36 +581,11 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
-                StatementKind::Unwatch(local) => {
-                    // Unwatch uses the local (we need to read its value to unlink from watch graph)
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                }
-                StatementKind::NotifyBlock { .. } => {
-                    // NotifyBlock doesn't use any locals - it's a pure side effect
-                }
                 StatementKind::Intrinsic { args, .. } => {
                     // Intrinsic args are reads — record uses for each operand
                     for arg in args {
                         collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
                     }
-                }
-                StatementKind::WatchOptions { local, filter } => {
-                    // WatchOptions uses the local and the filter operand
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                    collect_uses_in_operand(filter, block.id, stmt_ref, &mut def_use);
-                }
-                StatementKind::WatchNotify(local) => {
-                    // WatchNotify uses the local
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
                 }
                 StatementKind::FreshCell(local) => {
                     // FreshCell only has an effect when the local is captured
@@ -732,7 +707,8 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
                 walk_operand_locals(cap, f);
             }
         }
-        Rvalue::MakeBoundMethod { receiver, .. } => {
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
@@ -815,6 +791,21 @@ fn collect_uses_in_terminator(
         }
         Terminator::Branch { condition, .. } => {
             collect_uses_in_operand(condition, block, StatementRef::Terminator, def_use);
+        }
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            collect_uses_in_operand(source, block, StatementRef::Terminator, def_use);
+            if let Some(du) = def_use.get_mut(destination) {
+                du.def = Some(DefLocation {
+                    block,
+                    statement_ref: StatementRef::Terminator,
+                    rvalue: Rvalue::Use(source.clone()),
+                });
+                du.all_defs.push((block, StatementRef::Terminator));
+            }
         }
         Terminator::Switch { discriminant, .. } => {
             collect_uses_in_operand(discriminant, block, StatementRef::Terminator, def_use);
@@ -1003,6 +994,14 @@ fn classify_locals(
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
     let mut stack_carry_candidates: HashMap<Local, stack_carry::StackCarryKind> = HashMap::new();
+    let narrow_bind_destinations: HashSet<Local> = body
+        .blocks
+        .iter()
+        .filter_map(|block| match block.terminator.as_ref() {
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            _ => None,
+        })
+        .collect();
 
     for (idx, _local_decl) in body.locals.iter().enumerate() {
         let local = Local(idx);
@@ -1021,17 +1020,15 @@ fn classify_locals(
         // Compiler temps have name=None and are always eligible for optimization.
         let is_user_local = local_decl.name.is_some();
 
-        let classification = if local_decl.is_watched {
-            // Watched variables must always be Real - no optimizations allowed.
-            // This ensures they have a stable stack slot for Watch/Unwatch instructions.
-            LocalClassification::Real
-        } else if idx > 0 && idx <= arity {
+        let classification = if idx > 0 && idx <= arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if local_decl.is_captured {
             // Captured locals must always be Real - they need a stable stack slot
             // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
+            LocalClassification::Real
+        } else if narrow_bind_destinations.contains(&local) {
             LocalClassification::Real
         } else if idx != 0
             && du.uses.is_empty()
@@ -1208,18 +1205,11 @@ fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) 
 fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
     match kind {
         // These don't touch the stack at all - just update external state
-        StatementKind::Unwatch(_) => true,
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
-        StatementKind::NotifyBlock { .. } => true,
-        StatementKind::WatchNotify(_) => true,
         StatementKind::FreshCell(_) => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
-
-        // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
-        // The return value stays at TOS throughout
-        StatementKind::WatchOptions { .. } => true,
 
         // These modify the stack
         StatementKind::Assign { .. } => false,
@@ -1230,7 +1220,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
 /// Check if `_0` (the return place) is a "return-phi" local.
 ///
 /// Return-phi applies when `_0` is assigned before Return in each defining block,
-/// with only stack-neutral statements (like Unwatch, `VizExit`) between the assignment
+/// with only stack-neutral statements (like `VizExit`) between the assignment
 /// and Return. This allows us to:
 /// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
 /// - At Return: skip `LoadVar` for _0 (value already on stack)
@@ -1368,6 +1358,13 @@ fn can_be_virtual(
     if has_single_def && is_pure_constant(&def.rvalue) {
         // Just need at least one use to not be dead
         return !du.uses.is_empty();
+    }
+
+    // `Rvalue::Len` must be materialized eagerly at the binding site.
+    // Re-evaluating a virtualized `len` after intervening mutations (e.g.
+    // `push`) changes observable semantics for `let` bindings.
+    if matches!(def.rvalue, Rvalue::Len(_)) {
+        return false;
     }
 
     // For non-constant rvalues, require exactly one definition site.
@@ -1538,7 +1535,8 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
-        Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
@@ -1623,7 +1621,11 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::Assign { destination, value } => {
             // Check if this assignment modifies a variable (or field/index of a variable)
             // that the rvalue reads from.
-            let base_local = get_base_local(destination);
+            let Some(base_local) = destination.base_local() else {
+                // Capture reads are not represented in `rvalue_reads`, so a
+                // capture-rooted write must conservatively block inlining.
+                return true;
+            };
             if rvalue_reads.contains(&base_local) {
                 return true;
             }
@@ -1632,26 +1634,10 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
             false
         }
         StatementKind::Drop(_) => true,
-        StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
-        StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
-        StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
-        StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
         StatementKind::Nop => false,
-    }
-}
-
-/// Get the base local from a place, following field/index projections.
-///
-/// Panics for `Place::Capture` — captures have no base local.
-fn get_base_local(place: &Place) -> Local {
-    match place {
-        Place::Local(local) => *local,
-        Place::Capture(_) => panic!("Place::Capture has no base local"),
-        Place::Field { base, .. } => get_base_local(base),
-        Place::Index { base, .. } => get_base_local(base),
     }
 }
 
@@ -1679,6 +1665,31 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
+        return false;
+    }
+
+    // A class spread is emitted incrementally as
+    // `AllocInstance; InitField/InitSpread`. Its explicit field operands must
+    // be pushed after the destination instance exists. Carrying a call result
+    // from the preceding block leaves it below that instance and reverses the
+    // `InitField` operands. Reject this structurally here, including when the
+    // aggregate destination is virtual and its use is forwarded elsewhere.
+    let use_loc = &du.uses[0];
+    if let StatementRef::Statement(stmt_idx) = use_loc.statement_ref
+        && let Some(StatementKind::Assign {
+            value:
+                Rvalue::Aggregate {
+                    kind: baml_compiler2_mir::AggregateKind::Class { .. },
+                    fields,
+                },
+            ..
+        }) = body
+            .block(use_loc.block)
+            .statements
+            .get(stmt_idx)
+            .map(|stmt| &stmt.kind)
+        && fields.iter().any(is_class_field_copy_operand)
+    {
         return false;
     }
 
@@ -1912,7 +1923,10 @@ fn get_copy_source(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{BasicBlock, Constant, Operand, Place, Statement, Terminator};
+    use baml_compiler2_mir::{
+        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+    };
+    use baml_type::{RuntimeTy, TyAttr};
 
     use super::*;
 
@@ -1968,7 +1982,7 @@ mod tests {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
                             value: Rvalue::Array(
-                                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::unknown()),
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::unknown()),
                                 vec![
                                     Operand::copy_local(target),
                                     Operand::Constant(Constant::Int(1)),
@@ -2004,5 +2018,138 @@ mod tests {
         assert!(!is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
+    }
+
+    #[test]
+    fn call_result_immediate_rejects_incremental_class_spread_init() {
+        let result = Local(1);
+        let spread_base = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Null),
+                        args: vec![],
+                        ntypeargs: 0,
+                        runtime_id: None,
+                        destination: Place::Local(result),
+                        target: BlockId(1),
+                        unwind: None,
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Aggregate {
+                                kind: baml_compiler2_mir::AggregateKind::Class {
+                                    name: "GuideHooks".to_string(),
+                                    type_arg_templates: vec![],
+                                },
+                                fields: vec![
+                                    Operand::copy_local(result),
+                                    Operand::Copy(Place::Field {
+                                        base: Box::new(Place::Local(spread_base)),
+                                        field: 1,
+                                    }),
+                                ],
+                            },
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+        let du = LocalDefUse {
+            def: Some(DefLocation {
+                block: BlockId(0),
+                statement_ref: StatementRef::Terminator,
+                rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+            }),
+            uses: vec![UseLocation {
+                block: BlockId(1),
+                statement_ref: StatementRef::Statement(0),
+            }],
+            all_defs: vec![(BlockId(0), StatementRef::Terminator)],
+        };
+
+        assert!(!is_call_result_immediate(result, &du, &body));
+    }
+
+    /// Builds a minimal integer local declaration for MIR analysis tests.
+    fn int_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Int {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
+    #[test]
+    fn len_bindings_are_not_virtualized() {
+        let arr = Local(1);
+        let len = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                statements: vec![
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(arr),
+                            value: Rvalue::Use(Operand::Constant(Constant::Null)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(len),
+                            value: Rvalue::Len(Place::Local(arr)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(len)),
+                        },
+                        span: None,
+                    },
+                ],
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(Some("arr")),
+                int_local_decl(Some("n")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&len),
+            Some(&LocalClassification::Real)
+        );
     }
 }

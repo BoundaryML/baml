@@ -403,6 +403,135 @@ mod linear_formatter_regression_tests {
 }
 
 #[cfg(test)]
+mod spawn_and_hug_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A relocated `spawn { … }` body reindents like any block instead of
+    /// printing verbatim at its original columns, and a call whose sole
+    /// argument is a spawn hugs the parens (`push(spawn {` … `});`).
+    #[test]
+    fn test_spawn_call_arg_hugs_parens() {
+        let source = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures\n            .push(\n                spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        },\n            );\n    }\n    await baml.future.all(futures)\n}\n";
+        let expected = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures.push(spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        });\n    }\n    await baml.future.all(futures)\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A lambda argument hugs the call parens the same way, including with
+    /// leading non-block arguments on the call line.
+    #[test]
+    fn test_trailing_lambda_arg_hugs_parens() {
+        let source = "function f(rows: int[]) -> int {\n    rows.reduce(0, (acc: int, x: int) -> {\n        acc + x + 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000\n    })\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Width used by a hugged trailing argument includes the chain prefix
+    /// exactly once. Double-counting `receiver.method` would wrap parameters
+    /// even though this lambda header fits the configured line width.
+    #[test]
+    fn test_hug_width_accounts_for_chain_prefix_once() {
+        let source = "function f() -> int {\n    receiver.method((a: int, b: int) -> {\n        a + b\n    })\n}\n";
+        let options = FormatOptions {
+            line_width: 45,
+            ..FormatOptions::default()
+        };
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, source);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The hug layout may remove the trailing comma, but comments attached to
+    /// the final argument and comma must remain in the formatted output.
+    #[test]
+    fn test_hug_preserves_trailing_argument_comments() {
+        let source = "function f() -> int {\n    consume(0, /* before spawn */ spawn {\n        let x = 1;\n        x\n    } /* after spawn */, /* after comma */)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "/* before spawn */",
+            "/* after spawn */",
+            "/* after comma */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "hug comment {marker} must survive, got:\n{formatted}"
+            );
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A simple spawn body (`{ tail }`) stays on one line when it fits.
+    #[test]
+    fn test_simple_spawn_stays_single_line() {
+        let source = "function f() -> int {\n    let nm = \"n\";\n    let a = spawn nm { 7 };\n    let b = spawn with baml.spawn.options(name = nm) { 8 };\n    (await a) + (await b)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A spawn body with statements expands into a normal indented block.
+    #[test]
+    fn test_multi_statement_spawn_body_expands() {
+        let source =
+            "function f() -> int {\n    let a = spawn { let x = 1; x + 1 };\n    await a\n}\n";
+        let expected = "function f() -> int {\n    let a = spawn {\n        let x = 1;\n        x + 1\n    };\n    await a\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block with no interior comment collapses to `{}` — most
+    /// visibly in match arms (`null => {},`) and empty `if` bodies.
+    #[test]
+    fn test_empty_blocks_collapse() {
+        let source = "function f(p: string?) -> int {\n    match (p) {\n        null => {\n        },\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {\n    }\n    0\n}\n";
+        let expected = "function f(p: string?) -> int {\n    match (p) {\n        null => {},\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {}\n    0\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block that holds a comment must NOT collapse — the comment
+    /// would be lost.
+    #[test]
+    fn test_empty_block_with_comment_stays_multi_line() {
+        let source = "function f(p: string?) -> int {\n    if (p == null) {\n        // nothing to do\n    }\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("// nothing to do"),
+            "interior comment must survive, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_spawn_header_comments_are_preserved() {
+        let source = "function f(name: string) -> int {\n    let future = spawn // after spawn\n        name /* before with */ with /* before first */ first(), /* after comma */ second() /* before body */ { 1 };\n    await future\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "// after spawn",
+            "/* before with */",
+            "/* before first */",
+            "/* after comma */",
+            "/* before body */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "spawn header comment {marker} must survive, got:\n{formatted}"
+            );
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 
@@ -470,6 +599,58 @@ mod catch_format_tests {
         let formatted = format(source, &options).expect("formatter should succeed on catch arms");
 
         assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod match_arm_jump_format_tests {
+    //! B-619: a braceless `break`/`continue` match arm is wrapped into a block
+    //! with a trailing `;` — the same treatment `return` gets — so the output
+    //! round-trips through `BREAK_STMT`/`CONTINUE_STMT` and is idempotent.
+
+    use super::*;
+
+    #[test]
+    fn braceless_break_and_continue_arms_wrap_into_blocks() {
+        let source = r#"function f(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}
+"#;
+        let expected = r#"function f(n: int) -> int {
+    let x = n;
+    while (true) {
+        match (x) {
+            0 => {
+                break;
+            },
+            1 => {
+                continue;
+            },
+            _ => {
+                x = x - 1;
+            },
+        }
+    }
+    x
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on break/continue arms");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
@@ -903,6 +1084,18 @@ mod map_literal_format_tests {
     }
 
     #[test]
+    fn test_property_shorthand_is_preserved() {
+        let source = "function f(options: string) -> map<string, string> {\n    { options, explicit: options }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_object_property_shorthand_is_preserved() {
+        let source = "class Config {\n    options: string,\n}\n\nfunction f(options: string) -> Config {\n    Config { options }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
     fn test_empty_map_with_block_comment_keeps_padding() {
         // An interior comment is real content, so the padding stays.
         let source = "function f() -> int {\n    { /* keep */ };\n    0\n}\n";
@@ -975,5 +1168,112 @@ mod over_split_regression_tests {
         // it used to report itself as multi-line and force the block wrap.
         let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => throw Boom {},\n        baml.json.JsonDecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
+    }
+}
+
+#[cfg(test)]
+mod defer_comment_tests {
+    //! Regression tests for B-629: `baml fmt` silently deleted the trailing
+    //! line-comment on a `defer { … }` statement while an identical comment on a
+    //! normal statement survived. A `defer` statement is an unmodeled node held
+    //! as [`crate::ast::Expression::Unknown`] and printed verbatim; it used to
+    //! report the whole node span as its leftmost/rightmost token, but the trivia
+    //! classifier keys comments to individual *token* ranges, so the comment
+    //! attached to the closing `}` token never matched and was dropped. The fix
+    //! anchors the node's leading/trailing trivia to its true first/last tokens.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The headline case from the ticket: the trailing comment on a `defer`
+    /// statement must survive, exactly like the one on the normal statement.
+    #[test]
+    fn test_defer_trailing_comment_preserved() {
+        let source = "function f() -> string[] {\n  let out: string[] = [];\n  defer { out.push(\"x\") }   // THIS comment on a defer line\n  out.push(\"body\");         // this one on a normal line\n  out\n}\n";
+        let expected = "function f() -> string[] {\n    let out: string[] = [];\n    defer { out.push(\"x\") } // THIS comment on a defer line\n    out.push(\"body\"); // this one on a normal line\n    out\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A trailing comment on a `defer` that is the last statement in the block
+    /// (no following statement to "absorb" it) is preserved too.
+    #[test]
+    fn test_defer_trailing_comment_last_statement_preserved() {
+        let source = "function f() -> int {\n    defer { cleanup() } // bye\n    42\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A leading comment on its own line before a `defer` is preserved and
+    /// re-indented to the block indent (it used to be printed verbatim as part
+    /// of the node span, keeping its original indentation).
+    #[test]
+    fn test_defer_leading_comment_reindented() {
+        let source = "function f() -> int {\n  // set up cleanup\n  defer { cleanup() }\n  42\n}\n";
+        let expected =
+            "function f() -> int {\n    // set up cleanup\n    defer { cleanup() }\n    42\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
+mod return_comment_tests {
+    //! Regression tests for the same comment-loss class as B-629, applied to a
+    //! braceless `return` arm. `return …` in expression position is an unmodeled
+    //! node printed verbatim ([`crate::ast::Expression::Return`]); it used to
+    //! report the whole node span as its rightmost token. When such an arm has no
+    //! trailing comma, the arm's rightmost token delegates to the `return` body,
+    //! so a trailing comment (anchored to the return value's last token) never
+    //! matched and was silently dropped. Anchoring `Return` to its true first/last
+    //! tokens — like the `Unknown` fix — preserves the comment.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A trailing comment on a braceless `return` arm with no trailing comma must
+    /// survive. The formatter wraps the arm into `{ return …; }` (its established
+    /// behavior) and keeps the comment at the arm level.
+    #[test]
+    fn test_braceless_return_arm_trailing_comment_no_comma_preserved() {
+        let source = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => return 2 // fallback\n    }\n}\n";
+        let expected = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => {\n            return 2;\n        }, // fallback\n    }\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// Same, but the arm already has a trailing comma. This case never dropped
+    /// the comment, but pins that the wrap + comment placement stays consistent
+    /// with the no-comma case.
+    #[test]
+    fn test_braceless_return_arm_trailing_comment_with_comma_preserved() {
+        let source = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => return 2, // fallback\n    }\n}\n";
+        let expected = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => {\n            return 2;\n        }, // fallback\n    }\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A braceless `return` arm in a `catch` (no comment) still round-trips —
+    /// guards the shared wrap helper against regressing the existing behavior.
+    #[test]
+    fn test_braceless_return_catch_arm_no_comment_round_trips() {
+        let source = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => return -1,\n    };\n    v\n}\n";
+        let expected = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => {\n            return -1;\n        },\n    };\n    v\n}\n";
+        assert_formats_to(source, expected);
     }
 }

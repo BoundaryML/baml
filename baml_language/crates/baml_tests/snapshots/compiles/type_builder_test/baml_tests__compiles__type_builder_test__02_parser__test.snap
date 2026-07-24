@@ -107,7 +107,7 @@ SOURCE_FILE
               WORD "Q"
             R_BRACE "}"
         TYPE_ALIAS_DEF
-          WORD "type"
+          KW_TYPE "type"
           WORD "MyAlias"
           EQUALS "="
           TYPE_EXPR "string | int"

@@ -3,22 +3,25 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function spawn_semantics.$init_test_ns_spawn_semantics_spawn_semantics(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.spawn_semantics"
     load_const "multiple_awaits_on_same_future_return_cached_value"
     make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.spawn_semantics"
     load_const "three_level_nested_spawn_sum"
     make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.spawn_semantics"
     load_const "function_can_return_future_typed_value"
     make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

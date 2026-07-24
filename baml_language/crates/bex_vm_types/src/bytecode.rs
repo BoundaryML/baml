@@ -62,18 +62,6 @@ impl JumpTableData {
             self.names[index] = Some(name);
         }
     }
-
-    /// Lookup the offset for a value.
-    /// Returns None if value is out of range or is a hole.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn lookup(&self, value: i64) -> Option<isize> {
-        if value < self.min {
-            return None;
-        }
-        // Safety: value >= min, so index is non-negative.
-        let index = (value - self.min) as usize;
-        self.offsets.get(index).copied().flatten()
-    }
 }
 
 // ============================================================================
@@ -494,21 +482,6 @@ pub enum Instruction {
     /// BAML built on top of this.
     AwaitAny,
 
-    /// Creates a watched var and tracks its state.
-    ///
-    /// Format: `WATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Watch(usize),
-
-    /// Unregisters a watched variable when it goes out of scope.
-    ///
-    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Unwatch(usize),
-
-    /// Manually triggers notifications for a watched variable.
-    Notify(usize),
-
     /// Call a statically-known global function.
     ///
     /// Format: `CALL g ntypeargs` where `g` is the global index of the callee
@@ -648,6 +621,13 @@ pub enum Instruction {
     /// Pops the value, pushes `Bool` result.
     IsType(usize),
 
+    /// Pops and tests the top value, stores it in `destination` on success,
+    /// and pushes the `Bool` result.
+    NarrowBind {
+        ty: usize,
+        destination: usize,
+    },
+
     /// Materialise a `Ty` from a constant-pool `TyTemplate`, substituting
     /// any `TypeArgRef(n)` leaves with `frame.type_args[n]`.
     ///
@@ -731,6 +711,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
+
+    /// Create a bound method for an *interface* method by resolving the receiver's
+    /// impl at runtime — the value analogue of `VirtualCall` (`let f = x.eq` where
+    /// `x`'s concrete type is statically unknown). Pops the method name, the
+    /// interface type (`Object::Type`), `ntypeargs` method-level type args, and the
+    /// receiver; resolves the receiver's concrete `Self` to its `implements` rule
+    /// (coherence guarantees at most one) and pushes an `Object::BoundMethod` over
+    /// the resolved method, carrying the callee's complete frame type args — the
+    /// impl's realized frame followed by the method-level args (a generic method's
+    /// own type args must be captured here or they are lost; the receiver cannot
+    /// express them).
+    ///
+    /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
+    MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
 
     /// Create a generic-function value (`foo<T>`) from a base function's global
     /// index, popping `ntypeargs` `Object::Type` values from the stack into its
@@ -944,9 +942,6 @@ pub enum OpCode {
     AllocVariant,
     SysOp,
     Spawn,
-    Watch,
-    Unwatch,
-    Notify,
     Call,
     IsType,
     DenseTag,
@@ -996,6 +991,15 @@ pub enum OpCode {
 
     // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
     Rethrow,
+
+    // ── Appended to preserve discriminants ──
+    // Virtual interface-method *value* (the value analogue of `VirtualCall`):
+    // no operands (1 byte); receiver, interface type, and method name are popped
+    // from the stack and the resolved bound method is pushed.
+    MakeVirtualBoundMethod,
+
+    // Atomic type test plus local binding: u32 type constant + u32 destination.
+    NarrowBind,
 }
 
 impl OpCode {
@@ -1103,9 +1107,6 @@ impl OpCode {
             | Self::AllocVariant
             | Self::SysOp
             | Self::SysOpWithRuntimeId
-            | Self::Watch
-            | Self::Unwatch
-            | Self::Notify
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -1122,7 +1123,7 @@ impl OpCode {
             | Self::VirtualCallWithRuntimeId => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue => 3,
+            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1137,7 +1138,7 @@ impl OpCode {
             Self::JumpTable => 9,
 
             // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
-            Self::LoadVar2 | Self::StoreVar2 => 9,
+            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
         }
     }
 }
@@ -1152,6 +1153,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
+            x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1244,9 +1246,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
             x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
-            x if x == Self::Watch as u8 => Ok(Self::Watch),
-            x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
-            x if x == Self::Notify as u8 => Ok(Self::Notify),
             x if x == Self::Call as u8 => Ok(Self::Call),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
@@ -1271,6 +1270,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+            x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
             _ => Err(byte),
         }
     }
@@ -1286,6 +1286,7 @@ impl std::fmt::Display for OpCode {
             Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
+            Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1378,9 +1379,6 @@ impl std::fmt::Display for OpCode {
             Self::SysOp => "SYS_OP",
             Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
             Self::Spawn => "SPAWN",
-            Self::Watch => "WATCH",
-            Self::Unwatch => "UNWATCH",
-            Self::Notify => "NOTIFY",
             Self::Call => "CALL",
             Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
             Self::IsType => "IS_TYPE",
@@ -1401,6 +1399,7 @@ impl std::fmt::Display for OpCode {
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
+            Self::NarrowBind => "NARROW_BIND",
         };
         f.write_str(name)
     }
@@ -1599,18 +1598,21 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Throw => f.write_str("THROW"),
             Instruction::Rethrow => f.write_str("RETHROW"),
+            Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
-            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::JumpTable(table_idx) => {
                 write!(f, "JUMP_TABLE {table_idx}")
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
+            Instruction::NarrowBind { ty, destination } => {
+                write!(f, "NARROW_BIND {ty} {destination}")
+            }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
@@ -1655,7 +1657,7 @@ impl std::fmt::Display for Instruction {
 /// need to resolve names from the `ObjectPool` or runtime stack.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum OperandMeta {
-    /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
+    /// `LoadVar`, `StoreVar` — variable name.
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
@@ -1745,12 +1747,12 @@ pub struct ExceptionTableEntry {
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
-    /// `usize::MAX` means no stack trace binding (catch (e) without second param).
+    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
     pub stack_trace_slot: usize,
 }
 
 impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = usize::MAX;
+    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
 
     pub fn has_stack_trace_slot(&self) -> bool {
         self.stack_trace_slot != Self::NO_STACK_TRACE
@@ -1888,7 +1890,7 @@ pub struct Bytecode {
     /// Contains `ObjectIndex` for object references.
     pub constants: Vec<ConstValue>,
 
-    /// Resolved constants (resolved from `constants` at load time via [`Bytecode::resolve_constants`]).
+    /// Resolved constants, populated from `constants` at load time.
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
     /// Set to `null` for types.
     #[borsh(skip)]
@@ -1996,28 +1998,6 @@ impl Bytecode {
             .iter()
             .filter(|e| pc >= e.start_pc && pc < e.end_pc)
             .max_by_key(|e| e.handler_pc)
-    }
-
-    /// Resolve constants from `ConstValue` to Value using a resolver function.
-    /// Called at load time to convert `ObjectIndex` to `HeapPtr`.
-    pub fn resolve_constants<F>(&mut self, resolve: F)
-    where
-        F: Fn(crate::ObjectIndex) -> crate::HeapPtr,
-    {
-        self.resolved_constants = self
-            .constants
-            .iter()
-            .map(|cv| match cv {
-                // TyTemplate constants are NOT pre-resolved: `LoadType` reads
-                // them directly from `constants` at execution time.
-                ConstValue::Type(_) => crate::Value::NULL,
-                // ClassWithTypeArgs constants are NOT pre-resolved: `IsType`
-                // reads them directly from `constants` at execution time and
-                // resolves `class_obj` to a `HeapPtr` via `idx_to_ptr`.
-                ConstValue::ClassWithTypeArgs { .. } => crate::Value::NULL,
-                other => other.to_value(&resolve),
-            })
-            .collect();
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -2147,9 +2127,6 @@ impl Bytecode {
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
                 | Instruction::AllocMap(v)
-                | Instruction::Watch(v)
-                | Instruction::Unwatch(v)
-                | Instruction::Notify(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
@@ -2201,7 +2178,8 @@ impl Bytecode {
                 }
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
-                Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                Instruction::MakeGenericFunctionFromValue { ntypeargs }
+                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2298,6 +2276,18 @@ impl Bytecode {
                     );
                     code.extend_from_slice(
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
+                Instruction::NarrowBind { ty, destination } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*ty)
+                            .expect("type constant fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*destination)
+                            .expect("destination slot fits u32")
+                            .to_le_bytes(),
                     );
                 }
             }
@@ -2415,6 +2405,7 @@ impl Bytecode {
             Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
+            Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
@@ -2486,12 +2477,10 @@ impl Bytecode {
             Instruction::SysOp(_) => OpCode::SysOp,
             Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
             Instruction::Spawn => OpCode::Spawn,
-            Instruction::Watch(_) => OpCode::Watch,
-            Instruction::Unwatch(_) => OpCode::Unwatch,
-            Instruction::Notify(_) => OpCode::Notify,
             Instruction::Call { .. } => OpCode::Call,
             Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
+            Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,

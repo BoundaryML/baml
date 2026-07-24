@@ -146,7 +146,7 @@ SOURCE_FILE
           HASH "#"
       R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "BadAlias"
     EQUALS "="
     TYPE_EXPR
@@ -162,42 +162,38 @@ SOURCE_FILE
       GREATER ">"
 
 === ERRORS ===
-error: Unmatched '>' in type expression (found 1 extra)
-   ╭─[ extra_greater.baml:7:29 ]
-   │
+E0010
+
+  × invalid syntax
+   ╭─[extra_greater.baml:7:29]
  7 │   bad_field map<string, int>>
-   │                             ┬  
-   │                             ╰── Unmatched '>' in type expression (found 1 extra)
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                             ┬
+   ·                             ╰── unmatched `>` in type expression (found 1 extra)
+   ╰────
 
-error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:23:38 ]
-    │
+E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:23:38]
  23 │ function BadParam(x: map<string, int>>) -> string {
-    │                                      ┬  
-    │                                      ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                      ┬
+    ·                                      ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
 
-error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:29:45 ]
-    │
+E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:29:45]
  29 │ function BadReturnType() -> map<string, int>> {
-    │                                             ┬  
-    │                                             ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                             ┬
+    ·                                             ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────
 
-error: Unmatched '>' in type expression (found 1 extra)
-    ╭─[ extra_greater.baml:35:33 ]
-    │
+E0010
+
+  × invalid syntax
+    ╭─[extra_greater.baml:35:33]
  35 │ type BadAlias = map<string, int>>
-    │                                 ┬  
-    │                                 ╰── Unmatched '>' in type expression (found 1 extra)
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                                 ┬
+    ·                                 ╰── unmatched `>` in type expression (found 1 extra)
+    ╰────

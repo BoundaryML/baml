@@ -60,42 +60,38 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-error: Expected LLM function missing 'prompt' field, found '}'
-   ╭─[ ambiguous_function.baml:5:1 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:5:1]
  5 │ }
-   │ ┬  
-   │ ╰── Expected LLM function missing 'prompt' field, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   · ┬
+   · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
+   ╰────
 
-error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   ╭─[ ambiguous_function.baml:9:3 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:9:3]
  9 │   clent GPT4  // Typo in "client"
-   │   ──┬──  
-   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ──┬──
+   ·     ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'clent'`, found `identifier`
+   ╰────
 
-error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   ╭─[ ambiguous_function.baml:9:9 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[ambiguous_function.baml:9:9]
  9 │   clent GPT4  // Typo in "client"
-   │         ──┬─  
-   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·         ──┬─
+   ·           ╰── expected `Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'`, found `identifier`
+   ╰────
 
-error: Expected LLM function missing 'client' field, found '}'
-    ╭─[ ambiguous_function.baml:11:1 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[ambiguous_function.baml:11:1]
  11 │ }
-    │ ┬  
-    │ ╰── Expected LLM function missing 'client' field, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `LLM function missing 'client' field`, found `'}'`
+    ╰────

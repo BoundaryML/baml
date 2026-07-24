@@ -30,6 +30,9 @@ class TestSetReport {
   total int
   failed_names string[]
   results ChildReport[]
+  // Parallel to `results` when produced by built-in runners. Optional so
+  // existing custom TestSetRunner implementations remain source-compatible.
+  result_names string[]?
   // TODO: extras map<string, unknown> — see RunReport comment
 }
 
@@ -72,13 +75,16 @@ type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never
 /// leaf-level: `failed` = hard failures, `tolerated` = failing leaves whose
 /// enclosing testset runner still passed (e.g. under `PassRate`), `passed` and
 /// `total` as usual. `failed_names` are the hard-failure names; `messages` are
-/// every failing run's message.
+/// every failing run's message. The three name arrays partition selected leaf
+/// IDs by their actual outcome after applying testset-runner tolerance.
 class FlatTestReport {
   outcome Outcome
   passed int
   failed int
   tolerated int
   total int
+  passed_names string[]
   failed_names string[]
+  tolerated_names string[]
   messages string[]
 }

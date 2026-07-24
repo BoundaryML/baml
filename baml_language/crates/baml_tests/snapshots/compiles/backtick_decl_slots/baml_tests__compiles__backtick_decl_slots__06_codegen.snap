@@ -17,10 +17,17 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.Fast$new() -> null {
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
+function user.Fast$new(lenient: bool) -> null {
     load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
+    load_var lenient
+    call baml.env.get_or_panic_lenient
+    store_var _3
     load_const "Fast"
     load_const "openai"
     load_const "gpt-4o-mini"
@@ -32,7 +39,7 @@ function user.Fast$new() -> null {
     load_const null
     load_const null
     load_const null
-    load_var _2
+    load_var _3
     load_const null
     load_const null
     load_type string

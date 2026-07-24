@@ -2,12 +2,7 @@
 
 use once_cell::sync::OnceCell;
 
-/// Callback signature: (call_id, content, length).
-///
-/// `content` is always a protobuf-encoded `BamlOutboundResult` envelope —
-/// carrying the ok value, a thrown error, a panic, or a synthesized pre-call
-/// host-boundary failure. There is no separate error channel.
-pub type CallbackFn = extern "C" fn(call_id: u32, content: *const i8, length: usize);
+pub use super::super::api::BamlResultCallback as CallbackFn;
 
 static CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 

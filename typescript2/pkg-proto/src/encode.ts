@@ -2,11 +2,11 @@ import type {
   InboundValue,
   InboundMapEntry,
   CallFunctionArgs as CallFunctionArgsType,
-} from './generated/baml_core/cffi/v1/baml_inbound';
+} from './generated/baml_bridge/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
   InboundMapEntry as InboundMapEntryMessage,
-} from './generated/baml_core/cffi/v1/baml_inbound';
+} from './generated/baml_bridge/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
 function isBamlSerializable(val: unknown): val is BamlSerializable {
@@ -20,10 +20,10 @@ function isBamlSerializable(val: unknown): val is BamlSerializable {
 
 function serializeValue(val: unknown): InboundValue {
   if (val === null || val === undefined) {
-    return { value: undefined };
+    return { valueType: undefined, value: undefined };
   }
   if (typeof val === 'string') {
-    return { value: { $case: 'stringValue', stringValue: val } };
+    return { valueType: undefined, value: { $case: 'stringValue', stringValue: val } };
   }
   if (typeof val === 'number') {
     if (!Number.isFinite(val)) {
@@ -39,20 +39,21 @@ function serializeValue(val: unknown): InboundValue {
           val,
         );
       }
-      return { value: { $case: 'intValue', intValue: val } };
+      return { valueType: undefined, value: { $case: 'intValue', intValue: val } };
     }
-    return { value: { $case: 'floatValue', floatValue: val } };
+    return { valueType: undefined, value: { $case: 'floatValue', floatValue: val } };
   }
   if (typeof val === 'bigint') {
     // Base-sixteen hex on the wire (no `0x` prefix, leading `-` for
     // negatives) — matches Rust's `format!("{:x}")` / `parse_bytes(_, 16)`.
-    return { value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
+    return { valueType: undefined, value: { $case: 'bigintValue', bigintValue: val.toString(16) } };
   }
   if (typeof val === 'boolean') {
-    return { value: { $case: 'boolValue', boolValue: val } };
+    return { valueType: undefined, value: { $case: 'boolValue', boolValue: val } };
   }
   if (Array.isArray(val)) {
     return {
+      valueType: undefined,
       value: {
         $case: 'listValue',
         listValue: { values: val.map(serializeValue) },
@@ -63,12 +64,39 @@ function serializeValue(val: unknown): InboundValue {
     if (isBamlSerializable(val)) {
       return val.toBaml();
     }
+    const bamlMarker = (val as Record<string, unknown>)['$baml'];
+    // Honour a `$baml: { enum: 'user.Color', value: 'Red' }` marker so hosts
+    // (e.g. the playground args form) can pass real enum variants. Nothing on
+    // the args path coerces a plain string into an enum variant, so without
+    // this an expr function's `param == Color.Red` is silently false. The
+    // enum name is passed verbatim: the engine resolves its registered FQN
+    // (`user.ns.Color`) directly and falls back to prepending `user.`.
+    if (bamlMarker && typeof bamlMarker === 'object' && 'enum' in bamlMarker) {
+      const marker = bamlMarker as { enum?: unknown; value?: unknown };
+      // Fail fast on a malformed marker: falling through would serialize the
+      // `$baml` object as a literal map entry, which the engine accepts
+      // silently and misinterprets.
+      if (
+        typeof marker.enum !== 'string' ||
+        typeof marker.value !== 'string'
+      ) {
+        throw new Error(
+          'Invalid $baml enum marker: expected { enum: string, value: string }',
+        );
+      }
+      return {
+        valueType: undefined,
+        value: {
+          $case: 'enumValue',
+          enumValue: { name: marker.enum, value: marker.value },
+        },
+      };
+    }
     // Honour a `$baml: { type: 'ClassName' }` (or `'Namespace::ClassName'`)
     // marker so JSON shaped like `decodeCallResult` output round-trips back as
     // a `classValue`. Without this, every plain object would serialize as a
     // map, making typed function calls (e.g. `(inv: Invoice)`) fail with
     // "expected instance, got map" inside the runtime.
-    const bamlMarker = (val as Record<string, unknown>)['$baml'];
     if (
       bamlMarker &&
       typeof bamlMarker === 'object' &&
@@ -85,13 +113,15 @@ function serializeValue(val: unknown): InboundValue {
           value: serializeValue(v),
         }));
       return {
+        valueType: {
+          ty: {
+            $case: 'classTy',
+            classTy: { name: className, typeArgs: [] },
+          },
+        },
         value: {
           $case: 'classValue',
-          // `classTy` binds the class: `classTy.name` is the FQN and
-          // `classTy.type_args` would carry a generic instance's concrete args.
-          // The webview encoder does not yet support generic class instances, so
-          // `type_args` is always empty here.
-          classValue: { fields, classTy: { name: className, typeArgs: [] } },
+          classValue: { fields },
         },
       };
     }
@@ -103,7 +133,11 @@ function serializeValue(val: unknown): InboundValue {
       }),
     );
     return {
-      value: { $case: 'mapValue', mapValue: { entries } },
+      valueType: undefined,
+      value: {
+        $case: 'mapValue',
+        mapValue: { entries },
+      },
     };
   }
   throw new Error(

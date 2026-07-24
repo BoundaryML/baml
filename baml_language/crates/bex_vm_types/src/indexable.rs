@@ -369,13 +369,6 @@ impl SharedGlobals {
         }
     }
 
-    /// Whether the pool is empty.
-    ///
-    /// See [`Self::len`] for the permit-proof requirement.
-    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
-        self.len(proof) == 0
-    }
-
     /// Read a global by index.
     ///
     /// Requires a [`PermitProof`]; see [`Self::len`].
@@ -469,27 +462,6 @@ pub enum VmGlobals {
 }
 
 impl VmGlobals {
-    /// Number of globals in the view.
-    ///
-    /// `proof` is consumed for the `Shared` variant (where it gates a
-    /// safe read against the `UnsafeCell`-backed `SharedGlobals`); the
-    /// `Owned` variant ignores it. Taking the proof unconditionally
-    /// keeps the API symmetric across variants and matches how
-    /// post-`$init` VM operations always have access to one.
-    pub fn len(&self, proof: PermitProof<'_>) -> usize {
-        match self {
-            Self::Owned(pool) => pool.len(),
-            Self::Shared(globals) => globals.len(proof),
-        }
-    }
-
-    /// Whether the view is empty.
-    ///
-    /// See [`Self::len`] for the `proof` parameter.
-    pub fn is_empty(&self, proof: PermitProof<'_>) -> bool {
-        self.len(proof) == 0
-    }
-
     /// Read a global by index. `Value` is `Copy` so this returns by value.
     ///
     /// # Panics
@@ -533,10 +505,32 @@ pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;
 
 #[cfg(feature = "heap_debug")]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ObjectIndex {
     raw: usize,
     epoch: u32,
+}
+
+// The borsh wire format must be identical with and without `heap_debug`, so
+// a serialized `Program` (pack envelope, bytecode cache) written by one build
+// is readable by the other — e.g. `baml pack` run from a heap_debug build
+// embeds into a non-heap_debug `baml-pack-host`. `epoch` is a runtime GC-debug
+// tag: every `ObjectIndex` that reaches a serialized payload is a compile-time
+// pool index created via `from_raw` (epoch 0); live epochs exist only inside
+// the heap debugger and never cross serialization. So serialize `raw` alone,
+// exactly matching `Index<ObjectKind>`'s impl below, and rehydrate epoch 0.
+#[cfg(feature = "heap_debug")]
+impl BorshSerialize for ObjectIndex {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.raw, writer)
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl BorshDeserialize for ObjectIndex {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        usize::deserialize_reader(reader).map(|raw| Self { raw, epoch: 0 })
+    }
 }
 
 #[cfg(feature = "heap_debug")]
@@ -545,20 +539,12 @@ impl ObjectIndex {
         Self { raw, epoch: 0 }
     }
 
-    pub fn from_raw_epoch(raw: usize, epoch: u32) -> Self {
-        Self { raw, epoch }
-    }
-
     pub fn into_raw(self) -> usize {
         self.raw
     }
 
     pub fn raw(self) -> usize {
         self.raw
-    }
-
-    pub fn epoch(self) -> u32 {
-        self.epoch
     }
 }
 
@@ -607,16 +593,6 @@ impl<T> std::ops::IndexMut<ObjectIndex> for Pool<T, ObjectKind> {
 pub type ObjectIndex = Index<ObjectKind>;
 
 #[cfg(not(feature = "heap_debug"))]
-impl Index<ObjectKind> {
-    pub fn from_raw_epoch(raw: usize, _epoch: u32) -> Self {
-        Self::from_raw(raw)
-    }
-
-    pub fn epoch(self) -> u32 {
-        0
-    }
-}
-
 #[cfg(test)]
 mod shared_globals_tests {
     use super::*;

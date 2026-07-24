@@ -10,10 +10,10 @@ from __future__ import annotations
 import pydantic
 import pytest
 
-from baml_core import BamlError
-from baml_core.typemap import BamlTypeMap
-from baml_core.proto import decode_value
-from baml_core.cffi.v1 import baml_outbound_pb2
+from baml_bridge import BamlError
+from baml_bridge.typemap import BamlTypeMap
+from baml_bridge.proto import decode_value
+from baml_bridge.cffi.v1 import baml_outbound_pb2
 
 
 class _Resume(pydantic.BaseModel):

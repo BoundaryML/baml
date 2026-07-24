@@ -50,6 +50,7 @@ interface ParsedFile {
   content: string;
   extractedTitle?: string;
   slug?: string;
+  parentSlug?: string; // set when the file lives in a subdirectory of pages/
   isNew?: boolean; // true if this page doesn't exist yet
   error?: string;
 }
@@ -112,13 +113,21 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
 
         // Determine file type based on path
         const isReadme = innerPath.toLowerCase() === "readme.md";
-        const isPage = innerPath.toLowerCase().startsWith("pages/") &&
-          pathParts.length === 3; // Only direct children of pages/
+        // Direct children of pages/ (pages/foo.md) or one level of nesting
+        // (pages/design/api.md → parentSlug "design")
+        const inPagesDir = innerPath.toLowerCase().startsWith("pages/");
+        const isPage = inPagesDir && pathParts.length === 3;
+        const isNestedPage = inPagesDir && pathParts.length === 4;
 
-        // Skip files that aren't README or in pages/
-        if (!isReadme && !isPage) {
+        // Skip files that aren't README or in pages/ (deeper nesting is unsupported)
+        if (!isReadme && !isPage && !isNestedPage) {
           continue;
         }
+
+        // Parent slug comes from the subdirectory name
+        const parentSlug = isNestedPage
+          ? sanitizeSlug(pathParts[2])
+          : undefined;
 
         try {
           const text = await file.text();
@@ -156,10 +165,11 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             const result = parseImportedPage(text, file.name);
             if (!hasContent(result.content)) {
               parsed.push({
-                name: `pages/${file.name}`,
+                name: innerPath,
                 type: "page",
                 content: "",
                 slug: result.slug,
+                parentSlug,
                 error: "No content after stripping comments",
               });
               continue;
@@ -168,28 +178,43 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             const slug = sanitizeSlug(file.name);
             if (!slug) {
               parsed.push({
-                name: `pages/${file.name}`,
+                name: innerPath,
                 type: "page",
                 content: result.content,
+                parentSlug,
                 error: "Invalid filename for page slug",
               });
               continue;
             }
             if (isReservedPageSlug(slug)) {
               parsed.push({
-                name: `pages/${file.name}`,
+                name: innerPath,
                 type: "page",
                 content: result.content,
+                parentSlug,
                 error: `Slug "${slug}" is reserved for app routes`,
               });
               continue;
             }
+            // Slugs are unique per BEP, so the same filename in two
+            // subdirectories would collide
+            if (parsed.some((p) => p.type === "page" && !p.error && p.slug === slug)) {
+              parsed.push({
+                name: innerPath,
+                type: "page",
+                content: result.content,
+                parentSlug,
+                error: `Duplicate slug "${slug}" (same filename in another folder?)`,
+              });
+              continue;
+            }
             parsed.push({
-              name: `pages/${file.name}`,
+              name: innerPath,
               type: "page",
               content: result.content,
               extractedTitle: result.title,
               slug,
+              parentSlug,
               isNew: !existingPageSlugs.has(slug),
             });
           }
@@ -250,6 +275,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           slug: p.slug!,
           title: p.extractedTitle || p.slug!,
           content: p.content,
+          parentSlug: p.parentSlug,
         })),
         editNote: editNote || undefined,
         userId: userId as Id<"users">,
@@ -426,7 +452,8 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Select the exported BEP folder (e.g., BEP-001). Will import
-              README.md and files from pages/.
+              README.md and files from pages/, including one level of
+              subfolders (e.g., pages/design/api.md).
             </p>
           </div>
 
@@ -505,7 +532,9 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                   >
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-destructive/70" />
-                      <span className="font-medium text-destructive">pages/{page.slug}.md</span>
+                      <span className="font-medium text-destructive">
+                        pages/{page.parentSlug ? `${page.parentSlug}/` : ""}{page.slug}.md
+                      </span>
                       <Badge variant="outline" className="font-mono text-xs text-destructive border-destructive/50">
                         {page.slug}
                       </Badge>

@@ -59,7 +59,7 @@ pub(crate) fn resolve_source_location(
 pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
     let display = file_path.display().to_string();
     let canonical =
-        std::fs::canonicalize(file_path).with_context(|| format!("File not found: {display}"))?;
+        std::fs::canonicalize(file_path).with_context(|| format!("file not found: {display}"))?;
     if !canonical.is_file() {
         anyhow::bail!("`{}` is not a file.", canonical.display());
     }
@@ -110,10 +110,9 @@ pub(crate) fn load_project_from(
 /// Variant of [`load_project_from`] that announces each discovered
 /// file through the [`Reporter`] as it's loaded — cargo's
 /// `   Compiling foo v0.1.0` shape but for source files. The per-file
-/// `Loading <path>` flood is verbose-only detail; prefer
-/// [`load_project_for_build`] in command code, which gates this behind the
-/// command's verbosity. `grep`/`describe` stay on the lenient
-/// [`load_project_or_default`].
+/// `Loading <path>` flood is verbose-only detail, reachable through
+/// [`resolve_source_location`] with a reporter; command code goes through
+/// `ProjectSession` instead.
 pub(crate) fn load_project_from_reporting(
     from: Option<&Path>,
     reporter: &Reporter,
@@ -123,25 +122,46 @@ pub(crate) fn load_project_from_reporting(
     })
 }
 
-/// Single front-end every build-style command (`run`/`test`/`generate`/
-/// `check`/`pack`) uses to load its project.
-///
-/// Centralizes the one decision they all share: the per-file `Loading <path>`
-/// flood is *verbose-only* detail. By default the load is silent and the
-/// caller's single aggregate `Compiling N file(s)` line is the only progress
-/// shown for the whole load → check → compile span; a redundant `Checking`
-/// line and ~one `Loading` line per source file are exactly the noise this
-/// removes. Pass the command's own `--verbose` (or `false` when it has none).
-pub(crate) fn load_project_for_build(
+/// Lenient counterpart to [`resolve_project_sources`] for introspection
+/// sessions: `Ok(None)` when no project root is found (instead of an error),
+/// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
+/// key the bytecode cache identically to the strict path, but a broken
+/// manifest must not lock an agent out of `describe`/`grep`.
+pub(crate) fn resolve_project_sources_lenient(
     from: Option<&Path>,
-    reporter: &Reporter,
-    verbose: bool,
-) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
-    if verbose {
-        load_project_from_reporting(from, reporter)
+) -> Result<Option<ResolvedProject>> {
+    let canonical = resolve_search_start(from)?;
+    let Some(canonical) = find_baml_project_root(&canonical) else {
+        return Ok(None);
+    };
+    let toml_path = canonical.join("baml.toml");
+    let manifest = if toml_path.exists() {
+        std::fs::read_to_string(&toml_path).ok()
     } else {
-        load_project_from(from)
-    }
+        None
+    };
+    let walk_root = project_source_root(&canonical);
+    use rayon::prelude::*;
+    let files = discover_baml_files(&walk_root)
+        .into_par_iter()
+        .map(|path| {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            Ok((path, content))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Some(ResolvedProject {
+        root: canonical,
+        manifest,
+        files,
+    }))
+}
+
+/// The directory a projectless introspection session roots at (the same
+/// fallback [`load_project_or_default`] uses when no project is found).
+pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
+    let canonical = resolve_search_start(from)?;
+    Ok(project_search_dir(&canonical))
 }
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never
@@ -203,8 +223,8 @@ pub(crate) fn load_project_or_default(
 /// discovery starts at the current directory.
 fn resolve_search_start(from: Option<&Path>) -> Result<PathBuf> {
     resolve_project_search_start(from).with_context(|| match from {
-        Some(from) => format!("Could not resolve path: {}", from.display()),
-        None => "Could not resolve current directory".to_string(),
+        Some(from) => format!("could not resolve path: {}", from.display()),
+        None => "could not resolve current directory".to_string(),
     })
 }
 
@@ -217,19 +237,44 @@ fn load_project_from_inner(
     from: Option<&Path>,
     on_file: impl Fn(&Path),
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+    let resolved = resolve_project_sources(from)?;
+    let files = resolved.files.iter().map(|(p, _)| p.clone()).collect();
+    let db = build_db_from_sources(&resolved, on_file);
+    Ok((db, resolved.root, files))
+}
+
+/// A resolved project with every source read into memory but no
+/// [`ProjectDatabase`] built yet.
+///
+/// This is the seam the bytecode cache needs: computing a cache key requires
+/// the root, manifest, and file contents — but *not* a database. On a cache
+/// hit the database (and everything downstream of it: typecheck, emit) is
+/// skipped entirely; on a miss [`build_db_from_sources`] reuses these
+/// already-read contents instead of re-reading from disk.
+pub(crate) struct ResolvedProject {
+    /// Canonical project root (the directory holding `baml.toml`/`baml_src/`).
+    pub root: PathBuf,
+    /// `baml.toml` content when present (already validated).
+    pub manifest: Option<String>,
+    /// Discovered `.baml` files with contents, in discovery (sorted) order.
+    pub files: Vec<(PathBuf, String)>,
+}
+
+/// Resolve the project root, validate the manifest, and read every source
+/// file into memory. The strict-path front half of [`load_project_from`].
+pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedProject> {
     let canonical = resolve_search_start(from)?;
     let Some(canonical) = find_baml_project_root(&canonical) else {
         anyhow::bail!(
             "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
              and no `baml_src/` directory found in it or its ancestors.\n\
-             Add a `baml_src/` directory with your `.baml` files, run `baml init` \
+             add a `baml_src/` directory with your `.baml` files, run `baml init` \
              to create a `baml.toml`, or for a one-off script use `--file <PATH>`.",
             canonical.display()
         );
     };
 
     let toml_path = canonical.join("baml.toml");
-    let has_baml_toml = toml_path.exists();
 
     // Manifest validation, Cargo-style: when a `baml.toml` is present it must
     // be valid (`[package].name` mandatory). Failing here — before any source
@@ -237,11 +282,11 @@ fn load_project_from_inner(
     // `Cargo.toml`, rather than crashing several seconds in when a packaging
     // verb tries to use the name. A manifest-less `baml_src/` project skips
     // this: `baml.toml` is opt-in.
-    if has_baml_toml {
+    let manifest = if toml_path.exists() {
         let content = std::fs::read_to_string(&toml_path)
-            .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+            .with_context(|| format!("failed to read {}", toml_path.display()))?;
         let manifest = crate::manifest::parse(&content)
-            .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+            .with_context(|| format!("failed to parse {}", toml_path.display()))?;
         crate::manifest::package_name(&manifest, &toml_path)?;
         // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
         // `nmae = ...`) warns rather than silently no-ops, but a
@@ -249,9 +294,51 @@ fn load_project_from_inner(
         for warning in crate::manifest::unknown_field_warnings(&manifest) {
             crate::reporter::print_warning(format_args!("{warning}"));
         }
-    }
+        Some(content)
+    } else {
+        None
+    };
 
-    build_project_db(canonical, on_file)
+    let walk_root = project_source_root(&canonical);
+    // Read sources across worker threads; `collect` on an indexed parallel
+    // iterator preserves discovery order, so `FileId` assignment (and with it
+    // diagnostic ordering) is identical to a serial read.
+    use rayon::prelude::*;
+    let files = discover_baml_files(&walk_root)
+        .into_par_iter()
+        .map(|path| {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            Ok((path, content))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(ResolvedProject {
+        root: canonical,
+        manifest,
+        files,
+    })
+}
+
+/// Build a [`ProjectDatabase`] from already-read sources.
+pub(crate) fn build_db_from_sources(
+    resolved: &ResolvedProject,
+    on_file: impl Fn(&Path),
+) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(&resolved.root);
+    for (path, _) in &resolved.files {
+        on_file(path);
+    }
+    // Bulk registration: one project-file-list write instead of one per file
+    // (the per-file path is O(files²) Vec copies + one salsa revision each).
+    db.add_or_update_files(
+        resolved
+            .files
+            .iter()
+            .map(|(path, content)| (path.as_path(), content.as_str())),
+    );
+    db
 }
 
 /// Build a [`ProjectDatabase`] rooted at `canonical` (a directory already
@@ -276,7 +363,7 @@ fn build_project_db(
     for file_path in &baml_files {
         on_file(file_path);
         let content = std::fs::read_to_string(file_path)
-            .with_context(|| format!("Failed to read {}", file_path.display()))?;
+            .with_context(|| format!("failed to read {}", file_path.display()))?;
         db.add_or_update_file(file_path, &content);
     }
     Ok((db, canonical, baml_files))
@@ -288,9 +375,9 @@ fn build_project_db(
 /// naming) can reuse it without re-parsing.
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
-        .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+        .with_context(|| format!("failed to read {}", toml_path.display()))?;
     let manifest = crate::manifest::parse(&content)
-        .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+        .with_context(|| format!("failed to parse {}", toml_path.display()))?;
     crate::manifest::package_name(&manifest, toml_path)
 }
 
@@ -319,7 +406,7 @@ pub(crate) fn resolve_project_name(from: Option<&Path>) -> Result<String> {
         .map(str::to_string)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Could not derive a project name from `{}`; pass `-o <PATH>` to name the output.",
+                "could not derive a project name from `{}`; pass `-o <PATH>` to name the output.",
                 canonical.display()
             )
         })

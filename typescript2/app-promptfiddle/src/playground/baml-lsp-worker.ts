@@ -1024,6 +1024,12 @@ self.onmessage = async (event: MessageEvent) => {
     case "selectProject":
       return;
 
+    // Runtime-demand leases are only meaningful for the remote (WebSocket)
+    // transport; the in-worker runtime is always resident.
+    case "ensureProjectRuntime":
+    case "releaseProjectRuntime":
+      return;
+
     case "requestState":
       runtime?.requestPlaygroundState();
       postOut({ type: "buildTime", value: getBuildTime() });

@@ -8,10 +8,7 @@ use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{
-    project_load::load_project_or_default,
-    util::{line_number_at_offset, relative_path},
-};
+use crate::util::{line_number_at_offset, relative_path};
 
 /// Parsed documentation entry for a BAML keyword topic.
 #[derive(serde::Deserialize)]
@@ -164,7 +161,7 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
     let suggestions = suggest_similar_kinded(db, name, 5);
     if !suggestions.is_empty() {
         eprintln!();
-        eprintln!("Did you mean:");
+        eprintln!("did you mean:");
         // did-you-mean writes to stderr, so use a stderr-bound painter (gets the
         // stderr color decision, never stdout's).
         let painter = crate::paint::Painter::stderr();
@@ -289,12 +286,20 @@ impl DescribeArgs {
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
-        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
+        let mut session = crate::project_session::ProjectSession::open_lenient(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadOnly,
+        )?;
+        // Warm seeds (no-delta only) + parallel index prime: describe queries
+        // the whole-package aggregates, which otherwise derive serially.
+        let _ = session.warm_prep_seeds_only();
+        session.prime();
+        let (db, from) = (session.db, session.resolved.root);
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
             eprintln!(
-                "warning: --symbols is deprecated. Use `baml describe` with no arguments instead."
+                "warning: `--symbols` is deprecated. Use `baml describe` with no arguments instead."
             );
         }
 
@@ -308,7 +313,7 @@ impl DescribeArgs {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&json)
-                            .context("Failed to serialize keyword output as JSON")?
+                            .context("failed to serialize keyword output as JSON")?
                     );
                 } else {
                     render_keyword(kw);
@@ -318,14 +323,14 @@ impl DescribeArgs {
             Some(ResolvedTarget::Package(pkg)) => {
                 let entries = baml_lsp2_actions::list_package_items(&db, pkg);
                 if entries.is_empty() {
-                    eprintln!("No symbols found.");
+                    eprintln!("no symbols found");
                     return Ok(crate::ExitCode::Other);
                 }
                 if self.json {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
-                            .context("Failed to serialize output as JSON")?
+                            .context("failed to serialize output as JSON")?
                     );
                 } else {
                     render_listing(&entries, &from);
@@ -343,7 +348,7 @@ impl DescribeArgs {
                     if baml_lsp2_actions::resolve_target(&db, user_pkg, pkg_name).is_some() {
                         eprintln!();
                         eprintln!(
-                            "Note: your project also defines `{pkg_name}`. \
+                            "note: your project also defines `{pkg_name}`. \
                              Use `baml describe root.{pkg_name}` to see your definition."
                         );
                     }
@@ -354,14 +359,14 @@ impl DescribeArgs {
                 let entries = baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
                     .unwrap_or_default();
                 if entries.is_empty() {
-                    eprintln!("No symbols found in namespace.");
+                    eprintln!("no symbols found in namespace");
                     return Ok(crate::ExitCode::Other);
                 }
                 if self.json {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
-                            .context("Failed to serialize output as JSON")?
+                            .context("failed to serialize output as JSON")?
                     );
                 } else {
                     render_listing(&entries, &from);
@@ -383,14 +388,14 @@ impl DescribeArgs {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
-                                .context("Failed to serialize output as JSON")?
+                                .context("failed to serialize output as JSON")?
                         );
                     } else {
                         render_description(&db, &desc, self.budget, &from);
                     }
                     Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("No symbol found: {name}");
+                    eprintln!("no symbol found: {name}");
                     print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
@@ -416,14 +421,14 @@ impl DescribeArgs {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
-                                .context("Failed to serialize output as JSON")?
+                                .context("failed to serialize output as JSON")?
                         );
                     } else {
                         render_description(&db, &desc, self.budget, &from);
                     }
                     Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("No symbol found: {name}");
+                    eprintln!("no symbol found: {name}");
                     print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
@@ -434,7 +439,7 @@ impl DescribeArgs {
                 let descriptions = describe(&db, &describe_files, name);
 
                 if descriptions.is_empty() {
-                    eprintln!("No symbol found: {name}");
+                    eprintln!("no symbol found: {name}");
                     print_did_you_mean(&db, name);
                     return Ok(crate::ExitCode::Other);
                 }
@@ -448,7 +453,7 @@ impl DescribeArgs {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&json_output)
-                            .context("Failed to serialize output as JSON")?
+                            .context("failed to serialize output as JSON")?
                     );
                     return Ok(crate::ExitCode::Success);
                 }
@@ -487,7 +492,7 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
         writeln!(w, "{} — {}", painter.keyword(name), doc.message)?;
         if let Some(ref see) = doc.see {
             writeln!(w)?;
-            writeln!(w, "See: baml describe {}", painter.fragment(see))?;
+            writeln!(w, "see: `baml describe {}`", painter.fragment(see))?;
         }
     }
     Ok(())
@@ -630,7 +635,7 @@ pub fn write_description(
                 writeln!(w)?;
                 writeln!(
                     w,
-                    "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
+                    "[INFO] showing {shown} of {total} lines; use `--budget {needed}` for full output",
                     shown = shown_body_lines,
                     total = body_lines.len(),
                     needed = body_lines.len() + 1,
@@ -801,7 +806,7 @@ fn write_highlighted_body(
     writeln!(w)?;
     writeln!(
         w,
-        "[INFO] Showing {} of {} lines. Use --budget {} for full output.",
+        "[INFO] showing {} of {} lines; use `--budget {}` for full output",
         head + tail + 1,
         lines.len(),
         lines.len() + 1,

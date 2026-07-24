@@ -38,12 +38,11 @@ test Foo {
 
 //----
 //- diagnostics
-// error: Expected identifier, found ','
-//     ╭─[ misc_bad_syntax.baml:15:7 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[misc_bad_syntax.baml:15:7]
 //  15 │     },,
-//     │       ┬  
-//     │       ╰── Expected identifier, found ','
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+//     ·       ┬
+//     ·       ╰── expected `identifier`, found `','`
+//     ╰────

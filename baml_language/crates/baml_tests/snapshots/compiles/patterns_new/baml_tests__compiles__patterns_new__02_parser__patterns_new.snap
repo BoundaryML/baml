@@ -246,6 +246,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
@@ -276,6 +280,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -289,6 +297,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "string"
                 WORD "string"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -320,6 +332,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
@@ -341,6 +357,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "string"
                     WORD "string"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "0"
           R_BRACE "}"
@@ -365,6 +385,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -378,6 +402,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -404,6 +432,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
             COMMA ","
@@ -419,6 +451,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "2"
           R_BRACE "}"
@@ -443,6 +479,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -456,6 +496,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -482,6 +526,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
             COMMA ","
@@ -518,6 +566,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "T"
                 WORD "T"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -531,6 +583,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "T"
                 WORD "T"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -562,6 +618,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "T"
                         WORD "T"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
@@ -588,6 +648,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "T"
                         WORD "T"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
@@ -621,19 +685,39 @@ SOURCE_FILE
               TYPE_EXPR
                 L_PAREN "("
                 FUNCTION_TYPE_PARAM
-                  TYPE_EXPR "int"
-                    WORD "int"
+                  TYPE_EXPR
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR "int"
+                        WORD "int"
+                    R_PAREN ")"
+                    ARROW "->"
+                    TYPE_EXPR
+                      L_PAREN "("
+                      FUNCTION_TYPE_PARAM
+                        TYPE_EXPR
+                          L_PAREN "("
+                          FUNCTION_TYPE_PARAM
+                            TYPE_EXPR "int"
+                              WORD "int"
+                          R_PAREN ")"
+                          ARROW "->"
+                          TYPE_EXPR "int"
+                            WORD "int"
+                          THROWS_CLAUSE
+                            KW_THROWS "throws"
+                            TYPE_EXPR "never"
+                              WORD "never"
+                      R_PAREN ")"
+                    THROWS_CLAUSE
+                      KW_THROWS "throws"
+                      TYPE_EXPR "never"
+                        WORD "never"
                 R_PAREN ")"
-                ARROW "->"
-                TYPE_EXPR
-                  L_PAREN "("
-                  FUNCTION_TYPE_PARAM
-                    TYPE_EXPR "int"
-                      WORD "int"
-                  R_PAREN ")"
-                  ARROW "->"
-                  TYPE_EXPR "int"
-                    WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -648,12 +732,24 @@ SOURCE_FILE
               TYPE_EXPR
                 L_PAREN "("
                 FUNCTION_TYPE_PARAM
-                  TYPE_EXPR "string"
-                    WORD "string"
+                  TYPE_EXPR
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR "string"
+                        WORD "string"
+                    R_PAREN ")"
+                    ARROW "->"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    THROWS_CLAUSE
+                      KW_THROWS "throws"
+                      TYPE_EXPR "never"
+                        WORD "never"
                 R_PAREN ")"
-                ARROW "->"
-                TYPE_EXPR "string"
-                  WORD "string"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -686,19 +782,39 @@ SOURCE_FILE
                       TYPE_EXPR
                         L_PAREN "("
                         FUNCTION_TYPE_PARAM
-                          TYPE_EXPR "int"
-                            WORD "int"
+                          TYPE_EXPR
+                            L_PAREN "("
+                            FUNCTION_TYPE_PARAM
+                              TYPE_EXPR "int"
+                                WORD "int"
+                            R_PAREN ")"
+                            ARROW "->"
+                            TYPE_EXPR
+                              L_PAREN "("
+                              FUNCTION_TYPE_PARAM
+                                TYPE_EXPR
+                                  L_PAREN "("
+                                  FUNCTION_TYPE_PARAM
+                                    TYPE_EXPR "int"
+                                      WORD "int"
+                                  R_PAREN ")"
+                                  ARROW "->"
+                                  TYPE_EXPR "int"
+                                    WORD "int"
+                                  THROWS_CLAUSE
+                                    KW_THROWS "throws"
+                                    TYPE_EXPR "never"
+                                      WORD "never"
+                              R_PAREN ")"
+                            THROWS_CLAUSE
+                              KW_THROWS "throws"
+                              TYPE_EXPR "never"
+                                WORD "never"
                         R_PAREN ")"
-                        ARROW "->"
-                        TYPE_EXPR
-                          L_PAREN "("
-                          FUNCTION_TYPE_PARAM
-                            TYPE_EXPR "int"
-                              WORD "int"
-                          R_PAREN ")"
-                          ARROW "->"
-                          TYPE_EXPR "int"
-                            WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               CALL_EXPR
@@ -738,12 +854,24 @@ SOURCE_FILE
                       TYPE_EXPR
                         L_PAREN "("
                         FUNCTION_TYPE_PARAM
-                          TYPE_EXPR "string"
-                            WORD "string"
+                          TYPE_EXPR
+                            L_PAREN "("
+                            FUNCTION_TYPE_PARAM
+                              TYPE_EXPR "string"
+                                WORD "string"
+                            R_PAREN ")"
+                            ARROW "->"
+                            TYPE_EXPR "string"
+                              WORD "string"
+                            THROWS_CLAUSE
+                              KW_THROWS "throws"
+                              TYPE_EXPR "never"
+                                WORD "never"
                         R_PAREN ")"
-                        ARROW "->"
-                        TYPE_EXPR "string"
-                          WORD "string"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "0"
           R_BRACE "}"
@@ -771,10 +899,18 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               R_PAREN ")"
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           PIPE "|"
           L_PAREN "("
@@ -791,10 +927,18 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               R_PAREN ")"
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
       R_PAREN ")"
     ARROW "->"
@@ -829,10 +973,18 @@ SOURCE_FILE
                           ARROW "->"
                           TYPE_EXPR "int"
                             WORD "int"
+                          THROWS_CLAUSE
+                            KW_THROWS "throws"
+                            TYPE_EXPR "never"
+                              WORD "never"
                       R_PAREN ")"
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "r"
@@ -880,10 +1032,18 @@ SOURCE_FILE
                           ARROW "->"
                           TYPE_EXPR "int"
                             WORD "int"
+                          THROWS_CLAUSE
+                            KW_THROWS "throws"
+                            TYPE_EXPR "never"
+                              WORD "never"
                       R_PAREN ")"
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "r"
@@ -981,28 +1141,33 @@ SOURCE_FILE
           L_BRACE "{"
           MATCH_ARM
             PATTERN
-              UNION_PATTERN
-                TYPE_PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR
+                  L_PAREN "("
+                  FUNCTION_TYPE_PARAM
+                    TYPE_EXPR "int"
+                      WORD "int"
+                  R_PAREN ")"
+                  ARROW "->"
                   TYPE_EXPR
                     L_PAREN "("
                     FUNCTION_TYPE_PARAM
-                      TYPE_EXPR "int"
+                      TYPE_EXPR "int | string"
                         WORD "int"
+                        PIPE "|"
+                        WORD "string"
                     R_PAREN ")"
-                    ARROW "->"
-                    TYPE_EXPR "int"
-                      WORD "int"
-                PIPE "|"
-                TYPE_PATTERN
-                  TYPE_EXPR "string"
-                    WORD "string"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
             FAT_ARROW "=>"
             INTEGER_LITERAL "1"
             COMMA ","
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "Number"
     EQUALS "="
     TYPE_EXPR "int | float"
@@ -1157,6 +1322,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
             FAT_ARROW "=>"
             CALL_EXPR
               WORD "f"
@@ -1296,6 +1465,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           L_BRACKET "["
           R_BRACKET "]"
@@ -1334,6 +1507,10 @@ SOURCE_FILE
                       ARROW "->"
                       TYPE_EXPR "int"
                         WORD "int"
+                      THROWS_CLAUSE
+                        KW_THROWS "throws"
+                        TYPE_EXPR "never"
+                          WORD "never"
           KW_IN "in"
           WORD "items"
           R_PAREN ")"

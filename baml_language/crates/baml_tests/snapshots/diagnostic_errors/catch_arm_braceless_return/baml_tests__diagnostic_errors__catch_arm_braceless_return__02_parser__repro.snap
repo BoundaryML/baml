@@ -43,7 +43,7 @@ SOURCE_FILE
                   WORD "boom"
                   QUOTE """
             R_BRACE "}"
-        WORD "true"
+        KW_TRUE "true"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

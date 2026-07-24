@@ -1,0 +1,22 @@
+# `cross` configuration for the `bridge_cffi` cdylib build.
+#
+# `.github/workflows/build2-bridge-cffi.reusable.yaml` runs `cross` for the
+# linux targets. Every leg receives deterministic `--remap-path-prefix` flags.
+# The musl legs additionally disable `crt-static` so rustc can emit a cdylib —
+# a static CRT (musl's default) cannot produce a shared object, so without this
+# rustc silently drops the `cdylib` crate type and only the `.rlib` is built.
+#
+# `cross` runs the build inside a container and forwards only a curated set of
+# environment variables, so the Rust and native C/C++ remapping flags must be
+# listed here explicitly or they never reach the compilers.
+[target.x86_64-unknown-linux-gnu.env]
+passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+
+[target.aarch64-unknown-linux-gnu.env]
+passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+
+[target.x86_64-unknown-linux-musl.env]
+passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]
+
+[target.aarch64-unknown-linux-musl.env]
+passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]

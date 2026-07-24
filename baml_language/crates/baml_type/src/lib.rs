@@ -1,8 +1,11 @@
 //! Unified type system for BAML.
 //!
-//! Includes five main type representations:
+//! Includes six main type representations:
 //! - [`Ty`]: the full type representation containing all compiler and runtime types.
 //! - [`RuntimeTy`]: the runtime-facing deep subset of [`Ty`] that excludes type inference helper types.
+//! - [`CodegenTy`]: the generator-independent deep subset used for public API
+//!   declarations. It preserves aliases and generic type variables, but excludes
+//!   compiler-only inference states and unresolved associated-type projections.
 //! - [`ConcreteTy`]: like [`RuntimeTy`] but only the concrete-layout variants (plus `never`).
 //!   Not deep: parameter types are [`RuntimeTy`]s.
 //! - [`RealizedTy`]: the realized deep subset of [`RuntimeTy`] that excludes type variables.
@@ -13,9 +16,11 @@
 //! ```text
 //!     `Ty`
 //!      ↑
-//!  `RuntimeTy` <- `RealizedTy`
-//!      ↑               ↑
-//! `ConcreteTy` <- `ConcreteRealizedTy`
+//!  `RuntimeTy` <- `CodegenTy`
+//!      ↑              ↑
+//! `ConcreteTy`    `RealizedTy`
+//!      ↑              ↑
+//!      `ConcreteRealizedTy`
 //! ```
 
 use std::fmt;
@@ -26,6 +31,7 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+mod codegen_ty;
 mod defs;
 mod family;
 mod names;
@@ -35,6 +41,7 @@ mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
@@ -42,7 +49,7 @@ pub use family::*;
 pub use names::*;
 pub use primitive::*;
 pub use runtime_ty::*;
-pub use template::TyTemplate;
+pub use template::SubstituteError;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
@@ -155,8 +162,6 @@ impl Ty {
     ///     their own;
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `WatchAccessor` — the compiler-internal type of `x.$watch`, not a
-    ///     user-facing data type;
     ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
     ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
@@ -191,7 +196,6 @@ impl Ty {
             | Ty::Future(..)
             | Ty::Function { .. }
             | Ty::RustType { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
@@ -203,18 +207,78 @@ impl Ty {
         }
     }
 
+    /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
+    /// every value of which has exactly one run-time representation that method
+    /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
+    /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
+    /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
+    /// `PromptAst`, and the native `RustType`.
+    ///
+    /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
+    ///   - `Union` and `Interface` (existential) — the union of several concrete
+    ///     types, so no single run-time representation;
+    ///   - the top type `BuiltinUnknown` (`unknown`) — the union of all types;
+    ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
+    ///     dispatch through it rather than being a concrete type of their own;
+    ///   - `Never` — the empty type (no values);
+    ///   - `Void`;
+    ///   - `TypeVar` and `AssociatedTypeProjection` — symbolic stand-ins whose
+    ///     concreteness, when required, is a separate *inductive* obligation on their
+    ///     own bound, not a property of the type as written here;
+    ///   - `TypeAlias` — callers resolve aliases first, so a survivor is unresolved;
+    ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
+    ///
+    /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
+    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType`, which are
+    /// concrete yet undispatchable as impl targets, and admitting `Never`/`TypeVar`/a
+    /// projection). This asks the broader "is it a run-time concrete type" the taxonomy
+    /// defines — used to gate an interface-bounded type-parameter argument (an
+    /// interface bound admits only a single run-time type, so dispatch is well-defined).
+    ///
+    /// Exhaustive (no wildcard) so a new `Ty` variant must be classified here.
+    pub fn is_concrete(&self) -> bool {
+        match self {
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Enum(..)
+            | Ty::List(..)
+            | Ty::Map { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::RustType { .. } => true,
+            Ty::Union(..)
+            | Ty::Interface(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Literal(..)
+            | Ty::EnumVariant(..)
+            | Ty::Never { .. }
+            | Ty::Void { .. }
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::TypeAlias(..)
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::Infer { .. } => false,
+        }
+    }
+
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
     pub fn int() -> Self {
         Ty::Int {
-            attr: TyAttr::default(),
-        }
-    }
-
-    /// `bigint` with default attributes.
-    pub fn bigint() -> Self {
-        Ty::Bigint {
             attr: TyAttr::default(),
         }
     }
@@ -391,20 +455,6 @@ impl Ty {
         Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
     }
 
-    /// `Class(name, args)` — a parametric class instantiation.
-    pub fn class_with_args(name: TypeName, args: Vec<Ty>) -> Self {
-        Ty::Class(name, args, TyAttr::default())
-    }
-
-    /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
-    pub fn user_class(name: &str) -> Self {
-        Ty::Class(
-            QualifiedTypeName::local(Name::new(name)),
-            Vec::new(),
-            TyAttr::default(),
-        )
-    }
-
     /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
         Ty::Class(
@@ -467,102 +517,6 @@ impl Ty {
         }
     }
 
-    /// Check if this is the void type.
-    pub fn is_void(&self) -> bool {
-        matches!(self, Ty::Void { .. })
-    }
-
-    /// Check if this is a primitive type (including literals of primitive types).
-    pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            Ty::Int { .. }
-                | Ty::Bigint { .. }
-                | Ty::Float { .. }
-                | Ty::String { .. }
-                | Ty::Bool { .. }
-                | Ty::Null { .. }
-                | Ty::Uint8Array { .. }
-                | Ty::Literal(..)
-        )
-    }
-
-    /// Check if this type is a subtype of another.
-    ///
-    /// Returns true if `self` can be used where `other` is expected.
-    /// Ported from VIR `ty.rs:93-140` with literal subtyping rules.
-    ///
-    /// Note: TyAttr does NOT affect subtyping. Two types with different
-    /// attrs are not subtypes of each other (they're different types via
-    /// PartialEq), but attr content isn't checked for subtype relationships.
-    ///
-    /// Note: Unknown/Error/Never handling is not needed here because:
-    /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
-    /// - Never is mapped to Void during VIR lowering
-    /// - All real type checking (where those variants matter) happens in TIR
-    ///
-    /// Structural subtyping for `Ty`. This is the runtime / SAP analogue of
-    /// `baml_compiler2_tir::normalize::is_subtype_of`. The relation is purely
-    /// structural — only representation-preserving widenings are allowed.
-    /// Representation-changing numeric coercions (`int → bigint`, `int → float`,
-    /// and their literal forms) are not subtype relations: `int → bigint`
-    /// happens only at the FFI boundary (`bex_engine::conversion`), and
-    /// `int → float` requires an explicit `float` literal. Keep behaviour
-    /// aligned with `crate::normalize::is_subtype_of` in TIR.
-    pub fn is_subtype_of(&self, other: &Ty) -> bool {
-        // Same types are subtypes
-        if self == other {
-            return true;
-        }
-
-        // Any type is a subtype of BuiltinUnknown (it accepts everything)
-        if matches!(other, Ty::BuiltinUnknown { .. }) {
-            return true;
-        }
-
-        match (self, other) {
-            // Literal types are subtypes of their corresponding primitives.
-            // (Same representation — these are free widenings, like
-            // `Literal(Int 42) <: Int`.)
-            (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. }) => true,
-            (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. }) => true,
-            (Ty::Literal(Literal::String(_), _, _), Ty::String { .. }) => true,
-            (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => true,
-            (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. }) => true,
-
-            // T is a subtype of T | U (union containing T). Subsumes the former
-            // `Optional` rules: `?` is now `T | null`, so `null <: T | null` and
-            // `T <: T | null` both fall out of union membership.
-            (inner, Ty::Union(types, _)) => types.iter().any(|t| inner.is_subtype_of(t)),
-
-            // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
-            (Ty::Union(types, _), other) => types.iter().all(|t| t.is_subtype_of(other)),
-
-            // List: structural recursion. Since this impl is coercion-free,
-            // recursion via `is_subtype_of` only admits free widenings —
-            // `int[]` is **not** a subtype of `bigint[]`/`float[]`.
-            (Ty::List(inner1, _), Ty::List(inner2, _)) => inner1.is_subtype_of(inner2),
-
-            // Map: structural recursion in both key and value. Same coercion-
-            // free semantics as `List` — values cannot widen across
-            // representation boundaries.
-            (
-                Ty::Map {
-                    key: k1, value: v1, ..
-                },
-                Ty::Map {
-                    key: k2, value: v2, ..
-                },
-            ) => k1.is_subtype_of(k2) && v1.is_subtype_of(v2),
-
-            // Note: `int <: bigint`, `int <: float`, and the literal-int
-            // widenings to bigint/float are intentionally absent — numeric
-            // types do not widen across representations in the type system (TIR
-            // matches this). `int → bigint` is an FFI-boundary coercion only.
-            _ => false,
-        }
-    }
-
     /// Recursively walk this type tree and return an error if any compiler-only
     /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
@@ -571,7 +525,6 @@ impl Ty {
             // for output format rendering (cycle detection needs the alias name).
             Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
-            Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
             // Recurse into containers
             Ty::List(inner, _) => inner.validate_runtime(),
@@ -851,16 +804,12 @@ impl Ty {
                 member,
                 ..
             } => {
-                if let Some(interface) = interface {
-                    format!(
-                        "({} as {}).{}",
-                        base.render_with(s),
-                        interface.to_ty().render_with(s),
-                        member
-                    )
-                } else {
-                    format!("{}.{}", base.render_with(s), member)
-                }
+                format!(
+                    "({} as {}).{}",
+                    base.render_with(s),
+                    interface.to_ty().render_with(s),
+                    member
+                )
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
@@ -877,7 +826,6 @@ impl Ty {
             Ty::Future(value, error, _) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
             }
-            Ty::WatchAccessor(inner, _) => format!("{}.$watch", inner.render_with(s)),
         }
     }
 }
@@ -1055,7 +1003,6 @@ impl fmt::Display for Ty {
                 write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
-            Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
             Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
             Ty::TypeVar(name, _) => write!(f, "{name}"),
@@ -1064,10 +1011,7 @@ impl fmt::Display for Ty {
                 interface,
                 member,
                 ..
-            } => match interface {
-                Some(iface) => write!(f, "({base} as {}).{member}", iface.to_ty()),
-                None => write!(f, "{base}.{member}"),
-            },
+            } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
@@ -1110,17 +1054,6 @@ mod tests {
             attr: TyAttr::default(),
         }
     }
-    fn ty_null() -> Ty {
-        Ty::Null {
-            attr: TyAttr::default(),
-        }
-    }
-
-    #[test]
-    fn test_literal_int_subtype_of_int() {
-        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
-        assert!(lit_42.is_subtype_of(&ty_int()));
-    }
 
     #[test]
     fn is_valid_impl_subject_classifies_variants() {
@@ -1149,7 +1082,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1176,7 +1109,6 @@ mod tests {
             Ty::RustType {
                 attr: TyAttr::default(),
             },
-            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
             Ty::Void {
                 attr: TyAttr::default(),
@@ -1199,115 +1131,91 @@ mod tests {
     }
 
     #[test]
-    fn test_literal_float_subtype_of_float() {
-        let lit_3_14 = Ty::Literal(
-            Literal::Float("3.14".to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
-        );
-        assert!(lit_3_14.is_subtype_of(&ty_float()));
-    }
+    fn is_concrete_classifies_variants() {
+        let qtn = |n: &str| QualifiedTypeName::local(Name::new(n));
+        let boxed = |t: Ty| Box::new(t);
 
-    #[test]
-    fn test_literal_int_does_not_widen_to_float() {
-        // `baml_type::Ty::is_subtype_of` is coercion-free; the int-literal
-        // → float widening is a representation change, not a structural
-        // subtype. TIR keeps the scalar widening as a runtime coercion
-        // (MIR-level), not as a subtype relation modeled here.
-        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
-        assert!(!lit_42.is_subtype_of(&ty_float()));
-    }
-
-    #[test]
-    fn test_literal_string_subtype_of_string() {
-        let lit_hello = Ty::Literal(
-            Literal::String("hello".to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
-        );
-        assert!(lit_hello.is_subtype_of(&ty_string()));
-    }
-
-    #[test]
-    fn test_literal_bool_subtype_of_bool() {
-        let lit_true = Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default());
-        assert!(lit_true.is_subtype_of(&ty_bool()));
-    }
-
-    #[test]
-    fn test_literal_in_union() {
-        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
-        let union_type = Ty::Union(vec![ty_string(), ty_int()], TyAttr::default());
-        assert!(lit_42.is_subtype_of(&union_type));
-    }
-
-    #[test]
-    fn test_literal_float_in_union() {
-        let lit_3_14 = Ty::Literal(
-            Literal::Float("3.14".to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
-        );
-        let union_type = Ty::Union(vec![ty_string(), ty_float()], TyAttr::default());
-        assert!(lit_3_14.is_subtype_of(&union_type));
-    }
-
-    #[test]
-    fn test_literal_in_optional() {
-        let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
-        let opt_int = Ty::optional(ty_int());
-        assert!(lit_42.is_subtype_of(&opt_int));
-    }
-
-    #[test]
-    fn test_null_subtype_of_optional() {
-        let opt_string = Ty::optional(ty_string());
-        assert!(ty_null().is_subtype_of(&opt_string));
-    }
-
-    #[test]
-    fn test_int_not_subtype_of_float() {
-        // Coercion-free: `int` is i64, `float` is f64. Values past 2^53 lose
-        // precision; TIR removed this scalar rule, and `baml_type` mirrors it.
-        assert!(!ty_int().is_subtype_of(&ty_float()));
-    }
-
-    #[test]
-    fn test_int_not_subtype_of_bigint() {
-        // Scalar int→bigint widening is a representation change (i64 → heap
-        // BigInt) and is not a subtype relation in either `baml_type` or TIR;
-        // it happens only at the FFI boundary.
-        assert!(!ty_int().is_subtype_of(&Ty::Bigint {
-            attr: TyAttr::default()
-        }));
-    }
-
-    #[test]
-    fn test_int_array_not_subtype_of_bigint_array() {
-        // Regression: container invariance. `int[]` must not be a subtype
-        // of `bigint[]`.
-        let int_arr = Ty::List(Box::new(ty_int()), TyAttr::default());
-        let bigint_arr = Ty::List(
-            Box::new(Ty::Bigint {
+        // Concrete: a single run-time representation dispatch can key on. Note the
+        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
+        // are concrete types even though they are not written-impl targets, and
+        // the `Evolving*` inference forms are lists/maps.
+        let concrete = [
+            ty_int(),
+            Ty::Bigint {
                 attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        );
-        assert!(!int_arr.is_subtype_of(&bigint_arr));
-    }
+            },
+            ty_float(),
+            ty_string(),
+            ty_bool(),
+            Ty::null(),
+            Ty::class("Foo"),
+            Ty::Enum(qtn("Color"), TyAttr::default()),
+            Ty::list(ty_int()),
+            Ty::Map {
+                key: boxed(ty_string()),
+                value: boxed(ty_int()),
+                attr: TyAttr::default(),
+            },
+            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
+            Ty::Function {
+                params: vec![],
+                ret: boxed(Ty::null()),
+                throws: boxed(Ty::null()),
+                attr: TyAttr::default(),
+            },
+            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
+            Ty::Type {
+                attr: TyAttr::default(),
+            },
+            Ty::resource(),
+            Ty::prompt_ast(),
+            Ty::RustType {
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &concrete {
+            assert!(ty.is_concrete(), "{ty:?} should be concrete");
+        }
 
-    #[test]
-    fn test_list_covariance() {
-        let list_lit = Ty::List(
-            Box::new(Ty::Literal(
-                Literal::Int(42),
-                Freshness::Regular,
-                TyAttr::default(),
-            )),
-            TyAttr::default(),
-        );
-        let list_int = Ty::List(Box::new(ty_int()), TyAttr::default());
-        assert!(list_lit.is_subtype_of(&list_int));
+        // Abstract (unions, existentials, `unknown`), literal types (`Literal`,
+        // `EnumVariant`), the empty type `never`, the symbolic stand-ins whose
+        // concreteness is an inductive obligation elsewhere (`TypeVar`, a
+        // projection), and the alias/sentinel non-types — all not concrete.
+        let not_concrete = [
+            Ty::union([ty_int(), ty_string()]),
+            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
+            Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+            Ty::Void {
+                attr: TyAttr::default(),
+            },
+            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::AssociatedTypeProjection {
+                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            },
+            Ty::TypeAlias(qtn("A"), TyAttr::default()),
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Error {
+                attr: TyAttr::default(),
+            },
+            Ty::Infer {
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &not_concrete {
+            assert!(!ty.is_concrete(), "{ty:?} should not be concrete");
+        }
     }
 
     #[test]

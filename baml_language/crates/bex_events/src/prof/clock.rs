@@ -147,8 +147,13 @@ mod imp {
     /// NOT cross-core/cross-socket synchronization. On Linux we therefore
     /// also defer to the kernel, which measures TSC sync across CPUs at
     /// boot and only offers `tsc` as a clocksource when it holds (the same
-    /// check minstant used). Elsewhere the CPUID bit is the best signal
-    /// available; modern single-socket parts ship synchronized.
+    /// check minstant used). Elsewhere we require the invariant bit AND the
+    /// absence of a hypervisor: under virtualization the invariant bit is
+    /// still set, but a vCPU can migrate between physical cores whose TSCs
+    /// are not in lockstep, so `rdtsc` reads backwards across a thread
+    /// hand-off (observed on virtualized Windows CI). Falling back to
+    /// `Instant` there is correct, not just safe: Windows `Instant` is
+    /// `QueryPerformanceCounter`, which the OS keeps system-wide monotonic.
     #[cfg(target_arch = "x86_64")]
     fn tsc_is_trustworthy() -> bool {
         if !has_invariant_tsc() {
@@ -164,8 +169,24 @@ mod imp {
         }
         #[cfg(not(target_os = "linux"))]
         {
-            true
+            !hypervisor_present()
         }
+    }
+
+    /// Whether a hypervisor is present: `CPUID.01H:ECX[31]`, the "hypervisor
+    /// present" bit that is reserved-zero on bare metal and set by every
+    /// mainstream VMM. Used to reject the TSC for cross-thread stamps under
+    /// virtualization, where invariant-TSC no longer implies cross-vCPU
+    /// synchronization. Conservative by design: a guest whose hypervisor
+    /// *does* synchronize the TSC still falls back to `Instant`, trading a
+    /// little per-stamp cost for guaranteed cross-thread monotonicity.
+    #[cfg(all(target_arch = "x86_64", not(target_os = "linux")))]
+    // `__cpuid` is an unsafe fn on the pinned stable toolchain but safe on
+    // newer ones — keep the block, silence the newer toolchains' lint.
+    #[allow(unused_unsafe)]
+    fn hypervisor_present() -> bool {
+        // SAFETY: cpuid leaf 1 is unprivileged and universally available.
+        unsafe { core::arch::x86_64::__cpuid(1).ecx & (1 << 31) != 0 }
     }
 
     /// Invariant-TSC probe: CPUID.80000007H:EDX[8] (constant rate, does not

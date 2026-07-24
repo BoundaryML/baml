@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "HiddenHandler"
     EQUALS "="
     TYPE_EXPR
@@ -18,6 +18,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   CLASS_DEF
     KW_CLASS "class"
     WORD "Holder"
@@ -35,6 +39,10 @@ SOURCE_FILE
         ARROW "->"
         TYPE_EXPR "int"
           WORD "int"
+        THROWS_CLAUSE
+          KW_THROWS "throws"
+          TYPE_EXPR "never"
+            WORD "never"
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -83,6 +91,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "int"
                 WORD "int"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           ARROW "->"
           TYPE_EXPR "int"
@@ -222,6 +234,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"

@@ -106,8 +106,8 @@ function GuessGameAgent() -> GuessResponse {
   let history: string[] = []
   let famous_person_name = GenerateFamousPersonName([])
   log.info({"famous_person_name":
-  watch let user_input = SimulateHumanGuess(history)
-  watch let guess_response = TakeGuess(user_input, famous_person_name, history)
+  let user_input = SimulateHumanGuess(history)
+  let guess_response = TakeGuess(user_input, famous_person_name, history)
   guess_response
 }
 "##;

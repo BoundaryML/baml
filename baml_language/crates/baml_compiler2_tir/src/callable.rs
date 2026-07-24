@@ -2,18 +2,13 @@ use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
 use baml_compiler2_ast::ExprBody;
-use baml_compiler2_hir::{
-    body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
-};
+use baml_compiler2_hir::{body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId};
 use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
-    lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
-    throw_inference::{
-        flatten_ty_to_facts, function_throw_sets, throw_set_key, throws_ty_has_infer_hole,
-    },
+    throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
     ty::{Ty, TyAttr},
 };
@@ -31,29 +26,58 @@ fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
     }
 }
 
+/// Generic parameters of the type declaration enclosing `function` — the
+/// class's for a class method, the interface's for a default method, empty for
+/// top-level functions and free-impl methods (whose generics live on the impl
+/// block). Firewall twin of `ItemTree::enclosing_type_generic_params`.
+fn enclosing_type_generic_params<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Vec<Name> {
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+            baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .generic_params
+                .clone()
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+            baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                .generic_params
+                .clone()
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(_)) | None => Vec::new(),
+    }
+}
+
 fn lowered_declared_callable_throws<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Option<Ty> {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+    let mut generic_params = enclosing_type_generic_params(db, function);
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
-    sig.throws.as_ref().map(|declared_throws| {
+    sig.throws.map(|declared_throws| {
         let mut diags = Vec::new();
-        lower_type_expr_in_ns(
-            db,
+        crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
             declared_throws,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, function,
+                ),
+                self_ty: None,
+            },
             &mut diags,
         )
     })
@@ -64,25 +88,30 @@ fn signature_cycle_initial_callable_throws<'db>(
     function: FunctionLoc<'db>,
 ) -> Ty {
     let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+    let mut generic_params = enclosing_type_generic_params(db, function);
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
+    let param_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &generic_params,
+        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, function),
+        self_ty: None,
+    };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
         let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            &param.ty,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+        let lowered = crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
+            param.type_ref,
+            &param_scope,
             &mut diags,
         );
         if let Ty::Function { throws, .. } = lowered {
@@ -93,28 +122,16 @@ fn signature_cycle_initial_callable_throws<'db>(
     join_throw_facts(&facts)
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
-}
-
 fn callable_short_name<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name {
-    let file = function.file(db);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, function);
 
-    if let Some(class_data) = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function.id(db)))
+    // Only a class owner qualifies the name — interface default methods and
+    // free-impl methods keep their bare name, preserving the throw-set key
+    // format the scan produced.
+    if let Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) =
+        baml_compiler2_ppir::item_data::method_owner(db, function)
     {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         Name::new(format!("{}.{}", class_data.name, func_data.name))
     } else {
         func_data.name.clone()
@@ -125,23 +142,6 @@ fn callable_key<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name
     let namespace = file_package::file_package(db, function.file(db)).namespace_path;
     let short_name = callable_short_name(db, function);
     throw_set_key(&namespace, &short_name)
-}
-
-fn function_scope_id<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    let file = function.file(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
-
-    index.scope_ids.iter().copied().find(|scope_id| {
-        let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
-        matches!(scope.kind, ScopeKind::Function)
-            && scope.range == func_data.span
-            && scope.name.as_ref() == Some(&func_data.name)
-    })
 }
 
 fn named_callee_key<'db>(
@@ -364,72 +364,75 @@ fn callable_throws_cycle_initial<'db>(
     _id: salsa::Id,
     function: FunctionLoc<'db>,
 ) -> Ty {
-    match lowered_declared_callable_throws(db, function) {
-        // An open `throws X | _` contract seeds the fixpoint with just its named
-        // members — never the `_` hole — so a recursive cycle never observes a
-        // hole in a callable type. The fixpoint adds the inferred throws on top.
-        Some(declared) if throws_ty_has_infer_hole(&declared) => {
-            join_throw_facts(&flatten_ty_to_facts(&declared))
-        }
-        Some(declared) => declared,
-        None => signature_cycle_initial_callable_throws(db, function),
-    }
+    lowered_declared_callable_throws(db, function)
+        .unwrap_or_else(|| signature_cycle_initial_callable_throws(db, function))
 }
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
-    let declared = lowered_declared_callable_throws(db, function);
-    let declared_has_hole = declared.as_ref().is_some_and(throws_ty_has_infer_hole);
-
-    // A closed declaration (`throws X`, no `_`) is the exact contract callers see.
-    if let Some(declared_throws) = &declared
-        && !declared_has_hole
-    {
-        return declared_throws.clone();
+    // A seeded value from a previous compile short-circuits body
+    // inference for a clean function, returning exactly the `Ty` this query
+    // produced last time. `seeds.by_path(db)` is a *tracked* read of the
+    // `SeededCallableThrows` input (present-from-construction, empty until
+    // seeded), so a later seed reliably invalidates this memo. The seed is
+    // keyed by (source path, item-tree `LocalItemId`) — process-independent for
+    // byte-identical files. Only functions the reuse plan proved clean are
+    // seeded, so a converged fixpoint value is returned without re-entering the
+    // callee body; a dirty function is never in the map and infers below.
+    if let Some(seeds) = db.seeded_callable_throws() {
+        // `by_path(db)` is the tracked read (kept unconditional so a later seed
+        // still invalidates this memo), but the path-display allocation and the
+        // lookup are skipped whenever no seeds were injected — the LSP and every
+        // cold CLI compile hold the empty map, so this guard avoids a per-eval
+        // `String` allocation on the hot `callable_throws` path.
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return ty.clone();
+            }
+        }
     }
 
-    // Otherwise infer the body's effective throw set: either no declaration at
-    // all, or an open `throws X | _` contract whose hole is filled from the body.
-    // For the open contract we also union in the declared named members, so a
-    // caller sees the full set (declared ∪ inferred) rather than just the hole.
+    if let Some(declared_throws) = lowered_declared_callable_throws(db, function) {
+        return declared_throws;
+    }
+
     let file = function.file(db);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
-    let mut facts: BTreeSet<Ty> = match baml_compiler2_ppir::function_body(db, function).as_ref() {
+    match baml_compiler2_ppir::function_body(db, function).as_ref() {
         FunctionBody::Expr(body) => {
-            let Some(scope_id) = function_scope_id(db, function) else {
+            let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, function)
+            else {
                 return Ty::Unknown {
                     attr: TyAttr::default(),
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::inference::package_alias_map(db, res_ctx);
-            crate::throws_analysis::collect_escaping_throws(
+            // Salsa-cached per package — previously rebuilt for every callable.
+            let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
+            let facts = crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
-                    aliases: &aliases,
+                    aliases,
                 },
                 body,
-            )
+            );
+            join_throw_facts(&facts)
         }
-        // A builtin/missing body contributes no inferred facts; an open contract
-        // then reduces to just its declared named members.
-        FunctionBody::Builtin(_) => BTreeSet::new(),
-        FunctionBody::Missing if declared_has_hole => BTreeSet::new(),
-        FunctionBody::Missing => {
-            return Ty::Unknown {
-                attr: TyAttr::default(),
-            };
-        }
-    };
-
-    if let Some(declared_throws) = &declared {
-        facts.extend(flatten_ty_to_facts(declared_throws));
+        FunctionBody::Builtin(_) => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        FunctionBody::Missing => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
     }
-    join_throw_facts(&facts)
 }

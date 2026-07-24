@@ -6,15 +6,14 @@ function TestLogCompletion() -> void {
 
 //----
 //- diagnostics
-// error: Expected Expected field name after '.', found '}'
-//    ╭─[ baml_namespace.baml:5:1 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[baml_namespace.baml:5:1]
 //  5 │ }
-//    │ ┬  
-//    │ ╰── Expected Expected field name after '.', found '}'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    · ┬
+//    · ╰── expected `field name after `'.'``, found `'}'`
+//    ╰────
 //
 //- completions
 // SHOULD_CONTAIN: info, debug, warn, error

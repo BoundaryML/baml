@@ -27,7 +27,11 @@ import type {
   SerializedTestDef,
   SerializedTestSet,
 } from './serialized-test-tree';
-import type { FunctionInfo } from './worker-protocol';
+import {
+  previewTestKey,
+  type FunctionInfo,
+  type TestInfo,
+} from './worker-protocol';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -36,6 +40,8 @@ import type { FunctionInfo } from './worker-protocol';
 interface TestTreeNodeProps {
   def: SerializedTestDef;
   depth?: number;
+  /** Disable run/retry actions while the runtime is unavailable. */
+  disabled?: boolean;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
@@ -45,6 +51,7 @@ interface TestTreeNodeProps {
 function TestTreeNode({
   def,
   depth = 0,
+  disabled = false,
   onRunTest,
   testRunResults,
   failedExpands,
@@ -81,7 +88,8 @@ function TestTreeNode({
         </span>
         {isFailed && onRetryExpand && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
               onRetryExpand(def.name);
@@ -114,7 +122,8 @@ function TestTreeNode({
         </span>
         {onRunTest && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
               onRunTest(def.name);
@@ -170,6 +179,7 @@ function TestTreeNode({
             key={`${'name' in child ? child.name : i}-${i}`}
             def={child}
             depth={depth + 1}
+            disabled={disabled}
             onRunTest={onRunTest}
             testRunResults={testRunResults}
             failedExpands={failedExpands}
@@ -192,7 +202,12 @@ export interface FunctionSidebarProps {
   showInternalFunctions: boolean;
   internalFunctionCount: number;
   isLoadingProject?: boolean;
+  /** Disable Run/Test-derived actions until the current build is ready. */
+  runtimeControlsDisabled?: boolean;
   testTree?: SerializedTestDef[] | null;
+  previewTests?: TestInfo[];
+  selectedPreviewTestKey?: string | null;
+  onSelectPreviewTest?: (test: TestInfo) => void;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -235,21 +250,36 @@ function FunctionTreeNode({
 
   if (node.type === 'folder') {
     const forcedOpen = forcedOpenFolderKeys.has(node.key);
-    const open = forcedOpen || (openFolderKeys[node.key] ?? false);
+    const requestedOpen = openFolderKeys[node.key];
+    const collapsePending = forcedOpen && requestedOpen === false;
+    const open = forcedOpen || (requestedOpen ?? false);
+    const collapsePendingMessage =
+      'Will collapse when this folder is no longer kept open automatically';
     return (
       <Collapsible
         open={open}
-        onOpenChange={(nextOpen) => onFolderOpenChange(node.key, nextOpen)}
+        onOpenChange={(nextOpen) =>
+          onFolderOpenChange(
+            node.key,
+            collapsePending && !nextOpen ? true : nextOpen,
+          )
+        }
       >
         <CollapsibleTrigger
           className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
           style={{ paddingLeft: indent }}
-          title={node.path.join('.')}
+          title={
+            collapsePending
+              ? `${node.path.join('.')} — ${collapsePendingMessage}`
+              : node.path.join('.')
+          }
+          data-collapse-pending={collapsePending || undefined}
         >
           <ChevronRight
             className={cn(
-              'h-3 w-3 text-vsc-text-faint transition-transform',
-              open && 'rotate-90',
+              'h-3 w-3 shrink-0 transition-transform',
+              collapsePending ? 'text-vsc-accent' : 'text-vsc-text-faint',
+              open && !collapsePending && 'rotate-90',
             )}
           />
           <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
@@ -259,6 +289,9 @@ function FunctionTreeNode({
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
+          {collapsePending && (
+            <span className="sr-only">{collapsePendingMessage}</span>
+          )}
         </CollapsibleTrigger>
         <CollapsibleContent>
           {node.children.map((child) => (
@@ -314,7 +347,11 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   showInternalFunctions,
   internalFunctionCount,
   isLoadingProject = false,
+  runtimeControlsDisabled = false,
   testTree,
+  previewTests = [],
+  selectedPreviewTestKey,
+  onSelectPreviewTest,
   selectedFn,
   onSelectFn,
   onRefreshTests,
@@ -347,6 +384,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   };
 
   const treeItems = testTree ?? [];
+  const previewNameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const test of previewTests) {
+      counts.set(test.name, (counts.get(test.name) ?? 0) + 1);
+    }
+    return counts;
+  }, [previewTests]);
   let emptyFunctionMessage = 'No matches';
   if (isLoadingProject) {
     emptyFunctionMessage = 'Loading project...';
@@ -451,6 +495,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 size="icon"
                 className={`h-5 w-5 text-vsc-text-faint hover:text-vsc-text${onSelectCollectionView ? '' : ' ml-auto'}`}
                 onClick={onRefreshTests}
+                disabled={runtimeControlsDisabled}
                 title="Re-collect tests"
               >
                 <RefreshCw size={10} />
@@ -458,25 +503,56 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             </div>
 
             <CollapsibleContent>
-              {!testTree && (
+              {!testTree && previewTests.length === 0 && (
                 <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                   No test data yet
                 </div>
               )}
 
-              {testTree && treeItems.length === 0 && (
+              {testTree && treeItems.length === 0 && previewTests.length === 0 && (
                 <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                   No tests found
                 </div>
               )}
 
+              {previewTests.map((test) => {
+                const key = previewTestKey(test);
+                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={cn(
+                      'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
+                      selectedPreviewTestKey === key
+                        ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+                        : 'text-vsc-text-muted hover:bg-vsc-hover',
+                    )}
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => onSelectPreviewTest?.(test)}
+                    title={`Use ${test.name} args for ${test.functionName}`}
+                  >
+                    <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
+                    <span className="truncate text-[11px]">
+                      {test.name}
+                      {duplicateName ? ` → ${test.functionName}` : ''}
+                    </span>
+                    <span className="ml-auto text-[9px] text-vsc-text-faint shrink-0">
+                      preview
+                    </span>
+                  </button>
+                );
+              })}
+
               {treeItems.map((def, i) => (
                 <TestTreeNode
                   key={`${'name' in def ? def.name : i}-${i}`}
                   def={def}
+                  disabled={runtimeControlsDisabled}
                   onRunTest={onRunTest}
                   testRunResults={testRunResults}
                   failedExpands={failedExpands}
+                  onRetryExpand={onRetryExpand}
                 />
               ))}
             </CollapsibleContent>

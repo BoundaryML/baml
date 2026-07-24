@@ -10,10 +10,7 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{
-    project_load::load_project_or_default,
-    util::{line_number_at_offset, relative_path},
-};
+use crate::util::{line_number_at_offset, relative_path};
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -73,7 +70,13 @@ impl GrepArgs {
         // get a stdlib-only default state and an empty user-file set;
         // each grep mode already surfaces "no matches" / "no symbol found"
         // gracefully below, so there's no need to bail up front.
-        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
+        let mut session = crate::project_session::ProjectSession::open_lenient(
+            self.from.as_deref(),
+            crate::project_session::CacheUse::ReadOnly,
+        )?;
+        let _ = session.warm_prep_seeds_only();
+        session.prime();
+        let (db, from) = (session.db, session.resolved.root);
 
         let source_files = db.get_source_files();
         let kind_filter = parse_kind_filter(&self.kind)?;
@@ -82,7 +85,7 @@ impl GrepArgs {
         if self.symbols {
             let symbols = list_symbols(&db, &source_files, &kind_filter);
             if symbols.is_empty() {
-                eprintln!("No symbols found.");
+                eprintln!("no symbols found");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -104,7 +107,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -125,7 +128,7 @@ impl GrepArgs {
         let pattern = match &self.pattern {
             Some(p) => p.as_str(),
             None => {
-                eprintln!("No pattern provided. Use --symbols to list all symbols.");
+                eprintln!("no pattern provided; use `--symbols` to list all symbols");
                 return Ok(crate::ExitCode::InvalidArgs);
             }
         };
@@ -134,7 +137,7 @@ impl GrepArgs {
         if self.def {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("No symbol found: {pattern}");
+                eprintln!("no symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -146,7 +149,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -166,7 +169,7 @@ impl GrepArgs {
         if self.refs {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("No symbol found: {pattern}");
+                eprintln!("no symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -193,7 +196,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -240,7 +243,7 @@ impl GrepArgs {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&json_output)
-                    .context("Failed to serialize output as JSON")?
+                    .context("failed to serialize output as JSON")?
             );
             return Ok(crate::ExitCode::Success);
         }
@@ -249,7 +252,7 @@ impl GrepArgs {
             GrepMode::Semantic => {
                 if result.descriptions.is_empty() {
                     // Symbol exists but was filtered out by --kind.
-                    eprintln!("No symbol found matching pattern and kind filter: {pattern}");
+                    eprintln!("no symbol found matching pattern and kind filter: {pattern}");
                     return Ok(crate::ExitCode::Other);
                 }
                 let history: std::collections::HashSet<&str> =
@@ -264,7 +267,7 @@ impl GrepArgs {
             }
             GrepMode::TextSearch => {
                 if result.text_matches.is_empty() {
-                    eprintln!("No matches found for: {pattern}");
+                    eprintln!("no matches found for: {pattern}");
                     return Ok(crate::ExitCode::Other);
                 }
                 render_text_matches(&db, &result.text_matches, &from);
@@ -383,7 +386,7 @@ pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
             "field" => Ok(DefinitionKind::Field),
             "variant" => Ok(DefinitionKind::Variant),
             other => anyhow::bail!(
-                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
+                "unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
             ),
         })
         .collect()

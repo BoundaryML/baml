@@ -442,7 +442,7 @@ def get_runtime() -> BamlRuntime:
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
 
-    Used by the pure-Python factories in `baml_core` so generated
+    Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call
     site.
     """
@@ -458,7 +458,7 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     Insert a Python callable into the registry and return its key.
 
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
-    Called from the inbound encoder in `baml_core.proto` whenever a Python
+    Called from the inbound encoder in `baml_bridge.proto` whenever a Python
     callable appears as a kwarg.
     """
 

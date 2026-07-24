@@ -306,6 +306,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"
@@ -1117,7 +1121,7 @@ SOURCE_FILE
                 KW_ELSE "else"
                 BLOCK_EXPR "{ null }"
                   L_BRACE "{"
-                  WORD "null"
+                  KW_NULL "null"
                   R_BRACE "}"
               R_BRACE "}"
         CALL_EXPR
@@ -1564,6 +1568,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"
@@ -1711,6 +1719,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "g"
@@ -1724,6 +1736,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"
@@ -2209,7 +2225,7 @@ SOURCE_FILE
             L_BRACKET "["
             INTEGER_LITERAL "1"
             COMMA ","
-            WORD "null"
+            KW_NULL "null"
             COMMA ","
             INTEGER_LITERAL "3"
             R_BRACKET "]"

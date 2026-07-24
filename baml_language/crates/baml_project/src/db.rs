@@ -74,6 +74,45 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 ///     println!("{}", diag.message);
 /// }
 /// ```
+/// Cap on the total node count of a fully-inlined control-flow graph. Callee
+/// graphs are copied into every call site, so an uncapped graph grows as
+/// `fan_out^depth` on deep call chains; once the budget is reached remaining
+/// calls stay plain call nodes.
+const CFG_EXPANSION_NODE_BUDGET: usize = 5_000;
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct CfgExpansionCacheKey {
+    callee_name: String,
+    active_expansions: Vec<String>,
+}
+
+/// State threaded through one top-level [`ProjectDatabase::ast_control_flow_graph`] build.
+#[derive(Default)]
+struct CfgExpansionCtx {
+    /// Functions currently being expanded (cycle guard).
+    expanding: HashSet<String>,
+    /// Fully-expanded callee graphs keyed by the active expansion context.
+    /// `None` records callees with no buildable graph so they are not retried
+    /// per equivalent site.
+    cache: HashMap<
+        CfgExpansionCacheKey,
+        Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
+    >,
+}
+
+impl CfgExpansionCtx {
+    fn cache_key(&self, callee_name: String) -> CfgExpansionCacheKey {
+        // The recursion guard depends on membership in `expanding`, not call
+        // order, so a sorted active set is the safe memoization context.
+        let mut active_expansions = self.expanding.iter().cloned().collect::<Vec<_>>();
+        active_expansions.sort();
+        CfgExpansionCacheKey {
+            callee_name,
+            active_expansions,
+        }
+    }
+}
+
 #[salsa::db]
 #[derive(Clone)]
 pub struct ProjectDatabase {
@@ -86,12 +125,72 @@ pub struct ProjectDatabase {
     /// Compiler2-only extra files (`baml_builtins2` stubs). Held separately so
     /// they are NOT added to `project.files()`.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
+    /// Per-file throw facts seeded from a previous compile (bytecode cache).
+    ///
+    /// This is a real `#[salsa::input]` handle, created **once** (empty) in
+    /// `ProjectDatabase::new` and thereafter mutated *in place* by
+    /// `set_seeded_throw_facts` via its Salsa setter. It is therefore always
+    /// `Some` for a `ProjectDatabase`. Keeping the input present from
+    /// construction is what makes `throw_inference::file_throw_facts` read the
+    /// seed map through a **tracked** dependency: were the handle absent until
+    /// the first seed, a query memoized while it was `None` would record no
+    /// dependency and a later seed on a reused database would be invisible to
+    /// the memo. Mutating via the setter bumps the revision and correctly
+    /// invalidates dependents.
+    seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
+    /// Stdlib packages' typed interfaces seeded from a previous compile
+    /// (bytecode cache).
+    ///
+    /// Same present-from-construction discipline as `seeded_throw_facts` above: a
+    /// real `#[salsa::input]` handle created **once** (empty) in the constructors
+    /// and thereafter mutated in place via its Salsa setter, so it is always
+    /// `Some` and `package_interface::package_interface` reads the seed through a
+    /// **tracked** dependency (an absent-then-added handle would leave a stale
+    /// memo on a reused database, e.g. the LSP's long-lived `ProjectDatabase`).
+    seeded_stdlib_interface: Option<baml_workspace::SeededStdlibInterface>,
+    /// Per-function `callable_throws` values seeded from a previous compile
+    /// (bytecode cache).
+    ///
+    /// Same present-from-construction discipline as `seeded_throw_facts` and
+    /// `seeded_stdlib_interface` above: a real `#[salsa::input]` handle created
+    /// **once** (empty) in the constructors and thereafter mutated in place via
+    /// its Salsa setter, so it is always `Some` and `callable::callable_throws`
+    /// reads the seed through a **tracked** dependency (an absent-then-added
+    /// handle would leave a stale memo on a reused database, e.g. the LSP's
+    /// long-lived `ProjectDatabase`).
+    seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
     /// Maps file paths to their `SourceFile` handles (user files only).
-    file_map: HashMap<std::path::PathBuf, SourceFile>,
+    ///
+    /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
+    /// database handle stays O(1): the parallel check and emit drivers mint a
+    /// shared-storage handle per work chunk, and a deep per-clone copy of an
+    /// N-entry `PathBuf` map made every clone O(files) — quadratic CPU and
+    /// peak RSS across a whole compile.
+    file_map: Arc<HashMap<std::path::PathBuf, SourceFile>>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
-    /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
-    file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// Maps `FileId` to file path for reverse lookup (all files including v2
+    /// stubs). `Arc`-wrapped for the same reason as `file_map`.
+    file_id_to_path: Arc<HashMap<FileId, std::path::PathBuf>>,
+    /// `SourceFile` inputs of removed paths. Salsa never frees inputs, so a
+    /// delete/recreate cycle (branch switch, codegen rewriting `.baml`
+    /// files) would mint a new immortal input per cycle; instead the input
+    /// parks here with empty text (releasing the source string and its
+    /// downstream memos) and is revived if the path reappears.
+    removed_file_tombstones: HashMap<std::path::PathBuf, SourceFile>,
+}
+
+/// Origin-preference order for disambiguating functions that share one
+/// declaration span (a declarative LLM function and its `$stream` /
+/// `$parse_stream` companions): the user-authored function sorts first.
+fn func_origin_rank(origin: baml_compiler2_ast::ast::FunctionOrigin) -> u8 {
+    use baml_compiler2_ast::ast::FunctionOrigin;
+    match origin {
+        FunctionOrigin::UserDefined => 0,
+        FunctionOrigin::Companion => 1,
+        FunctionOrigin::Internal => 2,
+        FunctionOrigin::AutoDerive => 3,
+    }
 }
 
 #[salsa::db]
@@ -102,6 +201,18 @@ impl baml_workspace::Db for ProjectDatabase {
     fn project(&self) -> Project {
         self.project
             .expect("project must be set before querying - call set_project_root first")
+    }
+
+    fn seeded_throw_facts(&self) -> Option<baml_workspace::SeededThrowFacts> {
+        self.seeded_throw_facts
+    }
+
+    fn seeded_stdlib_interface(&self) -> Option<baml_workspace::SeededStdlibInterface> {
+        self.seeded_stdlib_interface
+    }
+
+    fn seeded_callable_throws(&self) -> Option<baml_workspace::SeededCallableThrows> {
+        self.seeded_callable_throws
     }
 }
 
@@ -122,7 +233,16 @@ impl baml_compiler2_tir::Db for ProjectDatabase {}
 impl baml_compiler2_mir::Db for ProjectDatabase {}
 
 #[salsa::db]
-impl baml_compiler2_emit::Db for ProjectDatabase {}
+impl baml_compiler2_emit::Db for ProjectDatabase {
+    fn parallel_db_handle(&self) -> Option<Box<dyn baml_compiler2_mir::Db + Send>> {
+        // A shared-storage salsa handle (an `Arc` bump — the same handle
+        // cloning the parallel check in `check.rs` relies on): the clone is
+        // MOVED into an emit worker thread, and all clones share one memo
+        // table. `ProjectDatabase` is `Send` but deliberately not `Sync`, so
+        // handing out owned handles is the only way workers can read salsa.
+        Some(Box::new(self.clone()))
+    }
+}
 
 #[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
@@ -149,15 +269,7 @@ impl ProjectDatabase {
 
     /// Create a new empty database.
     pub fn new() -> Self {
-        Self {
-            storage: salsa::Storage::default(),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-            project: None,
-            compiler2_extra_files: None,
-            file_map: HashMap::new(),
-            compiler2_file_map: HashMap::new(),
-            file_id_to_path: HashMap::new(),
-        }
+        Self::from_storage(salsa::Storage::default())
     }
 
     /// Create a new database with an event callback for tracking query execution.
@@ -168,15 +280,43 @@ impl ProjectDatabase {
     ///
     /// This is useful for tracking incremental compilation behavior.
     pub fn new_with_event_callback(callback: EventCallback) -> Self {
-        Self {
-            storage: salsa::Storage::new(Some(callback)),
+        Self::from_storage(salsa::Storage::new(Some(callback)))
+    }
+
+    /// Build a database over `storage`, installing the three seed inputs empty
+    /// from construction. Holding each `#[salsa::input]` handle present (not
+    /// `None`) from the start is what lets the seed-reading queries record a
+    /// *tracked* dependency on the initially-empty seed maps, so a later
+    /// `set_seeded_*` on a reused database reliably invalidates their memos; an
+    /// empty map means "no seeds" and every file derives honestly. See the
+    /// `seeded_*` field docs.
+    fn from_storage(storage: salsa::Storage<Self>) -> Self {
+        let mut db = Self {
+            storage,
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
-            file_map: HashMap::new(),
+            seeded_throw_facts: None,
+            seeded_stdlib_interface: None,
+            seeded_callable_throws: None,
+            file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
-            file_id_to_path: HashMap::new(),
-        }
+            file_id_to_path: Arc::new(HashMap::new()),
+            removed_file_tombstones: HashMap::new(),
+        };
+        db.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.seeded_stdlib_interface = Some(baml_workspace::SeededStdlibInterface::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.seeded_callable_throws = Some(baml_workspace::SeededCallableThrows::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db
     }
 
     /// Get the project, if set.
@@ -184,28 +324,65 @@ impl ProjectDatabase {
         self.project
     }
 
-    /// Get the project, if set.
+    /// Seed per-file throw facts from a previous compile of identical file
+    /// content (bytecode-cache per-file reuse); keys are full source-file path
+    /// strings.
     ///
-    /// Alias for `get_project()` for API compatibility with old `LspDatabase`.
-    pub fn project(&self) -> Option<Project> {
-        self.project
+    /// This mutates the always-present `SeededThrowFacts` input (created in
+    /// `new`) through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `file_throw_facts` memo — it is safe to
+    /// call before *or* after queries have run.
+    pub fn set_seeded_throw_facts(
+        &mut self,
+        by_path: std::collections::BTreeMap<
+            String,
+            Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        >,
+    ) {
+        let seeds = self
+            .seeded_throw_facts
+            .expect("SeededThrowFacts input is created in ProjectDatabase::new");
+        seeds.set_by_path(self).to(by_path);
     }
 
-    /// Get a reference to self as the database.
+    /// Seed the stdlib packages' typed interfaces from a previous compile;
+    /// keys are package names, values are `borsh(PackageInterface)`.
     ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db()` to get the underlying `RootDatabase`.
-    /// Since `ProjectDatabase` IS the database now, this just returns `self`.
-    pub fn db(&self) -> &Self {
-        self
+    /// Mutates the always-present `SeededStdlibInterface` input (created in
+    /// `new`) through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `package_interface` memo — it is safe to
+    /// call before *or* after queries have run. Only stdlib package names ever
+    /// appear in the map, so user packages are never seeded and always derive
+    /// their interface honestly.
+    pub fn set_seeded_stdlib_interface(
+        &mut self,
+        by_package: std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        let seeds = self
+            .seeded_stdlib_interface
+            .expect("SeededStdlibInterface input is created in ProjectDatabase::new");
+        seeds.set_by_package(self).to(by_package);
     }
 
-    /// Get a mutable reference to self as the database.
+    /// Seed per-function `callable_throws` values from a previous compile of
+    /// identical file content; the outer key is a full source-file path string,
+    /// the inner key an item-tree `LocalItemId::as_u32`.
     ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db_mut()` to get the underlying `RootDatabase`.
-    pub fn db_mut(&mut self) -> &mut Self {
-        self
+    /// Mutates the always-present `SeededCallableThrows` input (created in `new`)
+    /// through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `callable_throws` memo — safe to call
+    /// before *or* after queries have run. Only functions the reuse plan proved
+    /// clean (unchanged body and unchanged transitive throw contributors) ever
+    /// appear, so a dirty or throws-tainted function is never seeded and always
+    /// infers honestly.
+    pub fn set_seeded_callable_throws(
+        &mut self,
+        by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+    ) {
+        let seeds = self
+            .seeded_callable_throws
+            .expect("SeededCallableThrows input is created in ProjectDatabase::new");
+        seeds.set_by_path(self).to(by_path);
     }
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
@@ -249,12 +426,18 @@ impl ProjectDatabase {
             existing_file.set_text(self).to(content.to_string());
             existing_file
         } else {
-            // Create new file
-            let file = self.add_file_internal(&canonical_path, content);
+            // Revive the tombstoned input if this path existed before —
+            // creating a fresh input would leak the old one forever.
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
             let file_id = file.file_id(self);
 
-            self.file_map.insert(canonical_path.clone(), file);
-            self.file_id_to_path.insert(file_id, canonical_path);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
 
             // Update project files list if project is set
             if let Some(project) = self.project {
@@ -267,16 +450,56 @@ impl ProjectDatabase {
         }
     }
 
+    /// Bulk [`Self::add_or_update_file`]: identical per-file semantics
+    /// (canonicalization, tombstone revival, map registration), but the
+    /// project file list is written once at the end instead of once per new
+    /// file. The per-file path clones and re-sets the whole `files` Vec and
+    /// bumps the salsa revision each time — O(files²) copies plus one
+    /// revision per file during initial project load.
+    pub fn add_or_update_files<'a, I>(&mut self, files: I)
+    where
+        I: IntoIterator<Item = (&'a std::path::Path, &'a str)>,
+    {
+        let mut new_files = Vec::new();
+        for (path, content) in files {
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+            if let Some(&existing_file) = self.file_map.get(&canonical_path) {
+                existing_file.set_text(self).to(content.to_string());
+                continue;
+            }
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
+            let file_id = file.file_id(self);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
+            new_files.push(file);
+        }
+        if !new_files.is_empty()
+            && let Some(project) = self.project
+        {
+            let mut project_files: Vec<SourceFile> = project.files(self).clone();
+            project_files.extend(new_files);
+            project.set_files(self).to(project_files);
+        }
+    }
+
     /// Remove a file from the database.
     ///
-    /// Note: Salsa doesn't support true removal, but we can remove it from our tracking
-    /// and the project's file list.
+    /// Note: Salsa doesn't support true removal. The input is emptied (so its
+    /// text and per-file memos can be reclaimed), removed from tracking and
+    /// the project's file list, and parked in a tombstone map for reuse if
+    /// the same path is re-added later.
     pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        if let Some(file) = self.file_map.remove(&canonical_path) {
+        if let Some(file) = Arc::make_mut(&mut self.file_map).remove(&canonical_path) {
             let file_id = file.file_id(self);
-            self.file_id_to_path.remove(&file_id);
+            Arc::make_mut(&mut self.file_id_to_path).remove(&file_id);
 
             // Remove from project files list
             if let Some(project) = self.project {
@@ -288,6 +511,9 @@ impl ProjectDatabase {
                     .collect();
                 project.set_files(self).to(files);
             }
+
+            file.set_text(self).to(String::new());
+            self.removed_file_tombstones.insert(canonical_path, file);
         }
     }
 
@@ -327,7 +553,7 @@ impl ProjectDatabase {
     /// Load compiler2 builtin BAML source files into the database.
     ///
     /// Returns the list of compiler2 builtin stub files (Array<T>, Map<K,V>, String,
-    /// Media, baml.env, baml.http, baml.math, baml.sys namespaces, etc.).
+    /// Media, baml.env, baml.http, baml.sys namespaces, etc.).
     ///
     /// These are stored in `compiler2_file_map` (NOT `file_map`) so that
     /// `get_source_files()` does NOT return them.
@@ -339,7 +565,7 @@ impl ProjectDatabase {
             let file = self.add_file_internal(&path, builtin.contents);
             let file_id = file.file_id(self);
 
-            self.file_id_to_path.insert(file_id, path.clone());
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
             self.compiler2_file_map.insert(path, file);
 
             v2_builtin_files.push(file);
@@ -353,11 +579,6 @@ impl ProjectDatabase {
     /// This is an alias for `add_or_update_file` for API compatibility.
     pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
-    }
-
-    /// Get all files currently in the database.
-    pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
-        self.file_map.values().copied()
     }
 
     /// Get all file paths currently tracked by the database.
@@ -377,23 +598,6 @@ impl ProjectDatabase {
     /// Get a `FileId` by its path.
     pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
-    }
-
-    /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
-        self.file_id_to_path
-            .get(&file_id)
-            .map(std::path::PathBuf::as_path)
-    }
-
-    /// Get a `SourceFile` by its `FileId`.
-    pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path.get(&file_id).and_then(|path| {
-            self.file_map
-                .get(path)
-                .or_else(|| self.compiler2_file_map.get(path))
-                .copied()
-        })
     }
 
     /// Get the compiled bytecode for the project using the compiler2 pipeline.
@@ -427,6 +631,20 @@ impl ProjectDatabase {
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
+        self.get_bytecode_unchecked()
+    }
+
+    /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
+    ///
+    /// Only for callers that have already run a full-project check (per-file
+    /// `check_file` sweep **plus** package-level diagnostics) at the current
+    /// revision and found no user-file errors — the gate in `get_bytecode`
+    /// would re-derive exactly that result. Calling this on an error-bearing
+    /// project can panic in the runtime-conversion boundary (see the gate
+    /// comment above).
+    pub fn get_bytecode_unchecked(
+        &self,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
@@ -438,31 +656,35 @@ impl ProjectDatabase {
     /// More error-resilient than `control_flow_graph()` — works even when code has type errors,
     /// because it builds directly from the AST using `Missing` sentinels for unresolved nodes.
     /// Suitable for the playground which must function during editing.
+    ///
+    /// Callee graphs are inlined at every call site, memoized per callee and
+    /// active recursion context, and capped at 5,000 total nodes — the fully-inlined
+    /// representation is otherwise exponential in call-chain depth.
     pub fn ast_control_flow_graph(
         &self,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let mut expanding = HashSet::new();
-        self.ast_control_flow_graph_impl(function_name, &mut expanding)
+        let mut ctx = CfgExpansionCtx::default();
+        self.ast_control_flow_graph_impl(function_name, &mut ctx)
     }
 
     fn ast_control_flow_graph_impl(
         &self,
         function_name: &str,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         use baml_compiler2_visualization::control_flow::{
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
-        if !expanding.insert(function_name.to_string()) {
+        if !ctx.expanding.insert(function_name.to_string()) {
             return None;
         }
 
         let mut result = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -471,33 +693,23 @@ impl ProjectDatabase {
                     continue;
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
-                // Check if this is an LLM function via declarative_meta (not body variant,
-                // since compiler2 desugars LLM functions to Expr bodies).
-                let is_llm = matches!(
-                    func_data.declarative_meta,
-                    Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
-                );
-
-                result = if is_llm {
-                    let client_name =
-                        if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
-                            func_data.declarative_meta
-                        {
-                            llm.client
-                                .as_ref()
-                                .map(|c: &baml_db::Name| c.to_string())
-                                .unwrap_or_else(|| "unknown".to_string())
-                        } else {
-                            "unknown".to_string()
-                        };
+                // LLM functions desugar to Expr bodies, so it is `declarative_meta`
+                // (surfaced span-free by `function_llm_meta`) — not the body variant —
+                // that marks them.
+                result = if let Some(llm_meta) =
+                    baml_compiler2_ppir::item_data::function_llm_meta(self, func_loc)
+                {
+                    let client_name = llm_meta
+                        .client_name
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "unknown".to_string());
                     let mut graph = build_llm_control_flow_graph(function_name, &client_name);
-                    if let Some(source_span) =
-                        self.source_span_for_range(source_file, func_data.span)
-                    {
+                    if let Some(source_span) = self.source_span_for_range(source_file, func_span) {
                         if let Some(node) = graph.nodes.values_mut().next() {
                             node.source_span = Some(source_span);
                         }
@@ -522,7 +734,7 @@ impl ProjectDatabase {
                             // whole function declaration so clicking the root in the
                             // playground selects the function (mirrors the LLM path above).
                             if let Some(root_span) =
-                                self.source_span_for_range(source_file, func_data.span)
+                                self.source_span_for_range(source_file, func_span)
                             {
                                 if let Some(root) = graph.nodes.values_mut().find(|node| {
                                     node.node_type
@@ -531,9 +743,7 @@ impl ProjectDatabase {
                                     root.source_span.get_or_insert(root_span);
                                 }
                             }
-                            self.expand_user_function_calls_in_graph(
-                                &mut graph, expr_body, expanding,
-                            );
+                            self.expand_user_function_calls_in_graph(&mut graph, expr_body, ctx);
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
@@ -547,7 +757,7 @@ impl ProjectDatabase {
             }
         }
 
-        expanding.remove(function_name);
+        ctx.expanding.remove(function_name);
         result
     }
 
@@ -555,7 +765,7 @@ impl ProjectDatabase {
         &self,
         graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
         body: &baml_compiler2_ast::ExprBody,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) {
         use baml_compiler2_visualization::control_flow::NodeType;
 
@@ -572,8 +782,27 @@ impl ProjectDatabase {
                 continue;
             }
 
-            let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
-            else {
+            // Recursion is cut at the call node rather than cached: a graph
+            // truncated by the cycle guard must not be reused at sites where
+            // the callee is not part of the active expansion chain.
+            if ctx.expanding.contains(&callee_name) {
+                continue;
+            }
+            // Each callee is fully expanded once per equivalent recursion
+            // context and reused at later matching call sites. The active
+            // expansion set is part of the key because it controls which
+            // recursive edges are intentionally left as plain call nodes.
+            let cache_key = ctx.cache_key(callee_name.clone());
+            let callee_graph = if let Some(cached) = ctx.cache.get(&cache_key) {
+                cached.clone()
+            } else {
+                let built = self
+                    .ast_control_flow_graph_impl(&callee_name, ctx)
+                    .map(std::sync::Arc::new);
+                ctx.cache.insert(cache_key, built.clone());
+                built
+            };
+            let Some(callee_graph) = callee_graph else {
                 continue;
             };
 
@@ -607,6 +836,13 @@ impl ProjectDatabase {
                 }
             }
 
+            // Even with per-callee memoization the merged output copies the
+            // callee graph at every call site, so deep chains still multiply
+            // node counts. Stop inlining once the graph reaches the budget;
+            // remaining calls render as plain call nodes.
+            if graph.nodes.len() + callee_graph.nodes.len() > CFG_EXPANSION_NODE_BUDGET {
+                continue;
+            }
             Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
         }
     }
@@ -619,8 +855,8 @@ impl ProjectDatabase {
     fn function_header_title(&self, function_name: &str) -> Option<String> {
         let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for func_data in index.item_tree.functions.values() {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -628,8 +864,10 @@ impl ProjectDatabase {
                 ) {
                     continue;
                 }
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let text = source_file.text(self);
-                let start = usize::from(func_data.span.start()).min(text.len());
+                let start = usize::from(func_span.start()).min(text.len());
                 if let Some(title) = header_title_above(&text[..start]) {
                     match &unique_title {
                         Some(existing) if existing != &title => return None,
@@ -1036,7 +1274,7 @@ impl ProjectDatabase {
             return Some(sf);
         }
         // Fallback: match by file name suffix (handles Monaco's relative paths)
-        for (stored_path, sf) in &self.file_map {
+        for (stored_path, sf) in self.file_map.iter() {
             if stored_path.ends_with(file_path)
                 || file_path.ends_with(stored_path.to_string_lossy().as_ref())
             {
@@ -1052,7 +1290,6 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> Option<(String, bool)> {
-        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -1067,20 +1304,19 @@ impl ProjectDatabase {
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
 
-        // Match against item tree functions by span
-        let item_tree = &index.item_tree;
-        let (local_id, _) = item_tree
-            .functions
+        // A declarative LLM function and its `$stream`/`$parse_stream` companions
+        // share one declaration span, hence one scope range — so multiple
+        // functions match here. Prefer the user-authored one (origin order).
+        let func_loc = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(_, func_data)| func_data.span == func_scope_range)
-            .min_by_key(|(_, func_data)| match func_data.origin {
-                FunctionOrigin::UserDefined => 0,
-                FunctionOrigin::Companion => 1,
-                FunctionOrigin::Internal => 2,
-                FunctionOrigin::AutoDerive => 3,
+            .copied()
+            .filter(|&loc| {
+                baml_compiler2_ppir::item_data::function_source_map(self, loc).span
+                    == func_scope_range
+            })
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
             })?;
-
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
         let is_workflow = matches!(
@@ -1098,8 +1334,8 @@ impl ProjectDatabase {
         let mut memberships = Vec::new();
 
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 let func_name =
                     self.playground_function_name_for_source_file(source_file, &func_data.name);
                 if func_data.name.as_str() == target_function_name
@@ -1108,8 +1344,6 @@ impl ProjectDatabase {
                     continue; // Skip self
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Only workflow (Expr) functions can call other functions
@@ -1175,7 +1409,6 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> (Option<u32>, Vec<u32>) {
-        use baml_compiler2_ast::ast::FunctionOrigin;
         use baml_compiler2_hir::scope::ScopeKind;
 
         let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
@@ -1190,20 +1423,17 @@ impl ProjectDatabase {
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-
-        let item_tree = &index.item_tree;
-        if let Some((local_id, _)) = item_tree
-            .functions
+        if let Some(func_loc) = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(_, func_data)| func_data.span == func_scope_range)
-            .min_by_key(|(_, func_data)| match func_data.origin {
-                FunctionOrigin::UserDefined => 0,
-                FunctionOrigin::Companion => 1,
-                FunctionOrigin::Internal => 2,
-                FunctionOrigin::AutoDerive => 3,
+            .copied()
+            .filter(|&loc| {
+                baml_compiler2_ppir::item_data::function_source_map(self, loc).span
+                    == func_scope_range
+            })
+            .min_by_key(|&loc| {
+                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
             })
         {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);
@@ -1376,6 +1606,159 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_files_are_revived_not_recreated() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/churn.baml");
+        let original =
+            db.add_or_update_file(path, "function A(input: string) -> string {\n  input\n}\n");
+        let original_id = original.file_id(&db);
+        let baseline = crate::collect_compiler2_diagnostics(&db).len();
+
+        // Branch switches and codegen delete and recreate files; each cycle
+        // must revive the tombstoned salsa input instead of minting a new
+        // immortal one.
+        for i in 0..3 {
+            db.remove_file(path);
+            assert!(
+                crate::collect_compiler2_diagnostics(&db).len() >= baseline,
+                "diagnostics must still compute while the file is removed"
+            );
+            let revived = db.add_or_update_file(
+                path,
+                &format!("function A(input: string) -> string {{\n  //# v{i}\n  input\n}}\n"),
+            );
+            assert_eq!(
+                revived.file_id(&db),
+                original_id,
+                "re-adding a removed path must reuse its SourceFile input"
+            );
+        }
+
+        assert_eq!(crate::collect_compiler2_diagnostics(&db).len(), baseline);
+        assert!(db.ast_control_flow_graph("A").is_some());
+    }
+
+    #[test]
+    fn callee_graphs_are_still_inlined_per_call_site() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/diamond.baml"),
+            r#"
+function Leaf(input: string) -> string {
+  //# leaf work
+  let a = input;
+  a
+}
+
+function Mid(input: string) -> string {
+  let a = Leaf(input);
+  let b = Leaf(a);
+  b
+}
+
+function Top(input: string) -> string {
+  let a = Mid(input);
+  let b = Mid(a);
+  b
+}
+"#,
+        );
+        let leaf = db.ast_control_flow_graph("Leaf").unwrap();
+        let mid = db.ast_control_flow_graph("Mid").unwrap();
+        let top = db.ast_control_flow_graph("Top").unwrap();
+        // Memoization must not change the inlined-output shape: every call
+        // site still receives its own copy of the callee graph.
+        assert!(
+            mid.nodes.len() > leaf.nodes.len(),
+            "Mid should contain inlined copies of Leaf ({} vs {})",
+            mid.nodes.len(),
+            leaf.nodes.len()
+        );
+        assert!(
+            top.nodes.len() > mid.nodes.len(),
+            "Top should contain inlined copies of Mid ({} vs {})",
+            top.nodes.len(),
+            mid.nodes.len()
+        );
+    }
+
+    #[test]
+    fn recursive_callee_cache_is_scoped_by_active_expansions() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/recursive-cache.baml"),
+            r#"
+//# a step
+function A(input: string) -> string {
+  let next = B(input);
+  next
+}
+
+//# b step
+function B(input: string) -> string {
+  let looped = A(input);
+  let done = Leaf(looped);
+  done
+}
+
+//# leaf step
+function Leaf(input: string) -> string {
+  input
+}
+
+function Top(input: string) -> string {
+  let first = A(input);
+  let second = B(first);
+  second
+}
+"#,
+        );
+
+        let graph = db.ast_control_flow_graph("Top").unwrap();
+        let a_step_count = graph
+            .nodes
+            .values()
+            .filter(|node| node.label == "a step")
+            .count();
+
+        assert!(
+            a_step_count >= 2,
+            "direct B expansion must not reuse a B graph truncated under A recursion; got {a_step_count} A call node(s)"
+        );
+    }
+
+    #[test]
+    fn deep_call_chains_are_capped_not_exponential() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        // Depth 12, fan-out 3: fully inlined and uncapped this is 3^12 ≈ 531k
+        // nodes per top-level function (and exponential build time without
+        // per-callee memoization).
+        let mut src = String::from(
+            "function F12(input: string) -> string {\n  //# leaf\n  let a = input;\n  a\n}\n",
+        );
+        for i in (0..12).rev() {
+            use std::fmt::Write as _;
+            let callee = i + 1;
+            let _ = write!(
+                src,
+                "function F{i}(input: string) -> string {{\n  let v0 = F{callee}(input);\n  let v1 = F{callee}(v0);\n  let v2 = F{callee}(v1);\n  v2\n}}\n"
+            );
+        }
+        db.add_or_update_file(std::path::Path::new("/tmp/chain.baml"), &src);
+
+        let graph = db.ast_control_flow_graph("F0").unwrap();
+        assert!(
+            graph.nodes.len() <= CFG_EXPANSION_NODE_BUDGET,
+            "inlined graph must respect the node budget, got {}",
+            graph.nodes.len()
+        );
+    }
 
     #[test]
     fn header_above_if_keeps_all_branch_arms() {

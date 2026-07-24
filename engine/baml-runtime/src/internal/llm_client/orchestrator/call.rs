@@ -3,7 +3,7 @@ use baml_ids::HttpRequestId;
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
-use stream_cancel::Tripwire;
+use tokio_util::sync::CancellationToken;
 use web_time::Duration;
 
 use super::{OrchestrationScope, OrchestratorNodeIterator};
@@ -50,7 +50,7 @@ pub async fn orchestrate(
     prompt: &PromptRenderer,
     params: &BamlValue,
     parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
-    cancel_tripwire: Option<Tripwire>,
+    cancel_tripwire: Option<CancellationToken>,
 ) -> (
     Vec<(
         OrchestrationScope,
@@ -64,8 +64,8 @@ pub async fn orchestrate(
 
     // Create a future that either waits for cancellation or never completes
     let cancel_future = match cancel_tripwire {
-        Some(tripwire) => Box::pin(async move {
-            tripwire.await;
+        Some(token) => Box::pin(async move {
+            token.cancelled_owned().await;
         })
             as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
         None => Box::pin(futures::future::pending()),

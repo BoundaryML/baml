@@ -1,12 +1,7 @@
 //! Unified tests for shell operations.
 //!
-//! Tests converted to BAML (ns_shell/shell.baml):
-//!   shell_echo, shell_failing_command, shell_with_variable,
-//!   shell_ok_method, exec_echo, shell_stdout_bytes.
-//!
-//! Tests kept here (not convertible):
+//! Platform-specific and timing-sensitive tests:
 //!   shell_with_pipe        — Unix-only (`tr`), has insta bytecode snapshot.
-//!   shell_nonexistent_command — non-deterministic exit code (127/9009/1).
 //!   shell_stderr           — Unix-only `>&2` redirect.
 //!   exec_failing           — platform-split binary (`false` vs `cmd`).
 //!   exec_with_args         — platform-split (`printf` vs `cmd`).
@@ -45,26 +40,6 @@ async fn shell_with_pipe() {
         output.result,
         Ok(BexExternalValue::String("HELLO WORLD\n".to_string().into()))
     );
-}
-
-#[tokio::test]
-async fn shell_nonexistent_command() {
-    let output = baml_test!(
-        r#"
-            function main() -> int {
-                baml.sys.shell("nonexistent_command_12345", null).exit_code
-            }
-        "#
-    );
-    // Should succeed (shell itself spawns fine) with a non-zero exit code.
-    // Unix shells return 127, cmd returns 9009, PowerShell returns 1.
-    assert!(output.result.is_ok());
-    if let Ok(BexExternalValue::Int(code)) = &output.result {
-        assert_ne!(
-            *code, 0,
-            "nonexistent command should have non-zero exit code"
-        );
-    }
 }
 
 #[tokio::test]

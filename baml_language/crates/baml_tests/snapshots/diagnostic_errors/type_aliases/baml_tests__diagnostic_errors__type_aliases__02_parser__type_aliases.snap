@@ -4,13 +4,13 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "foo"
     EQUALS "="
     TYPE_EXPR "bar"
       WORD "bar"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "bar"
     EQUALS "="
     TYPE_EXPR "int"
@@ -45,10 +45,10 @@ SOURCE_FILE
   true
 }"
         L_BRACE "{"
-        WORD "true"
+        KW_TRUE "true"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "Json"
     EQUALS "="
     TYPE_EXPR

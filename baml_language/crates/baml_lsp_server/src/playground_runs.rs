@@ -57,7 +57,13 @@ impl GraphRuntimeOverlaySpanProvider for ProjectGraphRuntimeOverlaySpanProvider 
 }
 
 fn overlay_function_name(run: &Run) -> Option<&str> {
-    match &run.target {
+    overlay_function_name_for_target(&run.target)
+}
+
+/// The function whose control-flow graph backs a run's graph overlay, if the
+/// target kind has one.
+pub fn overlay_function_name_for_target(target: &RunTarget) -> Option<&str> {
+    match target {
         RunTarget::Function { function_name } | RunTarget::Companion { function_name, .. } => {
             Some(function_name)
         }
@@ -108,6 +114,12 @@ impl RunStoreProfileObserver {
 impl ProfileEventObserver for RunStoreProfileObserver {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope) {
         for patch in self.run_store.ingest_profile_event(envelope) {
+            broadcast_run_patch(&self.broadcast_tx, &patch);
+        }
+    }
+
+    fn engine_closed(&self, engine_id: bex_events::ids::EngineId) {
+        for patch in self.run_store.engine_closed(engine_id) {
             broadcast_run_patch(&self.broadcast_tx, &patch);
         }
     }

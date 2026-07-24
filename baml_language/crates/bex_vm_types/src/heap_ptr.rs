@@ -141,13 +141,6 @@ impl HeapPtr {
     pub fn epoch(self) -> u32 {
         self.epoch
     }
-
-    /// Get the epoch (always 0 in non-debug mode).
-    #[cfg(not(feature = "heap_debug"))]
-    #[inline]
-    pub fn epoch(self) -> u32 {
-        0
-    }
 }
 
 // `HeapPtr` is a runtime-only address into the live heap. It must never

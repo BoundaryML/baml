@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "ExplicitHandler"
     EQUALS "="
     TYPE_EXPR
@@ -23,7 +23,7 @@ SOURCE_FILE
         TYPE_EXPR "never"
           WORD "never"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "ImplicitHandler"
     EQUALS "="
     TYPE_EXPR
@@ -37,8 +37,12 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "string"
         WORD "string"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "HiddenHandler"
     EQUALS "="
     TYPE_EXPR
@@ -52,6 +56,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "string"
         WORD "string"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "run_explicit"
@@ -176,6 +184,10 @@ SOURCE_FILE
               ARROW "->"
               TYPE_EXPR "string"
                 WORD "string"
+              THROWS_CLAUSE
+                KW_THROWS "throws"
+                TYPE_EXPR "never"
+                  WORD "never"
           R_PAREN ")"
           QUESTION "?"
       COMMA ","
@@ -264,6 +276,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "string"
         WORD "string"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"

@@ -19,10 +19,13 @@
 
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
-use bex_project::{Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError};
+use bex_project::{
+    Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError,
+    UnhandledSpawnError,
+};
 use bridge_ctypes::{
     CffiHandleTableOptions,
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
     external_to_outbound,
@@ -222,6 +225,21 @@ pub fn result_to_outbound(
     }
 }
 
+pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_in_process();
+    let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
+        (
+            frame.file_path.as_str(),
+            frame.error_line,
+            frame.function_name.as_str(),
+        )
+    }));
+    BamlOutboundResult {
+        result: Some(thrown_arm(error.value, trace, &options)),
+    }
+    .encode_to_vec()
+}
+
 /// Encode a pre-call host-boundary [`BridgeError`] as `BamlOutboundResult`
 /// envelope bytes (32c). These failures never entered the VM, so they carry an
 /// empty trace and ride the *same* decode path as engine errors via
@@ -308,6 +326,7 @@ pub async fn call_and_encode(
     call_ctx: FunctionCallContext,
 ) -> Vec<u8> {
     let options = CffiHandleTableOptions::for_in_process();
+    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
 
     let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
         .catch_unwind()

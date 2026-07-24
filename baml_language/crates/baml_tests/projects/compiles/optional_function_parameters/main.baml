@@ -1,5 +1,5 @@
-type Searcher = (query: string, max_results?: int) -> int
-type NarrowSearcher = (query: string, filter?: string?) -> string[]
+type Searcher = (query: string, max_results?: int) -> int throws never
+type NarrowSearcher = (query: string, filter?: string?) -> string[] throws never
 
 client<llm> TestClient {
   provider openai

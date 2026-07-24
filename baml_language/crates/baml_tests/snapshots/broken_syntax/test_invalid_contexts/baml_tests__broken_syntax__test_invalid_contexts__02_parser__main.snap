@@ -32,7 +32,7 @@ SOURCE_FILE
               CALL_ARGS
                 L_PAREN "("
                 CALL_ARG "true"
-                  WORD "true"
+                  KW_TRUE "true"
                 R_PAREN ")"
             R_BRACE "}"
         R_BRACE "}"
@@ -74,7 +74,7 @@ SOURCE_FILE
                   CALL_ARGS
                     L_PAREN "("
                     CALL_ARG "true"
-                      WORD "true"
+                      KW_TRUE "true"
                     R_PAREN ")"
                 R_BRACE "}"
             R_BRACE "}"
@@ -98,7 +98,7 @@ SOURCE_FILE
         CALL_ARGS
           L_PAREN "("
           CALL_ARG "true"
-            WORD "true"
+            KW_TRUE "true"
           R_PAREN ")"
       R_BRACE "}"
   TESTSET_DEF
@@ -131,28 +131,26 @@ SOURCE_FILE
             CALL_ARGS
               L_PAREN "("
               CALL_ARG "true"
-                WORD "true"
+                KW_TRUE "true"
               R_PAREN ")"
           R_BRACE "}"
       R_BRACE "}"
 
 === ERRORS ===
-error: test blocks are only allowed at the top level or inside a testset
-   ╭─[ main.baml:4:3 ]
-   │
- 4 │   test "inside function" {
-   │   ──┬─  
-   │     ╰─── test blocks are only allowed at the top level or inside a testset
-   │ 
-   │ Note: Error code: E0010
-───╯
+E0010
 
-error: testset blocks are only allowed at the top level or inside a testset
-    ╭─[ main.baml:10:3 ]
-    │
+  × invalid syntax
+   ╭─[main.baml:4:3]
+ 4 │   test "inside function" {
+   ·   ──┬─
+   ·     ╰── test blocks are only allowed at the top level or inside a testset
+   ╰────
+
+E0010
+
+  × invalid syntax
+    ╭─[main.baml:10:3]
  10 │   testset "inside function set" {
-    │   ───┬───  
-    │      ╰───── testset blocks are only allowed at the top level or inside a testset
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬───
+    ·      ╰── testset blocks are only allowed at the top level or inside a testset
+    ╰────

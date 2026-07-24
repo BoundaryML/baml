@@ -12,8 +12,10 @@ type DynamicClass struct {
 	Fields map[string]any
 }
 
-// DynamicUnion represents a BAML union variant with the selected variant name and value.
+// DynamicUnion represents a BAML union variant. Variant is display-only;
+// SelectedOptionIndex is the canonical arm identity when present.
 type DynamicUnion struct {
-	Variant string
-	Value   any
+	Variant             string
+	SelectedOptionIndex *uint32
+	Value               any
 }

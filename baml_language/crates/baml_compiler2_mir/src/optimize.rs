@@ -128,6 +128,11 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             then_block,
             else_block,
             ..
+        }
+        | Terminator::NarrowBind {
+            then_block,
+            else_block,
+            ..
         } => {
             remap(then_block);
             remap(else_block);
@@ -202,6 +207,11 @@ fn rewrite_block_ids_in_terminator_with_map(
     match term {
         Terminator::Goto { target } => remap(target),
         Terminator::Branch {
+            then_block,
+            else_block,
+            ..
+        }
+        | Terminator::NarrowBind {
             then_block,
             else_block,
             ..
@@ -382,7 +392,8 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(cap, set);
                 }
             }
-            crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+            crate::Rvalue::MakeBoundMethod { receiver, .. }
+            | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
                 scan_operand(receiver, set);
             }
             crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -471,6 +482,14 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_place(future, &mut set);
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
+                Terminator::NarrowBind {
+                    source,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(source, &mut set);
+                    scan_place(&Place::Local(*destination), &mut set);
+                }
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
@@ -526,24 +545,27 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
-                // Place::Capture has no local base — skip def counting for capture stores.
-                if !matches!(destination, Place::Capture(_)) {
-                    defs[destination.base_local().0] += 1;
+                // Capture-rooted places have no local definition to count.
+                if let Some(local) = destination.base_local() {
+                    defs[local.0] += 1;
                 }
             }
         }
         // Terminator destinations also count as definitions.
         if let Some(dest) = match &block.terminator {
-            Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::VirtualCall { destination, .. }) => Some(destination),
-            Some(Terminator::SysOp { destination, .. }) => Some(destination),
-            Some(Terminator::Spawn { future, .. }) => Some(future),
-            Some(Terminator::Await { destination, .. }) => Some(destination),
-            Some(Terminator::AwaitAny { destination, .. }) => Some(destination),
-            Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            Some(
+                Terminator::Call { destination, .. }
+                | Terminator::VirtualCall { destination, .. }
+                | Terminator::SysOp { destination, .. }
+                | Terminator::Await { destination, .. }
+                | Terminator::AwaitAny { destination, .. }
+                | Terminator::ShortCircuit { destination, .. },
+            ) => destination.base_local(),
+            Some(Terminator::Spawn { future, .. }) => future.base_local(),
             _ => None,
         } {
-            defs[dest.base_local().0] += 1;
+            defs[dest.0] += 1;
         }
     }
 
@@ -644,7 +666,8 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
                 count_in_operand(cap, uses);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             count_in_operand(receiver, uses);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -669,22 +692,11 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
             count_in_rvalue(value, uses);
         }
         crate::StatementKind::Drop(p) => count_in_place(p, uses),
-        crate::StatementKind::Unwatch(l) => {
-            uses[l.0] += 1;
-        }
-        crate::StatementKind::WatchOptions { local, filter } => {
-            uses[local.0] += 1;
-            count_in_operand(filter, uses);
-        }
-        crate::StatementKind::WatchNotify(l) => {
-            uses[l.0] += 1;
-        }
         crate::StatementKind::FreshCell(l) => {
             uses[l.0] += 1;
         }
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
@@ -707,6 +719,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
 
     match term {
         Terminator::Branch { condition, .. } => count_in_operand(condition, uses),
+        Terminator::NarrowBind { source, .. } => count_in_operand(source, uses),
         Terminator::Switch { discriminant, .. } => count_in_operand(discriminant, uses),
         Terminator::Call {
             callee,
@@ -1007,7 +1020,8 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
                 apply_subst_to_operand(cap, subst);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             apply_subst_to_operand(receiver, subst);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1024,9 +1038,6 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         crate::StatementKind::Assign { value, .. } => {
             apply_subst_to_rvalue(value, subst);
         }
-        crate::StatementKind::WatchOptions { filter, .. } => {
-            apply_subst_to_operand(filter, subst);
-        }
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
                 apply_subst_to_operand(arg, subst);
@@ -1039,6 +1050,7 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
 fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Operand>) {
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
+        Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
         Terminator::Call {
             callee,
@@ -1131,11 +1143,12 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
-                Terminator::Call { destination, .. } => Some(destination.base_local()),
-                Terminator::VirtualCall { destination, .. } => Some(destination.base_local()),
-                Terminator::Await { destination, .. } => Some(destination.base_local()),
-                Terminator::AwaitAny { destination, .. } => Some(destination.base_local()),
-                Terminator::SysOp { destination, .. } => Some(destination.base_local()),
+                Terminator::Call { destination, .. } => destination.base_local(),
+                Terminator::VirtualCall { destination, .. } => destination.base_local(),
+                Terminator::Await { destination, .. } => destination.base_local(),
+                Terminator::AwaitAny { destination, .. } => destination.base_local(),
+                Terminator::SysOp { destination, .. } => destination.base_local(),
+                Terminator::NarrowBind { destination, .. } => Some(*destination),
                 // ShortCircuit is side-effect-free (pure control flow), so its
                 // destination can be dead-eliminated like any other local.
                 _ => None,
@@ -1151,10 +1164,7 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     let mut new_locals: Vec<crate::LocalDecl> = Vec::new();
 
     for (i, local_decl) in body.locals.iter().enumerate() {
-        let keep = i == 0              // return place
-            || i <= arity              // parameter
-            || uses[i] > 0            // has uses (including force-alive)
-            || local_decl.is_watched; // watched variable
+        let keep = i == 0 || i <= arity || uses[i] > 0;
         if keep {
             let new_id = Local(new_locals.len());
             old_to_new[i] = Some(new_id);
@@ -1291,7 +1301,8 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
                 remap_operand(cap, map);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             remap_operand(receiver, map);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1310,16 +1321,9 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_rvalue(value, map);
         }
         crate::StatementKind::Drop(p) => remap_place(p, map),
-        crate::StatementKind::Unwatch(l) => remap_local(l, map),
-        crate::StatementKind::WatchOptions { local, filter } => {
-            remap_local(local, map);
-            remap_operand(filter, map);
-        }
-        crate::StatementKind::WatchNotify(l) => remap_local(l, map),
         crate::StatementKind::FreshCell(l) => remap_local(l, map),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
@@ -1332,6 +1336,14 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
 fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
     match term {
         Terminator::Branch { condition, .. } => remap_operand(condition, map),
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            remap_operand(source, map);
+            remap_local(destination, map);
+        }
         Terminator::Switch { discriminant, .. } => remap_operand(discriminant, map),
         Terminator::Call {
             callee,
@@ -1553,7 +1565,8 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                                 check_operand(cap, &blk);
                             }
                         }
-                        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+                        crate::Rvalue::MakeBoundMethod { receiver, .. }
+                        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
                             check_operand(receiver, &blk);
                         }
                         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1565,12 +1578,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     }
                 }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
-                crate::StatementKind::Unwatch(l) => check_local(*l, &blk),
-                crate::StatementKind::WatchOptions { local, filter } => {
-                    check_local(*local, &blk);
-                    check_operand(filter, &blk);
-                }
-                crate::StatementKind::WatchNotify(l) => check_local(*l, &blk),
                 crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
                 _ => {}
             }
@@ -1583,6 +1590,14 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         if let Some(term) = &block.terminator {
             match term {
                 Terminator::Branch { condition, .. } => check_operand(condition, &blk),
+                Terminator::NarrowBind {
+                    source,
+                    destination,
+                    ..
+                } => {
+                    check_operand(source, &blk);
+                    check_local(*destination, &blk);
+                }
                 Terminator::Switch { discriminant, .. } => check_operand(discriminant, &blk),
                 Terminator::Call {
                     callee,
@@ -1696,37 +1711,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     is_unreachable,
                     "exhaustive switch in {:?} has non-unreachable default block {:?} in MIR function {}",
                     block.id, otherwise, name,
-                );
-            }
-        }
-    }
-
-    // 6. Watch invariants: watched locals must have names, watch statements
-    //    must reference watched locals.
-    //    (Same as V1 verifier.rs:90-145)
-    for (idx, decl) in body.locals.iter().enumerate() {
-        if decl.is_watched {
-            assert!(
-                decl.name.is_some(),
-                "watched local _{idx} must have a user-visible name in MIR function {name}",
-            );
-        }
-    }
-
-    for block in &body.blocks {
-        for stmt in &block.statements {
-            let watch_local = match &stmt.kind {
-                crate::StatementKind::Unwatch(l)
-                | crate::StatementKind::WatchNotify(l)
-                | crate::StatementKind::WatchOptions { local: l, .. } => Some(*l),
-                _ => None,
-            };
-            if let Some(local) = watch_local {
-                let decl = &body.locals[local.0];
-                assert!(
-                    decl.is_watched,
-                    "watch statement references non-watched local _{} in MIR function {}",
-                    local.0, name,
                 );
             }
         }

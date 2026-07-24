@@ -9,10 +9,10 @@ pub enum BuiltinPipeline {
 
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
-    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.math.trunc"`
+    /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.now_ms"`
     pub path: String,
     /// Rust function name derived from path (dots → underscores, lowercased):
-    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_math_trunc"`
+    /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_now_ms"`
     pub fn_name: String,
     /// Non-self/receiver parameters only.
     pub params: Vec<Param>,

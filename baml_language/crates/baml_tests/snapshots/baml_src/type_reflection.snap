@@ -3,40 +3,46 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.type_reflection"
     load_const "eq_type_values_same"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_reflection"
     load_const "eq_type_values_different"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_reflection"
     load_const "neq_type_values_same"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_reflection"
     load_const "neq_type_values_different"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_reflection"
     load_const "deep_equals_type_values_same"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.type_reflection"
     load_const "deep_equals_type_values_different"
     make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -302,7 +308,7 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     return
 }
 
-function type_reflection.TestClient$new() -> null {
+function type_reflection.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const "gpt-4o-mini"

@@ -2,7 +2,7 @@
 
 interface Named {
     name: string
-    function greet(self) -> string
+    function greet(self) -> string throws never
 }
 
 class Robot {
@@ -17,12 +17,10 @@ implements Named for Robot {
 
 //----
 //- diagnostics
-// error: `implements Named for Robot` cannot implement field-bearing interface `Named` outside the class body
-//     ╭─[ interface_error_out_of_body_field_interface.baml:12:12 ]
-//     │
+// E0126
+//
+//   × interface `Named` declares fields and can only be implemented in the class body, not out-of-body
+//     ╭─[interface_error_out_of_body_field_interface.baml:12:12]
 //  12 │ implements Named for Robot {
-//     │            ──┬──
-//     │              ╰──── field-bearing interfaces must be implemented inside the class body
-//     │
-//     │ Note: Error code: E0126
-// ────╯
+//     ·            ─────
+//     ╰────

@@ -3,7 +3,7 @@
 // methods alongside interface methods.
 
 interface Configurable {
-  function configure(self) -> null
+  function configure(self) -> null throws never
 }
 
 class Server {

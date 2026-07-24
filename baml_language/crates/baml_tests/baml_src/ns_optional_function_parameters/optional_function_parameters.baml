@@ -53,7 +53,7 @@ function combine(x: int, a: int = 10, b: int = 100) -> int {
 }
 
 function ofp_optional_dropping_adapter_uses_defaults_for_hidden_params() -> int {
-  let f: (x: int, b?: int) -> int = combine
+  let f: (x: int, b?: int) -> int throws never = combine
   f(1, b = 5)
 }
 

@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[duplicate_attribute.baml:12:28]
+ 12 │   a string @alias("first") @alias("second")
+    ·            ───────┬─────── ────────┬───────
+    ·                   │                ╰── duplicate `@alias` — only the last takes effect
+    ·                   ╰── `@alias` first applied here
+    ╰────
+
+  [hir] E0014
+
+  × duplicate attribute `@description`
+    ╭─[duplicate_attribute.baml:17:34]
+ 17 │   a string @description("first") @description("second")
+    ·            ──────────┬────────── ───────────┬──────────
+    ·                      │                      ╰── duplicate `@description` — only the last takes effect
+    ·                      ╰── `@description` first applied here
+    ╰────
+
+  [hir] E0014
+
+  × duplicate attribute `@alias`
+    ╭─[duplicate_attribute.baml:22:23]
+ 22 │   ACTIVE @alias("on") @alias("enabled")
+    ·          ──────┬───── ────────┬────────
+    ·                │              ╰── duplicate `@alias` — only the last takes effect
+    ·                ╰── `@alias` first applied here
+    ╰────

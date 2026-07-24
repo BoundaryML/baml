@@ -2,7 +2,7 @@
   "name": "baml-language",
   "displayName": "BAML",
   "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
-  "version": "0.13.0",
+  "version": "0.15.0",
   "publisher": "Boundary",
   "private": true,
   "type": "commonjs",
@@ -32,6 +32,16 @@
         "path": "./syntaxes/baml.tmLanguage.json"
       }
     ],
+    "configurationDefaults": {
+      "[baml]": {
+        "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "namespace:baml": "#808080CC"
+        }
+      }
+    },
     "commands": [
       {
         "command": "baml.openPlayground",

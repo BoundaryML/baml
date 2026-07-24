@@ -17,6 +17,12 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
 function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
@@ -292,7 +298,7 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     return
 }
 
-function user.TestClient$new() -> null {
+function user.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const null

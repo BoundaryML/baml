@@ -125,6 +125,7 @@ export default defineSchema({
       title: v.string(),
       content: v.string(),
       order: v.number(),
+      parentSlug: v.optional(v.string()),              // Slug of the parent page (one level of nesting)
     }))),
 
     // Legacy fields (will be removed after migration)
@@ -151,6 +152,7 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     order: v.number(),
+    parentSlug: v.optional(v.string()),                // Slug of the parent page (one level of nesting, e.g. "design")
     createdAt: v.number(),
     updatedAt: v.number(),
   })

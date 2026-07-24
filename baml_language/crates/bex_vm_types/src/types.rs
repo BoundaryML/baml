@@ -13,6 +13,7 @@ mod function;
 mod future;
 mod interface;
 mod object;
+mod package;
 mod value;
 
 use std::collections::HashMap;
@@ -27,6 +28,7 @@ pub use future::*;
 use indexmap::IndexMap;
 pub use interface::*;
 pub use object::*;
+pub use package::*;
 pub use tokio_util::sync::CancellationToken;
 pub use value::*;
 
@@ -94,28 +96,15 @@ pub struct Program {
     /// Empty when there are no top-level let bindings in any package.
     pub package_init_order: Vec<String>,
 
-    /// Recursive type alias definitions for output format rendering.
-    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Keyed by [`baml_type::TypeName`] for consistent identity with `RuntimeTy::TypeAlias`.
-    pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, RuntimeTy>,
-
-    /// Per-package interface registry: package name → that package's
-    /// [`InterfaceImpls`]. Each rule carries its implementor pattern,
-    /// generic-parameter bounds, interface args, and method handles, so a value's
-    /// concrete runtime type can be matched to the applicable impl and its method
-    /// dispatched.
-    ///
-    /// Split by package so a dynamically-loaded package is just a new entry — no
-    /// rebuild of existing ones. By the orphan rule a concrete `implement I for T`
-    /// lives in `T`'s or `I`'s package, and a blanket `implement<T: Bound> I for T`
-    /// lives in `I`'s package (it can match a type from *any* package satisfying
-    /// `Bound` — including one that doesn't depend on `I`'s package, e.g. a
-    /// sibling under a shared `Bound` combined only in a downstream package). So
-    /// resolving whether a concrete type implements `I` consults exactly its
-    /// package and `I`'s package; each bound obligation then recurses into its own
-    /// packages the same way. The single source of truth for interface dispatch
-    /// and reflection. Empty for programs without interface impls.
-    pub interface_impls: InterfaceImplsByPackage,
+    /// Per-package program structure (global-index-keyed), sorted by package name
+    /// for deterministic output. Holds each package's classes, enums, interfaces,
+    /// impl rules, and recursive type aliases. The loader allocates the heap
+    /// `Object::Package` / `Object::Interface` / `Object::ImplRule` objects and the
+    /// `vm.packages` index from this, resolving each `ObjectIndex` to a
+    /// compile-time `HeapPtr` (every slot is pre-allocated, so cross-package
+    /// references are order-independent). The single source of truth for interface
+    /// dispatch, named-item lookup, and recursive-alias rendering.
+    pub packages: IndexMap<baml_type::Name, ProgramPackage>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -161,6 +150,25 @@ impl Program {
         let idx = self.objects.len();
         self.objects.push(object);
         idx
+    }
+
+    /// Flatten every package's recursive type aliases into one
+    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
+    /// ones are expanded inline), reconstructing each qualified name from its
+    /// package + `LocalName`. The shape output-format rendering consumes.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+        let mut out = IndexMap::new();
+        for (pkg_name, package) in &self.packages {
+            for (local, ty) in &package.recursive_type_aliases {
+                let qtn = baml_type::TypeName::new(
+                    pkg_name.clone(),
+                    local.namespace.clone(),
+                    local.name.clone(),
+                );
+                out.insert(qtn, ty.clone());
+            }
+        }
+        out
     }
 
     /// Add a global value (`ConstValue`, converted to Value at load time).
@@ -386,6 +394,13 @@ pub struct TestCase {
     pub function_names: Vec<String>,
     /// Test arguments, keyed by parameter name.
     pub args: IndexMap<String, TestArgValue>,
+    /// Project-root-relative path of the file that *defines* this test block.
+    ///
+    /// Recorded so `baml test --list` reports the test-defining file
+    /// identically whether the program was freshly compiled or served from the
+    /// bytecode cache. Empty only for programs compiled before this field
+    /// existed.
+    pub source_file: String,
 }
 
 /// Compile-time constant values.
@@ -608,7 +623,7 @@ mod tests {
     fn instance_field_helpers_load_and_store_checked_slots() {
         let instance = Instance::new(
             HeapPtr::null(),
-            vec![],
+            Box::new([]),
             vec![Value::int(10), Value::int(20)],
         );
 
@@ -625,7 +640,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "index out of bounds")]
     fn instance_load_field_panics_for_invalid_slot() {
-        let instance = Instance::new(HeapPtr::null(), vec![], vec![Value::int(10)]);
+        let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);
 
         let _ = instance.load_field(1);
     }

@@ -13,7 +13,8 @@ pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, is_cancelled_engine_error,
+    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
     value_capture::{
         CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
         TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
@@ -21,8 +22,8 @@ pub use bex_engine::{
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch, try_convert_rust_data,
-    validate_host_return,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
@@ -32,6 +33,7 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+mod seed;
 
 pub struct BexArgs(pub HashMap<String, BexExternalValue>);
 
@@ -105,9 +107,12 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
     Ok(Arc::new(engine))
 }
 
+// Schema types re-exported for `bridge_wasm`, which depends on `bex_project`
+// but not `baml_project` and needs to name them in its `From` impl.
+pub use baml_project::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use bex_lsp::{
     BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
     LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
-    ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
+    PreparedRun, ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

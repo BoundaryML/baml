@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40853
+---
+=== PPIR ===
+enum user.Errors {AuthenticationError, AuthorizationError, NotFoundError, InternalServerError}
+function user.callee() -> bool  [expr] {
+  { return true }
+}
+function user.caller() -> bool  [expr] {
+  {  } callee() catch (e) { user.Errors.AuthenticationError => { return e } }
+}

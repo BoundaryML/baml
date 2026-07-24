@@ -13,9 +13,7 @@ use baml_project::{collect_diagnostics, testing::setup_test_db};
 /// Collect all error-severity diagnostic ids for a source program.
 fn error_ids(source: &str) -> Vec<DiagnosticId> {
     let db = setup_test_db(source);
-    let project = db.get_project().expect("project must be set");
-    let files = db.get_source_files();
-    collect_diagnostics(&db, project, &files)
+    collect_diagnostics(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .map(|d| d.id)

@@ -15,17 +15,17 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "raw string name", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "raw string name", copy _3, const null) -> [bb1];
     }
 
     bb1: {
         _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestCollector.register_test(copy _1, const "has \"quotes\" inside", copy _5, const null) -> [bb2];
+        _4 = call const fn testing.TestCollector.register_test_at(copy _1, const "root", const "has \"quotes\" inside", copy _5, const null) -> [bb2];
     }
 
     bb2: {
         _7 = make_closure lambda[2]();
-        _6 = call const fn testing.TestCollector.register_test_set(copy _1, const "raw testset name", copy _7, const null) -> [bb3];
+        _6 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root", const "raw testset name", copy _7, const null) -> [bb3];
     }
 
     bb3: {

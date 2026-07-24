@@ -47,7 +47,11 @@ export interface DiagnosticEntry {
 }
 
 export type FunctionKind = 'llm' | 'expr';
-export type FunctionOrigin = 'userDefined' | 'companion' | 'internal';
+export type FunctionOrigin =
+  | 'userDefined'
+  | 'companion'
+  | 'internal'
+  | 'autoDerive';
 
 export interface LlmCapabilities {
   /** Whether render_prompt preview is available through `startPreviewRun`. */
@@ -57,6 +61,55 @@ export interface LlmCapabilities {
   /** The LLM client name (e.g., "MyClient"). */
   clientName?: string;
 }
+
+/** Schema for one function parameter (mirrors `baml_project::ParamSchema`). */
+export interface ParamSchema {
+  name: string;
+  /** The parameter has a default value and may be omitted entirely. Distinct
+   *  from a nullable type, which appears as `{ type: 'optional' }` in
+   *  `schema`. */
+  hasDefault: boolean;
+  schema: FieldSchema;
+}
+
+/** One class field; optionality is folded into `schema` as
+ *  `{ type: 'optional' }`, not a flag here. */
+export interface FieldSchemaField {
+  name: string;
+  schema: FieldSchema;
+}
+
+/** Recursive type schema for the args form (mirrors
+ *  `baml_project::FieldSchema`). Named types are `ref`s into
+ *  `ProjectUpdate.types`; `name`s are the canonical dotted FQN the engine
+ *  registers (`user.shapes.Foo`), usable verbatim in `$baml` markers. */
+export type FieldSchema =
+  | { type: 'string' }
+  | { type: 'int' }
+  | { type: 'float' }
+  | { type: 'bool' }
+  | { type: 'null' }
+  | { type: 'bigint' }
+  | { type: 'media'; kind: string }
+  | { type: 'literal'; value: unknown }
+  /** Reference to a named type in `ProjectUpdate.types`; a dangling name
+   *  (mid-edit inconsistency) degrades to the raw-JSON fallback. */
+  | { type: 'ref'; name: string }
+  /** A specific-variant param type (`s: Status.Active`) — self-contained so
+   *  the form can emit the enum wire marker without a table entry. */
+  | { type: 'enumVariant'; name: string; value: string }
+  | { type: 'list'; item: FieldSchema }
+  | { type: 'map'; key: FieldSchema; value: FieldSchema }
+  | { type: 'optional'; inner: FieldSchema }
+  | { type: 'union'; variants: FieldSchema[] }
+  | { type: 'unsupported'; display: string };
+
+/** A named type's definition in the per-project table (mirrors
+ *  `baml_project::TypeSchema`), keyed by canonical dotted FQN. */
+export type TypeSchema =
+  | { kind: 'class'; fields: FieldSchemaField[] }
+  | { kind: 'enum'; values: string[] }
+  | { kind: 'alias'; schema: FieldSchema };
 
 /** Metadata about a BAML function exposed to the playground.
  *
@@ -69,11 +122,35 @@ export interface FunctionInfo {
   kind: FunctionKind;
   origin: FunctionOrigin;
   capabilities?: LlmCapabilities;
+  /** Parameter schemas for the args form. `undefined` = no schema available
+   *  (old WASM binary or extraction skipped) → raw-JSON-only mode; `[]` = the
+   *  function takes no arguments. */
+  params?: ParamSchema[];
+}
+
+/** A statically declared legacy test that can seed function previews. */
+export interface TestInfo {
+  name: string;
+  functionName: string;
+  argsJson: string;
+}
+
+/** Stable identity shared by preview selection state and sidebar rows. */
+export function previewTestKey(
+  test: Pick<TestInfo, 'functionName' | 'name'>,
+): string {
+  return `${test.functionName}\u0000${test.name}`;
 }
 
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
+  /** Omitted by older runtimes; the UI treats that as no previewable tests. */
+  tests?: TestInfo[];
+  /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
+   *  predates the args form (refs, if any, degrade to raw JSON); may be an
+   *  empty object when no function references named types. */
+  types?: Record<string, TypeSchema>;
   diagnostics: DiagnosticEntry[];
 }
 
@@ -668,6 +745,18 @@ export type WebSocketInMessage =
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
@@ -798,6 +887,21 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
+  /** Standing intent: the client wants a live runtime for this project.
+   *  Unlike run commands this is not session-scoped — transports must
+   *  re-assert the latest lease after every reconnect handshake. */
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }

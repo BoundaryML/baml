@@ -1,8 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    FutureRead, HeapPtr, ValueKind,
+    FutureRead, HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -15,7 +18,10 @@ use super::{
     },
     make_compare_callee, make_to_string_callee,
 };
-use crate::BexVm;
+use crate::{
+    BexVm, VmPanic,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
@@ -185,6 +191,96 @@ impl BamlPackageBaml for PackageBamlImpl {
             None => true,
         }
     }
+
+    // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────
+    //
+    // Private native backings for the `Summable` / `FloatStats` methods declared
+    // in `containers.baml`. `expect_int` / `expect_float` are infallible reads:
+    // the type system proves each element's tag before execution reaches here.
+
+    /// `baml._sum_int(values)` — native backing for `int[].sum()`.
+    ///
+    /// Accumulates left-to-right from `0`, checking the running total against
+    /// the `int` range at each step so overflow raises `IntegerOverflow` exactly
+    /// like repeated `+` would. Both `acc` and each element are already in range,
+    /// so the intermediate i64 add never wraps; the tighter range check is the
+    /// meaningful bound. The empty array sums to `0`.
+    fn _sum_int(values: &[Value]) -> Result<i64, VmRustFnError> {
+        let mut acc: i64 = 0;
+        for (index, value) in values.iter().enumerate() {
+            let x = expect_int(*value, "_sum_int", index);
+            match acc.checked_add(x) {
+                Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
+                _ => {
+                    return Err(VmPanic::IntegerOverflow {
+                        message: format!("{acc} + {x} overflows int"),
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(acc)
+    }
+
+    /// `baml._sum_float(values)` — native backing for `float[].sum()`.
+    ///
+    /// Sums left-to-right from `0.0`; the empty array sums to `0.0`. Never throws.
+    fn _sum_float(vm: &BexVm, values: &[Value]) -> f64 {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| expect_float(vm, *value, "_sum_float", index))
+            .sum()
+    }
+
+    /// `baml._mean_float(values)` — native backing for `float[].mean()`.
+    ///
+    /// Throws `InvalidArgument` when `values` is empty.
+    #[allow(clippy::cast_precision_loss)]
+    fn _mean_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
+        if values.is_empty() {
+            return Err(VmBamlError::InvalidArgument {
+                message: "float[].mean: cannot take the mean of an empty array".to_string(),
+            }
+            .into());
+        }
+        let n = values.len() as f64;
+        Ok(Self::_sum_float(vm, values) / n)
+    }
+
+    /// `baml._median_float(values)` — native backing for `float[].median()`.
+    ///
+    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
+    /// `float[].sort()`) so the caller's array is left untouched. Throws
+    /// `InvalidArgument` when `values` is empty.
+    fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
+        if values.is_empty() {
+            return Err(VmBamlError::InvalidArgument {
+                message: "float[].median: cannot take the median of an empty array".to_string(),
+            }
+            .into());
+        }
+        let mut sorted: Vec<f64> = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
+            .collect();
+        sorted.sort_by(f64::total_cmp);
+        let mid = sorted.len() / 2;
+        if sorted.len() % 2 == 1 {
+            Ok(sorted[mid])
+        } else {
+            Ok(f64::midpoint(sorted[mid - 1], sorted[mid]))
+        }
+    }
+
+    /// `baml._trunc_to_int(value)` — saturating truncation toward zero (formerly
+    /// the public `baml.math.trunc`). Rust's `as` cast saturates to the `i64`
+    /// range and maps NaN to `0`; never throws.
+    #[allow(clippy::cast_possible_truncation)]
+    fn _trunc_to_int(value: f64) -> i64 {
+        value as i64
+    }
 }
 
 /// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
@@ -264,8 +360,8 @@ fn render_done(
     pending: &[HeapPtr],
     results: &[String],
 ) -> NativeCallResult {
-    let mut counter = 0;
-    let rendered = render_to_string(vm, root, false, pending, results, &mut counter);
+    let mut state = StringRenderState::with_overrides(pending, results);
+    let rendered = render_to_string(vm, root, false, 0, &mut state);
     NativeCallResult::Done(Value::object(vm.alloc_string(rendered)))
 }
 
@@ -334,32 +430,111 @@ enum DisplaySnap {
     Leaf(String),
     /// A string's contents — quoted when nested, bare at top level.
     Str(String),
-    /// An array (or `uint8array`) — elements rendered as `[a, b, c]`.
-    Seq(Vec<Value>),
+    /// An array — elements rendered as `[a, b, c]`, with at most one trailing
+    /// ellipsis when diagnostic limits omit further siblings.
+    Seq(Vec<Value>, bool),
     /// A map — entries rendered as `{"k": v, ...}` (keys are always strings, and
     /// are quoted so keys containing `:`/`,` stay unambiguous).
-    Entries(Vec<(String, Value)>),
+    Entries(Vec<(String, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
-    Instance(String, Vec<(String, Value)>),
+    Instance(String, Vec<(String, Value)>, bool),
+}
+
+const DIAGNOSTIC_RENDER_MAX_DEPTH: usize = 32;
+const DIAGNOSTIC_RENDER_MAX_NODES: usize = 256;
+const TRUNCATED_RENDER: &str = "…";
+
+/// Mutable traversal state for structural string rendering.
+///
+/// User-facing `ToString` rendering is unbounded to preserve its existing
+/// behavior and carries the precomputed override tables. Native diagnostic
+/// rendering has empty override tables and strict depth/node/cycle guards:
+/// an error-reporting path must degrade to an ellipsis rather than dispatch,
+/// throw, or recurse forever.
+struct StringRenderState<'a> {
+    pending: &'a [HeapPtr],
+    results: &'a [String],
+    counter: usize,
+    qualified_class_names: bool,
+    remaining_nodes: Option<usize>,
+    max_depth: Option<usize>,
+    active_objects: Option<HashSet<HeapPtr>>,
+}
+
+impl<'a> StringRenderState<'a> {
+    fn with_overrides(pending: &'a [HeapPtr], results: &'a [String]) -> Self {
+        Self {
+            pending,
+            results,
+            counter: 0,
+            qualified_class_names: false,
+            remaining_nodes: None,
+            max_depth: None,
+            active_objects: None,
+        }
+    }
+
+    fn diagnostic() -> Self {
+        Self {
+            pending: &[],
+            results: &[],
+            counter: 0,
+            qualified_class_names: true,
+            remaining_nodes: Some(DIAGNOSTIC_RENDER_MAX_NODES),
+            max_depth: Some(DIAGNOSTIC_RENDER_MAX_DEPTH),
+            active_objects: Some(HashSet::new()),
+        }
+    }
+
+    fn consume_node(&mut self, depth: usize) -> bool {
+        let has_budget = match &mut self.remaining_nodes {
+            Some(remaining) if *remaining == 0 => false,
+            Some(remaining) => {
+                *remaining -= 1;
+                true
+            }
+            None => true,
+        };
+        has_budget && self.max_depth.is_none_or(|max_depth| depth <= max_depth)
+    }
+
+    fn can_render_node(&self, depth: usize) -> bool {
+        self.remaining_nodes.is_none_or(|remaining| remaining != 0)
+            && self.max_depth.is_none_or(|max_depth| depth <= max_depth)
+    }
+
+    fn snapshot_child_limit(&self, child_count: usize) -> usize {
+        self.remaining_nodes
+            .map_or(child_count, |remaining| remaining.min(child_count))
+    }
+
+    fn consume_leaf_children(&mut self, count: usize) {
+        if let Some(remaining) = &mut self.remaining_nodes {
+            *remaining = remaining.saturating_sub(count);
+        }
+    }
 }
 
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
-/// Structural and total: every value type renders to *something* and nothing
-/// throws. A node whose runtime class overrides `baml.ToString` (recorded
+/// Structural: every value type renders to *something* and nothing throws. A
+/// node whose runtime class overrides `baml.ToString` (recorded
 /// pre-order in `pending` by [`collect_to_string_overrides`]) is rendered via its
-/// precomputed result (`results[*counter]`, produced by pass 2), spliced in bare
+/// precomputed result (`results[state.counter]`, produced by pass 2), spliced in bare
 /// regardless of nesting. Because collect and render share the same pre-order,
-/// `pending[*counter]` is exactly the next override node — so the check is a
+/// `pending[state.counter]` is exactly the next override node — so the check is a
 /// pointer compare, not a per-node global lookup. With an empty `pending` this is
 /// a pure structural walk.
 fn render_to_string(
     vm: &BexVm,
     value: Value,
     nested: bool,
-    pending: &[HeapPtr],
-    results: &[String],
-    counter: &mut usize,
+    depth: usize,
+    state: &mut StringRenderState<'_>,
 ) -> String {
+    if !state.consume_node(depth) {
+        return TRUNCATED_RENDER.to_string();
+    }
+
     let ptr = match value.kind() {
         ValueKind::Null => return "null".to_string(),
         ValueKind::Int(i) => return i.to_string(),
@@ -369,10 +544,22 @@ fn render_to_string(
     };
 
     // Override node: splice its precomputed `to_string` result in bare.
-    if pending.get(*counter) == Some(&ptr) {
-        let rendered = results.get(*counter).cloned().unwrap_or_default();
-        *counter += 1;
+    if state.pending.get(state.counter) == Some(&ptr) {
+        let rendered = state
+            .results
+            .get(state.counter)
+            .cloned()
+            .unwrap_or_default();
+        state.counter += 1;
         return rendered;
+    }
+
+    // Only an object currently on the recursion stack is a cycle. Shared DAG
+    // children render normally after the first branch removes them on unwind.
+    if let Some(active_objects) = &mut state.active_objects
+        && !active_objects.insert(ptr)
+    {
+        return TRUNCATED_RENDER.to_string();
     }
 
     // Capture an owned snapshot, dropping the heap borrow / container lock
@@ -381,44 +568,73 @@ fn render_to_string(
         Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
         Object::Float(f) => DisplaySnap::Leaf(bex_vm_types::format_float(*f)),
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
-        Object::Array(values) => DisplaySnap::Seq(values.to_vec()),
+        Object::Array(values) => {
+            let values = values.lock();
+            let limit = state.snapshot_child_limit(values.len());
+            DisplaySnap::Seq(
+                values.iter().take(limit).copied().collect(),
+                values.len() > limit,
+            )
+        }
         Object::Uint8Array(bytes) => {
-            let rendered = bytes
-                .to_vec()
+            let bytes = bytes.lock();
+            let limit = state.snapshot_child_limit(bytes.len());
+            let truncated = bytes.len() > limit;
+            let mut rendered = bytes
                 .iter()
+                .take(limit)
                 .map(u8::to_string)
                 .collect::<Vec<_>>()
                 .join(", ");
+            state.consume_leaf_children(limit);
+            if truncated {
+                if !rendered.is_empty() {
+                    rendered.push_str(", ");
+                }
+                rendered.push_str(TRUNCATED_RENDER);
+            }
             DisplaySnap::Leaf(format!("[{rendered}]"))
         }
-        Object::Map(map) => DisplaySnap::Entries(
-            map.to_index_map()
-                .into_iter()
-                .map(|(k, v)| (k.as_str().to_string(), v))
-                .collect(),
-        ),
+        Object::Map(map) => {
+            let map = map.lock();
+            let limit = state.snapshot_child_limit(map.len());
+            DisplaySnap::Entries(
+                map.iter()
+                    .take(limit)
+                    .map(|(k, v)| (k.as_str().to_string(), *v))
+                    .collect(),
+                map.len() > limit,
+            )
+        }
         Object::Instance(inst) => {
-            let field_values: Vec<Value> = inst.fields.iter().map(AtomicValueSlot::load).collect();
-            let (class_name, field_names) = match vm.get_object(inst.class) {
-                Object::Class(class) => (
-                    class.name.name().to_string(),
-                    class
+            let limit = state.snapshot_child_limit(inst.fields.len());
+            let (class_name, paired) = match vm.get_object(inst.class) {
+                Object::Class(class) => {
+                    let name = if state.qualified_class_names {
+                        class.name.to_string()
+                    } else {
+                        class.name.name().to_string()
+                    };
+                    let fields = inst
                         .fields
                         .iter()
-                        .map(|f| f.name.clone())
-                        .collect::<Vec<_>>(),
-                ),
+                        .take(limit)
+                        .map(AtomicValueSlot::load)
+                        .enumerate()
+                        .map(|(i, v)| {
+                            let field_name = class
+                                .fields
+                                .get(i)
+                                .map(|field| field.name.clone())
+                                .unwrap_or_else(|| i.to_string());
+                            (field_name, v)
+                        })
+                        .collect();
+                    (name, fields)
+                }
                 _ => (String::new(), Vec::new()),
             };
-            let paired = field_values
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let name = field_names.get(i).cloned().unwrap_or_else(|| i.to_string());
-                    (name, v)
-                })
-                .collect();
-            DisplaySnap::Instance(class_name, paired)
+            DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -434,7 +650,7 @@ fn render_to_string(
         other => DisplaySnap::Leaf(other.to_string()),
     };
 
-    match snap {
+    let rendered = match snap {
         DisplaySnap::Leaf(s) => s,
         DisplaySnap::Str(s) => {
             if nested {
@@ -443,38 +659,76 @@ fn render_to_string(
                 s
             }
         }
-        DisplaySnap::Seq(values) => {
+        DisplaySnap::Seq(values, mut truncated) => {
             let mut parts: Vec<String> = Vec::with_capacity(values.len());
             for v in &values {
-                parts.push(render_to_string(vm, *v, true, pending, results, counter));
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
+                parts.push(render_to_string(vm, *v, true, depth + 1, state));
+            }
+            if truncated {
+                parts.push(TRUNCATED_RENDER.to_string());
             }
             format!("[{}]", parts.join(", "))
         }
-        DisplaySnap::Entries(entries) => {
+        DisplaySnap::Entries(entries, mut truncated) => {
             let mut parts: Vec<String> = Vec::with_capacity(entries.len());
             for (k, v) in &entries {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
                 parts.push(format!(
                     "{k:?}: {}",
-                    render_to_string(vm, *v, true, pending, results, counter)
+                    render_to_string(vm, *v, true, depth + 1, state)
                 ));
+            }
+            if truncated {
+                parts.push(TRUNCATED_RENDER.to_string());
             }
             format!("{{{}}}", parts.join(", "))
         }
-        DisplaySnap::Instance(class_name, paired) => {
+        DisplaySnap::Instance(class_name, paired, mut truncated) => {
             if paired.is_empty() {
-                class_name
+                if truncated {
+                    format!("{class_name} {{ {TRUNCATED_RENDER} }}")
+                } else {
+                    class_name
+                }
             } else {
                 let mut parts: Vec<String> = Vec::with_capacity(paired.len());
                 for (name, v) in &paired {
+                    if !state.can_render_node(depth + 1) {
+                        truncated = true;
+                        break;
+                    }
                     parts.push(format!(
                         "{name}: {}",
-                        render_to_string(vm, *v, true, pending, results, counter)
+                        render_to_string(vm, *v, true, depth + 1, state)
                     ));
+                }
+                if truncated {
+                    parts.push(TRUNCATED_RENDER.to_string());
                 }
                 format!("{class_name} {{ {} }}", parts.join(", "))
             }
         }
+    };
+    if let Some(active_objects) = &mut state.active_objects {
+        active_objects.remove(&ptr);
     }
+    rendered
+}
+
+/// VM-heap-allocation-free structural rendering for diagnostics that already
+/// execute inside a native call and therefore cannot yield to user `ToString`
+/// overrides. The bounded traversal uses qualified class names consistently and
+/// truncates on excessive depth, node count, or an object cycle.
+pub(super) fn render_value_structural(vm: &BexVm, value: Value, nested: bool) -> String {
+    let mut state = StringRenderState::diagnostic();
+    render_to_string(vm, value, nested, 0, &mut state)
 }
 
 fn deep_copy_value_recursive(
@@ -558,7 +812,7 @@ fn deep_copy_value_recursive(
                 Object::Instance(instance) => {
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
                         instance.class,
-                        instance.class_type_args.to_vec(),
+                        instance.class_type_args.to_vec().into_boxed_slice(),
                         Vec::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -570,7 +824,7 @@ fn deep_copy_value_recursive(
 
                     let new_instance = Instance::new(
                         instance.class,
-                        instance.class_type_args.to_vec(),
+                        instance.class_type_args.to_vec().into_boxed_slice(),
                         new_fields,
                     );
                     // no GC write barrier because it is all in gen0
@@ -581,6 +835,9 @@ fn deep_copy_value_recursive(
                 // Bigint is behind Arc — clone() is cheap (increments refcount).
                 Object::Bigint(arc) => vm.tlab.alloc(Object::Bigint(std::sync::Arc::clone(&arc))),
                 Object::Function(f) => vm.tlab.alloc(Object::Function(f)),
+                Object::Interface(i) => vm.tlab.alloc(Object::Interface(i)),
+                Object::Package(p) => vm.tlab.alloc(Object::Package(p)),
+                Object::ImplRule(r) => vm.tlab.alloc(Object::ImplRule(r)),
                 Object::Class(c) => vm.tlab.alloc(Object::Class(c)),
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
@@ -748,5 +1005,78 @@ fn deep_equals_recursive(
         }
 
         _ => false,
+    }
+}
+
+// ── Helpers for the numeric-array reductions ──────────────────────────────────
+
+/// Returns a human-readable runtime type name for the `unreachable!` diagnostics
+/// in `expect_float` / `expect_int`.
+fn value_type_name(vm: &BexVm, value: Value) -> String {
+    if value.is_null() {
+        return "null".to_string();
+    }
+    if value.as_int().is_some() {
+        return "int".to_string();
+    }
+    if value.as_bool().is_some() {
+        return "bool".to_string();
+    }
+    if value.is_omitted() {
+        return "omitted".to_string();
+    }
+    if let Some(ptr) = value.as_object_ptr() {
+        return ObjectType::of(vm.get_object(ptr)).to_string();
+    }
+    "unknown".to_string()
+}
+
+/// Extracts a float from a validated `float[]` element. The `FloatStats` /
+/// `Summable` methods are declared on `float[]`, so by the time execution reaches
+/// the native path each element is a boxed float; any other tag is an upstream
+/// invariant violation.
+fn expect_float(vm: &BexVm, value: Value, fn_name: &str, index: usize) -> f64 {
+    let Some(ptr) = value.as_object_ptr() else {
+        unreachable!(
+            "{fn_name}: expected float at index {index}, got {}",
+            value_type_name(vm, value)
+        );
+    };
+    match vm.get_object(ptr) {
+        Object::Float(float) => *float,
+        _ => unreachable!(
+            "{fn_name}: expected float at index {index}, got {}",
+            value_type_name(vm, value)
+        ),
+    }
+}
+
+/// Extracts an `i64` from a validated `int[]` element. Ints are unboxed tagged
+/// values, so no heap read is needed; a missing int tag is an upstream invariant
+/// violation.
+fn expect_int(value: Value, fn_name: &str, index: usize) -> i64 {
+    value
+        .as_int()
+        .unwrap_or_else(|| unreachable!("{fn_name}: expected int at index {index}"))
+}
+
+#[cfg(test)]
+mod trunc_to_int_tests {
+    use super::{BamlPackageBaml, PackageBamlImpl};
+
+    /// `_trunc_to_int` must preserve the old `baml.math.trunc` semantics exactly:
+    /// truncate toward zero, saturate to the `i64` range, map NaN to `0`, and
+    /// never throw.
+    #[test]
+    fn trunc_to_int_saturating_semantics() {
+        assert_eq!(PackageBamlImpl::_trunc_to_int(3.7), 3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(-3.7), -3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(3.0), 3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(0.0), 0);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(-0.0), 0);
+        // NaN maps to 0; ±∞ saturate to the i64 bounds (Rust's `as` cast).
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NAN), 0);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::INFINITY), i64::MAX);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NEG_INFINITY), i64::MIN);
     }
 }
