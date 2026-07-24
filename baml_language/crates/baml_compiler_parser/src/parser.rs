@@ -3935,7 +3935,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "unmatched `>` in type expression (found {} extra)",
+                        "unmatched `>` in generic parameter list (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -6924,7 +6924,7 @@ impl<'a> Parser<'a> {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "unmatched `>` in type expression (found {} extra)",
+                        "unmatched `>` in generic argument list (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -8777,6 +8777,32 @@ function read_int<T extends Converter<int>>(m: T) -> int {
         assert_eq!(
             generic_param_lists, 2,
             "expected interface and function generic params"
+        );
+    }
+
+    #[test]
+    fn extra_generic_parameter_closer_uses_parameter_list_wording() {
+        let (_root, errors) = parse_source("function f<T>>() -> int { 1 }");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "unmatched `>` in generic parameter list (found 1 extra)"
+            )),
+            "expected generic parameter list wording, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn extra_generic_argument_closer_uses_argument_list_wording() {
+        let (_root, errors) = parse_source("function f(x: int) -> int { x.as<int>>() }");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "unmatched `>` in generic argument list (found 1 extra)"
+            )),
+            "expected generic argument list wording, got: {errors:#?}"
         );
     }
 
