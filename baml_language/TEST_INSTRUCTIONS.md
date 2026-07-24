@@ -4,7 +4,7 @@
 
 | Suite | Location | Purpose |
 |-------|----------|---------|
-| `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed CST/HIR/THIR output |
+| `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed compiler IR output |
 | `baml_lsp2_actions_tests` | `crates/baml_lsp2_actions_tests/` | LSP integration tests with inline expectations |
 
 ## Workflow: Debugging a Failing Test
@@ -46,8 +46,6 @@ Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
 
 | Snapshot | Contents |
 |----------|----------|
-| `*_01_lexer_*.snap` | Token stream from lexer |
-| `*_02_parser_*.snap` | CST (Concrete Syntax Tree) |
 | `*_03_hir.snap` | HIR (High-level IR) |
 | `*_04_thir.snap` | THIR (Typed HIR) with type inference |
 | `*_05_diagnostics.snap` | All errors and warnings |
@@ -115,7 +113,7 @@ DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use UPDATE_EXPE
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
-A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
+A good place to start when given a diagnostic failure or parser issue is to create a focused compiler test and inspect its diagnostics and IR snapshots.
 
 BEFORE you run these lsp tests with UPDATE_EXPECT, make sure to just run without it and figure out if the new results are what you expect.
 

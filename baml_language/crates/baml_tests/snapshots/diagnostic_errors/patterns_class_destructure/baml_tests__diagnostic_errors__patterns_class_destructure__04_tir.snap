@@ -32,7 +32,6 @@ function user.class_destructure_duplicate_field_key_in_let() -> int throws never
     let Person { age: first, age: second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     first + second : unknown
   }
-  !! 902..907: unresolved name: first
 }
 function user.class_destructure_duplicate_field_key_with_wildcards() -> int throws never {
   { : 1

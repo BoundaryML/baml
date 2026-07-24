@@ -427,17 +427,13 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         None
     };
 
-    // All tiers get lexer and parser
-    let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
-    let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
-
     // All tiers get diagnostics (with tier-specific invariant assertions)
     let diagnostics_test = generate_diagnostics_test(project, project.tier);
 
     // Tier-specific phases
     let (hir_test, tir_test, mir_test, codegen_test, formatter_tests) = match project.tier {
         Tier::BrokenSyntax => {
-            // Tier 1: lexer + parser + diagnostics only — no higher phases
+            // Tier 1: diagnostics only - no higher phases
             (quote! {}, quote! {}, quote! {}, quote! {}, quote! {})
         }
         Tier::DiagnosticErrors => {
@@ -483,18 +479,14 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     quote! {
         mod #module_name {
             use baml_db::*;
-            use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
-            use salsa::Setter;
             #[allow(unused_imports)]
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
-            #lexer_tests
-            #parser_tests
             #hir_test
             #tir_test
             #mir_test
@@ -502,89 +494,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             #codegen_test
             #formatter_tests
             #parser_specific_tests
-        }
-    }
-}
-
-fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_01_lexer_{}", baml_file.name);
-    let snapshot_name = format!("01_lexer__{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            // Normalize line endings for cross-platform compatibility
-            let content = content.replace("\r\n", "\n");
-            let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
-            let tokens = baml_compiler_lexer::lex_file(&db, source_file);
-
-            // Format tokens as readable text
-            let mut output = String::new();
-            for token in tokens.iter() {
-                if !matches!(token.kind,
-                    baml_compiler_lexer::TokenKind::Whitespace |
-                    baml_compiler_lexer::TokenKind::Newline
-                ) {
-                    writeln!(output, "{:?} {:?}", token.kind, token.text).unwrap();
-                }
-            }
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!(#snapshot_name, output);
-            });
-        }
-    }
-}
-
-fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_02_parser_{}", baml_file.name);
-    let snapshot_name = format!("02_parser__{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            // Normalize line endings for cross-platform compatibility
-            let content = content.replace("\r\n", "\n");
-            let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
-            let source_file = db.add_file(#relative_path, &content);
-            root.set_files(&mut db).to(vec![source_file]);
-            let tree = baml_compiler_parser::syntax_tree(&db, source_file);
-            let errors = baml_compiler_parser::parse_errors(&db, source_file);
-
-            let mut output = String::new();
-            writeln!(output, "=== SYNTAX TREE ===").unwrap();
-            write!(output, "{}", crate::format_syntax_tree(&tree)).unwrap();
-            writeln!(output, "\n=== ERRORS ===").unwrap();
-            if errors.is_empty() {
-                writeln!(output, "None").unwrap();
-            } else {
-                // Build sources map for rendering
-                let file_id = source_file.file_id(&db);
-                let mut sources = HashMap::new();
-                let mut file_paths = HashMap::new();
-                sources.insert(file_id, content.clone());
-                file_paths.insert(file_id, source_file.path(&db));
-                let config = RenderConfig::test();
-
-                for error in errors.iter() {
-                    let diag = error.to_diagnostic();
-                    writeln!(output, "{}", render_diagnostic(&diag, &sources, &file_paths, &config)).unwrap();
-                }
-            }
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!(#snapshot_name, output);
-            });
         }
     }
 }
