@@ -27,6 +27,7 @@ pub mod analysis;
 pub mod builder;
 pub mod callable;
 pub mod exhaustiveness;
+mod generic_env;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;

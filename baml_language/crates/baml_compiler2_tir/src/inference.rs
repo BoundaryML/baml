@@ -32,6 +32,7 @@ use text_size::TextRange;
 
 use crate::{
     builder::{TypeInferenceBuilder, duplicate_parameter_names, parameter_binding_ty},
+    generic_env::{BoundSource, GenericEnv},
     infer_context::{InferContext, TypeCheckDiagnostics},
     lower_type_expr::TypeVarBoundsMap,
     ty::{FunctionParamTy, Ty, TyAttr},
@@ -49,153 +50,6 @@ static SCOPE_INFERENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::Ato
 /// (dirty scopes only); large on a cold compile.
 pub fn scope_inferences() -> usize {
     SCOPE_INFERENCES.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// One declared `extends` bound, from either bound universe.
-///
-/// Item-tree declarations (functions, classes, interfaces, impl blocks) carry
-/// their bounds as [`TypeRefId`](baml_compiler2_hir::type_ref::TypeRefId)s into
-/// the owning item's arena — firewall data. Expression-body lambdas are not
-/// items: their bounds live in the body AST and stay `ast::TypeExpr`. The env
-/// lowers both identically (`lower_type_ref` is what `lower_type_expr` shims
-/// onto), so which universe a bound came from never affects its meaning.
-#[derive(Debug, Clone)]
-enum BoundSource<'db> {
-    Ref(
-        &'db baml_compiler2_hir::type_ref::TypeRefStore,
-        baml_compiler2_hir::type_ref::TypeRefId,
-    ),
-    /// Transitional. Its last legitimate producer is the lambda path (lambdas
-    /// live in expression bodies, which have no `TypeRefStore` yet); everything
-    /// else is an unconverted item-tree arm. Once bodies store their type
-    /// positions as `TypeRefId`s (the `ExpressionStore` convergence — which also
-    /// fixes the `RawAttribute`-span cutoff leak in body type exprs), this
-    /// variant dies and `BoundSource` collapses to a plain `(store, id)` pair.
-    #[deprecated(
-        note = "transitional: dies with the body TypeRef migration; do not add new producers"
-    )]
-    Ast(ast::TypeExpr),
-}
-
-/// Wrap a declaration's AST bounds for the env. The lambda path's permanent
-/// form; item-tree callers use it only until they hand over firewall ids.
-#[expect(
-    deprecated,
-    reason = "the one sanctioned Ast producer until the body TypeRef migration"
-)]
-fn ast_bounds<'db>(bounds: &[Option<ast::TypeExpr>]) -> Vec<Option<BoundSource<'db>>> {
-    bounds
-        .iter()
-        .map(|bound| bound.clone().map(BoundSource::Ast))
-        .collect()
-}
-
-/// Wrap a firewall item's declared bounds (`TypeRefId`s into its own `store`)
-/// for the env.
-fn ref_bounds<'db>(
-    store: &'db baml_compiler2_hir::type_ref::TypeRefStore,
-    bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
-) -> Vec<Option<BoundSource<'db>>> {
-    bounds
-        .iter()
-        .map(|bound| bound.map(|id| BoundSource::Ref(store, id)))
-        .collect()
-}
-
-#[derive(Debug, Clone, Default)]
-struct GenericEnv<'db> {
-    params: Vec<Name>,
-    bound_param_names: Vec<Name>,
-    bound_exprs: Vec<Option<BoundSource<'db>>>,
-    /// Parallel to `bound_param_names`/`bound_exprs`: whether this env's scope
-    /// *owns* the bound's declaration. Bound-expr diagnostics (unresolved names,
-    /// arity, non-interface bounds) are reported only by the owning scope — an
-    /// env that merely inherits a parent declaration's bounds (a method env
-    /// carrying its class's, a lambda env carrying its function's) still lowers
-    /// them for enforcement/projection but stays silent, so each declaration
-    /// error is reported exactly once, at its declaration.
-    owned_bounds: Vec<bool>,
-    /// A parameter pinned to an interface *constraint* (currently only `Self` inside an
-    /// interface's own default method). A `baml_type::Interface`, never a `Ty::Interface`
-    /// existential — a constraint pins only some associated types.
-    concrete_bounds: Vec<(Name, baml_type::Interface)>,
-}
-
-impl<'db> GenericEnv<'db> {
-    fn from_params(params: Vec<Name>) -> Self {
-        Self {
-            params,
-            bound_param_names: Vec::new(),
-            bound_exprs: Vec::new(),
-            owned_bounds: Vec::new(),
-            concrete_bounds: Vec::new(),
-        }
-    }
-
-    /// Prepend an *enclosing* declaration's parameters (a class's onto a method
-    /// env, an impl block's onto its method env). Their bounds are inherited —
-    /// diagnosed at the enclosing declaration, not re-reported by this env.
-    fn prepend_declared(&mut self, params: &[Name], bounds: &[Option<BoundSource<'db>>]) {
-        let mut merged_params = params.to_vec();
-        merged_params.extend(std::mem::take(&mut self.params));
-        self.params = merged_params;
-
-        let mut merged_bound_names = params.to_vec();
-        merged_bound_names.extend(std::mem::take(&mut self.bound_param_names));
-        self.bound_param_names = merged_bound_names;
-
-        let mut merged_bounds = bounds.to_vec();
-        merged_bounds.extend(std::mem::take(&mut self.bound_exprs));
-        self.bound_exprs = merged_bounds;
-
-        let mut merged_owned = vec![false; params.len()];
-        merged_owned.extend(std::mem::take(&mut self.owned_bounds));
-        self.owned_bounds = merged_owned;
-    }
-
-    fn add_bounds_for_declared_params(
-        &mut self,
-        params: &[Name],
-        bounds: &[Option<BoundSource<'db>>],
-    ) {
-        self.bound_param_names.extend(params.iter().cloned());
-        self.bound_exprs.extend(
-            params
-                .iter()
-                .enumerate()
-                .map(|(idx, _)| bounds.get(idx).cloned().unwrap_or(None)),
-        );
-        self.owned_bounds.extend(params.iter().map(|_| true));
-    }
-
-    fn append_declared(&mut self, params: &[Name], bounds: &[Option<BoundSource<'db>>]) {
-        self.params.extend(params.iter().cloned());
-        self.add_bounds_for_declared_params(params, bounds);
-    }
-
-    fn append_unique_declared(&mut self, params: &[Name], bounds: &[Option<BoundSource<'db>>]) {
-        for (idx, param) in params.iter().enumerate() {
-            if self.params.contains(param) {
-                continue;
-            }
-            self.params.push(param.clone());
-            self.bound_param_names.push(param.clone());
-            self.bound_exprs
-                .push(bounds.get(idx).cloned().unwrap_or(None));
-            self.owned_bounds.push(true);
-        }
-    }
-
-    /// Demote every bound to inherited: the env is being extended for an inner
-    /// scope (a lambda, a required-method signature) that must not re-report the
-    /// enclosing declaration's bound diagnostics.
-    fn mark_all_bounds_inherited(&mut self) {
-        self.owned_bounds.fill(false);
-    }
-
-    fn add_concrete_bound(&mut self, param: Name, bound: baml_type::Interface) {
-        self.concrete_bounds.push((param, bound));
-    }
 }
 
 pub(crate) fn inference_owner_scope(
@@ -330,26 +184,17 @@ fn fetch_scope_body<'db>(
     }
 }
 
-fn enclosing_type_generics<'db>(
-    db: &'db dyn crate::Db,
+fn enclosing_type_generics(
+    db: &dyn crate::Db,
     file: SourceFile,
     type_name: &Name,
-) -> Option<(
-    crate::infer_context::ShadowedParamOwner,
-    Vec<Name>,
-    Vec<Option<BoundSource<'db>>>,
-)> {
+) -> Option<(crate::infer_context::ShadowedParamOwner, Vec<Name>)> {
     for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
         let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         if class_data.name == *type_name {
             return Some((
                 crate::infer_context::ShadowedParamOwner::Class,
                 class_data.generic_params.clone(),
-                class_data
-                    .generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.map(|id| BoundSource::Ref(&class_data.type_refs, id)))
-                    .collect(),
             ));
         }
     }
@@ -364,11 +209,6 @@ fn enclosing_type_generics<'db>(
             return Some((
                 crate::infer_context::ShadowedParamOwner::Interface,
                 iface_data.generic_params.clone(),
-                iface_data
-                    .generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.map(|id| BoundSource::Ref(&iface_data.type_refs, id)))
-                    .collect(),
             ));
         }
     }
@@ -515,8 +355,8 @@ fn lower_env_generic_bound(
 /// mentioning `Self.Item` lowers inside the same scope its enforcement runs in.
 fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty>) {
     let bounds: TypeVarBoundsMap = env
-        .concrete_bounds
-        .iter()
+        .concrete_bounds()
+        .into_iter()
         .map(|(name, constraint)| (name.clone(), vec![constraint.clone()]))
         .collect();
     let self_ty = bounds
@@ -532,40 +372,59 @@ fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty
 /// same env that [`install_generic_param_bounds`] installs as the `Ty`-typed
 /// enforcement table; bound-lowering diagnostics are the enforcement path's to
 /// report, so they are discarded here.
-fn env_interface_bounds(
+pub(crate) fn env_interface_bounds(
     db: &dyn crate::Db,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
 ) -> TypeVarBoundsMap {
+    lower_env_interface_bounds(db, pkg_items, ns_context, env, true)
+}
+
+pub(crate) fn env_declared_interface_bounds(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+) -> TypeVarBoundsMap {
+    lower_env_interface_bounds(db, pkg_items, ns_context, env, false)
+}
+
+fn lower_env_interface_bounds(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+    include_concrete: bool,
+) -> TypeVarBoundsMap {
     let mut bounds = TypeVarBoundsMap::default();
     let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
-    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
-        let Some(bound_te) = bound else {
-            continue;
+    env.visit_params(&mut |param| {
+        let Some(bound) = param.bound() else {
+            return;
         };
         let mut diags = Vec::new();
         let bound_ty = lower_env_generic_bound(
             db,
             pkg_items,
             ns_context,
-            &env.params,
+            env.param_names(),
             &concrete_lowering_bounds,
             lowering_self_ty.as_ref(),
-            bound_te,
+            bound,
             &mut diags,
         );
         if let Some(constraint) = bound_ty.as_interface() {
-            // Last-wins, matching `install_generic_param_bounds`'s `insert`: a name repeated
-            // across `bound_param_names` is a shadowing artifact (an inner-scope parameter
-            // reusing an outer name), not an intersection conjunction, so the inner bound
-            // replaces the outer one. Keeping both would make this map disagree with the
-            // enforcement table it is meant to mirror.
-            bounds.insert(name.clone(), vec![constraint]);
+            // Inner declarations are visited after their parents. Shadowing is
+            // diagnosed separately, and the inner declaration remains the
+            // recovery binding used by the rest of inference.
+            bounds.insert(param.name().clone(), vec![constraint]);
         }
-    }
-    for (name, constraint) in &env.concrete_bounds {
-        bounds.insert(name.clone(), vec![constraint.clone()]);
+    });
+    if include_concrete {
+        for (name, constraint) in env.concrete_bounds() {
+            bounds.insert(name.clone(), vec![constraint.clone()]);
+        }
     }
     bounds
 }
@@ -777,15 +636,9 @@ fn install_generic_param_bounds(
 ) {
     let mut bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
     let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
-    debug_assert_eq!(env.bound_param_names.len(), env.owned_bounds.len());
-    for ((name, bound), owned) in env
-        .bound_param_names
-        .iter()
-        .zip(env.bound_exprs.iter())
-        .zip(env.owned_bounds.iter().copied())
-    {
-        let Some(bound_te) = bound else {
-            continue;
+    env.visit_params(&mut |param| {
+        let Some(bound) = param.bound() else {
+            return;
         };
         // Inherited bounds (an enclosing declaration's) are lowered for the
         // enforcement table but their diagnostics belong to — and were already
@@ -798,18 +651,18 @@ fn install_generic_param_bounds(
             builder,
             pkg_items,
             ns_context,
-            &env.params,
+            env.param_names(),
             &concrete_lowering_bounds,
             lowering_self_ty.as_ref(),
-            bound_te,
+            bound,
             span,
-            owned,
+            param.index() >= env.parent_count(),
         );
-        bounds.insert(name.clone(), constraint.into_vec());
-    }
+        bounds.insert(param.name().clone(), constraint.into_vec());
+    });
     bounds.extend(
-        env.concrete_bounds
-            .iter()
+        env.concrete_bounds()
+            .into_iter()
             .map(|(name, constraint)| (name.clone(), vec![constraint.clone()])),
     );
     builder.set_generic_param_bounds(bounds);
@@ -823,7 +676,7 @@ fn apply_generic_env(
     env: &GenericEnv,
     span: TextRange,
 ) {
-    builder.set_generic_params(env.params.clone());
+    builder.set_generic_params(env.param_names().to_vec());
     install_generic_param_bounds(db, builder, pkg_items, ns_context, env, span);
 }
 
@@ -836,112 +689,27 @@ struct GenericLookupContext<'a, 'db> {
 
 /// The enclosing class/interface declaration whose type-level parameters a method's
 /// signature env extends — with the declaration kind for shadowing diagnostics.
-struct ParentTypeGenerics<'db> {
+struct ParentTypeGenerics {
     type_name: Name,
     owner: crate::infer_context::ShadowedParamOwner,
     params: Vec<Name>,
-    bounds: Vec<Option<BoundSource<'db>>>,
 }
 
-fn parent_type_generic_env<'db>(
-    ctx: GenericLookupContext<'_, 'db>,
+fn parent_type_generic_env(
+    ctx: GenericLookupContext<'_, '_>,
     parent_scope_id: Option<FileScopeId>,
-) -> Option<ParentTypeGenerics<'db>> {
+) -> Option<ParentTypeGenerics> {
     let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
     if !matches!(parent.kind, ScopeKind::Class) {
         return None;
     }
     let type_name = parent.name.clone()?;
-    let (owner, params, bounds) = enclosing_type_generics(ctx.db, ctx.file, &type_name)?;
+    let (owner, params) = enclosing_type_generics(ctx.db, ctx.file, &type_name)?;
     Some(ParentTypeGenerics {
         type_name,
         owner,
         params,
-        bounds,
     })
-}
-
-fn prepend_parent_type_generics<'db>(
-    ctx: GenericLookupContext<'_, 'db>,
-    env: &mut GenericEnv<'db>,
-    parent_scope_id: Option<FileScopeId>,
-) -> Option<Name> {
-    let parent = parent_type_generic_env(ctx, parent_scope_id)?;
-    env.prepend_declared(&parent.params, &parent.bounds);
-    Some(parent.type_name)
-}
-
-/// An out-of-body impl block's declared generics as `(param names, each's single optional
-/// bound)`. The legacy flat form the generic env consumes; the block holds the full
-/// `&`-bound set per param, of which only the first is used here (matching the old single-bound
-/// representation). Empty for an in-body (`InClass`) block.
-fn free_impl_generics<'db>(
-    block: &'db baml_compiler2_ppir::item_data::ImplBlockData<'db>,
-) -> (Vec<Name>, Vec<Option<BoundSource<'db>>>) {
-    match &block.subject {
-        baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => (
-            generics.iter().map(|g| g.name.clone()).collect(),
-            generics
-                .iter()
-                .map(|g| {
-                    g.bounds
-                        .first()
-                        .map(|&id| BoundSource::Ref(&block.type_refs, id))
-                })
-                .collect(),
-        ),
-        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => {
-            debug_assert!(false, "Should only be called for a free impl");
-            (Vec::new(), Vec::new())
-        }
-    }
-}
-
-/// The out-of-body `implement … for …` block whose method list contains `func_loc`, as its
-/// declared generics, if any.
-///
-/// Membership is by the recorded owner link. It used to be by source span, which cannot
-/// distinguish a function from its companions — all of `f`, `f$stream` and `f$parse_stream`
-/// carry one span.
-fn enclosing_impl_generics_for_func<'db>(
-    db: &'db dyn crate::Db,
-    func_loc: FunctionLoc<'db>,
-) -> Option<(Vec<Name>, Vec<Option<BoundSource<'db>>>)> {
-    match baml_compiler2_ppir::item_data::method_owner(db, func_loc)? {
-        baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc) => {
-            Some(free_impl_generics(
-                baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc),
-            ))
-        }
-        baml_compiler2_ppir::item_data::MethodOwner::Class(_)
-        | baml_compiler2_ppir::item_data::MethodOwner::Interface(_) => None,
-    }
-}
-
-fn generic_env_for_function_data<'db>(
-    ctx: GenericLookupContext<'_, 'db>,
-    function_scope: &baml_compiler2_hir::scope::Scope,
-    func_loc: FunctionLoc<'db>,
-) -> GenericEnv<'db> {
-    let func_data = baml_compiler2_ppir::item_data::function_data(ctx.db, func_loc);
-    let mut env = GenericEnv::from_params(func_data.generic_params.clone());
-    env.add_bounds_for_declared_params(
-        &func_data.generic_params,
-        &ref_bounds(&func_data.type_refs, &func_data.generic_param_bounds),
-    );
-    // A method in a generic `implements<T …> Iface for Target` block sees the
-    // block's type params (e.g. `T` in `implements<T extends Comparable>
-    // Sortable for T[]`), which live on the impl block rather than a parent
-    // scope. Mirror the `ScopeKind::Function` arm: impl generics take the place
-    // of parent-type generics so a nested lambda body can resolve them too.
-    if let Some((generic_params, generic_param_bounds)) =
-        enclosing_impl_generics_for_func(ctx.db, func_loc)
-    {
-        env.prepend_declared(&generic_params, &generic_param_bounds);
-    } else {
-        prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
-    }
-    env
 }
 
 fn enclosing_function_generic_env_from_let<'db>(
@@ -960,7 +728,7 @@ fn enclosing_function_generic_env_from_let<'db>(
                 let baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc) = owner else {
                     return None;
                 };
-                return Some(generic_env_for_function_data(ctx, scope, func_loc));
+                return Some(crate::generic_env::function_generic_env(ctx.db, func_loc));
             }
             ScopeKind::Let => current = scope.parent,
             _ => current = scope.parent,
@@ -989,7 +757,7 @@ fn validate_type_ref_generic_bounds_at_span(
         db,
         package_items: pkg_items,
         ns_context,
-        generic_params: &env.params,
+        generic_params: env.param_names(),
         bounds: env_bounds,
         self_ty,
     };
@@ -1002,17 +770,10 @@ fn validate_type_ref_generic_bounds_at_span(
 }
 
 fn extend_env_with_lambda_generics<'db>(
-    mut env: GenericEnv<'db>,
+    env: &GenericEnv<'db>,
     func_def: &FunctionDef,
 ) -> GenericEnv<'db> {
-    // The enclosing scope's bounds were already diagnosed there; the lambda's
-    // scope reports only its own.
-    env.mark_all_bounds_inherited();
-    env.append_unique_declared(
-        &func_def.generic_params,
-        &ast_bounds(&func_def.generic_param_bounds),
-    );
-    env
+    env.child_unique_ast(&func_def.generic_params, &func_def.generic_param_bounds)
 }
 
 fn add_lambda_params_to_builder(
@@ -1045,7 +806,7 @@ fn add_lambda_params_to_builder(
                         db,
                         package_items: pkg_items,
                         ns_context,
-                        generic_params: &env.params,
+                        generic_params: env.param_names(),
                         bounds: &bounds,
                         self_ty: None,
                     },
@@ -1749,12 +1510,19 @@ pub fn infer_scope_types<'db>(
                         | None => None,
                     };
 
-                let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
-                env.params
-                    .extend(sig.synthetic_effect_params.iter().cloned());
+                let env = crate::generic_env::function_generic_env(db, func_loc)
+                    .clone()
+                    .with_additional_own_unbounded(&sig.synthetic_effect_params);
                 report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
                 if let Some(imp) = enclosing_impl {
-                    let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
+                    let impl_generic_params: Vec<_> = match &imp.subject {
+                        baml_compiler2_ppir::item_data::ImplSubjectData::Free {
+                            generics, ..
+                        } => generics.iter().map(|param| param.name.clone()).collect(),
+                        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => {
+                            Vec::new()
+                        }
+                    };
                     for mp in &sig.user_generic_params {
                         if impl_generic_params.iter().any(|cp| cp == mp) {
                             builder.report_at_span(
@@ -1765,7 +1533,6 @@ pub fn infer_scope_types<'db>(
                             );
                         }
                     }
-                    env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
                 } else if let Some(parent) =
                     parent_type_generic_env(GenericLookupContext { db, index, file }, scope.parent)
                 {
@@ -1781,55 +1548,12 @@ pub fn infer_scope_types<'db>(
                             );
                         }
                     }
-                    env.prepend_declared(&parent.params, &parent.bounds);
                 }
-                // BEP-044 (Self-as-type-variable): inside an interface's own
-                // method, `self` is a `Self` type variable bound by the
-                // interface instead of the interface existential. Register it
-                // in the shared generic env so the normal bound-aware member
-                // resolution path handles `Self`.
-                let interface_self_bound: Option<baml_type::Interface> = if enclosing_impl.is_none()
-                {
-                    scope.parent.and_then(|parent_idx| {
-                        let parent = &index.scopes[parent_idx.index() as usize];
-                        if !matches!(parent.kind, ScopeKind::Class) {
-                            return None;
-                        }
-                        let cn = parent.name.as_ref()?;
-                        let def = pkg_items.lookup_type(&pkg_info.namespace_path, cn)?;
-                        let baml_compiler2_hir::contributions::Definition::Interface(iface_loc) =
-                            def
-                        else {
-                            return None;
-                        };
-                        let qtn = crate::lower_type_expr::qualify_def(db, def, cn);
-                        let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-                        let args = iface
-                            .generic_params
-                            .iter()
-                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                            .collect();
-                        // `Self`'s bound is the interface as a *constraint* (a
-                        // `baml_type::Interface`, not a `Ty::Interface` existential): it pins
-                        // none of its associated types — they are `Self`'s own, abstract in a
-                        // default body, so `Self.Item` stays symbolic. Empty bindings, never
-                        // `Ty::Error` placeholders which would wrongly pin `Item = Error`.
-                        Some(baml_type::Interface::new(qtn, args, Vec::new()))
-                    })
-                } else {
-                    None
-                };
-                if let Some(bound) = interface_self_bound.clone() {
-                    let self_param = Name::new("Self");
-                    if !env.params.iter().any(|p| p == &self_param) {
-                        env.params.push(self_param.clone());
-                    }
-                    env.add_concrete_bound(self_param, bound);
-                }
-                env.add_bounds_for_declared_params(
-                    &func_data.generic_params,
-                    &ref_bounds(&func_data.type_refs, &func_data.generic_param_bounds),
-                );
+                let interface_self_bound = env
+                    .concrete_bounds()
+                    .into_iter()
+                    .find(|(name, _)| name.as_str() == "Self")
+                    .map(|(_, bound)| bound.clone());
                 apply_generic_env(
                     db,
                     &mut builder,
@@ -1905,7 +1629,7 @@ pub fn infer_scope_types<'db>(
                                 db,
                                 package_items: pkg_items,
                                 ns_context: &pkg_info.namespace_path,
-                                generic_params: &env.params,
+                                generic_params: env.param_names(),
                                 bounds: &env_bounds,
                                 self_ty: None,
                             },
@@ -1937,7 +1661,7 @@ pub fn infer_scope_types<'db>(
                     let sig_sm =
                         baml_compiler2_ppir::elaborated_function_signature_source_map(db, func_loc);
                     let mut type_bindings: FxHashMap<Name, Ty> =
-                        type_bindings_for_params(&env.params);
+                        type_bindings_for_params(env.param_names());
                     if let Some(target) =
                         baml_compiler2_ppir::item_data::method_interface_target(db, func_loc)
                         && let Some(iface_loc) = crate::interfaces::resolve_ref_to_interface(
@@ -2404,14 +2128,10 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    let env = extend_env_with_lambda_generics(
-                                        generic_env_for_function_data(
-                                            GenericLookupContext { db, index, file },
-                                            ancestor_scope,
-                                            ancestor_func,
-                                        ),
-                                        func_def,
-                                    );
+                                    let parent_env =
+                                        crate::generic_env::function_generic_env(db, ancestor_func);
+                                    let env =
+                                        extend_env_with_lambda_generics(&parent_env, func_def);
                                     apply_generic_env(
                                         db,
                                         &mut builder,
@@ -2471,14 +2191,13 @@ pub fn infer_scope_types<'db>(
                                             }
                                         });
 
-                                    let env = extend_env_with_lambda_generics(
-                                        enclosing_function_generic_env_from_let(
-                                            GenericLookupContext { db, index, file },
-                                            ancestor_scope,
-                                        )
-                                        .unwrap_or_default(),
-                                        func_def,
-                                    );
+                                    let parent_env = enclosing_function_generic_env_from_let(
+                                        GenericLookupContext { db, index, file },
+                                        ancestor_scope,
+                                    )
+                                    .unwrap_or_default();
+                                    let env =
+                                        extend_env_with_lambda_generics(&parent_env, func_def);
                                     apply_generic_env(
                                         db,
                                         &mut builder,
@@ -2523,11 +2242,7 @@ pub fn infer_scope_types<'db>(
                 let class_sm = baml_compiler2_ppir::item_data::class_source_map(db, class_loc);
                 let class_span = class_sm.span;
                 report_duplicate_generic_params(&builder, &class_data.generic_params, class_span);
-                let mut env = GenericEnv::from_params(class_data.generic_params.clone());
-                env.add_bounds_for_declared_params(
-                    &class_data.generic_params,
-                    &ref_bounds(&class_data.type_refs, &class_data.generic_param_bounds),
-                );
+                let env = crate::generic_env::class_generic_env(db, class_loc).clone();
                 apply_generic_env(
                     db,
                     &mut builder,
@@ -2695,35 +2410,7 @@ pub fn infer_scope_types<'db>(
                     .iter()
                     .map(|assoc| assoc.name.clone())
                     .collect();
-                let mut iface_env = GenericEnv::from_params(iface_params.clone());
-                iface_env.add_bounds_for_declared_params(
-                    &iface_params,
-                    &ref_bounds(&iface_data.type_refs, &iface_data.generic_param_bounds),
-                );
-                // `Self` in an interface's own signatures is its rigid `Self` type variable,
-                // bounded by the interface itself (as a constraint, no associated pins) — so a
-                // `Self.member` projection in a field or method signature resolves through it,
-                // mirroring the interface-default-body path.
-                let self_param = Name::new("Self");
-                if !iface_env.params.iter().any(|p| p == &self_param) {
-                    iface_env.params.push(self_param.clone());
-                }
-                iface_env.add_concrete_bound(
-                    self_param,
-                    baml_type::Interface::new(
-                        crate::lower_type_expr::qualify_def(
-                            db,
-                            baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
-                            &iface_data.name,
-                        ),
-                        iface_data
-                            .generic_params
-                            .iter()
-                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                            .collect(),
-                        Vec::new(),
-                    ),
-                );
+                let iface_env = crate::generic_env::interface_generic_env(db, iface_loc).clone();
                 let self_ty = crate::self_type::self_type_for_interface_default();
                 apply_generic_env(
                     db,
@@ -2749,7 +2436,7 @@ pub fn infer_scope_types<'db>(
                             &mut builder,
                             pkg_items,
                             &pkg_info.namespace_path,
-                            &iface_env.params,
+                            iface_env.param_names(),
                             &iface_env_bounds,
                             Some(&self_ty),
                             &BoundSource::Ref(&iface_data.type_refs, bound_ref),
@@ -2794,14 +2481,10 @@ pub fn infer_scope_types<'db>(
                             );
                         }
                     }
-                    let mut sig_env = iface_env.clone();
-                    // The interface's own bounds were diagnosed above at the
-                    // interface span; each signature env reports only its
-                    // method's own.
-                    sig_env.mark_all_bounds_inherited();
-                    sig_env.append_declared(
+                    let sig_env = iface_env.child_refs(
                         &sig.generic_params,
-                        &ref_bounds(&iface_data.type_refs, &sig.generic_param_bounds),
+                        &iface_data.type_refs,
+                        &sig.generic_param_bounds,
                     );
                     apply_generic_env(
                         db,
