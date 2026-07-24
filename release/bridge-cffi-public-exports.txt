@@ -23,4 +23,6 @@ new_function_call
 register_callback
 register_host_dispatch_callback
 register_host_release_callback
+register_unhandled_spawn_error_callback
+shutdown_runtime
 version
