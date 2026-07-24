@@ -59,7 +59,7 @@ pub(crate) fn resolve_source_location(
 pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
     let display = file_path.display().to_string();
     let canonical =
-        std::fs::canonicalize(file_path).with_context(|| format!("File not found: {display}"))?;
+        std::fs::canonicalize(file_path).with_context(|| format!("file not found: {display}"))?;
     if !canonical.is_file() {
         anyhow::bail!("`{}` is not a file.", canonical.display());
     }
@@ -146,7 +146,7 @@ pub(crate) fn resolve_project_sources_lenient(
         .into_par_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read {}", path.display()))?;
+                .with_context(|| format!("failed to read {}", path.display()))?;
             Ok((path, content))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -223,8 +223,8 @@ pub(crate) fn load_project_or_default(
 /// discovery starts at the current directory.
 fn resolve_search_start(from: Option<&Path>) -> Result<PathBuf> {
     resolve_project_search_start(from).with_context(|| match from {
-        Some(from) => format!("Could not resolve path: {}", from.display()),
-        None => "Could not resolve current directory".to_string(),
+        Some(from) => format!("could not resolve path: {}", from.display()),
+        None => "could not resolve current directory".to_string(),
     })
 }
 
@@ -268,7 +268,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
         anyhow::bail!(
             "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
              and no `baml_src/` directory found in it or its ancestors.\n\
-             Add a `baml_src/` directory with your `.baml` files, run `baml init` \
+             add a `baml_src/` directory with your `.baml` files, run `baml init` \
              to create a `baml.toml`, or for a one-off script use `--file <PATH>`.",
             canonical.display()
         );
@@ -284,9 +284,9 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
     // this: `baml.toml` is opt-in.
     let manifest = if toml_path.exists() {
         let content = std::fs::read_to_string(&toml_path)
-            .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+            .with_context(|| format!("failed to read {}", toml_path.display()))?;
         let manifest = crate::manifest::parse(&content)
-            .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+            .with_context(|| format!("failed to parse {}", toml_path.display()))?;
         crate::manifest::package_name(&manifest, &toml_path)?;
         // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
         // `nmae = ...`) warns rather than silently no-ops, but a
@@ -308,7 +308,7 @@ pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedPro
         .into_par_iter()
         .map(|path| {
             let content = std::fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read {}", path.display()))?;
+                .with_context(|| format!("failed to read {}", path.display()))?;
             Ok((path, content))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -363,7 +363,7 @@ fn build_project_db(
     for file_path in &baml_files {
         on_file(file_path);
         let content = std::fs::read_to_string(file_path)
-            .with_context(|| format!("Failed to read {}", file_path.display()))?;
+            .with_context(|| format!("failed to read {}", file_path.display()))?;
         db.add_or_update_file(file_path, &content);
     }
     Ok((db, canonical, baml_files))
@@ -375,9 +375,9 @@ fn build_project_db(
 /// naming) can reuse it without re-parsing.
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
-        .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+        .with_context(|| format!("failed to read {}", toml_path.display()))?;
     let manifest = crate::manifest::parse(&content)
-        .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+        .with_context(|| format!("failed to parse {}", toml_path.display()))?;
     crate::manifest::package_name(&manifest, toml_path)
 }
 
@@ -406,7 +406,7 @@ pub(crate) fn resolve_project_name(from: Option<&Path>) -> Result<String> {
         .map(str::to_string)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Could not derive a project name from `{}`; pass `-o <PATH>` to name the output.",
+                "could not derive a project name from `{}`; pass `-o <PATH>` to name the output.",
                 canonical.display()
             )
         })

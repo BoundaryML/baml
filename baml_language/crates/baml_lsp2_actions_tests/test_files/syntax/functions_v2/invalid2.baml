@@ -117,138 +117,119 @@ function Foo6(arg: int) -> float {
 
 //----
 //- diagnostics
-// error: Expected LLM function missing 'prompt' field, found '}'
-//    ╭─[ functions_v2_invalid2.baml:3:1 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid2.baml:3:1]
 //  3 │ }
-//    │ ┬
-//    │ ╰── Expected LLM function missing 'prompt' field, found '}'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected LLM function missing 'client' field, found '}'
-//    ╭─[ functions_v2_invalid2.baml:7:1 ]
-//    │
+//    · ┬
+//    · ╰── expected `LLM function missing 'prompt' field`, found `'}'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid2.baml:7:1]
 //  7 │ }
-//    │ ┬
-//    │ ╰── Expected LLM function missing 'client' field, found '}'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected prompt string, found '}'
-//     ╭─[ functions_v2_invalid2.baml:18:1 ]
-//     │
+//    · ┬
+//    · ╰── expected `LLM function missing 'client' field`, found `'}'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:18:1]
 //  18 │ }
-//     │ ┬
-//     │ ╰── Expected prompt string, found '}'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected prompt string, found '}'
-//     ╭─[ functions_v2_invalid2.baml:30:1 ]
-//     │
+//     · ┬
+//     · ╰── expected `prompt string`, found `'}'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[functions_v2_invalid2.baml:30:1]
 //  30 │ }
-//     │ ┬
-//     │ ╰── Expected prompt string, found '}'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: unresolved name: Foo
-//    ╭─[ functions_v2_invalid2.baml:1:34 ]
-//    │
+//     · ┬
+//     · ╰── expected `prompt string`, found `'}'`
+//     ╰────
+// E0003
+//
+//   × unresolved name: `Foo`
+//    ╭─[functions_v2_invalid2.baml:1:34]
 //  1 │ ╭─▶ function Foo1(arg: int) -> float {
-//    ┆ ┆
-//  3 │ ├─▶ }
-//    │ │
-//    │ ╰─────── unresolved name: Foo
-//    │
-//    │     Note: Error code: E0003
-// ───╯
-// error: type mismatch: expected baml.llm.Client, got null
-//    ╭─[ functions_v2_invalid2.baml:5:34 ]
-//    │
+//  2 │ │     client Foo
+//  3 │ ╰─▶ }
+//    ╰────
+// E0001
+//
+//   × mismatched types
+//    ╭─[functions_v2_invalid2.baml:5:34]
 //  5 │ ╭─▶ function Foo2(arg: int) -> float {
-//    ┆ ┆
+//  6 │ │     prompt #"..."#
 //  7 │ ├─▶ }
-//    │ │
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//    │
-//    │     Note: Error code: E0001
-// ───╯
-// error: type mismatch: expected baml.llm.Client, got null
-//    ╭─[ functions_v2_invalid2.baml:5:1 ]
-//    │
+//    · ╰──── expected `baml.llm.Client`, found `null`
+//    ╰────
+// E0001
+//
+//   × mismatched types
+//    ╭─[functions_v2_invalid2.baml:5:1]
 //  5 │ ╭─▶ function Foo2(arg: int) -> float {
-//    ┆ ┆
+//  6 │ │     prompt #"..."#
 //  7 │ ├─▶ }
-//    │ │
-//    │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//    │
-//    │     Note: Error code: E0001
-// ───╯
-// error: unresolved name: bar
-//     ╭─[ functions_v2_invalid2.baml:9:34 ]
-//     │
+//    · ╰──── expected `baml.llm.Client`, found `null`
+//    ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:9:34]
 //   9 │ ╭─▶ function Foo3(arg: int) -> float {
-//     ┆ ┆
-//  12 │ ├─▶ }
-//     │ │
-//     │ ╰─────── unresolved name: bar
-//     │
-//     │     Note: Error code: E0003
-// ────╯
-// error: unresolved name: bar
-//     ╭─[ functions_v2_invalid2.baml:15:34 ]
-//     │
+//  10 │ │     client bar
+//  11 │ │     prompt "..."
+//  12 │ ╰─▶ }
+//     ╰────
+// E0003
+//
+//   × unresolved name: `bar`
+//     ╭─[functions_v2_invalid2.baml:15:34]
 //  15 │ ╭─▶ function Foo4(arg: int) -> float {
-//     ┆ ┆
-//  18 │ ├─▶ }
-//     │ │
-//     │ ╰─────── unresolved name: bar
-//     │
-//     │     Note: Error code: E0003
-// ────╯
-// error: type mismatch: expected baml.llm.Client, got null
-//     ╭─[ functions_v2_invalid2.baml:21:34 ]
-//     │
+//  16 │ │     client bar
+//  17 │ │     prompt
+//  18 │ ╰─▶ }
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_invalid2.baml:21:34]
 //  21 │ ╭─▶ function Foo5(arg: int) -> float {
-//     ┆ ┆
+//  22 │ │     client
+//  23 │ │     prompt #"..."#
 //  24 │ ├─▶ }
-//     │ │
-//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//     │
-//     │     Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected baml.llm.Client, got null
-//     ╭─[ functions_v2_invalid2.baml:21:1 ]
-//     │
+//     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_invalid2.baml:21:1]
 //  21 │ ╭─▶ function Foo5(arg: int) -> float {
-//     ┆ ┆
+//  22 │ │     client
+//  23 │ │     prompt #"..."#
 //  24 │ ├─▶ }
-//     │ │
-//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//     │
-//     │     Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected baml.llm.Client, got null
-//     ╭─[ functions_v2_invalid2.baml:27:34 ]
-//     │
+//     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_invalid2.baml:27:34]
 //  27 │ ╭─▶ function Foo6(arg: int) -> float {
-//     ┆ ┆
+//  28 │ │     client
+//  29 │ │     prompt
 //  30 │ ├─▶ }
-//     │ │
-//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//     │
-//     │     Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected baml.llm.Client, got null
-//     ╭─[ functions_v2_invalid2.baml:27:1 ]
-//     │
+//     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[functions_v2_invalid2.baml:27:1]
 //  27 │ ╭─▶ function Foo6(arg: int) -> float {
-//     ┆ ┆
+//  28 │ │     client
+//  29 │ │     prompt
 //  30 │ ├─▶ }
-//     │ │
-//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
-//     │
-//     │     Note: Error code: E0001
-// ────╯
+//     · ╰──── expected `baml.llm.Client`, found `null`
+//     ╰────

@@ -82,102 +82,92 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-error: field 'field2' is missing a type annotation
-   ╭─[ partial_input.baml:4:3 ]
-   │
+E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:4:3]
  4 │   field2  // Missing type entirely
-   │   ───┬──  
-   │      ╰──── field 'field2' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·   ───┬──
+   ·      ╰── field 'field2' is missing a type annotation
+   ╰────
 
-error: Attribute is missing a name
-   ╭─[ partial_input.baml:5:17 ]
-   │
+E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:5:17]
  5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Attribute is missing a name
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                 ┬
+   ·                 ╰── attribute is missing a name
+   ╰────
 
-error: Expected ')', found identifier
-   ╭─[ partial_input.baml:7:10 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[partial_input.baml:7:10]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
-   │          ───┬──  
-   │             ╰──── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·          ───┬──
+   ·             ╰── expected `')'`, found `identifier`
+   ╰────
 
-error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:7:10 ]
-   │
+E0010
+
+  × invalid syntax
+   ╭─[partial_input.baml:7:10]
  7 │   field5 string  // This should break as `field5` is treated as part of the attribute
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·          ───┬──
+   ·             ╰── field 'string' is missing a type annotation
+   ╰────
 
-error: Expected ')', found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected ')', found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ────┬───
+    ·     ╰── expected `')'`, found `function`
+    ╰────
 
-error: Expected return type (->), found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected return type (->), found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ────┬───
+    ·     ╰── expected `return type (->)`, found `function`
+    ╰────
 
-error: Expected function body, found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:13:1]
  13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected function body, found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ────┬───
+    ·     ╰── expected `function body`, found `function`
+    ╰────
 
-error: Expected '{', found identifier
-    ╭─[ partial_input.baml:19:3 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:19:3]
  19 │   VALUE2
-    │   ───┬──  
-    │      ╰──── Expected '{', found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬──
+    ·      ╰── expected `'{'`, found `identifier`
+    ╰────
 
-error: Expected top-level declaration, found identifier
-    ╭─[ partial_input.baml:19:3 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:19:3]
  19 │   VALUE2
-    │   ───┬──  
-    │      ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·   ───┬──
+    ·      ╰── expected `top-level declaration`, found `identifier`
+    ╰────
 
-error: Expected top-level declaration, found '}'
-    ╭─[ partial_input.baml:20:1 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[partial_input.baml:20:1]
  20 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────

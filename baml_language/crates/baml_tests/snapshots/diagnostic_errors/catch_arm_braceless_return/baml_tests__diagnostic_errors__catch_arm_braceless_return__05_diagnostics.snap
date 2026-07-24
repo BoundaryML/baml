@@ -2,12 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected bool, got string
-    ╭─[ repro.baml:23:22 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[repro.baml:23:22]
  23 │     string => return e
-    │                      ┬  
-    │                      ╰── type mismatch: expected bool, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                      ┬
+    ·                      ╰── expected `bool`, found `string`
+    ╰────

@@ -4,8 +4,12 @@
 //! compiler error across all phases (parsing, HIR lowering, type checking).
 //! This enables centralized rendering and consistent error handling.
 
+use std::borrow::Cow;
+
 use baml_base::{FileId, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
+
+use crate::message::{DiagnosticMessageHighlight, DiagnosticText};
 
 // ============================================================================
 // DiagnosticPhase - Tracks which compiler phase produced a diagnostic
@@ -592,25 +596,41 @@ pub struct Annotation {
     pub span: Span,
     /// Message for this annotation (optional).
     pub message: Option<String>,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Whether this is the primary annotation.
     pub is_primary: bool,
 }
 
 impl Annotation {
     /// Create a primary annotation with a message.
-    pub fn primary(span: Span, message: impl Into<String>) -> Self {
+    pub fn primary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
+            is_primary: true,
+        }
+    }
+
+    /// Create a primary annotation without a label.
+    pub fn primary_span(span: Span) -> Self {
+        Self {
+            span,
+            message: None,
+            message_highlights: Vec::new(),
             is_primary: true,
         }
     }
 
     /// Create a secondary annotation with a message.
-    pub fn secondary(span: Span, message: impl Into<String>) -> Self {
+    pub fn secondary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
             is_primary: false,
         }
     }
@@ -623,16 +643,20 @@ pub struct RelatedInfo {
     pub span: Span,
     /// The message describing this related location.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Optional file path for display purposes.
     pub file_path: Option<String>,
 }
 
 impl RelatedInfo {
     /// Create a new related info with a span and message.
-    pub fn new(span: Span, message: impl Into<String>) -> Self {
+    pub fn new(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: message.into(),
+            message,
+            message_highlights,
             file_path: None,
         }
     }
@@ -642,7 +666,7 @@ impl RelatedInfo {
 ///
 /// This type is inspired by `ruff_db::Diagnostic` and enables:
 /// - Centralized diagnostic collection via `Project::check()`
-/// - Multi-format rendering (Ariadne for CLI, LSP types for editors)
+/// - Multi-format rendering (Miette for CLI, LSP types for editors)
 /// - Consistent error handling across all compiler phases
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
@@ -652,6 +676,8 @@ pub struct Diagnostic {
     pub severity: Severity,
     /// The main error message.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Annotations pointing to relevant source locations.
     pub annotations: Vec<Annotation>,
     /// Related information (e.g., "first defined here").
@@ -662,11 +688,13 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Create a new diagnostic with a single primary span.
-    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             id,
             severity,
-            message: message.into(),
+            message,
+            message_highlights,
             annotations: Vec::new(),
             related_info: Vec::new(),
             phase: DiagnosticPhase::default(),
@@ -674,12 +702,12 @@ impl Diagnostic {
     }
 
     /// Create an error diagnostic.
-    pub fn error(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn error(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Error, message)
     }
 
     /// Create a warning diagnostic.
-    pub fn warning(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn warning(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Warning, message)
     }
 
@@ -692,7 +720,7 @@ impl Diagnostic {
 
     /// Add a primary annotation at a span with a message.
     #[must_use]
-    pub fn with_primary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_primary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::primary(span, message));
         self
     }
@@ -700,21 +728,20 @@ impl Diagnostic {
     /// Add a primary annotation at a span using the main message.
     #[must_use]
     pub fn with_primary_span(mut self, span: Span) -> Self {
-        self.annotations
-            .push(Annotation::primary(span, self.message.clone()));
+        self.annotations.push(Annotation::primary_span(span));
         self
     }
 
     /// Add a secondary annotation at a span.
     #[must_use]
-    pub fn with_secondary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_secondary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::secondary(span, message));
         self
     }
 
     /// Add related information.
     #[must_use]
-    pub fn with_related(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_related(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.related_info.push(RelatedInfo::new(span, message));
         self
     }
@@ -730,6 +757,19 @@ impl Diagnostic {
             .iter()
             .find(|a| a.is_primary)
             .map(|a| a.span)
+    }
+
+    /// Return the headline plus a distinct primary annotation label.
+    pub fn message_with_primary_label(&self) -> Cow<'_, str> {
+        self.annotations
+            .iter()
+            .find(|annotation| annotation.is_primary)
+            .and_then(|annotation| annotation.message.as_deref())
+            .filter(|message| *message != self.message)
+            .map_or_else(
+                || Cow::Borrowed(self.message.as_str()),
+                |message| Cow::Owned(format!("{}: {message}", self.message)),
+            )
     }
 
     /// Get the primary file ID.
@@ -783,6 +823,17 @@ mod tests {
 
         assert_eq!(diag.related_info.len(), 1);
         assert_eq!(diag.related_info[0].message, "First defined here");
+    }
+
+    #[test]
+    fn message_with_primary_label_preserves_span_detail() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+            .with_primary(test_span(), "expected `int`, found `string`");
+
+        assert_eq!(
+            diag.message_with_primary_label(),
+            "mismatched types: expected `int`, found `string`"
+        );
     }
 
     #[test]

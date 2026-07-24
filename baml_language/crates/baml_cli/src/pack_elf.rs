@@ -135,7 +135,7 @@ pub fn append_note<W: Write>(
     };
 
     let mut builder =
-        e::Builder::read(host).map_err(|err| anyhow!("Failed to parse host ELF: {err}"))?;
+        e::Builder::read(host).map_err(|err| anyhow!("failed to parse host ELF: {err}"))?;
 
     let section = builder.sections.add();
     section.name = ".note.sui".into();
@@ -249,7 +249,7 @@ pub fn append_note<W: Write>(
     let mut out = Vec::new();
     builder
         .write(&mut out)
-        .map_err(|err| anyhow!("Failed to write packed ELF: {err}"))?;
+        .map_err(|err| anyhow!("failed to write packed ELF: {err}"))?;
     writer.write_all(&out)?;
     Ok(())
 }

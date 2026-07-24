@@ -10,7 +10,7 @@ fn compile_errors(source: &str) -> Vec<String> {
     collect_diagnostics(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 

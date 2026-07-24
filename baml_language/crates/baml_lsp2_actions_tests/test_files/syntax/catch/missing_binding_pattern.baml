@@ -11,12 +11,11 @@ function MissingBindingPattern(x: int) -> string {
 
 //----
 //- diagnostics
-// error: Expected '(', found '{'
-//    ╭─[ catch_missing_binding_pattern.baml:6:20 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[catch_missing_binding_pattern.baml:6:20]
 //  6 │   MayFail(x) catch {
-//    │                    ┬  
-//    │                    ╰── Expected '(', found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+//    ·                    ┬
+//    ·                    ╰── expected `'('`, found `'{'`
+//    ╰────

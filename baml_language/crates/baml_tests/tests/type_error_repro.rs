@@ -15,10 +15,10 @@ use baml_tests::baml_test;
 // §1 — A null array index is rejected at compile time (plain `[]`)
 // ============================================================================
 
-/// Null indices are rejected at compile time with a type mismatch diagnostic
-/// (`got int | null`). This test verifies the rejection using #[should_panic].
+/// Null indices are rejected at compile time with a mismatched-types diagnostic
+/// (`found int | null`). This test verifies the rejection using `#[should_panic]`.
 #[tokio::test]
-#[should_panic(expected = "type mismatch: expected int, got int | null")]
+#[should_panic(expected = "mismatched types: expected `int`, found `int | null`")]
 async fn array_index_with_null_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"

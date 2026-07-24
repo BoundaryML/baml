@@ -98,12 +98,12 @@ pub fn skill_warning_message(
     cached_latest: Option<&str>,
 ) -> Option<&'static str> {
     if !project_has_skills {
-        return Some("No baml skill is installed, set it up with baml agent install.");
+        return Some("no baml skill is installed; set it up with `baml agent install`");
     }
     let latest = cached_latest?;
     match state {
         Some(state) if state.installed_commit == latest => None,
-        _ => Some("Your baml skill is outdated, use baml agent install to upgrade it."),
+        _ => Some("your baml skill is outdated; use `baml agent install` to upgrade it"),
     }
 }
 
@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn missing_project_skills_prompt_install_regardless_of_caches() {
-        let expected = Some("No baml skill is installed, set it up with baml agent install.");
+        let expected = Some("no baml skill is installed; set it up with `baml agent install`");
         assert_eq!(skill_warning_message(false, None, None), expected);
         assert_eq!(skill_warning_message(false, None, Some("bbb")), expected);
         // Even matching global provenance doesn't matter: this project has no skills.
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn skills_behind_or_untracked_prompt_upgrade() {
-        let expected = Some("Your baml skill is outdated, use baml agent install to upgrade it.");
+        let expected = Some("your baml skill is outdated; use `baml agent install` to upgrade it");
         assert_eq!(
             skill_warning_message(true, Some(&skills_state("aaa")), Some("bbb")),
             expected

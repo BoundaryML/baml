@@ -23,7 +23,8 @@ use std::collections::HashSet;
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
-    Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
+    Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
+    ParseError, ToDiagnostic,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
@@ -131,33 +132,29 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             Definition::Class(class_loc) => {
                 let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
                 for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            tir_type_error_to_diagnostic_id(error),
-                            source_aware_tir_type_error_message(db, file, error),
-                        )
-                        .with_primary_span(Span {
+                    diagnostics.push(new_tir_diagnostic(
+                        error,
+                        rich_source_aware_tir_type_error_message(db, file, error),
+                        Span {
                             file_id,
                             range: *span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                    );
+                        },
+                        false,
+                    ));
                 }
             }
             Definition::TypeAlias(alias_loc) => {
                 let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
                 for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            tir_type_error_to_diagnostic_id(error),
-                            source_aware_tir_type_error_message(db, file, error),
-                        )
-                        .with_primary_span(Span {
+                    diagnostics.push(new_tir_diagnostic(
+                        error,
+                        rich_source_aware_tir_type_error_message(db, file, error),
+                        Span {
                             file_id,
                             range: *span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                    );
+                        },
+                        false,
+                    ));
                 }
             }
             _ => {}
@@ -1666,7 +1663,7 @@ fn render_jinja_validation_result(
         return vec![
             Diagnostic::error(
                 DiagnosticId::JinjaParseError,
-                format!("Error parsing jinja template: {parse_error}"),
+                format!("error parsing jinja template: {parse_error}"),
             )
             .with_primary_span(Span { file_id, range })
             .with_phase(DiagnosticPhase::Type),
@@ -1753,9 +1750,19 @@ fn is_function_default_signature_diagnostic(
 /// `RenderedTirDiagnostic` has already resolved arena IDs to `TextRange`.
 /// We add the `file_id` to form a full `Span` for the primary annotation.
 ///
+#[cfg(test)]
 fn tir_rendered_to_diagnostic(
     rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
     file_id: FileId,
+) -> Diagnostic {
+    let message = DiagnosticText::from(rendered.message.clone());
+    tir_rendered_to_diagnostic_with_message(rendered, file_id, message)
+}
+
+fn tir_rendered_to_diagnostic_with_message(
+    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    file_id: FileId,
+    message: DiagnosticText,
 ) -> Diagnostic {
     let unknown_member_access_member = match &rendered.error {
         TirTypeError::UnresolvedMember {
@@ -1768,50 +1775,113 @@ fn tir_rendered_to_diagnostic(
         file_id,
         range: rendered.range,
     };
-    let diag = match rendered.severity {
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => Diagnostic::warning(
-            tir_type_error_to_diagnostic_id(&rendered.error),
-            rendered.message,
-        ),
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => Diagnostic::error(
-            tir_type_error_to_diagnostic_id(&rendered.error),
-            rendered.message,
-        ),
-    };
+    let warning = matches!(
+        rendered.severity,
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning
+    );
+    let mut diag = new_tir_diagnostic(&rendered.error, message, span, warning);
     let diag = if let Some(member) = &unknown_member_access_member {
+        diag.annotations.clear();
         diag.with_primary(
             span,
             format!("use `match` to narrow this value before accessing `{member}`"),
         )
     } else {
-        diag.with_primary_span(span)
+        diag
     };
-    rendered
-        .related
-        .into_iter()
-        .fold(diag, |diag, related| {
-            let span = Span {
-                file_id: related.file_id,
-                range: related.range,
-            };
-            let message = related.message;
-            let diag = if unknown_member_access_member.is_some() {
-                diag.with_secondary(span, message.clone())
-            } else {
-                diag
-            };
-            diag.with_related(span, message)
-        })
-        .with_phase(DiagnosticPhase::Type)
+    rendered.related.into_iter().fold(diag, |diag, related| {
+        let span = Span {
+            file_id: related.file_id,
+            range: related.range,
+        };
+        let message = related.message;
+        let diag = if unknown_member_access_member.is_some() {
+            diag.with_secondary(span, message.clone())
+        } else {
+            diag
+        };
+        diag.with_related(span, message)
+    })
 }
 
 fn tir_rendered_to_diagnostic_for_file(
     db: &dyn Db,
     file: SourceFile,
-    mut rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
 ) -> Diagnostic {
-    rendered.message = source_aware_tir_type_error_message(db, file, &rendered.error);
-    tir_rendered_to_diagnostic(rendered, file.file_id(db))
+    let message = rich_source_aware_tir_type_error_message(db, file, &rendered.error);
+    tir_rendered_to_diagnostic_with_message(rendered, file.file_id(db), message)
+}
+
+fn new_tir_diagnostic(
+    error: &TirTypeError,
+    message: DiagnosticText,
+    span: Span,
+    warning: bool,
+) -> Diagnostic {
+    let id = tir_type_error_to_diagnostic_id(error);
+    let headline = match error {
+        TirTypeError::TypeMismatch { .. } => Some("mismatched types"),
+        TirTypeError::MissingReturn { .. } => Some("missing return expression"),
+        _ => None,
+    };
+    let diagnostic = match headline {
+        Some(headline) => {
+            let diagnostic = if warning {
+                Diagnostic::warning(id, headline)
+            } else {
+                Diagnostic::error(id, headline)
+            };
+            diagnostic.with_primary(span, message)
+        }
+        None => {
+            let diagnostic = if warning {
+                Diagnostic::warning(id, message)
+            } else {
+                Diagnostic::error(id, message)
+            };
+            diagnostic.with_primary_span(span)
+        }
+    };
+    diagnostic.with_phase(DiagnosticPhase::Type)
+}
+
+fn rich_source_aware_tir_type_error_message(
+    db: &dyn Db,
+    file: SourceFile,
+    error: &TirTypeError,
+) -> DiagnosticText {
+    let ty = |ty: &Ty| crate::utils::display_ty_for_file(db, file, ty);
+    match error {
+        TirTypeError::TypeMismatch { expected, got } => DiagnosticText::new()
+            .text("expected ")
+            .type_expr(ty(expected))
+            .text(", found ")
+            .type_expr(ty(got)),
+        TirTypeError::UnresolvedName { name, .. } => DiagnosticText::new()
+            .text("unresolved name: ")
+            .identifier(name, DiagnosticIdentifierKind::Variable),
+        TirTypeError::UnresolvedMember {
+            base_type, member, ..
+        } => DiagnosticText::new()
+            .text("type ")
+            .type_expr(ty(base_type))
+            .text(" has no member ")
+            .identifier(member, DiagnosticIdentifierKind::Field),
+        TirTypeError::NotCallable { ty: callee_ty } => DiagnosticText::new()
+            .type_expr(ty(callee_ty))
+            .text(" is not a function and cannot be called"),
+        TirTypeError::NotIterable { ty: iter_ty } => DiagnosticText::new()
+            .text("cannot iterate over type ")
+            .type_expr(ty(iter_ty)),
+        TirTypeError::NotIndexable { ty: index_ty } => DiagnosticText::new()
+            .text("cannot index into type ")
+            .type_expr(ty(index_ty)),
+        TirTypeError::MissingReturn { expected } => DiagnosticText::new()
+            .text("expected return value of type ")
+            .type_expr(ty(expected)),
+        _ => DiagnosticText::from(source_aware_tir_type_error_message(db, file, error)),
+    }
 }
 
 fn source_aware_tir_type_error_message(
@@ -2428,25 +2498,29 @@ function TakeGuess(person: Person) -> string {
 <[CURSOR]"#,
         );
 
-        let messages = check_file(&test.db, test.cursor.file)
-            .into_iter()
-            .map(|diag| diag.message)
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let messages = diagnostics
+            .iter()
+            .map(|diag| diag.message.as_str())
             .collect::<Vec<_>>();
 
         assert!(
-            messages.iter().any(|message| message
-                == "default for parameter `a` cannot reference later parameter `b`"),
+            messages.contains(&"default for parameter `a` cannot reference later parameter `b`"),
             "missing forward-reference diagnostic; got {messages:#?}"
         );
         assert!(
-            messages
-                .iter()
-                .any(|message| message == "type mismatch: expected string, got 2"),
-            "missing default type-mismatch diagnostic; got {messages:#?}"
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message == "mismatched types"
+                    && diagnostic.annotations.iter().any(|annotation| {
+                        annotation.message.as_deref() == Some("expected `string`, found `2`")
+                    })
+            }),
+            "missing default type-mismatch diagnostic; got {diagnostics:#?}"
         );
         assert!(
-            messages.iter().any(|message| message
-                == "required parameter `required` cannot appear after a defaulted parameter"),
+            messages.contains(
+                &"required parameter `required` cannot appear after a defaulted parameter"
+            ),
             "missing required-after-default diagnostic; got {messages:#?}"
         );
     }

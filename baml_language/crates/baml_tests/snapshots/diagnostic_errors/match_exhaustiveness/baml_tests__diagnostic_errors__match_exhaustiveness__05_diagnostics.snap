@@ -2,486 +2,392 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:19:23 ]
-    │
+  [type] E0063
+
+  × unreachable arm
+    ╭─[match_exhaustiveness.baml:19:23]
  19 │         let n: int => "never reached"
-    │                       ───────┬───────  
-    │                              ╰───────── unreachable arm
-    │ 
-    │ Note: Error code: E0063
-────╯
+    ·                       ───────────────
+    ╰────
 
-  [type] error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:27:23 ]
-    │
+  [type] E0063
+
+  × unreachable arm
+    ╭─[match_exhaustiveness.baml:27:23]
  27 │         let n: int => "unreachable 1",
-    │                       ───────┬───────  
-    │                              ╰───────── unreachable arm
-    │ 
-    │ Note: Error code: E0063
-────╯
+    ·                       ───────────────
+    ╰────
 
-  [type] error: unreachable arm
-    ╭─[ match_exhaustiveness.baml:28:23 ]
-    │
+  [type] E0063
+
+  × unreachable arm
+    ╭─[match_exhaustiveness.baml:28:23]
  28 │         let m: int => "unreachable 2"
-    │                       ───────┬───────  
-    │                              ╰───────── unreachable arm
-    │ 
-    │ Note: Error code: E0063
-────╯
+    ·                       ───────────────
+    ╰────
 
-  [type] error: non-exhaustive match on type int; missing: _
-    ╭─[ match_exhaustiveness.baml:60:5 ]
-    │
+  [type] E0062
+
+  × non-exhaustive match on type int; missing: _
+    ╭─[match_exhaustiveness.baml:60:5]
  60 │ ╭─▶     match (x) {
-    ┆ ┆   
- 63 │ ├─▶     }
-    │ │           
-    │ ╰─────────── non-exhaustive match on type int; missing: _
-    │     
-    │     Note: Error code: E0062
-────╯
+ 61 │ │           let n: int if n > 0 => n * 2,
+ 62 │ │           let n: int if n < 0 => n * -1
+ 63 │ ╰─▶     }
+    ╰────
 
-  [type] error: non-exhaustive match on type bool; missing: false
-     ╭─[ match_exhaustiveness.baml:244:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type bool; missing: false
+     ╭─[match_exhaustiveness.baml:244:5]
  244 │ ╭─▶     match (b) {
-     ┆ ┆   
- 246 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type bool; missing: false
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 245 │ │           true => "yes"
+ 246 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type bool; missing: true
-     ╭─[ match_exhaustiveness.baml:251:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type bool; missing: true
+     ╭─[match_exhaustiveness.baml:251:5]
  251 │ ╭─▶     match (b) {
-     ┆ ┆   
- 253 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type bool; missing: true
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 252 │ │           false => "no"
+ 253 │ ╰─▶     }
+     ╰────
 
-  [type] error: type mismatch: expected AlwaysTrue, got false
-     ╭─[ match_exhaustiveness.baml:297:9 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:297:9]
  297 │         false => "wrong!"
-     │         ──┬──  
-     │           ╰──── type mismatch: expected AlwaysTrue, got false
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·         ──┬──
+     ·           ╰── expected `AlwaysTrue`, found `false`
+     ╰────
 
-  [type] error: non-exhaustive match on type CustomBool; missing: false
-     ╭─[ match_exhaustiveness.baml:303:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type CustomBool; missing: false
+     ╭─[match_exhaustiveness.baml:303:5]
  303 │ ╭─▶     match (b) {
-     ┆ ┆   
- 305 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type CustomBool; missing: false
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 304 │ │           true => "yes"
+ 305 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type Role; missing: "system"
-     ╭─[ match_exhaustiveness.baml:356:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Role; missing: "system"
+     ╭─[match_exhaustiveness.baml:356:5]
  356 │ ╭─▶     match (role) {
-     ┆ ┆   
- 359 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Role; missing: "system"
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 357 │ │           "user" => "User",
+ 358 │ │           "assistant" => "Assistant"
+ 359 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type SuccessCode; missing: 204
-     ╭─[ match_exhaustiveness.baml:397:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type SuccessCode; missing: 204
+     ╭─[match_exhaustiveness.baml:397:5]
  397 │ ╭─▶     match (code) {
-     ┆ ┆   
- 400 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type SuccessCode; missing: 204
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 398 │ │           200 => "OK",
+ 399 │ │           201 => "Created"
+ 400 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type Status; missing: user.Status.Pending
-     ╭─[ match_exhaustiveness.baml:457:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Status; missing: user.Status.Pending
+     ╭─[match_exhaustiveness.baml:457:5]
  457 │ ╭─▶     match (s) {
-     ┆ ┆   
- 460 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Pending
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 458 │ │           Status.Active => "active",
+ 459 │ │           Status.Inactive => "inactive"
+ 460 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
-     ╭─[ match_exhaustiveness.baml:465:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+     ╭─[match_exhaustiveness.baml:465:5]
  465 │ ╭─▶     match (s) {
-     ┆ ┆   
- 467 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 466 │ │           Status.Active => "active"
+ 467 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:479:26 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:479:26]
  479 │         Status.Active => "second",
-     │                          ────┬───  
-     │                              ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                          ────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:489:14 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:489:14]
  489 │         1 => "second one",
-     │              ──────┬─────  
-     │                    ╰─────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·              ────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:498:17 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:498:17]
  498 │         true => "second true",
-     │                 ──────┬──────  
-     │                       ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                 ─────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:507:19 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:507:19]
  507 │         "user" => "second user",
-     │                   ──────┬──────  
-     │                         ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                   ─────────────
+     ╰────
 
-  [type] error: non-exhaustive match on type MaybeOk; missing: null
-     ╭─[ match_exhaustiveness.baml:530:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type MaybeOk; missing: null
+     ╭─[match_exhaustiveness.baml:530:5]
  530 │ ╭─▶     match (code) {
-     ┆ ┆   
- 532 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: null
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 531 │ │           200 => "OK"
+ 532 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type MaybeOk; missing: 200
-     ╭─[ match_exhaustiveness.baml:537:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type MaybeOk; missing: 200
+     ╭─[match_exhaustiveness.baml:537:5]
  537 │ ╭─▶     match (code) {
-     ┆ ┆   
- 539 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type MaybeOk; missing: 200
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 538 │ │           null => "no code"
+ 539 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type MixedLiterals; missing: true
-     ╭─[ match_exhaustiveness.baml:560:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type MixedLiterals; missing: true
+     ╭─[match_exhaustiveness.baml:560:5]
  560 │ ╭─▶     match (x) {
-     ┆ ┆   
- 563 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type MixedLiterals; missing: true
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 561 │ │           200 => "http ok",
+ 562 │ │           "success" => "string success"
+ 563 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type OkOrCreated; missing: 201
-     ╭─[ match_exhaustiveness.baml:584:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type OkOrCreated; missing: 201
+     ╭─[match_exhaustiveness.baml:584:5]
  584 │ ╭─▶     match (code) {
-     ┆ ┆   
- 586 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type OkOrCreated; missing: 201
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 585 │ │           200 => "ok"
+ 586 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
-     ╭─[ match_exhaustiveness.baml:599:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
+     ╭─[match_exhaustiveness.baml:599:5]
  599 │ ╭─▶     match (dm) {
-     ┆ ┆   
- 603 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 600 │ │           let s: Success => s.data,
+ 601 │ │           let f: Failure => f.reason,
+ 602 │ │           null => "nothing"
+ 603 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:600:27 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:600:27]
  600 │         let s: Success => s.data,
-     │                           ───┬──  
-     │                              ╰──── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                           ──────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:601:27 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:601:27]
  601 │         let f: Failure => f.reason,
-     │                           ────┬───  
-     │                               ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                           ────────
+     ╰────
 
-  [type] error: non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
-     ╭─[ match_exhaustiveness.baml:608:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
+     ╭─[match_exhaustiveness.baml:608:5]
  608 │ ╭─▶     match (dm) {
-     ┆ ┆   
- 611 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type DoubleMaybe; missing: Success, Failure, null, null
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 609 │ │           let s: Success => s.data,
+ 610 │ │           let f: Failure => f.reason
+ 611 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:609:27 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:609:27]
  609 │         let s: Success => s.data,
-     │                           ───┬──  
-     │                              ╰──── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                           ──────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:610:27 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:610:27]
  610 │         let f: Failure => f.reason
-     │                           ────┬───  
-     │                               ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                           ────────
+     ╰────
 
-  [type] error: non-exhaustive match on type Result; missing: Failure { reason: _ }
-     ╭─[ match_exhaustiveness.baml:621:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Result; missing: Failure { reason: _ }
+     ╭─[match_exhaustiveness.baml:621:5]
  621 │ ╭─▶     match (r) {
-     ┆ ┆   
- 623 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Result; missing: Failure { reason: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 622 │ │           let s: Success => s.data
+ 623 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
-     ╭─[ match_exhaustiveness.baml:628:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     ╭─[match_exhaustiveness.baml:628:5]
  628 │ ╭─▶     match (r) {
-     ┆ ┆   
- 631 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 629 │ │           let s: Success => s.data,
+ 630 │ │           let f: Failure => f.reason
+ 631 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:643:20 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:643:20]
  643 │         "hello" => "unreachable"
-     │                    ──────┬──────  
-     │                          ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                    ─────────────
+     ╰────
 
-  [type] error: non-exhaustive match on type Status | null; missing: null
-     ╭─[ match_exhaustiveness.baml:672:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Status | null; missing: null
+     ╭─[match_exhaustiveness.baml:672:5]
  672 │ ╭─▶     match (s) {
-     ┆ ┆   
- 676 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Status | null; missing: null
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 673 │ │           Status.Active => "active",
+ 674 │ │           Status.Inactive => "inactive",
+ 675 │ │           Status.Pending => "pending"
+ 676 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type Status | null; missing: user.Status.Pending
-     ╭─[ match_exhaustiveness.baml:681:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Status | null; missing: user.Status.Pending
+     ╭─[match_exhaustiveness.baml:681:5]
  681 │ ╭─▶     match (s) {
-     ┆ ┆   
- 685 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Status | null; missing: user.Status.Pending
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 682 │ │           Status.Active => "active",
+ 683 │ │           Status.Inactive => "inactive",
+ 684 │ │           null => "no status"
+ 685 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type SuccessOr200; missing: 200
-     ╭─[ match_exhaustiveness.baml:705:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type SuccessOr200; missing: 200
+     ╭─[match_exhaustiveness.baml:705:5]
  705 │ ╭─▶     match (x) {
-     ┆ ┆   
- 707 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: 200
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 706 │ │           let s: Success => s.data
+ 707 │ ╰─▶     }
+     ╰────
 
-  [type] error: non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
-     ╭─[ match_exhaustiveness.baml:712:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
+     ╭─[match_exhaustiveness.baml:712:5]
  712 │ ╭─▶     match (x) {
-     ┆ ┆   
- 714 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type SuccessOr200; missing: Success { data: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 713 │ │           200 => "http ok"
+ 714 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:733:26 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:733:26]
  733 │         Status.Active => "unreachable"
-     │                          ──────┬──────  
-     │                                ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                          ─────────────
+     ╰────
 
-  [type] error: type mismatch: expected bool, got 42
-     ╭─[ match_exhaustiveness.baml:746:9 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:746:9]
  746 │         42 => "wrong type"
-     │         ─┬  
-     │          ╰── type mismatch: expected bool, got 42
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·         ─┬
+     ·          ╰── expected `bool`, found `42`
+     ╰────
 
-  [type] error: type mismatch: expected int, got "hello"
-     ╭─[ match_exhaustiveness.baml:753:9 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[match_exhaustiveness.baml:753:9]
  753 │         "hello" => "wrong type"
-     │         ───┬───  
-     │            ╰───── type mismatch: expected int, got "hello"
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·         ───┬───
+     ·            ╰── expected `int`, found `"hello"`
+     ╰────
 
-  [type] error: non-exhaustive match on type FullResult; missing: Pending { eta: _ }
-     ╭─[ match_exhaustiveness.baml:764:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type FullResult; missing: Pending { eta: _ }
+     ╭─[match_exhaustiveness.baml:764:5]
  764 │ ╭─▶     match (r) {
-     ┆ ┆   
- 766 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type FullResult; missing: Pending { eta: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 765 │ │           let x: Success | Failure => "not pending"
+ 766 │ ╰─▶     }
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:785:15 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:785:15]
  785 │         42 => "unreachable"
-     │               ──────┬──────  
-     │                     ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·               ─────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:793:17 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:793:17]
  793 │         true => "unreachable"
-     │                 ──────┬──────  
-     │                       ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                 ─────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:807:27 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:807:27]
  807 │         let f: Failure => 1
-     │                           ┬  
-     │                           ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                           ─
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:855:21 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:855:21]
  855 │             true => "unreachable nested"
-     │                     ──────────┬─────────  
-     │                               ╰─────────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                     ────────────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:866:26 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:866:26]
  866 │         Status.Active => "duplicate 1",
-     │                          ──────┬──────  
-     │                                ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                          ─────────────
+     ╰────
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:868:26 ]
-     │
+  [type] E0063
+
+  × unreachable arm
+     ╭─[match_exhaustiveness.baml:868:26]
  868 │         Status.Active => "duplicate 2",
-     │                          ──────┬──────  
-     │                                ╰──────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
+     ·                          ─────────────
+     ╰────
 
-  [type] error: non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
-     ╭─[ match_exhaustiveness.baml:876:5 ]
-     │
+  [type] E0062
+
+  × non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+     ╭─[match_exhaustiveness.baml:876:5]
  876 │ ╭─▶     match (s) {
-     ┆ ┆   
- 878 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
-     │     
-     │     Note: Error code: E0062
-─────╯
+ 877 │ │           Status.Active => "active only"
+ 878 │ ╰─▶     }
+     ╰────

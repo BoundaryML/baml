@@ -31,30 +31,27 @@ function FooBar(arg) -> bar {
 
 //----
 //- diagnostics
-// error: Expected type, found '{'
-//    ╭─[ functions_v2_invalid.baml:1:19 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:1:19]
 //  1 │ function Foo() -> {
-//    │                   ┬
-//    │                   ╰── Expected type, found '{'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected type annotation, found ')'
-//    ╭─[ functions_v2_invalid.baml:6:20 ]
-//    │
+//    ·                   ┬
+//    ·                   ╰── expected `type`, found `'{'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:6:20]
 //  6 │ function FooBar(arg) -> bar {
-//    │                    ┬
-//    │                    ╰── Expected type annotation, found ')'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: could not parse type expression for return type of `Foo`
-//    ╭─[ functions_v2_invalid.baml:1:18 ]
-//    │
+//    ·                    ┬
+//    ·                    ╰── expected `type annotation`, found `')'`
+//    ╰────
+// E0108
+//
+//   × could not parse type expression for return type of `Foo`
+//    ╭─[functions_v2_invalid.baml:1:18]
 //  1 │ function Foo() -> {
-//    │                  │
-//    │                  ╰─ unparseable type
-//    │
-//    │ Note: Error code: E0108
-// ───╯
+//    ·                  ▲
+//    ·                  ╰── unparseable type
+//    ╰────

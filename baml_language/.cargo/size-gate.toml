@@ -42,29 +42,29 @@ policy.max_delta_pct = 3.0
 # Baselines include the first-class C# generator now linked into baml-cli.
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
-# macOS arm64: baseline 20.31 MB file (20_306_304), ceiling = baseline x1.03.
+# macOS arm64: baseline 21.02 MB file (21_018_272), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 20_915_494
-# Linux x86_64: baseline 26.20 MB file (26_196_496), ceiling = baseline x1.03.
+max_file_bytes = 21_648_821
+# Linux x86_64: baseline 27.07 MB file (27_071_888), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 26_982_391
-# Windows x86_64: baseline 21.91 MB file (21_914_624), ceiling = baseline x1.03.
+max_file_bytes = 27_884_045
+# Windows x86_64: baseline 22.67 MB file (22_665_216), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 22_572_063
+max_file_bytes = 23_345_173
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 13.21 MB file.
+# macOS arm64: baseline 13.57 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 13_620_179
-# Linux x86_64: baseline 17.03 MB file.
+max_file_bytes = 13_977_943
+# Linux x86_64: baseline 17.42 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 17_542_483
-# Windows x86_64: baseline 14.14 MB file.
+max_file_bytes = 17_947_207
+# Windows x86_64: baseline 14.50 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 14_578_079
+max_file_bytes = 14_934_288
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -86,6 +86,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 4.40 MB gzip.
+# Single platform; baseline 4.48 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 4_534_455
+max_gzip_bytes = 4_613_794

@@ -49,7 +49,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
                 .map(|span| user_file_ids.contains(&span.file_id))
                 .unwrap_or(false)
         })
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 
@@ -3835,7 +3835,7 @@ fn narrower_associated_interface_pattern_is_rejected() {
             }
         }
         "#,
-        "type mismatch: expected Iterator<Item = int | string>, got Iterator<Item = int>",
+        "mismatched types: expected `Iterator<Item = int | string>`, found `Iterator<Item = int>`",
     );
 }
 

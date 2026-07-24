@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3213
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -337,82 +336,74 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-error: Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-   ╭─[ patterns_array_rest_parser_recovery.baml:8:19 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[patterns_array_rest_parser_recovery.baml:8:19]
  8 │         [..let a, ..let b] => a.length() + b.length(),
-   │                   ─┬  
-   │                    ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·                   ─┬
+   ·                    ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+   ╰────
 
-error: Expected pattern, found '...'
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:10 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:10]
  16 │         [...let r] => r.length(),
-    │          ─┬─  
-    │           ╰─── Expected pattern, found '...'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ─┬─
+    ·           ╰── expected `pattern`, found `'...'`
+    ╰────
 
-error: Expected ',' or ']' after array pattern element, found let
-    ╭─[ patterns_array_rest_parser_recovery.baml:16:13 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:16:13]
  16 │         [...let r] => r.length(),
-    │             ─┬─  
-    │              ╰─── Expected ',' or ']' after array pattern element, found let
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·             ─┬─
+    ·              ╰── expected `',' or ']' after array pattern element`, found `let`
+    ╰────
 
-error: Expected identifier after 'let', found ']'
-    ╭─[ patterns_array_rest_parser_recovery.baml:24:15 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:24:15]
  24 │         [..let] => 1,
-    │               ┬  
-    │               ╰── Expected identifier after 'let', found ']'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·               ┬
+    ·               ╰── expected `identifier after 'let'`, found `']'`
+    ╰────
 
-error: Expected pattern, found ':'
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:13 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:13]
  32 │         [.. : int[]] => 1,
-    │             ┬  
-    │             ╰── Expected pattern, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·             ┬
+    ·             ╰── expected `pattern`, found `':'`
+    ╰────
 
-error: Expected ',' or ']' after array pattern element, found identifier
-    ╭─[ patterns_array_rest_parser_recovery.baml:32:15 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:32:15]
  32 │         [.. : int[]] => 1,
-    │               ─┬─  
-    │                ╰─── Expected ',' or ']' after array pattern element, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·               ─┬─
+    ·                ╰── expected `',' or ']' after array pattern element`, found `identifier`
+    ╰────
 
-error: Expected ',' or ']' after array pattern element, found ':'
-    ╭─[ patterns_array_rest_parser_recovery.baml:40:14 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:40:14]
  40 │         [.._ : int[]] => 1,
-    │              ┬  
-    │              ╰── Expected ',' or ']' after array pattern element, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·              ┬
+    ·              ╰── expected `',' or ']' after array pattern element`, found `':'`
+    ╰────
 
-error: Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-    ╭─[ patterns_array_rest_parser_recovery.baml:48:17 ]
-    │
+E0010
+
+  × unexpected token
+    ╭─[patterns_array_rest_parser_recovery.baml:48:17]
  48 │         [..[.., ..]] => 1,
-    │                 ─┬  
-    │                  ╰── Expected only one '..' rest pattern is allowed in an array pattern, found '..'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                 ─┬
+    ·                  ╰── expected `only one '..' rest pattern is allowed in an array pattern`, found `'..'`
+    ╰────

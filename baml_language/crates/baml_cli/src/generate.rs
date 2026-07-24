@@ -72,7 +72,7 @@ impl GenerateArgs {
         session.prime();
         let (db, from) = (session.db, session.resolved.root);
         // Compile-time diagnostics — same shape as run/pack: render the
-        // ariadne block after abandoning the spinner so the colored
+        // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
@@ -84,18 +84,9 @@ impl GenerateArgs {
             .filter(|d| d.severity == Severity::Error)
             .collect();
         if !errors.is_empty() {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(&db);
-                sources.insert(file_id, sf.text(&db).to_string());
-                file_paths.insert(file_id, sf.path(&db));
-            }
-            let rendered = render::render_diagnostics(
+            let rendered = crate::check_command::render_project_diagnostics(
+                &db,
                 &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &crate::output::policy().diagnostic_render_config(),
             );
             reporter.abandon();
             eprintln!("{rendered}");
@@ -112,7 +103,7 @@ impl GenerateArgs {
         if !gen_diags.is_empty() {
             // Manifest diagnostics carry spans into `baml.toml`, which isn't a
             // salsa source file — register it under a dedicated pseudo
-            // [`FileId`] so ariadne can render the offending snippet.
+            // [`FileId`] so the diagnostic renderer can show the offending snippet.
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {
@@ -142,7 +133,7 @@ impl GenerateArgs {
             #[allow(clippy::print_stderr)]
             {
                 eprintln!();
-                eprintln!("Add a generator section to your baml.toml, e.g.:");
+                eprintln!("add a generator section to `baml.toml`, for example:");
                 eprintln!();
                 eprintln!("  [generator.my_client]");
                 eprintln!("  output_type = \"python/pydantic\"");
@@ -158,9 +149,9 @@ impl GenerateArgs {
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
             .get_bytecode()
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = borsh::to_vec(&program)
-            .map_err(|e| anyhow!("Failed to serialize BAML bytecode: {e}"))?;
+            .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
 
         let mut total_files = 0;
 
@@ -174,7 +165,7 @@ impl GenerateArgs {
                 requested_output
             } else {
                 std::env::current_dir()
-                    .context("Failed to resolve the current directory for generated output")?
+                    .context("failed to resolve the current directory for generated output")?
                     .join(requested_output)
             };
 
@@ -269,7 +260,7 @@ impl GenerateArgs {
                         max_typed_union_arity: generator.max_typed_union_arity,
                     },
                 )
-                .map_err(|error| anyhow!("Go SDK generation failed: {error}"))?
+                .map_err(|error| anyhow!("failed to generate Go SDK: {error}"))?
                 .into_iter()
                 .map(|(path, content)| (path, content.into_bytes()))
                 .collect(),
@@ -313,7 +304,7 @@ impl GenerateArgs {
                 .collect();
             let report = write_generated_output(&output_dir, output).with_context(|| {
                 format!(
-                    "Failed to install generated output in {}",
+                    "failed to install generated output in {}",
                     output_dir.display()
                 )
             })?;

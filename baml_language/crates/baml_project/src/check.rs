@@ -25,7 +25,7 @@ use crate::ProjectDatabase;
 pub struct CheckResult {
     /// The collected diagnostics.
     pub diagnostics: Vec<Diagnostic>,
-    /// Maps `FileId` to source text (for Ariadne rendering).
+    /// Maps `FileId` to source text for diagnostic rendering.
     pub sources: HashMap<FileId, String>,
     /// Maps `FileId` to file path (for URL generation).
     pub file_paths: HashMap<FileId, std::path::PathBuf>,
