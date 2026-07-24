@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 47392
 ---
 === PPIR ===
 class user.Box {
@@ -163,6 +162,9 @@ function user.wrong_arity_on_non_generic() -> user.Plain<int>  [expr] {
 }
 function user.wrong_arity_partial() -> user.Pair<int>  [expr] {
   {  } user.Pair { first: 1, second: "two" }
+}
+function user.wrong_arity_partial_inferred() -> int  [expr] {
+  { let pair = user.Pair { first: "one", second: "two" } } 0
 }
 class user.Todo {
   id: int

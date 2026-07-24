@@ -63,25 +63,42 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
+  × type `Pair` expects 2 type argument(s), got 1
+     ╭─[classes.baml:138:16]
+ 138 │     let pair = Pair<int> { first: "one", second: "two" }
+     ·                ─────────────────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[classes.baml:138:35]
+ 138 │     let pair = Pair<int> { first: "one", second: "two" }
+     ·                                   ──┬──
+     ·                                     ╰── expected `int`, found `"one"`
+     ╰────
+
+  [type] E0001
+
   × type `Plain` expects 0 type argument(s), got 1
-     ╭─[classes.baml:145:42]
- 145 │ function wrong_arity_on_non_generic() -> Plain<int> {
+     ╭─[classes.baml:150:42]
+ 150 │ function wrong_arity_on_non_generic() -> Plain<int> {
      ·                                          ──────────
      ╰────
 
   [type] E0001
 
   × type `Plain` expects 0 type argument(s), got 1
-     ╭─[classes.baml:146:5]
- 146 │     Plain<int> { name: "hello" }
+     ╭─[classes.baml:151:5]
+ 151 │     Plain<int> { name: "hello" }
      ·     ────────────────────────────
      ╰────
 
   [type] E0063
 
   × unreachable arm
-     ╭─[classes.baml:197:21]
- 197 │             null => default,
+     ╭─[classes.baml:202:21]
+ 202 │             null => default,
      ·                     ───────
      ╰────
 

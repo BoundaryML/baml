@@ -122,6 +122,14 @@ function user.wrong_arity_partial() -> user.Pair<int> throws never {
   !! 3257..3266: type `Pair` expects 2 type argument(s), got 1
   !! 3273..3310: type `Pair` expects 2 type argument(s), got 1
 }
+function user.wrong_arity_partial_inferred() -> int throws never {
+  { : 0
+    let pair = Pair { first: "one", second: "two" } : user.Pair<int>
+    0 : 0
+  }
+  !! 3378..3419: type `Pair` expects 2 type argument(s), got 1
+  !! 3397..3402: type mismatch: expected int, got "one"
+}
 class user.Plain {
   name: string
 }
@@ -129,8 +137,8 @@ function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
   { : user.Plain<int>
     Plain { name: "hello" } : user.Plain<int>
   }
-  !! 3571..3581: type `Plain` expects 0 type argument(s), got 1
-  !! 3588..3616: type `Plain` expects 0 type argument(s), got 1
+  !! 3686..3696: type `Plain` expects 0 type argument(s), got 1
+  !! 3703..3731: type `Plain` expects 0 type argument(s), got 1
 }
 class user.Container {
   inner: user.Box<T>
@@ -176,7 +184,7 @@ function user.MaybeBox.get_or_default(self: user.MaybeBox<T>, default: T) -> T t
       null =>
         default : T
   }
-  !! 4804..4811: unreachable arm
+  !! 4919..4926: unreachable arm
 }
 function user.use_maybe_box() -> int throws never {
   { : int

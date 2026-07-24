@@ -726,6 +726,51 @@ SOURCE_FILE
               QUOTE """
           R_BRACE "}"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "wrong_arity_partial_inferred"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let pair"
+              KW_LET "let"
+              WORD "pair"
+          EQUALS "="
+          OBJECT_LITERAL
+            PATH_EXPR
+              WORD "Pair"
+              GENERIC_ARGS
+                LESS "<"
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+            L_BRACE "{"
+            OBJECT_FIELD
+              WORD "first"
+              COLON ":"
+              STRING_LITERAL "one"
+                QUOTE """
+                WORD "one"
+                QUOTE """
+            COMMA ","
+            OBJECT_FIELD
+              WORD "second"
+              COLON ":"
+              STRING_LITERAL "two"
+                QUOTE """
+                WORD "two"
+                QUOTE """
+            R_BRACE "}"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
     WORD "Plain"

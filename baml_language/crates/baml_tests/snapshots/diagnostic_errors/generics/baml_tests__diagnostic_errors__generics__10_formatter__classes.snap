@@ -137,6 +137,11 @@ function wrong_arity_partial() -> Pair<int> {
     Pair<int> { first: 1, second: "two" }
 }
 
+function wrong_arity_partial_inferred() -> int {
+    let pair = Pair<int> { first: "one", second: "two" };
+    0
+}
+
 // ============================================================
 // Non-generic class used with type args (error case)
 // ============================================================
