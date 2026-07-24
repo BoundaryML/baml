@@ -186,6 +186,70 @@ jobs:
           --remap-path-prefix=/project=baml-source \
           --remap-path-prefix=/cargo=cargo-home \
           --remap-path-prefix=/rust=rust-toolchain"
+          if [[ "$TARGET" == *-windows-msvc ]]; then
+            # Git Bash reports cargo's root as a POSIX path while rustc, MSVC,
+            # and CMake embed native drive-letter paths. Remap the exact native
+            # forms that those compilers see; do not assume a runner drive or
+            # username.
+            source_root_native="$(cygpath -aw "$source_root")"
+            cargo_root_native="$(cygpath -aw "$cargo_root")"
+            rust_sysroot_native="$(cygpath -aw "$rust_sysroot")"
+            source_root_native_short="$(cygpath --absolute --windows --short-name "$source_root")"
+            cargo_root_native_short="$(cygpath --absolute --windows --short-name "$cargo_root")"
+            rust_sysroot_native_short="$(cygpath --absolute --windows --short-name "$rust_sysroot")"
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
+          --remap-path-prefix=$source_root_native=baml-source \
+          --remap-path-prefix=$cargo_root_native=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native=rust-toolchain \
+          --remap-path-prefix=$source_root_native_short=baml-source \
+          --remap-path-prefix=$cargo_root_native_short=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native_short=rust-toolchain"
+            # MSVC's /pathmap only sanitizes debug metadata, not AWS-LC's
+            # __FILE__ strings. Use clang-cl for the native dependency build on
+            # both Windows targets: it is MSVC ABI-compatible and supports
+            # -ffile-prefix-map for debug data and predefined macros. CMake/cc
+            # may pass 8.3 short paths, so map both native representations.
+            command -v clang-cl >/dev/null
+            target_key="${TARGET//-/_}"
+            export "CC_${target_key}=clang-cl"
+            export "CXX_${target_key}=clang-cl"
+            native_path_maps="\
+          /clang:-ffile-prefix-map=$source_root_native=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native=rust-toolchain \
+          /clang:-ffile-prefix-map=$source_root_native_short=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native_short=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native_short=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          elif [[ "$TARGET" == *-unknown-linux-gnu ]]; then
+            # cross 0.2.5's GNU images intentionally use GCC 5 to retain an old
+            # glibc floor. GCC 5 supports debug-prefix remapping but predates
+            # -ffile-prefix-map/-fmacro-prefix-map. Override the diagnostic-only
+            # __FILE__ identity so AWS-LC cannot retain its /cargo source root,
+            # while still remapping any debug metadata before stripping.
+            native_path_maps="\
+          -fdebug-prefix-map=$source_root=baml-source \
+          -fdebug-prefix-map=$cargo_root=cargo-home \
+          -fdebug-prefix-map=$rust_sysroot=rust-toolchain \
+          -fdebug-prefix-map=/project=baml-source \
+          -fdebug-prefix-map=/cargo=cargo-home \
+          -fdebug-prefix-map=/rust=rust-toolchain \
+          -Wno-builtin-macro-redefined \
+          -D__FILE__=\"baml-source/native\""
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          else
+            native_path_maps="\
+          -ffile-prefix-map=$source_root=baml-source \
+          -ffile-prefix-map=$cargo_root=cargo-home \
+          -ffile-prefix-map=$rust_sysroot=rust-toolchain \
+          -ffile-prefix-map=/project=baml-source \
+          -ffile-prefix-map=/cargo=cargo-home \
+          -ffile-prefix-map=/rust=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          fi
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
           # release artifact. `release-bridge-cffi` = release + panic = "unwind".
           #
@@ -249,6 +313,18 @@ jobs:
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
+
+      - name: Verify shipping artifact hygiene
+        working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          ../scripts/baml-bridge-cffi-hygiene verify \
+            --native "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
+            --target "$TARGET"
 
       - name: Smoke test the public C and C++ ABI (Unix)
         if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}

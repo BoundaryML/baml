@@ -30,11 +30,15 @@ on:
         type: string
         default: ""
         required: false
+      source_ci_run_id:
+        description: "Successful canary CI run that attests source_sha (required for production)"
+        type: string
+        default: ""
+        required: false
 
 permissions:
-  contents: write
+  contents: read
   actions: read
-  id-token: write
 
 concurrency:
   group: ${{ inputs.dry_run == true && 'baml-language-release-dryrun' || 'baml-language-release-canary' }}
@@ -76,6 +80,7 @@ jobs:
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
       source_branch: ${{ steps.plan.outputs.source_branch }}
+      source_ci_run_id: ${{ steps.plan.outputs.source_ci_run_id }}
       dry_run: ${{ steps.plan.outputs.dry_run }}
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
@@ -87,17 +92,94 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Attest production source CI run
+        id: attest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$INPUT_DRY_RUN" != "false" ]]; then
+            echo "Dry run: a source CI attestation is not required."
+            exit 0
+          fi
+          if [[ ! "$INPUT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::production releases require an explicit 40-character source_sha"
+            exit 1
+          fi
+          if [[ ! "$SOURCE_CI_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production releases require a numeric source_ci_run_id"
+            exit 1
+          fi
+
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$INPUT_SOURCE_SHA" ]]; then
+            echo "::error::checked-out SHA $checked_out_sha does not match source_sha $INPUT_SOURCE_SHA"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if ! run_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_CI_RUN_ID")"; then
+              echo "gh api call failed (attempt $attempt/30); retrying"
+              if [[ "$attempt" -lt 30 ]]; then
+                sleep 10
+              fi
+              continue
+            fi
+            workflow_name="$(jq -r '.name // ""' <<<"$run_json")"
+            workflow_path="$(jq -r '.path // ""' <<<"$run_json")"
+            event="$(jq -r '.event // ""' <<<"$run_json")"
+            branch="$(jq -r '.head_branch // ""' <<<"$run_json")"
+            head_sha="$(jq -r '.head_sha // ""' <<<"$run_json")"
+            status="$(jq -r '.status // ""' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            url="$(jq -r '.html_url // ""' <<<"$run_json")"
+
+            if [[ "$workflow_name" != "CI - BAML Language" ||
+                  "$workflow_path" != ".github/workflows/ci.yaml" ||
+                  "$event" != "push" ||
+                  "$branch" != "canary" ||
+                  "$head_sha" != "$INPUT_SOURCE_SHA" ]]; then
+              echo "::error::source CI run does not attest this canary commit"
+              echo "workflow=$workflow_name path=$workflow_path event=$event branch=$branch head_sha=$head_sha"
+              exit 1
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" != "success" ]]; then
+                echo "::error::source CI run concluded $conclusion, expected success: $url"
+                exit 1
+              fi
+              echo "source_branch=$branch" >> "$GITHUB_OUTPUT"
+              echo "Attested production source with successful CI run: $url"
+              exit 0
+            fi
+
+            echo "Source CI run is $status; waiting (attempt $attempt/30): $url"
+            if [[ "$attempt" -lt 30 ]]; then
+              sleep 10
+            fi
+          done
+
+          echo "::error::timed out waiting for source CI run to complete"
+          exit 1
+
       - name: Compute release plan
         id: plan
         env:
           INPUT_CHANNEL: ${{ inputs.channel }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
+          ATTESTED_SOURCE_BRANCH: ${{ steps.attest.outputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
-          source_branch="${GITHUB_REF_NAME:-}"
+          source_branch="${ATTESTED_SOURCE_BRANCH:-${GITHUB_REF_NAME:-}}"
           dispatch_nightly_after_canary="false"
           if [[ "$channel" == "auto" ]]; then
             channel="nightly"
@@ -139,6 +221,7 @@ jobs:
             echo "EOF"
             echo "source_sha=$source_sha"
             echo "source_branch=$source_branch"
+            echo "source_ci_run_id=$INPUT_SOURCE_CI_RUN_ID"
             echo "dry_run=$dry_run"
             echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
           } >> "$GITHUB_OUTPUT"
@@ -1530,7 +1613,7 @@ jobs:
       - publish-crates-io
       - publish-homebrew
       - publish-aur
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: ${{ always() && needs.all-builds.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every enabled immutable publisher
@@ -1606,6 +1689,9 @@ jobs:
     needs: [plan, release-prerequisites-complete]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1824,7 +1910,7 @@ jobs:
   release-complete:
     name: All enabled publishers complete
     needs: [plan, release-prerequisites-complete, publish-go-sdk]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: ${{ always() && needs.release-prerequisites-complete.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
       - name: Require pre-manifest publishers and Go
@@ -1850,6 +1936,9 @@ jobs:
     needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -1883,6 +1972,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          SOURCE_CI_RUN_ID: ${{ needs.plan.outputs.source_ci_run_id }}
         run: |
           set -euo pipefail
           # Pin the nightly to the commit this canary released, not to whatever
@@ -1892,7 +1982,8 @@ jobs:
             --ref canary \
             -f channel=nightly \
             -f dry_run=false \
-            -f source_sha="$SOURCE_SHA"
+            -f source_sha="$SOURCE_SHA" \
+            -f source_ci_run_id="$SOURCE_CI_RUN_ID"
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
@@ -2006,6 +2097,9 @@ jobs:
     needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:

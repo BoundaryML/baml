@@ -393,7 +393,14 @@ def released_at_for_plan() -> str:
     if not value:
         value = git_output("show", "-s", "--format=%cI", "HEAD")
     try:
-        timestamp = dt.datetime.fromisoformat(value) if value else None
+        # Python 3.10 (still present on Ubuntu 22 release runners) does not
+        # accept the ISO-8601 `Z` UTC suffix. Git 2.54 emits `%cI` in that form,
+        # so normalize it just as load_plan() does below.
+        timestamp = (
+            dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if value
+            else None
+        )
     except ValueError:
         timestamp = None
     if timestamp is None or timestamp.tzinfo is None:
