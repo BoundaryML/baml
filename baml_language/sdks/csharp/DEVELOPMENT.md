@@ -43,6 +43,21 @@ Release platform metadata declares `artifacts.cffi` and `artifacts.csharp` as
 sibling records. C# entries name the RID-local native asset and require the
 generic CFFI artifact for the same target; a generic CFFI target does not imply
 a C# package. `build2-bridge-cffi.reusable.yaml` produces only generic native
-artifacts. `verify-csharp-product-slice.reusable.yaml` assembles and exercises
-the eight-RID NuGet package, and `publish2-csharp-sdk.yaml` publishes that
-verified package.
+artifacts containing the library and its checksum. Actions artifacts are
+workflow-run scoped; C# records source SHA, canonical version, workflow run ID,
+target, producer filename, runtime path, and digest when it assembles the
+package. Provenance deliberately excludes `github.run_attempt`, so rerunning
+failed jobs can reuse successful producers from an earlier attempt of the same
+run. Unrelated future CFFI-only artifacts are ignored.
+
+`prepare-csharp-sdk.reusable.yaml` prepares platform-neutral generated and ABI
+inputs in parallel with the CFFI matrix.
+`verify-csharp-product-slice.reusable.yaml` assembles and exercises the required
+RID set from the validated platform contract, and `publish2-csharp-sdk.yaml`
+publishes that exact verified package. On a repair rerun, the publisher removes
+only NuGet's repository signature from the comparison model and skips an
+identical existing package; a product-owned content mismatch remains fatal.
+`release/csharp-package-size-policy.json` records the reviewed compressed
+package and per-native baselines from the first eight-target release evidence;
+package assembly enforces their regression budgets independently from the
+NuGet registry-safety ceiling.

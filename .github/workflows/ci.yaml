@@ -431,6 +431,9 @@ jobs:
       - name: "Validate package-manager artifacts"
         run: python3 scripts/test-baml-package-manager-artifacts
 
+      - name: "Test release contracts and workflow graph"
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
       - name: "Validate canary/nightly version computation"
         env:
           BAML_LANGUAGE_VERSION_DATE: "20260522"
@@ -461,10 +464,37 @@ jobs:
 
           scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
           scripts/baml-language-version stamp --plan nightly-release-plan.json
+          nuget="$(jq -r .registry_versions.nuget nightly-release-plan.json)"
+          maven="$(jq -r .registry_versions.maven nightly-release-plan.json)"
+          gradle_plugin="$(jq -r \
+            .registry_versions.gradle_plugin nightly-release-plan.json)"
+          swiftpm="$(jq -r .registry_versions.swiftpm nightly-release-plan.json)"
           node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
           web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
+          csharp_nuget="$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
+          rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
+            baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_runtime="$(sed -n \
+            's/^const DefaultRuntimeVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
           test "$node_npm" = "$nightly"
           test "$web_npm" = "$node_npm"
+          test "$nuget" = "$nightly"
+          test "$csharp_nuget" = "$nuget"
+          test "$maven" = "$nightly"
+          test "$gradle_plugin" = "$nightly"
+          test "$swiftpm" = "$nightly"
+          test "$rust_crate" = "$nightly"
+          test "$go_runtime" = "$nightly"
+          test "$vsix" = "$nightly"
+          for shipping_version in \
+            "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_runtime" "$vsix"; do
+            test "$shipping_version" != "$canary"
+          done
 
   # Call reusable workflows
   cargo-tests:

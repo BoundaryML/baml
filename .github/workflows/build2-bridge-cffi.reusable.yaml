@@ -38,10 +38,10 @@ name: BAML Release - Build bridge_cffi
 #   - linux musl x86_64/aarch64: `cross`, aws-lc-sys builds fine. musl defaults
 #     to `+crt-static`, which cannot emit a cdylib, so the build disables
 #     `crt-static` (RUSTFLAGS in the build step + `Cross.toml` passthrough) to
-#     produce a musl `.so` dynamically linked against musl libc. Experimental
-#     until an Alpine (or other real musl) dlopen smoke proves a consumer loads
-#     it.
-#   - windows aarch64: experimental until a native arm64 smoke runner exists.
+#     produce a musl `.so` dynamically linked against musl libc. The C++ and C#
+#     release consumers execute it in real musl userspace.
+#   - windows aarch64: required after native C++ and C# consumer execution on
+#     the windows-11-arm runner.
 #   - windows x86_64: `AWS_LC_SYS_PREBUILT_NASM=1` (below) lets aws-lc-sys use
 #     its prebuilt NASM objects if the runner has no NASM.
 
@@ -75,9 +75,9 @@ defaults:
 jobs:
   # The cffi build matrix is generated from the repository's platform contract
   # (`release/platforms.json`) so the target set + per-target build config live
-  # in one machine-readable place, not a hand-copied YAML list. The experimental
-  # musl + arm64-Windows targets carry `experimental: true` in the contract,
-  # which drives `continue-on-error` on the build job below.
+  # in one machine-readable place, not a hand-copied YAML list. Any future
+  # experimental target carries that tier in the contract, which drives
+  # `continue-on-error` on the build job below.
   matrix:
     name: Compute target matrix
     runs-on: ubuntu-latest
@@ -172,19 +172,45 @@ jobs:
           TARGET: ${{ matrix._.target }}
         run: |
           set -euo pipefail
+          # Rust panic locations otherwise retain runner/workspace/toolchain
+          # absolute paths in the stripped cdylib. Map both native-runner and
+          # cross-container roots to stable relative identities before build.
+          source_root="${GITHUB_WORKSPACE:-$(pwd -P)}"
+          rust_sysroot="$(rustc --print sysroot)"
+          cargo_bin="$(command -v cargo)"
+          cargo_root="$(cd "$(dirname "$cargo_bin")/.." && pwd -P)"
+          export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
+          --remap-path-prefix=$source_root=baml-source \
+          --remap-path-prefix=$rust_sysroot=rust-toolchain \
+          --remap-path-prefix=$cargo_root=cargo-home \
+          --remap-path-prefix=/project=baml-source \
+          --remap-path-prefix=/cargo=cargo-home \
+          --remap-path-prefix=/rust=rust-toolchain"
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
           # release artifact. `release-bridge-cffi` = release + panic = "unwind".
           #
+          # Setting RUSTFLAGS overrides target rustflags from Cargo config.
+          # Preserve the x64 Windows stack reservation explicitly.
+          if [[ "$TARGET" == "x86_64-pc-windows-msvc" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=/STACK:67108864"
+          fi
+          if [[ "$TARGET" == "wasm32-unknown-unknown" ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg=getrandom_backend=\"wasm_js\""
+          fi
           # musl targets default to `+crt-static`, and rustc cannot emit a
           # cdylib under a static CRT — it silently drops the crate type and
           # produces only the `.rlib`. Disable `crt-static` so the build yields
           # a real musl `.so`, dynamically linked against musl libc and
-          # dlopen-loadable on a musl consumer (e.g. Alpine). Scoped to musl so
-          # the other targets keep their `.cargo/config.toml` rustflags (the
-          # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
-          # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
+          # dlopen-loadable on a musl consumer (e.g. Alpine).
           if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
+          # The shared macOS artifact is installed into host-language packages
+          # under an ecosystem-specific filename. Give the dylib a portable ID
+          # at production time so every consumer receives the exact producer
+          # bytes; package assembly must never rewrite a checksummed native.
+          if [[ "$TARGET" == *-apple-darwin ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,-install_name,@rpath/libbridge_cffi.dylib"
           fi
           ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "$TARGET"
 

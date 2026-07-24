@@ -20,10 +20,44 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        if (args is ["--self-test"])
+        {
+            try
+            {
+                RunSelfTests();
+                Console.WriteLine("nuget_payload_comparison_tests=ok");
+                return 0;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine(
+                    $"BAML NuGet self-test failed: {exception.Message}");
+                return 1;
+            }
+        }
+
+        if (args is ["compare", string expectedPath, string actualPath])
+        {
+            try
+            {
+                CompareProductPayload(expectedPath, actualPath);
+                Console.WriteLine("nuget_product_payload=identical");
+                return 0;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine(
+                    $"BAML NuGet payload comparison failed: {exception.Message}");
+                return 1;
+            }
+        }
+
         if (args.Length != 2)
         {
             Console.Error.WriteLine(
-                "Usage: Baml.NuGetNormalizer <unsigned-input.nupkg> <normalized-output.nupkg>");
+                "Usage: Baml.NuGetNormalizer <unsigned-input.nupkg> <normalized-output.nupkg>\n"
+                + "       Baml.NuGetNormalizer compare <verified-unsigned.nupkg> <registry-signed.nupkg>\n"
+                + "       Baml.NuGetNormalizer --self-test");
             return 2;
         }
 
@@ -31,7 +65,7 @@ internal static class Program
         {
             string inputPath = Path.GetFullPath(args[0]);
             string outputPath = Path.GetFullPath(args[1]);
-            Normalize(inputPath, outputPath);
+            Normalize(inputPath, outputPath, allowRepositorySignature: false);
 
             using FileStream output = File.OpenRead(outputPath);
             string digest = Convert.ToHexStringLower(SHA256.HashData(output));
@@ -47,7 +81,10 @@ internal static class Program
         }
     }
 
-    private static void Normalize(string inputPath, string outputPath)
+    private static void Normalize(
+        string inputPath,
+        string outputPath,
+        bool allowRepositorySignature)
     {
         if (StringComparer.Ordinal.Equals(inputPath, outputPath))
         {
@@ -96,7 +133,9 @@ internal static class Program
                        entryNameEncoding: Encoding.UTF8))
             {
                 IReadOnlyList<InputEntry> entries =
-                    ReadAndValidateEntries(inputArchive);
+                    ReadAndValidateEntries(
+                        inputArchive,
+                        allowRepositorySignature);
                 NormalizedMetadata metadata = NormalizeMetadata(entries);
 
                 using FileStream temporaryStream = new(
@@ -133,7 +172,8 @@ internal static class Program
     }
 
     private static IReadOnlyList<InputEntry> ReadAndValidateEntries(
-        ZipArchive archive)
+        ZipArchive archive,
+        bool allowRepositorySignature)
     {
         List<InputEntry> entries = new(archive.Entries.Count);
         HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
@@ -151,6 +191,11 @@ internal static class Program
                     entry.FullName,
                     SignatureEntryName))
             {
+                if (allowRepositorySignature)
+                {
+                    continue;
+                }
+
                 throw new InvalidDataException(
                     "The package is already signed. Normalize unsigned bytes before signing.");
             }
@@ -520,6 +565,210 @@ internal static class Program
                 sourceStream.CopyTo(destinationStream);
             }
         }
+    }
+
+    private static void CompareProductPayload(
+        string expectedPath,
+        string actualPath)
+    {
+        string work = Path.Combine(
+            Path.GetTempPath(),
+            $"baml-nuget-compare-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(work);
+        string expectedNormalized = Path.Combine(work, "expected.nupkg");
+        string actualNormalized = Path.Combine(work, "actual.nupkg");
+        try
+        {
+            Normalize(
+                Path.GetFullPath(expectedPath),
+                expectedNormalized,
+                allowRepositorySignature: true);
+            Normalize(
+                Path.GetFullPath(actualPath),
+                actualNormalized,
+                allowRepositorySignature: true);
+            if (!FilesEqual(expectedNormalized, actualNormalized))
+            {
+                throw new InvalidDataException(
+                    "the existing immutable version has different product-owned content");
+            }
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    private static bool FilesEqual(string leftPath, string rightPath)
+    {
+        FileInfo leftInfo = new(leftPath);
+        FileInfo rightInfo = new(rightPath);
+        if (leftInfo.Length != rightInfo.Length)
+        {
+            return false;
+        }
+
+        using FileStream left = File.OpenRead(leftPath);
+        using FileStream right = File.OpenRead(rightPath);
+        byte[] leftBuffer = new byte[1 << 20];
+        byte[] rightBuffer = new byte[leftBuffer.Length];
+        long remaining = leftInfo.Length;
+        while (remaining > 0)
+        {
+            int chunkLength = (int)Math.Min(leftBuffer.Length, remaining);
+            Span<byte> leftChunk = leftBuffer.AsSpan(0, chunkLength);
+            Span<byte> rightChunk = rightBuffer.AsSpan(0, chunkLength);
+            left.ReadExactly(leftChunk);
+            right.ReadExactly(rightChunk);
+            if (!leftChunk.SequenceEqual(rightChunk))
+            {
+                return false;
+            }
+            remaining -= chunkLength;
+        }
+        return true;
+    }
+
+    private static void RunSelfTests()
+    {
+        string work = Path.Combine(
+            Path.GetTempPath(),
+            $"baml-nuget-self-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(work);
+        try
+        {
+            string expected = Path.Combine(work, "expected.nupkg");
+            string signed = Path.Combine(work, "signed.nupkg");
+            WriteTestPackage(expected, signature: false, mutation: null);
+            WriteTestPackage(signed, signature: true, mutation: null);
+            CompareProductPayload(expected, signed);
+
+            foreach (string mutation in new[]
+                     {
+                         "managed-assembly",
+                         "native-asset",
+                         "nuspec-version",
+                         "nuspec-dependency",
+                     })
+            {
+                string changed = Path.Combine(work, $"{mutation}.nupkg");
+                WriteTestPackage(
+                    changed,
+                    signature: true,
+                    mutation: mutation);
+                bool rejected = false;
+                try
+                {
+                    CompareProductPayload(expected, changed);
+                }
+                catch (InvalidDataException)
+                {
+                    rejected = true;
+                }
+                if (!rejected)
+                {
+                    throw new InvalidOperationException(
+                        $"payload mutation was not rejected: {mutation}");
+                }
+            }
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    private static void WriteTestPackage(
+        string path,
+        bool signature,
+        string? mutation)
+    {
+        const string contentTypes =
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
+              <Default Extension="psmdcp" ContentType="application/vnd.openxmlformats-package.core-properties+xml" />
+              <Default Extension="nuspec" ContentType="application/octet" />
+              <Default Extension="dll" ContentType="application/octet" />
+              <Default Extension="so" ContentType="application/octet" />
+            </Types>
+            """;
+        const string relationships =
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Type="http://schemas.microsoft.com/packaging/2010/07/manifest" Target="/baml-bridge.nuspec" Id="manifest" />
+              <Relationship Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/package/services/metadata/core-properties/random.psmdcp" Id="properties" />
+            </Relationships>
+            """;
+        string version = mutation == "nuspec-version" ? "1.2.4" : "1.2.3";
+        string dependency = mutation == "nuspec-dependency"
+            ? "[3.36.0,4.0.0)"
+            : "[3.35.1,4.0.0)";
+        string nuspec =
+            $"""
+             <?xml version="1.0" encoding="utf-8"?>
+             <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+               <metadata>
+                 <id>baml-bridge</id>
+                 <version>{version}</version>
+                 <authors>BoundaryML</authors>
+                 <description>comparison fixture</description>
+                 <dependencies>
+                   <group targetFramework="net10.0">
+                     <dependency id="Google.Protobuf" version="{dependency}" />
+                   </group>
+                 </dependencies>
+               </metadata>
+             </package>
+             """;
+
+        using FileStream stream = new(
+            path,
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        using ZipArchive archive = new(
+            stream,
+            ZipArchiveMode.Create,
+            leaveOpen: false,
+            entryNameEncoding: Encoding.UTF8);
+        AddTestEntry(archive, ContentTypesEntryName, contentTypes);
+        AddTestEntry(archive, RootRelationshipsEntryName, relationships);
+        AddTestEntry(
+            archive,
+            "package/services/metadata/core-properties/random.psmdcp",
+            "<core>product-owned</core>");
+        AddTestEntry(archive, "baml-bridge.nuspec", nuspec);
+        AddTestEntry(
+            archive,
+            "lib/net10.0/Baml.Bridge.dll",
+            mutation == "managed-assembly" ? "changed-managed" : "managed");
+        AddTestEntry(
+            archive,
+            "runtimes/linux-x64/native/libbridge_cffi.so",
+            mutation == "native-asset" ? "changed-native" : "native");
+        if (signature)
+        {
+            AddTestEntry(archive, SignatureEntryName, "repository-signature");
+        }
+    }
+
+    private static void AddTestEntry(
+        ZipArchive archive,
+        string name,
+        string content)
+    {
+        ZipArchiveEntry entry = archive.CreateEntry(
+            name,
+            CompressionLevel.SmallestSize);
+        entry.LastWriteTime = CanonicalTimestamp;
+        entry.ExternalAttributes = CanonicalFileExternalAttributes;
+        using StreamWriter writer = new(
+            entry.Open(),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(content);
     }
 
     private sealed record InputEntry(

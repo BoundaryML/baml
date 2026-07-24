@@ -59,10 +59,14 @@ jobs:
             <(jq -S . expected-release-plan.json) \
             <(jq -S . product-package/release-plan.json)
 
-          version="$(jq -er \
+          canonical_version="$(jq -er \
             '.canonical_version | select(type == "string" and length > 0)' \
             expected-release-plan.json)"
-          package="product-package/baml-bridge.$version.nupkg"
+          nuget_version="$(jq -er \
+            '.registry_versions.nuget
+             | select(type == "string" and length > 0)' \
+            expected-release-plan.json)"
+          package="product-package/baml-bridge.$nuget_version.nupkg"
           test -f "$package"
           test "$(find product-package -maxdepth 1 \
             -type f -name 'baml-bridge.*.nupkg' | wc -l)" -eq 1
@@ -72,26 +76,35 @@ jobs:
             sha256sum -c product-package.sha256
           )
           test "$(unzip -p "$package" baml-bridge.nuspec \
-            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = "$version"
-          test "$(wc -l < product-package/native-provenance.tsv)" -eq 8
-          awk -F '\t' -v sha="$SOURCE_SHA" -v version="$version" '
-            NF != 8 || $2 != sha || $3 != version { exit 1 }
-          ' product-package/native-provenance.tsv
+            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = \
+            "$nuget_version"
+          scripts/baml-csharp-release-contract verify-product \
+            --release-plan expected-release-plan.json \
+            --source-sha "$SOURCE_SHA" \
+            --provenance product-package/native-provenance.json \
+            --manifest product-package/native-manifest.sha256 \
+            --package "$package"
 
           digest="$(sha256sum "$package" | cut -d ' ' -f 1)"
           grep -Fxq "$digest  $(basename "$package")" \
             product-package/product-package.sha256
           {
             echo "path=$package"
-            echo "version=$version"
+            echo "version=$nuget_version"
+            echo "canonical_version=$canonical_version"
             echo "digest=$digest"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Fail closed if the immutable version already exists
+      - name: Compare any existing immutable version by product payload
+        id: existing
         env:
           VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE: ${{ steps.package.outputs.path }}
         run: |
           set -euo pipefail
+          normalizer=baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj
+          dotnet build "$normalizer" --configuration Release --nologo \
+            -p:NuGetAudit=false
           normalized="${VERSION,,}"
           url="https://api.nuget.org/v3-flatcontainer/baml-bridge/$normalized/baml-bridge.$normalized.nupkg"
           status="$(curl --retry 3 --retry-all-errors --silent \
@@ -99,11 +112,15 @@ jobs:
             --write-out '%{http_code}' "$url")"
           case "$status" in
             404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
               echo "baml-bridge $VERSION is not present on nuget.org"
               ;;
             200)
-              echo "::error::baml-bridge $VERSION already exists on nuget.org; the original unsigned artifact identity cannot be reconstructed from a repository-signed package"
-              exit 1
+              dotnet run --project "$normalizer" \
+                --configuration Release --no-build --no-restore -- \
+                compare "$PACKAGE" "$RUNNER_TEMP/existing.nupkg"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "baml-bridge $VERSION already exists with identical product-owned content; skipping upload"
               ;;
             *)
               echo "::error::nuget.org version probe returned HTTP $status"
@@ -112,12 +129,14 @@ jobs:
           esac
 
       - name: Exchange GitHub OIDC for a short-lived NuGet key
+        if: ${{ steps.existing.outputs.publish == 'true' }}
         id: login
         uses: NuGet/login@v1.2.0
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Publish the already-verified package
+        if: ${{ steps.existing.outputs.publish == 'true' }}
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           PACKAGE: ${{ steps.package.outputs.path }}
