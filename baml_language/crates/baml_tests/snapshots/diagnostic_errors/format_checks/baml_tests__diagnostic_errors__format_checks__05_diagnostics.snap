@@ -434,16 +434,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: unreachable arm
-     ╭─[ match_exprs.baml:162:14 ]
-     │
- 162 │         _ => "other"
-     │              ───┬───  
-     │                 ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
   [type] error: operator `*` cannot be applied to `bool` and `bool`
      ╭─[ match_exprs.baml:311:20 ]
      │

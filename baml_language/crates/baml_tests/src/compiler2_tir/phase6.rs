@@ -1853,7 +1853,7 @@ function f(p: Point) -> string {
     );
 }
 
-/// Ensures an unknown-field arm still counts for exhaustiveness coverage.
+/// Ensures an unknown-field arm suppresses usefulness diagnostics.
 #[test]
 fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
     let mut db = make_db();
@@ -1884,7 +1884,7 @@ function f(v: A | B) -> string {
     );
     assert!(
         !output.contains("non-exhaustive match"),
-        "invalid match arms should still participate in coverage to avoid duplicate non-exhaustive diagnostics, got:\n{output}"
+        "invalid match arms should suppress dependent non-exhaustive diagnostics, got:\n{output}"
     );
 }
 

@@ -260,7 +260,6 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string th
         "wrong!" : "wrong!"
   }
   !! 8604..8609: type mismatch: expected AlwaysTrue, got false
-  !! 8584..8627: non-exhaustive match on `AlwaysTrue`; missing: true
 }
 function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throws never {
   { : "yes"
@@ -683,7 +682,6 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
         "wrong type" : "wrong type"
   }
   !! 21982..21984: type mismatch: expected bool, got 42
-  !! 21962..22006: non-exhaustive match on `bool`; missing: true, false
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
   { : "wrong type"
@@ -692,7 +690,6 @@ function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
         "wrong type" : "wrong type"
   }
   !! 22144..22151: type mismatch: expected int, got "hello"
-  !! 22124..22173: non-exhaustive match on `int`; missing: _
 }
 function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws never {
   { : "not pending"

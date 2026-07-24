@@ -2247,8 +2247,8 @@ fn match_narrowing_partitions_interface_associated_bindings_in_union() {
 }
 
 #[test]
-fn narrowed_associated_interface_pattern_does_not_exhaust_unbound_interface() {
-    assert_compile_error_code(
+fn unbound_associated_interface_scrutinee_requires_binding() {
+    assert_compile_error_contains(
         r#"
         interface Iterator {
             type Item
@@ -2262,7 +2262,7 @@ fn narrowed_associated_interface_pattern_does_not_exhaust_unbound_interface() {
             }
         }
         "#,
-        "E0062",
+        "must specify its associated type(s) `Item`",
     );
 }
 
@@ -3819,8 +3819,8 @@ fn associated_interface_optional_match_requires_null_arm() {
 }
 
 #[test]
-fn associated_union_pattern_does_not_exhaust_wider_associated_binding() {
-    assert_compile_error_code(
+fn narrower_associated_interface_pattern_is_rejected() {
+    assert_compile_error_contains(
         r#"
         interface Iterator {
             type Item
@@ -3835,7 +3835,7 @@ fn associated_union_pattern_does_not_exhaust_wider_associated_binding() {
             }
         }
         "#,
-        "E0062",
+        "type mismatch: expected Iterator<Item = int | string>, got Iterator<Item = int>",
     );
 }
 

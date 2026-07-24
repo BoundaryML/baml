@@ -68,18 +68,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0062
 ─────╯
 
-  [type] error: non-exhaustive match on type AlwaysTrue; missing: true
-     ╭─[ match_exhaustiveness.baml:296:5 ]
-     │
- 296 │ ╭─▶     match (t) {
-     ┆ ┆   
- 298 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type AlwaysTrue; missing: true
-     │     
-     │     Note: Error code: E0062
-─────╯
-
   [type] error: type mismatch: expected AlwaysTrue, got false
      ╭─[ match_exhaustiveness.baml:297:9 ]
      │
@@ -394,18 +382,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: non-exhaustive match on type bool; missing: true, false
-     ╭─[ match_exhaustiveness.baml:745:5 ]
-     │
- 745 │ ╭─▶     match (b) {
-     ┆ ┆   
- 747 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type bool; missing: true, false
-     │     
-     │     Note: Error code: E0062
-─────╯
-
   [type] error: type mismatch: expected bool, got 42
      ╭─[ match_exhaustiveness.baml:746:9 ]
      │
@@ -414,18 +390,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │          ╰── type mismatch: expected bool, got 42
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: non-exhaustive match on type int; missing: _
-     ╭─[ match_exhaustiveness.baml:752:5 ]
-     │
- 752 │ ╭─▶     match (x) {
-     ┆ ┆   
- 754 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type int; missing: _
-     │     
-     │     Note: Error code: E0062
 ─────╯
 
   [type] error: type mismatch: expected int, got "hello"
