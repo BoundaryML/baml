@@ -156,7 +156,10 @@ if find "$publish" -type f \
   echo "published consumer contains a forbidden source/tooling asset" >&2
   exit 1
 fi
-if rg -a -F -l "$repository_root" "$publish" | grep -q .; then
+# Include the path separator so a short mount point such as /work does not
+# mistake an unrelated path segment such as /worker.rs for a repository path.
+repository_path_prefix="${repository_root%/}/"
+if rg -a -F -l "$repository_path_prefix" "$publish" | grep -q .; then
   echo "published consumer contains a repository path" >&2
   exit 1
 fi

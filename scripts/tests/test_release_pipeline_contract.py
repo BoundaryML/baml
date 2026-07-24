@@ -914,6 +914,41 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("right.ReadExactly(rightChunk)", normalizer)
         self.assertNotIn("left.Read(leftBuffer)", normalizer)
 
+    def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
+        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        self.assertIn(
+            'repository_path_prefix="${repository_root%/}/"',
+            primitive_consumer,
+        )
+        self.assertIn(
+            'rg -a -F -l "$repository_path_prefix" "$publish"',
+            primitive_consumer,
+        )
+        self.assertNotIn(
+            'rg -a -F -l "$repository_root" "$publish"',
+            primitive_consumer,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            benign = root / "benign.bin"
+            leaked = root / "leaked.bin"
+            benign.write_bytes(
+                b"cargo-home/registry/src/tokio/src/runtime/metrics/worker.rs"
+            )
+            leaked.write_bytes(b"debug source: /work/baml/src/runtime.rs")
+
+            result = subprocess.run(
+                ["rg", "-a", "-F", "-l", "/work/", str(root)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                {Path(path).name for path in result.stdout.splitlines()},
+                {leaked.name},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
