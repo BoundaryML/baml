@@ -121,8 +121,14 @@ jobs:
           fi
 
           for attempt in $(seq 1 30); do
-            run_json="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_CI_RUN_ID")"
+            if ! run_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_CI_RUN_ID")"; then
+              echo "gh api call failed (attempt $attempt/30); retrying"
+              if [[ "$attempt" -lt 30 ]]; then
+                sleep 10
+              fi
+              continue
+            fi
             workflow_name="$(jq -r '.name // ""' <<<"$run_json")"
             workflow_path="$(jq -r '.path // ""' <<<"$run_json")"
             event="$(jq -r '.event // ""' <<<"$run_json")"

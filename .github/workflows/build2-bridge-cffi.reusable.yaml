@@ -236,7 +236,7 @@ jobs:
           -fdebug-prefix-map=/cargo=cargo-home \
           -fdebug-prefix-map=/rust=rust-toolchain \
           -Wno-builtin-macro-redefined \
-          -D__FILE__=\\\"baml-source/native\\\""
+          -D__FILE__=\"baml-source/native\""
             export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
             export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
           else

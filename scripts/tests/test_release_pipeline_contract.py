@@ -545,6 +545,19 @@ class BridgeCffiHygieneTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("C:\\Users\\runneradmin\\.cargo", result.stderr)
 
+    def test_rejects_quoted_cross_paths(self) -> None:
+        payloads = (
+            b'cargo "/project/aws-lc/source.c"',
+            b"cargo '/cargo/registry/src/dependency.c'",
+            b'rustc "/rust/toolchains/stable/lib/libstd.rlib"',
+            b"rustc '/rust/settings.toml'",
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                result = self.verify_payload(payload)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("absolute build-tree paths", result.stderr)
+
     def test_allows_stable_mapped_and_rust_dependency_paths(self) -> None:
         payload = b"\0".join(
             (
@@ -610,7 +623,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
         self.assertIn("-ffile-prefix-map=/cargo=cargo-home", builder)
         self.assertIn("-fdebug-prefix-map=/cargo=cargo-home", builder)
-        self.assertIn('-D__FILE__=\\\\\\"baml-source/native\\\\\\"', builder)
+        self.assertIn('-D__FILE__=\\"baml-source/native\\"', builder)
         self.assertIn("cygpath -aw", builder)
         self.assertIn("--short-name", builder)
         self.assertIn(
@@ -670,6 +683,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn('"$branch" != "canary"', plan)
         self.assertIn('"$head_sha" != "$INPUT_SOURCE_SHA"', plan)
         self.assertIn('"$conclusion" != "success"', plan)
+        self.assertIn('if ! run_json="$(gh api', plan)
+        self.assertIn("gh api call failed (attempt $attempt/30); retrying", plan)
         self.assertIn(
             "permissions:\n  contents: read\n  actions: read\n",
             release,

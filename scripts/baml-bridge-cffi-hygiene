@@ -34,18 +34,18 @@ PATH_PATTERNS = (
     ),
     re.compile(r"/builds/[^\x00\r\n\t \"']*", re.IGNORECASE),
     re.compile(
-        r"(?<![^\s=])/project/[^\x00\r\n\t \"']*",
+        r"(?<![^\s=\"'])/project/[^\x00\r\n\t \"']*",
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?<![^\s=])/cargo/[^\x00\r\n\t \"']*",
+        r"(?<![^\s=\"'])/cargo/[^\x00\r\n\t \"']*",
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?<![^\s=])/rust/(?:toolchains|downloads|tmp)/[^\x00\r\n\t \"']*",
+        r"(?<![^\s=\"'])/rust/(?:toolchains|downloads|tmp)/[^\x00\r\n\t \"']*",
         re.IGNORECASE,
     ),
-    re.compile(r"(?<![^\s=])/rust/settings\.toml", re.IGNORECASE),
+    re.compile(r"(?<![^\s=\"'])/rust/settings\.toml", re.IGNORECASE),
     re.compile(
         r"[A-Z]:[\\/](?:Users|a)[\\/][^\x00\r\n\t \"']*",
         re.IGNORECASE,
@@ -79,12 +79,14 @@ def binary_strings(data: bytes) -> list[str]:
 
 
 def redact_credentials(value: str) -> str:
+    """Replace credential-shaped material before rendering diagnostics."""
     for _category, pattern in CREDENTIAL_PATTERNS:
         value = pattern.sub("<redacted>", value)
     return value
 
 
 def find_path_violations(strings: list[str]) -> list[str]:
+    """Collect unique forbidden build paths from extracted binary strings."""
     violations: set[str] = set()
     for value in strings:
         for pattern in PATH_PATTERNS:
@@ -94,6 +96,7 @@ def find_path_violations(strings: list[str]) -> list[str]:
 
 
 def find_credential_categories(strings: list[str]) -> list[str]:
+    """Return credential categories without retaining or exposing their values."""
     categories = {
         category
         for value in strings
@@ -104,6 +107,7 @@ def find_credential_categories(strings: list[str]) -> list[str]:
 
 
 def verify(native: Path, target: str) -> int:
+    """Verify one native artifact and return a process-style exit status."""
     if not native.is_file():
         print(f"native artifact does not exist: {native}", file=sys.stderr)
         return 1
@@ -140,6 +144,7 @@ def verify(native: Path, target: str) -> int:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the hygiene checker's command-line interface."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     verify_parser = subparsers.add_parser(
@@ -152,6 +157,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Run the requested hygiene command."""
     args = parse_args()
     if args.command == "verify":
         return verify(args.native, args.target)
