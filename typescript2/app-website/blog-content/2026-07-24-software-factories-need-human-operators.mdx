@@ -76,7 +76,7 @@ It took me 2 months to design and implement all of this for Python and Typescrip
 
 In addition to all of these shared designs and implementation patterns, we also set up test infrastructure to exercise end-to-end tests of each SDK:
 
-- a standardized pattern for running SDK tests for each bridge (`cargo nextest run -p sdk_test_python_pydantic2`, `cargo nextest run -p sdk_test_typescript_node`, `cargo nextest run -p sdk_test_<bridge>)
+- a standardized pattern for running SDK tests for each bridge (`cargo nextest run -p sdk_test_python_pydantic2`, `cargo nextest run -p sdk_test_typescript_node`, `cargo nextest run -p sdk_test_<bridge>`)
 - each SDK test suite's setup builds the universal interface and the bridge-specific library that loads the C interface from `HEAD`
 - each SDK test suite then also runs type checking and each test case in that language
 - CI workflows that do all of the above, fanning out across Linux, MacOS, and Windows
