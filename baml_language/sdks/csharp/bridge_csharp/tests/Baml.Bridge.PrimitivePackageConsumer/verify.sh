@@ -1,6 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+verify_repository_paths() (
+  local repository_root="$1"
+  local publish="$2"
+  local repository_path_prefix
+  local scan_status
+
+  # Include the path separator so a short mount point such as /work does not
+  # mistake an unrelated path segment such as /worker.rs for a repository path.
+  repository_path_prefix="${repository_root%/}/"
+  if rg -a -F -l -- "$repository_path_prefix" "$publish" > /dev/null; then
+    echo "published consumer contains a repository path" >&2
+    return 1
+  else
+    scan_status="$?"
+    if [[ "$scan_status" -ne 1 ]]; then
+      echo "failed to scan published consumer for repository paths" >&2
+      return "$scan_status"
+    fi
+  fi
+)
+
+if [[ "${1:-}" == "--verify-repository-paths" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: verify.sh --verify-repository-paths <repository-root> <publish-dir>" >&2
+    exit 2
+  fi
+  verify_repository_paths "$2" "$3"
+  exit 0
+fi
+
 if [[ "$#" -lt 1 || "$#" -gt 4 ]]; then
   echo "usage: verify.sh <exact-package> [rid] [canonical-native-name] [generated-source-root]" >&2
   exit 2
@@ -156,10 +186,7 @@ if find "$publish" -type f \
   echo "published consumer contains a forbidden source/tooling asset" >&2
   exit 1
 fi
-if rg -a -F -l "$repository_root" "$publish" | grep -q .; then
-  echo "published consumer contains a repository path" >&2
-  exit 1
-fi
+verify_repository_paths "$repository_root" "$publish"
 
 mismatch="$work/mismatch"
 mkdir -p "$mismatch"

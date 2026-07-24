@@ -914,6 +914,65 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("right.ReadExactly(rightChunk)", normalizer)
         self.assertNotIn("left.Read(leftBuffer)", normalizer)
 
+    def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
+        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        self.assertIn(
+            'repository_path_prefix="${repository_root%/}/"',
+            primitive_consumer,
+        )
+        self.assertIn(
+            'rg -a -F -l -- "$repository_path_prefix" "$publish"',
+            primitive_consumer,
+        )
+        self.assertNotIn(
+            'rg -a -F -l "$repository_root" "$publish"',
+            primitive_consumer,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            benign_publish = root / "benign"
+            leaked_publish = root / "leaked"
+            benign_publish.mkdir()
+            leaked_publish.mkdir()
+            benign = benign_publish / "benign.bin"
+            leaked = leaked_publish / "leaked.bin"
+            benign.write_bytes(
+                b"cargo-home/registry/src/tokio/src/runtime/metrics/worker.rs"
+            )
+            leaked.write_bytes(b"debug source: /work/baml/src/runtime.rs")
+
+            benign_result = subprocess.run(
+                [
+                    str(PRIMITIVE_CONSUMER),
+                    "--verify-repository-paths",
+                    "/work",
+                    str(benign_publish),
+                ],
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(benign_result.returncode, 0, benign_result.stderr)
+            self.assertIn(b"/worker.rs", benign.read_bytes())
+
+            leaked_result = subprocess.run(
+                [
+                    str(PRIMITIVE_CONSUMER),
+                    "--verify-repository-paths",
+                    "/work",
+                    str(leaked_publish),
+                ],
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(leaked_result.returncode, 1)
+            self.assertIn(
+                "published consumer contains a repository path",
+                leaked_result.stderr,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
