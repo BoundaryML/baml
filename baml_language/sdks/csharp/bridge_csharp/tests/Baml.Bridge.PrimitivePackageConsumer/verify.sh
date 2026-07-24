@@ -38,6 +38,8 @@ if [[ -z "$generated_source_root" ]]; then
 else
   generated_source_root="$(cd "$generated_source_root" && pwd -P)"
 fi
+test -f "$generated_source_root/Baml/Generated/BamlProgram.g.cs"
+test -f "$generated_source_root/CsharpSlice/Functions.g.cs"
 cp "$test_dir/Baml.Bridge.PrimitivePackageConsumer.csproj" "$consumer/"
 cp "$test_dir/NuGet.Config" "$consumer/"
 cp "$test_dir/Program.cs" "$consumer/"
@@ -48,19 +50,18 @@ while IFS= read -r source; do
   cp "$source" "$destination"
 done < <(find "$generated_source_root" -type f -name '*.g.cs' | LC_ALL=C sort)
 
-LC_ALL=C find "$consumer/baml_client" -type f -name '*.g.cs' \
-  -printf '%P\n' | LC_ALL=C sort | diff -u <(printf '%s\n' \
-    'Baml/Csv/CsvError.g.cs' \
-    'Baml/Csv/CsvErrorKind.g.cs' \
-    'Baml/Csv/CsvPosition.g.cs' \
-    'Baml/Csv/ReaderOptions.g.cs' \
-    'Baml/Csv/WriterOptions.g.cs' \
-    'Baml/Fs/DirEntry.g.cs' \
-    'Baml/Fs/MkdirOptions.g.cs' \
-    'Baml/Generated/BamlProgram.g.cs' \
-    'Baml/Glob/ScanOptions.g.cs' \
-    'Baml/Net/Datagram.g.cs' \
-    'CsharpSlice/Functions.g.cs') -
+list_generated_sources() {
+  (
+    cd "$1"
+    find . -type f -name '*.g.cs' -print \
+      | sed 's#^\./##' \
+      | LC_ALL=C sort
+  )
+}
+
+diff -u \
+  <(list_generated_sources "$generated_source_root") \
+  <(list_generated_sources "$consumer/baml_client")
 if find "$consumer" -type f \
   \( -name '*.proto' -o -name '*.baml' -o -name '*.toml' -o -name '*.bin' \) \
   | grep -q .; then

@@ -112,6 +112,9 @@ jobs:
           package_output="$product_root/packages"
           generated_output="$PWD/neutral-preparation/baml_client"
           mkdir -p "$package_output"
+          scripts/baml-csharp-release-contract verify-generated-sources \
+            --root "$generated_output" \
+            --manifest neutral-preparation/generated-sources.sha256
           baml_language/sdks/csharp/bridge_csharp/tools/pack-product.sh \
             staging \
             native-manifest.sha256 \
@@ -122,19 +125,6 @@ jobs:
             -type f -name 'baml-bridge.*.nupkg' -print)"
           test -n "$package"
           test "$(printf '%s\n' "$package" | wc -l)" -eq 1
-          LC_ALL=C find "$generated_output" -type f -name '*.g.cs' \
-            -printf '%P\n' | LC_ALL=C sort | diff -u <(printf '%s\n' \
-              'Baml/Csv/CsvError.g.cs' \
-              'Baml/Csv/CsvErrorKind.g.cs' \
-              'Baml/Csv/CsvPosition.g.cs' \
-              'Baml/Csv/ReaderOptions.g.cs' \
-              'Baml/Csv/WriterOptions.g.cs' \
-              'Baml/Fs/DirEntry.g.cs' \
-              'Baml/Fs/MkdirOptions.g.cs' \
-              'Baml/Generated/BamlProgram.g.cs' \
-              'Baml/Glob/ScanOptions.g.cs' \
-              'Baml/Net/Datagram.g.cs' \
-              'CsharpSlice/Functions.g.cs') -
           baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.PrimitivePackageConsumer/verify.sh \
             "$package" \
             linux-x64 \
@@ -160,6 +150,7 @@ jobs:
           cp native-manifest.sha256 product-output/
           cp native-provenance.json product-output/
           cp release-plan.json product-output/
+          cp neutral-preparation/generated-sources.sha256 product-output/
           cp -R "$generated_output" product-output/
           mkdir -p product-output/documentation
           cp \

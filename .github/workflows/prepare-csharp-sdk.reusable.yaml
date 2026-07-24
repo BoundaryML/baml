@@ -95,19 +95,9 @@ jobs:
             cp "$source" "$destination"
           done < <(find "$fixture/baml_client" \
             -type f -name '*.g.cs' | LC_ALL=C sort)
-          LC_ALL=C find "$generated_output" -type f -name '*.g.cs' \
-            -printf '%P\n' | LC_ALL=C sort | diff -u <(printf '%s\n' \
-              'Baml/Csv/CsvError.g.cs' \
-              'Baml/Csv/CsvErrorKind.g.cs' \
-              'Baml/Csv/CsvPosition.g.cs' \
-              'Baml/Csv/ReaderOptions.g.cs' \
-              'Baml/Csv/WriterOptions.g.cs' \
-              'Baml/Fs/DirEntry.g.cs' \
-              'Baml/Fs/MkdirOptions.g.cs' \
-              'Baml/Generated/BamlProgram.g.cs' \
-              'Baml/Glob/ScanOptions.g.cs' \
-              'Baml/Net/Datagram.g.cs' \
-              'CsharpSlice/Functions.g.cs') -
+          scripts/baml-csharp-release-contract write-generated-manifest \
+            --root "$generated_output" \
+            --manifest "$output/generated-sources.sha256"
           cp release-plan.json "$output/"
 
       - name: Exercise NuGet payload comparison policy
