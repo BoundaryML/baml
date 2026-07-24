@@ -17,15 +17,10 @@ RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
 CSHARP_VERIFIER = (
-    ROOT
-    / ".github"
-    / "workflows"
-    / "verify-csharp-product-slice.reusable.yaml"
+    ROOT / ".github" / "workflows" / "verify-csharp-product-slice.reusable.yaml"
 )
 CARGO_TESTS = ROOT / ".github" / "workflows" / "cargo-tests.reusable.yaml"
-CFFI_BUILDER = (
-    ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
-)
+CFFI_BUILDER = ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
 PACK_PRODUCT = (
     ROOT
     / "baml_language"
@@ -277,7 +272,9 @@ class CSharpReleaseContractTests(unittest.TestCase):
         )
         return path
 
-    def verify(self, root: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    def verify(
+        self, root: Path, *, check: bool = True
+    ) -> subprocess.CompletedProcess[str]:
         return self.run_tool(
             "verify-product",
             "--release-plan",
@@ -315,7 +312,10 @@ class CSharpReleaseContractTests(unittest.TestCase):
             {"duplicate_target": target},
         )
         for option in options:
-            with self.subTest(option=option), tempfile.TemporaryDirectory() as temporary:
+            with (
+                self.subTest(option=option),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
                 root = Path(temporary)
                 result = self.stage(
                     root,
@@ -373,7 +373,12 @@ class WorkflowGraphTests(unittest.TestCase):
         cffi = job_block(workflow, "build-bridge-cffi")
         verify = job_block(workflow, "verify-csharp-sdk")
         all_builds = job_block(workflow, "all-builds")
+        wrapper_builds = job_block(workflow, "wrapper-builds")
         nuget = job_block(workflow, "publish-csharp-sdk")
+        wrapper_release = job_block(workflow, "publish-wrapper-release")
+        homebrew = job_block(workflow, "publish-homebrew")
+        aur = job_block(workflow, "publish-aur")
+        wrapper_manifest = job_block(workflow, "publish-wrapper-manifest")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
@@ -389,6 +394,15 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("build-bridge-cffi", verify)
         self.assertIn("- verify-csharp-sdk", all_builds)
         self.assertIn("all-builds", nuget)
+        self.assertIn("- build-wrapper", wrapper_builds)
+        self.assertNotIn("all-builds", wrapper_builds)
+        for publisher in (wrapper_release, homebrew, aur):
+            self.assertIn("wrapper-builds", publisher)
+            self.assertNotIn("all-builds", publisher)
+        self.assertIn("publish-wrapper-release", wrapper_manifest)
+        self.assertIn("publish-homebrew", wrapper_manifest)
+        self.assertIn("publish-aur", wrapper_manifest)
+        self.assertIn("--wrapper-only", wrapper_manifest)
         for publisher in (
             "publish-pypi",
             "publish-nodejs-sdk",
@@ -403,6 +417,7 @@ class WorkflowGraphTests(unittest.TestCase):
             "publish-crates-io",
             "publish-homebrew",
             "publish-aur",
+            "publish-wrapper-manifest",
         ):
             self.assertIn(f"- {publisher}", prerequisites)
         self.assertIn(
@@ -424,7 +439,6 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("--swift-package-sha256", dry_run)
         for block in (manifest, dry_run):
             for output, variable in (
-                ("wrapper_changed", "WRAPPER_CHANGED"),
                 ("crates_io_version", "CRATES_IO_VERSION"),
                 ("nuget_version", "NUGET_VERSION"),
                 ("swiftpm_version", "SWIFTPM_VERSION"),
@@ -438,6 +452,11 @@ class WorkflowGraphTests(unittest.TestCase):
                     f"{variable}: ${{{{ needs.plan.outputs.{output} }}}}",
                     block,
                 )
+        self.assertIn(
+            "WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}",
+            dry_run,
+        )
+        self.assertNotIn("WRAPPER_CHANGED", manifest)
 
         swift_verify = job_block(workflow, "verify-swift-sdk")
         swift_smoke = job_block(workflow, "smoke-swift-release")
@@ -456,9 +475,9 @@ class WorkflowGraphTests(unittest.TestCase):
         cargo_tests = CARGO_TESTS.read_text(encoding="utf-8")
         pack = PACK_PRODUCT.read_text(encoding="utf-8")
         normalizer = NUGET_NORMALIZER.read_text(encoding="utf-8")
-        self.assertIn('404)', publisher)
+        self.assertIn("404)", publisher)
         self.assertIn('echo "publish=true"', publisher)
-        self.assertIn('200)', publisher)
+        self.assertIn("200)", publisher)
         self.assertIn('compare "$PACKAGE"', publisher)
         self.assertIn(
             "if: ${{ steps.existing.outputs.publish == 'true' }}",
@@ -472,7 +491,7 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn(".registry_versions.nuget", pack)
         self.assertIn('-p:PackageVersion="$nuget_version"', pack)
         self.assertIn('-p:InformationalVersion="$canonical_version"', pack)
-        self.assertNotIn("baml-language-version\" show", pack)
+        self.assertNotIn('baml-language-version" show', pack)
         self.assertNotIn("workflow_run_attempt", pack)
         self.assertNotIn("baml-language-version show", verifier)
         self.assertIn(".registry_versions.nuget", verifier)

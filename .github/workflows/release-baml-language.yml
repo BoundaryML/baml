@@ -700,6 +700,15 @@ jobs:
     steps:
       - run: echo "all release build jobs completed"
 
+  wrapper-builds:
+    name: All wrapper builds gate
+    runs-on: ubuntu-latest
+    needs:
+      - plan
+      - build-wrapper
+    steps:
+      - run: echo "all wrapper build jobs completed"
+
   publish-pypi:
     name: Publish Python PyPI
     needs: [plan, all-builds]
@@ -1112,7 +1121,7 @@ jobs:
 
   publish-wrapper-release:
     name: Publish wrapper release assets
-    needs: [plan, all-builds]
+    needs: [plan, wrapper-builds]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     env:
@@ -1532,6 +1541,7 @@ jobs:
       - publish-crates-io
       - publish-homebrew
       - publish-aur
+      - publish-wrapper-manifest
     if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -1551,6 +1561,7 @@ jobs:
           CRATES_IO: ${{ needs.publish-crates-io.result }}
           HOMEBREW: ${{ needs.publish-homebrew.result }}
           AUR: ${{ needs.publish-aur.result }}
+          WRAPPER_MANIFEST: ${{ needs.publish-wrapper-manifest.result }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
           WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
         run: |
@@ -1593,10 +1604,12 @@ jobs:
             require_success wrapper-assets "$WRAPPER"
             require_success Homebrew "$HOMEBREW"
             require_success AUR "$AUR"
+            require_success wrapper-manifest "$WRAPPER_MANIFEST"
           else
             require_skipped wrapper-assets "$WRAPPER"
             require_skipped Homebrew "$HOMEBREW"
             require_skipped AUR "$AUR"
+            require_skipped wrapper-manifest "$WRAPPER_MANIFEST"
           fi
 
   publish-pkg-boundaryml-com:
@@ -1650,7 +1663,6 @@ jobs:
           role-session-name: baml-language-release-${{ github.run_id }}
       - name: Generate release manifests
         env:
-          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
           CRATES_IO_VERSION: ${{ needs.plan.outputs.crates_io_version }}
           NUGET_VERSION: ${{ needs.plan.outputs.nuget_version }}
           SWIFTPM_VERSION: ${{ needs.plan.outputs.swiftpm_version }}
@@ -1662,9 +1674,6 @@ jobs:
         run: |
           set -euo pipefail
           args=()
-          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
-            args+=(--wrapper-changed)
-          fi
           (
             cd dist/csharp
             sha256sum -c product-package.sha256
@@ -1743,11 +1752,6 @@ jobs:
 
           version="${{ needs.plan.outputs.version }}"
           upload_immutable "manifests/version/$version.json" "manifest/v1/version/$version.json"
-          if [[ -f manifests/wrapper.json ]]; then
-            aws s3 cp manifests/wrapper.json "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
-              --content-type application/json \
-              --cache-control "public, max-age=60, must-revalidate"
-          fi
           aws s3 cp scripts/install.sh "s3://$PKG_BUCKET/install.sh" --content-type text/x-shellscript --cache-control "public, max-age=60, must-revalidate"
           aws s3 cp scripts/install.ps1 "s3://$PKG_BUCKET/install.ps1" --content-type text/plain --cache-control "public, max-age=60, must-revalidate"
           aws s3 cp tools/pkg_boundaryml_com/data/index.html "s3://$PKG_BUCKET/index.html" --content-type text/html --cache-control "public, max-age=300"
@@ -1898,7 +1902,7 @@ jobs:
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
-    needs: [plan, all-builds, publish-wrapper-release]
+    needs: [plan, wrapper-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: macos-14
     steps:
@@ -1950,7 +1954,7 @@ jobs:
 
   publish-aur:
     name: Publish AUR wrapper packages
-    needs: [plan, all-builds, publish-wrapper-release]
+    needs: [plan, wrapper-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -2002,6 +2006,45 @@ jobs:
             git push origin HEAD
             cd ..
           done
+
+  publish-wrapper-manifest:
+    name: Publish wrapper manifest
+    needs: [plan, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: baml-wrapper-release-${{ github.run_id }}
+      - name: Generate wrapper manifest
+        env:
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          scripts/baml-release-manifests \
+            --wrapper-only \
+            --wrapper-dir dist/wrapper \
+            --out manifests \
+            --released-at "$RELEASED_AT" \
+            --wrapper-version "$WRAPPER_VERSION"
+      - name: Upload wrapper manifest
+        run: |
+          aws s3 cp manifests/wrapper.json \
+            "s3://$PKG_BUCKET/manifest/v1/wrapper.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate"
 
   dry-run-artifacts:
     name: Generate dry-run manifests and package files

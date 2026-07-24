@@ -16,7 +16,9 @@ def _toolchain_required_targets() -> list[str]:
     set lives in one machine-readable place instead of a hand-copied list.
     Required = the `toolchain` artifact is present and not experimental."""
     contract = json.loads(
-        (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
+        (
+            Path(__file__).resolve().parent.parent / "release" / "platforms.json"
+        ).read_text()
     )
     targets = []
     for target in contract["targets"]:
@@ -63,7 +65,9 @@ def collect_artifacts(
     missing = sorted(set(TARGETS) - set(artifacts))
     extra = sorted(set(artifacts) - set(TARGETS))
     if missing or extra:
-        raise SystemExit(f"{product} artifact target mismatch missing={missing} extra={extra}")
+        raise SystemExit(
+            f"{product} artifact target mismatch missing={missing} extra={extra}"
+        )
     return artifacts
 
 
@@ -98,17 +102,31 @@ def collect_cffi_artifacts(root: Path, version: str) -> dict[str, dict[str, str]
     return artifacts
 
 
+def write_wrapper_manifest(
+    out: Path, wrapper_dir: Path, wrapper_version: str, released_at: str
+) -> None:
+    wrapper = {
+        "schema": 1,
+        "version": wrapper_version,
+        "released_at": released_at,
+        "artifacts": collect_artifacts(wrapper_dir, "baml-wrapper", wrapper_version),
+    }
+    (out / "wrapper.json").write_text(
+        json.dumps(wrapper, indent=2, sort_keys=True) + "\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--toolchain-dir", required=True, type=Path)
-    parser.add_argument("--cffi-dir", required=True, type=Path)
+    parser.add_argument("--toolchain-dir", type=Path)
+    parser.add_argument("--cffi-dir", type=Path)
     parser.add_argument("--wrapper-dir", required=True, type=Path)
-    parser.add_argument("--vsix-dir", required=True, type=Path)
+    parser.add_argument("--vsix-dir", type=Path)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--channel", required=True, choices=["canary", "nightly"])
-    parser.add_argument("--version", required=True)
+    parser.add_argument("--channel", choices=["canary", "nightly"])
+    parser.add_argument("--version")
     parser.add_argument("--released-at", required=True)
-    parser.add_argument("--pypi-version", required=True)
+    parser.add_argument("--pypi-version")
     # Registry coordinates are optional to keep this utility useful for partial
     # fixture generation; the release workflow supplies every enabled SDK only
     # after its publisher succeeds.
@@ -119,6 +137,7 @@ def main() -> None:
     parser.add_argument("--swift-package-sha256", default=None)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
+    parser.add_argument("--wrapper-only", action="store_true")
     args = parser.parse_args()
 
     for version, digest, version_flag, digest_flag in (
@@ -145,15 +164,31 @@ def main() -> None:
         ):
             raise SystemExit(f"{digest_flag} must be a lowercase SHA-256 digest")
     try:
-        released_at = dt.datetime.fromisoformat(
-            args.released_at.replace("Z", "+00:00")
-        )
+        released_at = dt.datetime.fromisoformat(args.released_at.replace("Z", "+00:00"))
     except ValueError as exc:
         raise SystemExit("--released-at must be an ISO-8601 timestamp") from exc
     if released_at.tzinfo is None or not args.released_at.endswith("Z"):
         raise SystemExit("--released-at must be a UTC timestamp ending in Z")
 
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.wrapper_only:
+        write_wrapper_manifest(
+            args.out, args.wrapper_dir, args.wrapper_version, args.released_at
+        )
+        return
+
+    required = {
+        "--toolchain-dir": args.toolchain_dir,
+        "--cffi-dir": args.cffi_dir,
+        "--vsix-dir": args.vsix_dir,
+        "--channel": args.channel,
+        "--version": args.version,
+        "--pypi-version": args.pypi_version,
+    }
+    missing = [flag for flag, value in required.items() if value is None]
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)}")
+
     (args.out / "version").mkdir(parents=True, exist_ok=True)
     released_at = args.released_at
 
@@ -165,7 +200,9 @@ def main() -> None:
         "version": args.version,
         "channel": args.channel,
         "released_at": released_at,
-        "artifacts": collect_artifacts(args.toolchain_dir, "baml-language", args.version),
+        "artifacts": collect_artifacts(
+            args.toolchain_dir, "baml-language", args.version
+        ),
         "vsix": {
             "url": artifact_url(f"baml-language-{args.version}", vsix),
             "sha256": sha256(vsix),
@@ -210,13 +247,9 @@ def main() -> None:
     (args.out / f"{args.channel}.json").write_text(text)
 
     if args.wrapper_changed:
-        wrapper = {
-            "schema": 1,
-            "version": args.wrapper_version,
-            "released_at": released_at,
-            "artifacts": collect_artifacts(args.wrapper_dir, "baml-wrapper", args.wrapper_version),
-        }
-        (args.out / "wrapper.json").write_text(json.dumps(wrapper, indent=2, sort_keys=True) + "\n")
+        write_wrapper_manifest(
+            args.out, args.wrapper_dir, args.wrapper_version, released_at
+        )
 
 
 if __name__ == "__main__":

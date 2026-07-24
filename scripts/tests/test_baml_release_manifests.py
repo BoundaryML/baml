@@ -24,6 +24,12 @@ class ReleaseManifestTests(unittest.TestCase):
             directory.mkdir()
 
         contract = json.loads(PLATFORMS.read_text(encoding="utf-8"))
+        self.required_targets = {
+            target["triple"]
+            for target in contract["targets"]
+            if target["artifacts"].get("toolchain") is not None
+            and not target["artifacts"]["toolchain"].get("experimental", False)
+        }
         for target in contract["targets"]:
             triple = target["triple"]
             suffix = ".zip" if target["os"] == "windows" else ".tar.gz"
@@ -120,6 +126,28 @@ class ReleaseManifestTests(unittest.TestCase):
                 "verified_package_sha256": digest,
             },
         )
+
+    def test_wrapper_manifest_can_be_generated_independently(self) -> None:
+        output = self.root / "wrapper-only"
+        subprocess.run(
+            [
+                str(MANIFEST_TOOL),
+                "--wrapper-only",
+                "--wrapper-dir",
+                str(self.wrapper),
+                "--out",
+                str(output),
+                "--released-at",
+                "2026-07-23T12:34:56Z",
+                "--wrapper-version",
+                "9.8.7",
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+        manifest = json.loads((output / "wrapper.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["version"], "9.8.7")
+        self.assertEqual(set(manifest["artifacts"]), self.required_targets)
 
     def test_partial_or_invalid_native_sdk_identity_fails(self) -> None:
         cases = (
