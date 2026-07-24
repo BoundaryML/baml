@@ -2,7 +2,6 @@
 
 use std::fmt;
 
-use ariadne;
 use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
@@ -149,22 +148,6 @@ impl Span {
             file_id: FileId::sentinel(),
             range: TextRange::empty(TextSize::new(0)),
         }
-    }
-}
-
-impl ariadne::Span for Span {
-    type SourceId = FileId;
-    fn source(&self) -> &Self::SourceId {
-        &self.file_id
-    }
-    fn start(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.start()
-    }
-
-    fn end(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.end()
     }
 }
 

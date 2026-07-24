@@ -47,7 +47,9 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 2: `Function` gained the borsh-serialized `docstring` field
 /// (BEP-062 `reflect.signature`).
-pub const FORMAT_VERSION: u32 = 2;
+///
+/// Version 3: diagnostic cache blobs gained `message_highlights` fields.
+pub const FORMAT_VERSION: u32 = 3;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

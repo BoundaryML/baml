@@ -27,39 +27,31 @@ function ThrowNewInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// warning: unreachable arm
-//    ╭─[ throw_throw_in_catch.baml:9:10 ]
-//    │
+// E0063
+//
+//   ⚠ unreachable arm
+//    ╭─[throw_throw_in_catch.baml:9:10]
 //  9 │     _ => throw e
-//    │          ───┬───
-//    │             ╰───── unreachable arm
-//    │
-//    │ Note: Error code: E0063
-// ───╯
-// warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:16:15 ]
-//     │
+//    ·          ───────
+//    ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:16:15]
 //  16 │     string => "handled string",
-//     │               ────────┬───────
-//     │                       ╰───────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:17:18 ]
-//     │
+//     ·               ────────────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:17:18]
 //  17 │     let other => throw other
-//     │                  ─────┬─────
-//     │                       ╰─────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:24:10 ]
-//     │
+//     ·                  ───────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[throw_throw_in_catch.baml:24:10]
 //  24 │     _ => throw "wrapped: original error"
-//     │          ───────────────┬───────────────
-//     │                         ╰───────────────── unreachable arm
-//     │
-//     │ Note: Error code: E0063
-// ────╯
+//     ·          ───────────────────────────────
+//     ╰────

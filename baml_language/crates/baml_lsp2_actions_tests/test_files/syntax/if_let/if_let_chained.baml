@@ -43,12 +43,10 @@ function IfLetChainNoElse(r: Ok | Err) -> string {
 
 //----
 //- diagnostics
-// warning: irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     ╭─[ if_let_if_let_chained.baml:38:13 ]
-//     │
+// E0112
+//
+//   ⚠ irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
+//     ╭─[if_let_if_let_chained.baml:38:13]
 //  38 │   } else if let e: Err = r {
-//     │             ─────┬────
-//     │                  ╰────── irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     │
-//     │ Note: Error code: E0112
-// ────╯
+//     ·             ──────────
+//     ╰────

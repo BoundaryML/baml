@@ -85,7 +85,7 @@ impl GrepArgs {
         if self.symbols {
             let symbols = list_symbols(&db, &source_files, &kind_filter);
             if symbols.is_empty() {
-                eprintln!("No symbols found.");
+                eprintln!("no symbols found");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -107,7 +107,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -128,7 +128,7 @@ impl GrepArgs {
         let pattern = match &self.pattern {
             Some(p) => p.as_str(),
             None => {
-                eprintln!("No pattern provided. Use --symbols to list all symbols.");
+                eprintln!("no pattern provided; use `--symbols` to list all symbols");
                 return Ok(crate::ExitCode::InvalidArgs);
             }
         };
@@ -137,7 +137,7 @@ impl GrepArgs {
         if self.def {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("No symbol found: {pattern}");
+                eprintln!("no symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -149,7 +149,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -169,7 +169,7 @@ impl GrepArgs {
         if self.refs {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("No symbol found: {pattern}");
+                eprintln!("no symbol found: {pattern}");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -196,7 +196,7 @@ impl GrepArgs {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&json_output)
-                        .context("Failed to serialize output as JSON")?
+                        .context("failed to serialize output as JSON")?
                 );
                 return Ok(crate::ExitCode::Success);
             }
@@ -243,7 +243,7 @@ impl GrepArgs {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&json_output)
-                    .context("Failed to serialize output as JSON")?
+                    .context("failed to serialize output as JSON")?
             );
             return Ok(crate::ExitCode::Success);
         }
@@ -252,7 +252,7 @@ impl GrepArgs {
             GrepMode::Semantic => {
                 if result.descriptions.is_empty() {
                     // Symbol exists but was filtered out by --kind.
-                    eprintln!("No symbol found matching pattern and kind filter: {pattern}");
+                    eprintln!("no symbol found matching pattern and kind filter: {pattern}");
                     return Ok(crate::ExitCode::Other);
                 }
                 let history: std::collections::HashSet<&str> =
@@ -267,7 +267,7 @@ impl GrepArgs {
             }
             GrepMode::TextSearch => {
                 if result.text_matches.is_empty() {
-                    eprintln!("No matches found for: {pattern}");
+                    eprintln!("no matches found for: {pattern}");
                     return Ok(crate::ExitCode::Other);
                 }
                 render_text_matches(&db, &result.text_matches, &from);
@@ -386,7 +386,7 @@ pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
             "field" => Ok(DefinitionKind::Field),
             "variant" => Ok(DefinitionKind::Variant),
             other => anyhow::bail!(
-                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
+                "unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
             ),
         })
         .collect()

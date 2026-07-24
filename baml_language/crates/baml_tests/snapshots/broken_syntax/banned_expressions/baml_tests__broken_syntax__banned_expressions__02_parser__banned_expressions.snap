@@ -479,12 +479,11 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-error: Expected expression, found let
-   ╭─[ banned_expressions.baml:3:11 ]
-   │
+E0010
+
+  × unexpected token
+   ╭─[banned_expressions.baml:3:11]
  3 │   let a = let b = 42
-   │           ─┬─  
-   │            ╰─── Expected expression, found let
-   │ 
-   │ Note: Error code: E0010
-───╯
+   ·           ─┬─
+   ·            ╰── expected `expression`, found `let`
+   ╰────

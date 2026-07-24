@@ -148,7 +148,6 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
-ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
@@ -177,6 +176,8 @@ cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
+miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
+owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
 # `CachePadded` for the profiling ring's cache-line-aligned field groups
 # (bex_events::prof, plan D3).

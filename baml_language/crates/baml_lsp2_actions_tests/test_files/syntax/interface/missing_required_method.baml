@@ -10,12 +10,10 @@ class IncompleteAnimal {
 
 //----
 //- diagnostics
-// error: missing implementation of method `speak` required by interface `Animal`
-//    ╭─[ interface_missing_required_method.baml:8:14 ]
-//    │
+// E0113
+//
+//   × missing implementation of method `speak` required by interface `Animal`
+//    ╭─[interface_missing_required_method.baml:8:14]
 //  8 │   implements Animal {}
-//    │              ───┬──
-//    │                 ╰──── missing implementation of method `speak` required by interface `Animal`
-//    │
-//    │ Note: Error code: E0113
-// ───╯
+//    ·              ──────
+//    ╰────

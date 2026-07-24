@@ -60,7 +60,7 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
     match location {
         SourceLocation::Project { root, files } => {
             if files.is_empty() {
-                anyhow::bail!("No .baml files found in {}", root.display());
+                anyhow::bail!("no `.baml` files found in {}", root.display());
             }
             Ok(vec![root])
         }
@@ -80,7 +80,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
     }
 
     anyhow::bail!(
-        "Could not find packaged playground assets. For local debugging, run \
+        "could not find packaged playground assets. For local debugging, run \
          `pnpm --filter app-vscode-webview dev -- --host 127.0.0.1 --port 4000` \
          and set `BAML_PLAYGROUND_DEV_PORT=4000`, or set `BAML_PLAYGROUND_DIR` \
          to a built app-vscode-webview/dist directory."
@@ -88,7 +88,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
 }
 
 fn discover_playground_dir() -> Result<Option<PathBuf>> {
-    let exe = std::env::current_exe().context("Could not resolve current executable")?;
+    let exe = std::env::current_exe().context("could not resolve current executable")?;
     let Some(bin_dir) = exe.parent() else {
         return Ok(None);
     };

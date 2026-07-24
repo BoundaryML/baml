@@ -81,48 +81,38 @@ template_string BadCall4 #"
 
 //----
 //- diagnostics
-// warning: Function 'WithParams' expects 1 arguments, but got 2
-//    ╭─[ template_string_bad_calls.baml:6:6 ]
-//    │
+// E0080
+//
+//   ⚠ Function 'WithParams' expects 1 arguments, but got 2
+//    ╭─[template_string_bad_calls.baml:6:6]
 //  6 │   {{ WithParams(a=2, b=2) }}
-//    │      ──────────┬─────────
-//    │                ╰─────────── Function 'WithParams' expects 1 arguments, but got 2
-//    │
-//    │ Note: Error code: E0080
-// ───╯
-// warning: Function 'WithParams' expects argument 'a' to be of type int, but got literal["a"]
-//     ╭─[ template_string_bad_calls.baml:10:6 ]
-//     │
+//    ·      ────────────────────
+//    ╰────
+// E0083
+//
+//   ⚠ Function 'WithParams' expects argument 'a' to be of type int, but got literal["a"]
+//     ╭─[template_string_bad_calls.baml:10:6]
 //  10 │   {{ WithParams("a") }}
-//     │      ───────┬───────
-//     │             ╰───────── Function 'WithParams' expects argument 'a' to be of type int, but got literal["a"]
-//     │
-//     │ Note: Error code: E0083
-// ────╯
-// warning: Function 'WithParams' expects 1 arguments, but got 0
-//     ╭─[ template_string_bad_calls.baml:14:6 ]
-//     │
+//     ·      ───────────────
+//     ╰────
+// E0080
+//
+//   ⚠ Function 'WithParams' expects 1 arguments, but got 0
+//     ╭─[template_string_bad_calls.baml:14:6]
 //  14 │   {{ WithParams() }}
-//     │      ──────┬─────
-//     │            ╰─────── Function 'WithParams' expects 1 arguments, but got 0
-//     │
-//     │ Note: Error code: E0080
-// ────╯
-// warning: Variable `Random` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
-//     ╭─[ template_string_bad_calls.baml:18:6 ]
-//     │
+//     ·      ────────────
+//     ╰────
+// E0070
+//
+//   ⚠ Variable `Random` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
+//     ╭─[template_string_bad_calls.baml:18:6]
 //  18 │   {{ Random(2) }}
-//     │      ───┬──
-//     │         ╰──── Variable `Random` does not exist. Did you mean one of these: `_`, `baml`, `ctx`?
-//     │
-//     │ Note: Error code: E0070
-// ────╯
-// warning: 'Random' is undefined, expected function
-//     ╭─[ template_string_bad_calls.baml:18:6 ]
-//     │
+//     ·      ──────
+//     ╰────
+// E0073
+//
+//   ⚠ 'Random' is undefined, expected function
+//     ╭─[template_string_bad_calls.baml:18:6]
 //  18 │   {{ Random(2) }}
-//     │      ────┬────
-//     │          ╰────── 'Random' is undefined, expected function
-//     │
-//     │ Note: Error code: E0073
-// ────╯
+//     ·      ─────────
+//     ╰────

@@ -54,6 +54,8 @@ jobs:
       proto: ${{ steps.check_proto.outputs.changed }}
       # Flag for profiling-ring changes (bex_events) - triggers loom + miri
       prof: ${{ steps.check_prof.outputs.changed }}
+      # Flag for inputs that can change the shipping bridge_cffi binaries
+      bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
       # Flag that is raised when perf benchmarks (CodSpeed) should run: always
       # after merge (push to main/canary) and on manual dispatch; on PRs only
       # when the PR title/body or a commit message opts in.
@@ -83,12 +85,14 @@ jobs:
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
             ':scripts/baml-package-manager-artifacts' \
+            ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
             ':packaging/aur/**' \
             ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
             ':.github/workflows/build2-web-sdk.reusable.yaml' \
@@ -285,6 +289,28 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if bridge_cffi release inputs changed
+        id: check_bridge_cffi_release
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':.github/workflows/ci.yaml' \
+            ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
+            ':.github/actions/setup-rust/**' \
+            ':scripts/baml-bridge-cffi-hygiene' \
+            ':release/platforms.json' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+            ':baml_language/Cross.toml' \
+            ':baml_language/rust-toolchain.toml' \
+            ':baml_language/crates/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Decide whether perf benchmarks (CodSpeed) should run for this event.
       # Policy: benchmarks run AFTER MERGE (push to main/canary) only when the
       # merge actually touched baml_language/, and on manual dispatch. On PRs
@@ -428,6 +454,9 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
+      - name: "Test release contracts and workflow graph"
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
       - name: "Validate canary/nightly version computation"
         env:
           BAML_LANGUAGE_VERSION_DATE: "20260522"
@@ -458,12 +487,49 @@ jobs:
 
           scripts/baml-language-version plan --channel nightly --out nightly-release-plan.json
           scripts/baml-language-version stamp --plan nightly-release-plan.json
+          nuget="$(jq -r .registry_versions.nuget nightly-release-plan.json)"
+          maven="$(jq -r .registry_versions.maven nightly-release-plan.json)"
+          gradle_plugin="$(jq -r \
+            .registry_versions.gradle_plugin nightly-release-plan.json)"
+          swiftpm="$(jq -r .registry_versions.swiftpm nightly-release-plan.json)"
           node_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript/package.json)"
           web_npm="$(jq -r .version baml_language/sdks/typescript/bridge_typescript_web/package.json)"
+          csharp_nuget="$(sed -n \
+            's#^    <Version>\([^<]*\)</Version>$#\1#p' \
+            baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
+          rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
+            baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_runtime="$(sed -n \
+            's/^const DefaultRuntimeVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
+          vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
           test "$node_npm" = "$nightly"
           test "$web_npm" = "$node_npm"
+          test "$nuget" = "$nightly"
+          test "$csharp_nuget" = "$nuget"
+          test "$maven" = "$nightly"
+          test "$gradle_plugin" = "$nightly"
+          test "$swiftpm" = "$nightly"
+          test "$rust_crate" = "$nightly"
+          test "$go_runtime" = "$nightly"
+          test "$vsix" = "$nightly"
+          for shipping_version in \
+            "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_runtime" "$vsix"; do
+            test "$shipping_version" != "$canary"
+          done
 
   # Call reusable workflows
+  bridge-cffi-release:
+    name: "Release bridge_cffi artifacts"
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.bridge_cffi_release == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/canary') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    with:
+      source_sha: ${{ github.sha }}
+
   cargo-tests:
     name: "Cargo Tests"
     needs: determine_changes
@@ -1070,6 +1136,7 @@ jobs:
     needs:
       - prek
       - release-metadata
+      - bridge-cffi-release
       - cargo-tests
       - wasm-pack-tests
       - docs
@@ -1097,6 +1164,7 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1123,6 +1191,7 @@ jobs:
     needs:
       - prek
       - release-metadata
+      - bridge-cffi-release
       - cargo-tests
       - wasm-pack-tests
       - docs
@@ -1154,4 +1223,5 @@ jobs:
             --ref canary \
             -f channel=auto \
             -f dry_run=false \
-            -f source_sha="$GITHUB_SHA"
+            -f source_sha="$GITHUB_SHA" \
+            -f source_ci_run_id="$GITHUB_RUN_ID"

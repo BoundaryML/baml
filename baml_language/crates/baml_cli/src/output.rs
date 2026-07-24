@@ -128,7 +128,7 @@ const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
         hyperlinks: false,
     },
     diagnostics: DiagnosticPolicy {
-        format: DiagnosticFormat::Ariadne,
+        format: DiagnosticFormat::Human,
         show_error_codes: true,
     },
 };
@@ -179,7 +179,7 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
     }
     if let Some(format) = args.diagnostic_format {
         policy.diagnostics.format = match format {
-            DiagnosticFormatChoice::Human => DiagnosticFormat::Ariadne,
+            DiagnosticFormatChoice::Human => DiagnosticFormat::Human,
             DiagnosticFormatChoice::Agent => DiagnosticFormat::Agent,
             DiagnosticFormatChoice::Concise => DiagnosticFormat::Concise,
         };
@@ -215,7 +215,7 @@ impl OutputPreset {
                     hyperlinks: signals.stderr_is_terminal,
                 },
                 diagnostics: DiagnosticPolicy {
-                    format: DiagnosticFormat::Ariadne,
+                    format: DiagnosticFormat::Human,
                     show_error_codes: true,
                 },
             },
@@ -335,7 +335,7 @@ mod tests {
         assert!(policy.stderr.color);
         assert!(!policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
-        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Ariadne);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
         assert!(policy.stderr.color);
         assert!(policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
-        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Ariadne);
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
     }
 
     #[test]

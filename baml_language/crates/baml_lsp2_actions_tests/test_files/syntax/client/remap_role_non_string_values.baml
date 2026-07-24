@@ -18,14 +18,19 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// error: type mismatch: expected string, got 123
-//     ╭─[ client_remap_role_non_string_values.baml:1:1 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[client_remap_role_non_string_values.baml:1:1]
 //   1 │ ╭─▶ client<llm> MyClient {
-//     ┆ ┆
+//   2 │ │     provider openai
+//   3 │ │     options {
+//   4 │ │       model "gpt-4o"
+//   5 │ │       remap_roles {
+//   6 │ │         user "human"
+//   7 │ │         assistant 123
+//   8 │ │       }
+//   9 │ │     }
 //  10 │ ├─▶ }
-//     │ │
-//     │ ╰─────── type mismatch: expected string, got 123
-//     │
-//     │     Note: Error code: E0001
-// ────╯
+//     · ╰──── expected `string`, found `123`
+//     ╰────

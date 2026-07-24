@@ -24,48 +24,38 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// warning: unreachable arm
-//    ╭─[ catch_chained_catch.baml:8:15 ]
-//    │
+// E0063
+//
+//   ⚠ unreachable arm
+//    ╭─[catch_chained_catch.baml:8:15]
 //  8 │     string => "string error"
-//    │               ───────┬──────  
-//    │                      ╰──────── unreachable arm
-//    │ 
-//    │ Note: Error code: E0063
-// ───╯
-// warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:10:12 ]
-//     │
+//    ·               ──────────────
+//    ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_chained_catch.baml:10:12]
 //  10 │     int => "int error"
-//     │            ─────┬─────  
-//     │                 ╰─────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:17:15 ]
-//     │
+//     ·            ───────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_chained_catch.baml:17:15]
 //  17 │     string => "first"
-//     │               ───┬───  
-//     │                  ╰───── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:19:12 ]
-//     │
+//     ·               ───────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_chained_catch.baml:19:12]
 //  19 │     int => "second"
-//     │            ────┬───  
-//     │                ╰───── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// warning: unreachable arm
-//     ╭─[ catch_chained_catch.baml:21:10 ]
-//     │
+//     ·            ────────
+//     ╰────
+// E0063
+//
+//   ⚠ unreachable arm
+//     ╭─[catch_chained_catch.baml:21:10]
 //  21 │     _ => "third"
-//     │          ───┬───  
-//     │             ╰───── unreachable arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+//     ·          ───────
+//     ╰────

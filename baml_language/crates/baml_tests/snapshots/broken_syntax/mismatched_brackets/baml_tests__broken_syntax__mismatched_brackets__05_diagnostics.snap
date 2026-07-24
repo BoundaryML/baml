@@ -2,162 +2,119 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [parse] error: Expected ')', found '}'
-    ╭─[ main.baml:13:1 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:13:1]
  13 │ }
-    │ ┬  
-    │ ╰── Expected ')', found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `')'`, found `'}'`
+    ╰────
 
-  [parse] error: Expected expression, found ')'
-    ╭─[ main.baml:17:16 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:17:16]
  17 │     f(1, "two"))
-    │                ┬  
-    │                ╰── Expected expression, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                ┬
+    ·                ╰── expected `expression`, found `')'`
+    ╰────
 
-  [parse] error: Expected expression, found ','
-    ╭─[ main.baml:22:10 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:22:10]
  22 │     f<int, string(1, "two")
-    │          ┬  
-    │          ╰── Expected expression, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ┬
+    ·          ╰── expected `expression`, found `','`
+    ╰────
 
-  [parse] error: Expected expression, found ','
-    ╭─[ main.baml:27:10 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:27:10]
  27 │     f<int, string>>(1, "two")
-    │          ┬  
-    │          ╰── Expected expression, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ┬
+    ·          ╰── expected `expression`, found `','`
+    ╰────
 
-  [parse] error: Expected ')', found ','
-    ╭─[ main.baml:27:22 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:27:22]
  27 │     f<int, string>>(1, "two")
-    │                      ┬  
-    │                      ╰── Expected ')', found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                      ┬
+    ·                      ╰── expected `')'`, found `','`
+    ╰────
 
-  [parse] error: Expected expression, found ','
-    ╭─[ main.baml:27:22 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:27:29]
  27 │     f<int, string>>(1, "two")
-    │                      ┬  
-    │                      ╰── Expected expression, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                             ┬
+    ·                             ╰── expected `expression`, found `')'`
+    ╰────
 
-  [parse] error: Expected expression, found ')'
-    ╭─[ main.baml:27:29 ]
-    │
- 27 │     f<int, string>>(1, "two")
-    │                             ┬  
-    │                             ╰── Expected expression, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] error: Expected ')', found ']'
-    ╭─[ main.baml:32:11 ]
-    │
+  × unexpected token
+    ╭─[main.baml:32:11]
  32 │     (1 + 2]
-    │           ┬  
-    │           ╰── Expected ')', found ']'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·           ┬
+    ·           ╰── expected `')'`, found `']'`
+    ╰────
 
-  [parse] error: Expected expression, found ']'
-    ╭─[ main.baml:32:11 ]
-    │
- 32 │     (1 + 2]
-    │           ┬  
-    │           ╰── Expected expression, found ']'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] error: Expected expression, found '}'
-    ╭─[ main.baml:38:1 ]
-    │
+  × unexpected token
+    ╭─[main.baml:38:1]
  38 │ }
-    │ ┬  
-    │ ╰── Expected expression, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `expression`, found `'}'`
+    ╰────
 
-  [parse] error: Expected expression, found function
-    ╭─[ main.baml:41:1 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:41:1]
  41 │ function NestedUnclosed() -> string {
-    │ ────┬───  
-    │     ╰───── Expected expression, found function
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ────┬───
+    ·     ╰── expected `expression`, found `function`
+    ╰────
 
-  [parse] error: Expected expression, found '->'
-    ╭─[ main.baml:41:27 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:41:27]
  41 │ function NestedUnclosed() -> string {
-    │                           ─┬  
-    │                            ╰── Expected expression, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·                           ─┬
+    ·                            ╰── expected `expression`, found `'->'`
+    ╰────
 
-  [parse] error: Expected expression, found ','
-    ╭─[ main.baml:42:10 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:42:10]
  42 │     f<int, string(1, "two"
-    │          ┬  
-    │          ╰── Expected expression, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·          ┬
+    ·          ╰── expected `expression`, found `','`
+    ╰────
 
-  [parse] error: Expected ')', found '}'
-    ╭─[ main.baml:43:1 ]
-    │
- 43 │ }
-    │ ┬  
-    │ ╰── Expected ')', found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+  [parse] E0010
 
-  [parse] error: Expected ']', found EOF
-    ╭─[ main.baml:43:2 ]
-    │
+  × unexpected token
+    ╭─[main.baml:43:1]
  43 │ }
-    │  │ 
-    │  ╰─ Expected ']', found EOF
-    │ 
-    │ Note: Error code: E0010
-────╯
+    · ┬
+    · ╰── expected `')'`, found `'}'`
+    ╰────
 
-  [parse] error: Expected '}', found EOF
-    ╭─[ main.baml:43:2 ]
-    │
+  [parse] E0010
+
+  × unexpected token
+    ╭─[main.baml:43:2]
  43 │ }
-    │  │ 
-    │  ╰─ Expected '}', found EOF
-    │ 
-    │ Note: Error code: E0010
-────╯
+    ·  ▲
+    ·  ╰── expected `']'`, found `EOF`
+    ╰────

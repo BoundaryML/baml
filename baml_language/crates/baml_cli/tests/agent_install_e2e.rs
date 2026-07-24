@@ -156,7 +156,7 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
     assert!(project.join("baml.toml").is_file());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("No baml skill is installed, set it up with baml agent install."),
+        stderr.contains("no baml skill is installed; set it up with `baml agent install`"),
         "{stderr}"
     );
     // A generator section makes the step-3 `generate` genuinely succeed, so

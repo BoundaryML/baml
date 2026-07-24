@@ -470,7 +470,7 @@ fn run_unformatted_project_keeps_format_warning() {
     assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Code is unformatted"),
+        stderr.contains("code is unformatted"),
         "Expected format warning, got:\n{stderr}"
     );
     common::assert_no_compile_file_status(&stderr);

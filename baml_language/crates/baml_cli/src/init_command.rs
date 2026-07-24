@@ -44,9 +44,9 @@ impl InitArgs {
         // refuse if `baml.toml` already exists so we never clobber a
         // project the user already initialized.
         std::fs::create_dir_all(&self.path)
-            .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
+            .with_context(|| format!("failed to create directory {}", self.path.display()))?;
         let canonical = std::fs::canonicalize(&self.path)
-            .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
+            .with_context(|| format!("failed to canonicalize path {}", self.path.display()))?;
         if canonical.join("baml.toml").exists() {
             anyhow::bail!(
                 "`{}` already exists. Refusing to overwrite an existing project.",
@@ -87,9 +87,9 @@ impl NewArgs {
             );
         }
         std::fs::create_dir(&self.path)
-            .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
+            .with_context(|| format!("failed to create directory {}", self.path.display()))?;
         let canonical = std::fs::canonicalize(&self.path)
-            .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
+            .with_context(|| format!("failed to canonicalize path {}", self.path.display()))?;
         scaffold(&canonical, self.name.as_deref(), reporter, "Created")
     }
 }
@@ -113,17 +113,17 @@ fn scaffold(
     let toml_path = canonical.join("baml.toml");
     reporter.spin("Creating", format!("baml.toml ({name})"));
     std::fs::write(&toml_path, render_baml_toml(&name))
-        .with_context(|| format!("Failed to write {}", toml_path.display()))?;
+        .with_context(|| format!("failed to write {}", toml_path.display()))?;
 
     let src_dir = canonical.join("baml_src");
     std::fs::create_dir_all(&src_dir)
-        .with_context(|| format!("Failed to create {}", src_dir.display()))?;
+        .with_context(|| format!("failed to create {}", src_dir.display()))?;
 
     let main_path = src_dir.join("main.baml");
     if !main_path.exists() {
         reporter.spin("Creating", "baml_src/main.baml");
         std::fs::write(&main_path, STARTER_MAIN_BAML)
-            .with_context(|| format!("Failed to write {}", main_path.display()))?;
+            .with_context(|| format!("failed to write {}", main_path.display()))?;
     }
 
     reporter.finish(verb, format!("{} ({name})", canonical.display()));
@@ -147,7 +147,7 @@ fn default_project_name(canonical: &Path) -> Option<String> {
 /// (or any control char) in the name produces an unparseable manifest.
 fn validate_project_name(name: &str) -> Result<()> {
     if name.is_empty() {
-        anyhow::bail!("Project name cannot be empty.");
+        anyhow::bail!("project name cannot be empty");
     }
     let bad: Vec<char> = name
         .chars()
@@ -155,7 +155,7 @@ fn validate_project_name(name: &str) -> Result<()> {
         .collect();
     if !bad.is_empty() {
         anyhow::bail!(
-            "Project name `{name}` contains invalid character(s) {bad:?}. \
+            "project name `{name}` contains invalid character(s) {bad:?}. \
              Use ASCII letters, digits, `-`, `_`, or `.`."
         );
     }

@@ -2,12 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got int
-     ╭─[ edge_cases.baml:132:5 ]
-     │
+  [type] E0001
+
+  × mismatched types
+     ╭─[edge_cases.baml:132:5]
  132 │     x
-     │     ┬  
-     │     ╰── type mismatch: expected string, got int
-     │ 
-     │ Note: Error code: E0001
-─────╯
+     ·     ┬
+     ·     ╰── expected `string`, found `int`
+     ╰────

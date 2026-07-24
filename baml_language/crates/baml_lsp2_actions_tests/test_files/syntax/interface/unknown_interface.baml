@@ -6,12 +6,10 @@ class Ghost {
 
 //----
 //- diagnostics
-// error: unresolved type: DoesNotExist
-//    ╭─[ interface_unknown_interface.baml:4:14 ]
-//    │
+// E0002
+//
+//   × unresolved type: DoesNotExist
+//    ╭─[interface_unknown_interface.baml:4:14]
 //  4 │   implements DoesNotExist {}
-//    │              ──────┬─────
-//    │                    ╰─────── unresolved type: DoesNotExist
-//    │
-//    │ Note: Error code: E0002
-// ───╯
+//    ·              ────────────
+//    ╰────

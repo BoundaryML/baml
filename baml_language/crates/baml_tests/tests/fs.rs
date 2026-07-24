@@ -21,7 +21,7 @@ fn tmp(files: IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
 }
 
 #[tokio::test]
-#[should_panic(expected = "type mismatch")]
+#[should_panic(expected = "mismatched types")]
 async fn fs_file_invalid_mode() {
     let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
 

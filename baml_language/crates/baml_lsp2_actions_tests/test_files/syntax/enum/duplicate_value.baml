@@ -14,16 +14,16 @@ enum Test {
 
 //----
 //- diagnostics
-// error: Duplicate variant `Test.ONE`
-//    ╭─[ enum_duplicate_value.baml:4:5 ]
-//    │
+// E0012
+//
+//   × duplicate variant `Test.ONE`
+//    ╭─[enum_duplicate_value.baml:2:5]
 //  2 │     ONE
-//    │     ─┬─  
-//    │      ╰─── first defined as variant here
-//    │ 
+//    ·     ─┬─
+//    ·      ╰── first defined as variant here
+//    ╰────
+//    ╭─[enum_duplicate_value.baml:4:5]
 //  4 │     ONE
-//    │     ─┬─  
-//    │      ╰─── duplicate variant definition
-//    │ 
-//    │ Note: Error code: E0012
-// ───╯
+//    ·     ─┬─
+//    ·      ╰── duplicate variant definition
+//    ╰────

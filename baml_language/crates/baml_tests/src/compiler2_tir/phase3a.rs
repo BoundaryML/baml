@@ -561,7 +561,10 @@ testset "invoice pipeline" {
     let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
     let unresolved = diagnostics
         .iter()
-        .filter(|diag| diag.message.contains("unresolved name: ReviewInvoice"))
+        .filter(|diag| {
+            diag.id == baml_compiler_diagnostics::DiagnosticId::UnknownVariable
+                && diag.message.contains("`ReviewInvoice`")
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         unresolved.len(),

@@ -50,7 +50,7 @@ impl<'db> NameConflict<'db> {
             .iter()
             .all(|e| e.definition.source_kind(db) == first_kind);
         let message = if kinds_match {
-            format!("Duplicate {} `{}`", first_kind, self.name)
+            format!("duplicate {} `{}`", first_kind, self.name)
         } else {
             let kind_list: Vec<&str> = self
                 .entries
@@ -58,7 +58,7 @@ impl<'db> NameConflict<'db> {
                 .map(|e| e.definition.source_kind_name(db))
                 .collect();
             format!(
-                "Name `{}` defined {} times as: {}",
+                "name `{}` defined {} times as: {}",
                 self.name,
                 self.entries.len(),
                 kind_list.join(", ")

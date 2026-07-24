@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "$#" -ne 5 ]]; then
-  echo "usage: pack-product.sh <staged-native-root> <native-sha256-manifest> <native-provenance.tsv> <release-plan.json> <output-directory>" >&2
+  echo "usage: pack-product.sh <staged-native-root> <native-sha256-manifest> <native-provenance.json> <release-plan.json> <output-directory>" >&2
   exit 2
 fi
 
@@ -12,6 +12,8 @@ project="$tool_dir/../src/Baml.Bridge.csproj"
 target_template="$tool_dir/../src/baml-bridge.targets.in"
 normalizer="$tool_dir/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj"
 platforms="$repository_root/release/platforms.json"
+release_contract="$repository_root/scripts/baml-csharp-release-contract"
+size_policy="$repository_root/release/csharp-package-size-policy.json"
 expected_exports="$tool_dir/../tests/expected-bridge-cffi-exports.txt"
 native_root="$(cd "$1" && pwd -P)"
 native_manifest="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"
@@ -19,16 +21,19 @@ native_provenance="$(cd "$(dirname "$3")" && pwd -P)/$(basename "$3")"
 release_plan="$(cd "$(dirname "$4")" && pwd -P)/$(basename "$4")"
 output_directory="$5"
 
-for command in jq llvm-nm llvm-objdump llvm-readobj sha256sum strings unzip; do
+for command in jq llvm-nm llvm-objdump llvm-readobj sha256sum unzip; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "required package inspection command is unavailable: $command" >&2
     exit 1
   fi
 done
 
-version="$(jq -er '.canonical_version | select(type == "string" and length > 0)' \
+canonical_version="$(jq -er \
+  '.canonical_version | select(type == "string" and length > 0)' \
   "$release_plan")"
-test "$version" = "$("$repository_root/scripts/baml-language-version" show)"
+nuget_version="$(jq -er \
+  '.registry_versions.nuget | select(type == "string" and length > 0)' \
+  "$release_plan")"
 expected_native_source_sha="$(git -C "$repository_root" rev-parse HEAD)"
 [[ "$expected_native_source_sha" =~ ^[0-9a-f]{40}$ ]]
 
@@ -37,7 +42,7 @@ if [[ "$output_directory" != /* ]]; then
 fi
 mkdir -p "$output_directory"
 output_directory="$(cd "$output_directory" && pwd -P)"
-output_package="$output_directory/baml-bridge.$version.nupkg"
+output_package="$output_directory/baml-bridge.$nuget_version.nupkg"
 if [[ -e "$output_package" ]]; then
   echo "package output already exists: $output_package" >&2
   exit 1
@@ -56,49 +61,45 @@ jq -r '
 find "$native_root/runtimes" -type f -printf 'runtimes/%P\n' \
   | LC_ALL=C sort > "$actual_runtime_entries"
 diff -u "$expected_runtime_entries" "$actual_runtime_entries"
-test "$(wc -l < "$actual_runtime_entries")" -eq 8
+expected_native_count="$(wc -l < "$expected_runtime_entries")"
+test "$expected_native_count" -gt 0
+test "$(wc -l < "$actual_runtime_entries")" -eq "$expected_native_count"
 awk '{print $2}' "$native_manifest" | LC_ALL=C sort \
   > "$work/manifest-runtime-entries.txt"
 diff -u "$expected_runtime_entries" "$work/manifest-runtime-entries.txt"
 (cd "$native_root" && sha256sum -c "$native_manifest")
 
-if ! awk -F '\t' '
-  NF != 8 { exit 1 }
-  $1 !~ /^[0-9a-f]{64}$/ { exit 1 }
-  $2 !~ /^[0-9a-f]{40}$/ { exit 1 }
-  $4 !~ /^[1-9][0-9]*$/ { exit 1 }
-  $5 !~ /^[1-9][0-9]*$/ { exit 1 }
-' "$native_provenance"; then
-  echo "native provenance must contain eight valid tab-separated identity rows" >&2
-  exit 1
-fi
-test "$(wc -l < "$native_provenance")" -eq 8
-awk -F '\t' 'BEGIN { OFS = "\t" } { print $4, $5 }' \
-  "$native_provenance" | LC_ALL=C sort -u \
-  > "$work/provenance-run-attempts.tsv"
-if [[ "$(wc -l < "$work/provenance-run-attempts.tsv")" -ne 1 ]]; then
-  echo "all native inputs must come from one workflow run and attempt" >&2
-  exit 1
-fi
+"$release_contract" verify-product \
+  --platforms "$platforms" \
+  --release-plan "$release_plan" \
+  --source-sha "$expected_native_source_sha" \
+  --provenance "$native_provenance" \
+  --manifest "$native_manifest" \
+  --native-root "$native_root"
+
+native_size_regression_percent="$(jq -er \
+  '.native_assets.max_regression_percent
+   | select(type == "number" and . >= 0)' "$size_policy")"
 jq -r '
   .targets[]
-  | select(.artifacts.csharp != null and .artifacts.cffi != null)
+  | select(.artifacts.csharp != null)
   | [.triple,
-     .artifacts.cffi.asset,
      "runtimes/\(.artifacts.csharp.rid)/native/\(.artifacts.csharp.native_asset)"]
-  | @tsv' "$platforms" | LC_ALL=C sort \
-  > "$work/expected-provenance-shape.tsv"
-awk -F '\t' 'BEGIN { OFS = "\t" } { print $6, $7, $8 }' \
-  "$native_provenance" | LC_ALL=C sort \
-  > "$work/actual-provenance-shape.tsv"
-diff -u "$work/expected-provenance-shape.tsv" \
-  "$work/actual-provenance-shape.tsv"
-while IFS=$'\t' read -r digest source_sha release_version \
-  workflow_run_id workflow_run_attempt target producer_asset runtime_path; do
-  test "$source_sha" = "$expected_native_source_sha"
-  test "$release_version" = "$version"
-  grep -Fxq "$digest  $runtime_path" "$native_manifest"
-done < "$native_provenance"
+  | @tsv' "$platforms" |
+while IFS=$'\t' read -r target runtime_path; do
+  baseline="$(jq -er --arg target "$target" \
+    '.native_assets.baseline_bytes_by_target[$target]
+     | select(type == "number" and . > 0)' "$size_policy")"
+  actual="$(stat -c %s "$native_root/$runtime_path")"
+  limit="$((baseline * (100 + native_size_regression_percent) / 100))"
+  if ((actual > limit)); then
+    echo "native size regression exceeds policy: $target actual=$actual limit=$limit baseline=$baseline" >&2
+    exit 1
+  fi
+done
+policy_target_count="$(jq \
+  '.native_assets.baseline_bytes_by_target | length' "$size_policy")"
+test "$policy_target_count" -eq "$expected_native_count"
 
 inspection_root="$work/native-inspection"
 mkdir -p "$inspection_root"
@@ -227,23 +228,9 @@ while IFS=$'\t' read -r target os arch libc rid canonical; do
   esac
   diff -u "$expected_exports" "$exports"
 
-  strings_file="$inspection_root/$rid.strings.txt"
-  strings "$native" > "$strings_file"
-  if [[ "$os" == "windows" ]]; then
-    strings -el "$native" >> "$strings_file"
-  fi
-  if grep -Eiq \
-    '(/home/runner/(work|\.rustup)/|/Users/runner/(work|\.rustup)/|/github/workspace/|/root/(dev|\.rustup)/|/usr/local/rustup/|/builds/|[A-Z]:\\(Users|a)\\)|(^|[[:space:]=])(/project/|/cargo/|/rust/(toolchains|downloads|tmp)/|/rust/settings\.toml)' \
-    "$strings_file"; then
-    echo "shipping native contains an absolute build-tree path: $rid" >&2
-    exit 1
-  fi
-  if grep -Eiq \
-    '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' \
-    "$strings_file"; then
-    echo "shipping native contains credential-shaped material: $rid" >&2
-    exit 1
-  fi
+  "$repository_root/scripts/baml-bridge-cffi-hygiene" verify \
+    --native "$native" \
+    --target "$target"
 done
 
 supported_rids="$(jq -r '
@@ -264,15 +251,18 @@ dotnet build "$normalizer" --configuration Release --nologo \
   -p:NuGetAudit=false
 dotnet build "$project" --configuration Release --nologo \
   -p:NuGetAudit=false \
-  -p:Version="$version" \
-  -p:PackageVersion="$version"
+  -p:Version="$canonical_version" \
+  -p:InformationalVersion="$canonical_version" \
+  -p:PackageVersion="$nuget_version"
 for raw in raw-a raw-b; do
   dotnet pack "$project" --configuration Release --nologo \
     --no-build --no-restore \
     --output "$work/$raw" \
     -p:NuGetAudit=false \
-    -p:Version="$version" \
-    -p:PackageVersion="$version" \
+    -p:Version="$canonical_version" \
+    -p:InformationalVersion="$canonical_version" \
+    -p:PackageVersion="$nuget_version" \
+    -p:BamlExpectedNativeAssetCount="$expected_native_count" \
     -p:BamlNativeAssetRoot="$native_root" \
     -p:BamlGeneratedTargetsPath="$generated_targets"
 done
@@ -280,7 +270,7 @@ done
 for suffix in a b; do
   dotnet run --project "$normalizer" \
     --configuration Release --no-build --no-restore -- \
-    "$work/raw-$suffix/baml-bridge.$version.nupkg" \
+    "$work/raw-$suffix/baml-bridge.$nuget_version.nupkg" \
     "$work/normalized/package-$suffix.nupkg"
 done
 cmp "$work/normalized/package-a.nupkg" \
@@ -315,8 +305,28 @@ unzip -Z1 "$work/normalized/package-a.nupkg" \
 } | LC_ALL=C sort > "$work/expected-package-entries.txt"
 diff -u "$work/expected-package-entries.txt" \
   "$work/actual-package-entries.txt"
-test "$(wc -l < "$work/actual-package-entries.txt")" -eq 15
-test "$(stat -c %s "$work/normalized/package-a.nupkg")" -lt 200000000
+expected_package_entry_count="$((expected_native_count + 7))"
+test "$(wc -l < "$work/actual-package-entries.txt")" \
+  -eq "$expected_package_entry_count"
+package_size="$(stat -c %s "$work/normalized/package-a.nupkg")"
+package_baseline="$(jq -er \
+  '.compressed_package.baseline_bytes
+   | select(type == "number" and . > 0)' "$size_policy")"
+package_regression_percent="$(jq -er \
+  '.compressed_package.max_regression_percent
+   | select(type == "number" and . >= 0)' "$size_policy")"
+package_regression_limit="$((package_baseline * (100 + package_regression_percent) / 100))"
+package_safety_ceiling="$(jq -er \
+  '.compressed_package.registry_safety_ceiling_bytes
+   | select(type == "number" and . > 0)' "$size_policy")"
+if ((package_size > package_regression_limit)); then
+  echo "compressed package size regression exceeds policy: actual=$package_size limit=$package_regression_limit baseline=$package_baseline" >&2
+  exit 1
+fi
+if ((package_size >= package_safety_ceiling)); then
+  echo "compressed package exceeds registry safety ceiling: actual=$package_size ceiling=$package_safety_ceiling" >&2
+  exit 1
+fi
 unzip -p "$work/normalized/package-a.nupkg" baml-bridge.nuspec \
   > "$work/baml-bridge.nuspec"
 grep -Fq '<dependency id="Google.Protobuf"' "$work/baml-bridge.nuspec"
@@ -324,6 +334,15 @@ if grep -Fq 'Grpc.Tools' "$work/baml-bridge.nuspec"; then
   echo "Grpc.Tools leaked into the product package dependency graph" >&2
   exit 1
 fi
+
+"$release_contract" verify-product \
+  --platforms "$platforms" \
+  --release-plan "$release_plan" \
+  --source-sha "$expected_native_source_sha" \
+  --provenance "$native_provenance" \
+  --manifest "$native_manifest" \
+  --native-root "$native_root" \
+  --package "$work/normalized/package-a.nupkg"
 
 cp "$work/normalized/package-a.nupkg" "$output_package"
 cmp "$work/normalized/package-a.nupkg" "$output_package"

@@ -21,12 +21,10 @@ function dunk(d: Dog) -> string {
 
 //----
 //- diagnostics
-// error: type `Dog` does not implement interface `Swimmer`
-//     ╭─[ interface_error_qualified_call_non_implementor.baml:19:10 ]
-//     │
+// E0001
+//
+//   × type `Dog` does not implement interface `Swimmer`
+//     ╭─[interface_error_qualified_call_non_implementor.baml:19:10]
 //  19 │   return d.as<Swimmer>.swim()
-//     │          ──────┬──────  
-//     │                ╰──────── type `Dog` does not implement interface `Swimmer`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·          ─────────────
+//     ╰────

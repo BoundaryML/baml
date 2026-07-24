@@ -12,12 +12,10 @@ class InterfaceTwo {
 
 //----
 //- diagnostics
-// error: unresolved type: Bar
-//    ╭─[ class_unknown_type.baml:3:9 ]
-//    │
+// E0002
+//
+//   × unresolved type: Bar
+//    ╭─[class_unknown_type.baml:3:9]
 //  3 │   prop2 Bar
-//    │         ─┬─
-//    │          ╰─── unresolved type: Bar
-//    │
-//    │ Note: Error code: E0002
-// ───╯
+//    ·         ───
+//    ╰────

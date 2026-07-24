@@ -41,7 +41,7 @@ impl<'db> NamespaceShadow<'db> {
             .map(|(_, c)| c.name_span);
 
         let message = format!(
-            "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
+            "namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
             self.ns_name,
             self.ns_name,
             def.source_kind_name(db),

@@ -102,21 +102,21 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
                 function = Some(tokens[i].clone());
                 i += 1;
             } else {
-                anyhow::bail!("Script body has --function without a value");
+                anyhow::bail!("script body has `--function` without a value");
             }
             continue;
         }
 
         if let Some(stripped) = token.strip_prefix("--") {
             anyhow::bail!(
-                "Unknown run-verb flag `--{stripped}` in script body. \
+                "unknown run-verb flag `--{stripped}` in script body. \
                  Only `--function <name>` is recognized before `--`; \
                  put target arguments after `--`."
             );
         }
 
         anyhow::bail!(
-            "Unexpected token `{token}` in script body. \
+            "unexpected token `{token}` in script body. \
              Script bodies have the shape `[--function <name>] [-- <target-args>...]`."
         );
     }
@@ -226,7 +226,7 @@ impl RunArgs {
         self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
     }
 
-    /// Filter `diagnostics` to errors and, if any, render the full ariadne block
+    /// Filter `diagnostics` to errors and, if any, render the full diagnostic block
     /// (sources/paths for every user file plus builtins, since an error may carry
     /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
     /// not surfaced.
@@ -259,9 +259,9 @@ impl RunArgs {
                 emit_test_cases: false,
             },
         )
-        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), argv)
-            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))
+            .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -383,7 +383,7 @@ impl RunArgs {
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\
-                     \n    baml run --file {target} -f <NAME>\n",
+                     \n    `baml run --file {target} -f <NAME>`\n",
                 );
             }
             return self.run_single_target(target, reporter);
@@ -425,7 +425,7 @@ impl RunArgs {
                 let expansion = parse_script_body(script_tokens)?;
                 let func = expansion.function.ok_or_else(|| {
                     anyhow!(
-                        "Script `{target}` has no `--function` and there is no implicit \
+                        "script `{target}` has no `--function` and there is no implicit \
                          entry point. Add `--function <name>` to the script body."
                     )
                 })?;
@@ -459,7 +459,7 @@ impl RunArgs {
 
         let func_info = engine
             .find_user_function(&function_name)
-            .ok_or_else(|| anyhow!("Function `{function_name}` not found"))?;
+            .ok_or_else(|| anyhow!("function `{function_name}` not found"))?;
         baml_exec::validate_help_param(&engine, &function_name)?;
 
         let target_is_typed = !func_info.param_names.is_empty();
@@ -603,7 +603,7 @@ impl RunArgs {
         // Preserve the old cleanup call shape before program output.
         reporter.abandon();
 
-        let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+        let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let start = std::time::Instant::now();
@@ -712,7 +712,7 @@ impl RunArgs {
             session.root().display()
         ));
         if session.is_empty() {
-            anyhow::bail!("No .baml files found in {}", session.root().display());
+            anyhow::bail!("no `.baml` files found in {}", session.root().display());
         }
         self.vlog(format_args!("Found {} .baml file(s)", session.file_count()));
         let needs_format_hint = session.needs_format_hint();
@@ -759,12 +759,12 @@ impl RunArgs {
             self.render_and_bail_on_errors(
                 &incremental.merged,
                 db,
-                "Cannot run: compilation errors found",
+                "cannot run: compilation errors found",
                 reporter,
             )?;
             Some(incremental.fresh_by_file)
         } else {
-            self.check_project_diagnostics(db, "Cannot run: compilation errors found", reporter)?;
+            self.check_project_diagnostics(db, "cannot run: compilation errors found", reporter)?;
             None
         };
         self.vlog(format_args!("Compiling..."));
@@ -776,7 +776,7 @@ impl RunArgs {
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
-        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
@@ -805,7 +805,7 @@ impl RunArgs {
         ));
         let program = compiled.program;
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
-            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+            .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
@@ -831,7 +831,7 @@ impl RunArgs {
         ));
 
         let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("Failed to read {}", canonical.display()))?;
+            .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = source_needs_format_hint(&content);
 
         // Project root is the file's parent so relative imports resolve.
@@ -845,7 +845,7 @@ impl RunArgs {
         // render through the reporter when needed.
         self.check_project_diagnostics(
             &db,
-            &format!("Cannot run: compilation errors in {display}"),
+            &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
         let engine = self.compile_to_engine(&db, argv)?;
@@ -900,7 +900,7 @@ impl RunArgs {
 
         self.check_project_diagnostics(
             &db,
-            "Cannot evaluate expression: compilation errors",
+            "cannot evaluate expression: compilation errors",
             reporter,
         )?;
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
@@ -909,7 +909,7 @@ impl RunArgs {
         // `file` containing `2 + 2`) produce the same argv.
         let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
 
-        let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+        let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let return_type = engine
             .function_return_type("baml_run_expr_main__")
@@ -1007,7 +1007,7 @@ impl RunArgs {
     fn project_root(db: &ProjectDatabase) -> Result<PathBuf> {
         db.get_project()
             .map(|project| project.root(db).clone())
-            .ok_or_else(|| anyhow!("No project context"))
+            .ok_or_else(|| anyhow!("no project context"))
     }
 
     fn project_toml(db: &ProjectDatabase) -> Result<(PathBuf, String)> {
@@ -1096,7 +1096,7 @@ impl RunArgs {
             Ok(())
         } else {
             let joined = errors.join("\n  ");
-            anyhow::bail!("Invalid [scripts] in baml.toml:\n  {joined}");
+            anyhow::bail!("invalid `[scripts]` in `baml.toml`:\n  {joined}");
         }
     }
 
@@ -1134,12 +1134,12 @@ impl RunArgs {
 
         if suggestions.is_empty() {
             anyhow!(
-                "Function `{name}` not found.\n\
-                 Use `baml run --list` to see available targets."
+                "function `{name}` not found.\n\
+                 use `baml run --list` to see available targets."
             )
         } else {
             anyhow!(
-                "Function `{name}` not found. Did you mean one of:\n{}",
+                "function `{name}` not found. Did you mean one of:\n{}",
                 suggestions
                     .iter()
                     .map(|s| format!("  - {s}"))
@@ -1208,12 +1208,12 @@ impl RunArgs {
 
         if suggestions.is_empty() {
             anyhow!(
-                "No runnable target `{name}` found.\n\
-                 Use `baml run --list` to see available targets."
+                "no runnable target `{name}` found.\n\
+                 use `baml run --list` to see available targets."
             )
         } else {
             anyhow!(
-                "No runnable target `{name}` found. Did you mean one of:\n{}",
+                "no runnable target `{name}` found. Did you mean one of:\n{}",
                 suggestions
                     .iter()
                     .map(|s| format!("  - {s}"))
@@ -1244,7 +1244,7 @@ impl RunArgs {
         // shape via `print_list_json`.
         if functions.is_empty() && scripts.is_empty() && namespaces.is_empty() {
             if matches!(output, OutputFormat::Debug) {
-                println!("No runnable targets found.");
+                println!("no runnable targets found");
                 return Ok(crate::ExitCode::Success);
             }
         }
@@ -1477,7 +1477,7 @@ impl RunArgs {
         // subcommands at parse time, not when a subcommand reference is
         // grabbed directly via `find_subcommand`. Re-apply
         // `CLAP_STYLING` explicitly so `run --help` keeps the same
-        // green/cyan ariadne-adjacent palette as top-level help,
+        // green/cyan diagnostic palette as top-level help,
         // instead of falling back to clap's default
         // bold+underline-no-color treatment.
         sub.clone()
@@ -1490,7 +1490,7 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
-pub(crate) const FORMAT_HINT: &str = "Code is unformatted — run `baml fmt`.";
+pub(crate) const FORMAT_HINT: &str = "code is unformatted; run `baml fmt`";
 
 pub(crate) fn source_needs_format_hint(source: &str) -> bool {
     let options = baml_fmt::FormatOptions::default();
@@ -1575,10 +1575,10 @@ fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::Ex
 /// Load expression source from -e argument: inline string, @file, or - for stdin.
 fn load_expression_source(source: &str) -> Result<String> {
     if source == "-" {
-        std::io::read_to_string(std::io::stdin()).context("Failed to read expression from stdin")
+        std::io::read_to_string(std::io::stdin()).context("failed to read expression from stdin")
     } else if let Some(path) = source.strip_prefix('@') {
         std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read expression file: {path}"))
+            .with_context(|| format!("failed to read expression file: {path}"))
     } else {
         Ok(source.to_string())
     }
@@ -1641,7 +1641,7 @@ mod tests {
     fn format_hint_text_matches_ticket() {
         // Pinned because the wording is user-facing copy: any change
         // here is a deliberate UX call, not a casual refactor.
-        assert_eq!(FORMAT_HINT, "Code is unformatted — run `baml fmt`.");
+        assert_eq!(FORMAT_HINT, "code is unformatted; run `baml fmt`");
     }
 
     // Tests that touch the filesystem build paths under $TMPDIR. Appending
@@ -1713,7 +1713,7 @@ mod tests {
     #[test]
     fn test_parse_script_rejects_bare_pre_separator_token() {
         let err = parse_script_body(&tokens("random_word")).unwrap_err();
-        assert!(format!("{err}").contains("Unexpected token"));
+        assert!(format!("{err}").contains("unexpected token"));
     }
 
     /// Only the *first* `--` is the separator; subsequent literal `--`

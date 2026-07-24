@@ -6681,6 +6681,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Determine param types: annotation takes precedence, else use expected
                 let mut param_tys: Vec<FunctionParamTy> = Vec::new();
+                let mut parameter_mismatch = false;
                 for (i, param) in func_def.params.iter().enumerate() {
                     let expected_param_ty = expected_params
                         .get(i)
@@ -6695,14 +6696,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 self.lower_lambda_type_expr(te, &all_generic_params, te.span);
                             // Check annotation is compatible with expected
                             if !self.is_subtype(&expected_param_ty, &annotated) {
-                                self.context.report(
-                                    TirTypeError::TypeMismatch {
-                                        expected: expected_param_ty.clone(),
-                                        got: annotated.clone(),
-                                    },
-                                    expr_id,
-                                    Vec::new(),
-                                );
+                                parameter_mismatch = true;
                             }
                             annotated
                         }
@@ -6722,7 +6716,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| self.lower_lambda_type_expr(te, &all_generic_params, te.span));
-                let effective_ret = return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
+                let effective_ret = return_annotation
+                    .as_ref()
+                    .or_else(|| (!parameter_mismatch).then_some(expected_ret.as_ref()));
                 let (throws_ty, throws_span, warn_extraneous_throws) = self
                     .choose_lambda_throws_surface(
                         func_def,
@@ -6734,31 +6730,59 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
-                    Some(effective_ret),
+                    effective_ret,
                     &throws_ty,
                     throws_span,
                     warn_extraneous_throws,
                 );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
-                    if matches!(
-                        expected_ret.as_ref(),
-                        Ty::Unknown { .. } | Ty::TypeVar(_, _)
-                    ) {
+                    if parameter_mismatch
+                        || matches!(
+                            expected_ret.as_ref(),
+                            Ty::Unknown { .. } | Ty::TypeVar(_, _)
+                        )
+                    {
                         ret_ty.clone()
                     } else {
                         expected_ret.as_ref().clone()
                     }
                 });
+                let surface_throws_ty = if parameter_mismatch && func_def.throws.is_none() {
+                    lambda_effective_throws.clone()
+                } else {
+                    throws_ty.clone()
+                };
 
                 let result = Ty::Function {
                     params: param_tys,
                     ret: Box::new(surface_ret_ty),
-                    throws: Box::new(throws_ty),
+                    throws: Box::new(surface_throws_ty.clone()),
                     attr: TyAttr::default(),
                 };
                 self.lambda_effective_throws
                     .insert(expr_id, lambda_effective_throws);
-                if !crate::generics::contains_typevar(expected_fn_ty)
+                if parameter_mismatch {
+                    // Callback effect generics are inferred after lambda checking.
+                    // Resolve them for this diagnostic while keeping outer generics rigid.
+                    let mut diagnostic_bindings = FxHashMap::default();
+                    crate::generics::infer_bindings(
+                        expected_throws,
+                        &surface_throws_ty,
+                        &mut diagnostic_bindings,
+                    );
+                    diagnostic_bindings
+                        .retain(|name, _| !self.generic_params.iter().any(|param| param == name));
+                    let diagnostic_expected =
+                        crate::generics::substitute_ty(expected_fn_ty, &diagnostic_bindings);
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: diagnostic_expected,
+                            got: result.clone(),
+                        },
+                        expr_id,
+                        Vec::new(),
+                    );
+                } else if !crate::generics::contains_typevar(expected_fn_ty)
                     && !self.is_subtype(&result, expected_fn_ty)
                 {
                     self.context.report(
@@ -6770,12 +6794,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 }
-                self.record_function_coercion_if_needed(expr_id, &result, expected_fn_ty);
-                self.record_expr_type(expr_id, result.clone());
+                let expression_ty = if parameter_mismatch {
+                    Ty::Error {
+                        attr: TyAttr::default(),
+                    }
+                } else {
+                    self.record_function_coercion_if_needed(expr_id, &result, expected_fn_ty);
+                    result.clone()
+                };
+                self.record_expr_type(expr_id, expression_ty.clone());
                 if let Some(fsi) = lambda_fsi {
                     self.nested_lambda_types.insert(fsi, result.clone());
                 }
-                result
+                expression_ty
             }
             _ => {
                 // Non-function expected type: fall through to infer-then-check
@@ -7972,10 +8003,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Infer and validate a `match` expression against the scrutinee type.
     ///
-    /// Pattern-lowering errors are allowed to participate in exhaustiveness
-    /// coverage so we do not emit duplicate `NonExhaustiveMatch` diagnostics.
-    /// Reachability diagnostics are computed from error-free arms only to avoid
-    /// secondary "unreachable arm" noise caused by invalid patterns.
+    /// If any pattern reports an error, usefulness analysis is skipped for the
+    /// whole match so it cannot emit dependent exhaustiveness or reachability
+    /// diagnostics.
     fn infer_match_expr(
         &mut self,
         match_expr_id: ExprId,
@@ -8003,14 +8033,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // so they're irrelevant to exhaustiveness coverage.
         let mut arm_types = Vec::with_capacity(arms.len());
         let mut matrix_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
-        // Reachability uses only error-free, non-guarded arms so we suppress
-        // unreachable-arm noise from invalid patterns. (Errored arms still
-        // participate in exhaustiveness *coverage* via `matrix_arms`, so a real
-        // per-arm error is not compounded by a spurious `non-exhaustive match`.)
-        let mut reachability_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
-        // Map reachability-matrix index → source arm body ExprId for
-        // unreachable-arm diagnostics.
-        let mut reachability_arm_ids: Vec<ExprId> = Vec::new();
+        let mut matrix_arm_ids: Vec<ExprId> = Vec::new();
+        let mut match_had_pattern_error = false;
 
         for arm_id in arms {
             let arm = &body.match_arms[*arm_id];
@@ -8019,6 +8043,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let diag_count_before_pattern = self.context.diagnostic_count();
             let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
             let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
+            match_had_pattern_error |= pattern_had_error;
             let narrowed = result.matched_ty.clone();
 
             // Snapshot/restore the scope for this arm's bindings.
@@ -8045,12 +8070,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Guarded arms don't contribute to coverage.
             if arm.guard.is_none() {
-                matrix_arms.push(result.dpat.clone());
-                if !pattern_had_error {
-                    reachability_arms.push(result.dpat);
-                    reachability_arm_ids.push(arm.body);
-                }
+                matrix_arms.push(result.dpat);
+                matrix_arm_ids.push(arm.body);
             }
+        }
+
+        if match_had_pattern_error {
+            return Self::join_all(&arm_types);
         }
 
         // Pass 2: run matrix analysis for exhaustiveness and reachability.
@@ -8062,7 +8088,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let report = crate::pattern_lowering::compute_match_usefulness(
             self,
             &matrix_arms,
-            scrutinee_ty_for_matrix.clone(),
+            scrutinee_ty_for_matrix,
         );
         // Exhaustiveness diagnostic.
         if report.missing.is_empty() {
@@ -8082,33 +8108,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
 
-        // Unreachable-arm diagnostic. ArmId in the reachability report indexes
-        // into `reachability_arms` (not the original arm list), so we look up
-        // the source body ExprId via `reachability_arm_ids`. Computed from a
-        // second matrix of error-free arms only, so an invalid arm cannot
-        // spuriously mark a *later* valid arm unreachable.
-        if !reachability_arms.is_empty() {
-            // In the common case no arm had a pattern error, so
-            // `reachability_arms` is exactly `matrix_arms` (same DPats, same
-            // order) and the exhaustiveness report above was computed from the
-            // identical matrix — reuse its arm-reachability instead of running
-            // the whole usefulness algorithm a second time. The matrix walk is
-            // the hottest part of match checking, so this halves its cost per
-            // error-free `match`.
-            let reachability_report = if reachability_arms.len() == matrix_arms.len() {
-                report
-            } else {
-                crate::pattern_lowering::compute_match_usefulness(
-                    self,
-                    &reachability_arms,
-                    scrutinee_ty_for_matrix,
-                )
-            };
-            for arm in reachability_report.unreachable_arms {
-                if let Some(&body_expr) = reachability_arm_ids.get(arm.0) {
-                    self.context
-                        .report_simple(TirTypeError::UnreachableArm, body_expr);
-                }
+        for arm in report.unreachable_arms {
+            if let Some(&body_expr) = matrix_arm_ids.get(arm.0) {
+                self.context
+                    .report_simple(TirTypeError::UnreachableArm, body_expr);
             }
         }
 

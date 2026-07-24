@@ -788,13 +788,13 @@ function demo() -> ((x: int) -> int throws never) -> int throws never {
     );
 }
 
-/// Helper: does compiling `source` produce a `type mismatch` diagnostic?
+/// Helper: does compiling `source` produce a type mismatch diagnostic?
 fn has_type_mismatch(source: &str) -> bool {
     let mut db = make_db();
     db.add_file("test.baml", source);
     baml_project::collect_compiler2_diagnostics(&db)
         .iter()
-        .any(|diag| diag.message.contains("type mismatch"))
+        .any(|diag| diag.id == baml_compiler_diagnostics::DiagnosticId::TypeMismatch)
 }
 
 // ─── B-236: reassigning an unannotated local across container kinds ──────────

@@ -74,48 +74,34 @@ function MissingLetAfter() -> int {
 
 //----
 //- diagnostics
-// error: Expected ')', found ';'
-//    ╭─[ loops_header_requires_let_negative.baml:4:19 ]
-//    │
+// E0010
+//
+//   × unexpected token
+//    ╭─[loops_header_requires_let_negative.baml:4:19]
 //  4 │     for (i = 0; i < 3; i += 1) {
-//    │                      ┬
-//    │                      ╰── Expected ')', found ';'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected block after for expression, found ';'
-//    ╭─[ loops_header_requires_let_negative.baml:4:19 ]
-//    │
+//    ·                      ┬
+//    ·                      ╰── expected `')'`, found `';'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[loops_header_requires_let_negative.baml:4:27]
 //  4 │     for (i = 0; i < 3; i += 1) {
-//    │                      ┬
-//    │                      ╰── Expected block after for expression, found ';'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: Expected expression, found ')'
-//    ╭─[ loops_header_requires_let_negative.baml:4:27 ]
-//    │
+//    ·                              ┬
+//    ·                              ╰── expected `expression`, found `')'`
+//    ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//    ╭─[loops_header_requires_let_negative.baml:4:7]
 //  4 │     for (i = 0; i < 3; i += 1) {
-//    │                              ┬
-//    │                              ╰── Expected expression, found ')'
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: assignment is not allowed in expression position; assignment is a statement
-//    ╭─[ loops_header_requires_let_negative.baml:4:7 ]
-//    │
-//  4 │     for (i = 0; i < 3; i += 1) {
-//    │          ──┬──
-//    │            ╰──── assignment not allowed here
-//    │
-//    │ Note: Error code: E0010
-// ───╯
-// error: unresolved name: i
-//     ╭─[ loops_header_requires_let_negative.baml:14:16 ]
-//     │
+//    ·          ──┬──
+//    ·            ╰── assignment not allowed here
+//    ╰────
+// E0003
+//
+//   × unresolved name: `i`
+//     ╭─[loops_header_requires_let_negative.baml:14:16]
 //  14 │     for (; s < 2; i += 1) {
-//     │                   ┬
-//     │                   ╰── unresolved name: i
-//     │
-//     │ Note: Error code: E0003
-// ────╯
+//     ·                   ─
+//     ╰────

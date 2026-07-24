@@ -2,57 +2,53 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: Duplicate serialized key `x` in enum
-    ╭─[ duplicate_variant_alias.baml:11:3 ]
-    │
+  [hir] E0149
+
+  × duplicate serialized key `x` in enum
+    ╭─[duplicate_variant_alias.baml:11:3]
  10 │   A @alias("x")
-    │   ┬  
-    │   ╰── key `x` first serialized here
+    ·   ┬
+    ·   ╰── key `x` first serialized here
  11 │   B @alias("x")
-    │   ┬  
-    │   ╰── also serialized as `x` here
-    │ 
-    │ Note: Error code: E0149
-────╯
+    ·   ┬
+    ·   ╰── also serialized as `x` here
+    ╰────
 
-  [hir] error: Duplicate serialized key `Shared` in enum
-    ╭─[ duplicate_variant_alias.baml:17:3 ]
-    │
+  [hir] E0149
+
+  × duplicate serialized key `Shared` in enum
+    ╭─[duplicate_variant_alias.baml:17:3]
  16 │   Shared
-    │   ───┬──  
-    │      ╰──── key `Shared` first serialized here
+    ·   ───┬──
+    ·      ╰── key `Shared` first serialized here
  17 │   B @alias("Shared")
-    │   ┬  
-    │   ╰── also serialized as `Shared` here
-    │ 
-    │ Note: Error code: E0149
-────╯
+    ·   ┬
+    ·   ╰── also serialized as `Shared` here
+    ╰────
 
-  [hir] error: Duplicate serialized key `Shared` in enum
-    ╭─[ duplicate_variant_alias.baml:23:3 ]
-    │
+  [hir] E0149
+
+  × duplicate serialized key `Shared` in enum
+    ╭─[duplicate_variant_alias.baml:23:3]
  22 │   First @alias("Shared")
-    │   ──┬──  
-    │     ╰──── key `Shared` first serialized here
+    ·   ──┬──
+    ·     ╰── key `Shared` first serialized here
  23 │   Second @alias("Shared")
-    │   ───┬──  
-    │      ╰──── also serialized as `Shared` here
+    ·   ───┬──
+    ·      ╰── also serialized as `Shared` here
  24 │   Shared
-    │   ───┬──  
-    │      ╰──── also serialized as `Shared` here
-    │ 
-    │ Note: Error code: E0149
-────╯
+    ·   ───┬──
+    ·      ╰── also serialized as `Shared` here
+    ╰────
 
-  [hir] error: Duplicate serialized key `q` in enum
-    ╭─[ duplicate_variant_alias.baml:31:3 ]
-    │
+  [hir] E0149
+
+  × duplicate serialized key `q` in enum
+    ╭─[duplicate_variant_alias.baml:31:3]
  30 │   A @alias("q")
-    │   ┬  
-    │   ╰── key `q` first serialized here
+    ·   ┬
+    ·   ╰── key `q` first serialized here
  31 │   B @alias(#"q"#)
-    │   ┬  
-    │   ╰── also serialized as `q` here
-    │ 
-    │ Note: Error code: E0149
-────╯
+    ·   ┬
+    ·   ╰── also serialized as `q` here
+    ╰────

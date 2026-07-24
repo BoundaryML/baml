@@ -18,12 +18,15 @@ function bad() -> string {
 
 //----
 //- diagnostics
-// error: type `Dog` has no member `Animal`
-//     ╭─[ interface_error_old_qualified_projection.baml:16:10 ]
-//     │
+// E0007
+//
+//   × type `Dog` has no member `Animal`
+//     ╭─[interface_error_old_qualified_projection.baml:16:10]
 //  16 │   return d.Animal.speak()
-//     │          ───────┬──────
-//     │                 ╰──────── type `Dog` has no member `Animal`
-//     │
-//     │ Note: Error code: E0007
-// ────╯
+//     ·          ──────────────
+//     ╰────
+//   ╰─▶   ☞ class defined here
+//          ╭─[interface_error_old_qualified_projection.baml:8:7]
+//        8 │ class Dog {
+//          ·       ───
+//          ╰────

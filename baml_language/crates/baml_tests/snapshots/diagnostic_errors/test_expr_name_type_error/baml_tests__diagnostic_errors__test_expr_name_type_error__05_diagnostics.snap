@@ -2,32 +2,28 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: operator `+` cannot be applied to `"a"` and `1`
-   ╭─[ main.baml:3:6 ]
-   │
+  [type] E0004
+
+  × operator `+` cannot be applied to `"a"` and `1`
+   ╭─[main.baml:3:6]
  3 │ test "a" + 1 {
-   │      ───┬───  
-   │         ╰───── operator `+` cannot be applied to `"a"` and `1`
-   │ 
-   │ Note: Error code: E0004
-───╯
+   ·      ───────
+   ╰────
 
-  [type] error: type mismatch: expected string, got 42
-   ╭─[ main.baml:7:6 ]
-   │
+  [type] E0001
+
+  × mismatched types
+   ╭─[main.baml:7:6]
  7 │ test 42 {
-   │      ─┬  
-   │       ╰── type mismatch: expected string, got 42
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·      ─┬
+   ·       ╰── expected `string`, found `42`
+   ╰────
 
-  [type] error: type mismatch: expected string, got int
-    ╭─[ main.baml:13:11 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:13:11]
  13 │     test (5 + i) {
-    │           ──┬──  
-    │             ╰──── type mismatch: expected string, got int
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·           ──┬──
+    ·             ╰── expected `string`, found `int`
+    ╰────

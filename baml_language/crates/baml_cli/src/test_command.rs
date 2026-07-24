@@ -434,7 +434,7 @@ impl TestArgs {
             let cache = &session.cache;
             let project = db
                 .get_project()
-                .ok_or_else(|| anyhow!("No project context"))?;
+                .ok_or_else(|| anyhow!("no project context"))?;
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -455,7 +455,7 @@ impl TestArgs {
                 .cloned()
                 .collect();
             if !errors.is_empty() {
-                // Render the full ariadne block so test errors look like
+                // Render the full diagnostic block so test errors look like
                 // run/pack errors instead of a bullet list of messages. Sources
                 // and paths cover every user file plus builtins — an error in one
                 // file may carry related spans elsewhere.
@@ -478,7 +478,7 @@ impl TestArgs {
                 cache.as_ref(),
                 reuse_plan.as_ref(),
             )
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
                     .as_ref()
@@ -508,7 +508,7 @@ impl TestArgs {
             let bytecode = compiled.program;
             let engine = Arc::new(
                 BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
-                    .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
+                    .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
             );
             (engine, legacy)
         };
@@ -525,7 +525,7 @@ impl TestArgs {
                 unhandled_spawn_failures_for_handler.fetch_add(1, Ordering::SeqCst);
             }
         })));
-        let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+        let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
         let run_ctx = RunCtx {
             engine: &engine,

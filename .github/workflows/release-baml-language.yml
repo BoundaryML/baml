@@ -30,11 +30,15 @@ on:
         type: string
         default: ""
         required: false
+      source_ci_run_id:
+        description: "Successful canary CI run that attests source_sha (required for production)"
+        type: string
+        default: ""
+        required: false
 
 permissions:
-  contents: write
+  contents: read
   actions: read
-  id-token: write
 
 concurrency:
   group: ${{ inputs.dry_run == true && 'baml-language-release-dryrun' || 'baml-language-release-canary' }}
@@ -67,10 +71,16 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       pypi_version: ${{ steps.plan.outputs.pypi_version }}
       crates_io_version: ${{ steps.plan.outputs.crates_io_version }}
+      nuget_version: ${{ steps.plan.outputs.nuget_version }}
+      maven_version: ${{ steps.plan.outputs.maven_version }}
+      gradle_plugin_version: ${{ steps.plan.outputs.gradle_plugin_version }}
+      swiftpm_version: ${{ steps.plan.outputs.swiftpm_version }}
+      released_at: ${{ steps.plan.outputs.released_at }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
       source_branch: ${{ steps.plan.outputs.source_branch }}
+      source_ci_run_id: ${{ steps.plan.outputs.source_ci_run_id }}
       dry_run: ${{ steps.plan.outputs.dry_run }}
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
@@ -82,17 +92,94 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Attest production source CI run
+        id: attest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$INPUT_DRY_RUN" != "false" ]]; then
+            echo "Dry run: a source CI attestation is not required."
+            exit 0
+          fi
+          if [[ ! "$INPUT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::production releases require an explicit 40-character source_sha"
+            exit 1
+          fi
+          if [[ ! "$SOURCE_CI_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production releases require a numeric source_ci_run_id"
+            exit 1
+          fi
+
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$INPUT_SOURCE_SHA" ]]; then
+            echo "::error::checked-out SHA $checked_out_sha does not match source_sha $INPUT_SOURCE_SHA"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if ! run_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_CI_RUN_ID")"; then
+              echo "gh api call failed (attempt $attempt/30); retrying"
+              if [[ "$attempt" -lt 30 ]]; then
+                sleep 10
+              fi
+              continue
+            fi
+            workflow_name="$(jq -r '.name // ""' <<<"$run_json")"
+            workflow_path="$(jq -r '.path // ""' <<<"$run_json")"
+            event="$(jq -r '.event // ""' <<<"$run_json")"
+            branch="$(jq -r '.head_branch // ""' <<<"$run_json")"
+            head_sha="$(jq -r '.head_sha // ""' <<<"$run_json")"
+            status="$(jq -r '.status // ""' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            url="$(jq -r '.html_url // ""' <<<"$run_json")"
+
+            if [[ "$workflow_name" != "CI - BAML Language" ||
+                  "$workflow_path" != ".github/workflows/ci.yaml" ||
+                  "$event" != "push" ||
+                  "$branch" != "canary" ||
+                  "$head_sha" != "$INPUT_SOURCE_SHA" ]]; then
+              echo "::error::source CI run does not attest this canary commit"
+              echo "workflow=$workflow_name path=$workflow_path event=$event branch=$branch head_sha=$head_sha"
+              exit 1
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" != "success" ]]; then
+                echo "::error::source CI run concluded $conclusion, expected success: $url"
+                exit 1
+              fi
+              echo "source_branch=$branch" >> "$GITHUB_OUTPUT"
+              echo "Attested production source with successful CI run: $url"
+              exit 0
+            fi
+
+            echo "Source CI run is $status; waiting (attempt $attempt/30): $url"
+            if [[ "$attempt" -lt 30 ]]; then
+              sleep 10
+            fi
+          done
+
+          echo "::error::timed out waiting for source CI run to complete"
+          exit 1
+
       - name: Compute release plan
         id: plan
         env:
           INPUT_CHANNEL: ${{ inputs.channel }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_SOURCE_CI_RUN_ID: ${{ inputs.source_ci_run_id }}
+          ATTESTED_SOURCE_BRANCH: ${{ steps.attest.outputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
-          source_branch="${GITHUB_REF_NAME:-}"
+          source_branch="${ATTESTED_SOURCE_BRANCH:-${GITHUB_REF_NAME:-}}"
           dispatch_nightly_after_canary="false"
           if [[ "$channel" == "auto" ]]; then
             channel="nightly"
@@ -111,18 +198,30 @@ jobs:
           version="$(jq -r .canonical_version release-plan.json)"
           pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
+          nuget_version="$(jq -r .registry_versions.nuget release-plan.json)"
+          maven_version="$(jq -r .registry_versions.maven release-plan.json)"
+          gradle_plugin_version="$(jq -r \
+            .registry_versions.gradle_plugin release-plan.json)"
+          swiftpm_version="$(jq -r .registry_versions.swiftpm release-plan.json)"
+          released_at="$(jq -r .released_at release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
             echo "version=$version"
             echo "pypi_version=$pypi_version"
             echo "crates_io_version=$crates_io_version"
+            echo "nuget_version=$nuget_version"
+            echo "maven_version=$maven_version"
+            echo "gradle_plugin_version=$gradle_plugin_version"
+            echo "swiftpm_version=$swiftpm_version"
+            echo "released_at=$released_at"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
             cat release-plan.json
             echo "EOF"
             echo "source_sha=$source_sha"
             echo "source_branch=$source_branch"
+            echo "source_ci_run_id=$INPUT_SOURCE_CI_RUN_ID"
             echo "dry_run=$dry_run"
             echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
           } >> "$GITHUB_OUTPUT"
@@ -161,6 +260,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
+      csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -177,6 +277,9 @@ jobs:
             | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
+          csharp="$(scripts/baml-csharp-release-contract matrix)"
+          echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
+          jq . <<<"$csharp"
 
   build-toolchain:
     name: Build toolchain (${{ matrix.target }})
@@ -341,28 +444,52 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Build wrapper
-        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
-      - name: Archive wrapper
         run: |
           set -euo pipefail
-          version="${{ needs.plan.outputs.wrapper_version }}"
           target="${{ matrix.target }}"
-          mkdir -p staging/bin
+          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$target"
           suffix=""
           if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          mkdir -p staging/bin
           cp "baml_language/target/$target/release/baml$suffix" "staging/bin/baml$suffix"
           if test -f "staging/bin/baml-cli$suffix"; then
             exit 1
           fi
-          if [[ "$target" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-wrapper-$version-$target.zip" .)
+      - name: Build package-manager wrapper
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          cargo build \
+            --manifest-path baml_language/Cargo.toml \
+            --release \
+            --bin baml \
+            --features no-self-update \
+            --target "$target"
+          mkdir -p staging-no-self-update/bin
+          cp "baml_language/target/$target/release/baml" \
+            "staging-no-self-update/bin/baml"
+      - name: Archive wrapper
+        env:
+          TARGET: ${{ matrix.target }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-wrapper-$WRAPPER_VERSION-$TARGET.zip" .)
           else
-            tar -C staging -czf "baml-wrapper-$version-$target.tar.gz" .
+            tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
+          fi
+          if [[ "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+            tar -C staging-no-self-update -czf \
+              "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: wrapper-${{ matrix.target }}
-          path: baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+          path: |
+            baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+            baml-wrapper-no-self-update-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
 
   build-python-sdk:
     name: Build Python SDK
@@ -398,6 +525,18 @@ jobs:
     name: Build Web SDK
     needs: [plan]
     uses: ./.github/workflows/build2-web-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  # Platform-neutral C# work (schema vectors, generator output, ABI bytecode,
+  # package-comparison policy) runs alongside the shared native matrix.
+  prepare-csharp-sdk:
+    name: Prepare C# SDK product inputs
+    needs: [plan, build-matrix]
+    uses: ./.github/workflows/prepare-csharp-sdk.reusable.yaml
     permissions:
       contents: read
     with:
@@ -476,7 +615,7 @@ jobs:
       - name: Zip + checksum (SwiftPM checksum == sha256 of the zip)
         id: pack
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
           set -euo pipefail
           ZIP="BamlBridgeFFI-${VERSION}.xcframework.zip"
@@ -488,7 +627,7 @@ jobs:
       - name: Assemble baml-swift mirror
         env:
           TAG: ${{ needs.plan.outputs.git_tag }}
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.swiftpm_version }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           CHECKSUM: ${{ steps.pack.outputs.checksum }}
           ZIP: ${{ steps.pack.outputs.zip }}
@@ -528,6 +667,8 @@ jobs:
           name: swift-sdk-mirror
           path: ${{ runner.temp }}/mirror
       - name: Assemble a clean consumer and link the release binary
+        env:
+          EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/verify"
@@ -555,14 +696,20 @@ jobs:
           EOF
           cat > "$work/Sources/Verify/main.swift" <<'EOF'
           import BamlBridge
-          print("linked release BamlBridge OK")
+          import Foundation
+          let expected = ProcessInfo.processInfo.environment["BAML_EXPECTED_VERSION"]!
+          let actual = BamlRuntime.nativeVersion()
+          guard actual == expected else {
+              fatalError("native BAML version \(actual) != planned \(expected)")
+          }
+          print("executed release BamlBridge \(actual)")
           EOF
           cd "$work"
           swift build -c release
           bin=.build/release/Verify
           # Runner AMFI can SIGKILL a freshly linked binary's ad-hoc signature.
           codesign --force --sign - "$bin"
-          "$bin"
+          BAML_EXPECTED_VERSION="$EXPECTED_VERSION" "$bin"
 
   # Verify-only: the C++ SDK ships no artifact (headers are vendored at
   # generate time); it consumes the shared bridge_cffi artifacts.
@@ -578,13 +725,14 @@ jobs:
 
   verify-csharp-sdk:
     name: Verify C# SDK product package
-    needs: [plan, build-bridge-cffi]
+    needs: [plan, build-matrix, prepare-csharp-sdk, build-bridge-cffi]
     uses: ./.github/workflows/verify-csharp-product-slice.reusable.yaml
     permissions:
       contents: read
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
+      platform_matrix_json: ${{ needs.build-matrix.outputs.csharp }}
 
   build-rust-sdk:
     name: Build Rust SDK
@@ -625,6 +773,7 @@ jobs:
       - build-swift-sdk
       - verify-swift-sdk
       - verify-cpp-sdk
+      - prepare-csharp-sdk
       - verify-csharp-sdk
       # The Rust SDK is production-ready (crates.io publisher live), so its
       # build + consumer verification gate the release: a failure here blocks
@@ -708,8 +857,6 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
-    secrets:
-      NUGET_USER: ${{ secrets.NUGET_USER }}
 
   publish-maven:
     name: Publish Java Maven Central
@@ -751,9 +898,9 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
-          # Maven version = the plan's canonical string, Maven-legal as-is
-          # (canary → 0.15.0, nightly → 0.15.0-nightly.YYYYMMDD.a).
-          version="$(jq -r .canonical_version release-plan.json)"
+          # Maven's registry encoding is the canonical SemVer identity today,
+          # but the frozen plan remains the authority for that relationship.
+          version="$(jq -r .registry_versions.maven release-plan.json)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Decide what to publish (per-coordinate Central idempotency)
         id: exists
@@ -964,7 +1111,7 @@ jobs:
       - name: Skip if this version is already on the Gradle Plugin Portal
         id: exists
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.gradle_plugin_version }}
         run: |
           set -euo pipefail
           # IDEMPOTENCY: the Portal rejects republishing an existing version. Its
@@ -988,7 +1135,7 @@ jobs:
         if: ${{ steps.exists.outputs.publish == 'true' }}
         working-directory: baml_language/sdks/java/gradle-plugin
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.gradle_plugin_version }}
           # com.gradle.plugin-publish reads these env vars natively (verified: it
           # falls back to GRADLE_PUBLISH_KEY/SECRET when the gradle.publish.*
           # properties are unset). The Portal does not require GPG signatures, so
@@ -1051,6 +1198,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_REPO: ${{ github.repository }}
+    outputs:
+      source_sha256: ${{ steps.source-archive.outputs.sha256 }}
     permissions:
       contents: write
     steps:
@@ -1069,6 +1218,7 @@ jobs:
       - name: Publish wrapper release
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
@@ -1077,9 +1227,23 @@ jobs:
             gh release upload "$tag" dist/wrapper/* --clobber
           else
             gh release create "$tag" dist/wrapper/* \
+              --target "$SOURCE_SHA" \
               --title "BAML Wrapper $WRAPPER_VERSION" \
               --notes "BAML wrapper $WRAPPER_VERSION"
           fi
+      - name: Checksum wrapper source archive
+        id: source-archive
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          source_sha="$(
+            curl --retry 5 --retry-all-errors -fsSL \
+              "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${WRAPPER_VERSION}.tar.gz" |
+              sha256sum |
+              awk '{print $1}'
+          )"
+          echo "sha256=$source_sha" >> "$GITHUB_OUTPUT"
 
   publish-bridge-cffi-release:
     name: Publish bridge_cffi release assets
@@ -1305,7 +1469,7 @@ jobs:
       - name: Publish immutable package tag
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.swiftpm_version }}
         run: |
           set -euo pipefail
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_swift_mirror_key -o IdentitiesOnly=yes"
@@ -1431,14 +1595,103 @@ jobs:
           # verifier already smoked it). No cargo-release, no git tags.
           cargo publish -p baml_bridge --no-verify --allow-dirty
 
+  release-prerequisites-complete:
+    name: All pre-manifest publishers complete
+    needs:
+      - plan
+      - all-builds
+      - publish-pypi
+      - publish-nodejs-sdk
+      - publish-web-sdk
+      - publish-csharp-sdk
+      - publish-maven
+      - publish-gradle-plugin
+      - publish-toolchain-release
+      - publish-wrapper-release
+      - publish-bridge-cffi-release
+      - publish-swift-sdk
+      - publish-crates-io
+      - publish-homebrew
+      - publish-aur
+    if: ${{ always() && needs.all-builds.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every enabled immutable publisher
+        env:
+          ALL_BUILDS: ${{ needs.all-builds.result }}
+          PYPI: ${{ needs.publish-pypi.result }}
+          NPM_NODE: ${{ needs.publish-nodejs-sdk.result }}
+          NPM_WEB: ${{ needs.publish-web-sdk.result }}
+          NUGET: ${{ needs.publish-csharp-sdk.result }}
+          MAVEN: ${{ needs.publish-maven.result }}
+          GRADLE_PLUGIN: ${{ needs.publish-gradle-plugin.result }}
+          TOOLCHAIN: ${{ needs.publish-toolchain-release.result }}
+          WRAPPER: ${{ needs.publish-wrapper-release.result }}
+          CFFI: ${{ needs.publish-bridge-cffi-release.result }}
+          SWIFTPM: ${{ needs.publish-swift-sdk.result }}
+          CRATES_IO: ${{ needs.publish-crates-io.result }}
+          HOMEBREW: ${{ needs.publish-homebrew.result }}
+          AUR: ${{ needs.publish-aur.result }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
+        run: |
+          set -euo pipefail
+          require_success() {
+            local name="$1"
+            local result="$2"
+            if [[ "$result" != "success" ]]; then
+              echo "::error::$name publisher result is $result, expected success"
+              exit 1
+            fi
+          }
+          require_skipped() {
+            local name="$1"
+            local result="$2"
+            if [[ "$result" != "skipped" ]]; then
+              echo "::error::$name publisher result is $result, expected skipped"
+              exit 1
+            fi
+          }
+
+          require_success all-builds "$ALL_BUILDS"
+          require_success PyPI "$PYPI"
+          require_success node-npm "$NPM_NODE"
+          require_success web-npm "$NPM_WEB"
+          require_success NuGet "$NUGET"
+          require_success Maven-Central "$MAVEN"
+          require_success toolchain-assets "$TOOLCHAIN"
+          require_success bridge-cffi-assets "$CFFI"
+          require_success SwiftPM "$SWIFTPM"
+          require_success crates.io "$CRATES_IO"
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            require_skipped Gradle-Plugin-Portal "$GRADLE_PLUGIN"
+          else
+            require_success Gradle-Plugin-Portal "$GRADLE_PLUGIN"
+          fi
+
+          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
+            require_success wrapper-assets "$WRAPPER"
+            require_success Homebrew "$HOMEBREW"
+            require_success AUR "$AUR"
+          else
+            require_skipped wrapper-assets "$WRAPPER"
+            require_skipped Homebrew "$HOMEBREW"
+            require_skipped AUR "$AUR"
+          fi
+
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    # This precedes publish-go-sdk intentionally. The Go module dynamically
-    # resolves bridge_cffi through the immutable exact-version manifest, so the
-    # manifest is part of the module's publish preconditions, not a follow-up.
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    # The exact-version manifest is a Go publishing precondition: the public
+    # module resolves bridge_cffi through it. Every other enabled publisher is
+    # complete before the manifest is made immutable; Go closes the final gate
+    # afterward without creating a dependency cycle.
+    needs: [plan, release-prerequisites-complete]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1466,33 +1719,69 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-product-package
+          path: dist/csharp
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-xcframework
+          path: dist/swift
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: baml-language-release-${{ github.run_id }}
       - name: Generate release manifests
+        env:
+          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
+          CRATES_IO_VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          NUGET_VERSION: ${{ needs.plan.outputs.nuget_version }}
+          SWIFTPM_VERSION: ${{ needs.plan.outputs.swiftpm_version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           args=()
-          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
-          # Record sdks.rust only when the crate actually published this run, so
-          # the manifest never promises a baml_bridge version absent from crates.io.
-          if [[ "${{ needs.publish-crates-io.result }}" == "success" ]]; then
-            args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
+          (
+            cd dist/csharp
+            sha256sum -c product-package.sha256
+          )
+          csharp_digest="$(cut -d ' ' -f 1 \
+            dist/csharp/product-package.sha256)"
+          mapfile -t swift_packages < <(
+            find dist/swift -maxdepth 1 -type f \
+              -name 'BamlBridgeFFI-*.xcframework.zip' -print
+          )
+          if [[ "${#swift_packages[@]}" -ne 1 ]]; then
+            echo "::error::expected exactly one verified Swift XCFramework zip"
+            exit 1
           fi
+          swift_digest="$(sha256sum "${swift_packages[0]}" | cut -d ' ' -f 1)"
+          args+=(
+            --crates-io-version "$CRATES_IO_VERSION"
+            --nuget-version "$NUGET_VERSION"
+            --nuget-package-sha256 "$csharp_digest"
+            --swiftpm-version "$SWIFTPM_VERSION"
+            --swift-package-sha256 "$swift_digest"
+          )
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out manifests \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
-            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            --channel "$CHANNEL" \
+            --version "$VERSION" \
+            --released-at "$RELEASED_AT" \
+            --pypi-version "$PYPI_VERSION" \
+            --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
@@ -1585,7 +1874,8 @@ jobs:
     steps:
       - name: Resolve, link, and run the published package
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.swiftpm_version }}
+          EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/baml-swift-release-smoke"
@@ -1603,22 +1893,52 @@ jobs:
           EOF
           cat > "$work/Sources/Smoke/main.swift" <<'EOF'
           import BamlBridge
-          print("resolved + linked published BamlBridge OK")
+          import Foundation
+          let expected = ProcessInfo.processInfo.environment["BAML_EXPECTED_VERSION"]!
+          let actual = BamlRuntime.nativeVersion()
+          guard actual == expected else {
+              fatalError("native BAML version \(actual) != planned \(expected)")
+          }
+          print("executed published BamlBridge \(actual)")
           EOF
           cd "$work"
           swift build -c release
           bin=.build/release/Smoke
           codesign --force --sign - "$bin"
-          "$bin"
+          BAML_EXPECTED_VERSION="$EXPECTED_VERSION" "$bin"
+
+  release-complete:
+    name: All enabled publishers complete
+    needs: [plan, release-prerequisites-complete, publish-go-sdk]
+    if: ${{ always() && needs.release-prerequisites-complete.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require pre-manifest publishers and Go
+        env:
+          PREREQUISITES: ${{ needs.release-prerequisites-complete.result }}
+          GO: ${{ needs.publish-go-sdk.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$PREREQUISITES" != "success" ]]; then
+            echo "::error::pre-manifest publisher gate result is $PREREQUISITES, expected success"
+            exit 1
+          fi
+          if [[ "$GO" != "success" ]]; then
+            echo "::error::Go publisher result is $GO, expected success"
+            exit 1
+          fi
 
   publish-pkg-channel:
     name: Promote verified release channel manifest
     # Keep the mutable canary/nightly pointer on the preceding known-good
-    # release until the public Go module resolves, loads its native runtime,
-    # and executes successfully on every supported desktop OS.
-    needs: [plan, publish-pkg-boundaryml-com, publish-go-sdk, smoke-go-release]
+    # release until every publisher completes and the public Go and Swift
+    # packages execute their native runtimes successfully.
+    needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -1652,6 +1972,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+          SOURCE_CI_RUN_ID: ${{ needs.plan.outputs.source_ci_run_id }}
         run: |
           set -euo pipefail
           # Pin the nightly to the commit this canary released, not to whatever
@@ -1661,13 +1982,14 @@ jobs:
             --ref canary \
             -f channel=nightly \
             -f dry_run=false \
-            -f source_sha="$SOURCE_SHA"
+            -f source_sha="$SOURCE_SHA" \
+            -f source_ci_run_id="$SOURCE_CI_RUN_ID"
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1679,12 +2001,26 @@ jobs:
           path: dist/wrapper
           merge-multiple: true
       - name: Generate Homebrew formula
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
+      - name: Test Homebrew formula
+        run: |
+          set -euo pipefail
+          brew tap boundaryml/tap
+          tap="$(brew --repo boundaryml/tap)"
+          cp package-manager/homebrew/Formula/baml.rb "$tap/Formula/baml.rb"
+          brew audit --strict boundaryml/tap/baml
+          brew install --build-from-source boundaryml/tap/baml
+          brew test boundaryml/tap/baml
+          brew linkage --test boundaryml/tap/baml
       - name: Push formula to BoundaryML/homebrew-tap
         env:
           TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
@@ -1692,11 +2028,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$TOKEN"
-          git clone "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git" tap
-          cp package-manager/homebrew/Formula/baml.rb tap/Formula/baml.rb
-          cd tap
+          tap="$(brew --repo boundaryml/tap)"
+          cd "$tap"
           git config user.name "boundaryml-release-bot"
           git config user.email "boundaryml-release-bot@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git"
           git add Formula/baml.rb
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
@@ -1728,13 +2064,15 @@ jobs:
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
       - name: Generate AUR package files
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          source_sha="$(curl -fsSL "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${{ needs.plan.outputs.wrapper_version }}.tar.gz" | sha256sum | awk '{print $1}')"
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
-            --source-sha256 "$source_sha" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
       - name: Push AUR repos
         env:
@@ -1759,6 +2097,9 @@ jobs:
     needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1783,30 +2124,70 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-product-package
+          path: dist/csharp
+      - uses: actions/download-artifact@v4
+        with:
+          name: swift-xcframework
+          path: dist/swift
       - name: Generate dry-run files
+        env:
+          WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
+          CRATES_IO_VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          NUGET_VERSION: ${{ needs.plan.outputs.nuget_version }}
+          SWIFTPM_VERSION: ${{ needs.plan.outputs.swiftpm_version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASED_AT: ${{ needs.plan.outputs.released_at }}
+          PYPI_VERSION: ${{ needs.plan.outputs.pypi_version }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           args=()
-          if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
+          if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             args+=(--wrapper-changed)
           fi
-          # Dry-run rehearses the real manifest shape: a real run publishes the
-          # Rust SDK and records sdks.rust, so include it here too.
-          args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
+          # Dry-run rehearses the real manifest shape and binds it to the exact
+          # verified native packages even though no registry mutation occurs.
+          (
+            cd dist/csharp
+            sha256sum -c product-package.sha256
+          )
+          csharp_digest="$(cut -d ' ' -f 1 \
+            dist/csharp/product-package.sha256)"
+          mapfile -t swift_packages < <(
+            find dist/swift -maxdepth 1 -type f \
+              -name 'BamlBridgeFFI-*.xcframework.zip' -print
+          )
+          if [[ "${#swift_packages[@]}" -ne 1 ]]; then
+            echo "::error::expected exactly one verified Swift XCFramework zip"
+            exit 1
+          fi
+          swift_digest="$(sha256sum "${swift_packages[0]}" | cut -d ' ' -f 1)"
+          args+=(
+            --crates-io-version "$CRATES_IO_VERSION"
+            --nuget-version "$NUGET_VERSION"
+            --nuget-package-sha256 "$csharp_digest"
+            --swiftpm-version "$SWIFTPM_VERSION"
+            --swift-package-sha256 "$swift_digest"
+          )
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
             --cffi-dir dist/cffi \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out dry-run/manifest/v1 \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
-            --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
+            --channel "$CHANNEL" \
+            --version "$VERSION" \
+            --released-at "$RELEASED_AT" \
+            --pypi-version "$PYPI_VERSION" \
+            --wrapper-version "$WRAPPER_VERSION" \
             "${args[@]}"
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --version "$WRAPPER_VERSION" \
             --out dry-run/package-manager
       - uses: actions/upload-artifact@v4
         with:
