@@ -921,13 +921,14 @@ class WorkflowGraphTests(unittest.TestCase):
             primitive_consumer,
         )
         self.assertIn(
-            'rg -a -F -l -- "$repository_path_prefix" "$publish"',
+            'grep -r -a -F -l -- "$repository_path_prefix" "$publish"',
             primitive_consumer,
         )
         self.assertNotIn(
-            'rg -a -F -l "$repository_root" "$publish"',
+            'grep -r -a -F -l -- "$repository_root" "$publish"',
             primitive_consumer,
         )
+        self.assertNotIn("rg -a", primitive_consumer)
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
