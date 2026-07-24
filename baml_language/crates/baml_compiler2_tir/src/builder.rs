@@ -8920,7 +8920,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         bindings_by_name: &FxHashMap<Name, Vec<(PatId, Ty)>>,
         at_expr: ExprId,
-    ) {
+    ) -> FxHashSet<Name> {
+        let mut conflicting_names = FxHashSet::default();
         for (name, entries) in bindings_by_name {
             let Some((_, first_ty)) = entries.first() else {
                 continue;
@@ -8938,9 +8939,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         other_type: other_ty.clone(),
                     };
                     self.report_at_pat_or_expr(err, *pat, at_expr);
+                    conflicting_names.insert(name.clone());
                 }
             }
         }
+        conflicting_names
     }
 
     /// Resolve a `TypeExpr` to a `Ty`.  Tries `bare_type_sugar_to_ty` first
@@ -16892,9 +16895,18 @@ impl TypeInferenceBuilder<'_> {
             matched_tys.push(r.matched_ty);
         }
 
-        // Emit `OrPatternBindingTypeMismatch` per offending branch if a
-        // bound name has different types across alternatives.
-        self.check_or_binding_type_compatibility(&bindings_by_name, at_expr);
+        // Emit `OrPatternBindingTypeMismatch` per offending branch, then
+        // poison every occurrence so the arm body cannot inherit one
+        // alternative's type based on source order.
+        let conflicting_names =
+            self.check_or_binding_type_compatibility(&bindings_by_name, at_expr);
+        for binding in &mut bindings {
+            if conflicting_names.contains(&binding.name) {
+                binding.ty = Ty::Error {
+                    attr: TyAttr::default(),
+                };
+            }
+        }
 
         let required = if required_tys.is_empty() {
             None

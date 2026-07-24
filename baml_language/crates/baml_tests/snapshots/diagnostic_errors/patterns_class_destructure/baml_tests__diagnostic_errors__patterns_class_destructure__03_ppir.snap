@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 53641
 ---
 === PPIR ===
 class user.Address {
@@ -79,7 +78,10 @@ function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person |
   {  } match (v) { Person { age: age } | int => age }
 }
 function user.class_destructure_or_pattern_same_binding_conflicting_types(v: user.Person | user.Admin) -> int  [expr] {
-  {  } match (v) { Person { age: age } | Admin { age: age } => 1 }
+  {  } match (v) { Person { age: age } | Admin { age: age } => age }
+}
+function user.class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: user.Person | user.Admin) -> int  [expr] {
+  {  } match (v) { Admin { age: age } | Person { age: age } => age }
 }
 function user.class_destructure_unknown_field_in_let() -> int  [expr] {
   { let Person { missing: missing } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 0
